@@ -55,6 +55,9 @@ export const catalogConfigRepository = {
     const strategy = getRuntimeStrategy();
     if (strategy.shouldReadThroughSupabase) {
       const standardValue = await readCatalogFromStandardTable(key, fallback);
+      if (key === CATALOG_CONFIG_KEYS.branches) {
+        return standardValue;
+      }
       const hasStandardValue = Array.isArray(standardValue)
         ? standardValue.length > 0
         : standardValue !== fallback;
