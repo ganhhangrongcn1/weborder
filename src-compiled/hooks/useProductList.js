@@ -8,6 +8,7 @@ import {
 import { subscribeCatalogRealtime } from "../services/repositories/catalogSupabaseRepository.js";
 import { adminConfigRepository } from "../services/repositories/adminConfigRepository.js";
 import { getDataSource } from "../services/repositories/dataSource.js";
+import { initSupabaseRuntimeClient } from "../services/supabase/supabaseRuntimeClient.js";
 import {
   isMenuSchemaBridgeMigrationEnabled,
   isSupabaseConfigSyncEnabled,
@@ -301,6 +302,40 @@ export default function useProductList({
     categories,
     normalizeSmartPromotion
   ]);
+
+  useEffect(() => {
+    if (!supabaseConfigSyncEnabled) return undefined;
+    let disposed = false;
+    let timerId = null;
+
+    const hydrateFromStandardTables = async () => {
+      await initSupabaseRuntimeClient();
+      if (disposed) return;
+      catalogConfigRepository
+        .getManyAsync([
+          { key: CATALOG_CONFIG_KEYS.branches, fallback: defaultBranches },
+          { key: CATALOG_CONFIG_KEYS.hours, fallback: defaultStoreHours }
+        ])
+        .then((remoteValues) => {
+          if (disposed) return;
+          const remoteBranches = remoteValues[CATALOG_CONFIG_KEYS.branches];
+          const remoteHours = remoteValues[CATALOG_CONFIG_KEYS.hours];
+          if (Array.isArray(remoteBranches)) setBranches(remoteBranches);
+          if (remoteHours && typeof remoteHours === "object") {
+            setHours(normalizeHours(remoteHours, defaultStoreHours));
+          }
+        })
+        .catch(() => {});
+    };
+
+    hydrateFromStandardTables();
+    timerId = window.setTimeout(hydrateFromStandardTables, 1500);
+
+    return () => {
+      disposed = true;
+      if (timerId) window.clearTimeout(timerId);
+    };
+  }, [supabaseConfigSyncEnabled, defaultBranches, defaultStoreHours]);
 
   useEffect(() => {
     if (!supabaseConfigSyncEnabled) return undefined;
