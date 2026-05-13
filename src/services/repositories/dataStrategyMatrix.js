@@ -8,22 +8,22 @@ export const DATA_STRATEGY = {
 };
 
 export const CONFIG_KEY_TTL_MS = {
-  ghr_products: 1 * MINUTE,
-  ghr_categories: 1 * MINUTE,
-  ghr_toppings: 1 * MINUTE,
-  ghr_option_group_presets: 1 * MINUTE,
-  ghr_home_content: 1 * MINUTE,
-  ghr_banners: 1 * MINUTE,
-  ghr_smart_promotions: 1 * MINUTE,
-  ghr_coupons: 1 * MINUTE,
-  ghr_promos: 1 * MINUTE,
-  ghr_campaigns: 1 * MINUTE,
-  ghr_shipping_config: 1 * MINUTE,
-  ghr_branches: 1 * MINUTE,
-  ghr_hours: 1 * MINUTE,
-  ghr_zones: 1 * MINUTE,
-  ghr_loyalty: 1 * MINUTE,
-  ghr_zalo_config: 1 * MINUTE
+  ghr_products: 5 * MINUTE,
+  ghr_categories: 5 * MINUTE,
+  ghr_toppings: 5 * MINUTE,
+  ghr_option_group_presets: 5 * MINUTE,
+  ghr_home_content: 5 * MINUTE,
+  ghr_banners: 5 * MINUTE,
+  ghr_smart_promotions: 2 * MINUTE,
+  ghr_coupons: 2 * MINUTE,
+  ghr_promos: 2 * MINUTE,
+  ghr_campaigns: 2 * MINUTE,
+  ghr_shipping_config: 2 * MINUTE,
+  ghr_branches: 2 * MINUTE,
+  ghr_hours: 2 * MINUTE,
+  ghr_zones: 2 * MINUTE,
+  ghr_loyalty: 5 * MINUTE,
+  ghr_zalo_config: 5 * MINUTE
 };
 
 export const HYBRID_CACHE_KEYS = new Set(Object.keys(CONFIG_KEY_TTL_MS));
