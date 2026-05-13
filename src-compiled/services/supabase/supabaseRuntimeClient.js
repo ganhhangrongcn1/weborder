@@ -12,7 +12,15 @@ function setClient(client) {
 
 export async function initSupabaseRuntimeClient() {
   const { url, anonKey } = getSupabaseEnvConfig();
-  if (!url || !anonKey) return null;
+  if (!url || !anonKey) {
+    if (import.meta?.env?.PROD) {
+      console.warn("[supabaseRuntimeClient] Missing runtime env:", {
+        hasUrl: Boolean(url),
+        hasAnonKey: Boolean(anonKey)
+      });
+    }
+    return null;
+  }
 
   const existing = getExistingClient();
   if (existing) return existing;

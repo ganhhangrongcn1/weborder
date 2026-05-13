@@ -1,4 +1,4 @@
-import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
+﻿import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
 
 const ADMIN_AUTH_TIMEOUT_MS = 6000;
 
@@ -36,8 +36,14 @@ export async function getAdminSession() {
 }
 
 export async function loginAdminWithPassword({ email, password }) {
-  const client = await getClientReady();
+  // Retry once because runtime client can finish bootstrapping just after first check.
+  let client = await getClientReady();
+  if (!client) {
+    await initSupabaseRuntimeClient();
+    client = await getClientReady();
+  }
   if (!client) return { ok: false, message: "Supabase chưa sẵn sàng." };
+
   const { data, error } = await client.auth.signInWithPassword({
     email: String(email || "").trim(),
     password: String(password || "")
