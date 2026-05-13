@@ -1,0 +1,29 @@
+.admin-promo-page {
+  border-radius: 16px;
+}
+
+.admin-promo-page .admin-panel-head {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.admin-promo-tabs {
+  position: sticky;
+  top: 76px;
+  z-index: 15;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 8px;
+}

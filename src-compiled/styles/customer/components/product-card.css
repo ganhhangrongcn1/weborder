@@ -1,0 +1,121 @@
+.product-card {
+  overflow: hidden;
+  border: 1px solid rgba(58, 31, 20, 0.04);
+  border-radius: 24px;
+  background: white;
+  box-shadow: var(--shadow-soft);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.product-row {
+  display: flex;
+  gap: 12px;
+  border-radius: 24px;
+  background: white;
+  padding: 9px;
+  box-shadow: var(--shadow-soft);
+}
+
+.product-image-wrap,
+.product-row-image {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 0.82;
+  overflow: hidden;
+  border-radius: 22px;
+}
+
+.product-row-image {
+  width: 118px;
+  min-width: 118px;
+  aspect-ratio: 1 / 0.9;
+}
+
+.product-selected {
+  border-color: rgba(255, 106, 0, 0.28);
+  box-shadow: 0 12px 28px rgba(255, 106, 0, 0.12);
+}
+
+.selected-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 5px 8px;
+  color: #ff6a00;
+  font-size: 10px;
+  font-weight: 950;
+  box-shadow: 0 8px 18px rgba(58, 31, 20, 0.12);
+}
+
+.product-card-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff3e6;
+  color: #ff8a00;
+}
+
+.product-add-btn {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  color: white;
+  font-size: 24px;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 12px 24px rgba(255, 90, 31, 0.25);
+}
+
+.product-card-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid rgba(255, 106, 0, 0.2);
+  border-radius: 16px;
+  background: #fff7ec;
+  padding: 3px;
+  box-shadow: 0 10px 20px rgba(255, 106, 0, 0.1);
+}
+
+.product-card-stepper button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 12px;
+  background: white;
+  color: #ff6a00;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.product-card-stepper span {
+  min-width: 20px;
+  text-align: center;
+  color: #3a1f14;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.customer-shell .badge {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff3838, #ff7a00);
+  padding: 4px 7px;
+  color: white;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}

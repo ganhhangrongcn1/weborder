@@ -1,0 +1,35 @@
+{
+    "type": "module",
+    "scripts": {
+        "dev": "node scripts/patch-vite.mjs && node scripts/compile-jsx.mjs && vite",
+        "build": "node scripts/check-encoding.mjs && node scripts/patch-vite.mjs && node scripts/compile-jsx.mjs && npm run check:generated && vite build --minify false --target esnext",
+        "smoke:loyalty": "node scripts/smoke-loyalty-config.mjs",
+        "smoke:flows": "node scripts/smoke-main-flows.mjs",
+        "smoke": "npm run smoke:loyalty && npm run smoke:flows && npm run smoke:supabase-config",
+        "fix:encoding": "node scripts/fix-encoding.mjs",
+        "check:encoding": "node scripts/check-encoding.mjs",
+        "check:generated": "node scripts/check-generated-sync.mjs",
+        "preview": "vite preview",
+        "lint": "eslint .",
+        "smoke:supabase-config": "node scripts/smoke-supabase-config.mjs",
+        "smoke:supabase-core": "node scripts/smoke-supabase-core.mjs",
+        "smoke:supabase-catalog": "node scripts/smoke-supabase-catalog.mjs"
+    },
+    "dependencies": {
+        "@babel/core": "7.29.0",
+        "@babel/preset-react": "7.28.5",
+        "@supabase/supabase-js": "^2.105.3",
+        "@vitejs/plugin-react": "4.3.4",
+        "autoprefixer": "10.4.21",
+        "maplibre-gl": "^5.24.0",
+        "postcss": "8.5.6",
+        "react": "18.2.0",
+        "react-dom": "18.2.0",
+        "react-router-dom": "^6.30.3",
+        "tailwindcss": "3.4.17",
+        "vite": "5.4.19"
+    },
+    "devDependencies": {
+        "eslint": "^9.0.0"
+    }
+}

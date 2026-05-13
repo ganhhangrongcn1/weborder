@@ -1,0 +1,69 @@
+@media (max-width: 980px) {
+  .admin-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .admin-grid,
+  .admin-mini-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-ship-compact-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-smart-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-row,
+  .admin-edit-card,
+  .admin-edit-fields,
+  .admin-branch-layout,
+  .admin-branch-top-grid,
+  .admin-branch-bottom-grid,
+  .admin-branch-time-grid,
+  .admin-product-grid,
+  .admin-product-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-option-group-row,
+  .admin-option-item-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-product-form .wide {
+    grid-column: span 1;
+  }
+
+  .admin-appearance-layout,
+  .admin-appearance-promo-grid,
+  .admin-appearance-fields,
+  .admin-appearance-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-smart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-ship-compact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-ship-note-item {
+    grid-column: span 1;
+  }
+
+  .admin-promo-toolbar {
+    align-items: flex-start;
+  }
+}

@@ -1,0 +1,8 @@
+.admin-shell button,
+.admin-shell input {
+  font: inherit;
+}
+
+.admin-shell button {
+  -webkit-tap-highlight-color: transparent;
+}

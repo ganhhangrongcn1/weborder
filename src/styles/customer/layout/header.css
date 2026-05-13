@@ -1,0 +1,80 @@
+.home2026-greeting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.home2026-greeting h1 {
+  color: #3a1f14;
+  font-size: 24px;
+  font-weight: 850;
+  line-height: 1.08;
+}
+
+.home2026-greeting p {
+  margin-top: 6px;
+  color: rgba(58, 31, 20, 0.58);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.home2026-profile-btn {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 17px;
+  background: white;
+  color: #ff6a00;
+  box-shadow: 0 12px 26px rgba(58, 31, 20, 0.08);
+}
+
+.home2026-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  border: 1px solid rgba(255, 106, 0, 0.1);
+  border-radius: 21px;
+  background: white;
+  padding: 0 16px;
+  color: rgba(58, 31, 20, 0.45);
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 13px 28px rgba(58, 31, 20, 0.06);
+}
+
+.home2026-user-outline {
+  position: relative;
+  display: block;
+  width: 19px;
+  height: 19px;
+}
+
+.home2026-user-outline::before {
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  width: 7px;
+  height: 7px;
+  transform: translateX(-50%);
+  border: 1.8px solid #ff6a00;
+  border-radius: 999px;
+  content: "";
+}
+
+.home2026-user-outline::after {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  width: 15px;
+  height: 9px;
+  transform: translateX(-50%);
+  border: 1.8px solid #ff6a00;
+  border-top-left-radius: 999px;
+  border-top-right-radius: 999px;
+  border-bottom: 0;
+  content: "";
+}

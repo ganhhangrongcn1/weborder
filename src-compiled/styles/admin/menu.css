@@ -1,0 +1,47 @@
+/* ===== Admin SaaS Redesign - Phase 3 (Menu + Promo + Store + Polish) ===== */
+.admin-menu-page {
+  gap: 12px;
+}
+
+.admin-menu-section {
+  border-radius: 16px;
+}
+
+.admin-menu-sticky-toolbar {
+  position: sticky;
+  top: 64px;
+  z-index: 15;
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 10px;
+}
+
+.admin-menu-overview-board,
+.admin-menu-groups-board {
+  border-color: #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.admin-menu-col-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+}
+
+.admin-menu-category-item,
+.admin-menu-product-row {
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-menu-category-item:hover,
+.admin-menu-product-row:hover {
+  background: #f8fbff;
+}
+
+.admin-menu-bulk-section .admin-mini-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}

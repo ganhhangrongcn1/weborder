@@ -1,0 +1,40 @@
+import AdminOrdersCrmSection from "../AdminOrdersCrmSection.js";
+import { jsx as _jsx } from "react/jsx-runtime";
+export default function AdminCustomersPage({
+  customerAdminTab,
+  setCustomerAdminTab,
+  ordersSnapshot,
+  setOrdersSnapshot,
+  onOrderUpdated,
+  crmSnapshot,
+  setCrmSnapshot,
+  selectedCustomerPhone,
+  setSelectedCustomerPhone,
+  onAdjustPoints,
+  onResetPoints,
+  onGiftVoucher,
+  onCancelVoucher,
+  onSaveLoyaltyConfig,
+  orderStorage,
+  coupons = []
+}) {
+  return /*#__PURE__*/_jsx(AdminOrdersCrmSection, {
+    section: "customers",
+    customerAdminTab: customerAdminTab,
+    setCustomerAdminTab: setCustomerAdminTab,
+    ordersSnapshot: ordersSnapshot,
+    setOrdersSnapshot: setOrdersSnapshot,
+    onOrderUpdated: onOrderUpdated,
+    crmSnapshot: crmSnapshot,
+    setCrmSnapshot: setCrmSnapshot,
+    selectedCustomerPhone: selectedCustomerPhone,
+    setSelectedCustomerPhone: setSelectedCustomerPhone,
+    onAdjustPoints: onAdjustPoints,
+    onResetPoints: onResetPoints,
+    onGiftVoucher: onGiftVoucher,
+    onCancelVoucher: onCancelVoucher,
+    onSaveLoyaltyConfig: onSaveLoyaltyConfig,
+    orderStorage: orderStorage,
+    coupons: coupons
+  });
+}

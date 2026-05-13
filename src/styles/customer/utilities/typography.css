@@ -1,0 +1,43 @@
+/* Lightweight typography pass */
+.customer-shell,
+.customer-shell button,
+.customer-shell input,
+.customer-shell select,
+.customer-shell textarea,
+.customer-shell p,
+.customer-shell span,
+.customer-shell small,
+.customer-shell label,
+.customer-shell em,
+.customer-shell li,
+.customer-shell a {
+  font-weight: 400 !important;
+}
+
+.customer-shell h1,
+.customer-shell h2,
+.customer-shell h3,
+.customer-shell h4,
+.customer-shell h5,
+.customer-shell h6,
+.customer-shell strong,
+.customer-shell b,
+.customer-shell .font-black,
+.customer-shell .font-extrabold,
+.customer-shell .font-bold,
+.customer-shell .font-semibold,
+.customer-shell .font-medium {
+  font-weight: 500 !important;
+}
+
+.customer-shell .cta,
+.customer-shell .cta-small,
+.customer-shell .ghost-small,
+.customer-shell .filter-btn,
+.customer-shell .chip,
+.customer-shell .option,
+.customer-shell .qty-btn,
+.customer-shell .topbar-title,
+.customer-shell .checkout-sticky-cta button {
+  font-weight: 500 !important;
+}

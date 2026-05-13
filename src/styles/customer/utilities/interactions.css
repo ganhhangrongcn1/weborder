@@ -1,0 +1,123 @@
+.customer-shell .icon-ux {
+  transform-origin: center;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.customer-shell button:hover .icon-ux,
+.customer-shell a:hover .icon-ux {
+  transform: scale(1.1);
+}
+
+.customer-shell button:active .icon-ux,
+.customer-shell a:active .icon-ux {
+  transform: scale(0.95);
+}
+
+.customer-shell .menu-search .icon-ux {
+  opacity: 0.5;
+}
+
+.customer-shell .menu-search:focus-within .icon-ux {
+  opacity: 1;
+}
+
+.customer-shell .menu-addon-card .addon-plus,
+.customer-shell .product-add-btn {
+  border-radius: 999px;
+  background: #ff7a00;
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+
+.customer-shell .product-card,
+.customer-shell .menu-addon-card,
+.customer-shell .checkout-card,
+.customer-shell .checkin-card,
+.customer-shell .home2026-program-card,
+.customer-shell .home2026-flash-card,
+.customer-shell .branch-card,
+.customer-shell .promo-code-card,
+.customer-shell .payment-card,
+.customer-shell .account-metric,
+.customer-shell .hero-card,
+.customer-shell .cashback-card,
+.customer-shell .delivery-app-card,
+.customer-shell .flash-card,
+.customer-shell .topping-card,
+.customer-shell .promo-sheet,
+.customer-shell .account-hero,
+.customer-shell .rounded-\[28px\],
+.customer-shell .rounded-\[30px\],
+.customer-shell .rounded-\[24px\],
+.customer-shell .rounded-\[22px\] {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.customer-shell .product-card:hover,
+.customer-shell .menu-addon-card:hover,
+.customer-shell .checkout-card:hover,
+.customer-shell .checkin-card:hover,
+.customer-shell .home2026-program-card:hover,
+.customer-shell .home2026-flash-card:hover,
+.customer-shell .branch-card:hover,
+.customer-shell .promo-code-card:hover,
+.customer-shell .payment-card:hover,
+.customer-shell .account-metric:hover,
+.customer-shell .hero-card:hover,
+.customer-shell .cashback-card:hover,
+.customer-shell .delivery-app-card:hover,
+.customer-shell .flash-card:hover,
+.customer-shell .topping-card:hover,
+.customer-shell .promo-sheet:hover,
+.customer-shell .account-hero:hover,
+.customer-shell .rounded-\[28px\]:hover,
+.customer-shell .rounded-\[30px\]:hover,
+.customer-shell .rounded-\[24px\]:hover,
+.customer-shell .rounded-\[22px\]:hover {
+  transform: scale(1.02);
+  box-shadow: 0 14px 28px rgba(58, 31, 20, 0.12);
+}
+
+.customer-shell .product-card:active,
+.customer-shell .menu-addon-card:active,
+.customer-shell .checkout-card:active,
+.customer-shell .checkin-card:active,
+.customer-shell .home2026-program-card:active,
+.customer-shell .home2026-flash-card:active,
+.customer-shell .branch-card:active,
+.customer-shell .promo-code-card:active,
+.customer-shell .payment-card:active,
+.customer-shell .account-metric:active,
+.customer-shell .hero-card:active,
+.customer-shell .cashback-card:active,
+.customer-shell .delivery-app-card:active,
+.customer-shell .flash-card:active,
+.customer-shell .topping-card:active,
+.customer-shell .promo-sheet:active,
+.customer-shell .account-hero:active,
+.customer-shell .rounded-\[28px\]:active,
+.customer-shell .rounded-\[30px\]:active,
+.customer-shell .rounded-\[24px\]:active,
+.customer-shell .rounded-\[22px\]:active {
+  transform: scale(0.98);
+}
+
+.option-modal-overlay .promo-sheet {
+  transform: none !important;
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.option-modal-overlay .promo-sheet:hover,
+.option-modal-overlay .promo-sheet:active {
+  transform: none !important;
+  box-shadow: 0 14px 28px rgba(58, 31, 20, 0.12);
+}
+
+.milestone-modal-item {
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.milestone-modal-item:hover {
+  opacity: 0.92;
+}

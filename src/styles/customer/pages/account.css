@@ -1,0 +1,152 @@
+﻿.flash-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  overflow: hidden;
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, rgba(58, 31, 20, 0.28), transparent),
+    linear-gradient(135deg, #ff7a00, #ff4f17);
+  padding: 20px;
+  box-shadow: var(--shadow-orange);
+}
+
+.account-hero {
+  overflow: hidden;
+  border-radius: 30px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.16), transparent 42%),
+    linear-gradient(135deg, #ff9d2e 0%, #ff6a00 48%, #ff4f17 100%);
+  padding: 18px;
+  box-shadow: var(--shadow-orange);
+}
+
+.account-metric {
+  display: flex;
+  min-height: 136px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  border-radius: 26px;
+  background: white;
+  padding: 16px;
+  text-align: left;
+  box-shadow: var(--shadow-soft);
+}
+
+.account-metric strong {
+  color: #3a1f14;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.account-metric small {
+  color: rgba(58, 31, 20, 0.52);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.toggle-input {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  flex: 0 0 auto;
+  appearance: none;
+  border-radius: 999px;
+  background: #eadfd2;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.toggle-input::after {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: white;
+  box-shadow: 0 4px 10px rgba(58, 31, 20, 0.18);
+  content: "";
+  transition: transform 0.2s ease;
+}
+
+.toggle-input:checked {
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+}
+
+.toggle-input:checked::after {
+  transform: translateX(20px);
+}
+
+.account-notice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: rgba(58, 31, 20, 0.42);
+  padding: 18px;
+  backdrop-filter: blur(4px);
+}
+
+.account-notice-modal {
+  display: grid;
+  width: min(100%, 360px);
+  gap: 14px;
+  border: 1px solid rgba(255, 106, 0, 0.16);
+  border-radius: 28px;
+  background: #fffaf3;
+  padding: 20px;
+  color: #3a1f14;
+  box-shadow: 0 24px 70px rgba(58, 31, 20, 0.26);
+  animation: account-notice-in 0.18s ease-out;
+}
+
+.account-notice-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 18px;
+  background: #fff1e6;
+  color: #ff6a00;
+}
+
+.account-notice-modal h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.account-notice-modal p {
+  margin: 6px 0 0;
+  color: rgba(58, 31, 20, 0.66);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.55;
+}
+
+.account-notice-modal button {
+  min-height: 48px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 950;
+  box-shadow: var(--shadow-orange);
+}
+
+@keyframes account-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+

@@ -1,0 +1,259 @@
+/* ===== Admin Visual QA Pass ===== */
+.admin-gap-12 { margin-bottom: 12px; }
+.admin-gap-top-12 { margin-top: 12px; }
+.admin-gap-top-10 { margin-top: 10px; }
+
+.admin-main {
+  line-height: 1.45;
+}
+
+.admin-panel + .admin-panel {
+  margin-top: 2px;
+}
+
+.admin-panel-head h2 {
+  letter-spacing: -0.01em;
+}
+
+.admin-help-text {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.admin-mini-card strong {
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.admin-mini-card p,
+.admin-mini-card span,
+.admin-mini-card small,
+.admin-mini-card label {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.admin-mini-card p {
+  margin-top: 3px;
+  font-size: 13px;
+  color: #334155;
+  font-weight: 700;
+}
+
+.admin-crm-card .crm-customer-head-meta small {
+  font-size: 11px;
+}
+
+.admin-crm-quick-actions .admin-secondary,
+.admin-crm-quick-actions .admin-danger {
+  width: 100%;
+  justify-self: stretch;
+}
+
+.admin-crm-order-history .admin-secondary {
+  margin-top: 8px;
+}
+
+.admin-order-item small {
+  text-transform: capitalize;
+}
+
+.admin-menu-product-row strong,
+.admin-menu-category-item span {
+  font-size: 14px;
+}
+
+.admin-menu-product-row em,
+.admin-menu-category-item em {
+  font-size: 12px;
+}
+
+.admin-promo-page .admin-panel-head h2,
+.admin-store-panel .admin-panel-head h2,
+.admin-menu-section .admin-panel-head h2 {
+  font-size: 17px;
+}
+
+.admin-store-panel textarea.admin-input,
+.admin-promo-page textarea.admin-input {
+  min-height: 92px;
+}
+
+.admin-top-header,
+.admin-page-header,
+.admin-toolbar,
+.admin-panel,
+.admin-stat-card,
+.admin-mini-card,
+.admin-edit-card {
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+}
+
+@media (max-width: 980px) {
+  .admin-panel-head h2 {
+    font-size: 15px;
+  }
+
+  .admin-menu-main-tabs {
+    gap: 10px;
+  }
+
+  .admin-menu-main-tabs button {
+    font-size: 12px;
+  }
+}
+
+
+/* ===== Admin Comfort Mode: Spacious ===== */
+.admin-main {
+  padding: 22px 28px 30px;
+}
+
+.admin-top-header {
+  margin-bottom: 18px;
+  padding: 12px 14px;
+}
+
+.admin-page-header {
+  margin-bottom: 20px;
+  padding: 18px 20px;
+}
+
+.admin-page-header h1 {
+  font-size: 28px;
+}
+
+.admin-stack {
+  gap: 20px;
+}
+
+.admin-panel {
+  padding: 18px;
+}
+
+.admin-panel-head {
+  margin-bottom: 14px;
+}
+
+.admin-panel-head h2 {
+  font-size: 18px;
+}
+
+.admin-toolbar {
+  padding: 12px 14px;
+}
+
+.admin-grid {
+  gap: 14px;
+}
+
+.admin-stat-card {
+  padding: 16px;
+  gap: 8px;
+}
+
+.admin-stat-card strong {
+  font-size: 26px;
+}
+
+.admin-stat-card small {
+  font-size: 12px;
+}
+
+.admin-mini-grid {
+  gap: 12px;
+}
+
+.admin-mini-card,
+.admin-edit-card,
+.admin-option-group,
+.admin-order-item,
+.admin-crm-card {
+  padding: 14px;
+}
+
+.admin-input,
+.admin-status-select,
+.admin-search-input,
+.admin-btn,
+.admin-secondary,
+.admin-danger {
+  min-height: 40px;
+}
+
+.admin-input,
+.admin-status-select {
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.admin-search-input input,
+.admin-top-search input {
+  font-size: 14px;
+}
+
+.admin-help-text,
+.admin-mini-card span,
+.admin-mini-card small,
+.admin-order-item small {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.admin-order-card {
+  padding: 14px;
+}
+
+.admin-menu-sticky-toolbar,
+.admin-promo-tabs,
+.admin-orders-toolbar,
+.admin-crm-toolbar {
+  top: 72px;
+}
+
+.admin-menu-category-item,
+.admin-menu-product-row {
+  padding: 16px;
+}
+
+.admin-menu-tabs {
+  gap: 10px;
+}
+
+.admin-menu-tabs button {
+  padding: 9px 13px;
+}
+
+.admin-crm-quick-actions {
+  gap: 10px;
+}
+
+.admin-top-header,
+.admin-page-header,
+.admin-toolbar,
+.admin-panel,
+.admin-stat-card,
+.admin-mini-card,
+.admin-edit-card {
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
+}
+
+@media (max-width: 980px) {
+  .admin-main {
+    padding: 16px;
+  }
+
+  .admin-page-header h1 {
+    font-size: 24px;
+  }
+
+  .admin-stack {
+    gap: 16px;
+  }
+
+  .admin-panel {
+    padding: 14px;
+  }
+}

@@ -1,0 +1,253 @@
+﻿.menu-sticky-tools {
+  position: sticky;
+  top: 64px;
+  z-index: 20;
+  display: grid;
+  gap: 10px;
+  margin-inline: -4px;
+  border-bottom: 1px solid rgba(255, 194, 119, 0.32);
+  background: rgba(255, 247, 236, 0.94);
+  padding: 0 4px 10px;
+  backdrop-filter: blur(14px);
+}
+
+.menu-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(255, 106, 0, 0.08);
+  border-radius: 22px;
+  background: white;
+  padding: 12px 14px;
+  color: rgba(58, 31, 20, 0.45);
+  box-shadow: var(--shadow-soft);
+}
+
+.menu-chip-row,
+.menu-quick-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 1px;
+}
+
+.chip,
+.filter-btn,
+.option {
+  min-height: 42px;
+  border: 1px solid rgba(58, 31, 20, 0.1);
+  border-radius: 16px;
+  background: white;
+  padding: 0 16px;
+  color: rgba(58, 31, 20, 0.78);
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(58, 31, 20, 0.04);
+  white-space: nowrap;
+}
+
+.chip-active,
+.option-active,
+.choice-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  color: white;
+}
+
+.filter-btn {
+  min-height: 38px;
+}
+
+.float-btn,
+.top-icon {
+  display: grid;
+  min-width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #3a1f14;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: var(--shadow-soft);
+}
+
+.label {
+  display: block;
+  color: rgba(58, 31, 20, 0.78);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.topping-card {
+  display: grid;
+  min-width: 116px;
+  gap: 4px;
+  border: 1px solid rgba(58, 31, 20, 0.1);
+  border-radius: 18px;
+  background: white;
+  padding: 12px 10px;
+  color: #3a1f14;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: var(--shadow-soft);
+}
+
+.topping-card span {
+  color: rgba(58, 31, 20, 0.56);
+  font-size: 11px;
+}
+
+.topping-active {
+  border-color: rgba(255, 90, 31, 0.5);
+  background: #fff3e6;
+}
+
+.menu-addon-section {
+  margin-top: 18px;
+  border: 1px solid #f0cd73;
+  border-radius: 22px;
+  background: #fffefa;
+  padding: 16px;
+  box-shadow: 0 10px 28px rgba(88, 54, 20, 0.05);
+}
+
+.menu-addon-section > p {
+  color: #b77900;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.menu-addon-section > h2 {
+  margin-top: 6px;
+  margin-bottom: 12px;
+  color: #1f1714;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.menu-addon-section > div:first-child > span {
+  flex: 0 0 auto;
+  color: rgba(58, 31, 20, 0.45);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.menu-addon-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 2px 8px;
+  scroll-snap-type: x proximity;
+}
+
+.menu-addon-card {
+  display: grid;
+  min-width: 148px;
+  min-height: 132px;
+  border: 1px solid #f0cd73;
+  border-radius: 18px;
+  background: #fffdf8;
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+  scroll-snap-align: start;
+  overflow: hidden;
+}
+
+.menu-addon-main {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  min-width: 0;
+}
+
+.menu-addon-card.addon-selected {
+  border-color: #ffb000;
+  background: #fff8df;
+  box-shadow: 0 10px 24px rgba(255, 176, 0, 0.16);
+}
+
+.menu-addon-card h3 {
+  color: #211713;
+  font-size: 15px;
+  font-weight: 950;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-addon-card p {
+  display: -webkit-box;
+  min-height: 34px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  color: rgba(58, 31, 20, 0.62);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.38;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.menu-addon-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.menu-addon-card strong {
+  color: #c48700;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.menu-addon-card .addon-plus {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ffda21, #ffb000);
+  color: #1f1714;
+  font-size: 20px;
+  font-weight: 950;
+  box-shadow: 0 8px 18px rgba(255, 176, 0, 0.26);
+}
+
+.addon-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 999px;
+  background: #fff3d0;
+  padding: 3px;
+}
+
+.addon-stepper button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: white;
+  color: #c48700;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.addon-stepper em {
+  min-width: 18px;
+  text-align: center;
+  color: #1f1714;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 950;
+}
+

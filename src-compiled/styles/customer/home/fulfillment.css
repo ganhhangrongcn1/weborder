@@ -1,0 +1,29 @@
+.pickup-time-card {
+  display: grid;
+  gap: 12px;
+  border-radius: 22px;
+  background: #fffaf3;
+  padding: 12px;
+}
+
+.pickup-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  border-radius: 18px;
+  background: white;
+  padding: 4px;
+}
+
+.pickup-mode-tabs button {
+  min-height: 40px;
+  border-radius: 14px;
+  color: rgba(58, 31, 20, 0.62);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pickup-mode-tabs button.active {
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  color: white;
+}

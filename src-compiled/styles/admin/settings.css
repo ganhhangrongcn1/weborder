@@ -1,0 +1,23 @@
+.admin-store-panel {
+  border-radius: 16px;
+}
+
+.admin-store-panel .admin-panel-head {
+  margin-bottom: 14px;
+}
+
+.admin-store-panel .admin-table,
+.admin-store-panel .admin-mini-grid {
+  gap: 12px;
+}
+
+.admin-store-panel .admin-edit-card,
+.admin-store-panel .admin-mini-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.admin-store-panel .admin-secondary {
+  margin-top: 10px;
+}

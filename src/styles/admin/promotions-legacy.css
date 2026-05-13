@@ -1,0 +1,150 @@
+.admin-promo-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  border: 1px solid #ffe0b8;
+  border-radius: 18px;
+  background: #fff9ef;
+  padding: 14px;
+}
+
+.admin-promo-toolbar p {
+  color: #7a4b15;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.admin-info-btn {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 14px;
+  background: #ff6a00;
+  color: white;
+  font-size: 18px;
+  font-weight: 950;
+  box-shadow: 0 10px 22px rgba(255, 106, 0, 0.18);
+}
+
+.admin-smart-promo-list {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-smart-promo-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #ead7aa;
+  border-radius: 20px;
+  background: #fffdf8;
+  padding: 16px;
+}
+
+.admin-smart-promo-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-smart-promo-head span {
+  color: #b77900;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-smart-promo-head strong {
+  display: block;
+  margin-top: 4px;
+  color: #172033;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.admin-smart-promo-head small {
+  display: block;
+  margin-top: 4px;
+  color: #7a8294;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-smart-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-smart-grid label {
+  display: grid;
+  gap: 6px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.admin-smart-grid input,
+.admin-smart-grid select {
+  min-width: 0;
+  border: 1px solid #e2e5ee;
+  border-radius: 12px;
+  background: white;
+  padding: 11px 12px;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+  outline: none;
+}
+
+.admin-place-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-place-row span {
+  color: #7a8294;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.admin-place-row button {
+  border: 1px solid #e6eaf2;
+  border-radius: 999px;
+  background: white;
+  padding: 9px 12px;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-place-row button.active {
+  border-color: #ffb35c;
+  background: #fff3df;
+  color: #ff6a00;
+}
+
+.admin-supabase-note {
+  border-radius: 16px;
+  background: #eefbf3;
+  padding: 12px;
+  color: #17633a;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.admin-supabase-note code,
+.admin-guide-body code {
+  border-radius: 8px;
+  background: rgba(23, 32, 51, 0.08);
+  padding: 2px 6px;
+  font-size: 12px;
+}

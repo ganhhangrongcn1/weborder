@@ -1,0 +1,88 @@
+/* Customer mobile app shell */
+.customer-shell {
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.customer-shell.bg-app {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.72), rgba(255, 247, 236, 0.82)),
+    #f2eee8;
+}
+
+.customer-shell .shadow-preview,
+main.shadow-preview {
+  width: min(100vw, 430px);
+  max-width: 430px;
+  min-height: 100vh;
+  margin-right: auto;
+  margin-left: auto;
+  overflow-x: hidden;
+  box-shadow: 0 0 70px rgba(58, 31, 20, 0.14);
+}
+
+.home2026-shell,
+.home2026-shell * {
+  min-width: 0;
+}
+
+.home2026-shell {
+  width: 100%;
+  max-width: 100%;
+  justify-self: center;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.home2026-shell > *,
+.home2026-section,
+.home2026-program-grid,
+.home2026-search,
+.home2026-flash-deal {
+  width: 100%;
+  max-width: 100%;
+}
+
+.home2026-section-head {
+  width: 100%;
+  align-items: center;
+}
+
+.home2026-section-head h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.home2026-section-head button {
+  flex: 0 0 auto;
+  padding-left: 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.home2026-section > .grid.grid-cols-2 {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 390px) {
+  .home2026-shell {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .home2026-section > .grid.grid-cols-2 {
+    gap: 10px;
+  }
+
+  .home2026-section-head h2 {
+    font-size: 18px;
+  }
+
+  .home2026-section-head button {
+    font-size: 11px;
+  }
+}

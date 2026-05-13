@@ -1,0 +1,30 @@
+.admin-input {
+  min-width: 0;
+  border: 1px solid #e2e5ee;
+  border-radius: 12px;
+  background: white;
+  padding: 11px 12px;
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+  outline: none;
+}
+
+.admin-danger {
+  border-radius: 12px;
+  background: #fff0f0;
+  padding: 10px 12px;
+  color: #e33b3b;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.admin-secondary {
+  width: fit-content;
+  background: #172033;
+  box-shadow: none;
+}
+
+.admin-switch input {
+  display: none;
+}

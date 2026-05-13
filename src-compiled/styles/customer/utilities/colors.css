@@ -1,0 +1,21 @@
+.customer-shell .bg-gradient-main {
+  background: linear-gradient(135deg, #ff7a00 0%, #ff4f17 100%);
+}
+
+.option-hint {
+  margin: -4px 0 10px;
+  color: rgba(58, 31, 20, 0.52);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.option-hint-required {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.option-hint-optional {
+  color: #64748b;
+  font-weight: 700;
+}

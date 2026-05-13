@@ -1,0 +1,81 @@
+.admin-table,
+.admin-mini-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-row {
+  display: grid;
+  grid-template-columns: 58px 1.2fr 0.8fr 120px 1.6fr 80px 70px;
+  gap: 10px;
+  align-items: center;
+  border-radius: 16px;
+  background: #f8f9fc;
+  padding: 10px;
+}
+
+.admin-row img {
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.admin-mini-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-ship-compact-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-ship-compact-item {
+  gap: 6px;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.admin-ship-compact-item label {
+  color: #4b5568;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-ship-compact-item .admin-input {
+  min-height: 40px;
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+.admin-ship-toggle-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-ship-note-item {
+  grid-column: span 2;
+}
+
+.admin-ship-note-item textarea.admin-input {
+  min-height: 40px;
+  height: 40px;
+  resize: none;
+}
+
+.admin-mini-card,
+.admin-edit-card {
+  display: grid;
+  gap: 10px;
+  border-radius: 16px;
+  background: #f8f9fc;
+  padding: 12px;
+}
+
+.admin-edit-card {
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  margin-bottom: 10px;
+}

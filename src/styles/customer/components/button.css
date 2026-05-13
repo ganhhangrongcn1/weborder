@@ -1,0 +1,26 @@
+.customer-shell .cta {
+  min-height: 56px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #ff7a00 0%, #ff4f17 100%);
+  color: white;
+  font-weight: 900;
+  box-shadow: var(--shadow-orange);
+}
+
+.customer-shell .cta-small,
+.customer-shell .ghost-small {
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ff7a00 0%, #ff4f17 100%);
+  padding: 12px 14px;
+  color: white;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  box-shadow: var(--shadow-orange);
+}
+
+.customer-shell .ghost-small {
+  background: white;
+  color: #ff5a1f;
+  box-shadow: 0 8px 18px rgba(58, 31, 20, 0.08);
+}

@@ -1,0 +1,100 @@
+.admin-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  border-right: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 20px 16px;
+  font-family: system-ui, Arial, sans-serif;
+}
+
+.admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.admin-brand span {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  color: white;
+  font-size: 20px;
+  font-weight: 950;
+  flex: 0 0 auto;
+}
+
+.admin-brand strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.admin-brand small {
+  display: block;
+  color: #7a8294;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-nav-group {
+  margin-top: 12px;
+}
+
+.admin-nav-group-title {
+  margin: 0 0 8px;
+  padding: 0 4px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-sidebar button,
+.admin-view-store {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  align-items: center;
+  border-radius: 12px;
+  padding: 12px 12px;
+  color: #4b5568;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+
+.admin-sidebar button:hover {
+  background: #f3f4f6;
+}
+
+.admin-sidebar button:active,
+.admin-view-store:active {
+  transform: scale(0.98);
+}
+
+.admin-sidebar button.active {
+  border-left: 3px solid #f97316;
+  background: #fff7ed;
+  color: #c2410c;
+  font-weight: 900;
+}
+
+.admin-view-store {
+  margin-top: auto;
+  background: #0f172a;
+  color: white;
+  justify-content: center;
+}
+
+.admin-view-store:hover {
+  background: #1e293b;
+}

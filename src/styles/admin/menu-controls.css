@@ -1,0 +1,301 @@
+/* Menu controls polish: buttons, tabs, inputs, badges, and row actions only. */
+.admin-menu-page,
+.admin-side-backdrop {
+  --menu-brand: #f97316;
+  --menu-brand-strong: #ea580c;
+  --menu-brand-soft: #fff7ed;
+  --menu-border: #e2e8f0;
+  --menu-text: #0f172a;
+  --menu-muted: #64748b;
+  --menu-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.admin-menu-page button,
+.admin-side-backdrop button {
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.admin-menu-page button:hover,
+.admin-side-backdrop button:hover {
+  transform: translateY(-1px);
+}
+
+.admin-menu-page button:active,
+.admin-side-backdrop button:active {
+  transform: translateY(0);
+}
+
+.admin-menu-page .admin-menu-main-tabs {
+  gap: 8px;
+  border-bottom: 0;
+  padding: 4px;
+  width: fit-content;
+  border: 1px solid var(--menu-border);
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.admin-menu-page .admin-menu-main-tabs button {
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 0 14px;
+  color: var(--menu-muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: none;
+}
+
+.admin-menu-page .admin-menu-main-tabs button:hover {
+  background: #fff;
+  color: var(--menu-brand-strong);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
+}
+
+.admin-menu-page .admin-menu-main-tabs button.active {
+  border-bottom: 1px solid #fed7aa;
+  border-color: #fed7aa;
+  background: var(--menu-brand-soft);
+  color: var(--menu-brand-strong);
+  box-shadow: 0 8px 18px rgba(249, 115, 22, 0.12);
+}
+
+.admin-menu-page .admin-menu-left-actions > button,
+.admin-menu-page .admin-menu-filter-btn,
+.admin-menu-page .admin-secondary,
+.admin-menu-page .group-add-option-btn,
+.admin-side-backdrop .admin-secondary,
+.admin-side-backdrop .group-add-option-btn,
+.admin-side-backdrop .admin-option-head button,
+.admin-side-backdrop .admin-add-option {
+  min-height: 42px;
+  border: 1px solid var(--menu-border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 0 14px;
+  color: var(--menu-text);
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.035);
+}
+
+.admin-menu-page .admin-menu-filter-btn {
+  border-color: #fb923c;
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(249, 115, 22, 0.22);
+}
+
+.admin-menu-page .admin-menu-filter-btn:hover {
+  border-color: var(--menu-brand-strong);
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  color: #fff;
+}
+
+.admin-menu-page .admin-menu-create-dropdown {
+  border-color: var(--menu-border);
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+}
+
+.admin-menu-page .admin-menu-create-dropdown button {
+  min-height: 38px;
+  border-radius: 10px;
+  padding: 0 12px;
+  color: var(--menu-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-menu-page .admin-menu-create-dropdown button:hover {
+  background: var(--menu-brand-soft);
+  color: var(--menu-brand-strong);
+}
+
+.admin-menu-page .admin-menu-create-dropdown button + button {
+  border-top: 0;
+}
+
+.admin-menu-page .admin-input,
+.admin-side-backdrop .admin-input,
+.admin-side-backdrop .admin-product-form input,
+.admin-side-backdrop .admin-product-form select,
+.admin-side-backdrop .admin-product-form textarea,
+.admin-side-backdrop .menu-item-picker-search input,
+.admin-side-backdrop .group-rule-inline select,
+.admin-side-backdrop .group-rule-inline input {
+  min-height: 42px;
+  border: 1px solid var(--menu-border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 0 13px;
+  color: var(--menu-text);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.admin-side-backdrop .admin-product-form textarea {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.admin-menu-page .admin-input:focus,
+.admin-side-backdrop .admin-input:focus,
+.admin-side-backdrop .admin-product-form input:focus,
+.admin-side-backdrop .admin-product-form select:focus,
+.admin-side-backdrop .admin-product-form textarea:focus,
+.admin-side-backdrop .menu-item-picker-search input:focus,
+.admin-side-backdrop .group-rule-inline select:focus,
+.admin-side-backdrop .group-rule-inline input:focus {
+  border-color: #fb923c;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+}
+
+.admin-menu-page .admin-menu-category-item,
+.admin-menu-page .admin-menu-product-row {
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.admin-menu-page .admin-menu-category-item:hover,
+.admin-menu-page .admin-menu-product-row:hover {
+  background: #fff7ed;
+}
+
+.admin-menu-page .admin-menu-category-item.active {
+  background: linear-gradient(90deg, #fff7ed, #ffffff);
+  box-shadow: inset 4px 0 0 var(--menu-brand);
+}
+
+.admin-menu-page .admin-menu-category-item em,
+.admin-menu-page .admin-menu-product-row i,
+.admin-menu-page .admin-menu-product-row em {
+  width: fit-content;
+  border-radius: 999px;
+  color: var(--menu-muted);
+  font-weight: 700;
+}
+
+.admin-menu-page .admin-menu-category-item em small {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border-radius: 999px;
+  background: #ffedd5;
+  padding: 0 8px;
+  color: var(--menu-brand-strong);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-menu-page .admin-menu-preset-edit-btn,
+.admin-side-backdrop .admin-product-side-head button,
+.admin-side-backdrop .admin-option-remove {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  place-items: center;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  background: #fff;
+  color: #475569;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
+}
+
+.admin-menu-page .admin-menu-preset-edit-btn:hover,
+.admin-side-backdrop .admin-product-side-head button:hover {
+  border-color: #fed7aa;
+  background: var(--menu-brand-soft);
+  color: var(--menu-brand-strong);
+}
+
+.admin-side-backdrop .admin-danger,
+.admin-side-backdrop .menu-item-editor-actions .admin-danger {
+  min-height: 42px;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  background: #fff1f2;
+  padding: 0 14px;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.admin-side-backdrop .admin-danger:hover,
+.admin-side-backdrop .menu-item-editor-actions .admin-danger:hover {
+  border-color: #fca5a5;
+  background: #fee2e2;
+}
+
+.admin-side-backdrop .menu-item-editor-actions > button:last-child,
+.admin-side-backdrop .menu-item-picker-actions .menu-item-picker-confirm-active,
+.admin-side-backdrop .admin-modal-actions > button:last-child {
+  min-height: 42px;
+  border: 1px solid #fb923c;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 850;
+  box-shadow: 0 10px 22px rgba(249, 115, 22, 0.2);
+}
+
+.admin-side-backdrop .menu-item-editor-actions > button:last-child:hover,
+.admin-side-backdrop .menu-item-picker-actions .menu-item-picker-confirm-active:hover,
+.admin-side-backdrop .admin-modal-actions > button:last-child:hover {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+.admin-side-backdrop .menu-item-editor-actions .admin-secondary {
+  justify-self: stretch;
+  border-color: var(--menu-border);
+  background: #fff;
+  color: #334155;
+}
+
+.admin-side-backdrop .menu-item-editor-actions .admin-secondary:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.admin-side-backdrop .admin-option-remove {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #dc2626;
+  font-size: 18px;
+}
+
+.admin-side-backdrop .admin-option-remove:hover {
+  background: #fee2e2;
+}
+
+.admin-side-backdrop .menu-item-picker-row,
+.admin-side-backdrop .menu-item-linked-group,
+.admin-side-backdrop .group-option-card {
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.admin-side-backdrop .menu-item-picker-row:hover,
+.admin-side-backdrop .menu-item-linked-group:hover,
+.admin-side-backdrop .group-option-card:hover {
+  background: #fff7ed;
+}
+
+.admin-side-backdrop .menu-item-picker-row input,
+.admin-side-backdrop .group-rule-radio input,
+.admin-side-backdrop .admin-required-check input {
+  accent-color: var(--menu-brand);
+}
+
+@media (max-width: 980px) {
+  .admin-menu-page .admin-menu-main-tabs {
+    width: 100%;
+  }
+
+  .admin-menu-page .admin-menu-main-tabs button {
+    flex: 1 1 auto;
+  }
+}

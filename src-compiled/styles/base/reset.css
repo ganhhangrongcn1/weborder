@@ -1,0 +1,15 @@
+﻿* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: "Inter", system-ui, -apple-system, Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 106, 0, 0.1), transparent 34%),
+    linear-gradient(135deg, #fffaf3, #f3eee6);
+  color: #3a1f14;
+}

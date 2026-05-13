@@ -1,0 +1,52 @@
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-stat,
+.admin-panel {
+  border: 1px solid #e7e9f0;
+  border-radius: 22px;
+  background: white;
+  box-shadow: 0 12px 28px rgba(23, 32, 51, 0.06);
+}
+
+.admin-stat {
+  padding: 22px;
+}
+
+.admin-stat span {
+  color: #7a8294;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.admin-stat strong {
+  display: block;
+  margin-top: 10px;
+  font-size: 28px;
+  font-weight: 950;
+}
+
+.admin-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-panel {
+  padding: 18px;
+}
+
+.admin-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-panel-head h2 {
+  font-size: 18px;
+  font-weight: 950;
+}

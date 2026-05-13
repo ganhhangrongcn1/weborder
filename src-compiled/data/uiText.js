@@ -1,0 +1,111 @@
+export const suggestText = {
+  title: "G\u1ee3i \u00fd \u0111\u1ea1t \u01b0u \u0111\u00e3i",
+  nearLabel: "S\u1eafp \u0111\u1ea1t \u01b0u \u0111\u00e3i",
+  doneLabel: "\u0110\u00e3 \u0111\u1ea1t \u01b0u \u0111\u00e3i",
+  addMore: "Th\u00eam",
+  toGet: "\u0111\u1ec3 nh\u1eadn",
+  reached: "B\u1ea1n \u0111\u00e3 \u0111\u1ea1t m\u1ed1c",
+  toppingTitle: "Topping th\u00eam",
+  quickAdd: "Ch\u1ecdn nhanh",
+  mainTitle: "M\u00f3n ch\u00ednh",
+  chooseMore: "Ch\u1ecdn th\u00eam m\u00f3n",
+  addonSpice: "Th\u00eam cho \u0111\u1ee7 v\u1ecb",
+  defaultSpice: "V\u1eeba cay",
+  teaTitle: "T\u1eb7ng tr\u00e0 xo\u00e0i",
+  teaReward: "Nh\u1eadn 1 ly tr\u00e0 xo\u00e0i",
+  freeshipTitle: "Freeship",
+  freeshipReward: "\u0110\u01a1n m\u00f3n t\u1eeb 150k mi\u1ec5n ph\u00ed giao h\u00e0ng",
+  secretGiftTitle: "Qu\u00e0 b\u00ed m\u1eadt",
+  secretGiftReward: "Mua \u0111\u1ee7 m\u1ed1c nh\u1eadn qu\u00e0",
+  addonShort: "Topping ri\u00eang t\u1eeb m\u1ee5c Th\u00eam cho \u0111\u1ee7 v\u1ecb.",
+  addonDescription: "M\u00f3n th\u00eam gi\u00fap \u0111\u01a1n \u0111\u1ee7 v\u1ecb h\u01a1n."
+};
+
+export const homeText = {
+  hello: "Ch\u00e0o b\u1ea1n",
+  morning: "Ch\u00e0o bu\u1ed5i s\u00e1ng",
+  subtitle: "H\u00f4m nay \u0103n g\u00ec cho \u0111\u00e3 th\u00e8m n\u00e8?",
+  search: "B\u1ea1n th\u00e8m g\u00ec h\u00f4m nay?",
+  bannerAria: "Xem banner",
+  bannerBadge: "\u01afu \u0111\u00e3i h\u00f4m nay",
+  bannerTiktokTitle: "Combo hot TikTok gi\u1ea3m \u0111\u1ebfn 30%",
+  bannerTiktokText: "B\u00e1nh tr\u00e1ng cay th\u01a1m, topping \u0111\u1ea7y tay, \u0111\u1eb7t l\u00e0 c\u00f3 ngay.",
+  bannerTiktokCta: "S\u0103n combo",
+  bannerTeaTitle: "Mua b\u00e1nh tr\u00e1ng t\u1eb7ng tr\u00e0 xo\u00e0i",
+  bannerTeaText: "\u0110\u01a1n t\u1eeb 79K c\u00f3 qu\u00e0 m\u00e1t l\u1ea1nh cho bu\u1ed5i x\u1ebf chi\u1ec1u.",
+  bannerTeaCta: "Xem \u01b0u \u0111\u00e3i",
+  bannerBirthdayTitle: "B\u00e1nh sinh nh\u1eadt b\u00e1nh tr\u00e1ng \u0111\u1ed9c l\u1ea1",
+  bannerBirthdayText: "M\u1ed9t chi\u1ebfc b\u00e1nh m\u1eb7n vui mi\u1ec7ng cho ti\u1ec7c b\u1ea1n th\u00e2n.",
+  bannerBirthdayCta: "\u0110\u1eb7t th\u1eed ngay",
+  freeshipTitle: "Freeship 150K",
+  freeshipText: "GHR h\u1ed7 tr\u1ee3 ph\u00ed ship khi \u0111\u01a1n \u0111\u1ee7 m\u1ed1c.",
+  newCustomerTitle: "Kh\u00e1ch m\u1edbi gi\u1ea3m 10K",
+  newCustomerText: "\u00c1p d\u1ee5ng cho l\u1ea7n \u0111\u1eb7t \u0111\u1ea7u ti\u00ean.",
+  freeTeaTitle: "T\u1eb7ng tr\u00e0 \u0111\u01a1n t\u1eeb 79K",
+  freeTeaText: "Th\u00eam m\u00f3n x\u1ebf chi\u1ec1u ngon h\u01a1n.",
+  pointsTitle: "T\u00edch \u0111i\u1ec3m \u0111\u1ed5i qu\u00e0",
+  pointsText: "Mua c\u00e0ng \u0111\u1ec1u, nh\u1eadn c\u00e0ng nhi\u1ec1u.",
+  goldTime: "Khung gi\u1edd v\u00e0ng",
+  flashTitle: "Flash Sale h\u00f4m nay",
+  dealTitle: "Deal h\u00f4m nay",
+  endAfter: "K\u1ebft th\u00fac sau",
+  categoryTitle: "Danh m\u1ee5c",
+  viewAll: "Xem t\u1ea5t c\u1ea3",
+  featuredTitle: "M\u00f3n \u0103n n\u1ed5i b\u1eadt",
+  viewMore: "Xem th\u00eam",
+  collapse: "Thu g\u1ecdn",
+  buyNow: "Mua ngay",
+  flashSub: "Gi\u1ea3m s\u00e2u trong khung gi\u1edd v\u00e0ng",
+  hotSelling: "\u0110ang b\u00e1n ch\u1ea1y",
+  all: "T\u1ea5t c\u1ea3",
+  bestseller: "Bestseller",
+  banhTrangTron: "B\u00e1nh Tr\u00e1ng Tr\u1ed9n",
+  banhTrangCuon: "B\u00e1nh Tr\u00e1ng Cu\u1ed1n",
+  banhTrangPhoiSuong: "B\u00e1nh Tr\u00e1ng Ph\u01a1i S\u01b0\u01a1ng",
+  combo: "Combo",
+  drink: "N\u01b0\u1edbc u\u1ed1ng"
+};
+
+export const menuText = {
+  title: "MENU",
+  searchPlaceholder: "T\u00ecm b\u00e1nh tr\u00e1ng, combo, tr\u00e0 xo\u00e0i...",
+  quickFilters: {
+    bestSelling: "B\u00e1n ch\u1ea1y",
+    combo: "Combo",
+    goodPrice: "Gi\u00e1 t\u1ed1t"
+  },
+  addonSectionEyebrow: "Th\u00eam cho \u0111\u1ee7 v\u1ecb",
+  addonSectionTitle: "Topping th\u00eam",
+  addonSectionHint: "K\u00e9o ngang \u0111\u1ec3 ch\u1ecdn",
+  addonShort: "Th\u00eam v\u1ecb ngon, h\u1ee3p m\u00f3n cay v\u00e0 s\u1ed1t me.",
+  addonDescription: "M\u00f3n th\u00eam gi\u00fap ph\u1ea7n \u0103n \u0111\u1eadm v\u1ecb h\u01a1n.",
+  addonSpice: "Kh\u00f4ng cay",
+  addonNote: "Topping th\u00eam t\u1eeb menu"
+};
+
+export const optionModalText = {
+  addToCart: "Th\u00eam v\u00e0o gi\u1ecf",
+  updateItem: "C\u1eadp nh\u1eadt m\u00f3n",
+  addonCategory: "Th\u00eam cho \u0111\u1ee7 v\u1ecb",
+  aria: "T\u00f9y ch\u1ecdn m\u00f3n",
+  close: "\u0110\u00f3ng",
+  requiredOne: "B\u1eaft bu\u1ed9c ch\u1ecdn 1 l\u1ef1a ch\u1ecdn.",
+  optionalMany: "Kh\u00f4ng b\u1eaft bu\u1ed9c, c\u00f3 th\u1ec3 ch\u1ecdn nhi\u1ec1u ph\u1ea7n.",
+  spiceTitle: "Ch\u1ecdn v\u1ecb / \u0111\u1ed9 cay",
+  requiredSpice: "B\u1eaft bu\u1ed9c ch\u1ecdn 1 m\u1ee9c \u0111\u1ed9 cay.",
+  toppingTitle: "Topping th\u00eam",
+  optionalTopping: "Kh\u00f4ng b\u1eaft bu\u1ed9c, c\u00f3 th\u1ec3 ch\u1ecdn nhi\u1ec1u ph\u1ea7n topping.",
+  note: "Ghi ch\u00fa",
+  notePlaceholder: "V\u00ed d\u1ee5: Kh\u00f4ng h\u00e0nh, \u00edt cay, nhi\u1ec1u s\u1ed1t...",
+  quantity: "S\u1ed1 l\u01b0\u1ee3ng",
+  subtotal: "T\u1ea1m t\u00ednh",
+  zeroDong: "0\u0111"
+};
+
+export const checkoutText = {
+  deliveryTo: "Giao h\u00e0ng \u0111\u1ebfn",
+  changeAddress: "\u0110\u1ed5i \u0111\u1ecba ch\u1ec9",
+  customerName: "T\u00ean kh\u00e1ch h\u00e0ng",
+  address: "\u0110\u1ecba ch\u1ec9",
+  phone: "S\u1ed1 \u0111i\u1ec7n tho\u1ea1i"
+};

@@ -1,0 +1,86 @@
+.admin-shell .admin-panel,
+.admin-shell .admin-mini-card {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-xl);
+  background: var(--admin-card-bg);
+  box-shadow: var(--admin-shadow-soft);
+}
+
+.admin-shell .admin-mini-card {
+  border-radius: var(--admin-radius-lg);
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-shell .admin-panel-head button,
+.admin-shell .admin-btn,
+.admin-shell .admin-secondary,
+.admin-shell .admin-danger {
+  display: inline-flex;
+  min-height: var(--admin-control-height-lg);
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--admin-radius-md);
+  padding: 0 14px;
+  font-size: var(--admin-font-size-md);
+  font-weight: var(--admin-font-weight-semibold);
+  transition: background-color var(--admin-transition), border-color var(--admin-transition), color var(--admin-transition), box-shadow var(--admin-transition), transform var(--admin-transition);
+}
+
+.admin-shell .admin-panel-head button,
+.admin-shell .admin-btn-primary {
+  border: 1px solid #fb923c;
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(249, 115, 22, 0.18);
+}
+
+.admin-shell .admin-btn,
+.admin-shell .admin-secondary {
+  border: 1px solid var(--admin-border-strong);
+  background: var(--admin-card-bg);
+  color: var(--admin-secondary);
+}
+
+.admin-shell .admin-danger {
+  border: 1px solid #fecaca;
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger);
+}
+
+.admin-shell .admin-input,
+.admin-shell .admin-status-select,
+.admin-shell .admin-search-input {
+  min-height: var(--admin-control-height-lg);
+  border: 1px solid var(--admin-border-strong);
+  border-radius: var(--admin-radius-md);
+  background: var(--admin-card-bg);
+  color: var(--admin-text);
+  font-size: var(--admin-font-size-md);
+  font-weight: var(--admin-font-weight-medium);
+  outline: none;
+}
+
+.admin-shell .admin-input:focus,
+.admin-shell .admin-status-select:focus,
+.admin-shell .admin-search-input:focus-within {
+  border-color: #fb923c;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+}
+
+@media (max-width: 980px) {
+  .admin-menu-sticky-toolbar,
+  .admin-promo-tabs {
+    position: static;
+  }
+
+  .admin-menu-bulk-section .admin-mini-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-menu-bulk-section .admin-mini-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,38 @@
+.input {
+  min-height: 48px;
+  border: 1px solid rgba(58, 31, 20, 0.1);
+  border-radius: 16px;
+  background: white;
+  padding: 0 14px;
+  color: #3a1f14;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.qty-btn {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(58, 31, 20, 0.1);
+  border-radius: 999px;
+  background: white;
+  color: #3a1f14;
+  font-weight: 900;
+}
+
+.choice {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(58, 31, 20, 0.1);
+  border-radius: 16px;
+  background: white;
+  padding: 0 14px;
+  color: #3a1f14;
+  font-size: 13px;
+  font-weight: 800;
+}
