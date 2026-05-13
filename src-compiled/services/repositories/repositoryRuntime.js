@@ -16,7 +16,10 @@ export function createRepositoryAdapter() {
   if (strategy.source === "supabase") {
     const client = requireSupabaseClient();
     if (!client) {
-      throw new Error("[repositoryRuntime] Supabase client is required in supabase-only mode.");
+      if (!localAdapterSingleton) {
+        localAdapterSingleton = createLocalStorageAdapter();
+      }
+      return localAdapterSingleton;
     }
     if (!supabaseAdapterSingleton || supabaseAdapterClient !== client) {
       supabaseAdapterSingleton = createSupabaseConfigAdapter({ supabaseClient: client });
