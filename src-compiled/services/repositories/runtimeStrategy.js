@@ -14,11 +14,9 @@ export function getRuntimeStrategy() {
   const hasSupabaseClient = Boolean(requireSupabaseClient());
   const configSyncEnabled = isSupabaseConfigSyncEnabled();
 
-  if (strictModeEnabled && source === "supabase" && !hasSupabaseClient) {
-    throw new Error("[runtimeStrategy] Supabase strict mode enabled but runtime client is unavailable.");
-  }
-
-  const shouldReadThroughSupabase = source === "supabase" && (hasSupabaseClient || strictModeEnabled);
+  // Do not hard-crash on first paint while runtime client is still bootstrapping.
+  // Strict mode is enforced by mode selection and write policy, not by startup throw.
+  const shouldReadThroughSupabase = source === "supabase" && hasSupabaseClient;
   const shouldWriteThroughSupabase = shouldReadThroughSupabase || configSyncEnabled;
   const mode = source === "supabase"
     ? strictModeEnabled
