@@ -1,5 +1,4 @@
 const MINUTE = 60 * 1000;
-const HOUR = 60 * MINUTE;
 
 export const DATA_STRATEGY = {
   HYBRID_CACHE: "hybrid-cache",
@@ -9,22 +8,22 @@ export const DATA_STRATEGY = {
 };
 
 export const CONFIG_KEY_TTL_MS = {
-  ghr_products: 15 * MINUTE,
-  ghr_categories: 15 * MINUTE,
-  ghr_toppings: 15 * MINUTE,
-  ghr_option_group_presets: 15 * MINUTE,
-  ghr_home_content: 10 * MINUTE,
-  ghr_banners: 10 * MINUTE,
-  ghr_smart_promotions: 5 * MINUTE,
-  ghr_coupons: 5 * MINUTE,
-  ghr_promos: 5 * MINUTE,
-  ghr_campaigns: 5 * MINUTE,
-  ghr_shipping_config: 30 * MINUTE,
-  ghr_branches: 30 * MINUTE,
-  ghr_hours: 30 * MINUTE,
-  ghr_zones: 30 * MINUTE,
-  ghr_loyalty: 30 * MINUTE,
-  ghr_zalo_config: 24 * HOUR
+  ghr_products: 1 * MINUTE,
+  ghr_categories: 1 * MINUTE,
+  ghr_toppings: 1 * MINUTE,
+  ghr_option_group_presets: 1 * MINUTE,
+  ghr_home_content: 1 * MINUTE,
+  ghr_banners: 1 * MINUTE,
+  ghr_smart_promotions: 1 * MINUTE,
+  ghr_coupons: 1 * MINUTE,
+  ghr_promos: 1 * MINUTE,
+  ghr_campaigns: 1 * MINUTE,
+  ghr_shipping_config: 1 * MINUTE,
+  ghr_branches: 1 * MINUTE,
+  ghr_hours: 1 * MINUTE,
+  ghr_zones: 1 * MINUTE,
+  ghr_loyalty: 1 * MINUTE,
+  ghr_zalo_config: 1 * MINUTE
 };
 
 export const HYBRID_CACHE_KEYS = new Set(Object.keys(CONFIG_KEY_TTL_MS));
