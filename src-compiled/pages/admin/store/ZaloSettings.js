@@ -57,7 +57,7 @@ export default function ZaloSettings({
             template: event.target.value
           }))
         }), /*#__PURE__*/_jsxs("small", {
-          children: ["Bi\u1EBFn h\u1ED7 tr\u1EE3: ", "{{customer_name}}, {{phone}}, {{items}}, {{total}}, {{address}}, {{note}}, {{order_code}}, {{order_time}}, {{fulfillment_type}}, {{pickup_branch}}, {{delivery_branch}}, {{payment_method}}, {{map_link}}, {{distance_km}}, {{subtotal}}, {{shipping_fee}}"]
+          children: ["Bi\u1EBFn h\u1ED7 tr\u1EE3: ", "{{customer_name}}, {{phone}}, {{items}}, {{total}}, {{address}}, {{note}}, {{order_code}}, {{order_time}}, {{fulfillment_type}}, {{pickup_branch}}, {{delivery_branch}}, {{payment_method}}, {{map_link}}, {{distance_km}}, {{subtotal}}, {{shipping_fee}}, {{order_link}}"]
         })]
       })]
     })

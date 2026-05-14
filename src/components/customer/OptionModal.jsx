@@ -9,7 +9,11 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
   const customOptionGroups = product.optionGroups?.length ? product.optionGroups : [];
   const usesCustomOptions = customOptionGroups.length > 0;
   const toppingTotal = selectedToppings.reduce((sum, topping) => sum + Number(topping.price || 0) * (topping.quantity || 1), 0);
-  const total = (product.price + toppingTotal) * quantity;
+  const productPrice = Number(product.price || 0);
+  const originalProductPrice = Number(product.originalPrice || 0);
+  const hasStrikePrice = originalProductPrice > productPrice;
+  const total = (productPrice + toppingTotal) * quantity;
+  const originalTotal = hasStrikePrice ? (originalProductPrice + toppingTotal) * quantity : 0;
 
   function getToppingQuantity(id, groupId = "") {
     return selectedToppings.find((item) => item.id === id && (groupId ? item.groupId === groupId : !item.groupId))?.quantity || 0;
@@ -110,7 +114,14 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
               <button onClick={onClose} aria-label={optionModalText.close} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-orange-50 text-sm font-black text-orange-600">X</button>
             </div>
             <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-brown/55">{product.short}</p>
-            <strong className="mt-2 block text-lg font-black text-orange-600">{formatMoney(product.price)}</strong>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              {hasStrikePrice && (
+                <span className="text-xs font-bold text-brown/35 line-through">
+                  {formatMoney(originalProductPrice)}
+                </span>
+              )}
+              <strong className="block text-lg font-black text-orange-600">{formatMoney(productPrice)}</strong>
+            </div>
           </div>
         </div>
 
@@ -211,7 +222,14 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
           <div className="option-modal-footer">
             <div className="flex items-center justify-between rounded-[22px] bg-orange-50 px-4 py-3">
               <span className="text-sm font-black uppercase text-brown/70">{optionModalText.subtotal}</span>
-              <strong className="text-xl font-black text-orange-600">{formatMoney(total)}</strong>
+              <div className="text-right">
+                {hasStrikePrice && (
+                  <span className="block text-xs font-bold text-brown/35 line-through">
+                    {formatMoney(originalTotal)}
+                  </span>
+                )}
+                <strong className="text-xl font-black text-orange-600">{formatMoney(total)}</strong>
+              </div>
             </div>
             <button onClick={handleAddToCart} className="cta w-full">{finalSubmitLabel}</button>
           </div>

@@ -28,7 +28,11 @@ export default function OptionModal({
   const customOptionGroups = product.optionGroups?.length ? product.optionGroups : [];
   const usesCustomOptions = customOptionGroups.length > 0;
   const toppingTotal = selectedToppings.reduce((sum, topping) => sum + Number(topping.price || 0) * (topping.quantity || 1), 0);
-  const total = (product.price + toppingTotal) * quantity;
+  const productPrice = Number(product.price || 0);
+  const originalProductPrice = Number(product.originalPrice || 0);
+  const hasStrikePrice = originalProductPrice > productPrice;
+  const total = (productPrice + toppingTotal) * quantity;
+  const originalTotal = hasStrikePrice ? (originalProductPrice + toppingTotal) * quantity : 0;
   function getToppingQuantity(id, groupId = "") {
     return selectedToppings.find(item => item.id === id && (groupId ? item.groupId === groupId : !item.groupId))?.quantity || 0;
   }
@@ -147,9 +151,15 @@ export default function OptionModal({
         }), /*#__PURE__*/_jsx("p", {
           className: "mt-1 line-clamp-2 text-xs font-semibold leading-5 text-brown/55",
           children: product.short
-        }), /*#__PURE__*/_jsx("strong", {
-          className: "mt-2 block text-lg font-black text-orange-600",
-          children: formatMoney(product.price)
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1",
+          children: [hasStrikePrice && /*#__PURE__*/_jsx("span", {
+            className: "text-xs font-bold text-brown/35 line-through",
+            children: formatMoney(originalProductPrice)
+          }), /*#__PURE__*/_jsx("strong", {
+            className: "block text-lg font-black text-orange-600",
+            children: formatMoney(productPrice)
+          })]
         })]
       })]
     }), /*#__PURE__*/_jsxs("div", {
@@ -287,9 +297,15 @@ export default function OptionModal({
           children: [/*#__PURE__*/_jsx("span", {
             className: "text-sm font-black uppercase text-brown/70",
             children: optionModalText.subtotal
-          }), /*#__PURE__*/_jsx("strong", {
-            className: "text-xl font-black text-orange-600",
-            children: formatMoney(total)
+          }), /*#__PURE__*/_jsxs("div", {
+            className: "text-right",
+            children: [hasStrikePrice && /*#__PURE__*/_jsx("span", {
+              className: "block text-xs font-bold text-brown/35 line-through",
+              children: formatMoney(originalTotal)
+            }), /*#__PURE__*/_jsx("strong", {
+              className: "text-xl font-black text-orange-600",
+              children: formatMoney(total)
+            })]
           })]
         }), /*#__PURE__*/_jsx("button", {
           onClick: handleAddToCart,

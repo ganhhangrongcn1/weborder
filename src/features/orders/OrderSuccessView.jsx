@@ -13,6 +13,14 @@ function buildOrderItemsText(orderItems) {
   }).join("\n");
 }
 
+function buildOrderLink(orderCode) {
+  const code = String(orderCode || "").trim();
+  if (!code) return "";
+  const path = `/orders?orderCode=${encodeURIComponent(code)}`;
+  if (typeof window === "undefined" || !window.location?.origin) return path;
+  return `${window.location.origin}${path}`;
+}
+
 export default function OrderSuccess({
   navigate,
   order,
@@ -33,15 +41,21 @@ export default function OrderSuccess({
   const subtotalValue = Number(order?.subtotal || orderItems.reduce((sum, item) => sum + (Number(item.lineTotal) || 0), 0));
   const shippingFeeValue = Number(order?.shippingFee || order?.deliveryFee || 0);
   const totalValue = Number(order?.totalAmount || order?.total || 0);
+  const orderCode = order?.orderCode || "GHR-1028";
+  const orderLink = buildOrderLink(orderCode);
   const zaloConfig = loadZaloConfig(rawZaloPhone);
-  const orderMessage = renderZaloTemplate(zaloConfig.template, {
+  const zaloTemplate = String(zaloConfig.template || "");
+  const templateWithOrderLink = zaloTemplate.includes("{{order_link}}")
+    ? zaloTemplate
+    : `${zaloTemplate}\n\uD83D\uDD0E Xem l\u1EA1i \u0111\u01A1n h\u00E0ng: {{order_link}}`;
+  const orderMessage = renderZaloTemplate(templateWithOrderLink, {
     customer_name: order?.customerName || "Khách",
     phone: order?.customerPhone || order?.phone || "",
     items: buildOrderItemsText(orderItems),
     total: formatMoney(totalValue),
     subtotal: formatMoney(subtotalValue),
     shipping_fee: isPickup ? "Không tính phí giao hàng" : formatMoney(shippingFeeValue),
-    order_code: order?.orderCode || "GHR-1028",
+    order_code: orderCode,
     order_time: order?.createdAt ? new Date(order.createdAt).toLocaleString("vi-VN") : new Date().toLocaleString("vi-VN"),
     fulfillment_type: isPickup ? "Đến lấy" : "Giao tận nơi",
     pickup_branch: [order?.pickupBranchName || order?.branchName || "", order?.pickupBranchAddress || order?.branchAddress || ""].filter(Boolean).join(" - "),
@@ -50,7 +64,8 @@ export default function OrderSuccess({
     map_link: mapLink || "",
     distance_km: !isPickup && order?.distanceKm ? `${Number(order.distanceKm).toFixed(1)}km` : "",
     address: isPickup ? order?.branchAddress || order?.branchName || "" : order?.deliveryAddress || "",
-    note: order?.note || ""
+    note: order?.note || "",
+    order_link: orderLink
   });
   const zaloUrl = buildZaloLink(zaloConfig.phone || rawZaloPhone, orderMessage);
 

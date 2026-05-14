@@ -149,7 +149,7 @@ export default function Checkout({
     navigate,
     onNotice: setCheckoutNotice
   });
-  const shippingZonesFromConfig = buildShippingZonesFromConfig(shippingConfig, deliveryFee, freeshipMinSubtotal, formatMoney);
+  const shippingZonesFromConfig = buildShippingZonesFromConfig(shippingConfig, deliveryFee, freeshipMinSubtotal, formatMoney, smartPromotions);
   useCheckoutPresetSync({
     setCheckoutPreset,
     fulfillmentType,

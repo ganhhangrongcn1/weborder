@@ -26,7 +26,6 @@ export default function CheckoutTotalCard({
   const appliedSupportMax = Math.max(0, Number(shippingSupportMax || 0));
   const displayedSubtotal = Number(subtotal || 0);
   const displayedOriginalSubtotal = Math.max(displayedSubtotal, Number(originalSubtotal || displayedSubtotal));
-  const hasSubtotalDiscount = displayedOriginalSubtotal > displayedSubtotal;
   const originalTotal = displayedOriginalSubtotal + rawShippingFee;
   const savingOriginalTotal = originalTotal + Math.max(0, Number(giftSavingAmount || 0));
   const savedAmount = Math.max(savingOriginalTotal - total, 0);
@@ -38,14 +37,8 @@ export default function CheckoutTotalCard({
         className: "summary-line",
         children: [/*#__PURE__*/_jsxs("span", {
           children: ["T\u1ED5ng t\u1EA1m t\xEDnh (", count, " m\xF3n)"]
-        }), /*#__PURE__*/_jsxs("strong", {
-          className: "flex flex-col items-end leading-tight",
-          children: [/*#__PURE__*/_jsx("span", {
-            children: formatMoney(displayedSubtotal)
-          }), hasSubtotalDiscount ? /*#__PURE__*/_jsx("del", {
-            className: "text-xs font-semibold text-brown/35",
-            children: formatMoney(displayedOriginalSubtotal)
-          }) : null]
+        }), /*#__PURE__*/_jsx("strong", {
+          children: formatMoney(displayedSubtotal)
         })]
       }), /*#__PURE__*/_jsxs("div", {
         className: "summary-line",
@@ -58,11 +51,11 @@ export default function CheckoutTotalCard({
           })]
         }), /*#__PURE__*/_jsx("strong", {
           children: isPickup ? "Không tính phí giao hàng" : shippingSupportDiscount > 0 ? /*#__PURE__*/_jsxs("span", {
-            className: "flex items-center gap-2",
+            className: "flex flex-col items-end leading-tight",
             children: [/*#__PURE__*/_jsx("span", {
               children: formatMoney(displayedShippingFee)
             }), /*#__PURE__*/_jsx("del", {
-              className: "text-brown/35",
+              className: "text-xs font-semibold text-brown/35",
               children: formatMoney(rawShippingFee)
             })]
           }) : formatMoney(displayedShippingFee)
@@ -107,19 +100,16 @@ export default function CheckoutTotalCard({
         className: "summary-final",
         children: [/*#__PURE__*/_jsx("span", {
           children: "T\u1ED5ng c\u1ED9ng"
-        }), /*#__PURE__*/_jsxs("strong", {
-          className: "flex flex-col items-end leading-tight",
-          children: [/*#__PURE__*/_jsx("span", {
-            children: formatMoney(total)
-          }), originalTotal > total ? /*#__PURE__*/_jsx("del", {
-            className: "text-sm font-semibold text-brown/35",
-            children: formatMoney(originalTotal)
-          }) : null]
+        }), /*#__PURE__*/_jsx("strong", {
+          children: formatMoney(total)
         })]
       }), savedAmount > 0 ? /*#__PURE__*/_jsxs("div", {
         className: "summary-saving",
         children: [/*#__PURE__*/_jsxs("span", {
-          children: ["B\u1EA1n ti\u1EBFt ki\u1EC7m \u0111\u01B0\u1EE3c ", formatMoney(savedAmount)]
+          children: [/*#__PURE__*/_jsx("span", {
+            "aria-hidden": "true",
+            children: "\uD83C\uDF89"
+          }), " B\u1EA1n ti\u1EBFt ki\u1EC7m \u0111\u01B0\u1EE3c ", formatMoney(savedAmount)]
         }), /*#__PURE__*/_jsx("del", {
           children: formatMoney(savingOriginalTotal)
         })]

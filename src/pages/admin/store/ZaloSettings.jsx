@@ -51,7 +51,7 @@ export default function ZaloSettings({ zaloConfig, setZaloConfig, onSave }) {
             onChange={(event) => setDraftConfig((current) => ({ ...current, template: event.target.value }))}
           />
           <small>
-            Biến hỗ trợ: {"{{customer_name}}, {{phone}}, {{items}}, {{total}}, {{address}}, {{note}}, {{order_code}}, {{order_time}}, {{fulfillment_type}}, {{pickup_branch}}, {{delivery_branch}}, {{payment_method}}, {{map_link}}, {{distance_km}}, {{subtotal}}, {{shipping_fee}}"}
+            Biến hỗ trợ: {"{{customer_name}}, {{phone}}, {{items}}, {{total}}, {{address}}, {{note}}, {{order_code}}, {{order_time}}, {{fulfillment_type}}, {{pickup_branch}}, {{delivery_branch}}, {{payment_method}}, {{map_link}}, {{distance_km}}, {{subtotal}}, {{shipping_fee}}, {{order_link}}"}
           </small>
         </div>
       </div>

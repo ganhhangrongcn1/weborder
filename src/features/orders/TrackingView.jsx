@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import AppHeader from "../../components/app/Header.jsx";
 import AppEmptyState from "../../components/app/EmptyState.jsx";
@@ -38,6 +38,18 @@ export default function Tracking({
   const canViewFullOrderCode = Boolean(currentPhone);
   const maskOrderCode = (code) => String(code || "GHR-****").replace(/GHR-\d{4}/i, "GHR-****");
 
+  useEffect(() => {
+    if (selectedOrder || !orders.length || typeof window === "undefined") return;
+    const targetCode = new URLSearchParams(window.location.search).get("orderCode");
+    if (!targetCode) return;
+    const matchedOrder = orders.find((order) => {
+      const id = String(order?.id || "").trim().toLowerCase();
+      const code = String(order?.orderCode || "").trim().toLowerCase();
+      return id === targetCode.trim().toLowerCase() || code === targetCode.trim().toLowerCase();
+    });
+    if (matchedOrder) setSelectedOrder(matchedOrder);
+  }, [orders, selectedOrder]);
+
   const shouldShowLoading = isOrdersLoading && orders.length === 0;
   const shouldShowEmpty = !shouldShowLoading && orders.length === 0;
 
@@ -59,6 +71,18 @@ export default function Tracking({
   };
 
   const formatOrderTime = (value) => (value ? formatTime(value) : "--");
+
+  const closeSelectedOrder = () => {
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("orderCode")) {
+        url.searchParams.delete("orderCode");
+        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState(window.history.state, "", nextUrl);
+      }
+    }
+    setSelectedOrder(null);
+  };
 
   return (
     <section>
@@ -175,7 +199,7 @@ export default function Tracking({
           formatOrderTime={formatOrderTime}
           canViewFullOrderCode={canViewFullOrderCode}
           maskOrderCode={maskOrderCode}
-          onClose={() => setSelectedOrder(null)}
+          onClose={closeSelectedOrder}
         />
       )}
     </section>

@@ -26,7 +26,6 @@ export default function CheckoutTotalCard({
   const appliedSupportMax = Math.max(0, Number(shippingSupportMax || 0));
   const displayedSubtotal = Number(subtotal || 0);
   const displayedOriginalSubtotal = Math.max(displayedSubtotal, Number(originalSubtotal || displayedSubtotal));
-  const hasSubtotalDiscount = displayedOriginalSubtotal > displayedSubtotal;
   const originalTotal = displayedOriginalSubtotal + rawShippingFee;
   const savingOriginalTotal = originalTotal + Math.max(0, Number(giftSavingAmount || 0));
   const savedAmount = Math.max(savingOriginalTotal - total, 0);
@@ -36,12 +35,7 @@ export default function CheckoutTotalCard({
       <div className="checkout-total-summary">
         <div className="summary-line">
           <span>Tổng tạm tính ({count} món)</span>
-          <strong className="flex flex-col items-end leading-tight">
-            <span>{formatMoney(displayedSubtotal)}</span>
-            {hasSubtotalDiscount ? (
-              <del className="text-xs font-semibold text-brown/35">{formatMoney(displayedOriginalSubtotal)}</del>
-            ) : null}
-          </strong>
+          <strong>{formatMoney(displayedSubtotal)}</strong>
         </div>
 
         <div className="summary-line">
@@ -53,9 +47,9 @@ export default function CheckoutTotalCard({
             {isPickup ? (
               "Không tính phí giao hàng"
             ) : shippingSupportDiscount > 0 ? (
-              <span className="flex items-center gap-2">
+              <span className="flex flex-col items-end leading-tight">
                 <span>{formatMoney(displayedShippingFee)}</span>
-                <del className="text-brown/35">{formatMoney(rawShippingFee)}</del>
+                <del className="text-xs font-semibold text-brown/35">{formatMoney(rawShippingFee)}</del>
               </span>
             ) : (
               formatMoney(displayedShippingFee)
@@ -100,17 +94,12 @@ export default function CheckoutTotalCard({
 
         <div className="summary-final">
           <span>Tổng cộng</span>
-          <strong className="flex flex-col items-end leading-tight">
-            <span>{formatMoney(total)}</span>
-            {originalTotal > total ? (
-              <del className="text-sm font-semibold text-brown/35">{formatMoney(originalTotal)}</del>
-            ) : null}
-          </strong>
+          <strong>{formatMoney(total)}</strong>
         </div>
 
         {savedAmount > 0 ? (
           <div className="summary-saving">
-            <span>Bạn tiết kiệm được {formatMoney(savedAmount)}</span>
+            <span><span aria-hidden="true">🎉</span> Bạn tiết kiệm được {formatMoney(savedAmount)}</span>
             <del>{formatMoney(savingOriginalTotal)}</del>
           </div>
         ) : null}

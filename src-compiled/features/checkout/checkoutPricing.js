@@ -108,12 +108,35 @@ export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, form
   ]);
 }
 
-export function buildShippingZonesFromConfig(shippingConfig, deliveryFee, freeshipMinSubtotal, formatMoney) {
-  const maxSupportShipFee = Number(shippingConfig.maxSupportShipFee || 0);
+function getActiveFreeShipPromo(smartPromotions = []) {
+  return getActivePromotions(smartPromotions, "checkout").find(
+    (promotion) => promotion.type === "free_shipping" || promotion.reward?.type === "shipping_discount"
+  );
+}
+
+function getPromoSupportCap(promotion) {
+  return Number(
+    promotion?.condition?.maxSupportShipFee ??
+    promotion?.reward?.maxSupportShipFee ??
+    0
+  );
+}
+
+export function buildShippingZonesFromConfig(shippingConfig, deliveryFee, freeshipMinSubtotal, formatMoney, smartPromotions = []) {
+  const activeFreeShipPromo = getActiveFreeShipPromo(smartPromotions);
+  const freeShipThreshold = Number(
+    activeFreeShipPromo?.condition?.minSubtotal ??
+    shippingConfig.freeShipThreshold ??
+    freeshipMinSubtotal
+  );
+  const maxSupportShipFee = activeFreeShipPromo
+    ? getPromoSupportCap(activeFreeShipPromo)
+    : Number(shippingConfig.maxSupportShipFee || 0);
+
   return [
     `0-3km \u0111\u1ea7u: ${formatMoney(Number(shippingConfig.baseFeeFirst3Km || deliveryFee))}`,
     `M\u1ed7i km sau: +${formatMoney(Number(shippingConfig.feePerNextKm || 0))}/km`,
-    `Freeship \u0111\u01a1n t\u1eeb ${formatMoney(Number(shippingConfig.freeShipThreshold || freeshipMinSubtotal))}`,
+    `Freeship \u0111\u01a1n t\u1eeb ${formatMoney(freeShipThreshold)}`,
     `Qu\u00e1n h\u1ed7 tr\u1ee3 ship t\u1ed1i \u0111a: ${maxSupportShipFee > 0 ? formatMoney(maxSupportShipFee) : "Kh\u00f4ng gi\u1edbi h\u1ea1n"}`,
     `B\u00e1n k\u00ednh giao t\u1ed1i \u0111a: ${Number(shippingConfig.maxRadiusKm || 0)}km`
   ];
@@ -132,15 +155,9 @@ export function calculateCheckoutPricing({
   loyaltyRule
 }) {
   const baseCheckoutShip = fulfillmentType === "pickup" ? 0 : baseShippingByConfig;
-  const activeFreeShipPromo = getActivePromotions(smartPromotions, "checkout").find(
-    (promotion) => promotion.type === "free_shipping" || promotion.reward.type === "shipping_discount"
-  );
+  const activeFreeShipPromo = getActiveFreeShipPromo(smartPromotions);
   const freeShipMinSubtotal = activeFreeShipPromo?.condition?.minSubtotal ?? Number(shippingConfig.freeShipThreshold || freeshipMinSubtotal);
-  const promoSupportCap = Number(
-    activeFreeShipPromo?.condition?.maxSupportShipFee ??
-    activeFreeShipPromo?.reward?.maxSupportShipFee ??
-    0
-  );
+  const promoSupportCap = getPromoSupportCap(activeFreeShipPromo);
   const promoShipSupport =
     fulfillmentType !== "pickup" && activeFreeShipPromo && subtotal >= freeShipMinSubtotal
       ? promoSupportCap > 0
