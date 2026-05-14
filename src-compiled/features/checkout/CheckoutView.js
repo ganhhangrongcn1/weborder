@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Icon from "../../components/Icon.js";
 import GoongAddressPicker from "../../components/GoongAddressPicker.js";
 import AppHeader from "../../components/app/Header.js";
@@ -67,6 +67,10 @@ export default function Checkout({
   const [isDeliveryFeeModalOpen, setIsDeliveryFeeModalOpen] = useState(false);
   const [checkoutNotice, setCheckoutNotice] = useState(null);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
+  const [pickupContact, setPickupContact] = useState(() => ({
+    name: demoUser?.name || userProfile?.name || "",
+    phone: currentPhone || demoUser?.phone || userProfile?.phone || ""
+  }));
   const {
     deliveryInfo,
     deliveryDistanceKm,
@@ -126,6 +130,17 @@ export default function Checkout({
   }, 0), [cart]);
   const selectedBranchInfo = pickupBranches.find(branch => branch.id === selectedBranch) || pickupBranches[0] || null;
   const pickupTimeText = pickupMode === "soon" ? "Sẵn sàng sau khoảng 20 phút" : `${pickupClock} - ${pickupDate}`;
+  const pickupDeliveryInfo = useMemo(() => ({
+    ...deliveryInfo,
+    name: pickupContact.name,
+    phone: pickupContact.phone,
+    address: selectedBranchInfo?.address || "Khách tự đến lấy",
+    lat: null,
+    lng: null,
+    distanceKm: null,
+    deliveryFee: 0
+  }), [deliveryInfo, pickupContact.name, pickupContact.phone, selectedBranchInfo?.address]);
+  const checkoutDeliveryInfo = fulfillmentType === "pickup" ? pickupDeliveryInfo : deliveryInfo;
   const {
     updateQty,
     handlePlaceOrder
@@ -141,7 +156,7 @@ export default function Checkout({
     selectedPromo,
     pointsDiscount,
     deliveryDistanceKm,
-    deliveryInfo,
+    deliveryInfo: checkoutDeliveryInfo,
     fulfillmentType,
     selectedBranchInfo,
     deliverySourceBranch,
@@ -179,6 +194,13 @@ export default function Checkout({
     if (!Array.isArray(cart) || cart.length > 0) return;
     navigate("home", "home");
   }, [cart, navigate]);
+  useEffect(() => {
+    if (!currentPhone && !demoUser?.phone && !userProfile?.phone) return;
+    setPickupContact(current => ({
+      name: current.name || demoUser?.name || userProfile?.name || "",
+      phone: current.phone || currentPhone || demoUser?.phone || userProfile?.phone || ""
+    }));
+  }, [currentPhone, demoUser?.name, demoUser?.phone, userProfile?.name, userProfile?.phone]);
   const handleCheckoutPlaceOrder = async () => {
     const orderBranch = fulfillmentType === "pickup" ? selectedBranchInfo : deliverySourceBranch;
     const storeNotice = getStoreBlockNotice?.();
@@ -229,42 +251,81 @@ export default function Checkout({
             value: deliveryInfo.phone
           })]
         })
-      }) : /*#__PURE__*/_jsx(CheckoutCard, {
-        title: "Chọn chi nhánh để lấy",
-        children: /*#__PURE__*/_jsx("div", {
-          className: "space-y-3",
-          children: (selectedBranchInfo && !isChangingBranch ? [selectedBranchInfo] : pickupBranches).map(branch => /*#__PURE__*/_jsxs("button", {
-            onClick: () => {
-              setSelectedBranch(branch.id);
-              setIsChangingBranch(false);
-            },
-            className: `branch-card ${selectedBranch === branch.id ? "branch-card-active" : ""}`,
-            children: [/*#__PURE__*/_jsx("span", {
-              className: "grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600",
-              children: /*#__PURE__*/_jsx(Icon, {
-                name: "home",
-                size: 18
-              })
-            }), /*#__PURE__*/_jsxs("span", {
-              className: "min-w-0 flex-1 text-left",
-              children: [/*#__PURE__*/_jsx("strong", {
-                children: branch.name
-              }), /*#__PURE__*/_jsx("small", {
-                children: branch.address
-              }), /*#__PURE__*/_jsx("em", {
-                children: branch.time
+      }) : /*#__PURE__*/_jsxs(Fragment, {
+        children: [/*#__PURE__*/_jsx(CheckoutCard, {
+          title: "Thông tin người nhận",
+          children: /*#__PURE__*/_jsxs("div", {
+            className: "grid gap-3",
+            children: [/*#__PURE__*/_jsxs("div", {
+              className: "grid grid-cols-2 gap-3",
+              children: [/*#__PURE__*/_jsxs("label", {
+                className: "pickup-field",
+                children: [/*#__PURE__*/_jsx("span", {
+                  children: "Tên của bạn"
+                }), /*#__PURE__*/_jsx("input", {
+                  value: pickupContact.name,
+                  onChange: event => setPickupContact(current => ({
+                    ...current,
+                    name: event.target.value
+                  })),
+                  placeholder: "Ví dụ: Anh Minh"
+                })]
+              }), /*#__PURE__*/_jsxs("label", {
+                className: "pickup-field",
+                children: [/*#__PURE__*/_jsx("span", {
+                  children: "Số điện thoại"
+                }), /*#__PURE__*/_jsx("input", {
+                  value: pickupContact.phone,
+                  onChange: event => setPickupContact(current => ({
+                    ...current,
+                    phone: event.target.value.replace(/\D/g, "")
+                  })),
+                  inputMode: "tel",
+                  placeholder: "09..."
+                })]
               })]
-            }), /*#__PURE__*/_jsx("span", {
-              className: "branch-radio",
-              children: selectedBranch === branch.id ? "✓" : ""
+            }), /*#__PURE__*/_jsx("p", {
+              className: "rounded-2xl bg-orange-50 px-3 py-2 text-xs font-semibold leading-5 text-orange-700",
+              children: "Quán dùng thông tin này để xác nhận người đến lấy và tích điểm cho bạn."
             })]
-          }, branch.id)).concat(selectedBranchInfo && !isChangingBranch ? [/*#__PURE__*/_jsx("button", {
-            type: "button",
-            onClick: () => setIsChangingBranch(true),
-            className: "w-full text-left text-sm font-semibold text-orange-600",
-            children: "Bấm vào đổi chi nhánh lấy"
-          }, "change-branch")] : [])
-        })
+          })
+        }), /*#__PURE__*/_jsx(CheckoutCard, {
+          title: "Chọn chi nhánh để lấy",
+          children: /*#__PURE__*/_jsx("div", {
+            className: "space-y-3",
+            children: (selectedBranchInfo && !isChangingBranch ? [selectedBranchInfo] : pickupBranches).map(branch => /*#__PURE__*/_jsxs("button", {
+              onClick: () => {
+                setSelectedBranch(branch.id);
+                setIsChangingBranch(false);
+              },
+              className: `branch-card ${selectedBranch === branch.id ? "branch-card-active" : ""}`,
+              children: [/*#__PURE__*/_jsx("span", {
+                className: "grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600",
+                children: /*#__PURE__*/_jsx(Icon, {
+                  name: "home",
+                  size: 18
+                })
+              }), /*#__PURE__*/_jsxs("span", {
+                className: "min-w-0 flex-1 text-left",
+                children: [/*#__PURE__*/_jsx("strong", {
+                  children: branch.name
+                }), /*#__PURE__*/_jsx("small", {
+                  children: branch.address
+                }), /*#__PURE__*/_jsx("em", {
+                  children: branch.time
+                })]
+              }), /*#__PURE__*/_jsx("span", {
+                className: "branch-radio",
+                children: selectedBranch === branch.id ? "✓" : ""
+              })]
+            }, branch.id)).concat(selectedBranchInfo && !isChangingBranch ? [/*#__PURE__*/_jsx("button", {
+              type: "button",
+              onClick: () => setIsChangingBranch(true),
+              className: "w-full text-left text-sm font-semibold text-orange-600",
+              children: "Bấm vào đổi chi nhánh lấy"
+            }, "change-branch")] : [])
+          })
+        })]
       }), fulfillmentType === "delivery" ? null : /*#__PURE__*/_jsx(CheckoutCard, {
         title: "Thời gian đến lấy",
         children: /*#__PURE__*/_jsxs("div", {

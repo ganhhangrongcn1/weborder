@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import Icon from "../../components/Icon.js";
 import { loadZaloConfig, renderZaloTemplate, buildZaloLink } from "../../services/zaloService.js";
 import { formatMoney } from "../../utils/format.js";
@@ -22,6 +23,7 @@ export default function OrderSuccess({
   orderStatus,
   confirmCurrentOrder
 }) {
+  const [hasOpenedZalo, setHasOpenedZalo] = useState(false);
   const effectiveStatus = String(order?.status || orderStatus || "").toLowerCase();
   const isConfirmed = Boolean(order?.zaloSentAt) || ["confirmed", "preparing", "cooking", "delivering", "done", "completed"].includes(effectiveStatus);
   const rawZaloPhone = String(branchPhone || "0788422424").replace(/\D/g, "") || "0788422424";
@@ -56,6 +58,16 @@ export default function OrderSuccess({
     order_link: orderLink
   });
   const zaloUrl = buildZaloLink(zaloConfig.phone || rawZaloPhone, orderMessage);
+  useEffect(() => {
+    if (isConfirmed || hasOpenedZalo) return undefined;
+    const handleBeforeUnload = event => {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasOpenedZalo, isConfirmed]);
   async function copyOrderText(showAlert = false) {
     try {
       await navigator.clipboard.writeText(orderMessage);
@@ -65,6 +77,7 @@ export default function OrderSuccess({
     }
   }
   async function copyOrderForZalo() {
+    setHasOpenedZalo(true);
     await copyOrderText(false);
   }
   function markZaloSent() {
@@ -79,10 +92,10 @@ export default function OrderSuccess({
         children: isConfirmed ? "OK" : "..."
       }), /*#__PURE__*/_jsx("h1", {
         className: `mt-6 text-2xl font-black ${isConfirmed ? "text-green-700" : "text-orange-700"}`,
-        children: isConfirmed ? "Đơn hàng đã được gửi xác nhận" : "Đơn hàng đang chờ xác nhận"
+        children: isConfirmed ? "Đơn hàng đã được gửi xác nhận" : "Còn 1 bước để quán nhận đơn"
       }), /*#__PURE__*/_jsx("p", {
         className: "mt-2 text-sm font-bold text-brown/70",
-        children: isConfirmed ? "Bạn đã mở Zalo để gửi thông tin đơn cho quán." : "Bước cuối: gửi thông tin đơn qua Zalo để quán xác nhận và bắt đầu chuẩn bị món."
+        children: isConfirmed ? "Bạn đã mở Zalo để gửi thông tin đơn cho quán." : "Bạn cần gửi tin nhắn Zalo để quán xác nhận và bắt đầu chuẩn bị món."
       }), /*#__PURE__*/_jsxs("div", {
         className: "mt-6 rounded-[24px] bg-white p-5 shadow-soft",
         children: [/*#__PURE__*/_jsx("p", {
@@ -95,17 +108,24 @@ export default function OrderSuccess({
           className: "mt-4 text-sm font-semibold text-brown/65",
           children: ["Th\u1EDDi gian \u0111\u1EB7t", /*#__PURE__*/_jsx("br", {}), order?.createdAt ? new Date(order.createdAt).toLocaleString("vi-VN") : new Date().toLocaleString("vi-VN")]
         })]
+      }), !isConfirmed && /*#__PURE__*/_jsx("a", {
+        href: zaloUrl,
+        target: "_blank",
+        rel: "noreferrer",
+        onClick: copyOrderForZalo,
+        className: "mt-5 block w-full rounded-2xl bg-gradient-main py-4 text-center text-sm font-black uppercase text-white shadow-orange",
+        children: "G\u1EEDi \u0111\u01A1n qua Zalo ngay"
       }), /*#__PURE__*/_jsxs("div", {
         className: `mt-4 rounded-[24px] border bg-white/85 p-4 text-left shadow-soft ${isConfirmed ? "border-green-200" : "border-orange-200"}`,
         children: [!isConfirmed && /*#__PURE__*/_jsx("p", {
           className: "mb-3 rounded-2xl bg-orange-50 px-3 py-2 text-xs text-orange-700",
-          children: "Qu\xE1n ch\u1EC9 b\u1EAFt \u0111\u1EA7u chu\u1EA9n b\u1ECB m\xF3n sau khi nh\u1EADn \u0111\u01B0\u1EE3c tin nh\u1EAFn x\xE1c nh\u1EADn tr\xEAn Zalo."
+          children: "L\u01B0u \xFD: qu\xE1n ch\u1EC9 b\u1EAFt \u0111\u1EA7u chu\u1EA9n b\u1ECB m\xF3n sau khi nh\u1EADn \u0111\u01B0\u1EE3c tin nh\u1EAFn x\xE1c nh\u1EADn tr\xEAn Zalo."
         }), /*#__PURE__*/_jsxs("div", {
           className: "flex items-start gap-3",
           children: [/*#__PURE__*/_jsx("span", {
             className: `grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${isConfirmed ? "bg-green-50 text-green-600" : "bg-orange-50 text-orange-600"}`,
             children: /*#__PURE__*/_jsx(Icon, {
-              name: "share",
+              name: "phone",
               size: 18
             })
           }), /*#__PURE__*/_jsxs("div", {
@@ -114,7 +134,7 @@ export default function OrderSuccess({
               children: isConfirmed ? "Đã mở Zalo xác nhận đơn" : "Gửi Zalo để quán xác nhận đơn"
             }), /*#__PURE__*/_jsx("p", {
               className: "mt-1 text-xs leading-5 text-brown/60",
-              children: isConfirmed ? "Nếu bạn chưa gửi tin nhắn trong Zalo hoặc đã lỡ copy nội dung khác, hãy copy lại nội dung đơn rồi dán vào khung chat quán." : "Bấm nút bên dưới để mở Zalo quán. Nội dung đơn đã được copy sẵn, bạn chỉ cần dán và gửi cho quán."
+              children: isConfirmed ? "Nếu bạn chưa gửi tin nhắn trong Zalo hoặc đã lỡ copy nội dung khác, hãy copy lại nội dung đơn rồi dán vào khung chat quán." : hasOpenedZalo ? "Zalo đã được mở. Sau khi gửi tin nhắn cho quán, quay lại đây và bấm nút xác nhận bên dưới." : "Bấm nút cam phía trên để mở Zalo quán. Nội dung đơn sẽ được copy sẵn, bạn chỉ cần dán và gửi cho quán."
             })]
           })]
         }), isConfirmed ? /*#__PURE__*/_jsxs("div", {
@@ -130,20 +150,22 @@ export default function OrderSuccess({
             className: "rounded-2xl bg-orange-50 px-3 py-3 text-center text-xs font-black text-orange-600",
             children: "M\u1EDF l\u1EA1i Zalo"
           })]
-        }) : /*#__PURE__*/_jsxs("div", {
+        }) : /*#__PURE__*/_jsx("div", {
           className: "mt-3 grid gap-2",
-          children: [/*#__PURE__*/_jsx("a", {
-            href: zaloUrl,
-            target: "_blank",
-            rel: "noreferrer",
-            onClick: copyOrderForZalo,
-            className: "block w-full rounded-2xl bg-gradient-main py-4 text-center text-sm font-black uppercase text-white shadow-orange",
-            children: "M\u1EDF Zalo v\xE0 copy n\u1ED9i dung \u0111\u01A1n"
-          }), /*#__PURE__*/_jsx("button", {
-            onClick: markZaloSent,
-            className: "w-full rounded-2xl border border-green-200 bg-green-50 px-3 py-3 text-xs font-black text-green-700",
-            children: "T\xF4i \u0111\xE3 g\u1EEDi tin nh\u1EAFn Zalo"
-          })]
+          children: hasOpenedZalo ? /*#__PURE__*/_jsxs(_Fragment, {
+            children: [/*#__PURE__*/_jsx("button", {
+              onClick: markZaloSent,
+              className: "w-full rounded-2xl border border-green-200 bg-green-50 px-3 py-3 text-xs font-black text-green-700",
+              children: "T\xF4i \u0111\xE3 g\u1EEDi Zalo r\u1ED3i"
+            }), /*#__PURE__*/_jsx("button", {
+              onClick: () => copyOrderText(true),
+              className: "w-full rounded-2xl border border-orange-100 bg-orange-50 px-3 py-3 text-xs font-black text-orange-600",
+              children: "Copy l\u1EA1i n\u1ED9i dung \u0111\u01A1n"
+            })]
+          }) : /*#__PURE__*/_jsx("p", {
+            className: "rounded-2xl bg-cream px-3 py-3 text-xs font-semibold leading-5 text-brown/60",
+            children: "N\xFAt x\xE1c nh\u1EADn s\u1EBD hi\u1EC7n sau khi b\u1EA1n b\u1EA5m m\u1EDF Zalo, \u0111\u1EC3 tr\xE1nh qu\xEAn g\u1EEDi \u0111\u01A1n cho qu\xE1n."
+          })
         })]
       }), isConfirmed && /*#__PURE__*/_jsxs(_Fragment, {
         children: [/*#__PURE__*/_jsx("button", {

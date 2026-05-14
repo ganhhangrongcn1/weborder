@@ -24,7 +24,7 @@ export const DEFAULT_ZALO_TEMPLATE = [
 function normalizeZaloConfig(config, fallbackPhone) {
   return {
     phone: String(config?.phone || fallbackPhone || "0788422424").replace(/\D/g, "") || String(fallbackPhone || "0788422424").replace(/\D/g, ""),
-    template: String(config?.template || DEFAULT_ZALO_TEMPLATE)
+    template: DEFAULT_ZALO_TEMPLATE
   };
 }
 

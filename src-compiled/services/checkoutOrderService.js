@@ -4,7 +4,9 @@ export function validateCheckoutContact({ deliveryInfo, fulfillmentType }) {
   if (!deliveryInfo.name || !deliveryInfo.phone || (fulfillmentType === "delivery" && !deliveryInfo.address)) {
     return {
       ok: false,
-      message: "Vui lòng nhập đủ tên, số điện thoại và địa chỉ giao hàng."
+      message: fulfillmentType === "pickup"
+        ? "Vui lòng nhập tên và số điện thoại để quán xác nhận người đến lấy và tích điểm."
+        : "Vui lòng nhập đủ tên, số điện thoại và địa chỉ giao hàng."
     };
   }
 

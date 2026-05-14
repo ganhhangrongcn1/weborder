@@ -1,22 +1,43 @@
 import { useEffect, useMemo, useState } from "react";
-import { DEFAULT_ZALO_TEMPLATE } from "../../../services/zaloService.js";
-import { AdminButton, AdminInput, AdminPanel, AdminTextarea } from "../ui/index.js";
+import { DEFAULT_ZALO_TEMPLATE, renderZaloTemplate } from "../../../services/zaloService.js";
+import { AdminButton, AdminInput, AdminPanel } from "../ui/index.js";
+
+const PREVIEW_MESSAGE = renderZaloTemplate(DEFAULT_ZALO_TEMPLATE, {
+  customer_name: "Khách ví dụ",
+  phone: "09xx xxx xxx",
+  items: "- Bánh tráng trộn ví dụ x1: 35.000đ",
+  total: "54.000đ",
+  address: "Địa chỉ giao hàng ví dụ",
+  note: "Ghi chú ví dụ",
+  order_code: "GHR-0000",
+  order_time: "01/01/2026 12:00",
+  fulfillment_type: "Giao tận nơi",
+  map_link: "https://maps.google.com/...",
+  shipping_fee: "19.000đ",
+  order_link: "https://ganhhangrong.vn/orders?orderCode=GHR-0000"
+});
+
+function normalizePhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
 
 export default function ZaloSettings({ zaloConfig, setZaloConfig, onSave }) {
-  const [draftConfig, setDraftConfig] = useState(() => ({ ...(zaloConfig || {}) }));
+  const [draftPhone, setDraftPhone] = useState(() => normalizePhone(zaloConfig?.phone));
 
   useEffect(() => {
-    setDraftConfig({ ...(zaloConfig || {}) });
-  }, [zaloConfig]);
+    setDraftPhone(normalizePhone(zaloConfig?.phone));
+  }, [zaloConfig?.phone]);
 
-  const hasChanges = useMemo(
-    () => JSON.stringify(draftConfig || {}) !== JSON.stringify(zaloConfig || {}),
-    [draftConfig, zaloConfig]
-  );
+  const savedPhone = normalizePhone(zaloConfig?.phone);
+  const hasChanges = useMemo(() => draftPhone !== savedPhone, [draftPhone, savedPhone]);
 
   const handleSave = () => {
-    setZaloConfig(draftConfig);
-    onSave(draftConfig);
+    const nextConfig = {
+      phone: draftPhone,
+      template: DEFAULT_ZALO_TEMPLATE
+    };
+    setZaloConfig(nextConfig);
+    onSave(nextConfig);
   };
 
   return (
@@ -38,21 +59,19 @@ export default function ZaloSettings({ zaloConfig, setZaloConfig, onSave }) {
         <div className="admin-mini-card">
           <label>Số điện thoại Zalo nhận đơn</label>
           <AdminInput
-            value={draftConfig.phone || ""}
-            onChange={(event) => setDraftConfig((current) => ({ ...current, phone: event.target.value.replace(/\D/g, "") }))}
+            value={draftPhone}
+            onChange={(event) => setDraftPhone(normalizePhone(event.target.value))}
+            placeholder="Ví dụ: 0788422424"
           />
-          <small>Dùng số dạng 09... hoặc 03... (không khoảng trắng).</small>
+          <small>Dùng số dạng 09... hoặc 03... không nhập khoảng trắng.</small>
         </div>
+
         <div className="admin-mini-card">
-          <label>Nội dung tin nhắn mẫu</label>
-          <AdminTextarea
-            rows="10"
-            value={draftConfig.template || DEFAULT_ZALO_TEMPLATE}
-            onChange={(event) => setDraftConfig((current) => ({ ...current, template: event.target.value }))}
-          />
-          <small>
-            Biến hỗ trợ: {"{{customer_name}}, {{phone}}, {{items}}, {{total}}, {{address}}, {{note}}, {{order_code}}, {{order_time}}, {{fulfillment_type}}, {{pickup_branch}}, {{delivery_branch}}, {{payment_method}}, {{map_link}}, {{distance_km}}, {{subtotal}}, {{shipping_fee}}, {{order_link}}"}
-          </small>
+          <label>Xem trước tin nhắn khách sẽ gửi</label>
+          <pre className="mt-3 max-h-[320px] overflow-auto whitespace-pre-wrap rounded-[18px] border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+            {PREVIEW_MESSAGE}
+          </pre>
+          <small>Thông tin khách trong khung này đã được che. Nội dung thật sẽ tự tạo theo đơn hàng, admin không cần chỉnh mẫu.</small>
         </div>
       </div>
     </AdminPanel>
