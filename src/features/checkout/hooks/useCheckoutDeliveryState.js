@@ -1,5 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
-import { calculateBaseShippingFeeByConfig, loadShippingConfig } from "../../../services/shippingService.js";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  calculateBaseShippingFeeByConfig,
+  loadShippingConfig,
+  loadShippingConfigAsync
+} from "../../../services/shippingService.js";
 import {
   buildDeliveryInfoFromAddress,
   createInitialDeliveryInfo,
@@ -29,7 +33,25 @@ export default function useCheckoutDeliveryState({
   const initialDistance = deliveryInfo.distanceKm || estimateDistanceKm(deliveryInfo.address);
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState(initialDistance);
   const [deliveryFeeSource, setDeliveryFeeSource] = useState(initialDistance ? "Demo ước tính" : "Chưa có địa chỉ");
-  const shippingConfig = useMemo(() => loadShippingConfig(), []);
+  const [shippingConfig, setShippingConfig] = useState(() => loadShippingConfig());
+
+  useEffect(() => {
+    let disposed = false;
+
+    loadShippingConfigAsync()
+      .then((remoteConfig) => {
+        if (!disposed && remoteConfig) {
+          setShippingConfig(remoteConfig);
+        }
+      })
+      .catch((error) => {
+        console.warn("[checkout] load shipping config failed", error);
+      });
+
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   const { deliveryEligibleBranches, deliverySourceBranch, deliveryOrigin } = useMemo(
     () => resolveDeliveryContext({
