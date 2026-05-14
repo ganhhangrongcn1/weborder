@@ -380,7 +380,7 @@
   border-radius: 8px;
   background: #f0441d;
   color: #fff;
-  content: "âš¡";
+  content: "\26A1";
   font-size: 14px;
   line-height: 1;
 }
@@ -392,7 +392,7 @@
 }
 
 .home2026-deal-head > button::after {
-  content: " â€º";
+  content: " \203A";
   color: #ff6a00;
   font-size: 18px;
   vertical-align: -1px;

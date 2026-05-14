@@ -93,6 +93,8 @@ export default function HomeFlashSale({
   getCountdownParts,
   formatCountdown
 }) {
+  const canViewAll = Array.isArray(flashProducts) && flashProducts.length > 1;
+
   return (
     <>
       <section className="home2026-section home2026-flash-deal">
@@ -102,12 +104,14 @@ export default function HomeFlashSale({
             <span>{endAfter}</span>
             <HomeDealTimer getCountdownParts={getCountdownParts} secondsLeft={secondsLeft} />
           </div>
-          <button type="button" onClick={() => setFlashModalOpen(true)}>{viewAll}</button>
+          {canViewAll && (
+            <button type="button" onClick={() => setFlashModalOpen(true)}>{viewAll}</button>
+          )}
         </div>
         {mainFlashProduct && <HomeFlashDealCard product={mainFlashProduct} onBuy={() => openOptionModal(mainFlashProduct)} flashSub={flashSub} />}
       </section>
 
-      {flashModalOpen && (
+      {canViewAll && flashModalOpen && (
         <FlashSaleSheet
           products={flashProducts}
           onClose={() => setFlashModalOpen(false)}

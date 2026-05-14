@@ -143,6 +143,7 @@ export default function HomeFlashSale({
   getCountdownParts,
   formatCountdown
 }) {
+  const canViewAll = Array.isArray(flashProducts) && flashProducts.length > 1;
   return /*#__PURE__*/_jsxs(_Fragment, {
     children: [/*#__PURE__*/_jsxs("section", {
       className: "home2026-section home2026-flash-deal",
@@ -158,7 +159,7 @@ export default function HomeFlashSale({
             getCountdownParts: getCountdownParts,
             secondsLeft: secondsLeft
           })]
-        }), /*#__PURE__*/_jsx("button", {
+        }), canViewAll && /*#__PURE__*/_jsx("button", {
           type: "button",
           onClick: () => setFlashModalOpen(true),
           children: viewAll
@@ -168,7 +169,7 @@ export default function HomeFlashSale({
         onBuy: () => openOptionModal(mainFlashProduct),
         flashSub: flashSub
       })]
-    }), flashModalOpen && /*#__PURE__*/_jsx(FlashSaleSheet, {
+    }), canViewAll && flashModalOpen && /*#__PURE__*/_jsx(FlashSaleSheet, {
       products: flashProducts,
       onClose: () => setFlashModalOpen(false),
       onBuy: product => {

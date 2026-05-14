@@ -117,6 +117,7 @@ export default function useHomeComputed({
         const discountPercent = Math.round(((basePrice - salePrice) / basePrice) * 100);
         return {
           ...product,
+          price: salePrice,
           originalPrice: basePrice,
           salePrice,
           discountPercent,
