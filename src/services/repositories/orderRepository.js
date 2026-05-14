@@ -2,6 +2,7 @@ import { getCustomerKey } from "../storageService.js";
 import { createRuntimeAppConfigRepository } from "./appConfigRepository.js";
 import { coreSupabaseRepository } from "./coreSupabaseRepository.js";
 import { normalizeOrdersByPhoneMap } from "./phoneDataMigration.js";
+import { getRuntimeStrategy } from "./runtimeStrategy.js";
 import { STORAGE_KEYS } from "./storageKeys.js";
 import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
 
@@ -206,13 +207,39 @@ export const orderRepository = {
     await repository.setAsync(STORAGE_KEYS.ordersByPhone, normalizedNext);
     ordersRemoteCache = { value: normalizedNext, cachedAt: Date.now() };
     notifyOrdersChanged();
+    const runtime = getRuntimeStrategy();
+    const shouldWriteOrders = shouldWriteDomainToSupabase("orders");
+    console.info("[order-debug] upsertOrderAsync:runtime", {
+      source: runtime?.source,
+      effectiveSource: runtime?.effectiveSource,
+      strictModeEnabled: runtime?.strictModeEnabled,
+      hasSupabaseClient: runtime?.hasSupabaseClient,
+      shouldReadThroughSupabase: runtime?.shouldReadThroughSupabase,
+      shouldWriteThroughSupabase: runtime?.shouldWriteThroughSupabase,
+      shouldWriteOrders
+    });
     if (shouldWriteDomainToSupabase("orders")) {
       try {
+        console.info("[order-debug] upsertOrderAsync:remote-write:start", {
+          orderId: nextOrder.id,
+          orderCode: nextOrder.orderCode
+        });
         await coreSupabaseRepository.upsertOrderToTable(nextOrder);
+        console.info("[order-debug] upsertOrderAsync:remote-write:ok", {
+          orderId: nextOrder.id
+        });
       } catch (error) {
         console.warn("[orderRepository] upsert single order failed", error);
+        console.error("[order-debug] upsertOrderAsync:remote-write:failed", {
+          message: error?.message || String(error || ""),
+          code: error?.code || "",
+          details: error?.details || "",
+          hint: error?.hint || ""
+        });
         throw error;
       }
+    } else {
+      console.warn("[order-debug] upsertOrderAsync:remote-write:skipped");
     }
     return nextOrder;
   },

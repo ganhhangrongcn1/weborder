@@ -32,10 +32,17 @@ export default function useCheckoutActions({
   }));
 
   const handlePlaceOrder = async () => {
+    console.info("[checkout-debug] handlePlaceOrder:start", {
+      hasDeliveryName: Boolean(deliveryInfo?.name),
+      hasDeliveryPhone: Boolean(deliveryInfo?.phone),
+      hasDeliveryAddress: Boolean(deliveryInfo?.address),
+      fulfillmentType
+    });
     const validation = validateCheckoutContact({
       deliveryInfo,
       fulfillmentType
     });
+    console.info("[checkout-debug] handlePlaceOrder:validation", validation);
 
     if (!validation.ok) {
       if (typeof onNotice === "function") {
@@ -66,10 +73,19 @@ export default function useCheckoutActions({
       deliverySourceBranch,
       pickupTimeText
     });
+    console.info("[checkout-debug] handlePlaceOrder:payload", {
+      totalAmount: orderPayload.totalAmount,
+      pointsBaseAmount: orderPayload.pointsBaseAmount,
+      phone: orderPayload?.deliveryInfo?.phone || "",
+      fulfillmentType: orderPayload.fulfillmentType
+    });
 
     let order = null;
     try {
       order = await createOrderFromCheckout(orderPayload);
+      console.info("[checkout-debug] handlePlaceOrder:createOrderFromCheckout:ok", {
+        orderCode: order?.orderCode || order?.id || ""
+      });
     } catch (error) {
       console.error("[checkout] createOrderFromCheckout failed", {
         message: error?.message || String(error || ""),
