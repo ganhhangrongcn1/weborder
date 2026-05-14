@@ -1,24 +1,30 @@
 const FALLBACK_SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
 const FALLBACK_SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
 
+function readBooleanEnv(value, fallback = false) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return fallback;
+  return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
+}
+
 export function isSupabaseConfigSyncEnabled() {
-  return String(import.meta.env?.VITE_ENABLE_SUPABASE_CONFIG_SYNC || "false").toLowerCase() === "true";
+  return readBooleanEnv(import.meta.env?.VITE_ENABLE_SUPABASE_CONFIG_SYNC, false);
 }
 
 export function isMenuSchemaBridgeMigrationEnabled() {
-  return String(import.meta.env?.VITE_ENABLE_MENU_SCHEMA_BRIDGE_MIGRATION || "false").toLowerCase() === "true";
+  return readBooleanEnv(import.meta.env?.VITE_ENABLE_MENU_SCHEMA_BRIDGE_MIGRATION, false);
 }
 
 export function isSupabaseSeedMigrationEnabled() {
-  return String(import.meta.env?.VITE_ENABLE_SUPABASE_SEED_MIGRATION || "false").toLowerCase() === "true";
+  return readBooleanEnv(import.meta.env?.VITE_ENABLE_SUPABASE_SEED_MIGRATION, false);
 }
 
 export function isSupabaseRuntimeWriteEnabled() {
-  return String(import.meta.env?.VITE_ENABLE_SUPABASE_RUNTIME_WRITES || "false").toLowerCase() === "true";
+  return readBooleanEnv(import.meta.env?.VITE_ENABLE_SUPABASE_RUNTIME_WRITES, false);
 }
 
 export function isSupabaseStrictModeEnabled() {
-  return String(import.meta.env?.VITE_SUPABASE_STRICT_MODE || "false").toLowerCase() === "true";
+  return readBooleanEnv(import.meta.env?.VITE_SUPABASE_STRICT_MODE, false);
 }
 
 export function getSupabaseEnvConfig() {
