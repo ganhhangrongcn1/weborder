@@ -31,6 +31,22 @@ function sortByCreatedAtDesc(items = []) {
   return [...items].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
+function canWriteOrdersToSupabase() {
+  return shouldWriteDomainToSupabase("orders");
+}
+
+async function persistOrderLocalAsync(nextOrder, phoneKey) {
+  await repository.setAsync(STORAGE_KEYS.lastCreatedOrderId, String(nextOrder.id || nextOrder.orderCode || "").trim());
+  await repository.setAsync(STORAGE_KEYS.currentOrder, nextOrder || null);
+  const all = await orderRepository.getAllByPhoneAsync();
+  const current = Array.isArray(all[phoneKey]) ? all[phoneKey] : [];
+  const next = { ...all, [phoneKey]: [nextOrder, ...current] };
+  const normalizedNext = normalizeOrdersByPhoneMap(next);
+  await repository.setAsync(STORAGE_KEYS.ordersByPhone, normalizedNext);
+  ordersRemoteCache = { value: normalizedNext, cachedAt: Date.now() };
+  notifyOrdersChanged();
+}
+
 export const orderRepository = {
   getCartDraft(fallback = []) {
     const raw = repository.get(STORAGE_KEYS.cartDraft, fallback);
@@ -87,7 +103,7 @@ export const orderRepository = {
     const saved = repository.set(STORAGE_KEYS.ordersByPhone, normalized);
     ordersRemoteCache = { value: normalized, cachedAt: Date.now() };
     notifyOrdersChanged();
-    if (!options?.skipRemote && shouldWriteDomainToSupabase("orders")) {
+    if (!options?.skipRemote && canWriteOrdersToSupabase()) {
       coreSupabaseRepository.writeOrdersByPhoneToTable(normalized).catch((error) => {
         console.warn("[orderRepository] write orders tables failed", error);
       });
@@ -116,7 +132,7 @@ export const orderRepository = {
     const all = this.getAllByPhone();
     const current = Array.isArray(all[key]) ? all[key] : [];
     this.saveAllByPhone({ ...all, [key]: [nextOrder, ...current] }, { skipRemote: true });
-    if (shouldWriteDomainToSupabase("orders")) {
+    if (canWriteOrdersToSupabase()) {
       coreSupabaseRepository.upsertOrderToTable(nextOrder).catch((error) => {
         console.warn("[orderRepository] upsert single order failed", error);
       });
@@ -160,7 +176,7 @@ export const orderRepository = {
     const saved = await repository.setAsync(STORAGE_KEYS.ordersByPhone, normalized);
     ordersRemoteCache = { value: normalized, cachedAt: Date.now() };
     notifyOrdersChanged();
-    if (!options?.skipRemote && shouldWriteDomainToSupabase("orders")) {
+    if (!options?.skipRemote && canWriteOrdersToSupabase()) {
       try {
         await coreSupabaseRepository.writeOrdersByPhoneToTable(normalized);
       } catch (error) {
@@ -198,17 +214,9 @@ export const orderRepository = {
     nextOrder.phone = key;
     nextOrder.customerPhoneKey = key;
     nextOrder.rawCustomerPhone = nextOrder.rawCustomerPhone || nextOrder.customerPhone || nextOrder.phone;
-    await repository.setAsync(STORAGE_KEYS.lastCreatedOrderId, String(nextOrder.id || nextOrder.orderCode || "").trim());
-    await repository.setAsync(STORAGE_KEYS.currentOrder, nextOrder || null);
-    const all = await this.getAllByPhoneAsync();
-    const current = Array.isArray(all[key]) ? all[key] : [];
-    const next = { ...all, [key]: [nextOrder, ...current] };
-    const normalizedNext = normalizeOrdersByPhoneMap(next);
-    await repository.setAsync(STORAGE_KEYS.ordersByPhone, normalizedNext);
-    ordersRemoteCache = { value: normalizedNext, cachedAt: Date.now() };
-    notifyOrdersChanged();
+    await persistOrderLocalAsync(nextOrder, key);
     const runtime = getRuntimeStrategy();
-    const shouldWriteOrders = shouldWriteDomainToSupabase("orders");
+    const shouldWriteOrders = canWriteOrdersToSupabase();
     console.info("[order-debug] upsertOrderAsync:runtime", {
       source: runtime?.source,
       effectiveSource: runtime?.effectiveSource,
@@ -218,7 +226,7 @@ export const orderRepository = {
       shouldWriteThroughSupabase: runtime?.shouldWriteThroughSupabase,
       shouldWriteOrders
     });
-    if (shouldWriteDomainToSupabase("orders")) {
+    if (shouldWriteOrders) {
       try {
         console.info("[order-debug] upsertOrderAsync:remote-write:start", {
           orderId: nextOrder.id,
@@ -246,7 +254,7 @@ export const orderRepository = {
   subscribeRealtimeByPhone(phone, onSynced) {
     const key = getCustomerKey(phone);
     if (!key) return () => {};
-    if (!shouldWriteDomainToSupabase("orders")) return () => {};
+    if (!canWriteOrdersToSupabase()) return () => {};
 
     const handleChange = async ({ payload }) => {
       const changedPhone = getCustomerKey(
