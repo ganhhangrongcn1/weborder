@@ -174,7 +174,7 @@ export default function Checkout({
     navigate("home", "home");
   }, [cart, navigate]);
 
-  const handleCheckoutPlaceOrder = () => {
+  const handleCheckoutPlaceOrder = async () => {
     const orderBranch = fulfillmentType === "pickup" ? selectedBranchInfo : deliverySourceBranch;
     const storeNotice = getStoreBlockNotice?.();
 
@@ -188,7 +188,7 @@ export default function Checkout({
       return;
     }
 
-    handlePlaceOrder();
+    await handlePlaceOrder();
   };
 
   return /*#__PURE__*/_jsxs("section", {

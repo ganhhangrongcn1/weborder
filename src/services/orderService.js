@@ -28,6 +28,9 @@ export const orderStorage = {
   addOrder(order) {
     return orderRepository.upsertOrder(order);
   },
+  async addOrderAsync(order) {
+    return orderRepository.upsertOrderAsync(order);
+  },
   saveAll(ordersByPhone) {
     return orderRepository.saveAllByPhone(ordersByPhone);
   },
@@ -192,6 +195,151 @@ export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee =
     orderStatus: order.status
   });
   if (!currentPhone || getCustomerKey(currentPhone) === order.phone) setDemoLoyaltyState(nextPhoneLoyalty);
+  if (fulfillmentType !== "pickup" && deliveryInfo?.address) {
+    const phoneAddresses = addressStorage.getAll(order.phone);
+    const existingAddress = phoneAddresses.find((address) => address.address.trim().toLowerCase() === deliveryInfo.address.trim().toLowerCase());
+    const baseAddresses = existingAddress
+      ? updateAddress(phoneAddresses, existingAddress.id, { label: "Giao gan nhat", receiverName: deliveryInfo.name, phone: order.phone, lat: deliveryInfo.lat, lng: deliveryInfo.lng, distanceKm: deliveryInfo.distanceKm, deliveryFee: deliveryInfo.deliveryFee })
+      : addAddress(phoneAddresses, { label: "Giao gan nhat", receiverName: deliveryInfo.name, phone: order.phone, address: deliveryInfo.address, lat: deliveryInfo.lat, lng: deliveryInfo.lng, distanceKm: deliveryInfo.distanceKm, deliveryFee: deliveryInfo.deliveryFee, isDefault: true });
+    const defaultId = existingAddress?.id || baseAddresses[0].id;
+    const defaulted = setDefaultAddress(baseAddresses, defaultId);
+    const savedAddresses = addressStorage.saveAll([defaulted.find((address) => address.id === defaultId), ...defaulted.filter((address) => address.id !== defaultId)].filter(Boolean), order.phone);
+    if (getCustomerKey(currentPhone) === order.phone) setDemoAddressesState(savedAddresses);
+  }
+
+  setUserProfile((profile) => {
+    const nextTotalSpent = profile.totalSpent + totalAmount;
+    const nextAddresses = fulfillmentType === "pickup" || !deliveryInfo?.address
+      ? profile.addresses
+      : [{ id: Date.now(), title: "Giao gan nhat", detail: deliveryInfo.address, active: true }, ...profile.addresses.map((address) => ({ ...address, active: false }))].slice(0, 4);
+    return {
+      ...profile,
+      name: profile.name,
+      phone: deliveryInfo?.phone || profile.phone,
+      points: Number(nextPhoneLoyalty?.totalPoints || profile.points || 0),
+      totalOrders: profile.totalOrders + 1,
+      totalSpent: nextTotalSpent,
+      memberRank: getMemberRank(nextTotalSpent),
+      addresses: nextAddresses,
+      orderHistory: [savedOrder, ...profile.orderHistory],
+      pointHistory: Array.isArray(nextPhoneLoyalty?.pointHistory) ? nextPhoneLoyalty.pointHistory : profile.pointHistory
+    };
+  });
+  setCurrentOrder(savedOrder);
+  setOrderStatus("pending_zalo");
+  setCart([]);
+  return order;
+}
+
+export async function createOrderAsync(params) {
+  const {
+    cart,
+    totalAmount,
+    pointsBaseAmount,
+    shippingFee = 0,
+    originalShippingFee = shippingFee,
+    shippingSupportDiscount = 0,
+    promoDiscount = 0,
+    promoCode = "",
+    promoSource = "",
+    promoVoucherId = "",
+    pointsDiscount = 0,
+    distanceKm = null,
+    lat = null,
+    lng = null,
+    deliveryInfo,
+    fulfillmentType,
+    branchInfo = null,
+    pickupTimeText = "",
+    paymentMethod,
+    userProfile,
+    currentPhone,
+    setDemoOrdersState,
+    loyaltyByPhoneStorage,
+    setDemoLoyaltyState,
+    addressStorage,
+    updateAddress,
+    addAddress,
+    setDefaultAddress,
+    setDemoAddressesState,
+    setUserProfile,
+    getMemberRank,
+    setCurrentOrder,
+    setOrderStatus,
+    setCart,
+    saveDemoUser
+  } = params;
+
+  if (!Array.isArray(cart) || !cart.length) return null;
+  const orderCode = `GHR-${Date.now().toString().slice(-4)}`;
+  const createdAt = new Date().toISOString();
+  const pointsAmount = Number(pointsBaseAmount ?? totalAmount ?? 0);
+  const pointsEarned = calculateOrderPoints(pointsAmount, getLoyaltyRuleConfig());
+  const order = {
+    id: orderCode,
+    orderCode,
+    phone: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
+    customerPhoneKey: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
+    rawCustomerPhone: deliveryInfo?.phone || userProfile.phone || "",
+    items: cart,
+    subtotal: pointsBaseAmount ?? totalAmount,
+    shippingFee,
+    originalShippingFee,
+    shippingSupportDiscount,
+    promoDiscount,
+    promoCode,
+    promoSource,
+    promoVoucherId,
+    pointsDiscount,
+    distanceKm,
+    deliveryFee: shippingFee,
+    lat,
+    lng,
+    total: totalAmount,
+    totalAmount,
+    createdAt,
+    status: "pending_zalo",
+    customerName: deliveryInfo?.name || userProfile.name,
+    orderCustomerName: deliveryInfo?.name || userProfile.name,
+    customerPhone: deliveryInfo?.phone || userProfile.phone,
+    fulfillmentType,
+    branchId: branchInfo?.id || "",
+    branchName: branchInfo?.name || "",
+    branchAddress: branchInfo?.address || "",
+    pickupBranchId: fulfillmentType === "pickup" ? (branchInfo?.id || "") : "",
+    pickupBranchName: fulfillmentType === "pickup" ? (branchInfo?.name || "") : "",
+    pickupBranchAddress: fulfillmentType === "pickup" ? (branchInfo?.address || "") : "",
+    deliveryBranchId: fulfillmentType === "delivery" ? (branchInfo?.id || "") : "",
+    deliveryBranchName: fulfillmentType === "delivery" ? (branchInfo?.name || "") : "",
+    deliveryBranchAddress: fulfillmentType === "delivery" ? (branchInfo?.address || "") : "",
+    pickupTimeText,
+    deliveryAddress: fulfillmentType === "pickup" ? "Khach tu den lay" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
+    paymentMethod,
+    pointsEarned
+  };
+
+  const savedOrder = await orderStorage.addOrderAsync(order);
+  if (currentPhone && getCustomerKey(currentPhone) === order.phone && saveDemoUser) {
+    saveDemoUser({ phone: order.phone, registered: true });
+  }
+  if (getCustomerKey(currentPhone) === order.phone) {
+    const latestOrders = await orderStorage.getByPhoneAsync(order.phone);
+    setDemoOrdersState(latestOrders);
+  }
+
+  const nextPhoneLoyalty = applyOrderLoyalty({
+    phone: order.phone,
+    orderId: orderCode,
+    amount: pointsAmount,
+    createdAt,
+    promoSource,
+    promoVoucherId,
+    promoCode,
+    pointsDiscount: Number(pointsDiscount || 0),
+    orderStatus: order.status
+  });
+  if (!currentPhone || getCustomerKey(currentPhone) === order.phone) setDemoLoyaltyState(nextPhoneLoyalty);
+
   if (fulfillmentType !== "pickup" && deliveryInfo?.address) {
     const phoneAddresses = addressStorage.getAll(order.phone);
     const existingAddress = phoneAddresses.find((address) => address.address.trim().toLowerCase() === deliveryInfo.address.trim().toLowerCase());

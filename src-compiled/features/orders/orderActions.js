@@ -1,4 +1,4 @@
-import { createOrder, orderStorage } from "../../services/orderService.js";
+import { createOrderAsync, orderStorage } from "../../services/orderService.js";
 
 export function createOrderActions({
   cart,
@@ -22,7 +22,7 @@ export function createOrderActions({
   currentOrder,
   saveDemoUser
 }) {
-  function createOrderFromCheckout({
+  async function createOrderFromCheckout({
     totalAmount,
     pointsBaseAmount,
     shippingFee = 0,
@@ -42,7 +42,7 @@ export function createOrderActions({
     pickupTimeText = "",
     paymentMethod
   }) {
-    return createOrder({
+    return createOrderAsync({
       cart,
       totalAmount,
       pointsBaseAmount,

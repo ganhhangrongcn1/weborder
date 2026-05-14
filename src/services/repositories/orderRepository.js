@@ -211,6 +211,7 @@ export const orderRepository = {
         await coreSupabaseRepository.upsertOrderToTable(nextOrder);
       } catch (error) {
         console.warn("[orderRepository] upsert single order failed", error);
+        throw error;
       }
     }
     return nextOrder;

@@ -171,7 +171,7 @@ export default function Checkout({
     if (!Array.isArray(cart) || cart.length > 0) return;
     navigate("home", "home");
   }, [cart, navigate]);
-  const handleCheckoutPlaceOrder = () => {
+  const handleCheckoutPlaceOrder = async () => {
     const orderBranch = fulfillmentType === "pickup" ? selectedBranchInfo : deliverySourceBranch;
     const storeNotice = getStoreBlockNotice?.();
     if (orderBranch && isBranchOpenNow && !isBranchOpenNow(orderBranch)) {
@@ -182,7 +182,7 @@ export default function Checkout({
       setServiceNotice?.(storeNotice);
       return;
     }
-    handlePlaceOrder();
+    await handlePlaceOrder();
   };
   return /*#__PURE__*/_jsxs("section", {
     children: [/*#__PURE__*/_jsx(AppHeader, {

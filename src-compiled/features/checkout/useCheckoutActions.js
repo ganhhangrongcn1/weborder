@@ -31,7 +31,7 @@ export default function useCheckoutActions({
     };
   }));
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     const validation = validateCheckoutContact({
       deliveryInfo,
       fulfillmentType
@@ -67,7 +67,27 @@ export default function useCheckoutActions({
       pickupTimeText
     });
 
-    const order = createOrderFromCheckout(orderPayload);
+    let order = null;
+    try {
+      order = await createOrderFromCheckout(orderPayload);
+    } catch (error) {
+      console.error("[checkout] createOrderFromCheckout failed", {
+        message: error?.message || String(error || ""),
+        code: error?.code || "",
+        details: error?.details || "",
+        hint: error?.hint || ""
+      });
+      if (typeof onNotice === "function") {
+        onNotice({
+          title: "Không thể tạo đơn hàng",
+          message: "Không thể ghi đơn lên hệ thống. Vui lòng thử lại sau.",
+          icon: "warning"
+        });
+      } else {
+        alert("Không thể tạo đơn hàng. Vui lòng thử lại sau.");
+      }
+      return;
+    }
     if (!order) {
       if (typeof onNotice === "function") {
         onNotice({

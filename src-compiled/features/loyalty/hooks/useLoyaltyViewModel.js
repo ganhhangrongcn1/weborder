@@ -185,7 +185,6 @@ export default function useLoyaltyViewModel({
       lastMissedStreak: missedStreak,
       comebackUsedDate: useComeback ? today : loyalty.comebackUsedDate
     };
-    saveLoyalty(nextData);
     if (currentPhone && isRegisteredCustomer) {
       const events = [
         {
@@ -209,7 +208,14 @@ export default function useLoyaltyViewModel({
           metadata: pointEntries[index + 1] || {}
         }))
       ];
-      await Promise.allSettled(events.map((event) => loyaltyRepository.appendEventByPhoneAsync(currentPhone, event)));
+      const results = await Promise.allSettled(
+        events.map((event) => loyaltyRepository.appendEventByPhoneAsync(currentPhone, event))
+      );
+      const failed = results.filter((item) => item.status === "rejected");
+      if (failed.length) {
+        console.error("[loyalty] appendEventByPhoneAsync failed", failed.map((item) => item.reason));
+        return;
+      }
       const refreshed = await loyaltyRepository.getByPhoneAsync(currentPhone, defaultResetLoyalty());
       const normalizedRemote = normalizeLoyaltyData(refreshed);
       setLoyalty(normalizedRemote);
@@ -224,6 +230,7 @@ export default function useLoyaltyViewModel({
       }
     }
     if (!currentPhone || !isRegisteredCustomer) {
+      saveLoyalty(nextData);
       setUserProfile((profile) => ({
         ...profile,
         points: Number(profile?.points || 0) + totalEarned,
