@@ -6,6 +6,7 @@ import {
 } from "./catalogSupabaseRepository.js";
 import { getRuntimeStrategy } from "./runtimeStrategy.js";
 import { shouldWriteConfigKeyToSupabase } from "./writeThroughPolicy.js";
+import { shouldAllowLocalFallbackForDomain } from "./writeThroughPolicy.js";
 
 export const CATALOG_CONFIG_KEYS = {
   products: "ghr_products",
@@ -43,8 +44,9 @@ export const LAZY_CATALOG_CONFIG_KEYS = [
 const lazyCatalogKeySet = new Set(LAZY_CATALOG_CONFIG_KEYS);
 export const catalogConfigRepository = {
   get(key, fallback) {
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("menuCatalog");
     if (lazyCatalogKeySet.has(key)) {
-      return adminConfigRepository.getLocal(key, fallback);
+      return allowLocalFallback ? adminConfigRepository.getLocal(key, fallback) : fallback;
     }
     return adminConfigRepository.get(key, fallback);
   },
@@ -52,6 +54,7 @@ export const catalogConfigRepository = {
     return adminConfigRepository.set(key, value);
   },
   async getAsync(key, fallback) {
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("menuCatalog");
     const strategy = getRuntimeStrategy();
     if (strategy.shouldReadThroughSupabase) {
       const standardValue = await readCatalogFromStandardTable(key, fallback);
@@ -63,6 +66,7 @@ export const catalogConfigRepository = {
         : standardValue !== fallback;
       if (hasStandardValue) return standardValue;
     }
+    if (!allowLocalFallback) return fallback;
     return adminConfigRepository.getAsync(key, fallback);
   },
   async getManyAsync(keyFallbackPairs = []) {

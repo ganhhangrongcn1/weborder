@@ -172,3 +172,28 @@ export function shouldWriteConfigKeyToSupabase(key) {
 
   return safeConfigKeys.has(String(key || "").trim());
 }
+
+export function isStrictSupabaseDomainMode() {
+  const strategy = getRuntimeStrategy();
+  return strategy?.source === "supabase" && strategy?.strictModeEnabled;
+}
+
+export function shouldAllowLocalFallbackForDomain(domain) {
+  if (isStrictSupabaseDomainMode()) {
+    const protectedDomains = new Set([
+      "menuCatalog",
+      "marketingPromos",
+      "smartPromotions",
+      "coupons",
+      "campaigns",
+      "appConfigs",
+      "customers",
+      "customerAddresses",
+      "orders",
+      "loyalty"
+    ]);
+    if (protectedDomains.has(String(domain || "").trim())) return false;
+  }
+  const policy = getDomainDataPolicy(domain);
+  return Boolean(policy?.allowFallbackLocal);
+}

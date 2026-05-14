@@ -3,7 +3,7 @@ import { createRuntimeAppConfigRepository } from "./appConfigRepository.js";
 import { coreSupabaseRepository } from "./coreSupabaseRepository.js";
 import { normalizeOrdersByPhoneMap } from "./phoneDataMigration.js";
 import { STORAGE_KEYS } from "./storageKeys.js";
-import { shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
+import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
 
 const repository = createRuntimeAppConfigRepository();
 const REMOTE_CACHE_TTL_MS = 8000;
@@ -28,14 +28,6 @@ function notifyOrdersChanged() {
 
 function sortByCreatedAtDesc(items = []) {
   return [...items].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-}
-
-function mergeOrdersByPhoneMaps(current = {}, incoming = {}) {
-  const merged = { ...current };
-  Object.entries(incoming || {}).forEach(([phone, orders]) => {
-    merged[phone] = [...(merged[phone] || []), ...(orders || [])];
-  });
-  return normalizeOrdersByPhoneMap(merged);
 }
 
 export const orderRepository = {
@@ -78,6 +70,10 @@ export const orderRepository = {
     return repository.set(STORAGE_KEYS.currentOrder, null);
   },
   getAllByPhone() {
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("orders");
+    if (!allowLocalFallback) {
+      return normalizeOrdersByPhoneMap(ordersRemoteCache.value || {});
+    }
     const raw = repository.get(STORAGE_KEYS.ordersByPhone, {});
     const normalized = normalizeOrdersByPhoneMap(raw);
     if (JSON.stringify(raw || {}) !== JSON.stringify(normalized || {})) {
@@ -135,14 +131,15 @@ export const orderRepository = {
       return ordersReadInFlight;
     }
     ordersReadInFlight = (async () => {
-    const fallback = await repository.getAsync(STORAGE_KEYS.ordersByPhone, {});
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("orders");
+    const fallback = allowLocalFallback ? await repository.getAsync(STORAGE_KEYS.ordersByPhone, {}) : {};
     try {
       const remote = await coreSupabaseRepository.readOrdersByPhoneFromTable();
       if (remote && typeof remote === "object") {
-        const merged = mergeOrdersByPhoneMaps(remote, fallback);
-        repository.set(STORAGE_KEYS.ordersByPhone, merged);
-        ordersRemoteCache = { value: merged, cachedAt: Date.now() };
-        return merged;
+        const remoteOnly = normalizeOrdersByPhoneMap(remote);
+        repository.set(STORAGE_KEYS.ordersByPhone, remoteOnly);
+        ordersRemoteCache = { value: remoteOnly, cachedAt: Date.now() };
+        return remoteOnly;
       }
     } catch (error) {
       console.warn("[orderRepository] read orders tables failed", error);
@@ -177,14 +174,11 @@ export const orderRepository = {
     try {
       const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(key);
       if (Array.isArray(remoteOrders)) {
-        const allLocal = normalizeOrdersByPhoneMap(await repository.getAsync(STORAGE_KEYS.ordersByPhone, {}));
-        const merged = normalizeOrdersByPhoneMap({
-          ...allLocal,
-          [key]: remoteOrders
-        });
-        await repository.setAsync(STORAGE_KEYS.ordersByPhone, merged);
-        ordersRemoteCache = { value: merged, cachedAt: Date.now() };
-        return Array.isArray(merged[key]) ? merged[key] : [];
+        const all = normalizeOrdersByPhoneMap(await repository.getAsync(STORAGE_KEYS.ordersByPhone, {}));
+        const nextAll = normalizeOrdersByPhoneMap({ ...all, [key]: remoteOrders });
+        await repository.setAsync(STORAGE_KEYS.ordersByPhone, nextAll);
+        ordersRemoteCache = { value: nextAll, cachedAt: Date.now() };
+        return Array.isArray(nextAll[key]) ? nextAll[key] : [];
       }
     } catch (error) {
       console.warn("[orderRepository] read orders by phone failed", error);

@@ -12,7 +12,8 @@ import { initSupabaseRuntimeClient } from "../services/supabase/supabaseRuntimeC
 import {
   isMenuSchemaBridgeMigrationEnabled,
   isSupabaseConfigSyncEnabled,
-  isSupabaseSeedMigrationEnabled
+  isSupabaseSeedMigrationEnabled,
+  isSupabaseStrictModeEnabled
 } from "../services/supabase/runtimeFlags.js";
 import {
   legacyCategoriesFromMenuSchema,
@@ -124,6 +125,12 @@ function resolveMenuRuntimeValue(catalogValue, schemaValue, seedValue) {
   return seedValue;
 }
 
+function resolveStrictCatalogFallback(key, fallback, strictMode) {
+  if (!strictMode) return fallback;
+  if (key === CATALOG_CONFIG_KEYS.hours) return {};
+  return [];
+}
+
 function getRouteLazyKeys(pathname = "/") {
   const path = String(pathname || "").toLowerCase();
   if (path.startsWith("/checkout") || path.startsWith("/cart")) {
@@ -192,6 +199,7 @@ export default function useProductList({
   const schemaToppings = legacyToppingsFromMenuSchema(menuSchema);
   const schemaCategories = legacyCategoriesFromMenuSchema(menuSchema);
   const isSupabaseMode = getDataSource() === "supabase";
+  const isStrictSupabaseMode = isSupabaseMode && isSupabaseStrictModeEnabled();
   const canRunSchemaBridge = !isSupabaseMode || isMenuSchemaBridgeMigrationEnabled() || isSupabaseSeedMigrationEnabled();
 
   useEffect(() => {
@@ -213,41 +221,74 @@ export default function useProductList({
 
   const [storeProducts, setStoreProducts] = useState(() =>
     resolveMenuRuntimeValue(
-      catalogConfigRepository.get(CATALOG_CONFIG_KEYS.products, productSeed),
+      catalogConfigRepository.get(
+        CATALOG_CONFIG_KEYS.products,
+        resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.products, productSeed, isStrictSupabaseMode)
+      ),
       schemaProducts,
-      productSeed
+      resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.products, productSeed, isStrictSupabaseMode)
     )
   );
   const [storeToppings, setStoreToppings] = useState(() =>
     resolveMenuRuntimeValue(
-      catalogConfigRepository.get(CATALOG_CONFIG_KEYS.toppings, toppingSeed),
+      catalogConfigRepository.get(
+        CATALOG_CONFIG_KEYS.toppings,
+        resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.toppings, toppingSeed, isStrictSupabaseMode)
+      ),
       schemaToppings,
-      toppingSeed
+      resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.toppings, toppingSeed, isStrictSupabaseMode)
     )
   );
-  const [storePromos, setStorePromos] = useState(() => catalogConfigRepository.get(CATALOG_CONFIG_KEYS.promos, promoSeed));
-  const [homeContent, setHomeContent] = useState(() => catalogConfigRepository.get(CATALOG_CONFIG_KEYS.homeContent, defaultHomeContent));
-  const [homeBanners, setHomeBanners] = useState(() => catalogConfigRepository.get(CATALOG_CONFIG_KEYS.banners, defaultHomeBanners));
-  const [adminCoupons, setAdminCoupons] = useState(() => catalogConfigRepository.get(CATALOG_CONFIG_KEYS.coupons, []));
-  const [smartPromotions, setSmartPromotions] = useState(() =>
-    catalogConfigRepository.get(CATALOG_CONFIG_KEYS.smartPromotions, defaultSmartPromotions).map(normalizeSmartPromotion)
+  const [storePromos, setStorePromos] = useState(() =>
+    catalogConfigRepository.get(CATALOG_CONFIG_KEYS.promos, resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.promos, promoSeed, isStrictSupabaseMode))
   );
-  const [campaigns, setCampaigns] = useState(() => defaultCampaigns);
-  const [branches, setBranches] = useState(() => catalogConfigRepository.get(CATALOG_CONFIG_KEYS.branches, defaultBranches));
-  const [hours, setHours] = useState(() => catalogConfigRepository.get(CATALOG_CONFIG_KEYS.hours, defaultStoreHours));
-  const [deliveryZones, setDeliveryZones] = useState(() => defaultDeliveryZones);
+  const [homeContent, setHomeContent] = useState(() =>
+    catalogConfigRepository.get(
+      CATALOG_CONFIG_KEYS.homeContent,
+      resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.homeContent, defaultHomeContent, isStrictSupabaseMode)
+    )
+  );
+  const [homeBanners, setHomeBanners] = useState(() =>
+    catalogConfigRepository.get(
+      CATALOG_CONFIG_KEYS.banners,
+      resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.banners, defaultHomeBanners, isStrictSupabaseMode)
+    )
+  );
+  const [adminCoupons, setAdminCoupons] = useState(() =>
+    catalogConfigRepository.get(CATALOG_CONFIG_KEYS.coupons, resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.coupons, [], isStrictSupabaseMode))
+  );
+  const [smartPromotions, setSmartPromotions] = useState(() =>
+    catalogConfigRepository
+      .get(
+        CATALOG_CONFIG_KEYS.smartPromotions,
+        resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.smartPromotions, defaultSmartPromotions, isStrictSupabaseMode)
+      )
+      .map(normalizeSmartPromotion)
+  );
+  const [campaigns, setCampaigns] = useState(() => resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.campaigns, defaultCampaigns, isStrictSupabaseMode));
+  const [branches, setBranches] = useState(() =>
+    catalogConfigRepository.get(CATALOG_CONFIG_KEYS.branches, resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.branches, defaultBranches, isStrictSupabaseMode))
+  );
+  const [hours, setHours] = useState(() =>
+    catalogConfigRepository.get(CATALOG_CONFIG_KEYS.hours, resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.hours, defaultStoreHours, isStrictSupabaseMode))
+  );
+  const [deliveryZones, setDeliveryZones] = useState(() => resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.zones, defaultDeliveryZones, isStrictSupabaseMode));
   const [adminCategories, setAdminCategories] = useState(() =>
     resolveMenuRuntimeValue(
-      catalogConfigRepository.get(CATALOG_CONFIG_KEYS.categories, categories),
+      catalogConfigRepository.get(
+        CATALOG_CONFIG_KEYS.categories,
+        resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.categories, categories, isStrictSupabaseMode)
+      ),
       schemaCategories,
-      categories
+      resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.categories, categories, isStrictSupabaseMode)
     )
   );
   const [lazyLoadedKeys, setLazyLoadedKeys] = useState(() => new Set());
   const supabaseConfigSyncEnabled = isSupabaseConfigSyncEnabled();
+  const shouldForceSupabaseCatalogRead = getDataSource() === "supabase";
 
   useEffect(() => {
-    if (!supabaseConfigSyncEnabled) return;
+    if (!supabaseConfigSyncEnabled && !shouldForceSupabaseCatalogRead) return;
     let disposed = false;
 
     catalogConfigRepository
@@ -261,7 +302,10 @@ export default function useProductList({
         { key: CATALOG_CONFIG_KEYS.branches, fallback: defaultBranches },
         { key: CATALOG_CONFIG_KEYS.hours, fallback: defaultStoreHours },
         { key: CATALOG_CONFIG_KEYS.categories, fallback: categories }
-      ].filter(({ key }) => INITIAL_CATALOG_CONFIG_KEYS.includes(key)))
+      ].map((entry) => ({
+        ...entry,
+        fallback: resolveStrictCatalogFallback(entry.key, entry.fallback, isStrictSupabaseMode)
+      })).filter(({ key }) => INITIAL_CATALOG_CONFIG_KEYS.includes(key)))
       .then((remoteValues) => {
         if (disposed) return;
         const remoteProducts = remoteValues[CATALOG_CONFIG_KEYS.products];
@@ -294,6 +338,7 @@ export default function useProductList({
     };
   }, [
     supabaseConfigSyncEnabled,
+    shouldForceSupabaseCatalogRead,
     productSeed,
     toppingSeed,
     promoSeed,
@@ -301,10 +346,12 @@ export default function useProductList({
     defaultSmartPromotions,
     categories,
     normalizeSmartPromotion
+    ,
+    isStrictSupabaseMode
   ]);
 
   useEffect(() => {
-    if (!supabaseConfigSyncEnabled) return undefined;
+    if (!supabaseConfigSyncEnabled && !shouldForceSupabaseCatalogRead) return undefined;
     let disposed = false;
     let timerId = null;
 
@@ -315,7 +362,10 @@ export default function useProductList({
         .getManyAsync([
           { key: CATALOG_CONFIG_KEYS.branches, fallback: defaultBranches },
           { key: CATALOG_CONFIG_KEYS.hours, fallback: defaultStoreHours }
-        ])
+        ].map((entry) => ({
+          ...entry,
+          fallback: resolveStrictCatalogFallback(entry.key, entry.fallback, isStrictSupabaseMode)
+        })))
         .then((remoteValues) => {
           if (disposed) return;
           const remoteBranches = remoteValues[CATALOG_CONFIG_KEYS.branches];
@@ -335,10 +385,10 @@ export default function useProductList({
       disposed = true;
       if (timerId) window.clearTimeout(timerId);
     };
-  }, [supabaseConfigSyncEnabled, defaultBranches, defaultStoreHours]);
+  }, [supabaseConfigSyncEnabled, shouldForceSupabaseCatalogRead, defaultBranches, defaultStoreHours, isStrictSupabaseMode]);
 
   useEffect(() => {
-    if (!supabaseConfigSyncEnabled) return undefined;
+    if (!supabaseConfigSyncEnabled && !shouldForceSupabaseCatalogRead) return undefined;
     const path = typeof window !== "undefined" ? window.location.pathname : "/";
     const activeKeys = getActiveRealtimeKeys(currentPage, path);
     if (!activeKeys.length) return undefined;
@@ -384,18 +434,21 @@ export default function useProductList({
     return () => {
       unsubscribers.forEach((unsubscribe) => unsubscribe?.());
     };
-  }, [currentPage, defaultHomeContent, normalizeSmartPromotion, supabaseConfigSyncEnabled]);
+  }, [currentPage, defaultHomeContent, normalizeSmartPromotion, supabaseConfigSyncEnabled, shouldForceSupabaseCatalogRead]);
 
   useEffect(() => {
     const syncHomeContentFromStorage = (event) => {
       if (event.key !== CATALOG_CONFIG_KEYS.homeContent) return;
-      const nextHomeContent = catalogConfigRepository.get(CATALOG_CONFIG_KEYS.homeContent, defaultHomeContent);
+      const nextHomeContent = catalogConfigRepository.get(
+        CATALOG_CONFIG_KEYS.homeContent,
+        resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.homeContent, defaultHomeContent, isStrictSupabaseMode)
+      );
       setHomeContent(normalizeHomeContent(nextHomeContent, defaultHomeContent));
     };
 
     window.addEventListener("storage", syncHomeContentFromStorage);
     return () => window.removeEventListener("storage", syncHomeContentFromStorage);
-  }, [defaultHomeContent]);
+  }, [defaultHomeContent, isStrictSupabaseMode]);
 
   useEffect(() => {
     const path = typeof window !== "undefined" ? window.location.pathname : "/";
@@ -414,11 +467,17 @@ export default function useProductList({
 
     pendingKeys.forEach((key) => {
       if (key === CATALOG_CONFIG_KEYS.coupons) {
-        const localCoupons = catalogConfigRepository.get(CATALOG_CONFIG_KEYS.coupons, []);
+        const localCoupons = catalogConfigRepository.get(
+          CATALOG_CONFIG_KEYS.coupons,
+          resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.coupons, [], isStrictSupabaseMode)
+        );
         if (Array.isArray(localCoupons)) setAdminCoupons(localCoupons);
         if (supabaseConfigSyncEnabled) {
           catalogConfigRepository
-            .getAsync(CATALOG_CONFIG_KEYS.coupons, [])
+            .getAsync(
+              CATALOG_CONFIG_KEYS.coupons,
+              resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.coupons, [], isStrictSupabaseMode)
+            )
             .then((remoteCoupons) => {
               if (Array.isArray(remoteCoupons)) setAdminCoupons(remoteCoupons);
             })
@@ -426,11 +485,17 @@ export default function useProductList({
         }
       }
       if (key === CATALOG_CONFIG_KEYS.zones) {
-        const localZones = catalogConfigRepository.get(CATALOG_CONFIG_KEYS.zones, defaultDeliveryZones);
+        const localZones = catalogConfigRepository.get(
+          CATALOG_CONFIG_KEYS.zones,
+          resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.zones, defaultDeliveryZones, isStrictSupabaseMode)
+        );
         if (Array.isArray(localZones)) setDeliveryZones(localZones);
         if (supabaseConfigSyncEnabled) {
           catalogConfigRepository
-            .getAsync(CATALOG_CONFIG_KEYS.zones, defaultDeliveryZones)
+            .getAsync(
+              CATALOG_CONFIG_KEYS.zones,
+              resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.zones, defaultDeliveryZones, isStrictSupabaseMode)
+            )
             .then((remoteZones) => {
               if (Array.isArray(remoteZones)) setDeliveryZones(remoteZones);
             })
@@ -438,11 +503,17 @@ export default function useProductList({
         }
       }
       if (key === CATALOG_CONFIG_KEYS.campaigns) {
-        const localCampaigns = catalogConfigRepository.get(CATALOG_CONFIG_KEYS.campaigns, defaultCampaigns);
+        const localCampaigns = catalogConfigRepository.get(
+          CATALOG_CONFIG_KEYS.campaigns,
+          resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.campaigns, defaultCampaigns, isStrictSupabaseMode)
+        );
         if (Array.isArray(localCampaigns)) setCampaigns(localCampaigns);
         if (supabaseConfigSyncEnabled) {
           catalogConfigRepository
-            .getAsync(CATALOG_CONFIG_KEYS.campaigns, defaultCampaigns)
+            .getAsync(
+              CATALOG_CONFIG_KEYS.campaigns,
+              resolveStrictCatalogFallback(CATALOG_CONFIG_KEYS.campaigns, defaultCampaigns, isStrictSupabaseMode)
+            )
             .then((remoteCampaigns) => {
               if (Array.isArray(remoteCampaigns)) setCampaigns(remoteCampaigns);
             })
@@ -450,7 +521,7 @@ export default function useProductList({
         }
       }
     });
-  }, [currentPage, lazyLoadedKeys, defaultDeliveryZones, defaultCampaigns, supabaseConfigSyncEnabled]);
+  }, [currentPage, lazyLoadedKeys, defaultDeliveryZones, defaultCampaigns, supabaseConfigSyncEnabled, isStrictSupabaseMode]);
 
   const customerProducts = useMemo(() => {
     const activeStrikePromotions = [...smartPromotions]

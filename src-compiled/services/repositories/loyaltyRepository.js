@@ -3,9 +3,8 @@ import { createRuntimeAppConfigRepository } from "./appConfigRepository.js";
 import { coreSupabaseRepository } from "./coreSupabaseRepository.js";
 import { normalizeLoyaltyByPhoneMap } from "./phoneDataMigration.js";
 import { getRepositoryRuntimeInfo } from "./repositoryRuntime.js";
-import { getRuntimeStrategy } from "./runtimeStrategy.js";
 import { STORAGE_KEYS } from "./storageKeys.js";
-import { shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
+import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
 
 const repository = createRuntimeAppConfigRepository();
 const REMOTE_CACHE_TTL_MS = 8000;
@@ -55,34 +54,6 @@ function mergeById(current = [], incoming = []) {
     map.set(key, { ...prev, ...(item || {}) });
   });
   return Array.from(map.values());
-}
-
-function mergeLoyaltyMaps(localMap = {}, remoteMap = {}) {
-  const next = { ...(localMap || {}) };
-  Object.entries(remoteMap || {}).forEach(([phone, remoteValue]) => {
-    const localValue = next[phone] || {};
-    const mergedPointHistory = mergeById(localValue.pointHistory || [], remoteValue?.pointHistory || []);
-    const mergedVoucherHistory = mergeById(localValue.voucherHistory || [], remoteValue?.voucherHistory || []);
-    const pointsFromHistory = mergedPointHistory.reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
-    const hasHistory = mergedPointHistory.length > 0;
-    next[phone] = {
-      ...localValue,
-      ...(remoteValue || {}),
-      phone,
-      pointHistory: mergedPointHistory,
-      voucherHistory: mergedVoucherHistory,
-      checkinHistory: Array.from(new Set([...(localValue.checkinHistory || []), ...(remoteValue?.checkinHistory || [])])),
-      rewardHistory: Array.from(new Set([...(localValue.rewardHistory || []), ...(remoteValue?.rewardHistory || [])])),
-      totalPoints: hasHistory
-        ? Math.max(0, pointsFromHistory)
-        : Math.max(0, Number(remoteValue?.totalPoints ?? localValue.totalPoints ?? 0))
-    };
-  });
-  return normalizeLoyaltyByPhoneMap(next);
-}
-
-function isSupabaseReadMode() {
-  return getRuntimeStrategy()?.effectiveSource === "supabase";
 }
 
 function logSupabaseError(scope, error, payload = null) {
@@ -148,6 +119,10 @@ export const loyaltyRepository = {
     return fallback;
   },
   getAllByPhone() {
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("loyalty");
+    if (!allowLocalFallback) {
+      return normalizeLoyaltyByPhoneMap(loyaltyRemoteCache.value || {});
+    }
     const raw = repository.get(STORAGE_KEYS.loyaltyByPhone, {});
     const normalized = normalizeLoyaltyByPhoneMap(raw);
     if (JSON.stringify(raw || {}) !== JSON.stringify(normalized || {})) {
@@ -245,26 +220,24 @@ export const loyaltyRepository = {
     }
     if (loyaltyReadInFlight) return loyaltyReadInFlight;
     loyaltyReadInFlight = (async () => {
-    const fallback = normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}));
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("loyalty");
+    const fallback = allowLocalFallback
+      ? normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}))
+      : {};
     try {
       const remote = await coreSupabaseRepository.readLoyaltyByPhoneFromTable();
       if (remote && typeof remote === "object" && Object.keys(remote).length) {
         const normalizedRemote = normalizeLoyaltyByPhoneMap(remote);
-        if (isSupabaseReadMode()) {
-          await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, normalizedRemote);
-          loyaltyRemoteCache = { value: normalizedRemote, cachedAt: Date.now() };
-          return normalizedRemote;
-        }
-        const merged = mergeLoyaltyMaps(fallback, normalizedRemote);
-        await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, merged);
-        loyaltyRemoteCache = { value: merged, cachedAt: Date.now() };
-        return merged;
+        await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, normalizedRemote);
+        loyaltyRemoteCache = { value: normalizedRemote, cachedAt: Date.now() };
+        return normalizedRemote;
       }
     } catch (error) {
       logSupabaseError("read loyalty tables", error);
     }
-      loyaltyRemoteCache = { value: fallback, cachedAt: Date.now() };
-      return fallback;
+      const normalizedFallback = normalizeLoyaltyByPhoneMap(fallback);
+      loyaltyRemoteCache = { value: normalizedFallback, cachedAt: Date.now() };
+      return normalizedFallback;
     })();
     try {
       return await loyaltyReadInFlight;
@@ -278,28 +251,18 @@ export const loyaltyRepository = {
     try {
       const remoteSingle = await coreSupabaseRepository.readLoyaltyForPhoneFromTable(key);
       if (remoteSingle && typeof remoteSingle === "object") {
-        if (isSupabaseReadMode()) {
-          const normalizedRemote = normalizeLoyaltyByPhoneMap({
-            [key]: remoteSingle
-          });
-          const remoteOnly = normalizedRemote[key] || { ...fallback, phone: key };
-          const nextAll = normalizeLoyaltyByPhoneMap({
-            ...(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {})),
-            [key]: remoteOnly
-          });
-          await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, nextAll);
-          loyaltyRemoteCache = { value: nextAll, cachedAt: Date.now() };
-          return remoteOnly;
-        }
+        const normalizedRemote = normalizeLoyaltyByPhoneMap({
+          [key]: remoteSingle
+        });
+        const remoteOnly = normalizedRemote[key] || { ...fallback, phone: key };
         const localAll = normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}));
-        const mergedOne = mergeLoyaltyRecord(localAll[key] || {}, remoteSingle, key);
         const nextAll = normalizeLoyaltyByPhoneMap({
           ...localAll,
-          [key]: mergedOne
+          [key]: remoteOnly
         });
         await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, nextAll);
         loyaltyRemoteCache = { value: nextAll, cachedAt: Date.now() };
-        return mergedOne;
+        return remoteOnly;
       }
     } catch (error) {
       logSupabaseError("read loyalty single phone", error, { phone: key });
@@ -434,12 +397,12 @@ export const loyaltyRepository = {
         createdAt: event.createdAt || new Date().toISOString()
       });
       const localAll = normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}));
-      const merged = mergeLoyaltyRecord(localAll[key] || fallback || {}, remote || {}, key);
-      const nextAll = normalizeLoyaltyByPhoneMap({ ...localAll, [key]: merged });
+      const remoteOnly = normalizeLoyaltyByPhoneMap({ [key]: remote || {} })[key] || { ...(fallback || {}), phone: key };
+      const nextAll = normalizeLoyaltyByPhoneMap({ ...localAll, [key]: remoteOnly });
       await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, nextAll);
       loyaltyRemoteCache = { value: nextAll, cachedAt: Date.now() };
       notifyLoyaltyChanged();
-      return merged;
+      return remoteOnly;
     } catch (error) {
       logSupabaseError("append loyalty event", error, { phone: key, eventType: event.entryType || event.type || "OTHER" });
       return this.getByPhoneAsync(key, fallback);

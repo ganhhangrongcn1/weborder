@@ -1,11 +1,11 @@
-import { getCustomerKey } from "../storageService.js";
+﻿import { getCustomerKey } from "../storageService.js";
 import { createRuntimeAppConfigRepository } from "./appConfigRepository.js";
 import { coreSupabaseRepository } from "./coreSupabaseRepository.js";
 import { normalizeAddressesByPhoneMap, normalizeUsersMap } from "./phoneDataMigration.js";
 import { orderRepository } from "./orderRepository.js";
 import { getRepositoryRuntimeInfo } from "./repositoryRuntime.js";
 import { STORAGE_KEYS } from "./storageKeys.js";
-import { shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
+import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
 
 const repository = createRuntimeAppConfigRepository();
 const LEGACY_USERS_KEY = "ghr_users_demo";
@@ -31,57 +31,6 @@ function logSupabaseError(scope, error, payload = null) {
   console.error(`[customerRepository] ${scope} failed`, meta, payload || "");
 }
 
-function getTime(value) {
-  const time = new Date(value || 0).getTime();
-  return Number.isFinite(time) ? time : 0;
-}
-
-function isPlaceholderName(name = "") {
-  const normalized = String(name || "").trim().toLowerCase();
-  return !normalized || normalized === "khách" || normalized === "khách vãng lai" || normalized === "khach" || normalized === "khach vang lai";
-}
-
-function mergeUsersByPriority(localUsers = {}, remoteUsers = {}) {
-  const keys = new Set([...Object.keys(localUsers || {}), ...Object.keys(remoteUsers || {})]);
-  const merged = {};
-  keys.forEach((key) => {
-    const local = localUsers[key] || null;
-    const remote = remoteUsers[key] || null;
-    if (!local) {
-      merged[key] = remote;
-      return;
-    }
-    if (!remote) {
-      merged[key] = local;
-      return;
-    }
-    const localTime = Math.max(getTime(local.updatedAt), getTime(local.createdAt));
-    const remoteTime = Math.max(getTime(remote.updatedAt), getTime(remote.createdAt));
-    const preferRemote = remoteTime > localTime;
-    const base = preferRemote ? local : remote;
-    const winner = preferRemote ? remote : local;
-    const localName = String(local.name || "").trim();
-    const remoteName = String(remote.name || "").trim();
-    const resolvedName = remoteName && remoteName !== localName
-      ? remoteName
-      : !isPlaceholderName(local.name) && isPlaceholderName(remote.name)
-        ? local.name
-        : !isPlaceholderName(remote.name) && isPlaceholderName(local.name)
-          ? remote.name
-          : String((preferRemote ? remote.name : local.name) || "");
-    merged[key] = {
-      ...base,
-      ...winner,
-      phone: key,
-      // In Supabase mode, prefer remote non-empty name to avoid stale local display.
-      name: resolvedName,
-      // Registration state must never be downgraded by stale local cache.
-      registered: Boolean(remote?.registered || local?.registered)
-    };
-  });
-  return normalizeUsersMap(merged);
-}
-
 function normalizeAddressFromOrder(order = {}) {
   const detail = String(order.deliveryAddress || "").trim();
   if (!detail) return null;
@@ -97,25 +46,6 @@ function normalizeAddressFromOrder(order = {}) {
     createdAt: now,
     updatedAt: now
   };
-}
-
-function mergeAddressesByPhoneMaps(localMap = {}, remoteMap = {}) {
-  const keys = new Set([...Object.keys(localMap || {}), ...Object.keys(remoteMap || {})]);
-  const merged = {};
-  keys.forEach((phone) => {
-    const local = Array.isArray(localMap?.[phone]) ? localMap[phone] : [];
-    const remote = Array.isArray(remoteMap?.[phone]) ? remoteMap[phone] : [];
-    const byId = new Map();
-    [...remote, ...local].forEach((item) => {
-      const id = String(item?.id || "");
-      if (!id) return;
-      if (!byId.has(id)) byId.set(id, item);
-    });
-    const list = Array.from(byId.values());
-    const hasDefault = list.some((item) => Boolean(item?.isDefault));
-    merged[phone] = hasDefault ? list : list.map((item, index) => ({ ...item, isDefault: index === 0 }));
-  });
-  return normalizeAddressesByPhoneMap(merged);
 }
 
 function getChangedUserKeys(prevUsers = {}, nextUsers = {}) {
@@ -135,6 +65,10 @@ export const customerRepository = {
     suppressRemoteCustomerWriteUntil = Date.now() + ttl;
   },
   getUsers() {
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("customers");
+    if (!allowLocalFallback) {
+      return normalizeUsersMap(usersRemoteCache.value || {});
+    }
     const raw = repository.get(STORAGE_KEYS.users, {});
     const normalized = normalizeUsersMap(raw);
     if (JSON.stringify(raw || {}) !== JSON.stringify(normalized || {})) {
@@ -251,12 +185,16 @@ export const customerRepository = {
   getAddressesByPhone(phone) {
     const key = getCustomerKey(phone);
     if (!key) return [];
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("customerAddresses");
+    if (!allowLocalFallback) {
+      return [];
+    }
     const raw = repository.get(STORAGE_KEYS.addressesByPhone, {});
     const all = normalizeAddressesByPhoneMap(raw);
     if (JSON.stringify(raw || {}) !== JSON.stringify(all || {})) {
       repository.set(STORAGE_KEYS.addressesByPhone, all);
     }
-    const existing = Array.isArray(all[key]) ? all[key] : [];
+    const existing = allowLocalFallback && Array.isArray(all[key]) ? all[key] : [];
     if (existing.length) {
       coreSupabaseRepository
         .readAddressesByPhoneFromTable(key)
@@ -264,9 +202,8 @@ export const customerRepository = {
           if (!remoteMap || typeof remoteMap !== "object") return;
           const normalizedRemote = normalizeAddressesByPhoneMap(remoteMap);
           const remoteList = Array.isArray(normalizedRemote[key]) ? normalizedRemote[key] : [];
-          const mergedList = mergeAddressesByPhoneMaps({ [key]: existing }, { [key]: remoteList })[key] || [];
-          if (JSON.stringify(mergedList) !== JSON.stringify(existing)) {
-            const nextAll = normalizeAddressesByPhoneMap({ ...all, [key]: mergedList });
+          if (JSON.stringify(remoteList) !== JSON.stringify(existing)) {
+            const nextAll = normalizeAddressesByPhoneMap({ ...all, [key]: remoteList });
             repository.set(STORAGE_KEYS.addressesByPhone, nextAll);
             notifyCustomerDataChanged();
           }
@@ -276,6 +213,8 @@ export const customerRepository = {
         });
       return existing;
     }
+
+    if (!allowLocalFallback) return [];
 
     const orderFallback = orderRepository
       .getByPhone(key)
@@ -314,20 +253,25 @@ export const customerRepository = {
   async getAddressesByPhoneAsync(phone) {
     const key = getCustomerKey(phone);
     if (!key) return [];
-    const localAll = normalizeAddressesByPhoneMap(await repository.getAsync(STORAGE_KEYS.addressesByPhone, {}));
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("customerAddresses");
+    const localAll = allowLocalFallback
+      ? normalizeAddressesByPhoneMap(await repository.getAsync(STORAGE_KEYS.addressesByPhone, {}))
+      : {};
     try {
       const remote = await coreSupabaseRepository.readAddressesByPhoneFromTable(key);
       if (remote && typeof remote === "object") {
         const remoteMap = normalizeAddressesByPhoneMap(remote);
-        const merged = mergeAddressesByPhoneMaps(localAll, { [key]: remoteMap[key] || [] });
-        await repository.setAsync(STORAGE_KEYS.addressesByPhone, merged);
-        return Array.isArray(merged[key]) ? merged[key] : [];
+        const remoteList = Array.isArray(remoteMap[key]) ? remoteMap[key] : [];
+        const nextAll = normalizeAddressesByPhoneMap({ ...localAll, [key]: remoteList });
+        await repository.setAsync(STORAGE_KEYS.addressesByPhone, nextAll);
+        return Array.isArray(nextAll[key]) ? nextAll[key] : [];
       }
     } catch (error) {
       logSupabaseError("read customer addresses table (async)", error);
     }
-    const existing = Array.isArray(localAll[key]) ? localAll[key] : [];
+    const existing = allowLocalFallback && Array.isArray(localAll[key]) ? localAll[key] : [];
     if (existing.length) return existing;
+    if (!allowLocalFallback) return [];
     const orderFallback = (await orderRepository.getByPhoneAsync(key)).map(normalizeAddressFromOrder).filter(Boolean);
     return orderFallback;
   },
@@ -367,11 +311,13 @@ export const customerRepository = {
     }
     if (usersReadInFlight) return usersReadInFlight;
     usersReadInFlight = (async () => {
-    const fallback = await repository.getAsync(STORAGE_KEYS.users, {});
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("customers");
+    const fallback = allowLocalFallback ? await repository.getAsync(STORAGE_KEYS.users, {}) : {};
     try {
       const remote = await coreSupabaseRepository.readCustomersMapFromTable();
       if (remote && typeof remote === "object" && Object.keys(remote).length) {
         const normalizedRemote = normalizeUsersMap(remote);
+        await repository.setAsync(STORAGE_KEYS.users, normalizedRemote);
         usersRemoteCache = { value: normalizedRemote, cachedAt: Date.now() };
         return normalizedRemote;
       }
@@ -389,18 +335,19 @@ export const customerRepository = {
     }
   },
   async hydrateUsersFromRemote() {
-    const localUsers = normalizeUsersMap(repository.get(STORAGE_KEYS.users, {}));
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain("customers");
+    const localUsers = allowLocalFallback ? normalizeUsersMap(repository.get(STORAGE_KEYS.users, {})) : {};
     try {
       const remote = await coreSupabaseRepository.readCustomersMapFromTable();
       if (!remote || typeof remote !== "object" || !Object.keys(remote).length) {
         return localUsers;
       }
-      const merged = mergeUsersByPriority(localUsers, normalizeUsersMap(remote));
-      if (JSON.stringify(localUsers) !== JSON.stringify(merged)) {
-        repository.set(STORAGE_KEYS.users, merged);
+      const remoteOnly = normalizeUsersMap(remote);
+      if (JSON.stringify(localUsers) !== JSON.stringify(remoteOnly)) {
+        repository.set(STORAGE_KEYS.users, remoteOnly);
         notifyCustomerDataChanged();
       }
-      return merged;
+      return remoteOnly;
     } catch (error) {
       logSupabaseError("hydrate customers from remote", error);
       return localUsers;
@@ -448,15 +395,16 @@ export const customerRepository = {
   subscribeAddressesRealtime(onChange) {
     return coreSupabaseRepository.subscribeCustomerAddressesRealtime(async () => {
       try {
-        const localAll = normalizeAddressesByPhoneMap(repository.get(STORAGE_KEYS.addressesByPhone, {}));
+        const allowLocalFallback = shouldAllowLocalFallbackForDomain("customerAddresses");
+        const localAll = allowLocalFallback ? normalizeAddressesByPhoneMap(repository.get(STORAGE_KEYS.addressesByPhone, {})) : {};
         const remote = await coreSupabaseRepository.readAddressesByPhoneFromTable();
         if (!remote || typeof remote !== "object") return;
-        const merged = mergeAddressesByPhoneMaps(localAll, normalizeAddressesByPhoneMap(remote));
-        if (JSON.stringify(merged) !== JSON.stringify(localAll)) {
-          repository.set(STORAGE_KEYS.addressesByPhone, merged);
+        const remoteOnly = normalizeAddressesByPhoneMap(remote);
+        if (JSON.stringify(remoteOnly) !== JSON.stringify(localAll)) {
+          repository.set(STORAGE_KEYS.addressesByPhone, remoteOnly);
           notifyCustomerDataChanged();
         }
-        if (typeof onChange === "function") onChange(merged);
+        if (typeof onChange === "function") onChange(remoteOnly);
       } catch (error) {
         logSupabaseError("realtime customer addresses sync", error);
       }
@@ -465,18 +413,20 @@ export const customerRepository = {
   subscribeUsersRealtime(onChange) {
     return coreSupabaseRepository.subscribeCustomersRealtime(async () => {
       try {
-        const localUsers = normalizeUsersMap(repository.get(STORAGE_KEYS.users, {}));
+        const allowLocalFallback = shouldAllowLocalFallbackForDomain("customers");
+        const localUsers = allowLocalFallback ? normalizeUsersMap(repository.get(STORAGE_KEYS.users, {})) : {};
         const remoteUsers = await coreSupabaseRepository.readCustomersMapFromTable();
         if (!remoteUsers || typeof remoteUsers !== "object") return;
-        const merged = mergeUsersByPriority(localUsers, normalizeUsersMap(remoteUsers));
-        if (JSON.stringify(merged) !== JSON.stringify(localUsers)) {
-          repository.set(STORAGE_KEYS.users, merged);
+        const remoteOnly = normalizeUsersMap(remoteUsers);
+        if (JSON.stringify(remoteOnly) !== JSON.stringify(localUsers)) {
+          repository.set(STORAGE_KEYS.users, remoteOnly);
           notifyCustomerDataChanged();
         }
-        if (typeof onChange === "function") onChange(merged);
+        if (typeof onChange === "function") onChange(remoteOnly);
       } catch (error) {
         logSupabaseError("realtime customers sync", error);
       }
     });
   }
 };
+
