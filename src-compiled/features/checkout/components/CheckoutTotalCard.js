@@ -40,12 +40,12 @@ export default function CheckoutTotalCard({
           children: ["T\u1ED5ng t\u1EA1m t\xEDnh (", count, " m\xF3n)"]
         }), /*#__PURE__*/_jsxs("strong", {
           className: "flex flex-col items-end leading-tight",
-          children: [hasSubtotalDiscount ? /*#__PURE__*/_jsx("del", {
+          children: [/*#__PURE__*/_jsx("span", {
+            children: formatMoney(displayedSubtotal)
+          }), hasSubtotalDiscount ? /*#__PURE__*/_jsx("del", {
             className: "text-xs font-semibold text-brown/35",
             children: formatMoney(displayedOriginalSubtotal)
-          }) : null, /*#__PURE__*/_jsx("span", {
-            children: formatMoney(displayedSubtotal)
-          })]
+          }) : null]
         })]
       }), /*#__PURE__*/_jsxs("div", {
         className: "summary-line",
@@ -59,11 +59,11 @@ export default function CheckoutTotalCard({
         }), /*#__PURE__*/_jsx("strong", {
           children: isPickup ? "Không tính phí giao hàng" : shippingSupportDiscount > 0 ? /*#__PURE__*/_jsxs("span", {
             className: "flex items-center gap-2",
-            children: [/*#__PURE__*/_jsx("del", {
+            children: [/*#__PURE__*/_jsx("span", {
+              children: formatMoney(displayedShippingFee)
+            }), /*#__PURE__*/_jsx("del", {
               className: "text-brown/35",
               children: formatMoney(rawShippingFee)
-            }), /*#__PURE__*/_jsx("span", {
-              children: formatMoney(displayedShippingFee)
             })]
           }) : formatMoney(displayedShippingFee)
         })]
@@ -109,12 +109,12 @@ export default function CheckoutTotalCard({
           children: "T\u1ED5ng c\u1ED9ng"
         }), /*#__PURE__*/_jsxs("strong", {
           className: "flex flex-col items-end leading-tight",
-          children: [originalTotal > total ? /*#__PURE__*/_jsx("del", {
+          children: [/*#__PURE__*/_jsx("span", {
+            children: formatMoney(total)
+          }), originalTotal > total ? /*#__PURE__*/_jsx("del", {
             className: "text-sm font-semibold text-brown/35",
             children: formatMoney(originalTotal)
-          }) : null, /*#__PURE__*/_jsx("span", {
-            children: formatMoney(total)
-          })]
+          }) : null]
         })]
       }), savedAmount > 0 ? /*#__PURE__*/_jsxs("div", {
         className: "summary-saving",

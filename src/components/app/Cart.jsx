@@ -49,10 +49,10 @@
                     </div>
                   )}
                   <div className="text-right">
+                    <strong>{formatMoney(lineTotal)}</strong>
                     {hasDiscountPrice ? (
                       <div className="text-[11px] font-semibold text-brown/40 line-through">{formatMoney(originalLineTotal)}</div>
                     ) : null}
-                    <strong>{formatMoney(lineTotal)}</strong>
                   </div>
                 </div>
               </div>

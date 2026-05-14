@@ -37,10 +37,10 @@ export default function CheckoutTotalCard({
         <div className="summary-line">
           <span>Tổng tạm tính ({count} món)</span>
           <strong className="flex flex-col items-end leading-tight">
+            <span>{formatMoney(displayedSubtotal)}</span>
             {hasSubtotalDiscount ? (
               <del className="text-xs font-semibold text-brown/35">{formatMoney(displayedOriginalSubtotal)}</del>
             ) : null}
-            <span>{formatMoney(displayedSubtotal)}</span>
           </strong>
         </div>
 
@@ -54,8 +54,8 @@ export default function CheckoutTotalCard({
               "Không tính phí giao hàng"
             ) : shippingSupportDiscount > 0 ? (
               <span className="flex items-center gap-2">
-                <del className="text-brown/35">{formatMoney(rawShippingFee)}</del>
                 <span>{formatMoney(displayedShippingFee)}</span>
+                <del className="text-brown/35">{formatMoney(rawShippingFee)}</del>
               </span>
             ) : (
               formatMoney(displayedShippingFee)
@@ -101,10 +101,10 @@ export default function CheckoutTotalCard({
         <div className="summary-final">
           <span>Tổng cộng</span>
           <strong className="flex flex-col items-end leading-tight">
+            <span>{formatMoney(total)}</span>
             {originalTotal > total ? (
               <del className="text-sm font-semibold text-brown/35">{formatMoney(originalTotal)}</del>
             ) : null}
-            <span>{formatMoney(total)}</span>
           </strong>
         </div>
 

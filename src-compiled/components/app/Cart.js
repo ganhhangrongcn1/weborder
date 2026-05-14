@@ -89,12 +89,12 @@ export default function Cart({
                 })]
               }), /*#__PURE__*/_jsxs("div", {
                 className: "text-right",
-                children: [hasDiscountPrice ? /*#__PURE__*/_jsx("div", {
+                children: [/*#__PURE__*/_jsx("strong", {
+                  children: formatMoney(lineTotal)
+                }), hasDiscountPrice ? /*#__PURE__*/_jsx("div", {
                   className: "text-[11px] font-semibold text-brown/40 line-through",
                   children: formatMoney(originalLineTotal)
-                }) : null, /*#__PURE__*/_jsx("strong", {
-                  children: formatMoney(lineTotal)
-                })]
+                }) : null]
               })]
             })]
           }), item.autoGiftByPromo ? null : /*#__PURE__*/_jsx("button", {
