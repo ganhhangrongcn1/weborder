@@ -16,9 +16,10 @@ if (fs.existsSync(chunksDir)) {
       code = code.replace(needle, 'safeRealpathSync = fs__default.realpathSync.native; return; // Codex Windows realpath patch\n  exec("net use", (error, stdout) => {');
       changed = true;
     }
+    const staleDefinePatch = 'async function replaceDefine(code, id, define, config) {\n  return { code, map: null }; // Codex Windows define patch\n  const esbuildOptions = config.esbuild || {};';
     const defineNeedle = 'async function replaceDefine(code, id, define, config) {\n  const esbuildOptions = config.esbuild || {};';
-    if (code.includes(defineNeedle) && !code.includes("Codex Windows define patch")) {
-      code = code.replace(defineNeedle, 'async function replaceDefine(code, id, define, config) {\n  return { code, map: null }; // Codex Windows define patch\n  const esbuildOptions = config.esbuild || {};');
+    if (code.includes(staleDefinePatch)) {
+      code = code.replace(staleDefinePatch, defineNeedle);
       changed = true;
     }
     if (changed) {
