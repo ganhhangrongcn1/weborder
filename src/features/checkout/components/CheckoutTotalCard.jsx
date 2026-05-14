@@ -3,6 +3,8 @@ import CheckoutCard from "./CheckoutCard.jsx";
 
 export default function CheckoutTotalCard({
   subtotal,
+  originalSubtotal = subtotal,
+  giftSavingAmount = 0,
   ship,
   originalShip = ship,
   shippingSupportDiscount = 0,
@@ -22,15 +24,24 @@ export default function CheckoutTotalCard({
   const displayedShippingFee = isPickup ? 0 : ship;
   const rawShippingFee = isPickup ? 0 : originalShip;
   const appliedSupportMax = Math.max(0, Number(shippingSupportMax || 0));
-  const originalTotal = subtotal + rawShippingFee;
-  const savedAmount = Math.max(originalTotal - total, 0);
+  const displayedSubtotal = Number(subtotal || 0);
+  const displayedOriginalSubtotal = Math.max(displayedSubtotal, Number(originalSubtotal || displayedSubtotal));
+  const hasSubtotalDiscount = displayedOriginalSubtotal > displayedSubtotal;
+  const originalTotal = displayedOriginalSubtotal + rawShippingFee;
+  const savingOriginalTotal = originalTotal + Math.max(0, Number(giftSavingAmount || 0));
+  const savedAmount = Math.max(savingOriginalTotal - total, 0);
 
   return (
     <CheckoutCard title="Tổng cộng">
       <div className="checkout-total-summary">
         <div className="summary-line">
           <span>Tổng tạm tính ({count} món)</span>
-          <strong>{formatMoney(subtotal)}</strong>
+          <strong className="flex flex-col items-end leading-tight">
+            {hasSubtotalDiscount ? (
+              <del className="text-xs font-semibold text-brown/35">{formatMoney(displayedOriginalSubtotal)}</del>
+            ) : null}
+            <span>{formatMoney(displayedSubtotal)}</span>
+          </strong>
         </div>
 
         <div className="summary-line">
@@ -89,13 +100,18 @@ export default function CheckoutTotalCard({
 
         <div className="summary-final">
           <span>Tổng cộng</span>
-          <strong>{formatMoney(total)}</strong>
+          <strong className="flex flex-col items-end leading-tight">
+            {originalTotal > total ? (
+              <del className="text-sm font-semibold text-brown/35">{formatMoney(originalTotal)}</del>
+            ) : null}
+            <span>{formatMoney(total)}</span>
+          </strong>
         </div>
 
         {savedAmount > 0 ? (
           <div className="summary-saving">
             <span>Bạn tiết kiệm được {formatMoney(savedAmount)}</span>
-            <del>{formatMoney(originalTotal)}</del>
+            <del>{formatMoney(savingOriginalTotal)}</del>
           </div>
         ) : null}
       </div>

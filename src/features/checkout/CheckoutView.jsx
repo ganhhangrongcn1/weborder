@@ -120,6 +120,20 @@ export default function Checkout({
     usePoints,
     loyaltyRule
   });
+  const originalSubtotal = useMemo(
+    () => cart.reduce((sum, item) => {
+      if (item.autoGiftByPromo) return sum + Number(item.lineTotal || 0);
+      return sum + Number(item.originalLineTotal || item.lineTotal || 0);
+    }, 0),
+    [cart]
+  );
+  const giftSavingAmount = useMemo(
+    () => cart.reduce((sum, item) => {
+      if (!item.autoGiftByPromo) return sum;
+      return sum + Number(item.originalLineTotal || item.originalUnitPrice || 0);
+    }, 0),
+    [cart]
+  );
   const selectedBranchInfo = pickupBranches.find(branch => branch.id === selectedBranch) || pickupBranches[0] || null;
   const pickupTimeText = pickupMode === "soon" ? "Sẵn sàng sau khoảng 20 phút" : `${pickupClock} - ${pickupDate}`;
   const { updateQty, handlePlaceOrder } = useCheckoutActions({
@@ -373,6 +387,8 @@ export default function Checkout({
         })
       }), /*#__PURE__*/_jsx(CheckoutTotalCard, {
         subtotal: subtotal,
+        originalSubtotal: originalSubtotal,
+        giftSavingAmount: giftSavingAmount,
         ship: checkoutShip,
         originalShip: baseCheckoutShip,
         shippingSupportDiscount: autoShipSupport,

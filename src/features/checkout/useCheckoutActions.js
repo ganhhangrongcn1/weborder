@@ -27,7 +27,10 @@ export default function useCheckoutActions({
     return {
       ...item,
       quantity,
-      lineTotal: item.unitTotal * quantity
+      lineTotal: item.unitTotal * quantity,
+      originalLineTotal: Number(item.originalUnitTotal || 0) > Number(item.unitTotal || 0)
+        ? Number(item.originalUnitTotal || 0) * quantity
+        : item.originalLineTotal
     };
   }));
 

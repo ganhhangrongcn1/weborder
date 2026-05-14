@@ -31,6 +31,13 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
     );
   }
 
+  function mergeDiscountLineTotal(first, second) {
+    const firstOriginal = Number(first?.originalLineTotal || 0);
+    const secondOriginal = Number(second?.originalLineTotal || 0);
+    if (!firstOriginal && !secondOriginal) return undefined;
+    return (firstOriginal || Number(first?.lineTotal || 0)) + (secondOriginal || Number(second?.lineTotal || 0));
+  }
+
   function setCart(value) {
     setCartState((current) => {
       const next = typeof value === "function" ? value(current) : value;
@@ -60,7 +67,8 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
           .concat({
             ...duplicate,
             quantity: Number(duplicate.quantity || 0) + Number(edited.quantity || 0),
-            lineTotal: Number(duplicate.lineTotal || 0) + Number(edited.lineTotal || 0)
+            lineTotal: Number(duplicate.lineTotal || 0) + Number(edited.lineTotal || 0),
+            originalLineTotal: mergeDiscountLineTotal(duplicate, edited)
           });
       });
       setEditingCartId(null);
@@ -73,7 +81,8 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
             ? {
                 ...cartItem,
                 quantity: Number(cartItem.quantity || 0) + Number(item.quantity || 0),
-                lineTotal: Number(cartItem.lineTotal || 0) + Number(item.lineTotal || 0)
+                lineTotal: Number(cartItem.lineTotal || 0) + Number(item.lineTotal || 0),
+                originalLineTotal: mergeDiscountLineTotal(cartItem, item)
               }
             : cartItem
         );
