@@ -218,7 +218,9 @@ export default function CustomerShell({
           count: cartCount,
           subtotal: subtotal,
           onClick: handleOpenCheckout,
-          formatMoney: formatMoney
+          formatMoney: formatMoney,
+          products: pageProps.products,
+          smartPromotions: pageProps.checkoutSmartPromotions || pageProps.smartPromotions
         }), toastVisible && /*#__PURE__*/_jsx(CustomerToast, {
           message: "\u0110\xE3 th\xEAm v\xE0o gi\u1ECF"
         }), !isWaitingZaloSend && /*#__PURE__*/_jsx(BottomNav, {

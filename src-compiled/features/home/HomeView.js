@@ -213,7 +213,8 @@ export default function Home({
       deliveryAppsRef: deliveryAppsRef,
       deliveryAppsBlock: deliveryAppsBlock,
       deliveryAppsList: deliveryAppsList,
-      deliveryAppBranches: deliveryAppBranches
+      deliveryAppBranches: deliveryAppBranches,
+      deliveryBranches: deliveryBranches
     }),
     fulfillment: () => showFulfillment ? /*#__PURE__*/_jsx("section", {
       ref: fulfillmentRef,

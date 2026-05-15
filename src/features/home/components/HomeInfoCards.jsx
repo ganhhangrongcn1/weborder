@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
+import HomeBranchPlannerModal from "./HomeBranchPlannerModal.jsx";
 
 function normalizeExternalUrl(url) {
   const trimmed = String(url || "").trim();
@@ -33,9 +34,11 @@ export default function HomeInfoCards({
   deliveryAppsRef,
   deliveryAppsBlock,
   deliveryAppsList,
-  deliveryAppBranches = []
+  deliveryAppBranches = [],
+  deliveryBranches = []
 }) {
   const [activeBranchId, setActiveBranchId] = useState(deliveryAppBranches[0]?.branchId || "");
+  const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const hasBranchApps = deliveryAppBranches.length > 0;
 
   useEffect(() => {
@@ -49,6 +52,26 @@ export default function HomeInfoCards({
   const activeBranch = useMemo(
     () => deliveryAppBranches.find((branch) => branch.branchId === activeBranchId) || deliveryAppBranches[0] || null,
     [activeBranchId, deliveryAppBranches]
+  );
+
+  const branchPickerItems = useMemo(
+    () =>
+      deliveryAppBranches.map((branch) => {
+        const sourceBranch = deliveryBranches.find((item) =>
+          String(item?.id || "") === String(branch.branchSourceId || "") ||
+          String(item?.name || "") === String(branch.branchSourceId || "") ||
+          String(item?.name || "") === String(branch.branchName || "")
+        );
+        return {
+          id: branch.branchId,
+          name: branch.branchName,
+          address: sourceBranch?.address || "",
+          time: sourceBranch?.time || "",
+          openTime: sourceBranch?.openTime || sourceBranch?.open || "",
+          closeTime: sourceBranch?.closeTime || sourceBranch?.close || ""
+        };
+      }),
+    [deliveryAppBranches, deliveryBranches]
   );
 
   const legacyApps = deliveryAppsList.length ? deliveryAppsList : ["GrabFood", "ShopeeFood", "Xanh Ngon"];
@@ -81,13 +104,14 @@ export default function HomeInfoCards({
             <>
               <label className="delivery-app-branch-select">
                 <span>Chọn chi nhánh đặt qua app</span>
-                <select value={activeBranch?.branchId || ""} onChange={(event) => setActiveBranchId(event.target.value)}>
-                  {deliveryAppBranches.map((branch) => (
-                    <option key={branch.branchId} value={branch.branchId}>
-                      {branch.branchName}
-                    </option>
-                  ))}
-                </select>
+                <button
+                  type="button"
+                  className="delivery-app-branch-trigger"
+                  onClick={() => setBranchPickerOpen(true)}
+                >
+                  <span>{activeBranch?.branchName || "Chọn chi nhánh"}</span>
+                  <i>▾</i>
+                </button>
               </label>
               {activeBranch?.branchName ? (
                 <p className="delivery-app-branch-note">
@@ -95,7 +119,7 @@ export default function HomeInfoCards({
                 </p>
               ) : null}
               <div className="grid grid-cols-3 gap-2">
-                {(activeBranch?.apps || []).map((app, index) => {
+                {(activeBranch?.apps || []).map((app) => {
                   const appUrl = normalizeExternalUrl(app.url);
                   return (
                     <button
@@ -111,6 +135,24 @@ export default function HomeInfoCards({
                   );
                 })}
               </div>
+
+              <HomeBranchPlannerModal
+                open={branchPickerOpen}
+                onBackdropClose={() => setBranchPickerOpen(false)}
+                onClose={() => setBranchPickerOpen(false)}
+                title="Chọn chi nhánh giao hàng"
+                subtitle="Chọn chi nhánh gần bạn nhất để tiết kiệm phí ship."
+                ariaLabel="Chọn chi nhánh giao hàng"
+                branches={branchPickerItems}
+                selectedBranchId={activeBranch?.branchId || ""}
+                onSelectBranch={setActiveBranchId}
+                onConfirm={() => {
+                  setBranchPickerOpen(false);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                confirmLabel="Chọn chi nhánh này"
+                iconName="star"
+              />
             </>
           ) : (
             <div className="grid grid-cols-3 gap-2">

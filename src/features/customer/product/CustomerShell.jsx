@@ -161,7 +161,14 @@ export default function CustomerShell({
         )}
 
         {cartCount > 0 && !["checkout", "success"].includes(page) && (
-          <CustomerFloatingCartBar count={cartCount} subtotal={subtotal} onClick={handleOpenCheckout} formatMoney={formatMoney} />
+          <CustomerFloatingCartBar
+            count={cartCount}
+            subtotal={subtotal}
+            onClick={handleOpenCheckout}
+            formatMoney={formatMoney}
+            products={pageProps.products}
+            smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions}
+          />
         )}
 
         {toastVisible && <CustomerToast message="Đã thêm vào giỏ" />}

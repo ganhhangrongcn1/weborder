@@ -1,4 +1,4 @@
-import { formatMoney } from "../../../utils/format.js";
+﻿import { formatMoney } from "../../../utils/format.js";
 import CheckoutCard from "./CheckoutCard.jsx";
 
 export default function CheckoutTotalCard({
@@ -22,10 +22,13 @@ export default function CheckoutTotalCard({
 }) {
   const isPickup = fulfillmentType === "pickup";
   const displayedShippingFee = isPickup ? 0 : ship;
-  const rawShippingFee = isPickup ? 0 : originalShip;
   const appliedSupportMax = Math.max(0, Number(shippingSupportMax || 0));
   const displayedSubtotal = Number(subtotal || 0);
   const displayedOriginalSubtotal = Math.max(displayedSubtotal, Number(originalSubtotal || displayedSubtotal));
+  const effectiveShippingPaid = isPickup ? 0 : Math.max(0, Number(displayedShippingFee || customerExtraShip || 0));
+  const rawShippingFee = isPickup
+    ? 0
+    : Math.max(effectiveShippingPaid, Number(originalShip || effectiveShippingPaid));
   const originalTotal = displayedOriginalSubtotal + rawShippingFee;
   const savingOriginalTotal = originalTotal + Math.max(0, Number(giftSavingAmount || 0));
   const savedAmount = Math.max(savingOriginalTotal - total, 0);
@@ -34,27 +37,16 @@ export default function CheckoutTotalCard({
     <CheckoutCard title="Tổng cộng">
       <div className="checkout-total-summary">
         <div className="summary-line">
-          <span>Tổng tạm tính ({count} món)</span>
+          <span>Tạm tính ({count} món)</span>
           <strong>{formatMoney(displayedSubtotal)}</strong>
         </div>
 
         <div className="summary-line">
           <span>
-            Phí giao hàng {!isPickup && distanceKm ? `(${distanceKm.toFixed(1)}km)` : ""}{" "}
+            Phí ship bạn trả {!isPickup && distanceKm ? `(${distanceKm.toFixed(1)}km)` : ""}{" "}
             <button type="button" onClick={onShowDeliveryFee} className="fee-info-btn">i</button>
           </span>
-          <strong>
-            {isPickup ? (
-              "Không tính phí giao hàng"
-            ) : shippingSupportDiscount > 0 ? (
-              <span className="flex flex-col items-end leading-tight">
-                <span>{formatMoney(displayedShippingFee)}</span>
-                <del className="text-xs font-semibold text-brown/35">{formatMoney(rawShippingFee)}</del>
-              </span>
-            ) : (
-              formatMoney(displayedShippingFee)
-            )}
-          </strong>
+          <strong>{isPickup ? "0đ" : formatMoney(effectiveShippingPaid)}</strong>
         </div>
 
         {shippingSupportDiscount > 0 ? (
@@ -68,13 +60,6 @@ export default function CheckoutTotalCard({
           <div className="mt-[-4px] mb-1 text-[10px] leading-4 text-brown/45">
             <span>Mức hỗ trợ tối đa: </span>
             <span className="font-medium">{formatMoney(appliedSupportMax)}</span>
-          </div>
-        ) : null}
-
-        {!isPickup && customerExtraShip > 0 ? (
-          <div className="summary-line">
-            <span>Phần phí ship khách trả thêm</span>
-            <strong>{formatMoney(customerExtraShip)}</strong>
           </div>
         ) : null}
 
@@ -93,7 +78,7 @@ export default function CheckoutTotalCard({
         ) : null}
 
         <div className="summary-final">
-          <span>Tổng cộng</span>
+          <span>Tổng thanh toán</span>
           <strong>{formatMoney(total)}</strong>
         </div>
 

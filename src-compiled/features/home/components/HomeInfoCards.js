@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import HomeBranchPlannerModal from "./HomeBranchPlannerModal.js";
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 function normalizeExternalUrl(url) {
   const trimmed = String(url || "").trim();
@@ -43,9 +44,11 @@ export default function HomeInfoCards({
   deliveryAppsRef,
   deliveryAppsBlock,
   deliveryAppsList,
-  deliveryAppBranches = []
+  deliveryAppBranches = [],
+  deliveryBranches = []
 }) {
   const [activeBranchId, setActiveBranchId] = useState(deliveryAppBranches[0]?.branchId || "");
+  const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const hasBranchApps = deliveryAppBranches.length > 0;
   useEffect(() => {
     if (!hasBranchApps) return;
@@ -55,6 +58,17 @@ export default function HomeInfoCards({
     }
   }, [activeBranchId, deliveryAppBranches, hasBranchApps]);
   const activeBranch = useMemo(() => deliveryAppBranches.find(branch => branch.branchId === activeBranchId) || deliveryAppBranches[0] || null, [activeBranchId, deliveryAppBranches]);
+  const branchPickerItems = useMemo(() => deliveryAppBranches.map(branch => {
+    const sourceBranch = deliveryBranches.find(item => String(item?.id || "") === String(branch.branchSourceId || "") || String(item?.name || "") === String(branch.branchSourceId || "") || String(item?.name || "") === String(branch.branchName || ""));
+    return {
+      id: branch.branchId,
+      name: branch.branchName,
+      address: sourceBranch?.address || "",
+      time: sourceBranch?.time || "",
+      openTime: sourceBranch?.openTime || sourceBranch?.open || "",
+      closeTime: sourceBranch?.closeTime || sourceBranch?.close || ""
+    };
+  }), [deliveryAppBranches, deliveryBranches]);
   const legacyApps = deliveryAppsList.length ? deliveryAppsList : ["GrabFood", "ShopeeFood", "Xanh Ngon"];
   const openDeliveryApp = url => {
     const normalizedUrl = normalizeExternalUrl(url);
@@ -90,13 +104,15 @@ export default function HomeInfoCards({
           className: "delivery-app-branch-select",
           children: [/*#__PURE__*/_jsx("span", {
             children: "Ch\u1ECDn chi nh\xE1nh \u0111\u1EB7t qua app"
-          }), /*#__PURE__*/_jsx("select", {
-            value: activeBranch?.branchId || "",
-            onChange: event => setActiveBranchId(event.target.value),
-            children: deliveryAppBranches.map(branch => /*#__PURE__*/_jsx("option", {
-              value: branch.branchId,
-              children: branch.branchName
-            }, branch.branchId))
+          }), /*#__PURE__*/_jsxs("button", {
+            type: "button",
+            className: "delivery-app-branch-trigger",
+            onClick: () => setBranchPickerOpen(true),
+            children: [/*#__PURE__*/_jsx("span", {
+              children: activeBranch?.branchName || "Chọn chi nhánh"
+            }), /*#__PURE__*/_jsx("i", {
+              children: "\u25BE"
+            })]
           })]
         }), activeBranch?.branchName ? /*#__PURE__*/_jsxs("p", {
           className: "delivery-app-branch-note",
@@ -105,7 +121,7 @@ export default function HomeInfoCards({
           })]
         }) : null, /*#__PURE__*/_jsx("div", {
           className: "grid grid-cols-3 gap-2",
-          children: (activeBranch?.apps || []).map((app, index) => {
+          children: (activeBranch?.apps || []).map(app => {
             const appUrl = normalizeExternalUrl(app.url);
             return /*#__PURE__*/_jsxs("button", {
               type: "button",
@@ -119,6 +135,25 @@ export default function HomeInfoCards({
               })]
             }, app.id);
           })
+        }), /*#__PURE__*/_jsx(HomeBranchPlannerModal, {
+          open: branchPickerOpen,
+          onBackdropClose: () => setBranchPickerOpen(false),
+          onClose: () => setBranchPickerOpen(false),
+          title: "Ch\u1ECDn chi nh\xE1nh giao h\xE0ng",
+          subtitle: "Ch\u1ECDn chi nh\xE1nh g\u1EA7n b\u1EA1n nh\u1EA5t \u0111\u1EC3 ti\u1EBFt ki\u1EC7m ph\xED ship.",
+          ariaLabel: "Ch\u1ECDn chi nh\xE1nh giao h\xE0ng",
+          branches: branchPickerItems,
+          selectedBranchId: activeBranch?.branchId || "",
+          onSelectBranch: setActiveBranchId,
+          onConfirm: () => {
+            setBranchPickerOpen(false);
+            window.scrollTo({
+              top: 0,
+              behavior: "smooth"
+            });
+          },
+          confirmLabel: "Ch\u1ECDn chi nh\xE1nh n\xE0y",
+          iconName: "star"
         })]
       }) : /*#__PURE__*/_jsx("div", {
         className: "grid grid-cols-3 gap-2",

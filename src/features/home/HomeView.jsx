@@ -254,6 +254,7 @@ export default function Home({
         deliveryAppsBlock={deliveryAppsBlock}
         deliveryAppsList={deliveryAppsList}
         deliveryAppBranches={deliveryAppBranches}
+        deliveryBranches={deliveryBranches}
       />
     ),
     fulfillment: () => showFulfillment ? (

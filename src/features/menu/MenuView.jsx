@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
 import ProductCard from "../../components/ProductCard.jsx";
 import Icon from "../../components/Icon.jsx";
 import AppHeader from "../../components/app/Header.jsx";
@@ -34,6 +34,7 @@ export default function Menu({
     () => [...toppings].sort((first, second) => Number(second.price || 0) - Number(first.price || 0)),
     [toppings]
   );
+
   const displayCategories = useMemo(() => {
     const allLabel = "Tất cả";
     const cleaned = (categories || []).map((item) => String(item || "").trim()).filter(Boolean);
@@ -96,17 +97,18 @@ export default function Menu({
           <div className="menu-chip-row-wrap">
             <div className="no-scrollbar menu-chip-row">
               {displayCategories.map((category, index) => (
-              <button
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                className={`chip ${activeCategory === category ? "chip-active" : ""} ${index === 0 && category === "Tất cả" ? "chip-pinned-all" : ""}`}
-              >
-                {category}
-              </button>
+                <button
+                  key={category}
+                  onClick={() => setActiveCategory(category)}
+                  className={`chip ${activeCategory === category ? "chip-active" : ""} ${index === 0 && category === "Tất cả" ? "chip-pinned-all" : ""}`}
+                >
+                  {category}
+                </button>
               ))}
             </div>
           </div>
         </div>
+
         <div className="grid grid-cols-2 gap-3">
           {filteredProducts.map((product) => (
             <ProductCard
@@ -119,6 +121,7 @@ export default function Menu({
             />
           ))}
         </div>
+
         <div className="menu-addon-section">
           <div className="flex items-end justify-between gap-3">
             <div>
