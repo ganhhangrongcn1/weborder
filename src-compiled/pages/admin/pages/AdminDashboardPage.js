@@ -3,6 +3,14 @@ import { jsx as _jsx } from "react/jsx-runtime";
 export default function AdminDashboardPage({
   dashboardSearch,
   setDashboardSearch,
+  dashboardDateFrom,
+  setDashboardDateFrom,
+  dashboardDateTo,
+  setDashboardDateTo,
+  dashboardDatePreset,
+  setDashboardDatePreset,
+  dashboardChartPreset,
+  setDashboardChartPreset,
   openBranches,
   totalBranches,
   ordersTotal,
@@ -16,11 +24,20 @@ export default function AdminDashboardPage({
   openAdminNav,
   flatAdminNav,
   filteredRecentOrders,
-  ordersSnapshot
+  ordersSnapshot,
+  chartOrdersSnapshot
 }) {
   return /*#__PURE__*/_jsx(AdminDashboardSection, {
     dashboardSearch: dashboardSearch,
     setDashboardSearch: setDashboardSearch,
+    dashboardDateFrom: dashboardDateFrom,
+    setDashboardDateFrom: setDashboardDateFrom,
+    dashboardDateTo: dashboardDateTo,
+    setDashboardDateTo: setDashboardDateTo,
+    dashboardDatePreset: dashboardDatePreset,
+    setDashboardDatePreset: setDashboardDatePreset,
+    dashboardChartPreset: dashboardChartPreset,
+    setDashboardChartPreset: setDashboardChartPreset,
     openBranches: openBranches,
     totalBranches: totalBranches,
     ordersTotal: ordersTotal,
@@ -34,6 +51,7 @@ export default function AdminDashboardPage({
     openAdminNav: openAdminNav,
     flatAdminNav: flatAdminNav,
     filteredRecentOrders: filteredRecentOrders,
-    ordersSnapshot: ordersSnapshot
+    ordersSnapshot: ordersSnapshot,
+    chartOrdersSnapshot: chartOrdersSnapshot
   });
 }

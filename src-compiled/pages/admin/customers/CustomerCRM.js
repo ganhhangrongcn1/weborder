@@ -118,7 +118,13 @@ export default function CustomerCRM({
   giftVoucherToCustomer,
   cancelCustomerVoucher,
   showCustomerTier,
-  coupons = []
+  coupons = [],
+  customersDateFrom,
+  setCustomersDateFrom,
+  customersDateTo,
+  setCustomersDateTo,
+  customersDatePreset,
+  setCustomersDatePreset
 }) {
   const [keyword, setKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
@@ -134,7 +140,7 @@ export default function CustomerCRM({
       const name = String(`${customer.name || ""} ${customer.registeredCustomerName || ""} ${customer.orderCustomerName || ""}`).toLowerCase();
       const phone = String(customer.phone || "").toLowerCase();
       const matchKeyword = !q || name.includes(q) || phone.includes(q) || phoneKey && phone.includes(phoneKey);
-      const matchFilter = customerFilter === "all" || customerFilter === "vip" && isVipCustomer(customer) || customerFilter === "care" && needsCare(customer);
+      const matchFilter = customerFilter === "all" || customerFilter === "vip" && isVipCustomer(customer) || customerFilter === "care" && needsCare(customer) || customerFilter === "inactive7" && Number(customer.daysSinceLastOrder || 0) >= 7 || customerFilter === "inactive15" && Number(customer.daysSinceLastOrder || 0) >= 15 || customerFilter === "inactive30" && Number(customer.daysSinceLastOrder || 0) >= 30;
       return matchKeyword && matchFilter;
     });
     next.sort((a, b) => {
@@ -144,14 +150,19 @@ export default function CustomerCRM({
     });
     return next;
   }, [crmSnapshot.customers, keyword, customerFilter, sortBy]);
+  const visibleCustomers = useMemo(() => filteredCustomers.slice(0, 5), [filteredCustomers]);
   const summary = useMemo(() => {
     const customers = crmSnapshot.customers || [];
+    const repeatCustomers30 = customers.filter(customer => {
+      const totalOrders = Number(customer.totalOrders || 0);
+      const daysSinceLastOrder = Number(customer.daysSinceLastOrder || 9999);
+      return totalOrders >= 2 && daysSinceLastOrder <= 30;
+    }).length;
     return {
       totalCustomers: customers.length,
-      totalRevenue: customers.reduce((sum, customer) => sum + Number(customer.totalSpent || 0), 0),
+      repeatCustomers30,
       vipCount: customers.filter(isVipCustomer).length,
-      careCount: customers.filter(needsCare).length,
-      totalPoints: customers.reduce((sum, customer) => sum + Number(customer.currentPoints || 0), 0)
+      careCount: customers.filter(needsCare).length
     };
   }, [crmSnapshot.customers]);
   const selectedCustomer = useMemo(() => (crmSnapshot.customers || []).find(customer => customer.phone === selectedCustomerPhone) || null, [crmSnapshot.customers, selectedCustomerPhone]);
@@ -244,9 +255,9 @@ export default function CustomerCRM({
       }), /*#__PURE__*/_jsx(CrmStatCard, {
         icon: "cart",
         tone: "green",
-        title: "Doanh thu t\u1EEB kh\xE1ch",
-        value: formatMoney(summary.totalRevenue),
-        subtitle: "T\u1ED5ng chi ti\xEAu \u0111\xE3 ghi nh\u1EADn"
+        title: "Kh\xE1ch quay l\u1EA1i (30 ng\xE0y)",
+        value: summary.repeatCustomers30.toLocaleString("vi-VN"),
+        subtitle: "T\u1EEB 2 \u0111\u01A1n tr\u1EDF l\xEAn trong 30 ng\xE0y"
       }), /*#__PURE__*/_jsx(CrmStatCard, {
         icon: "star",
         tone: "purple",
@@ -259,12 +270,6 @@ export default function CustomerCRM({
         title: "C\u1EA7n ch\u0103m s\xF3c",
         value: summary.careCount.toLocaleString("vi-VN"),
         subtitle: "Ch\u01B0a quay l\u1EA1i t\u1EEB 30 ng\xE0y"
-      }), /*#__PURE__*/_jsx(CrmStatCard, {
-        icon: "gift",
-        tone: "amber",
-        title: "\u0110i\u1EC3m loyalty",
-        value: summary.totalPoints.toLocaleString("vi-VN"),
-        subtitle: "T\u1ED5ng \u0111i\u1EC3m hi\u1EC7n t\u1EA1i"
       })]
     }), /*#__PURE__*/_jsxs("div", {
       className: "crm-workspace",
@@ -309,6 +314,21 @@ export default function CustomerCRM({
               children: "VIP"
             }), /*#__PURE__*/_jsx("button", {
               type: "button",
+              className: customerFilter === "inactive7" ? "active" : "",
+              onClick: () => setCustomerFilter("inactive7"),
+              children: "7 ng\xE0y ch\u01B0a mua"
+            }), /*#__PURE__*/_jsx("button", {
+              type: "button",
+              className: customerFilter === "inactive15" ? "active" : "",
+              onClick: () => setCustomerFilter("inactive15"),
+              children: "15 ng\xE0y ch\u01B0a mua"
+            }), /*#__PURE__*/_jsx("button", {
+              type: "button",
+              className: customerFilter === "inactive30" ? "active" : "",
+              onClick: () => setCustomerFilter("inactive30"),
+              children: "30 ng\xE0y ch\u01B0a mua"
+            }), /*#__PURE__*/_jsx("button", {
+              type: "button",
               className: customerFilter === "care" ? "active" : "",
               onClick: () => setCustomerFilter("care"),
               children: "C\u1EA7n ch\u0103m s\xF3c"
@@ -319,6 +339,13 @@ export default function CustomerCRM({
             onClick: resetFilters,
             children: "X\xF3a l\u1ECDc"
           })]
+        }), /*#__PURE__*/_jsxs("p", {
+          style: {
+            margin: "0 4px 10px",
+            fontSize: 12,
+            color: "#6b778c"
+          },
+          children: ["Hi\u1EC3n th\u1ECB ", Math.min(5, filteredCustomers.length), " / ", filteredCustomers.length, " kh\xE1ch theo b\u1ED9 l\u1ECDc hi\u1EC7n t\u1EA1i."]
         }), /*#__PURE__*/_jsxs("div", {
           className: "crm-table",
           children: [/*#__PURE__*/_jsxs("div", {
@@ -338,7 +365,7 @@ export default function CustomerCRM({
             })]
           }), /*#__PURE__*/_jsx("div", {
             className: "crm-table-body",
-            children: filteredCustomers.map(customer => {
+            children: visibleCustomers.map(customer => {
               const isSelected = selectedCustomerPhone === customer.phone;
               return /*#__PURE__*/_jsxs("button", {
                 type: "button",

@@ -10,6 +10,30 @@ function mapAdminStatusToOrderStatus(nextStatus) {
   if (nextStatus === "done") return "done";
   return "pending_zalo";
 }
+function buildDateRangeFromInputs(dateFromValue = "", dateToValue = "") {
+  const fromText = String(dateFromValue || "").trim();
+  const toText = String(dateToValue || "").trim();
+  if (!fromText && !toText) return {};
+  const fromDate = fromText ? new Date(`${fromText}T00:00:00`) : null;
+  const toDate = toText ? new Date(`${toText}T00:00:00`) : null;
+  if (fromDate && Number.isNaN(fromDate.getTime())) return {};
+  if (toDate && Number.isNaN(toDate.getTime())) return {};
+  let start = fromDate;
+  let end = toDate;
+  if (start && end && start.getTime() > end.getTime()) {
+    const temp = start;
+    start = end;
+    end = temp;
+  }
+  const range = {};
+  if (start) range.dateFrom = start.toISOString();
+  if (end) {
+    const nextEnd = new Date(end);
+    nextEnd.setDate(nextEnd.getDate() + 1);
+    range.dateTo = nextEnd.toISOString();
+  }
+  return range;
+}
 export default function AdminOrdersCrmSection({
   section,
   customerAdminTab,
@@ -28,10 +52,25 @@ export default function AdminOrdersCrmSection({
   onSaveLoyaltyConfig,
   orderStorage,
   branches = [],
-  coupons = []
+  coupons = [],
+  ordersDateFrom,
+  setOrdersDateFrom,
+  ordersDateTo,
+  setOrdersDateTo,
+  ordersDatePreset,
+  setOrdersDatePreset,
+  customersDateFrom,
+  setCustomersDateFrom,
+  customersDateTo,
+  setCustomersDateTo,
+  customersDatePreset,
+  setCustomersDatePreset
 }) {
+  const activeDateRange = section === "customers" ? buildDateRangeFromInputs(customersDateFrom, customersDateTo) : buildDateRangeFromInputs(ordersDateFrom, ordersDateTo);
   const refreshCrm = async () => {
-    const [ordersResult, crmResult] = await Promise.allSettled([orderStorage?.getAllAsync?.(), buildCustomersFromOrdersAsync(orderStorage)]);
+    const [ordersResult, crmResult] = await Promise.allSettled([orderStorage?.getAllAsync?.(activeDateRange), buildCustomersFromOrdersAsync(orderStorage, {
+      dateRange: activeDateRange
+    })]);
     const nextOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
     const nextCrm = crmResult.status === "fulfilled" ? crmResult.value : {
       customers: [],
@@ -64,7 +103,6 @@ export default function AdminOrdersCrmSection({
         });
       }
       await refreshCrm();
-      onOrderUpdated?.();
     } catch (error) {
       console.error("[admin][orders] update status failed", error);
       window.alert("Cập nhật trạng thái thất bại. Khả năng do RLS/permission của bảng orders.");
@@ -76,7 +114,13 @@ export default function AdminOrdersCrmSection({
       updateOrderStatus: updateOrderStatus,
       onOpenDetail: () => {},
       branches: branches,
-      registeredCustomersByPhone: customerRepository.getUsers()
+      registeredCustomersByPhone: customerRepository.getUsers(),
+      ordersDateFrom: ordersDateFrom,
+      setOrdersDateFrom: setOrdersDateFrom,
+      ordersDateTo: ordersDateTo,
+      setOrdersDateTo: setOrdersDateTo,
+      ordersDatePreset: ordersDatePreset,
+      setOrdersDatePreset: setOrdersDatePreset
     }), section === "customers" && /*#__PURE__*/_jsx(AdminCustomerSection, {
       customerAdminTab: customerAdminTab,
       setCustomerAdminTab: setCustomerAdminTab,
@@ -91,7 +135,13 @@ export default function AdminOrdersCrmSection({
       showCustomerTier: getCustomerTier,
       setCrmSnapshot: setCrmSnapshot,
       handleSaveLoyaltyRatio: saveLoyaltyConfig,
-      coupons: coupons
+      coupons: coupons,
+      customersDateFrom: customersDateFrom,
+      setCustomersDateFrom: setCustomersDateFrom,
+      customersDateTo: customersDateTo,
+      setCustomersDateTo: setCustomersDateTo,
+      customersDatePreset: customersDatePreset,
+      setCustomersDatePreset: setCustomersDatePreset
     })]
   });
 }

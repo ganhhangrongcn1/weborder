@@ -39,7 +39,8 @@ export function buildCreateOrderPayload({
 }) {
   return {
     totalAmount: checkoutTotal,
-    pointsBaseAmount: subtotal,
+    subtotal,
+    pointsBaseAmount: Math.max(Number(subtotal || 0) - Number(promoDiscount || 0), 0),
     shippingFee: checkoutShip,
     originalShippingFee: baseCheckoutShip,
     shippingSupportDiscount: autoShipSupport,

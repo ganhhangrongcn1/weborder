@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { getCustomerLoyaltyDetailAsync } from "../../../services/crmService.js";
@@ -107,7 +107,13 @@ export default function CustomerCRM({
   giftVoucherToCustomer,
   cancelCustomerVoucher,
   showCustomerTier,
-  coupons = []
+  coupons = [],
+  customersDateFrom,
+  setCustomersDateFrom,
+  customersDateTo,
+  setCustomersDateTo,
+  customersDatePreset,
+  setCustomersDatePreset
 }) {
   const [keyword, setKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
@@ -127,7 +133,10 @@ export default function CustomerCRM({
       const matchFilter =
         customerFilter === "all" ||
         (customerFilter === "vip" && isVipCustomer(customer)) ||
-        (customerFilter === "care" && needsCare(customer));
+        (customerFilter === "care" && needsCare(customer)) ||
+        (customerFilter === "inactive7" && Number(customer.daysSinceLastOrder || 0) >= 7) ||
+        (customerFilter === "inactive15" && Number(customer.daysSinceLastOrder || 0) >= 15) ||
+        (customerFilter === "inactive30" && Number(customer.daysSinceLastOrder || 0) >= 30);
       return matchKeyword && matchFilter;
     });
     next.sort((a, b) => {
@@ -138,14 +147,20 @@ export default function CustomerCRM({
     return next;
   }, [crmSnapshot.customers, keyword, customerFilter, sortBy]);
 
+  const visibleCustomers = useMemo(() => filteredCustomers.slice(0, 5), [filteredCustomers]);
+
   const summary = useMemo(() => {
     const customers = crmSnapshot.customers || [];
+    const repeatCustomers30 = customers.filter((customer) => {
+      const totalOrders = Number(customer.totalOrders || 0);
+      const daysSinceLastOrder = Number(customer.daysSinceLastOrder || 9999);
+      return totalOrders >= 2 && daysSinceLastOrder <= 30;
+    }).length;
     return {
       totalCustomers: customers.length,
-      totalRevenue: customers.reduce((sum, customer) => sum + Number(customer.totalSpent || 0), 0),
+      repeatCustomers30,
       vipCount: customers.filter(isVipCustomer).length,
-      careCount: customers.filter(needsCare).length,
-      totalPoints: customers.reduce((sum, customer) => sum + Number(customer.currentPoints || 0), 0)
+      careCount: customers.filter(needsCare).length
     };
   }, [crmSnapshot.customers]);
 
@@ -245,10 +260,9 @@ export default function CustomerCRM({
 
       <div className="crm-stat-grid">
         <CrmStatCard icon="user" tone="orange" title="Tổng khách hàng" value={summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Từ dữ liệu đơn hàng" />
-        <CrmStatCard icon="cart" tone="green" title="Doanh thu từ khách" value={formatMoney(summary.totalRevenue)} subtitle="Tổng chi tiêu đã ghi nhận" />
+        <CrmStatCard icon="cart" tone="green" title="Khách quay lại (30 ngày)" value={summary.repeatCustomers30.toLocaleString("vi-VN")} subtitle="Từ 2 đơn trở lên trong 30 ngày" />
         <CrmStatCard icon="star" tone="purple" title="Khách VIP" value={summary.vipCount.toLocaleString("vi-VN")} subtitle="Theo ngưỡng hiện tại" />
         <CrmStatCard icon="heart" tone="blue" title="Cần chăm sóc" value={summary.careCount.toLocaleString("vi-VN")} subtitle="Chưa quay lại từ 30 ngày" />
-        <CrmStatCard icon="gift" tone="amber" title="Điểm loyalty" value={summary.totalPoints.toLocaleString("vi-VN")} subtitle="Tổng điểm hiện tại" />
       </div>
 
       <div className="crm-workspace">
@@ -266,10 +280,16 @@ export default function CustomerCRM({
             <div className="crm-filter-tabs">
               <button type="button" className={customerFilter === "all" ? "active" : ""} onClick={() => setCustomerFilter("all")}>Tất cả</button>
               <button type="button" className={customerFilter === "vip" ? "active" : ""} onClick={() => setCustomerFilter("vip")}>VIP</button>
+              <button type="button" className={customerFilter === "inactive7" ? "active" : ""} onClick={() => setCustomerFilter("inactive7")}>7 ngày chưa mua</button>
+              <button type="button" className={customerFilter === "inactive15" ? "active" : ""} onClick={() => setCustomerFilter("inactive15")}>15 ngày chưa mua</button>
+              <button type="button" className={customerFilter === "inactive30" ? "active" : ""} onClick={() => setCustomerFilter("inactive30")}>30 ngày chưa mua</button>
               <button type="button" className={customerFilter === "care" ? "active" : ""} onClick={() => setCustomerFilter("care")}>Cần chăm sóc</button>
             </div>
             <button type="button" className="crm-reset-btn" onClick={resetFilters}>Xóa lọc</button>
           </div>
+          <p style={{ margin: "0 4px 10px", fontSize: 12, color: "#6b778c" }}>
+            Hiển thị {Math.min(5, filteredCustomers.length)} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
+          </p>
 
           <div className="crm-table">
             <div className="crm-table-head">
@@ -282,7 +302,7 @@ export default function CustomerCRM({
             </div>
 
             <div className="crm-table-body">
-              {filteredCustomers.map((customer) => {
+              {visibleCustomers.map((customer) => {
                 const isSelected = selectedCustomerPhone === customer.phone;
                 return (
                   <button

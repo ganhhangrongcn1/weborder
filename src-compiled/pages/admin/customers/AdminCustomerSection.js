@@ -15,7 +15,13 @@ export default function AdminCustomerSection({
   showCustomerTier,
   setCrmSnapshot,
   handleSaveLoyaltyRatio,
-  coupons = []
+  coupons = [],
+  customersDateFrom,
+  setCustomersDateFrom,
+  customersDateTo,
+  setCustomersDateTo,
+  customersDatePreset,
+  setCustomersDatePreset
 }) {
   return /*#__PURE__*/_jsxs("div", {
     className: "admin-stack",
@@ -54,7 +60,13 @@ export default function AdminCustomerSection({
       giftVoucherToCustomer: giftVoucherToCustomer,
       cancelCustomerVoucher: cancelCustomerVoucher,
       showCustomerTier: showCustomerTier,
-      coupons: coupons
+      coupons: coupons,
+      customersDateFrom: customersDateFrom,
+      setCustomersDateFrom: setCustomersDateFrom,
+      customersDateTo: customersDateTo,
+      setCustomersDateTo: setCustomersDateTo,
+      customersDatePreset: customersDatePreset,
+      setCustomersDatePreset: setCustomersDatePreset
     }) : /*#__PURE__*/_jsx(LoyaltySettings, {
       crmSnapshot: crmSnapshot,
       setCrmSnapshot: setCrmSnapshot,

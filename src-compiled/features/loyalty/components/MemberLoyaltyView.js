@@ -5,7 +5,7 @@ import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.js";
 import PointsCard from "../../../pages/customer/loyalty/PointsCard.js";
 import CouponList from "../../../pages/customer/loyalty/CouponList.js";
 import { isVoucherExpired } from "../../../utils/pureHelpers.js";
-import { getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getLoyaltyRule, getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 import LuckyVoucherModal from "./LuckyVoucherModal.js";
 import CheckinCard from "./CheckinCard.js";
 import PointHistoryList from "./PointHistoryList.js";
@@ -27,6 +27,9 @@ export default function MemberLoyaltyView({
   handleCheckin
 }) {
   const loyaltyText = getLoyaltyText();
+  const loyaltyRule = getLoyaltyRule();
+  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 1000));
+  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
   const loyaltyRulesRows = Array.isArray(getLoyaltyRulesRows()) ? getLoyaltyRulesRows() : [];
   const safePointHistory = Array.isArray(userProfile?.pointHistory) ? userProfile.pointHistory : [];
   const safeVoucherHistory = Array.isArray(loyalty?.voucherHistory) ? loyalty.voucherHistory : [];
@@ -47,7 +50,7 @@ export default function MemberLoyaltyView({
       title: loyaltyText.memberPointsTitle,
       pointsValue: loyalty.totalPoints.toLocaleString("vi-VN"),
       subtitle: loyaltyText.memberPointsSubtitle,
-      ratioText: `${loyaltyText.ratioPrefix}${loyaltyText.ratioFixed}`
+      ratioText: `${loyaltyText.ratioPrefix}${currencyPerPoint.toLocaleString("vi-VN")}đ = ${pointPerUnit} điểm`
     }), /*#__PURE__*/_jsxs("div", {
       className: "space-y-4 px-4 pt-4",
       children: [/*#__PURE__*/_jsx(CheckinCard, {

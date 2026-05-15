@@ -324,7 +324,6 @@ function OrderList({
   orders,
   activeOrderId,
   onSelectOrder,
-  onOpenDetail,
   updateOrderStatus,
   registeredCustomersByPhone
 }) {
@@ -353,7 +352,7 @@ function OrderList({
       }), /*#__PURE__*/_jsx("span", {
         children: "Tr\u1EA1ng th\xE1i"
       }), /*#__PURE__*/_jsx("span", {
-        children: "T\u1ED5ng ti\u1EC1n"
+        children: "Th\u1EF1c nh\u1EADn"
       }), /*#__PURE__*/_jsx("span", {
         children: "Thao t\xE1c"
       })]
@@ -367,6 +366,7 @@ function OrderList({
         const waitingMinutes = getWaitingMinutes(order.createdAt);
         const isActive = String(activeOrderId) === String(orderId);
         const nameMismatch = hasOrderNameMismatch(order, registeredCustomersByPhone);
+        const settlement = getSettlement(order);
         return /*#__PURE__*/_jsxs("article", {
           className: `admin-order-row ${isActive ? "is-selected" : ""}`,
           onClick: () => onSelectOrder(order),
@@ -407,25 +407,20 @@ function OrderList({
             children: /*#__PURE__*/_jsx(OrderStatusBadge, {
               status: status
             })
-          }), /*#__PURE__*/_jsx("div", {
-            className: "admin-order-cell admin-order-money",
-            children: /*#__PURE__*/_jsx("strong", {
-              children: formatMoney(Number(order.totalAmount || order.total || 0))
-            })
           }), /*#__PURE__*/_jsxs("div", {
+            className: "admin-order-cell admin-order-money",
+            children: [/*#__PURE__*/_jsx("strong", {
+              children: formatMoney(Number(settlement?.netRevenue || 0))
+            }), /*#__PURE__*/_jsxs("small", {
+              children: ["T\u1ED5ng thu kh\xE1ch: ", formatMoney(Number(order.totalAmount || order.total || 0))]
+            })]
+          }), /*#__PURE__*/_jsx("div", {
             className: "admin-order-cell admin-order-row-actions",
-            children: [/*#__PURE__*/_jsx("button", {
-              type: "button",
-              onClick: event => {
-                event.stopPropagation();
-                onOpenDetail(order);
-              },
-              children: "Xem"
-            }), /*#__PURE__*/_jsx(OrderStatusSelect, {
+            children: /*#__PURE__*/_jsx(OrderStatusSelect, {
               order: order,
               status: status,
               updateOrderStatus: updateOrderStatus
-            })]
+            })
           })]
         }, orderId);
       })
@@ -695,7 +690,6 @@ function OrderDetailPanel({
 export default function OrderManager({
   ordersSnapshot,
   updateOrderStatus,
-  onOpenDetail,
   branches = [],
   registeredCustomersByPhone = {}
 }) {
@@ -767,10 +761,6 @@ export default function OrderManager({
   }, [visibleOrders, activeOrderId]);
   const handleSelectOrder = order => {
     setActiveOrderId(getOrderId(order));
-    if (onOpenDetail) onOpenDetail(order);
-  };
-  const handleOpenDetail = order => {
-    handleSelectOrder(order);
     setDetailPanelOpen(true);
   };
   const copyShipperInfo = async orderId => {
@@ -837,7 +827,6 @@ export default function OrderManager({
         orders: visibleOrders,
         activeOrderId: activeOrder ? getOrderId(activeOrder) : activeOrderId,
         onSelectOrder: handleSelectOrder,
-        onOpenDetail: handleOpenDetail,
         updateOrderStatus: updateOrderStatus,
         registeredCustomersByPhone: registeredCustomersByPhone
       })]

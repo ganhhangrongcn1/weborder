@@ -1,13 +1,16 @@
 import Icon from "../../../components/Icon.js";
 import AppSectionTitle from "../../../components/app/SectionTitle.js";
 import AppEmptyState from "../../../components/app/EmptyState.js";
-import { getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getLoyaltyRule, getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 export default function GuestLoyaltyView({
   navigate,
   loyaltyBonusDisplay
 }) {
   const loyaltyText = getLoyaltyText();
+  const loyaltyRule = getLoyaltyRule();
+  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 1000));
+  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
   const loyaltyRulesRows = Array.isArray(getLoyaltyRulesRows()) ? getLoyaltyRulesRows() : [];
   const safeBonusDisplay = Array.isArray(loyaltyBonusDisplay) ? loyaltyBonusDisplay : [];
   return /*#__PURE__*/_jsxs("section", {
@@ -27,7 +30,7 @@ export default function GuestLoyaltyView({
           size: 14
         }), " ", loyaltyText.signedOutMessage]
       }), /*#__PURE__*/_jsxs("span", {
-        children: [loyaltyText.ratioPrefix, loyaltyText.ratioFixed]
+        children: [loyaltyText.ratioPrefix, currencyPerPoint.toLocaleString("vi-VN"), "\u0111 = ", pointPerUnit, " \u0111i\u1EC3m"]
       }), /*#__PURE__*/_jsx("button", {
         onClick: () => navigate("account", "account"),
         className: "mt-5 w-full rounded-[20px] bg-white px-4 py-4 text-sm font-black text-orange-600 shadow-soft",

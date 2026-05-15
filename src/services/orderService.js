@@ -1,7 +1,7 @@
 import { getCustomerKey } from "./storageService.js";
 import { orderRepository } from "./repositories/orderRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
-import { applyOrderLoyalty, applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfig } from "./loyaltyService.js";
+import { applyOrderLoyalty, applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfig, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 
 function getOrderPhoneForLoyalty(order = {}) {
   return order.phone || order.customerPhone || order.customerPhoneKey || order.rawCustomerPhone || "";
@@ -11,14 +11,14 @@ export const orderStorage = {
   getAllByPhone() {
     return orderRepository.getAllByPhone();
   },
-  async getAllByPhoneAsync() {
-    return orderRepository.getAllByPhoneAsync();
+  async getAllByPhoneAsync(options = {}) {
+    return orderRepository.getAllByPhoneAsync(options);
   },
   getAll() {
     return orderRepository.getAll();
   },
-  async getAllAsync() {
-    return orderRepository.getAllAsync();
+  async getAllAsync(options = {}) {
+    return orderRepository.getAllAsync(options);
   },
   getByPhone(phone) {
     return orderRepository.getByPhone(phone);
@@ -66,7 +66,14 @@ export const orderStorage = {
         applyOrderLoyalty({
           phone: getOrderPhoneForLoyalty(updatedOrder),
           orderId: updatedOrder.orderCode || updatedOrder.id,
-          amount: Number(updatedOrder.subtotal ?? updatedOrder.pointsBaseAmount ?? updatedOrder.totalAmount ?? updatedOrder.total ?? 0),
+          amount: Number(
+            updatedOrder.pointsBaseAmount ??
+              Math.max(
+                Number(updatedOrder.subtotal ?? updatedOrder.totalAmount ?? updatedOrder.total ?? 0) -
+                  Number(updatedOrder.promoDiscount || 0),
+                0
+              )
+          ),
           createdAt: updatedOrder.createdAt || new Date().toISOString(),
           promoSource: updatedOrder.promoSource || "",
           promoVoucherId: updatedOrder.promoVoucherId || "",
@@ -117,7 +124,14 @@ export const orderStorage = {
       await applyOrderLoyaltyAsync({
         phone: getOrderPhoneForLoyalty(updatedOrder),
         orderId: updatedOrder.orderCode || updatedOrder.id,
-        amount: Number(updatedOrder.subtotal ?? updatedOrder.pointsBaseAmount ?? updatedOrder.totalAmount ?? updatedOrder.total ?? 0),
+        amount: Number(
+          updatedOrder.pointsBaseAmount ??
+            Math.max(
+              Number(updatedOrder.subtotal ?? updatedOrder.totalAmount ?? updatedOrder.total ?? 0) -
+                Number(updatedOrder.promoDiscount || 0),
+              0
+            )
+        ),
         createdAt: updatedOrder.createdAt || new Date().toISOString(),
         promoSource: updatedOrder.promoSource || "",
         promoVoucherId: updatedOrder.promoVoucherId || "",
@@ -135,7 +149,12 @@ export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee =
   if (!cart.length) return null;
   const orderCode = `GHR-${Date.now().toString().slice(-4)}`;
   const createdAt = new Date().toISOString();
-  const pointsAmount = Number(pointsBaseAmount ?? totalAmount ?? 0);
+  const subtotalAmount = Number(
+    cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
+  );
+  const pointsAmount = Number(
+    pointsBaseAmount ?? Math.max(subtotalAmount - Number(promoDiscount || 0), 0)
+  );
   const pointsEarned = calculateOrderPoints(pointsAmount, getLoyaltyRuleConfig());
   const order = {
     id: orderCode,
@@ -144,7 +163,8 @@ export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee =
     customerPhoneKey: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
     rawCustomerPhone: deliveryInfo?.phone || userProfile.phone || "",
     items: cart,
-    subtotal: pointsBaseAmount ?? totalAmount,
+    subtotal: subtotalAmount,
+    pointsBaseAmount: pointsAmount,
     shippingFee,
     originalShippingFee,
     shippingSupportDiscount,
@@ -240,6 +260,7 @@ export async function createOrderAsync(params) {
     cart,
     totalAmount,
     pointsBaseAmount,
+    subtotal,
     shippingFee = 0,
     originalShippingFee = shippingFee,
     shippingSupportDiscount = 0,
@@ -277,8 +298,14 @@ export async function createOrderAsync(params) {
   if (!Array.isArray(cart) || !cart.length) return null;
   const orderCode = `GHR-${Date.now().toString().slice(-4)}`;
   const createdAt = new Date().toISOString();
-  const pointsAmount = Number(pointsBaseAmount ?? totalAmount ?? 0);
-  const pointsEarned = calculateOrderPoints(pointsAmount, getLoyaltyRuleConfig());
+  const subtotalAmount = Number(
+    subtotal ?? cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
+  );
+  const pointsAmount = Number(
+    pointsBaseAmount ?? Math.max(subtotalAmount - Number(promoDiscount || 0), 0)
+  );
+  const loyaltyRule = await getLoyaltyRuleConfigAsync();
+  const pointsEarned = calculateOrderPoints(pointsAmount, loyaltyRule);
   const order = {
     id: orderCode,
     orderCode,
@@ -286,7 +313,8 @@ export async function createOrderAsync(params) {
     customerPhoneKey: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
     rawCustomerPhone: deliveryInfo?.phone || userProfile.phone || "",
     items: cart,
-    subtotal: pointsBaseAmount ?? totalAmount,
+    subtotal: subtotalAmount,
+    pointsBaseAmount: pointsAmount,
     shippingFee,
     originalShippingFee,
     shippingSupportDiscount,

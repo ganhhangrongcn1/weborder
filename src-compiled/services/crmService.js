@@ -142,7 +142,14 @@ export function recalculateAllLoyaltyFromOrders(orderStorage) {
     const orderCode = String(order?.orderCode || order?.id || "").trim();
     if (!phone || !orderCode) return;
 
-    const amount = Number(order?.subtotal ?? order?.pointsBaseAmount ?? order?.totalAmount ?? order?.total ?? 0);
+    const amount = Number(
+      order?.pointsBaseAmount ??
+        Math.max(
+          Number(order?.subtotal ?? order?.totalAmount ?? order?.total ?? 0) -
+            Number(order?.promoDiscount || 0),
+          0
+        )
+    );
     const points = Math.max(0, Number(calculateOrderPoints(amount, loyaltyRule) || 0));
     if (points <= 0) return;
 
@@ -232,7 +239,7 @@ export function buildCustomersFromOrders(orderStorage) {
 }
 
 export async function buildCustomersFromOrdersAsync(orderStorage, options = {}) {
-  const orders = await orderStorage?.getAllAsync?.() || [];
+  const orders = await orderStorage?.getAllAsync?.(options?.dateRange || {}) || [];
   const uniquePhones = Array.from(
     new Set(
       orders

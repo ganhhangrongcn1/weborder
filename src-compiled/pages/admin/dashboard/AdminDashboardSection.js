@@ -1,7 +1,7 @@
 import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.js";
-import { AdminBadge, AdminButton, AdminInput, AdminPanel, AdminStatCard, AdminTable, AdminTableBody, AdminTableHead, AdminTableRow } from "../ui/index.js";
-import { jsxs as _jsxs, jsx as _jsx } from "react/jsx-runtime";
+import { AdminBadge, AdminInput, AdminPanel, AdminSelect, AdminStatCard, AdminTable, AdminTableBody, AdminTableHead, AdminTableRow } from "../ui/index.js";
+import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
 function getOrderStatusMeta(status) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "pending_zalo" || normalized === "new") return {
@@ -136,28 +136,28 @@ function formatChartDate(date) {
   });
 }
 function buildRevenueSeries(orders = []) {
-  const today = new Date();
-  const days = Array.from({
-    length: 7
-  }, (_, index) => {
-    const date = new Date(today);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(today.getDate() - (6 - index));
-    return {
-      key: getDateKey(date),
-      label: formatChartDate(date),
-      value: 0
-    };
-  });
-  const dayMap = new Map(days.map(day => [day.key, day]));
+  const dayMap = new Map();
   orders.forEach(order => {
     const createdAt = new Date(order.createdAt);
     if (Number.isNaN(createdAt.getTime())) return;
-    const bucket = dayMap.get(getDateKey(createdAt));
-    if (!bucket) return;
-    bucket.value += Number(order.totalAmount || 0);
+    const key = getDateKey(createdAt);
+    if (!dayMap.has(key)) {
+      dayMap.set(key, {
+        key,
+        label: formatChartDate(createdAt),
+        value: 0,
+        date: new Date(createdAt)
+      });
+    }
+    const totalAmount = Number(order.totalAmount || order.total || 0);
+    const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
+    dayMap.get(key).value += Math.max(totalAmount - shippingFee, 0);
   });
-  return days;
+  return [...dayMap.values()].sort((a, b) => a.date.getTime() - b.date.getTime()).map(item => ({
+    key: item.key,
+    label: item.label,
+    value: item.value
+  }));
 }
 function buildSmoothRevenuePath(points = []) {
   if (!points.length) return "";
@@ -177,6 +177,11 @@ function buildSmoothRevenuePath(points = []) {
   return segments.join(" ");
 }
 function buildRevenueChart(series = []) {
+  const safeSeries = series.length ? series : [{
+    key: "empty",
+    label: "--",
+    value: 0
+  }];
   const width = 680;
   const height = 250;
   const padding = {
@@ -185,29 +190,21 @@ function buildRevenueChart(series = []) {
     bottom: 38,
     left: 48
   };
-  const maxValue = Math.max(...series.map(item => item.value), 1);
+  const maxValue = Math.max(...safeSeries.map(item => item.value), 1);
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
-  const step = series.length > 1 ? plotWidth / (series.length - 1) : plotWidth;
-  const points = series.map((item, index) => {
-    const x = padding.left + index * step;
-    const y = padding.top + (1 - item.value / maxValue) * plotHeight;
-    return {
-      ...item,
-      x,
-      y
-    };
-  });
+  const step = safeSeries.length > 1 ? plotWidth / (safeSeries.length - 1) : plotWidth;
+  const points = safeSeries.map((item, index) => ({
+    ...item,
+    x: padding.left + index * step,
+    y: padding.top + (1 - item.value / maxValue) * plotHeight
+  }));
   const linePath = buildSmoothRevenuePath(points);
   const areaPath = points.length ? `M ${points[0].x} ${height - padding.bottom} L ${points[0].x} ${points[0].y} ${linePath.replace(/^M\s+[\d.-]+\s+[\d.-]+/, "")} L ${points[points.length - 1].x} ${height - padding.bottom} Z` : "";
-  const gridLines = [0, 0.25, 0.5, 0.75, 1].map(ratio => {
-    const y = padding.top + ratio * plotHeight;
-    const value = Math.round(maxValue * (1 - ratio));
-    return {
-      y,
-      value
-    };
-  });
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map(ratio => ({
+    y: padding.top + ratio * plotHeight,
+    value: Math.round(maxValue * (1 - ratio))
+  }));
   return {
     width,
     height,
@@ -221,6 +218,12 @@ function buildRevenueChart(series = []) {
 export default function AdminDashboardSection({
   dashboardSearch,
   setDashboardSearch,
+  dashboardDateFrom,
+  setDashboardDateFrom,
+  dashboardDateTo,
+  setDashboardDateTo,
+  dashboardDatePreset,
+  setDashboardDatePreset,
   openBranches,
   totalBranches,
   ordersTotal,
@@ -228,31 +231,75 @@ export default function AdminDashboardSection({
   ordersDoing,
   todayRevenue,
   totalCustomers,
-  activeProducts,
-  toppingsCount,
-  dashboardQuickActions,
-  openAdminNav,
-  flatAdminNav,
   filteredRecentOrders,
-  ordersSnapshot = []
+  ordersSnapshot = [],
+  chartOrdersSnapshot = [],
+  dashboardChartPreset,
+  setDashboardChartPreset
 }) {
   const topProducts = buildTopProducts(ordersSnapshot);
   const topProductMax = Math.max(...topProducts.map(item => item.quantity), 1);
   const channels = buildChannels(ordersSnapshot);
   const channelTotal = channels.reduce((sum, channel) => sum + channel.count, 0);
   const averageOrder = ordersTotal ? Math.round(todayRevenue / ordersTotal) : 0;
-  const completionCount = ordersSnapshot.filter(order => {
-    const status = String(order.status || "").toLowerCase();
-    return status === "done" || status === "completed";
-  }).length;
+  const completionCount = ordersSnapshot.filter(order => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
   const completionRate = ordersTotal ? Math.round(completionCount / ordersTotal * 100) : 0;
-  const revenueSeries = buildRevenueSeries(ordersSnapshot);
+  const chartOrdersTotal = chartOrdersSnapshot.length;
+  const chartRevenueTotal = chartOrdersSnapshot.reduce((sum, order) => {
+    const totalAmount = Number(order.totalAmount || order.total || 0);
+    const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
+    return sum + Math.max(totalAmount - shippingFee, 0);
+  }, 0);
+  const chartAverageOrder = chartOrdersTotal ? Math.round(chartRevenueTotal / chartOrdersTotal) : 0;
+  const chartCompletionCount = chartOrdersSnapshot.filter(order => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
+  const chartOrdersNew = chartOrdersSnapshot.filter(order => String(order.status || "").toLowerCase() === "pending_zalo").length;
+  const chartOrdersDoing = chartOrdersSnapshot.filter(order => {
+    const status = String(order.status || "").toLowerCase();
+    return status === "confirmed" || status === "delivering";
+  }).length;
+  const revenueSeries = buildRevenueSeries(chartOrdersSnapshot);
   const revenueChart = buildRevenueChart(revenueSeries);
+  const todayText = new Date().toISOString().slice(0, 10);
+  const applyPreset = preset => {
+    const now = new Date();
+    const toDateText = date => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+    if (preset === "today") {
+      const today = toDateText(now);
+      setDashboardDateFrom(today);
+      setDashboardDateTo(today);
+    }
+    if (preset === "yesterday") {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const text = toDateText(yesterday);
+      setDashboardDateFrom(text);
+      setDashboardDateTo(text);
+    }
+    if (preset === "week") {
+      const day = now.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - diff);
+      setDashboardDateFrom(toDateText(monday));
+      setDashboardDateTo(toDateText(now));
+    }
+    if (preset === "month") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      setDashboardDateFrom(toDateText(firstDay));
+      setDashboardDateTo(toDateText(now));
+    }
+    setDashboardDatePreset(preset);
+  };
   return /*#__PURE__*/_jsxs("div", {
     className: "admin-dashboard-page",
-    children: [/*#__PURE__*/_jsxs("section", {
+    children: [/*#__PURE__*/_jsx("section", {
       className: "admin-dashboard-hero",
-      children: [/*#__PURE__*/_jsxs("div", {
+      children: /*#__PURE__*/_jsxs("div", {
         children: [/*#__PURE__*/_jsxs(AdminBadge, {
           tone: "warning",
           children: ["Chi nh\xE1nh m\u1EDF: ", openBranches, "/", totalBranches]
@@ -261,17 +308,10 @@ export default function AdminDashboardSection({
         }), /*#__PURE__*/_jsx("p", {
           children: "T\u1ED5ng quan ho\u1EA1t \u0111\u1ED9ng kinh doanh v\xE0 v\u1EADn h\xE0nh \u0111\u01A1n h\xE0ng h\xF4m nay."
         })]
-      }), /*#__PURE__*/_jsx("div", {
-        className: "admin-dashboard-hero-actions",
-        children: dashboardQuickActions.slice(0, 2).map(item => /*#__PURE__*/_jsx(AdminButton, {
-          variant: item.id === "orders-main" ? "primary" : "secondary",
-          onClick: () => openAdminNav(flatAdminNav.find(navItem => navItem.id === item.id)),
-          children: item.label
-        }, item.id))
-      })]
-    }), /*#__PURE__*/_jsx("div", {
+      })
+    }), /*#__PURE__*/_jsxs("div", {
       className: "admin-dashboard-toolbar",
-      children: /*#__PURE__*/_jsxs("label", {
+      children: [/*#__PURE__*/_jsxs("label", {
         className: "admin-dashboard-search",
         children: [/*#__PURE__*/_jsx("span", {
           children: "\u2315"
@@ -280,13 +320,75 @@ export default function AdminDashboardSection({
           onChange: event => setDashboardSearch(event.target.value),
           placeholder: "T\xECm m\xE3 \u0111\u01A1n, t\xEAn kh\xE1ch, s\u1ED1 \u0111i\u1EC7n tho\u1EA1i..."
         })]
-      })
+      }), /*#__PURE__*/_jsxs("label", {
+        className: "admin-dashboard-search admin-dashboard-preset",
+        children: [/*#__PURE__*/_jsx("span", {
+          children: "\uD83D\uDDC2"
+        }), /*#__PURE__*/_jsx(AdminSelect, {
+          value: dashboardDatePreset || "today",
+          onChange: event => {
+            const nextPreset = event.target.value;
+            if (nextPreset === "custom") {
+              setDashboardDatePreset("custom");
+              return;
+            }
+            applyPreset(nextPreset);
+          },
+          options: [{
+            value: "today",
+            label: "Hôm nay"
+          }, {
+            value: "yesterday",
+            label: "Hôm qua"
+          }, {
+            value: "week",
+            label: "Tuần này"
+          }, {
+            value: "month",
+            label: "Tháng này"
+          }, {
+            value: "custom",
+            label: "Tùy chỉnh..."
+          }]
+        })]
+      }), dashboardDatePreset === "custom" ? /*#__PURE__*/_jsxs(_Fragment, {
+        children: [/*#__PURE__*/_jsxs("label", {
+          className: "admin-dashboard-search",
+          children: [/*#__PURE__*/_jsx("span", {
+            children: "\uD83D\uDCC5"
+          }), /*#__PURE__*/_jsx(AdminInput, {
+            type: "date",
+            value: dashboardDateFrom || "",
+            max: dashboardDateTo || todayText,
+            onChange: event => {
+              setDashboardDateFrom(event.target.value);
+              setDashboardDatePreset("custom");
+            },
+            placeholder: "T\u1EEB ng\xE0y"
+          })]
+        }), /*#__PURE__*/_jsxs("label", {
+          className: "admin-dashboard-search",
+          children: [/*#__PURE__*/_jsx("span", {
+            children: "\uD83D\uDCC5"
+          }), /*#__PURE__*/_jsx(AdminInput, {
+            type: "date",
+            value: dashboardDateTo || "",
+            min: dashboardDateFrom || "",
+            max: todayText,
+            onChange: event => {
+              setDashboardDateTo(event.target.value);
+              setDashboardDatePreset("custom");
+            },
+            placeholder: "\u0110\u1EBFn ng\xE0y"
+          })]
+        })]
+      }) : null]
     }), /*#__PURE__*/_jsxs("div", {
       className: "admin-dashboard-stat-grid",
       children: [/*#__PURE__*/_jsx(AdminStatCard, {
-        title: "Doanh thu",
+        title: "Doanh thu th\u1EF1c nh\u1EADn",
         value: formatMoney(todayRevenue),
-        subtitle: "Theo d\u1EEF li\u1EC7u \u0111\u01A1n hi\u1EC7n t\u1EA1i",
+        subtitle: "\u0110\xE3 lo\u1EA1i ph\xED ship",
         icon: /*#__PURE__*/_jsx(Icon, {
           name: "tag",
           size: 22
@@ -323,19 +425,29 @@ export default function AdminDashboardSection({
     }), /*#__PURE__*/_jsxs("div", {
       className: "admin-dashboard-main-grid",
       children: [/*#__PURE__*/_jsxs(AdminPanel, {
-        title: "Doanh thu",
-        description: "T\u1ED5ng doanh thu t\u1EEB d\u1EEF li\u1EC7u \u0111\u01A1n hi\u1EC7n t\u1EA1i.",
+        title: "Doanh thu th\u1EF1c nh\u1EADn",
+        description: "T\u1ED5ng ti\u1EC1n m\xF3n \u0111\xE3 thu, kh\xF4ng t\xEDnh ph\xED ship.",
         className: "admin-dashboard-revenue-card",
-        action: /*#__PURE__*/_jsx(AdminBadge, {
-          tone: "success",
-          children: formatMoney(todayRevenue)
+        action: /*#__PURE__*/_jsx(AdminSelect, {
+          value: dashboardChartPreset || "7d",
+          onChange: event => setDashboardChartPreset(event.target.value),
+          options: [{
+            value: "7d",
+            label: "7 ngày gần nhất"
+          }, {
+            value: "month",
+            label: "Tháng này"
+          }, {
+            value: "30d",
+            label: "30 ngày gần nhất"
+          }]
         }),
         children: [/*#__PURE__*/_jsxs("div", {
           className: "admin-dashboard-revenue-visual",
           children: [/*#__PURE__*/_jsx("strong", {
-            children: formatMoney(todayRevenue)
+            children: formatMoney(chartRevenueTotal)
           }), /*#__PURE__*/_jsxs("span", {
-            children: [ordersTotal, " \u0111\u01A1n \xB7 ", formatMoney(averageOrder), " / \u0111\u01A1n"]
+            children: [chartOrdersTotal, " \u0111\u01A1n \xB7 ", formatMoney(chartAverageOrder), " / \u0111\u01A1n"]
           }), /*#__PURE__*/_jsx("div", {
             className: "admin-dashboard-revenue-chart",
             children: /*#__PURE__*/_jsxs("svg", {
@@ -392,15 +504,15 @@ export default function AdminDashboardSection({
           className: "admin-dashboard-mini-metrics",
           children: [/*#__PURE__*/_jsxs("span", {
             children: [/*#__PURE__*/_jsx("b", {
-              children: ordersNew
+              children: chartOrdersNew
             }), " \u0111\u01A1n m\u1EDBi"]
           }), /*#__PURE__*/_jsxs("span", {
             children: [/*#__PURE__*/_jsx("b", {
-              children: ordersDoing
+              children: chartOrdersDoing
             }), " \u0111ang x\u1EED l\xFD"]
           }), /*#__PURE__*/_jsxs("span", {
             children: [/*#__PURE__*/_jsx("b", {
-              children: completionCount
+              children: chartCompletionCount
             }), " ho\xE0n t\u1EA5t"]
           })]
         })]
@@ -465,9 +577,9 @@ export default function AdminDashboardSection({
           children: "Ch\u01B0a c\xF3 m\xF3n n\xE0o trong \u0111\u01A1n h\xE0ng."
         })
       })]
-    }), /*#__PURE__*/_jsxs("div", {
+    }), /*#__PURE__*/_jsx("div", {
       className: "admin-dashboard-bottom-grid",
-      children: [/*#__PURE__*/_jsx(AdminPanel, {
+      children: /*#__PURE__*/_jsx(AdminPanel, {
         title: "\u0110\u01A1n h\xE0ng g\u1EA7n \u0111\xE2y",
         description: "Danh s\xE1ch compact theo b\u1ED9 l\u1ECDc t\xECm ki\u1EBFm hi\u1EC7n t\u1EA1i.",
         action: /*#__PURE__*/_jsxs(AdminBadge, {
@@ -528,34 +640,7 @@ export default function AdminDashboardSection({
             children: "Kh\xF4ng t\xECm th\u1EA5y \u0111\u01A1n ph\xF9 h\u1EE3p."
           })
         })
-      }), /*#__PURE__*/_jsxs(AdminPanel, {
-        title: "L\u1ED1i t\u1EAFt thao t\xE1c",
-        description: "C\xE1c khu v\u1EF1c v\u1EADn h\xE0nh th\u01B0\u1EDDng d\xF9ng.",
-        className: "admin-dashboard-actions-card",
-        children: [/*#__PURE__*/_jsx("div", {
-          className: "admin-dashboard-actions",
-          children: dashboardQuickActions.map(item => /*#__PURE__*/_jsx(AdminButton, {
-            variant: "secondary",
-            onClick: () => openAdminNav(flatAdminNav.find(navItem => navItem.id === item.id)),
-            children: item.label
-          }, item.id))
-        }), /*#__PURE__*/_jsxs("div", {
-          className: "admin-dashboard-ops-summary",
-          children: [/*#__PURE__*/_jsxs("span", {
-            children: ["M\xF3n \u0111ang b\xE1n ", /*#__PURE__*/_jsx("b", {
-              children: activeProducts
-            })]
-          }), /*#__PURE__*/_jsxs("span", {
-            children: ["Topping ", /*#__PURE__*/_jsx("b", {
-              children: toppingsCount
-            })]
-          }), /*#__PURE__*/_jsxs("span", {
-            children: ["Chi nh\xE1nh m\u1EDF ", /*#__PURE__*/_jsxs("b", {
-              children: [openBranches, "/", totalBranches]
-            })]
-          })]
-        })]
-      })]
+      })
     })]
   });
 }

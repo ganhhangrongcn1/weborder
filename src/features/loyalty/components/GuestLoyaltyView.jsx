@@ -1,10 +1,13 @@
 import Icon from "../../../components/Icon.jsx";
 import AppSectionTitle from "../../../components/app/SectionTitle.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
-import { getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getLoyaltyRule, getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 
 export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay }) {
   const loyaltyText = getLoyaltyText();
+  const loyaltyRule = getLoyaltyRule();
+  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 1000));
+  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
   const loyaltyRulesRows = Array.isArray(getLoyaltyRulesRows()) ? getLoyaltyRulesRows() : [];
   const safeBonusDisplay = Array.isArray(loyaltyBonusDisplay) ? loyaltyBonusDisplay : [];
 
@@ -16,7 +19,7 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay }) {
         </div>
         <strong>--</strong>
         <p><Icon name="star" size={14} /> {loyaltyText.signedOutMessage}</p>
-        <span>{loyaltyText.ratioPrefix}{loyaltyText.ratioFixed}</span>
+        <span>{loyaltyText.ratioPrefix}{currencyPerPoint.toLocaleString("vi-VN")}đ = {pointPerUnit} điểm</span>
         <button onClick={() => navigate("account", "account")} className="mt-5 w-full rounded-[20px] bg-white px-4 py-4 text-sm font-black text-orange-600 shadow-soft">
           {loyaltyText.authCta}
         </button>

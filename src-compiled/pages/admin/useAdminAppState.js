@@ -7,9 +7,18 @@ import { useEffect } from "react";
 
 export default function useAdminAppState(orderStorage, routeState = null) {
   const navigationState = useAdminNavigationState();
-  const orderCrmState = useAdminOrderCrmState(orderStorage);
   const storeConfigState = useAdminStoreConfigState();
   const uiState = useAdminUiState();
+  const orderCrmState = useAdminOrderCrmState(orderStorage, {
+    section: navigationState.section,
+    dashboardDateFrom: uiState.dashboardDateFrom,
+    dashboardDateTo: uiState.dashboardDateTo,
+    ordersDateFrom: uiState.ordersDateFrom,
+    ordersDateTo: uiState.ordersDateTo,
+    customersDateFrom: uiState.customersDateFrom,
+    customersDateTo: uiState.customersDateTo,
+    dashboardChartPreset: uiState.dashboardChartPreset
+  });
   const supabaseConfigSyncEnabled = isSupabaseConfigSyncEnabled();
 
   useEffect(() => {

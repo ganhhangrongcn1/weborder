@@ -16,7 +16,13 @@ export default function AdminCustomersPage({
   onCancelVoucher,
   onSaveLoyaltyConfig,
   orderStorage,
-  coupons = []
+  coupons = [],
+  customersDateFrom,
+  setCustomersDateFrom,
+  customersDateTo,
+  setCustomersDateTo,
+  customersDatePreset,
+  setCustomersDatePreset
 }) {
   return /*#__PURE__*/_jsx(AdminOrdersCrmSection, {
     section: "customers",
@@ -35,6 +41,12 @@ export default function AdminCustomersPage({
     onCancelVoucher: onCancelVoucher,
     onSaveLoyaltyConfig: onSaveLoyaltyConfig,
     orderStorage: orderStorage,
-    coupons: coupons
+    coupons: coupons,
+    customersDateFrom: customersDateFrom,
+    setCustomersDateFrom: setCustomersDateFrom,
+    customersDateTo: customersDateTo,
+    setCustomersDateTo: setCustomersDateTo,
+    customersDatePreset: customersDatePreset,
+    setCustomersDatePreset: setCustomersDatePreset
   });
 }

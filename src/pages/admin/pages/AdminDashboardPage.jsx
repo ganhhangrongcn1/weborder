@@ -3,6 +3,14 @@ import AdminDashboardSection from "../dashboard/AdminDashboardSection.jsx";
 export default function AdminDashboardPage({
   dashboardSearch,
   setDashboardSearch,
+  dashboardDateFrom,
+  setDashboardDateFrom,
+  dashboardDateTo,
+  setDashboardDateTo,
+  dashboardDatePreset,
+  setDashboardDatePreset,
+  dashboardChartPreset,
+  setDashboardChartPreset,
   openBranches,
   totalBranches,
   ordersTotal,
@@ -16,12 +24,21 @@ export default function AdminDashboardPage({
   openAdminNav,
   flatAdminNav,
   filteredRecentOrders,
-  ordersSnapshot
+  ordersSnapshot,
+  chartOrdersSnapshot
 }) {
   return (
     <AdminDashboardSection
       dashboardSearch={dashboardSearch}
       setDashboardSearch={setDashboardSearch}
+      dashboardDateFrom={dashboardDateFrom}
+      setDashboardDateFrom={setDashboardDateFrom}
+      dashboardDateTo={dashboardDateTo}
+      setDashboardDateTo={setDashboardDateTo}
+      dashboardDatePreset={dashboardDatePreset}
+      setDashboardDatePreset={setDashboardDatePreset}
+      dashboardChartPreset={dashboardChartPreset}
+      setDashboardChartPreset={setDashboardChartPreset}
       openBranches={openBranches}
       totalBranches={totalBranches}
       ordersTotal={ordersTotal}
@@ -36,6 +53,7 @@ export default function AdminDashboardPage({
       flatAdminNav={flatAdminNav}
       filteredRecentOrders={filteredRecentOrders}
       ordersSnapshot={ordersSnapshot}
+      chartOrdersSnapshot={chartOrdersSnapshot}
     />
   );
 }

@@ -33,6 +33,7 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
     editingProduct,
     setEditingProduct,
     ordersSnapshot,
+    chartOrdersSnapshot,
     setOrdersSnapshot,
     zaloConfig,
     setZaloConfig,
@@ -50,6 +51,26 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
     setUiDirty,
     dashboardSearch,
     setDashboardSearch,
+    dashboardDateFrom,
+    setDashboardDateFrom,
+    dashboardDateTo,
+    setDashboardDateTo,
+    dashboardDatePreset,
+    setDashboardDatePreset,
+    dashboardChartPreset,
+    setDashboardChartPreset,
+    ordersDateFrom,
+    setOrdersDateFrom,
+    ordersDateTo,
+    setOrdersDateTo,
+    ordersDatePreset,
+    setOrdersDatePreset,
+    customersDateFrom,
+    setCustomersDateFrom,
+    customersDateTo,
+    setCustomersDateTo,
+    customersDatePreset,
+    setCustomersDatePreset,
     adminGlobalSearch,
     setAdminGlobalSearch,
     selectedBranchFilter,
@@ -268,6 +289,26 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
           uiDirty={uiDirty}
           dashboardSearch={dashboardSearch}
           setDashboardSearch={setDashboardSearch}
+          dashboardDateFrom={dashboardDateFrom}
+          setDashboardDateFrom={setDashboardDateFrom}
+          dashboardDateTo={dashboardDateTo}
+          setDashboardDateTo={setDashboardDateTo}
+          dashboardDatePreset={dashboardDatePreset}
+          setDashboardDatePreset={setDashboardDatePreset}
+          dashboardChartPreset={dashboardChartPreset}
+          setDashboardChartPreset={setDashboardChartPreset}
+          ordersDateFrom={ordersDateFrom}
+          setOrdersDateFrom={setOrdersDateFrom}
+          ordersDateTo={ordersDateTo}
+          setOrdersDateTo={setOrdersDateTo}
+          ordersDatePreset={ordersDatePreset}
+          setOrdersDatePreset={setOrdersDatePreset}
+          customersDateFrom={customersDateFrom}
+          setCustomersDateFrom={setCustomersDateFrom}
+          customersDateTo={customersDateTo}
+          setCustomersDateTo={setCustomersDateTo}
+          customersDatePreset={customersDatePreset}
+          setCustomersDatePreset={setCustomersDatePreset}
           openBranches={openBranches}
           totalBranches={totalBranches}
           ordersTotal={ordersTotal}
@@ -284,6 +325,7 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
           customerAdminTab={customerAdminTab}
           setCustomerAdminTab={setCustomerAdminTab}
           ordersSnapshot={ordersSnapshot}
+          chartOrdersSnapshot={chartOrdersSnapshot}
           setOrdersSnapshot={setOrdersSnapshot}
           onOrderUpdated={handleOrderUpdated}
           crmSnapshot={crmSnapshot}

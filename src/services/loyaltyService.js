@@ -65,6 +65,17 @@ export function getLoyaltyRuleConfig() {
   });
 }
 
+export async function getLoyaltyRuleConfigAsync() {
+  return loyaltyRepository.getCrmConfigAsync({
+    currencyPerPoint: 1000,
+    pointPerUnit: 1,
+    checkinDailyPoints: 100,
+    streakRewards: { 7: 700, 14: 1500, 30: 3000 },
+    redeemPointUnit: 1,
+    redeemValue: 1
+  });
+}
+
 export function calculateOrderPoints(amount, loyaltyRule = getLoyaltyRuleConfig()) {
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 1000));
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
@@ -214,6 +225,7 @@ export async function applyOrderLoyaltyAsync({
 }) {
   const key = getCustomerKey(phone);
   if (!key || !orderId) return loyaltyByPhoneStorage.getByPhone(key);
+  const loyaltyRule = await getLoyaltyRuleConfigAsync();
 
   const phoneLoyalty = normalizeLoyaltyData(
     await loyaltyRepository.getByPhoneAsync(key, defaultLoyaltyData)
@@ -224,7 +236,7 @@ export async function applyOrderLoyaltyAsync({
   const alreadyEarned = pointHistory.some((entry) => {
     return String(entry?.orderId || "") === String(orderId) && String(entry?.type || "").toUpperCase() === "ORDER_EARN";
   });
-  const pointsEarned = isSettlementDone && !alreadyEarned ? calculateOrderPoints(amount) : 0;
+  const pointsEarned = isSettlementDone && !alreadyEarned ? calculateOrderPoints(amount, loyaltyRule) : 0;
   const spendPoints = Math.max(0, Number(pointsDiscount || 0));
   const alreadySpent = pointHistory.some((entry) => {
     return String(entry?.orderId || "") === String(orderId) && String(entry?.type || "").toUpperCase() === "ORDER_SPEND";
@@ -342,7 +354,14 @@ export function reconcileLoyaltyFromOrders(phone, orderStorage) {
   orders.forEach((order) => {
     const orderId = String(order?.orderCode || "").trim();
     if (!orderId) return;
-    const amount = Number(order.subtotal ?? order.pointsBaseAmount ?? order.totalAmount ?? order.total ?? 0);
+    const amount = Number(
+      order.pointsBaseAmount ??
+        Math.max(
+          Number(order.subtotal ?? order.totalAmount ?? order.total ?? 0) -
+            Number(order.promoDiscount || 0),
+          0
+        )
+    );
     const points = Number(order.pointsEarned ?? calculateOrderPoints(amount));
     if (points <= 0) return;
     const createdAt = order.createdAt || new Date().toISOString();

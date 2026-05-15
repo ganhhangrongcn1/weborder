@@ -16,7 +16,13 @@ export default function AdminCustomersPage({
   onCancelVoucher,
   onSaveLoyaltyConfig,
   orderStorage,
-  coupons = []
+  coupons = [],
+  customersDateFrom,
+  setCustomersDateFrom,
+  customersDateTo,
+  setCustomersDateTo,
+  customersDatePreset,
+  setCustomersDatePreset
 }) {
   return (
     <AdminOrdersCrmSection
@@ -37,6 +43,12 @@ export default function AdminCustomersPage({
       onSaveLoyaltyConfig={onSaveLoyaltyConfig}
       orderStorage={orderStorage}
       coupons={coupons}
+      customersDateFrom={customersDateFrom}
+      setCustomersDateFrom={setCustomersDateFrom}
+      customersDateTo={customersDateTo}
+      setCustomersDateTo={setCustomersDateTo}
+      customersDatePreset={customersDatePreset}
+      setCustomersDatePreset={setCustomersDatePreset}
     />
   );
 }

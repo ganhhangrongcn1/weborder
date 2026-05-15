@@ -139,36 +139,50 @@ export const orderRepository = {
     }
     return nextOrder;
   },
-  async getAllByPhoneAsync() {
+  async getAllByPhoneAsync(options = {}) {
+    const dateFrom = String(options?.dateFrom || "").trim();
+    const dateTo = String(options?.dateTo || "").trim();
+    const hasDateFilter = Boolean(dateFrom || dateTo);
     const now = Date.now();
-    if (ordersRemoteCache.value && now - ordersRemoteCache.cachedAt < REMOTE_CACHE_TTL_MS) {
+    if (!hasDateFilter && ordersRemoteCache.value && now - ordersRemoteCache.cachedAt < REMOTE_CACHE_TTL_MS) {
       return ordersRemoteCache.value;
     }
-    if (ordersReadInFlight) {
+    if (!hasDateFilter && ordersReadInFlight) {
       return ordersReadInFlight;
     }
-    ordersReadInFlight = (async () => {
+    const readTask = (async () => {
     const allowLocalFallback = shouldAllowLocalFallbackForDomain("orders");
     const fallback = allowLocalFallback ? await repository.getAsync(STORAGE_KEYS.ordersByPhone, {}) : {};
     try {
-      const remote = await coreSupabaseRepository.readOrdersByPhoneFromTable();
+      const remote = await coreSupabaseRepository.readOrdersByPhoneFromTable(
+        hasDateFilter ? { dateFrom, dateTo } : undefined
+      );
       if (remote && typeof remote === "object") {
         const remoteOnly = normalizeOrdersByPhoneMap(remote);
-        repository.set(STORAGE_KEYS.ordersByPhone, remoteOnly);
-        ordersRemoteCache = { value: remoteOnly, cachedAt: Date.now() };
+        if (!hasDateFilter) {
+          repository.set(STORAGE_KEYS.ordersByPhone, remoteOnly);
+          ordersRemoteCache = { value: remoteOnly, cachedAt: Date.now() };
+        }
         return remoteOnly;
       }
     } catch (error) {
       console.warn("[orderRepository] read orders tables failed", error);
     }
       const normalizedFallback = normalizeOrdersByPhoneMap(fallback);
-      ordersRemoteCache = { value: normalizedFallback, cachedAt: Date.now() };
+      if (!hasDateFilter) {
+        ordersRemoteCache = { value: normalizedFallback, cachedAt: Date.now() };
+      }
       return normalizedFallback;
     })();
+    if (!hasDateFilter) {
+      ordersReadInFlight = readTask;
+    }
     try {
-      return await ordersReadInFlight;
+      return await readTask;
     } finally {
-      ordersReadInFlight = null;
+      if (!hasDateFilter) {
+        ordersReadInFlight = null;
+      }
     }
   },
   async saveAllByPhoneAsync(next, options = {}) {
@@ -203,8 +217,8 @@ export const orderRepository = {
     const all = await this.getAllByPhoneAsync();
     return Array.isArray(all[key]) ? all[key] : [];
   },
-  async getAllAsync() {
-    const all = await this.getAllByPhoneAsync();
+  async getAllAsync(options = {}) {
+    const all = await this.getAllByPhoneAsync(options);
     return sortByCreatedAtDesc(Object.values(all).flat());
   },
   async upsertOrderAsync(order) {

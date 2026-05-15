@@ -32,7 +32,9 @@ function buildExternalOrder(payload = {}) {
   const promoDiscount = Number(payload.promoDiscount || 0);
   const pointsDiscount = Number(payload.pointsDiscount || 0);
   const totalAmount = Number(payload.totalAmount ?? payload.total ?? Math.max(subtotal + shippingFee - promoDiscount - pointsDiscount, 0));
-  const pointsBaseAmount = Number(payload.pointsBaseAmount ?? subtotal - promoDiscount);
+  const pointsBaseAmount = Number(
+    payload.pointsBaseAmount ?? Math.max(subtotal - promoDiscount, 0)
+  );
   const pointsEarned = calculateOrderPoints(pointsBaseAmount, getLoyaltyRuleConfig());
   const fulfillmentType = String(payload.fulfillmentType || "delivery").toLowerCase() === "pickup" ? "pickup" : "delivery";
 

@@ -15,7 +15,13 @@ export default function AdminCustomerSection({
   showCustomerTier,
   setCrmSnapshot,
   handleSaveLoyaltyRatio,
-  coupons = []
+  coupons = [],
+  customersDateFrom,
+  setCustomersDateFrom,
+  customersDateTo,
+  setCustomersDateTo,
+  customersDatePreset,
+  setCustomersDatePreset
 }) {
   return (
     <div className="admin-stack">
@@ -44,6 +50,12 @@ export default function AdminCustomerSection({
           cancelCustomerVoucher={cancelCustomerVoucher}
           showCustomerTier={showCustomerTier}
           coupons={coupons}
+          customersDateFrom={customersDateFrom}
+          setCustomersDateFrom={setCustomersDateFrom}
+          customersDateTo={customersDateTo}
+          setCustomersDateTo={setCustomersDateTo}
+          customersDatePreset={customersDatePreset}
+          setCustomersDatePreset={setCustomersDatePreset}
         />
       ) : (
         <LoyaltySettings crmSnapshot={crmSnapshot} setCrmSnapshot={setCrmSnapshot} onSave={handleSaveLoyaltyRatio} />

@@ -281,7 +281,6 @@ function OrderList({
   orders,
   activeOrderId,
   onSelectOrder,
-  onOpenDetail,
   updateOrderStatus,
   registeredCustomersByPhone
 }) {
@@ -302,7 +301,7 @@ function OrderList({
         <span>Hình thức</span>
         <span>Thời gian</span>
         <span>Trạng thái</span>
-        <span>Tổng tiền</span>
+        <span>Thực nhận</span>
         <span>Thao tác</span>
       </div>
       <div className="admin-order-table-body">
@@ -314,6 +313,7 @@ function OrderList({
           const waitingMinutes = getWaitingMinutes(order.createdAt);
           const isActive = String(activeOrderId) === String(orderId);
           const nameMismatch = hasOrderNameMismatch(order, registeredCustomersByPhone);
+          const settlement = getSettlement(order);
 
           return (
             <article
@@ -342,18 +342,10 @@ function OrderList({
                 <OrderStatusBadge status={status} />
               </div>
               <div className="admin-order-cell admin-order-money">
-                <strong>{formatMoney(Number(order.totalAmount || order.total || 0))}</strong>
+                <strong>{formatMoney(Number(settlement?.netRevenue || 0))}</strong>
+                <small>Tổng thu khách: {formatMoney(Number(order.totalAmount || order.total || 0))}</small>
               </div>
               <div className="admin-order-cell admin-order-row-actions">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenDetail(order);
-                  }}
-                >
-                  Xem
-                </button>
                 <OrderStatusSelect order={order} status={status} updateOrderStatus={updateOrderStatus} />
               </div>
             </article>
@@ -527,7 +519,7 @@ function OrderDetailPanel({
   );
 }
 
-export default function OrderManager({ ordersSnapshot, updateOrderStatus, onOpenDetail, branches = [], registeredCustomersByPhone = {} }) {
+export default function OrderManager({ ordersSnapshot, updateOrderStatus, branches = [], registeredCustomersByPhone = {} }) {
   const [activeOrderId, setActiveOrderId] = useState("");
   const [detailPanelOpen, setDetailPanelOpen] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState("");
@@ -601,11 +593,6 @@ export default function OrderManager({ ordersSnapshot, updateOrderStatus, onOpen
 
   const handleSelectOrder = (order) => {
     setActiveOrderId(getOrderId(order));
-    if (onOpenDetail) onOpenDetail(order);
-  };
-
-  const handleOpenDetail = (order) => {
-    handleSelectOrder(order);
     setDetailPanelOpen(true);
   };
 
@@ -665,7 +652,6 @@ export default function OrderManager({ ordersSnapshot, updateOrderStatus, onOpen
           orders={visibleOrders}
           activeOrderId={activeOrder ? getOrderId(activeOrder) : activeOrderId}
           onSelectOrder={handleSelectOrder}
-          onOpenDetail={handleOpenDetail}
           updateOrderStatus={updateOrderStatus}
           registeredCustomersByPhone={registeredCustomersByPhone}
         />

@@ -1,10 +1,10 @@
-import { formatMoney } from "../../../utils/format.js";
+﻿import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.jsx";
 import {
   AdminBadge,
-  AdminButton,
   AdminInput,
   AdminPanel,
+  AdminSelect,
   AdminStatCard,
   AdminTable,
   AdminTableBody,
@@ -28,11 +28,9 @@ function formatOrderTime(value) {
 }
 
 function getOrderBranch(order) {
-  return [
-    order.deliveryBranchName,
-    order.pickupBranchName,
-    order.branchName
-  ].map((value) => String(value || "").trim()).find(Boolean) || "--";
+  return [order.deliveryBranchName, order.pickupBranchName, order.branchName]
+    .map((value) => String(value || "").trim())
+    .find(Boolean) || "--";
 }
 
 function getOrderChannel(order) {
@@ -67,12 +65,7 @@ function buildTopProducts(orders = []) {
     (order.items || []).forEach((item) => {
       const key = String(item.id || item.name || "").trim();
       if (!key) return;
-      const current = map.get(key) || {
-        id: key,
-        name: item.name || "Món",
-        image: item.image || item.thumbnail || "",
-        quantity: 0
-      };
+      const current = map.get(key) || { id: key, name: item.name || "Món", image: item.image || item.thumbnail || "", quantity: 0 };
       current.quantity += Number(item.quantity || 1);
       map.set(key, current);
     });
@@ -87,9 +80,7 @@ function buildChannels(orders = []) {
     if (!channel) return;
     map.set(channel, (map.get(channel) || 0) + 1);
   });
-  return [...map.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
+  return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 }
 
 function getDateKey(date) {
@@ -104,34 +95,27 @@ function formatChartDate(date) {
 }
 
 function buildRevenueSeries(orders = []) {
-  const today = new Date();
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(today.getDate() - (6 - index));
-    return {
-      key: getDateKey(date),
-      label: formatChartDate(date),
-      value: 0
-    };
-  });
-
-  const dayMap = new Map(days.map((day) => [day.key, day]));
+  const dayMap = new Map();
   orders.forEach((order) => {
     const createdAt = new Date(order.createdAt);
     if (Number.isNaN(createdAt.getTime())) return;
-    const bucket = dayMap.get(getDateKey(createdAt));
-    if (!bucket) return;
-    bucket.value += Number(order.totalAmount || 0);
+    const key = getDateKey(createdAt);
+    if (!dayMap.has(key)) {
+      dayMap.set(key, { key, label: formatChartDate(createdAt), value: 0, date: new Date(createdAt) });
+    }
+    const totalAmount = Number(order.totalAmount || order.total || 0);
+    const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
+    dayMap.get(key).value += Math.max(totalAmount - shippingFee, 0);
   });
 
-  return days;
+  return [...dayMap.values()]
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .map((item) => ({ key: item.key, label: item.label, value: item.value }));
 }
 
 function buildSmoothRevenuePath(points = []) {
   if (!points.length) return "";
   if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-
   const segments = [`M ${points[0].x} ${points[0].y}`];
   for (let index = 0; index < points.length - 1; index += 1) {
     const previous = points[index - 1] || points[index];
@@ -144,39 +128,43 @@ function buildSmoothRevenuePath(points = []) {
     const cp2y = next.y - (nextNext.y - current.y) / 6;
     segments.push(`C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`);
   }
-
   return segments.join(" ");
 }
 
 function buildRevenueChart(series = []) {
+  const safeSeries = series.length ? series : [{ key: "empty", label: "--", value: 0 }];
   const width = 680;
   const height = 250;
   const padding = { top: 24, right: 22, bottom: 38, left: 48 };
-  const maxValue = Math.max(...series.map((item) => item.value), 1);
+  const maxValue = Math.max(...safeSeries.map((item) => item.value), 1);
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
-  const step = series.length > 1 ? plotWidth / (series.length - 1) : plotWidth;
-  const points = series.map((item, index) => {
-    const x = padding.left + index * step;
-    const y = padding.top + (1 - item.value / maxValue) * plotHeight;
-    return { ...item, x, y };
-  });
+  const step = safeSeries.length > 1 ? plotWidth / (safeSeries.length - 1) : plotWidth;
+  const points = safeSeries.map((item, index) => ({
+    ...item,
+    x: padding.left + index * step,
+    y: padding.top + (1 - item.value / maxValue) * plotHeight
+  }));
   const linePath = buildSmoothRevenuePath(points);
   const areaPath = points.length
     ? `M ${points[0].x} ${height - padding.bottom} L ${points[0].x} ${points[0].y} ${linePath.replace(/^M\s+[\d.-]+\s+[\d.-]+/, "")} L ${points[points.length - 1].x} ${height - padding.bottom} Z`
     : "";
-  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-    const y = padding.top + ratio * plotHeight;
-    const value = Math.round(maxValue * (1 - ratio));
-    return { y, value };
-  });
-
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
+    y: padding.top + ratio * plotHeight,
+    value: Math.round(maxValue * (1 - ratio))
+  }));
   return { width, height, padding, points, linePath, areaPath, gridLines };
 }
 
 export default function AdminDashboardSection({
   dashboardSearch,
   setDashboardSearch,
+  dashboardDateFrom,
+  setDashboardDateFrom,
+  dashboardDateTo,
+  setDashboardDateTo,
+  dashboardDatePreset,
+  setDashboardDatePreset,
   openBranches,
   totalBranches,
   ordersTotal,
@@ -184,26 +172,72 @@ export default function AdminDashboardSection({
   ordersDoing,
   todayRevenue,
   totalCustomers,
-  activeProducts,
-  toppingsCount,
-  dashboardQuickActions,
-  openAdminNav,
-  flatAdminNav,
   filteredRecentOrders,
-  ordersSnapshot = []
+  ordersSnapshot = [],
+  chartOrdersSnapshot = [],
+  dashboardChartPreset,
+  setDashboardChartPreset
 }) {
   const topProducts = buildTopProducts(ordersSnapshot);
   const topProductMax = Math.max(...topProducts.map((item) => item.quantity), 1);
   const channels = buildChannels(ordersSnapshot);
   const channelTotal = channels.reduce((sum, channel) => sum + channel.count, 0);
   const averageOrder = ordersTotal ? Math.round(todayRevenue / ordersTotal) : 0;
-  const completionCount = ordersSnapshot.filter((order) => {
-    const status = String(order.status || "").toLowerCase();
-    return status === "done" || status === "completed";
-  }).length;
+  const completionCount = ordersSnapshot.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
   const completionRate = ordersTotal ? Math.round((completionCount / ordersTotal) * 100) : 0;
-  const revenueSeries = buildRevenueSeries(ordersSnapshot);
+
+  const chartOrdersTotal = chartOrdersSnapshot.length;
+  const chartRevenueTotal = chartOrdersSnapshot.reduce((sum, order) => {
+    const totalAmount = Number(order.totalAmount || order.total || 0);
+    const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
+    return sum + Math.max(totalAmount - shippingFee, 0);
+  }, 0);
+  const chartAverageOrder = chartOrdersTotal ? Math.round(chartRevenueTotal / chartOrdersTotal) : 0;
+  const chartCompletionCount = chartOrdersSnapshot.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
+  const chartOrdersNew = chartOrdersSnapshot.filter((order) => String(order.status || "").toLowerCase() === "pending_zalo").length;
+  const chartOrdersDoing = chartOrdersSnapshot.filter((order) => {
+    const status = String(order.status || "").toLowerCase();
+    return status === "confirmed" || status === "delivering";
+  }).length;
+  const revenueSeries = buildRevenueSeries(chartOrdersSnapshot);
   const revenueChart = buildRevenueChart(revenueSeries);
+  const todayText = new Date().toISOString().slice(0, 10);
+
+  const applyPreset = (preset) => {
+    const now = new Date();
+    const toDateText = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+    if (preset === "today") {
+      const today = toDateText(now);
+      setDashboardDateFrom(today);
+      setDashboardDateTo(today);
+    }
+    if (preset === "yesterday") {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const text = toDateText(yesterday);
+      setDashboardDateFrom(text);
+      setDashboardDateTo(text);
+    }
+    if (preset === "week") {
+      const day = now.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - diff);
+      setDashboardDateFrom(toDateText(monday));
+      setDashboardDateTo(toDateText(now));
+    }
+    if (preset === "month") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      setDashboardDateFrom(toDateText(firstDay));
+      setDashboardDateTo(toDateText(now));
+    }
+    setDashboardDatePreset(preset);
+  };
 
   return (
     <div className="admin-dashboard-page">
@@ -212,17 +246,6 @@ export default function AdminDashboardSection({
           <AdminBadge tone="warning">Chi nhánh mở: {openBranches}/{totalBranches}</AdminBadge>
           <h2>Chào mừng quay trở lại!</h2>
           <p>Tổng quan hoạt động kinh doanh và vận hành đơn hàng hôm nay.</p>
-        </div>
-        <div className="admin-dashboard-hero-actions">
-          {dashboardQuickActions.slice(0, 2).map((item) => (
-            <AdminButton
-              key={item.id}
-              variant={item.id === "orders-main" ? "primary" : "secondary"}
-              onClick={() => openAdminNav(flatAdminNav.find((navItem) => navItem.id === item.id))}
-            >
-              {item.label}
-            </AdminButton>
-          ))}
         </div>
       </section>
 
@@ -235,10 +258,43 @@ export default function AdminDashboardSection({
             placeholder="Tìm mã đơn, tên khách, số điện thoại..."
           />
         </label>
+        <label className="admin-dashboard-search admin-dashboard-preset">
+          <span>🗂</span>
+          <AdminSelect
+            value={dashboardDatePreset || "today"}
+            onChange={(event) => {
+              const nextPreset = event.target.value;
+              if (nextPreset === "custom") {
+                setDashboardDatePreset("custom");
+                return;
+              }
+              applyPreset(nextPreset);
+            }}
+            options={[
+              { value: "today", label: "Hôm nay" },
+              { value: "yesterday", label: "Hôm qua" },
+              { value: "week", label: "Tuần này" },
+              { value: "month", label: "Tháng này" },
+              { value: "custom", label: "Tùy chỉnh..." }
+            ]}
+          />
+        </label>
+        {dashboardDatePreset === "custom" ? (
+          <>
+            <label className="admin-dashboard-search">
+              <span>📅</span>
+              <AdminInput type="date" value={dashboardDateFrom || ""} max={dashboardDateTo || todayText} onChange={(event) => { setDashboardDateFrom(event.target.value); setDashboardDatePreset("custom"); }} placeholder="Từ ngày" />
+            </label>
+            <label className="admin-dashboard-search">
+              <span>📅</span>
+              <AdminInput type="date" value={dashboardDateTo || ""} min={dashboardDateFrom || ""} max={todayText} onChange={(event) => { setDashboardDateTo(event.target.value); setDashboardDatePreset("custom"); }} placeholder="Đến ngày" />
+            </label>
+          </>
+        ) : null}
       </div>
 
       <div className="admin-dashboard-stat-grid">
-        <AdminStatCard title="Doanh thu" value={formatMoney(todayRevenue)} subtitle="Theo dữ liệu đơn hiện tại" icon={<Icon name="tag" size={22} />} tone="green" />
+        <AdminStatCard title="Doanh thu thực nhận" value={formatMoney(todayRevenue)} subtitle="Đã loại phí ship" icon={<Icon name="tag" size={22} />} tone="green" />
         <AdminStatCard title="Tổng đơn" value={ordersTotal} subtitle={`${ordersNew} đơn mới`} icon={<Icon name="bag" size={22} />} tone="brand" />
         <AdminStatCard title="Khách hàng" value={totalCustomers} subtitle="Từ CRM hiện có" icon={<Icon name="user" size={22} />} tone="blue" />
         <AdminStatCard title="Đơn trung bình" value={formatMoney(averageOrder)} subtitle={`${completionRate}% hoàn tất`} icon={<Icon name="star" size={22} />} tone="amber" />
@@ -246,14 +302,24 @@ export default function AdminDashboardSection({
 
       <div className="admin-dashboard-main-grid">
         <AdminPanel
-          title="Doanh thu"
-          description="Tổng doanh thu từ dữ liệu đơn hiện tại."
+          title="Doanh thu thực nhận"
+          description="Tổng tiền món đã thu, không tính phí ship."
           className="admin-dashboard-revenue-card"
-          action={<AdminBadge tone="success">{formatMoney(todayRevenue)}</AdminBadge>}
+          action={
+            <AdminSelect
+              value={dashboardChartPreset || "7d"}
+              onChange={(event) => setDashboardChartPreset(event.target.value)}
+              options={[
+                { value: "7d", label: "7 ngày gần nhất" },
+                { value: "month", label: "Tháng này" },
+                { value: "30d", label: "30 ngày gần nhất" }
+              ]}
+            />
+          }
         >
           <div className="admin-dashboard-revenue-visual">
-            <strong>{formatMoney(todayRevenue)}</strong>
-            <span>{ordersTotal} đơn · {formatMoney(averageOrder)} / đơn</span>
+            <strong>{formatMoney(chartRevenueTotal)}</strong>
+            <span>{chartOrdersTotal} đơn · {formatMoney(chartAverageOrder)} / đơn</span>
             <div className="admin-dashboard-revenue-chart">
               <svg viewBox={`0 0 ${revenueChart.width} ${revenueChart.height}`} role="img" aria-label="Revenue chart">
                 <defs>
@@ -264,32 +330,23 @@ export default function AdminDashboardSection({
                 </defs>
                 {revenueChart.gridLines.map((line) => (
                   <g key={line.y}>
-                    <line
-                      x1={revenueChart.padding.left}
-                      x2={revenueChart.width - revenueChart.padding.right}
-                      y1={line.y}
-                      y2={line.y}
-                    />
+                    <line x1={revenueChart.padding.left} x2={revenueChart.width - revenueChart.padding.right} y1={line.y} y2={line.y} />
                     <text x="10" y={line.y + 4}>{formatMoney(line.value)}</text>
                   </g>
                 ))}
                 <path className="admin-dashboard-revenue-area" d={revenueChart.areaPath} />
                 <path className="admin-dashboard-revenue-line" d={revenueChart.linePath} />
+                {revenueChart.points.map((point) => <circle key={point.key} cx={point.x} cy={point.y} r="5" />)}
                 {revenueChart.points.map((point) => (
-                  <circle key={point.key} cx={point.x} cy={point.y} r="5" />
-                ))}
-                {revenueChart.points.map((point) => (
-                  <text key={`${point.key}-label`} className="admin-dashboard-revenue-date" x={point.x} y={revenueChart.height - 10}>
-                    {point.label}
-                  </text>
+                  <text key={`${point.key}-label`} className="admin-dashboard-revenue-date" x={point.x} y={revenueChart.height - 10}>{point.label}</text>
                 ))}
               </svg>
             </div>
           </div>
           <div className="admin-dashboard-mini-metrics">
-            <span><b>{ordersNew}</b> đơn mới</span>
-            <span><b>{ordersDoing}</b> đang xử lý</span>
-            <span><b>{completionCount}</b> hoàn tất</span>
+            <span><b>{chartOrdersNew}</b> đơn mới</span>
+            <span><b>{chartOrdersDoing}</b> đang xử lý</span>
+            <span><b>{chartCompletionCount}</b> hoàn tất</span>
           </div>
         </AdminPanel>
 
@@ -309,9 +366,7 @@ export default function AdminDashboardSection({
                 );
               })}
             </div>
-          ) : (
-            <div className="admin-dashboard-empty-note">Chưa có dữ liệu kênh bán hàng trong đơn.</div>
-          )}
+          ) : <div className="admin-dashboard-empty-note">Chưa có dữ liệu kênh bán hàng trong đơn.</div>}
         </AdminPanel>
 
         <AdminPanel title="Top món bán chạy" description="Tính từ món trong các đơn hiện có." className="admin-dashboard-top-products">
@@ -328,9 +383,7 @@ export default function AdminDashboardSection({
                 </article>
               ))}
             </div>
-          ) : (
-            <div className="admin-dashboard-empty-note">Chưa có món nào trong đơn hàng.</div>
-          )}
+          ) : <div className="admin-dashboard-empty-note">Chưa có món nào trong đơn hàng.</div>}
         </AdminPanel>
       </div>
 
@@ -344,13 +397,7 @@ export default function AdminDashboardSection({
           {filteredRecentOrders.length ? (
             <AdminTable className="admin-dashboard-table">
               <AdminTableHead>
-                <span>Mã đơn</span>
-                <span>Nguồn</span>
-                <span>Khách</span>
-                <span>Giờ</span>
-                <span>Chi nhánh</span>
-                <span>Tổng</span>
-                <span>Trạng thái</span>
+                <span>Mã đơn</span><span>Nguồn</span><span>Khách</span><span>Giờ</span><span>Chi nhánh</span><span>Tổng</span><span>Trạng thái</span>
               </AdminTableHead>
               <AdminTableBody>
                 {filteredRecentOrders.map((order) => {
@@ -358,12 +405,8 @@ export default function AdminDashboardSection({
                   const source = getOrderSourceMeta(order);
                   return (
                     <AdminTableRow key={order.id || order.orderCode}>
-                      <span className="admin-dashboard-order-code">
-                        <strong>{order.orderCode || order.id}</strong>
-                      </span>
-                      <AdminBadge tone={source.tone} className={`admin-dashboard-source-badge ${source.className}`}>
-                        {source.label}
-                      </AdminBadge>
+                      <span className="admin-dashboard-order-code"><strong>{order.orderCode || order.id}</strong></span>
+                      <AdminBadge tone={source.tone} className={`admin-dashboard-source-badge ${source.className}`}>{source.label}</AdminBadge>
                       <span>{order.orderCustomerName || order.customerName || order.phone || "Khách lẻ"}</span>
                       <span>{formatOrderTime(order.createdAt)}</span>
                       <span>{getOrderBranch(order)}</span>
@@ -375,29 +418,8 @@ export default function AdminDashboardSection({
               </AdminTableBody>
             </AdminTable>
           ) : (
-            <div className="admin-order-empty">
-              <strong>Không tìm thấy đơn phù hợp.</strong>
-            </div>
+            <div className="admin-order-empty"><strong>Không tìm thấy đơn phù hợp.</strong></div>
           )}
-        </AdminPanel>
-
-        <AdminPanel title="Lối tắt thao tác" description="Các khu vực vận hành thường dùng." className="admin-dashboard-actions-card">
-          <div className="admin-dashboard-actions">
-            {dashboardQuickActions.map((item) => (
-              <AdminButton
-                key={item.id}
-                variant="secondary"
-                onClick={() => openAdminNav(flatAdminNav.find((navItem) => navItem.id === item.id))}
-              >
-                {item.label}
-              </AdminButton>
-            ))}
-          </div>
-          <div className="admin-dashboard-ops-summary">
-            <span>Món đang bán <b>{activeProducts}</b></span>
-            <span>Topping <b>{toppingsCount}</b></span>
-            <span>Chi nhánh mở <b>{openBranches}/{totalBranches}</b></span>
-          </div>
         </AdminPanel>
       </div>
     </div>

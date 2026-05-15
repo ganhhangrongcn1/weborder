@@ -6,7 +6,11 @@ export function computeAdminDashboardMetrics({ products, ordersSnapshot, crmSnap
     const status = String(order.status || "").toLowerCase();
     return status === "confirmed" || status === "delivering";
   }).length;
-  const todayRevenue = ordersSnapshot.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+  const todayRevenue = ordersSnapshot.reduce((sum, order) => {
+    const totalAmount = Number(order.totalAmount || order.total || 0);
+    const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
+    return sum + Math.max(totalAmount - shippingFee, 0);
+  }, 0);
   const totalCustomers = crmSnapshot?.customers?.length || 0;
   const openBranches = branches.filter((branch) => branch?.open !== false).length;
   const totalBranches = branches.length;

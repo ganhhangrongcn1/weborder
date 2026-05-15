@@ -195,7 +195,9 @@ export const loyaltyRepository = {
     return repository.get(STORAGE_KEYS.crmLoyalty, fallback);
   },
   saveCrmConfig(config) {
-    return repository.set(STORAGE_KEYS.crmLoyalty, config);
+    const saved = repository.set(STORAGE_KEYS.crmLoyalty, config);
+    notifyLoyaltyChanged();
+    return saved;
   },
   getLoyaltyRule(fallback) {
     return this.getCrmConfig(fallback);
@@ -370,7 +372,9 @@ export const loyaltyRepository = {
     return repository.getAsync(STORAGE_KEYS.crmLoyalty, fallback);
   },
   async saveCrmConfigAsync(config) {
-    return repository.setAsync(STORAGE_KEYS.crmLoyalty, config);
+    const saved = await repository.setAsync(STORAGE_KEYS.crmLoyalty, config);
+    notifyLoyaltyChanged();
+    return saved;
   },
   async getLoyaltyRuleAsync(fallback) {
     return this.getCrmConfigAsync(fallback);

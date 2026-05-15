@@ -12,6 +12,10 @@ export function getCheckoutLoyaltyRule() {
   return loyaltyRepository.getLoyaltyRule(defaultLoyaltyRule);
 }
 
+export async function getCheckoutLoyaltyRuleAsync() {
+  return loyaltyRepository.getLoyaltyRuleAsync(defaultLoyaltyRule);
+}
+
 export function saveLatestDeliveryAddress({
   demoAddresses = [],
   nextInfo,

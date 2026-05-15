@@ -290,15 +290,32 @@ async function writeAddressesForPhoneToTable(phone, addresses = []) {
   return addresses;
 }
 
-async function readOrdersByPhoneFromTable() {
+async function readOrdersByPhoneFromTable(options = {}) {
   if (!isSupabaseReady()) return null;
   const client = await getSupabaseClientAsync();
   if (!client) return null;
-  const { data: orders, error: orderError } = await client.from("orders").select("*").order("created_at", { ascending: false });
+  const dateFrom = String(options?.dateFrom || "").trim();
+  const dateTo = String(options?.dateTo || "").trim();
+  let ordersQuery = client.from("orders").select("*");
+  if (dateFrom) {
+    ordersQuery = ordersQuery.gte("created_at", dateFrom);
+  }
+  if (dateTo) {
+    ordersQuery = ordersQuery.lt("created_at", dateTo);
+  }
+  const { data: orders, error: orderError } = await ordersQuery.order("created_at", { ascending: false });
   if (orderError) throw orderError;
 
-  const { data: items, error: itemError } = await client.from("order_items").select("*");
-  if (itemError) throw itemError;
+  const orderIds = Array.isArray(orders) ? orders.map((order) => order?.id).filter(Boolean) : [];
+  let items = [];
+  if (orderIds.length) {
+    const { data: itemRows, error: itemError } = await client
+      .from("order_items")
+      .select("*")
+      .in("order_id", orderIds);
+    if (itemError) throw itemError;
+    items = Array.isArray(itemRows) ? itemRows : [];
+  }
 
   const itemMap = new Map();
   (items || []).forEach((item) => {

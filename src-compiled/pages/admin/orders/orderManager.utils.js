@@ -31,10 +31,12 @@ export function getSettlement(order) {
   const shipperCollectFromCustomer = fulfillmentType === "delivery" ? (isCOD ? totalValue : 0) : 0;
   const shipperPayBackStore = Math.max(shipperCollectFromCustomer - shippingFeeCustomer, 0);
   const customerNeedPayWhenReceive = fulfillmentType === "delivery" ? shipperCollectFromCustomer : totalValue;
+  const netRevenue = Math.max(totalValue - shippingFeeCustomer, 0);
 
   return {
     fulfillmentType,
     paymentMethod,
+    netRevenue,
     shippingRaw,
     shippingSupport,
     shippingFeeCustomer,

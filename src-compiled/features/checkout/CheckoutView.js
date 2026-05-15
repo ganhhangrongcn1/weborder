@@ -9,7 +9,7 @@ import DeliveryFeeModal from "./components/DeliveryFeeModal.js";
 import CheckoutCard from "./components/CheckoutCard.js";
 import InfoLine from "./components/InfoLine.js";
 import CheckoutTotalCard from "./components/CheckoutTotalCard.js";
-import { getCheckoutLoyaltyRule } from "../../services/checkoutService.js";
+import { getCheckoutLoyaltyRule, getCheckoutLoyaltyRuleAsync } from "../../services/checkoutService.js";
 import { deliveryFee, freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { checkoutFallbackCoupons } from "../../data/storeDefaults.js";
 import { checkoutText, optionModalText } from "../../data/uiText.js";
@@ -95,9 +95,9 @@ export default function Checkout({
   });
   const pickupBranches = useMemo(() => resolvePickupBranches(branches), [branches]);
   const checkoutLoyalty = currentPhone ? demoLoyalty || {} : demoLoyalty || {};
+  const [loyaltyRule, setLoyaltyRule] = useState(() => getCheckoutLoyaltyRule());
   const promoCodes = useMemo(() => buildCheckoutPromoCodes(coupons, checkoutFallbackCoupons, subtotal, formatMoney, checkoutLoyalty?.voucherHistory || [], demoOrders || []), [coupons, subtotal, checkoutLoyalty?.voucherHistory, demoOrders]);
   const availablePoints = userProfile?.points || 0;
-  const loyaltyRule = getCheckoutLoyaltyRule();
   const {
     baseCheckoutShip,
     autoShipSupport,
@@ -194,6 +194,33 @@ export default function Checkout({
     if (!Array.isArray(cart) || cart.length > 0) return;
     navigate("home", "home");
   }, [cart, navigate]);
+  useEffect(() => {
+    let disposed = false;
+    const syncRule = async () => {
+      try {
+        const remoteRule = await getCheckoutLoyaltyRuleAsync();
+        if (disposed) return;
+        if (remoteRule && typeof remoteRule === "object") {
+          setLoyaltyRule(remoteRule);
+        }
+      } catch (_error) {
+        // Keep current fallback rule.
+      }
+    };
+    const handleLoyaltyChanged = () => {
+      const localRule = getCheckoutLoyaltyRule();
+      if (localRule && typeof localRule === "object") {
+        setLoyaltyRule(localRule);
+      }
+      syncRule();
+    };
+    syncRule();
+    window.addEventListener("ghr:customer-data-changed", handleLoyaltyChanged);
+    return () => {
+      disposed = true;
+      window.removeEventListener("ghr:customer-data-changed", handleLoyaltyChanged);
+    };
+  }, []);
   useEffect(() => {
     if (!currentPhone && !demoUser?.phone && !userProfile?.phone) return;
     setPickupContact(current => ({

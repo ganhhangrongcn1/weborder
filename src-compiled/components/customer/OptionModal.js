@@ -130,7 +130,7 @@ export default function OptionModal({
     contentClassName: "customer-option-sheet-scroll",
     showHeader: false,
     children: [/*#__PURE__*/_jsxs("div", {
-      className: "flex items-start gap-3",
+      className: "option-modal-sticky-header flex items-start gap-3",
       children: [/*#__PURE__*/_jsx("img", {
         src: product.image,
         alt: product.name,
