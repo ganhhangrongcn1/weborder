@@ -34,6 +34,12 @@ export default function Menu({
     () => [...toppings].sort((first, second) => Number(second.price || 0) - Number(first.price || 0)),
     [toppings]
   );
+  const displayCategories = useMemo(() => {
+    const allLabel = "Tất cả";
+    const cleaned = (categories || []).map((item) => String(item || "").trim()).filter(Boolean);
+    const withoutAll = cleaned.filter((item) => item !== allLabel);
+    return cleaned.includes(allLabel) ? [allLabel, ...withoutAll] : cleaned;
+  }, [categories]);
 
   const removeOneByKey = (rawKey) => {
     const key = String(rawKey || "").replace(/^addon-/, "");
@@ -87,21 +93,18 @@ export default function Menu({
               placeholder={menuText.searchPlaceholder}
             />
           </div>
-          <div className="no-scrollbar menu-chip-row">
-            {categories.map((category) => (
+          <div className="menu-chip-row-wrap">
+            <div className="no-scrollbar menu-chip-row">
+              {displayCategories.map((category, index) => (
               <button
                 key={category}
                 onClick={() => setActiveCategory(category)}
-                className={`chip ${activeCategory === category ? "chip-active" : ""}`}
+                className={`chip ${activeCategory === category ? "chip-active" : ""} ${index === 0 && category === "Tất cả" ? "chip-pinned-all" : ""}`}
               >
                 {category}
               </button>
-            ))}
-          </div>
-          <div className="menu-quick-row">
-            <button className="filter-btn">{menuText.quickFilters.bestSelling}</button>
-            <button className="filter-btn">{menuText.quickFilters.combo}</button>
-            <button className="filter-btn">{menuText.quickFilters.goodPrice}</button>
+              ))}
+            </div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">

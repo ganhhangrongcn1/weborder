@@ -130,6 +130,7 @@ export default function MenuManager({
       categoryStats: state.categoryStats,
       setCategoryVisibility: actions.setCategoryVisibility,
       openCategoryEditor: categoryName => actions.openCategoryEditor(categoryName, state.setEditingCategoryName, state.setEditingCategoryDraft),
+      reorderAdminCategory: actions.reorderAdminCategory,
       filteredAdminProducts: state.filteredAdminProducts,
       setProductVisibility: actions.setProductVisibility,
       onEditProduct: onEditProduct
@@ -200,6 +201,7 @@ export default function MenuManager({
     }), /*#__PURE__*/_jsx(MenuCategoryEditorModal, {
       open: state.categoryEditorOpen,
       onClose: () => state.setCategoryEditorOpen(false),
+      isCreating: !state.editingCategoryName,
       editingCategoryDraft: state.editingCategoryDraft,
       setEditingCategoryDraft: state.setEditingCategoryDraft,
       deleteCategoryFromEditor: actions.deleteCategoryFromEditor,

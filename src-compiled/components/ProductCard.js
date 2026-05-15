@@ -9,6 +9,7 @@ export default function ProductCard({
   onRemove,
   selectedCount = 0
 }) {
+  const badgeText = String(product?.badge || "").trim();
   return /*#__PURE__*/_jsxs("article", {
     className: `${compact ? "product-row" : "product-card"} ${selectedCount ? "product-selected" : ""}`,
     children: [/*#__PURE__*/_jsxs("button", {
@@ -19,10 +20,10 @@ export default function ProductCard({
         src: product.image,
         alt: product.name,
         className: "h-full w-full object-cover"
-      }), /*#__PURE__*/_jsx("span", {
+      }), badgeText ? /*#__PURE__*/_jsx("span", {
         className: "badge",
-        children: product.badge
-      }), selectedCount > 0 && /*#__PURE__*/_jsxs("span", {
+        children: badgeText
+      }) : null, selectedCount > 0 && /*#__PURE__*/_jsxs("span", {
         className: "selected-badge",
         children: ["\u0110\xE3 ch\u1ECDn ", selectedCount]
       })]

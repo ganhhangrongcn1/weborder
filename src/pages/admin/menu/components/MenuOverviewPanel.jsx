@@ -18,6 +18,7 @@ export default function MenuOverviewPanel({
   categoryStats,
   setCategoryVisibility,
   openCategoryEditor,
+  reorderAdminCategory,
   filteredAdminProducts,
   setProductVisibility,
   onEditProduct
@@ -65,6 +66,20 @@ export default function MenuOverviewPanel({
                 <div
                   key={category}
                   className={`admin-menu-category-item admin-menu-preset-item ${selectedAdminCategory === category ? "active" : ""}`}
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", category);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const draggedCategory = event.dataTransfer.getData("text/plain");
+                    reorderAdminCategory?.(draggedCategory, category);
+                  }}
                   onClick={() => setSelectedAdminCategory(category)}
                   role="button"
                   tabIndex={0}

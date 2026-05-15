@@ -30,6 +30,12 @@ export default function Menu({
     }, {});
   }, [cart]);
   const sortedToppings = useMemo(() => [...toppings].sort((first, second) => Number(second.price || 0) - Number(first.price || 0)), [toppings]);
+  const displayCategories = useMemo(() => {
+    const allLabel = "Tất cả";
+    const cleaned = (categories || []).map(item => String(item || "").trim()).filter(Boolean);
+    const withoutAll = cleaned.filter(item => item !== allLabel);
+    return cleaned.includes(allLabel) ? [allLabel, ...withoutAll] : cleaned;
+  }, [categories]);
   const removeOneByKey = rawKey => {
     const key = String(rawKey || "").replace(/^addon-/, "");
     setCart(items => {
@@ -86,24 +92,15 @@ export default function Menu({
             placeholder: menuText.searchPlaceholder
           })]
         }), /*#__PURE__*/_jsx("div", {
-          className: "no-scrollbar menu-chip-row",
-          children: categories.map(category => /*#__PURE__*/_jsx("button", {
-            onClick: () => setActiveCategory(category),
-            className: `chip ${activeCategory === category ? "chip-active" : ""}`,
-            children: category
-          }, category))
-        }), /*#__PURE__*/_jsxs("div", {
-          className: "menu-quick-row",
-          children: [/*#__PURE__*/_jsx("button", {
-            className: "filter-btn",
-            children: menuText.quickFilters.bestSelling
-          }), /*#__PURE__*/_jsx("button", {
-            className: "filter-btn",
-            children: menuText.quickFilters.combo
-          }), /*#__PURE__*/_jsx("button", {
-            className: "filter-btn",
-            children: menuText.quickFilters.goodPrice
-          })]
+          className: "menu-chip-row-wrap",
+          children: /*#__PURE__*/_jsx("div", {
+            className: "no-scrollbar menu-chip-row",
+            children: displayCategories.map((category, index) => /*#__PURE__*/_jsx("button", {
+              onClick: () => setActiveCategory(category),
+              className: `chip ${activeCategory === category ? "chip-active" : ""} ${index === 0 && category === "Tất cả" ? "chip-pinned-all" : ""}`,
+              children: category
+            }, category))
+          })
         })]
       }), /*#__PURE__*/_jsx("div", {
         className: "grid grid-cols-2 gap-3",

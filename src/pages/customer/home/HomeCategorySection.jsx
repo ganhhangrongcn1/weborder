@@ -18,12 +18,13 @@ export default function HomeCategorySection({
     <section className="home2026-section">
       <div className="home2026-section-head">
         <h2>{categoryTitle}</h2>
-        <button type="button" onClick={onViewAll}>{viewAll}</button>
       </div>
-      <div className="home2026-category-scroll no-scrollbar">
-        {homeCategories.map((category) => (
-          <HomeCategoryBubble key={category.label} category={category} active={activeHomeCategory === category.value} onClick={() => onSelectCategory(category.value)} />
-        ))}
+      <div className="home2026-category-scroll-wrap">
+        <div className="home2026-category-scroll no-scrollbar">
+          {homeCategories.map((category) => (
+            <HomeCategoryBubble key={category.label} category={category} active={activeHomeCategory === category.value} onClick={() => onSelectCategory(category.value)} />
+          ))}
+        </div>
       </div>
     </section>
   );

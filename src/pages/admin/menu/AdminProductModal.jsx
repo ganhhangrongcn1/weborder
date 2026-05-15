@@ -184,6 +184,11 @@ export default function AdminProductModal({ product, categories, optionGroupPres
           </label>
 
           <label className="wide">
+            BADGE
+            <AdminInput placeholder="Ví dụ: Bestseller, Hot, Mới..." value={draft.badge || ""} onChange={(event) => patch("badge", event.target.value)} />
+          </label>
+
+          <label className="wide">
             DANH MỤC *
             <AdminSelect value={draft.category} onChange={(event) => patch("category", event.target.value)}>
               {categories.map((category) => (
@@ -313,6 +318,7 @@ export default function AdminProductModal({ product, categories, optionGroupPres
                 alert("Vui lòng nhập giá món lớn hơn 0.");
                 return;
               }
+              payload.badge = String(payload.badge || "").trim();
               payload.category = resolveValidCategory(payload.category, categories);
               payload.optionGroups = buildOptionGroupsFromPresets(selectedPresetIds, optionGroupPresets);
               onSave(payload);

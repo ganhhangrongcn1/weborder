@@ -36,7 +36,7 @@ export default function useMenuManagerActions({
 
   const addCategory = () => {
     const nextName = `Danh mục mới ${adminCategories.length + 1}`;
-    setAdminCategories([nextName, ...adminCategories]);
+    setAdminCategories((current) => [nextName, ...current]);
     setSelectedAdminCategory(nextName);
   };
 
@@ -59,10 +59,15 @@ export default function useMenuManagerActions({
   const saveCategoryEditor = () => {
     const oldName = editingCategoryName;
     const nextName = String(editingCategoryDraft || "").trim();
-    if (!oldName) return;
     if (!nextName) return alert("Vui lòng nhập tên danh mục.");
-    const duplicated = adminCategories.some((item) => item === nextName && item !== oldName);
+    const duplicated = adminCategories.some((item) => item === nextName && (!oldName || item !== oldName));
     if (duplicated) return alert("Tên danh mục đã tồn tại.");
+    if (!oldName) {
+      setAdminCategories((current) => [nextName, ...current]);
+      setSelectedAdminCategory(nextName);
+      setCategoryEditorOpen(false);
+      return;
+    }
     if (nextName === oldName) return setCategoryEditorOpen(false);
 
     setAdminCategories((current) => current.map((item) => (item === oldName ? nextName : item)));
@@ -85,6 +90,19 @@ export default function useMenuManagerActions({
     }
     setSelectedAdminCategory((current) => (current === target ? fallbackCategory : current));
     setCategoryEditorOpen(false);
+  };
+
+  const reorderAdminCategory = (draggedName, targetName) => {
+    if (!draggedName || !targetName || draggedName === targetName) return;
+    setAdminCategories((current) => {
+      const fromIndex = current.findIndex((item) => item === draggedName);
+      const toIndex = current.findIndex((item) => item === targetName);
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return current;
+      const next = [...current];
+      const [picked] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, picked);
+      return next;
+    });
   };
 
   const updateTopping = (id, patch) => setToppings(toppings.map((item) => (item.id === id ? { ...item, ...patch } : item)));
@@ -194,6 +212,7 @@ export default function useMenuManagerActions({
     openCategoryEditor,
     saveCategoryEditor,
     deleteCategoryFromEditor,
+    reorderAdminCategory,
     updateTopping,
     addTopping,
     createPreset,

@@ -203,6 +203,13 @@ export default function AdminProductModal({
           })]
         }), /*#__PURE__*/_jsxs("label", {
           className: "wide",
+          children: ["BADGE", /*#__PURE__*/_jsx(AdminInput, {
+            placeholder: "V\xED d\u1EE5: Bestseller, Hot, M\u1EDBi...",
+            value: draft.badge || "",
+            onChange: event => patch("badge", event.target.value)
+          })]
+        }), /*#__PURE__*/_jsxs("label", {
+          className: "wide",
           children: ["DANH M\u1EE4C *", /*#__PURE__*/_jsx(AdminSelect, {
             value: draft.category,
             onChange: event => patch("category", event.target.value),
@@ -350,6 +357,7 @@ export default function AdminProductModal({
               alert("Vui lòng nhập giá món lớn hơn 0.");
               return;
             }
+            payload.badge = String(payload.badge || "").trim();
             payload.category = resolveValidCategory(payload.category, categories);
             payload.optionGroups = buildOptionGroupsFromPresets(selectedPresetIds, optionGroupPresets);
             onSave(payload);

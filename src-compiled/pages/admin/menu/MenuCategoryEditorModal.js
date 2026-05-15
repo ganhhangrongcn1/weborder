@@ -3,6 +3,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 export default function MenuCategoryEditorModal({
   open,
   onClose,
+  isCreating,
   editingCategoryDraft,
   setEditingCategoryDraft,
   deleteCategoryFromEditor,
@@ -23,7 +24,7 @@ export default function MenuCategoryEditorModal({
           children: "\xD7"
         }), /*#__PURE__*/_jsx("div", {
           children: /*#__PURE__*/_jsx("h2", {
-            children: "CH\u1EC8NH S\u1EECA DANH M\u1EE4C"
+            children: isCreating ? "TẠO DANH MỤC" : "CHỈNH SỬA DANH MỤC"
           })
         })]
       }), /*#__PURE__*/_jsxs("div", {
@@ -47,7 +48,7 @@ export default function MenuCategoryEditorModal({
         })]
       }), /*#__PURE__*/_jsxs("div", {
         className: "admin-modal-actions admin-side-actions menu-item-editor-actions",
-        children: [/*#__PURE__*/_jsx(AdminButton, {
+        children: [isCreating ? /*#__PURE__*/_jsx("span", {}) : /*#__PURE__*/_jsx(AdminButton, {
           variant: "danger",
           className: "admin-danger",
           onClick: deleteCategoryFromEditor,
@@ -57,7 +58,7 @@ export default function MenuCategoryEditorModal({
           style: {
             gridColumn: "1 / -1"
           },
-          children: "L\u01B0u thay \u0111\u1ED5i"
+          children: isCreating ? "Tạo danh mục" : "Lưu thay đổi"
         })]
       })]
     })

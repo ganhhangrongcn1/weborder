@@ -28,6 +28,7 @@ export default function ProductDetailModal({
   addToCart,
   toppings
 }) {
+  const badgeText = String(selectedProduct?.badge || "").trim();
   const toppingTotal = selectedToppings.reduce((sum, topping) => sum + topping.price, 0);
   const total = (selectedProduct.price + toppingTotal) * quantity;
   function toggleTopping(topping) {
@@ -65,10 +66,10 @@ export default function ProductDetailModal({
             })
           })]
         })]
-      }), /*#__PURE__*/_jsx("span", {
+      }), badgeText ? /*#__PURE__*/_jsx("span", {
         className: "absolute bottom-4 left-4 rounded-full bg-red-600 px-3 py-1 text-xs font-black uppercase text-white",
-        children: selectedProduct.badge
-      })]
+        children: badgeText
+      }) : null]
     }), /*#__PURE__*/_jsxs("div", {
       className: "space-y-5 px-4 pt-5",
       children: [/*#__PURE__*/_jsxs("div", {

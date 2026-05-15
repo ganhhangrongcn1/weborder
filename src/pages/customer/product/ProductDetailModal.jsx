@@ -23,6 +23,7 @@ export default function ProductDetailModal({
   addToCart,
   toppings
 }) {
+  const badgeText = String(selectedProduct?.badge || "").trim();
   const toppingTotal = selectedToppings.reduce((sum, topping) => sum + topping.price, 0);
   const total = (selectedProduct.price + toppingTotal) * quantity;
 
@@ -45,7 +46,9 @@ export default function ProductDetailModal({
             <button aria-label="Yêu thích" className="float-btn text-orange-600"><Icon name="heart" size={18} /></button>
           </div>
         </div>
-        <span className="absolute bottom-4 left-4 rounded-full bg-red-600 px-3 py-1 text-xs font-black uppercase text-white">{selectedProduct.badge}</span>
+        {badgeText ? (
+          <span className="absolute bottom-4 left-4 rounded-full bg-red-600 px-3 py-1 text-xs font-black uppercase text-white">{badgeText}</span>
+        ) : null}
       </div>
 
       <div className="space-y-5 px-4 pt-5">

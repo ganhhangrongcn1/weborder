@@ -8,8 +8,7 @@
   letter-spacing: 0;
 }
 
-.home2026-flash-scroll,
-.home2026-category-scroll {
+.home2026-flash-scroll {
   display: flex;
   gap: 11px;
   margin-inline: -16px;

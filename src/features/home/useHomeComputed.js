@@ -206,7 +206,7 @@ export default function useHomeComputed({
 
   const visibleCategoryNames = categories.filter((category) => {
     if (category === homeText.all) return true;
-    return visibleProducts.some((product) => product.category === category || product.badge === category);
+    return visibleProducts.some((product) => product.category === category);
   });
   const homeCategories = buildHomeCategories(visibleCategoryNames, homeText);
   const activeHomeCategory = homeCategories.some((category) => category.value === homeCategory)
@@ -214,7 +214,7 @@ export default function useHomeComputed({
     : homeCategories[0]?.value || categories[0] || homeText.all;
   const filteredHomeProducts = activeHomeCategory === homeCategories[0]?.value
     ? visibleProducts
-    : visibleProducts.filter((product) => product.category === activeHomeCategory || product.badge === activeHomeCategory);
+    : visibleProducts.filter((product) => product.category === activeHomeCategory);
   const featuredProducts = (filteredHomeProducts.length ? filteredHomeProducts : visibleProducts).slice(0, showAllHomeProducts ? 8 : 4);
 
   return {

@@ -31,6 +31,37 @@
   padding-bottom: 1px;
 }
 
+.menu-chip-row-wrap {
+  position: relative;
+}
+
+.menu-chip-row-wrap::before,
+.menu-chip-row-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.menu-chip-row-wrap::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(255, 247, 236, 0.95), rgba(255, 247, 236, 0));
+}
+
+.menu-chip-row-wrap::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(255, 247, 236, 0.95), rgba(255, 247, 236, 0));
+}
+
+.menu-chip-row {
+  flex-wrap: nowrap;
+  scroll-snap-type: x proximity;
+  padding-inline: 0;
+}
+
 .chip,
 .filter-btn,
 .option {
@@ -52,6 +83,12 @@
   border-color: transparent;
   background: linear-gradient(135deg, #ff7a00, #ff4f17);
   color: white;
+}
+
+.chip-pinned-all {
+  position: sticky;
+  left: 0;
+  z-index: 3;
 }
 
 .filter-btn {

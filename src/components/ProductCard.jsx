@@ -1,12 +1,14 @@
-import { formatMoney } from "../utils/format.js";
+﻿import { formatMoney } from "../utils/format.js";
 import Icon from "./Icon.jsx";
 
 export default function ProductCard({ product, compact = false, onOpen, onAdd, onRemove, selectedCount = 0 }) {
+  const badgeText = String(product?.badge || "").trim();
+
   return (
     <article className={`${compact ? "product-row" : "product-card"} ${selectedCount ? "product-selected" : ""}`}>
       <button onClick={() => onAdd(product)} className={compact ? "product-row-image" : "product-image-wrap"} aria-label={`Tùy chọn ${product.name}`}>
         <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
-        <span className="badge">{product.badge}</span>
+        {badgeText ? <span className="badge">{badgeText}</span> : null}
         {selectedCount > 0 && <span className="selected-badge">Đã chọn {selectedCount}</span>}
       </button>
       <div className={compact ? "min-w-0 flex-1 py-1" : "p-3"}>

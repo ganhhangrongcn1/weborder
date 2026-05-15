@@ -1,12 +1,40 @@
+.home2026-category-scroll-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.home2026-category-scroll-wrap::before,
+.home2026-category-scroll-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 12px;
+  width: 20px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.home2026-category-scroll-wrap::before {
+  left: 0;
+  background: linear-gradient(to right, #f6f1e7 5%, rgba(246, 241, 231, 0));
+}
+
+.home2026-category-scroll-wrap::after {
+  right: 0;
+  background: linear-gradient(to left, #f6f1e7 5%, rgba(246, 241, 231, 0));
+}
+
 .home2026-category-scroll {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   width: 100%;
   max-width: 100%;
-  gap: 8px;
+  gap: 10px;
   margin-inline: 0;
-  overflow: visible;
-  padding: 0 0 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 1px 0 12px;
+  scroll-snap-type: x proximity;
   overscroll-behavior-x: contain;
 }
 

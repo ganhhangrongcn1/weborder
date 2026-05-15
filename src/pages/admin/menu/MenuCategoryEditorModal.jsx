@@ -1,8 +1,9 @@
-import { AdminButton, AdminIconButton, AdminInput, AdminSelect } from "../ui/index.js";
+﻿import { AdminButton, AdminIconButton, AdminInput, AdminSelect } from "../ui/index.js";
 
 export default function MenuCategoryEditorModal({
   open,
   onClose,
+  isCreating,
   editingCategoryDraft,
   setEditingCategoryDraft,
   deleteCategoryFromEditor,
@@ -16,7 +17,7 @@ export default function MenuCategoryEditorModal({
         <div className="admin-product-modal-head admin-product-side-head">
           <AdminIconButton label="Đóng" onClick={onClose}>×</AdminIconButton>
           <div>
-            <h2>CHỈNH SỬA DANH MỤC</h2>
+            <h2>{isCreating ? "TẠO DANH MỤC" : "CHỈNH SỬA DANH MỤC"}</h2>
           </div>
         </div>
 
@@ -34,10 +35,14 @@ export default function MenuCategoryEditorModal({
         </div>
 
         <div className="admin-modal-actions admin-side-actions menu-item-editor-actions">
-          <AdminButton variant="danger" className="admin-danger" onClick={deleteCategoryFromEditor}>Xóa danh mục</AdminButton>
+          {isCreating ? (
+            <span />
+          ) : (
+            <AdminButton variant="danger" className="admin-danger" onClick={deleteCategoryFromEditor}>Xóa danh mục</AdminButton>
+          )}
           <span />
           <AdminButton onClick={saveCategoryEditor} style={{ gridColumn: "1 / -1" }}>
-            Lưu thay đổi
+            {isCreating ? "Tạo danh mục" : "Lưu thay đổi"}
           </AdminButton>
         </div>
       </section>
