@@ -154,8 +154,8 @@ export function getDefaultOrderChoices(product, fallbackToppings = []) {
       ? [normalizeOrderOption(firstSingleGroup, firstSingleOption)]
       : [];
   return {
-    spice: firstSingleOption ? `${firstSingleGroup.name}: ${firstSingleOption.name}` : "Vừa cay",
-    toppings: groups.length ? paidDefaultOptions : fallbackToppings
+    spice: firstSingleOption ? `${firstSingleGroup.name}: ${firstSingleOption.name}` : "",
+    toppings: groups.length ? paidDefaultOptions : []
   };
 }
 

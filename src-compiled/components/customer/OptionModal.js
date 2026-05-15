@@ -3,7 +3,7 @@ import { toppings as toppingSeed } from "../../data/products.js";
 import { formatMoney } from "../../utils/format.js";
 import Icon from "../Icon.js";
 import CustomerBottomSheet from "./CustomerBottomSheet.js";
-import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 export default function OptionModal({
   product,
   selectedSpice,
@@ -210,55 +210,7 @@ export default function OptionModal({
             })
           })]
         }, group.id);
-      })()) : /*#__PURE__*/_jsxs(_Fragment, {
-        children: [/*#__PURE__*/_jsxs(OptionGroup, {
-          title: optionModalText.spiceTitle,
-          children: [/*#__PURE__*/_jsx("p", {
-            className: "option-hint option-hint-required",
-            children: optionModalText.requiredSpice
-          }), /*#__PURE__*/_jsx("div", {
-            className: "option-spice-grid",
-            children: spiceLevels.map(level => /*#__PURE__*/_jsx("button", {
-              onClick: () => setSelectedSpice(level),
-              className: "option " + (selectedSpice === level ? "option-active" : ""),
-              children: level
-            }, level))
-          })]
-        }), /*#__PURE__*/_jsxs(OptionGroup, {
-          title: optionModalText.toppingTitle,
-          children: [/*#__PURE__*/_jsx("p", {
-            className: "option-hint option-hint-optional",
-            children: optionModalText.optionalTopping
-          }), /*#__PURE__*/_jsx("div", {
-            className: "option-choice-grid",
-            children: toppings.map(topping => {
-              const qty = getToppingQuantity(topping.id);
-              const active = qty > 0;
-              return /*#__PURE__*/_jsxs("button", {
-                onClick: () => changeToppingQuantity(topping, 1),
-                className: "modal-topping " + (active ? "modal-topping-active" : ""),
-                children: [/*#__PURE__*/_jsx("span", {
-                  children: topping.name
-                }), /*#__PURE__*/_jsxs("strong", {
-                  children: ["+", formatMoney(topping.price)]
-                }), qty > 0 && /*#__PURE__*/_jsxs("em", {
-                  className: "modal-topping-count",
-                  onClick: event => event.stopPropagation(),
-                  children: [/*#__PURE__*/_jsx("b", {
-                    onClick: () => changeToppingQuantity(topping, -1),
-                    children: "-"
-                  }), /*#__PURE__*/_jsx("i", {
-                    children: qty
-                  }), /*#__PURE__*/_jsx("b", {
-                    onClick: () => changeToppingQuantity(topping, 1),
-                    children: "+"
-                  })]
-                })]
-              }, topping.id);
-            })
-          })]
-        })]
-      }), /*#__PURE__*/_jsxs("label", {
+      })()) : null, /*#__PURE__*/_jsxs("label", {
         className: "block",
         children: [/*#__PURE__*/_jsx("span", {
           className: "label",

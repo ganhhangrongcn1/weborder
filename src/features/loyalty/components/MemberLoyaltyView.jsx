@@ -28,7 +28,7 @@ export default function MemberLoyaltyView({
 }) {
   const loyaltyText = getLoyaltyText();
   const loyaltyRule = getLoyaltyRule();
-  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 1000));
+  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
   const loyaltyRulesRows = Array.isArray(getLoyaltyRulesRows()) ? getLoyaltyRulesRows() : [];
   const safePointHistory = Array.isArray(userProfile?.pointHistory) ? userProfile.pointHistory : [];

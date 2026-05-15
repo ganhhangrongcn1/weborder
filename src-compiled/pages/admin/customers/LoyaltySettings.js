@@ -30,13 +30,13 @@ export default function LoyaltySettings({
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const config = crmSnapshot?.loyaltyConfig || {};
-  const currencyPerPoint = Math.max(1, Number(config.currencyPerPoint || 10));
+  const currencyPerPoint = Math.max(1, Number(config.currencyPerPoint || 100));
   const pointPerUnit = Math.max(1, Number(config.pointPerUnit || 1));
-  const checkinDailyPoints = Math.max(1, Number(config.checkinDailyPoints || 1000));
+  const checkinDailyPoints = Math.max(1, Number(config.checkinDailyPoints || 100));
   const streakRewards = config.streakRewards || {};
-  const reward7 = Math.max(1, Number(streakRewards[7] || streakRewards["7"] || 1200));
+  const reward7 = Math.max(1, Number(streakRewards[7] || streakRewards["7"] || 700));
   const reward14 = Math.max(1, Number(streakRewards[14] || streakRewards["14"] || 1500));
-  const reward30 = Math.max(1, Number(streakRewards[30] || streakRewards["30"] || 2000));
+  const reward30 = Math.max(1, Number(streakRewards[30] || streakRewards["30"] || 3000));
   const redeemPointUnit = Math.max(1, Number(config.redeemPointUnit || 1));
   const redeemValue = Math.max(1, Number(config.redeemValue || 1));
   const handleSave = async () => {

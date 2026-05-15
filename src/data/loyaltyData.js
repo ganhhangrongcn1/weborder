@@ -30,7 +30,7 @@ export const loyaltyText = {
   signedOutCheckinHint: "Chưa đăng nhập",
   checkinTitle: "Điểm danh",
   checkinLoginHint: "Đăng nhập để điểm danh",
-  luckyGiftTitle: "Quà may mắn",
+  luckyGiftTitle: "Voucher Của Bạn",
   pointsHistoryTitle: "Lịch sử tích điểm",
   memberPointsTitle: "Điểm thưởng",
   memberPointsSubtitle: "điểm khả dụng",

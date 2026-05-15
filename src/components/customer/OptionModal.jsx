@@ -171,39 +171,7 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
                 );
               })()
             ))
-          ) : (
-            <>
-              <OptionGroup title={optionModalText.spiceTitle}>
-                <p className="option-hint option-hint-required">{optionModalText.requiredSpice}</p>
-                <div className="option-spice-grid">
-                  {spiceLevels.map((level) => <button key={level} onClick={() => setSelectedSpice(level)} className={"option " + (selectedSpice === level ? "option-active" : "")}>{level}</button>)}
-                </div>
-              </OptionGroup>
-
-              <OptionGroup title={optionModalText.toppingTitle}>
-                <p className="option-hint option-hint-optional">{optionModalText.optionalTopping}</p>
-                <div className="option-choice-grid">
-                  {toppings.map((topping) => {
-                    const qty = getToppingQuantity(topping.id);
-                    const active = qty > 0;
-                    return (
-                      <button key={topping.id} onClick={() => changeToppingQuantity(topping, 1)} className={"modal-topping " + (active ? "modal-topping-active" : "")}>
-                        <span>{topping.name}</span>
-                        <strong>+{formatMoney(topping.price)}</strong>
-                        {qty > 0 && (
-                          <em className="modal-topping-count" onClick={(event) => event.stopPropagation()}>
-                            <b onClick={() => changeToppingQuantity(topping, -1)}>-</b>
-                            <i>{qty}</i>
-                            <b onClick={() => changeToppingQuantity(topping, 1)}>+</b>
-                          </em>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </OptionGroup>
-            </>
-          )}
+          ) : null}
 
           <label className="block">
             <span className="label">{optionModalText.note}</span>

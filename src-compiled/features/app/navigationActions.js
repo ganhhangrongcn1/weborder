@@ -38,7 +38,7 @@ export function createNavigationActions({
 
   function openProduct(product) {
     if (tryBlockStoreAction()) return;
-    const defaults = getDefaultOrderChoices(product, [storeToppings[0], storeToppings[2]].filter(Boolean));
+    const defaults = getDefaultOrderChoices(product);
     setSelectedProduct(product);
     setSelectedSpice(defaults.spice);
     setSelectedToppings(defaults.toppings);
