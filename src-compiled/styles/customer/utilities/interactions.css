@@ -114,6 +114,19 @@
   box-shadow: 0 14px 28px rgba(58, 31, 20, 0.12);
 }
 
+.customer-shell .zalo-guide-overlay,
+.customer-shell .zalo-guide-overlay:hover,
+.customer-shell .zalo-guide-overlay:active,
+.customer-shell .zalo-guide-card,
+.customer-shell .zalo-guide-card:hover,
+.customer-shell .zalo-guide-card:active {
+  transform: none !important;
+}
+
+.customer-shell .zalo-guide-card {
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
 .milestone-modal-item {
   transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }

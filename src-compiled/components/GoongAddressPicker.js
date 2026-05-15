@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { BRANCH_LOCATION, getGoongMapTilesKey, goongAutocomplete, goongDistanceMatrix, goongPlaceDetail, goongReverseGeocode, hasGoongApiKey } from "../services/goongService.js";
+import { calculateBaseShippingFeeByConfig } from "../services/shippingService.js";
 import { formatMoney } from "../utils/format.js";
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-export function calculateDeliveryFee(distanceKm) {
+export function calculateDeliveryFee(distanceKm, shippingConfig) {
   if (!distanceKm) return null;
-  if (distanceKm <= 3) return 15000;
-  return 15000 + Math.ceil(distanceKm - 3) * 5000;
+  return calculateBaseShippingFeeByConfig(distanceKm, shippingConfig);
 }
 function estimateDistanceFromText(addressText) {
   const text = String(addressText || "").toLowerCase();
@@ -41,8 +41,8 @@ function getMapStyle() {
     }]
   };
 }
-function normalizeChange(data) {
-  const deliveryFee = calculateDeliveryFee(data.distanceKm);
+function normalizeChange(data, shippingConfig) {
+  const deliveryFee = calculateDeliveryFee(data.distanceKm, shippingConfig);
   return {
     addressText: data.addressText || "",
     placeId: data.placeId || "",
@@ -57,7 +57,8 @@ function normalizeChange(data) {
 export default function GoongAddressPicker({
   value,
   onChange,
-  origin
+  origin,
+  shippingConfig
 }) {
   const deliveryOrigin = origin?.lat && origin?.lng ? origin : BRANCH_LOCATION;
   const defaultCenter = [deliveryOrigin.lng, deliveryOrigin.lat];
@@ -69,7 +70,7 @@ export default function GoongAddressPicker({
     lng: value?.lng,
     distanceKm: value?.distanceKm,
     durationText: value?.durationText
-  }));
+  }, shippingConfig));
   const [isSearching, setIsSearching] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -138,7 +139,7 @@ export default function GoongAddressPicker({
     markerRef.current = marker;
   }, [showMap]);
   async function emitChange(next) {
-    const normalized = normalizeChange(next);
+    const normalized = normalizeChange(next, shippingConfig);
     setSelected(normalized);
     onChange?.(normalized);
   }
@@ -156,7 +157,7 @@ export default function GoongAddressPicker({
       lng,
       distanceKm: distance?.distanceKm ?? fallbackDistance,
       durationText: distance?.durationText || (fallbackDistance ? "Ước tính" : "")
-    });
+    }, shippingConfig);
     await emitChange(next);
     setStatusText(next.shippingStatus === "OK" ? `${distance?.distanceKm ? "Goong" : "Ước tính"} ${next.distanceKm.toFixed(1)}km · Phí ${formatMoney(next.deliveryFee)}` : "Không xác định được phí ship, nhân viên sẽ xác nhận");
     setIsCalculating(false);
@@ -184,7 +185,7 @@ export default function GoongAddressPicker({
         distanceKm: fallbackDistance,
         durationText: fallbackDistance ? "Ước tính" : ""
       });
-      setStatusText(fallbackDistance ? `Ước tính ${fallbackDistance.toFixed(1)}km · Phí ${formatMoney(calculateDeliveryFee(fallbackDistance))}` : "Không xác định được phí ship, nhân viên sẽ xác nhận");
+      setStatusText(fallbackDistance ? `Ước tính ${fallbackDistance.toFixed(1)}km · Phí ${formatMoney(calculateDeliveryFee(fallbackDistance, shippingConfig))}` : "Không xác định được phí ship, nhân viên sẽ xác nhận");
     }
     setIsCalculating(false);
   }

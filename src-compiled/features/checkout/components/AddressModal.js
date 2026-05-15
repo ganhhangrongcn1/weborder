@@ -10,6 +10,7 @@ export default function AddressModal({
   selectedDeliveryBranchId = "",
   onSelectDeliveryBranch,
   deliveryOrigin,
+  shippingConfig,
   onSelectAddress,
   onSave,
   onClose
@@ -113,6 +114,7 @@ export default function AddressModal({
         })]
       }), /*#__PURE__*/_jsx(GoongAddressPicker, {
         origin: deliveryOrigin,
+        shippingConfig: shippingConfig,
         value: {
           addressText: draft.address,
           placeId: draft.placeId,

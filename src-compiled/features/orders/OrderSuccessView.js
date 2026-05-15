@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "../../components/Icon.js";
-import { loadZaloConfig, renderZaloTemplate, buildZaloLink } from "../../services/zaloService.js";
+import { loadZaloConfigAsync, renderZaloTemplate, buildZaloLink } from "../../services/zaloService.js";
 import { formatMoney } from "../../utils/format.js";
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 function buildOrderItemsText(orderItems) {
@@ -24,6 +24,17 @@ export default function OrderSuccess({
   confirmCurrentOrder
 }) {
   const [hasOpenedZalo, setHasOpenedZalo] = useState(false);
+  const [zaloConfig, setZaloConfig] = useState({
+    phone: "",
+    template: ""
+  });
+  const [isZaloConfigLoading, setIsZaloConfigLoading] = useState(true);
+  const [copyPopup, setCopyPopup] = useState({
+    open: false,
+    title: "",
+    message: "",
+    tone: "success"
+  });
   const effectiveStatus = String(order?.status || orderStatus || "").toLowerCase();
   const isConfirmed = Boolean(order?.zaloSentAt) || ["confirmed", "preparing", "cooking", "delivering", "done", "completed"].includes(effectiveStatus);
   const rawZaloPhone = String(branchPhone || "0788422424").replace(/\D/g, "") || "0788422424";
@@ -35,9 +46,8 @@ export default function OrderSuccess({
   const totalValue = Number(order?.totalAmount || order?.total || 0);
   const orderCode = order?.orderCode || "GHR-1028";
   const orderLink = buildOrderLink(orderCode);
-  const zaloConfig = loadZaloConfig(rawZaloPhone);
   const zaloTemplate = String(zaloConfig.template || "");
-  const templateWithOrderLink = zaloTemplate.includes("{{order_link}}") ? zaloTemplate : `${zaloTemplate}\n\uD83D\uDD0E Xem l\u1EA1i \u0111\u01A1n h\u00E0ng: {{order_link}}`;
+  const templateWithOrderLink = zaloTemplate.includes("{{order_link}}") ? zaloTemplate : `${zaloTemplate}\n🔎 Xem lại đơn hàng: {{order_link}}`;
   const orderMessage = renderZaloTemplate(templateWithOrderLink, {
     customer_name: order?.customerName || "Khách",
     phone: order?.customerPhone || order?.phone || "",
@@ -57,7 +67,31 @@ export default function OrderSuccess({
     note: order?.note || "",
     order_link: orderLink
   });
-  const zaloUrl = buildZaloLink(zaloConfig.phone || rawZaloPhone, orderMessage);
+  const effectiveZaloPhone = String(zaloConfig.phone || "").replace(/\D/g, "");
+  const canOpenZalo = Boolean(effectiveZaloPhone) && !isZaloConfigLoading;
+  const zaloUrl = canOpenZalo ? buildZaloLink(effectiveZaloPhone, orderMessage) : "#";
+  useEffect(() => {
+    let disposed = false;
+    setIsZaloConfigLoading(true);
+    loadZaloConfigAsync(rawZaloPhone).then(nextConfig => {
+      if (disposed) return;
+      setZaloConfig(nextConfig || {
+        phone: rawZaloPhone,
+        template: ""
+      });
+    }).catch(() => {
+      if (disposed) return;
+      setZaloConfig({
+        phone: rawZaloPhone,
+        template: ""
+      });
+    }).finally(() => {
+      if (!disposed) setIsZaloConfigLoading(false);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [rawZaloPhone]);
   useEffect(() => {
     if (isConfirmed || hasOpenedZalo) return undefined;
     const handleBeforeUnload = event => {
@@ -71,31 +105,51 @@ export default function OrderSuccess({
   async function copyOrderText(showAlert = false) {
     try {
       await navigator.clipboard.writeText(orderMessage);
-      if (showAlert) alert("Đã copy lại nội dung đơn. Bạn mở Zalo và dán vào khung chat quán nhé.");
+      if (showAlert) {
+        setCopyPopup({
+          open: true,
+          title: "Đã copy nội dung đơn",
+          message: "Bạn mở Zalo, chạm vào ô chat của quán rồi chọn Dán và Gửi.",
+          tone: "success"
+        });
+      }
     } catch {
-      if (showAlert) alert("Trình duyệt không cho copy tự động. Bạn hãy mở lại trang đơn và thử lại nhé.");
+      if (showAlert) {
+        setCopyPopup({
+          open: true,
+          title: "Không thể copy tự động",
+          message: "Bạn thử lại lần nữa hoặc copy thủ công từ màn hình đơn hàng.",
+          tone: "error"
+        });
+      }
     }
   }
   async function copyOrderForZalo() {
-    setHasOpenedZalo(true);
+    if (!canOpenZalo) return;
     await copyOrderText(false);
+    confirmCurrentOrder();
+  }
+  function reopenZalo() {
+    if (!canOpenZalo) return;
+    setHasOpenedZalo(true);
+    copyOrderText(false);
   }
   function markZaloSent() {
     confirmCurrentOrder();
   }
-  return /*#__PURE__*/_jsx("section", {
+  return /*#__PURE__*/_jsxs("section", {
     className: "grid min-h-[calc(100vh-96px)] place-items-center px-4",
-    children: /*#__PURE__*/_jsxs("div", {
+    children: [/*#__PURE__*/_jsxs("div", {
       className: "w-full rounded-[30px] bg-success p-7 text-center shadow-soft",
       children: [/*#__PURE__*/_jsx("div", {
         className: `mx-auto grid h-24 w-24 place-items-center rounded-[28px] text-3xl font-black ${isConfirmed ? "bg-green-100 text-green-600" : "bg-orange-100 text-orange-600"}`,
         children: isConfirmed ? "OK" : "..."
       }), /*#__PURE__*/_jsx("h1", {
         className: `mt-6 text-2xl font-black ${isConfirmed ? "text-green-700" : "text-orange-700"}`,
-        children: isConfirmed ? "Đơn hàng đã được gửi xác nhận" : "Còn 1 bước để quán nhận đơn"
+        children: isConfirmed ? "Đơn hàng đã được gửi xác nhận" : "Còn 1 Bước Nữa Để Quán Nhận Đơn"
       }), /*#__PURE__*/_jsx("p", {
         className: "mt-2 text-sm font-bold text-brown/70",
-        children: isConfirmed ? "Bạn đã mở Zalo để gửi thông tin đơn cho quán." : "Bạn cần gửi tin nhắn Zalo để quán xác nhận và bắt đầu chuẩn bị món."
+        children: isConfirmed ? "Quán đã nhận thông tin đơn của bạn qua Zalo. Bạn có thể theo dõi trạng thái đơn ngay bên dưới." : "Đơn đang chờ xác nhận từ bạn"
       }), /*#__PURE__*/_jsxs("div", {
         className: "mt-6 rounded-[24px] bg-white p-5 shadow-soft",
         children: [/*#__PURE__*/_jsx("p", {
@@ -108,33 +162,48 @@ export default function OrderSuccess({
           className: "mt-4 text-sm font-semibold text-brown/65",
           children: ["Th\u1EDDi gian \u0111\u1EB7t", /*#__PURE__*/_jsx("br", {}), order?.createdAt ? new Date(order.createdAt).toLocaleString("vi-VN") : new Date().toLocaleString("vi-VN")]
         })]
-      }), !isConfirmed && /*#__PURE__*/_jsx("a", {
-        href: zaloUrl,
-        target: "_blank",
-        rel: "noreferrer",
-        onClick: copyOrderForZalo,
-        className: "mt-5 block w-full rounded-2xl bg-gradient-main py-4 text-center text-sm font-black uppercase text-white shadow-orange",
-        children: "G\u1EEDi \u0111\u01A1n qua Zalo ngay"
       }), /*#__PURE__*/_jsxs("div", {
-        className: `mt-4 rounded-[24px] border bg-white/85 p-4 text-left shadow-soft ${isConfirmed ? "border-green-200" : "border-orange-200"}`,
-        children: [!isConfirmed && /*#__PURE__*/_jsx("p", {
-          className: "mb-3 rounded-2xl bg-orange-50 px-3 py-2 text-xs text-orange-700",
-          children: "L\u01B0u \xFD: qu\xE1n ch\u1EC9 b\u1EAFt \u0111\u1EA7u chu\u1EA9n b\u1ECB m\xF3n sau khi nh\u1EADn \u0111\u01B0\u1EE3c tin nh\u1EAFn x\xE1c nh\u1EADn tr\xEAn Zalo."
-        }), /*#__PURE__*/_jsxs("div", {
-          className: "flex items-start gap-3",
-          children: [/*#__PURE__*/_jsx("span", {
-            className: `grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${isConfirmed ? "bg-green-50 text-green-600" : "bg-orange-50 text-orange-600"}`,
-            children: /*#__PURE__*/_jsx(Icon, {
-              name: "phone",
-              size: 18
-            })
+        className: `mt-4 rounded-[24px] border bg-white/90 p-4 text-left shadow-soft ${isConfirmed ? "border-green-200" : "border-orange-200"}`,
+        children: [!isConfirmed && /*#__PURE__*/_jsxs("div", {
+          className: "mb-4 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3",
+          children: [/*#__PURE__*/_jsx("p", {
+            className: "text-sm font-black text-orange-700",
+            children: "H\u01B0\u1EDBng d\u1EABn g\u1EEDi \u0111\u01A1n"
           }), /*#__PURE__*/_jsxs("div", {
-            children: [/*#__PURE__*/_jsx("h2", {
-              className: "text-sm font-black text-brown",
-              children: isConfirmed ? "Đã mở Zalo xác nhận đơn" : "Gửi Zalo để quán xác nhận đơn"
-            }), /*#__PURE__*/_jsx("p", {
-              className: "mt-1 text-xs leading-5 text-brown/60",
-              children: isConfirmed ? "Nếu bạn chưa gửi tin nhắn trong Zalo hoặc đã lỡ copy nội dung khác, hãy copy lại nội dung đơn rồi dán vào khung chat quán." : hasOpenedZalo ? "Zalo đã được mở. Sau khi gửi tin nhắn cho quán, quay lại đây và bấm nút xác nhận bên dưới." : "Bấm nút cam phía trên để mở Zalo quán. Nội dung đơn sẽ được copy sẵn, bạn chỉ cần dán và gửi cho quán."
+            className: "mt-3 grid gap-2",
+            children: [/*#__PURE__*/_jsxs("div", {
+              className: "flex items-center gap-2 rounded-xl bg-white px-3 py-2",
+              children: [/*#__PURE__*/_jsx("span", {
+                className: "grid h-6 w-6 place-items-center rounded-full bg-orange-100 text-xs font-black text-orange-700",
+                children: "1"
+              }), /*#__PURE__*/_jsxs("p", {
+                className: "text-sm font-semibold text-brown/80",
+                children: ["B\u1EA5m n\xFAt ", /*#__PURE__*/_jsx("strong", {
+                  children: "G\u1EECI X\xC1C NH\u1EACN \u0110\u01A0N"
+                }), " b\xEAn d\u01B0\u1EDBi."]
+              })]
+            }), /*#__PURE__*/_jsxs("div", {
+              className: "flex items-center gap-2 rounded-xl bg-white px-3 py-2",
+              children: [/*#__PURE__*/_jsx("span", {
+                className: "grid h-6 w-6 place-items-center rounded-full bg-orange-100 text-xs font-black text-orange-700",
+                children: "2"
+              }), /*#__PURE__*/_jsx("p", {
+                className: "text-sm font-semibold text-brown/80",
+                children: "Khi Zalo m\u1EDF ra, ch\u1EA1m v\xE0o \xF4 chat c\u1EE7a qu\xE1n."
+              })]
+            }), /*#__PURE__*/_jsxs("div", {
+              className: "flex items-center gap-2 rounded-xl bg-white px-3 py-2",
+              children: [/*#__PURE__*/_jsx("span", {
+                className: "grid h-6 w-6 place-items-center rounded-full bg-orange-100 text-xs font-black text-orange-700",
+                children: "3"
+              }), /*#__PURE__*/_jsxs("p", {
+                className: "text-sm font-semibold text-brown/80",
+                children: ["Ch\u1ECDn ", /*#__PURE__*/_jsx("strong", {
+                  children: "D\xE1n"
+                }), " r\u1ED3i b\u1EA5m ", /*#__PURE__*/_jsx("strong", {
+                  children: "G\u1EEDi"
+                }), " l\xE0 xong."]
+              })]
             })]
           })]
         }), isConfirmed ? /*#__PURE__*/_jsxs("div", {
@@ -147,6 +216,7 @@ export default function OrderSuccess({
             href: zaloUrl,
             target: "_blank",
             rel: "noreferrer",
+            onClick: reopenZalo,
             className: "rounded-2xl bg-orange-50 px-3 py-3 text-center text-xs font-black text-orange-600",
             children: "M\u1EDF l\u1EA1i Zalo"
           })]
@@ -162,12 +232,21 @@ export default function OrderSuccess({
               className: "w-full rounded-2xl border border-orange-100 bg-orange-50 px-3 py-3 text-xs font-black text-orange-600",
               children: "Copy l\u1EA1i n\u1ED9i dung \u0111\u01A1n"
             })]
-          }) : /*#__PURE__*/_jsx("p", {
-            className: "rounded-2xl bg-cream px-3 py-3 text-xs font-semibold leading-5 text-brown/60",
-            children: "N\xFAt x\xE1c nh\u1EADn s\u1EBD hi\u1EC7n sau khi b\u1EA1n b\u1EA5m m\u1EDF Zalo, \u0111\u1EC3 tr\xE1nh qu\xEAn g\u1EEDi \u0111\u01A1n cho qu\xE1n."
-          })
+          }) : null
         })]
-      }), isConfirmed && /*#__PURE__*/_jsxs(_Fragment, {
+      }), !isConfirmed && (canOpenZalo ? /*#__PURE__*/_jsx("a", {
+        href: zaloUrl,
+        target: "_blank",
+        rel: "noreferrer",
+        onClick: copyOrderForZalo,
+        className: "mt-5 block w-full rounded-2xl bg-gradient-main py-4 text-center text-sm font-black uppercase tracking-wide text-white shadow-orange",
+        children: "G\u1EECI X\xC1C NH\u1EACN \u0110\u01A0N"
+      }) : /*#__PURE__*/_jsx("button", {
+        type: "button",
+        disabled: true,
+        className: "mt-5 block w-full cursor-wait rounded-2xl bg-brown/30 py-4 text-center text-sm font-black uppercase text-white shadow-orange",
+        children: isZaloConfigLoading ? "Đang lấy số Zalo..." : "Chưa có số Zalo quán"
+      })), isConfirmed && /*#__PURE__*/_jsxs(_Fragment, {
         children: [/*#__PURE__*/_jsx("button", {
           onClick: () => navigate("tracking", "orders"),
           className: "mt-6 w-full rounded-2xl bg-green-600 py-4 text-sm font-black uppercase text-white",
@@ -178,6 +257,34 @@ export default function OrderSuccess({
           children: "Mua l\u1EA1i \u0111\u01A1n n\xE0y"
         })]
       })]
-    })
+    }), copyPopup.open && /*#__PURE__*/_jsx("div", {
+      className: "fixed inset-0 z-[200] grid place-items-center bg-black/35 px-4",
+      children: /*#__PURE__*/_jsxs("div", {
+        className: "w-full max-w-[360px] rounded-[24px] bg-white p-5 shadow-soft",
+        children: [/*#__PURE__*/_jsx("div", {
+          className: `grid h-12 w-12 place-items-center rounded-2xl ${copyPopup.tone === "error" ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`,
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: copyPopup.tone === "error" ? "x" : "check",
+            size: 20
+          })
+        }), /*#__PURE__*/_jsx("h3", {
+          className: "mt-3 text-lg font-black text-brown",
+          children: copyPopup.title
+        }), /*#__PURE__*/_jsx("p", {
+          className: "mt-2 text-sm font-semibold leading-6 text-brown/75",
+          children: copyPopup.message
+        }), /*#__PURE__*/_jsx("button", {
+          type: "button",
+          onClick: () => setCopyPopup({
+            open: false,
+            title: "",
+            message: "",
+            tone: "success"
+          }),
+          className: "mt-5 w-full rounded-2xl bg-gradient-main py-3 text-sm font-black uppercase text-white",
+          children: "\u0110\xE3 hi\u1EC3u"
+        })]
+      })
+    })]
   });
 }

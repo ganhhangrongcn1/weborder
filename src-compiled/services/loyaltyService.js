@@ -201,6 +201,133 @@ export function applyOrderLoyalty({
   return saved;
 }
 
+export async function applyOrderLoyaltyAsync({
+  phone,
+  orderId,
+  amount,
+  createdAt = new Date().toISOString(),
+  promoSource = "",
+  promoVoucherId = "",
+  promoCode = "",
+  pointsDiscount = 0,
+  orderStatus = ""
+}) {
+  const key = getCustomerKey(phone);
+  if (!key || !orderId) return loyaltyByPhoneStorage.getByPhone(key);
+
+  const phoneLoyalty = normalizeLoyaltyData(
+    await loyaltyRepository.getByPhoneAsync(key, defaultLoyaltyData)
+  );
+  const pointHistory = Array.isArray(phoneLoyalty.pointHistory) ? phoneLoyalty.pointHistory : [];
+  const normalizedStatus = String(orderStatus || "").toLowerCase();
+  const isSettlementDone = ["done", "completed", "hoan tat", "hoàn tất"].includes(normalizedStatus);
+  const alreadyEarned = pointHistory.some((entry) => {
+    return String(entry?.orderId || "") === String(orderId) && String(entry?.type || "").toUpperCase() === "ORDER_EARN";
+  });
+  const pointsEarned = isSettlementDone && !alreadyEarned ? calculateOrderPoints(amount) : 0;
+  const spendPoints = Math.max(0, Number(pointsDiscount || 0));
+  const alreadySpent = pointHistory.some((entry) => {
+    return String(entry?.orderId || "") === String(orderId) && String(entry?.type || "").toUpperCase() === "ORDER_SPEND";
+  });
+  const pointEntry = {
+    id: `point-${orderId}`,
+    type: "ORDER_EARN",
+    orderId,
+    points: pointsEarned,
+    amount: Number(amount || 0),
+    createdAt,
+    note: "Tich diem tu don hang",
+    title: `Tich diem don ${orderId}`
+  };
+  const spendEntry = {
+    id: `point-spend-${orderId}`,
+    type: "ORDER_SPEND",
+    orderId,
+    points: -spendPoints,
+    amount: Number(amount || 0),
+    createdAt,
+    note: "Dung diem khi thanh toan",
+    title: `Dung diem don ${orderId}`
+  };
+  const nextVoucherHistory = promoSource === "loyalty"
+    ? (phoneLoyalty.voucherHistory || []).map((voucher) => {
+        const sameVoucher = String(voucher.id || "") === String(promoVoucherId || "") || String(voucher.code || "").toUpperCase() === String(promoCode || "").toUpperCase();
+        return sameVoucher ? { ...voucher, used: true, usedAt: createdAt, orderCode: orderId } : voucher;
+      })
+    : phoneLoyalty.voucherHistory || [];
+  const nextPointHistory = [
+    ...(alreadyEarned || pointsEarned <= 0 ? [] : [pointEntry]),
+    ...(alreadySpent || spendPoints <= 0 ? [] : [spendEntry]),
+    ...pointHistory
+  ];
+  const nextTotalPoints = Math.max(
+    0,
+    Number(phoneLoyalty.totalPoints || 0) + pointsEarned - (alreadySpent ? 0 : spendPoints)
+  );
+  const nextPhoneLoyalty = {
+    ...phoneLoyalty,
+    phone: key,
+    totalPoints: nextTotalPoints,
+    pointHistory: nextPointHistory,
+    voucherHistory: nextVoucherHistory
+  };
+
+  const saved = await loyaltyRepository.saveByPhoneAsync(key, nextPhoneLoyalty, defaultLoyaltyData);
+  const remoteEventTasks = [];
+  if (!alreadyEarned && pointsEarned > 0) {
+    remoteEventTasks.push(
+      loyaltyRepository.appendEventByPhoneAsync(
+        key,
+        {
+          entryType: "ORDER_EARN",
+          points: pointsEarned,
+          orderId,
+          amount: Number(amount || 0),
+          title: pointEntry.title,
+          note: pointEntry.note,
+          createdAt,
+          metadata: pointEntry
+        },
+        defaultLoyaltyData
+      )
+    );
+  }
+  if (!alreadySpent && spendPoints > 0) {
+    remoteEventTasks.push(
+      loyaltyRepository.appendEventByPhoneAsync(
+        key,
+        {
+          entryType: "ORDER_SPEND",
+          points: -spendPoints,
+          orderId,
+          amount: Number(amount || 0),
+          title: spendEntry.title,
+          note: spendEntry.note,
+          createdAt,
+          metadata: spendEntry
+        },
+        defaultLoyaltyData
+      )
+    );
+  }
+  if (remoteEventTasks.length) {
+    await Promise.allSettled(remoteEventTasks);
+  }
+  if (promoSource === "loyalty" && (promoVoucherId || promoCode)) {
+    await loyaltyRepository.markVoucherUsedByPhoneAsync(
+      key,
+      {
+        voucherId: promoVoucherId,
+        voucherCode: promoCode,
+        orderId,
+        usedAt: createdAt
+      },
+      defaultLoyaltyData
+    );
+  }
+  return saved;
+}
+
 export function reconcileLoyaltyFromOrders(phone, orderStorage) {
   const key = getCustomerKey(phone);
   if (!key) return defaultLoyaltyData;

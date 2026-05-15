@@ -1,7 +1,11 @@
 import { getCustomerKey } from "./storageService.js";
 import { orderRepository } from "./repositories/orderRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
-import { applyOrderLoyalty, calculateOrderPoints, getLoyaltyRuleConfig } from "./loyaltyService.js";
+import { applyOrderLoyalty, applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfig } from "./loyaltyService.js";
+
+function getOrderPhoneForLoyalty(order = {}) {
+  return order.phone || order.customerPhone || order.customerPhoneKey || order.rawCustomerPhone || "";
+}
 
 export const orderStorage = {
   getAllByPhone() {
@@ -60,7 +64,7 @@ export const orderStorage = {
       const becameDone = !["done", "completed", "hoàn tất"].includes(prevStatus) && ["done", "completed", "hoàn tất"].includes(nextStatus);
       if (becameDone) {
         applyOrderLoyalty({
-          phone: updatedOrder.phone || updatedOrder.customerPhone,
+          phone: getOrderPhoneForLoyalty(updatedOrder),
           orderId: updatedOrder.orderCode || updatedOrder.id,
           amount: Number(updatedOrder.subtotal ?? updatedOrder.pointsBaseAmount ?? updatedOrder.totalAmount ?? updatedOrder.total ?? 0),
           createdAt: updatedOrder.createdAt || new Date().toISOString(),
@@ -110,8 +114,8 @@ export const orderStorage = {
     const nextStatus = String(updatedOrder?.status || "").toLowerCase();
     const becameDone = !["done", "completed", "hoàn tất"].includes(prevStatus) && ["done", "completed", "hoàn tất"].includes(nextStatus);
     if (becameDone) {
-      applyOrderLoyalty({
-        phone: updatedOrder.phone || updatedOrder.customerPhone,
+      await applyOrderLoyaltyAsync({
+        phone: getOrderPhoneForLoyalty(updatedOrder),
         orderId: updatedOrder.orderCode || updatedOrder.id,
         amount: Number(updatedOrder.subtotal ?? updatedOrder.pointsBaseAmount ?? updatedOrder.totalAmount ?? updatedOrder.total ?? 0),
         createdAt: updatedOrder.createdAt || new Date().toISOString(),

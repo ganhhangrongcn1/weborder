@@ -485,6 +485,7 @@ export default function Checkout({
       onSelectAddress: handleSelectAddress,
       onClose: () => setIsAddressModalOpen(false),
       deliveryOrigin: deliveryOrigin,
+      shippingConfig: shippingConfig,
       onSave: nextInfo => {
         handleSaveAddress(nextInfo);
         setIsAddressModalOpen(false);
