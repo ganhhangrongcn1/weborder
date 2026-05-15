@@ -3,6 +3,25 @@ import { createPortal } from "react-dom";
 import Icon from "../../../components/Icon.jsx";
 import { getBranchHours, getClosingSoonText } from "../homeHelpers.js";
 
+function getNowMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+function isBranchOpenNow(branch) {
+  const { openMinutes, closeMinutes } = getBranchHours(branch);
+  if (openMinutes === null || closeMinutes === null) return true;
+
+  const nowMinutes = getNowMinutes();
+  if (openMinutes === closeMinutes) return true;
+
+  if (openMinutes < closeMinutes) {
+    return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+  }
+
+  return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
+}
+
 export default function HomeBranchPlannerModal({
   open,
   onBackdropClose,
@@ -31,6 +50,10 @@ export default function HomeBranchPlannerModal({
 
   if (!open) return null;
 
+  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId) || null;
+  const selectedBranchOpen = selectedBranch ? isBranchOpenNow(selectedBranch) : true;
+  const isConfirmDisabled = disabledConfirm || !selectedBranchOpen;
+
   return createPortal(
     <div
       className="branch-picker-overlay"
@@ -52,29 +75,39 @@ export default function HomeBranchPlannerModal({
         </div>
 
         <div className="branch-picker-list">
-          {branches.map((branch) => (
-            <button
-              key={branch.id}
-              type="button"
-              onClick={() => onSelectBranch(branch.id)}
-              className={`branch-card ${selectedBranchId === branch.id ? "branch-card-active" : ""}`}
-            >
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                <Icon name={iconName} size={18} />
-              </span>
-              <span className="min-w-0 flex-1 text-left">
-                <strong>{branch.name}</strong>
-                <small>{branch.address}</small>
-                <em>Giờ hoạt động: {getBranchHours(branch).label}</em>
-                {getClosingSoonText(branch) ? <small className="branch-closing-warning">{getClosingSoonText(branch)}</small> : null}
-              </span>
-              <span className="branch-radio">{selectedBranchId === branch.id ? "✓" : ""}</span>
-            </button>
-          ))}
+          {branches.map((branch) => {
+            const openNow = isBranchOpenNow(branch);
+            const closingSoonText = openNow ? getClosingSoonText(branch) : "";
+
+            return (
+              <button
+                key={branch.id}
+                type="button"
+                onClick={() => {
+                  if (!openNow) return;
+                  onSelectBranch(branch.id);
+                }}
+                className={`branch-card ${selectedBranchId === branch.id ? "branch-card-active" : ""} ${openNow ? "" : "branch-card-closed"}`}
+                disabled={!openNow}
+              >
+                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
+                  <Icon name={iconName} size={18} />
+                </span>
+                <span className="min-w-0 flex-1 text-left">
+                  <strong>{branch.name}</strong>
+                  <small>{branch.address}</small>
+                  <em>Giờ hoạt động: {getBranchHours(branch).label}</em>
+                  {!openNow ? <small className="branch-closed-warning">Chi nhánh đã đóng cửa.</small> : null}
+                  {closingSoonText ? <small className="branch-closing-warning">{closingSoonText}</small> : null}
+                </span>
+                <span className="branch-radio">{selectedBranchId === branch.id ? "✓" : ""}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="branch-picker-footer">
-          <button onClick={onConfirm} className="cta w-full" disabled={disabledConfirm}>{confirmLabel}</button>
+          <button onClick={onConfirm} className="cta w-full" disabled={isConfirmDisabled}>{confirmLabel}</button>
         </div>
       </section>
     </div>,

@@ -275,6 +275,27 @@
   background: linear-gradient(180deg, rgba(255, 250, 243, 0.76), #fffaf3 28%);
 }
 
+.branch-card.branch-card-closed {
+  opacity: 0.6;
+  filter: saturate(0.6);
+  cursor: not-allowed;
+}
+
+.branch-picker-list .branch-card:disabled {
+  pointer-events: none;
+}
+
+.branch-card.branch-card-closed .branch-radio {
+  border-color: rgba(100, 116, 139, 0.36);
+  color: rgba(100, 116, 139, 0.8);
+}
+
+.branch-card .branch-closed-warning {
+  margin-top: 6px;
+  color: #b45309;
+  font-weight: 900;
+}
+
 @media (max-width: 480px) {
   .branch-picker-overlay {
     align-items: flex-end;
