@@ -191,6 +191,14 @@ export default function Checkout({
   useEffect(() => {
     syncSelectedDeliveryBranch();
   }, [syncSelectedDeliveryBranch, deliveryEligibleBranches, selectedDeliveryBranchId]);
+
+  useEffect(() => {
+    const presetDeliveryBranchId = String(checkoutPreset?.selectedDeliveryBranch || "");
+    if (!presetDeliveryBranchId) return;
+    if (presetDeliveryBranchId === String(selectedDeliveryBranchId || "")) return;
+    setSelectedDeliveryBranchId(presetDeliveryBranchId);
+  }, [checkoutPreset?.selectedDeliveryBranch, selectedDeliveryBranchId]);
+
   useCheckoutGiftPromotions({
     smartPromotions,
     subtotal,

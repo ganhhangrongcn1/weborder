@@ -1,0 +1,82 @@
+.loyalty-voucher-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(58, 31, 20, 0.46);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.loyalty-voucher-card {
+  position: relative;
+  width: min(420px, calc(100vw - 24px));
+  border: 1px solid rgba(255, 122, 0, 0.22);
+  border-radius: 26px;
+  background: #fffaf3;
+  padding: 20px 16px 16px;
+  box-shadow: 0 20px 60px rgba(58, 31, 20, 0.24);
+}
+
+.loyalty-voucher-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff1e6;
+  color: #ff6a00;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.loyalty-voucher-pill {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #fff1e6;
+  padding: 6px 10px;
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.loyalty-voucher-card h2 {
+  margin-top: 10px;
+  color: #3a1f14;
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.loyalty-voucher-value {
+  margin-top: 6px;
+  color: #ff6a00;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.loyalty-voucher-body {
+  margin: 14px 0 16px;
+  border: 1px solid rgba(58, 31, 20, 0.08);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 12px;
+  color: #3a1f14;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.loyalty-voucher-body p + p {
+  margin-top: 6px;
+}
+
+.loyalty-voucher-body strong {
+  color: #c2410c;
+}
+
