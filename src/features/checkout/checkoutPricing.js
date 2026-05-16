@@ -178,7 +178,8 @@ export function calculateCheckoutPricing({
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
   const redeemPointUnit = Math.max(1, Number(loyaltyRule?.redeemPointUnit || 1));
   const redeemValue = Math.max(1, Number(loyaltyRule?.redeemValue || 1));
-  const earnedPreviewPoints = Math.floor((Number(subtotal || 0) / currencyPerPoint) * pointPerUnit);
+  const pointsBaseAmount = Math.max(Number(subtotal || 0) - Number(promoDiscount || 0), 0);
+  const earnedPreviewPoints = Math.floor((pointsBaseAmount / currencyPerPoint) * pointPerUnit);
   const maxDiscountFromPoints = Math.floor(Number(availablePoints || 0) / redeemPointUnit) * redeemValue;
   const pointsDiscount = usePoints ? Math.min(maxDiscountFromPoints, Math.max(subtotal + checkoutShip - promoDiscount, 0)) : 0;
   const checkoutTotal = Math.max(subtotal - promoDiscount - pointsDiscount + checkoutShip, 0);
