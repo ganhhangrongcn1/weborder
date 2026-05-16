@@ -8,9 +8,8 @@ import HomeFeaturedProducts from "../../pages/customer/home/HomeFeaturedProducts
 import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { homeText, optionModalText } from "../../data/uiText.js";
-import { loadShippingConfig } from "../../services/shippingService.js";
-import { formatMoney } from "../../utils/format.js";
 import { closeOnlyOnBackdrop } from "../../utils/uiEvents.js";
+import { getNearestPickupClock, getTodayInputDate } from "../../utils/dateTimeDefaults.js";
 import {
   buildHomeCategories,
   formatCountdown,
@@ -98,9 +97,7 @@ export default function Home({
   buildDeliveryDisabledNotice,
   buildPickupDisabledNotice,
   buildOutOfHoursNotice,
-  setActiveCategory,
-  userProfile,
-  isRegisteredCustomer
+  setActiveCategory
 }) {
   const t = homeText;
   const bannerRef = useRef(null);
@@ -113,8 +110,8 @@ export default function Home({
   const [pickupBranch, setPickupBranch] = useState(checkoutPreset?.selectedBranch || "phu-hoa");
   const [selectedDeliveryBranch, setSelectedDeliveryBranch] = useState(checkoutPreset?.selectedDeliveryBranch || "");
   const [pickupMode, setPickupMode] = useState(checkoutPreset?.pickupMode || "soon");
-  const [pickupDate, setPickupDate] = useState(checkoutPreset?.pickupDate || "2026-05-02");
-  const [pickupClock, setPickupClock] = useState(checkoutPreset?.pickupClock || "12:30");
+  const [pickupDate, setPickupDate] = useState(checkoutPreset?.pickupDate || getTodayInputDate());
+  const [pickupClock, setPickupClock] = useState(checkoutPreset?.pickupClock || getNearestPickupClock());
   const [homeCategory, setHomeCategory] = useState("");
   const [showAllHomeProducts, setShowAllHomeProducts] = useState(false);
   const [homePopupOpen, setHomePopupOpen] = useState(false);
@@ -125,15 +122,9 @@ export default function Home({
   const categorySectionRef = useRef(null);
   const featuredProductsRef = useRef(null);
 
-  const displayName = userProfile?.name?.trim();
-  const greeting = isRegisteredCustomer && displayName ? `${t.morning}, ${displayName} 👋` : `${t.hello} 👋`;
   const {
     flashProducts,
     mainFlashProduct,
-    homeShippingConfig,
-    homeFreeShipThreshold,
-    homeFreeShipTitle,
-    homeFreeShipText,
     banners,
     heroBlockEnabled,
     cashbackBlock,
@@ -365,6 +356,10 @@ export default function Home({
     </section>
   );
 }
+
+
+
+
 
 
 

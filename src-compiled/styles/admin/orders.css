@@ -372,6 +372,13 @@
   color: #ea580c;
 }
 
+.admin-order-money small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.35;
+}
+
 .admin-order-status-badge,
 .admin-order-type-badge {
   display: inline-flex;

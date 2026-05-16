@@ -1,5 +1,6 @@
 ﻿import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.jsx";
+import { getSettlement } from "../orders/orderManager.utils.js";
 import {
   AdminBadge,
   AdminInput,
@@ -397,12 +398,13 @@ export default function AdminDashboardSection({
           {filteredRecentOrders.length ? (
             <AdminTable className="admin-dashboard-table">
               <AdminTableHead>
-                <span>Mã đơn</span><span>Nguồn</span><span>Khách</span><span>Giờ</span><span>Chi nhánh</span><span>Tổng</span><span>Trạng thái</span>
+                <span>Mã đơn</span><span>Nguồn</span><span>Khách</span><span>Giờ</span><span>Chi nhánh</span><span>Doanh thu thực nhận</span><span>Trạng thái</span>
               </AdminTableHead>
               <AdminTableBody>
                 {filteredRecentOrders.map((order) => {
                   const status = getOrderStatusMeta(order.status);
                   const source = getOrderSourceMeta(order);
+                  const settlement = getSettlement(order);
                   return (
                     <AdminTableRow key={order.id || order.orderCode}>
                       <span className="admin-dashboard-order-code"><strong>{order.orderCode || order.id}</strong></span>
@@ -410,7 +412,7 @@ export default function AdminDashboardSection({
                       <span>{order.orderCustomerName || order.customerName || order.phone || "Khách lẻ"}</span>
                       <span>{formatOrderTime(order.createdAt)}</span>
                       <span>{getOrderBranch(order)}</span>
-                      <strong>{formatMoney(Number(order.totalAmount || 0))}</strong>
+                      <strong>{formatMoney(Number(settlement?.netRevenue || 0))}</strong>
                       <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
                     </AdminTableRow>
                   );
@@ -425,3 +427,6 @@ export default function AdminDashboardSection({
     </div>
   );
 }
+
+
+

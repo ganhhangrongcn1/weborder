@@ -1,5 +1,6 @@
 import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.js";
+import { getSettlement } from "../orders/orderManager.utils.js";
 import { AdminBadge, AdminInput, AdminPanel, AdminSelect, AdminStatCard, AdminTable, AdminTableBody, AdminTableHead, AdminTableRow } from "../ui/index.js";
 import { jsxs as _jsxs, jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
 function getOrderStatusMeta(status) {
@@ -601,7 +602,7 @@ export default function AdminDashboardSection({
             }), /*#__PURE__*/_jsx("span", {
               children: "Chi nh\xE1nh"
             }), /*#__PURE__*/_jsx("span", {
-              children: "T\u1ED5ng"
+              children: "Doanh thu th\u1EF1c nh\u1EADn"
             }), /*#__PURE__*/_jsx("span", {
               children: "Tr\u1EA1ng th\xE1i"
             })]
@@ -609,6 +610,7 @@ export default function AdminDashboardSection({
             children: filteredRecentOrders.map(order => {
               const status = getOrderStatusMeta(order.status);
               const source = getOrderSourceMeta(order);
+              const settlement = getSettlement(order);
               return /*#__PURE__*/_jsxs(AdminTableRow, {
                 children: [/*#__PURE__*/_jsx("span", {
                   className: "admin-dashboard-order-code",
@@ -626,7 +628,7 @@ export default function AdminDashboardSection({
                 }), /*#__PURE__*/_jsx("span", {
                   children: getOrderBranch(order)
                 }), /*#__PURE__*/_jsx("strong", {
-                  children: formatMoney(Number(order.totalAmount || 0))
+                  children: formatMoney(Number(settlement?.netRevenue || 0))
                 }), /*#__PURE__*/_jsx(AdminBadge, {
                   tone: status.tone,
                   children: status.label
