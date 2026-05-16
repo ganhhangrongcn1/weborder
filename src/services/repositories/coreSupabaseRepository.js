@@ -23,6 +23,50 @@ function normalizePhone(phone) {
   return getCustomerKey(phone || "");
 }
 
+function readOrderItemMetadata(item = {}) {
+  if (item?.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)) {
+    return item.metadata;
+  }
+  return {};
+}
+
+function mapOrderItemRowToCartItem(item = {}) {
+  const metadata = readOrderItemMetadata(item);
+  const metadataImage = String(
+    metadata.image ||
+      metadata.thumbnail ||
+      metadata.thumbnailUrl ||
+      metadata.thumbnail_url ||
+      metadata.imageUrl ||
+      metadata.image_url ||
+      metadata.productImage ||
+      metadata.product_image ||
+      metadata.photo ||
+      metadata.img ||
+      ""
+  );
+  return {
+    ...metadata,
+    id: String(item.product_id || metadata.id || ""),
+    productId: String(item.product_id || metadata.productId || ""),
+    product_id: String(item.product_id || metadata.product_id || ""),
+    name: item.product_name || metadata.name || "",
+    quantity: Number(item.quantity || metadata.quantity || 1),
+    price: Number(item.unit_price || metadata.price || 0),
+    unitTotal: Number(item.unit_price || metadata.unitTotal || metadata.price || 0),
+    lineTotal: Number(
+      item.line_total ||
+        metadata.lineTotal ||
+        Number(item.quantity || metadata.quantity || 1) * Number(item.unit_price || metadata.unitTotal || metadata.price || 0)
+    ),
+    spice: item.spice || metadata.spice || "",
+    note: item.note || metadata.note || "",
+    image: metadataImage,
+    toppings: Array.isArray(item.toppings) ? item.toppings : Array.isArray(metadata.toppings) ? metadata.toppings : [],
+    optionGroups: Array.isArray(item.option_groups) ? item.option_groups : Array.isArray(metadata.optionGroups) ? metadata.optionGroups : []
+  };
+}
+
 function getDateKeyFromIso(value) {
   const iso = String(value || "");
   return iso.length >= 10 ? iso.slice(0, 10) : "";
@@ -320,18 +364,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
   const itemMap = new Map();
   (items || []).forEach((item) => {
     const list = itemMap.get(item.order_id) || [];
-    list.push({
-      id: item.product_id || "",
-      name: item.product_name || "",
-      quantity: Number(item.quantity || 1),
-      price: Number(item.unit_price || 0),
-      unitTotal: Number(item.unit_price || 0),
-      lineTotal: Number(item.line_total || 0),
-      spice: item.spice || "",
-      note: item.note || "",
-      toppings: Array.isArray(item.toppings) ? item.toppings : [],
-      optionGroups: Array.isArray(item.option_groups) ? item.option_groups : []
-    });
+    list.push(mapOrderItemRowToCartItem(item));
     itemMap.set(item.order_id, list);
   });
 
@@ -402,18 +435,7 @@ async function readOrdersForPhoneFromTable(phone) {
   const itemMap = new Map();
   items.forEach((item) => {
     const list = itemMap.get(item.order_id) || [];
-    list.push({
-      id: item.product_id || "",
-      name: item.product_name || "",
-      quantity: Number(item.quantity || 1),
-      price: Number(item.unit_price || 0),
-      unitTotal: Number(item.unit_price || 0),
-      lineTotal: Number(item.line_total || 0),
-      spice: item.spice || "",
-      note: item.note || "",
-      toppings: Array.isArray(item.toppings) ? item.toppings : [],
-      optionGroups: Array.isArray(item.option_groups) ? item.option_groups : []
-    });
+    list.push(mapOrderItemRowToCartItem(item));
     itemMap.set(item.order_id, list);
   });
 

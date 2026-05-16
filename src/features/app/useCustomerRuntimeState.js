@@ -154,7 +154,8 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     freeshipMinSubtotal,
     discount,
     reorder,
-    navigate
+    navigate,
+    catalogProducts: productState.storeProducts
   });
 
   const effectiveDeliveryZones = productState.deliveryZones.some((zone) => zone.includes("49.000") || zone.includes("3-6km"))

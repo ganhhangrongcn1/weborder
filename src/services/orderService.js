@@ -408,16 +408,67 @@ export async function createOrderAsync(params) {
   return order;
 }
 
-export function reorder(order) {
+export function reorder(order, catalogProducts = []) {
   const now = Date.now();
+  const normalizeId = (value = "") =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+  const normalizeName = (value = "") =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+
+  const safeProducts = Array.isArray(catalogProducts) ? catalogProducts : [];
+  const byId = new Map(
+    safeProducts
+      .filter((product) => product?.id)
+      .map((product) => [normalizeId(product.id), product])
+  );
+  const byName = new Map(
+    safeProducts
+      .filter((product) => String(product?.name || "").trim())
+      .map((product) => [normalizeName(product.name), product])
+  );
+  const allNamedProducts = safeProducts.filter((product) => normalizeName(product?.name || ""));
+
   return (order?.items || []).map((item, index) => {
     const quantity = item.quantity || 1;
     const unitTotal = item.unitTotal || Math.round((item.lineTotal || item.price || 0) / quantity);
+    const normalizedItemName = normalizeName(item.name);
+    const matchedById =
+      byId.get(normalizeId(item.id)) ||
+      byId.get(normalizeId(item.productId)) ||
+      byId.get(normalizeId(item.product_id));
+    const matchedByName = byName.get(normalizedItemName);
+    const matchedByLooseName = matchedById || matchedByName
+      ? null
+      : allNamedProducts.find((product) => {
+        const productName = normalizeName(product?.name || "");
+        if (!productName || !normalizedItemName) return false;
+        return productName.includes(normalizedItemName) || normalizedItemName.includes(productName);
+      }) || null;
+    const matchedProduct = matchedById || matchedByName || matchedByLooseName || null;
+    const resolvedImage =
+      matchedProduct?.image ||
+      item.image ||
+      item.thumbnail ||
+      item.productImage ||
+      "";
+    const resolvedName = matchedProduct?.name || item.name;
+
     return {
       ...item,
       cartId: `${item.id || "order"}-reorder-${now}-${index}`,
+      id: matchedProduct?.id || item.id,
+      name: resolvedName,
       quantity,
       toppings: item.toppings || [],
+      image: resolvedImage,
       unitTotal,
       lineTotal: unitTotal * quantity
     };

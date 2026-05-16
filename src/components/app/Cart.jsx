@@ -26,7 +26,21 @@
               className={`checkout-cart-item ${item.category === addonCategory ? "checkout-cart-addon" : ""}`}
               style={{ cursor: isEditableItem?.(item) ? "pointer" : "default" }}
             >
-              {item.category !== addonCategory && <img src={item.image} alt={item.name} />}
+              {item.category !== addonCategory ? (
+                item.image ? (
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="grid h-[70px] w-[70px] place-items-center rounded-[18px] bg-cream text-brown/40 text-xs font-bold">
+                    No image
+                  </div>
+                )
+              ) : null}
               <div className="min-w-0 flex-1">
                 <h3>{item.name}</h3>
                 <span className="checkout-spice-pill">{item.autoGiftByPromo ? "Quà tặng" : item.spice}</span>

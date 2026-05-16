@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { orderRepository } from "../services/repositories/orderRepository.js";
 
-export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate }) {
+export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate, catalogProducts = [] }) {
   const [cart, setCartState] = useState(() => orderRepository.getCartDraft(initialCart));
 
   function getToppingsSignature(toppings = []) {
@@ -94,7 +94,7 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
   }
 
   function reorderOrder(order) {
-    const items = reorder(order);
+    const items = reorder(order, catalogProducts);
     if (!items.length) return;
     setCart(items);
     navigate("checkout", "orders");
