@@ -32,6 +32,19 @@ function getOrderBranchName(order) {
     order.branchName
   ].map((value) => String(value || "").trim()).find(Boolean) || "";
 }
+function getOrderSourceMeta(order) {
+  const source = String(order?.orderSource || order?.source || order?.channel || order?.platform || "").trim().toLowerCase();
+  if (source === "qr_counter") {
+    return {
+      label: "QR tại quầy",
+      className: "is-pickup"
+    };
+  }
+  return {
+    label: "Online",
+    className: "is-delivery"
+  };
+}
 
 function normalizeName(value) {
   return String(value || "")
@@ -66,6 +79,9 @@ function normalizeBranchKey(value) {
 
 function getOrderBranchCandidates(order) {
   return [
+    order.deliveryBranchUuid,
+    order.pickupBranchUuid,
+    order.branchUuid,
     order.deliveryBranchId,
     order.pickupBranchId,
     order.branchId,
@@ -80,7 +96,7 @@ function getOrderBranchCandidates(order) {
 }
 
 function getBranchFilterValue(branch, index) {
-  return String(branch?.id || branch?.name || `branch-${index}`);
+  return String(branch?.branch_uuid || branch?.branchUuid || branch?.id || branch?.name || `branch-${index}`);
 }
 
 function buildBranchOptions(branches = []) {
@@ -91,7 +107,17 @@ function buildBranchOptions(branches = []) {
       return {
         value: getBranchFilterValue(branch, index),
         label,
-        aliases: [getBranchFilterValue(branch, index), branch?.id, branch?.name, branch?.address].flatMap((value) => {
+        aliases: [
+          getBranchFilterValue(branch, index),
+          branch?.branch_uuid,
+          branch?.branchUuid,
+          branch?.branch_code,
+          branch?.branchCode,
+          branch?.id,
+          branch?.slug,
+          branch?.name,
+          branch?.address
+        ].flatMap((value) => {
           const raw = String(value || "").trim();
           const normalized = normalizeBranchKey(raw);
           return [raw, normalized].filter(Boolean);
@@ -314,6 +340,7 @@ function OrderList({
           const isActive = String(activeOrderId) === String(orderId);
           const nameMismatch = hasOrderNameMismatch(order, registeredCustomersByPhone);
           const settlement = getSettlement(order);
+          const sourceMeta = getOrderSourceMeta(order);
 
           return (
             <article
@@ -332,6 +359,7 @@ function OrderList({
               </div>
               <div className="admin-order-cell">
                 <FulfillmentBadge type={fulfillmentType} />
+                <small className={`admin-order-type-badge ${sourceMeta.className}`}>{sourceMeta.label}</small>
                 {branchName ? <small className="admin-order-branch-name">{branchName}</small> : null}
                 <small>{String(order.paymentMethod || "COD").toUpperCase()}</small>
               </div>
@@ -387,6 +415,7 @@ function OrderDetailPanel({
   const totalValue = Number(order.totalAmount || order.total || 0);
   const settlement = getSettlement(order);
   const branchName = getOrderBranchName(order);
+  const sourceMeta = getOrderSourceMeta(order);
   const registeredCustomer = getRegisteredCustomer(order, registeredCustomersByPhone);
   const orderCustomerName = order.orderCustomerName || order.customerName || "";
   const nameMismatch = hasOrderNameMismatch(order, registeredCustomersByPhone);
@@ -415,6 +444,10 @@ function OrderDetailPanel({
           <div className="admin-order-detail-row">
             <span>Hình thức</span>
             <FulfillmentBadge type={fulfillmentType} />
+          </div>
+          <div className="admin-order-detail-row">
+            <span>Nguồn đơn</span>
+            <strong>{sourceMeta.label}</strong>
           </div>
           {branchName ? (
             <div className="admin-order-detail-row">

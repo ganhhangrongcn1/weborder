@@ -97,6 +97,19 @@ function normalizeCategoryId(value) {
   return normalized === "Tất cả" ? "" : normalized;
 }
 
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
+}
+
+function normalizeBranchKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
 function buildFallbackToppingId(optionName = "", groupId = "") {
   const seed = `${groupId}-${optionName}`.toLowerCase();
   const slug = seed
@@ -194,7 +207,7 @@ async function readCatalogFromStandardTableInternal(key, fallback) {
         .map((row) => normalizeText(row?.name || row?.id, ""))
         .filter(Boolean);
       return list.length ? list : fallback;
-    } catch (_error) {
+    } catch {
       return fallback;
     }
   }
@@ -225,11 +238,14 @@ async function readCatalogFromStandardTableInternal(key, fallback) {
           sortOrder: normalizeNumber(row?.sort_order, index),
           ...(row?.metadata && typeof row.metadata === "object" ? row.metadata : {})
           }));
-      } catch (_error) {
+      } catch {
         // Try next schema candidate
       }
     }
     return fallback;
+  }
+  if (key === "ghr_branches") {
+    return readStructuredBranches(fallback);
   }
   if (key === "ghr_coupons") {
     return readStructuredCoupons(fallback);
@@ -251,7 +267,7 @@ export async function readCatalogFromStandardTable(key, fallback, options = {}) 
     })
     .catch((error) => {
       if (isDev) {
-        console.warn(`[catalogSupabaseRepository] fetch failed, fallback local: ${key}`, {
+        console.warn(`[catalogSupabaseRepository] fetch failed for key "${key}".`, {
           message: error?.message || String(error || "")
         });
       }
@@ -507,7 +523,7 @@ async function writeStructuredToppings(value) {
     }));
     const { error } = await client.from("toppings").upsert(withMetadata, { onConflict: "id" });
     if (error) throw error;
-  } catch (_error) {
+  } catch {
     const fallbackPayload = basePayload.map((row) => ({
       ...row,
       metadata: { kind: "standalone_topping" }
@@ -585,6 +601,60 @@ async function readStructuredCoupons(fallback) {
   }));
 }
 
+async function readStructuredBranches(fallback) {
+  const client = getRuntimeSupabaseClient();
+  if (!client) return fallback;
+
+  const selectCandidates = [
+    "id,name,address,phone,map,lat,lng,open,time,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,legacy_id,is_open,data,updated_at",
+    "id,name,address,phone,map,lat,lng,open,time,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,is_open,data,updated_at",
+    "id,name,address,phone,map,lat,lng,open,time,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,data,updated_at",
+    "id,name,address,phone,map,lat,lng,open,time,slug,branch_code,branch_uuid,data,updated_at",
+    "id,name,data,slug,branch_code,branch_uuid,updated_at",
+    "id,name,data,updated_at"
+  ];
+
+  let data = null;
+  for (const columns of selectCandidates) {
+    const { data: rows, error } = await client
+      .from("branches")
+      .select(columns)
+      .order("updated_at", { ascending: true });
+    if (error) continue;
+    data = rows;
+    break;
+  }
+
+  if (!Array.isArray(data)) return fallback;
+  if (!data.length) return fallback;
+
+  return data.map((row) => {
+    const meta = row?.data && typeof row.data === "object" ? row.data : {};
+    const rowId = row?.id ?? meta?.id ?? "";
+    return {
+      ...meta,
+      id: String(meta?.id || row?.legacy_id || row?.branch_code || rowId || ""),
+      dbId: rowId,
+      name: normalizeText(meta?.name ?? row?.name, ""),
+      address: String(meta?.address ?? row?.address ?? ""),
+      phone: String(meta?.phone ?? row?.phone ?? ""),
+      map: String(meta?.map ?? row?.map ?? ""),
+      lat: String(meta?.lat ?? row?.lat ?? ""),
+      lng: String(meta?.lng ?? row?.lng ?? ""),
+      open: normalizeBoolean(meta?.open ?? row?.open ?? row?.is_open, true),
+      time: String(meta?.time ?? row?.time ?? ""),
+      openTime: String(meta?.openTime ?? row?.open_time ?? ""),
+      closeTime: String(meta?.closeTime ?? row?.close_time ?? ""),
+      shipEnabled: normalizeBoolean(meta?.shipEnabled ?? row?.ship_enabled, true),
+      pickupEnabled: normalizeBoolean(meta?.pickupEnabled ?? row?.pickup_enabled, true),
+      slug: String(meta?.slug ?? row?.slug ?? ""),
+      branch_code: String(meta?.branch_code ?? row?.branch_code ?? ""),
+      branch_uuid: String(meta?.branch_uuid ?? row?.branch_uuid ?? ""),
+      legacy_id: String(meta?.legacy_id ?? row?.legacy_id ?? "")
+    };
+  });
+}
+
 async function writeStructuredCoupons(value) {
   const client = getRuntimeSupabaseClient();
   if (!client) return value;
@@ -630,6 +700,94 @@ async function writeStructuredCoupons(value) {
   return rows;
 }
 
+async function upsertBranchRowWithSchemaFallback(client, branchRow = {}) {
+  const mutable = { ...(branchRow || {}) };
+  const removed = new Set();
+  let attempts = 0;
+
+  while (attempts < 8) {
+    attempts += 1;
+    const { error } = await client.from("branches").upsert(mutable, { onConflict: "id" });
+    if (!error) return;
+    const code = String(error?.code || "").toLowerCase();
+    const message = String(error?.message || "").toLowerCase();
+    const canTrim =
+      code === "42703" ||
+      code === "pgrst204" ||
+      (message.includes("column") && message.includes("does not exist")) ||
+      (message.includes("could not find the") && message.includes("column"));
+    if (!canTrim) throw error;
+    const quoteMatch = String(error?.message || "").match(/column\s+"([^"]+)"/i);
+    const pgrstMatch = String(error?.message || "").match(/could not find the\s+'([^']+)'\s+column/i);
+    const missing = quoteMatch?.[1] || pgrstMatch?.[1] || "";
+    if (!missing || removed.has(missing)) throw error;
+    removed.add(missing);
+    delete mutable[missing];
+  }
+
+  throw new Error("branches_upsert_failed_after_schema_fallback");
+}
+
+async function writeStructuredBranches(value) {
+  const client = getRuntimeSupabaseClient();
+  if (!client) return value;
+  const rows = Array.isArray(value) ? value : [];
+  if (!rows.length) return rows;
+
+  const { data: existingRows, error: existingError } = await client
+    .from("branches")
+    .select("id,name,slug,branch_code,legacy_id,data");
+  if (existingError) throw existingError;
+  const existing = Array.isArray(existingRows) ? existingRows : [];
+
+  const byDbId = new Map(existing.map((row) => [String(row?.id ?? ""), row]));
+  const byBranchCode = new Map(existing.map((row) => [String(row?.branch_code || "").trim().toLowerCase(), row]).filter(([key]) => key));
+  const byLegacyId = new Map(existing.map((row) => [String(row?.legacy_id || "").trim().toLowerCase(), row]).filter(([key]) => key));
+  const bySlug = new Map(existing.map((row) => [String(row?.slug || "").trim().toLowerCase(), row]).filter(([key]) => key));
+  const byName = new Map(existing.map((row) => [normalizeBranchKey(row?.name || ""), row]).filter(([key]) => key));
+
+  for (const item of rows) {
+    const source = item && typeof item === "object" ? item : {};
+    const rawDbId = String(source?.dbId ?? source?.id ?? "").trim();
+    const rawLegacyId = String(source?.legacy_id ?? source?.id ?? "").trim();
+    const rawBranchCode = String(source?.branch_code ?? source?.branchCode ?? "").trim();
+    const rawSlug = String(source?.slug || "").trim();
+    const rawName = normalizeText(source?.name, "");
+    const normalizedName = normalizeBranchKey(rawName);
+
+    const matched =
+      byDbId.get(rawDbId) ||
+      byBranchCode.get(rawBranchCode.toLowerCase()) ||
+      byLegacyId.get(rawLegacyId.toLowerCase()) ||
+      bySlug.get(rawSlug.toLowerCase()) ||
+      byName.get(normalizedName) ||
+      null;
+
+    const dbId = matched?.id ?? (rawDbId && /^\d+$/.test(rawDbId) ? Number(rawDbId) : null);
+    if (dbId == null) continue;
+
+    const payload = {
+      id: dbId,
+      name: rawName || matched?.name || "",
+      slug: rawSlug || matched?.slug || null,
+      branch_code: rawBranchCode || matched?.branch_code || null,
+      legacy_id: rawLegacyId || matched?.legacy_id || null,
+      branch_uuid: isUuidLike(source?.branch_uuid || source?.branchUuid) ? String(source?.branch_uuid || source?.branchUuid) : (matched?.branch_uuid || null),
+      data: {
+        ...(matched?.data && typeof matched.data === "object" ? matched.data : {}),
+        ...source,
+        id: rawLegacyId || String(source?.id || ""),
+        branch_code: rawBranchCode || String(source?.branch_code || ""),
+        slug: rawSlug || String(source?.slug || "")
+      }
+    };
+
+    await upsertBranchRowWithSchemaFallback(client, payload);
+  }
+
+  return rows;
+}
+
 export async function writeCatalogToStandardTable(key, value) {
   if (!isSupabaseRuntimeReady()) return value;
   const tableName = CATALOG_TABLE_BY_KEY[key];
@@ -649,6 +807,9 @@ export async function writeCatalogToStandardTable(key, value) {
   }
   if (key === "ghr_coupons") {
     return writeStructuredCoupons(value);
+  }
+  if (key === "ghr_branches") {
+    return writeStructuredBranches(value);
   }
   return writeJsonRows(tableName, value);
 }
@@ -781,7 +942,7 @@ export function subscribeCatalogRealtime(key, onChange) {
           if (nextValue !== null && nextValue !== undefined) {
             onChange(nextValue);
           }
-        } catch (_error) {
+        } catch {
           // Keep UI running when realtime refresh fails.
         }
       }
@@ -792,7 +953,7 @@ export function subscribeCatalogRealtime(key, onChange) {
   return () => {
     try {
       client.removeChannel(channel);
-    } catch (_error) {
+    } catch {
       // noop
     }
   };

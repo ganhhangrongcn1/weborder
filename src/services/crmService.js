@@ -302,7 +302,7 @@ export async function getCustomerLoyaltyDetailAsync(phone, { limit = 50, offset 
   if (!key) return { rows: [], total: 0 };
   try {
     return await coreSupabaseRepository.readLoyaltyLedgerByPhonePaged(key, { limit, offset });
-  } catch (_error) {
+  } catch {
     return { rows: [], total: 0 };
   }
 }
@@ -373,7 +373,6 @@ function buildCustomersSnapshotFromSources({
         orders: []
       };
       const autoPoints = Math.floor((Number(customer.totalSpent || 0) / ratio.currencyPerPoint) * ratio.pointPerUnit);
-      const phoneRecord = getPhoneRecord(normalizedLoyaltyConfig.byPhone, customer.phone);
       const phoneLoyalty = normalizeLoyaltyData({
         ...defaultLoyaltyData,
         ...(loyaltyByPhone[customer.phone] || {})

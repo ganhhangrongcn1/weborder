@@ -63,7 +63,7 @@ export default function LoyaltySettings({ crmSnapshot, setCrmSnapshot, onSave })
       }));
       await Promise.resolve(onSave?.(payload));
       setSaveMessage("Đã lưu cấu hình tích điểm.");
-    } catch (_error) {
+    } catch {
       setSaveMessage("Lưu cấu hình tích điểm thất bại. Kiểm tra kết nối/Pilot policy.");
     } finally {
       setIsSaving(false);

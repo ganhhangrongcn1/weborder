@@ -44,6 +44,13 @@ function buildEndpointUrl(endpoint, params) {
   return `${endpoint}?${search.toString()}`;
 }
 
+function normalizeGoongVehicle(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (["car", "bike", "truck", "taxi", "hd"].includes(raw)) return raw;
+  if (raw === "motorcycle") return "bike";
+  return "bike";
+}
+
 export async function goongAutocomplete(keyword) {
   try {
     if (!hasGoongApiKey() || !keyword || keyword.trim().length < 3) return [];
@@ -107,7 +114,7 @@ export async function goongDistanceMatrix(origin, destination) {
     const response = await fetch(buildEndpointUrl(getEndpoint("distanceEndpoint", "/DistanceMatrix"), {
       origins: `${origin.lat},${origin.lng}`,
       destinations: `${destination.lat},${destination.lng}`,
-      vehicle: getRuntimeConfig().vehicle || "bike"
+      vehicle: normalizeGoongVehicle(getRuntimeConfig().vehicle || "bike")
     }));
     if (!response.ok) {
       console.warn("Goong distance failed", response.status, await response.text());

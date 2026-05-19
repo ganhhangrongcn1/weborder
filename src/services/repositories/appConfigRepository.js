@@ -1,4 +1,3 @@
-import { createLocalStorageAdapter } from "../adapters/localStorageAdapter.js";
 import { createRepositoryAdapter } from "./repositoryRuntime.js";
 import { shouldWriteConfigKeyToSupabase } from "./writeThroughPolicy.js";
 import { getDataSource } from "./dataSource.js";
@@ -7,15 +6,9 @@ function shouldLogPolicyBlock() {
   return Boolean(import.meta?.env?.DEV);
 }
 
-function writeLocalFallback(key, value) {
+function returnWithoutLocalWrite(key, value) {
   if (getDataSource() === "supabase") {
-    // Supabase-only mode: never persist blocked keys to local storage.
     return value;
-  }
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (_error) {
-    // Keep non-blocking behavior when localStorage is unavailable/quota-limited.
   }
   return value;
 }
@@ -25,7 +18,7 @@ function isWriteBlockedByPolicy(enforceWritePolicy, key) {
   return !shouldWriteConfigKeyToSupabase(key);
 }
 
-export function createAppConfigRepository(adapter = createLocalStorageAdapter(), options = {}) {
+export function createAppConfigRepository(adapter = createRepositoryAdapter(), options = {}) {
   const { enforceWritePolicy = false } = options;
 
   return {
@@ -37,7 +30,7 @@ export function createAppConfigRepository(adapter = createLocalStorageAdapter(),
         if (shouldLogPolicyBlock()) {
           console.info(`[appConfigRepository] blocked supabase write for key "${key}" by writeThroughPolicy.`);
         }
-        return writeLocalFallback(key, value);
+        return returnWithoutLocalWrite(key, value);
       }
       return adapter.save(key, value);
     },
@@ -57,7 +50,7 @@ export function createAppConfigRepository(adapter = createLocalStorageAdapter(),
         if (shouldLogPolicyBlock()) {
           console.info(`[appConfigRepository] blocked async supabase write for key "${key}" by writeThroughPolicy.`);
         }
-        return writeLocalFallback(key, value);
+        return returnWithoutLocalWrite(key, value);
       }
       if (adapter.saveAsync) return adapter.saveAsync(key, value);
       return adapter.save(key, value);

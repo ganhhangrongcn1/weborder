@@ -12,7 +12,6 @@ export function createNavigationActions({
   setIsOptionModalOpen,
   storeProducts,
   spiceLevels,
-  storeToppings,
   getDefaultOrderChoices,
   getStoreBlockNotice,
   onStoreBlocked,

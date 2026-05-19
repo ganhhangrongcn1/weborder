@@ -4,6 +4,9 @@ import { initSupabaseRuntimeClient } from "../supabase/supabaseRuntimeClient.js"
 import { isSupabaseConfigSyncEnabled } from "../supabase/runtimeFlags.js";
 
 let ordersWriteQueue = Promise.resolve();
+let branchLookupCache = { value: null, cachedAt: 0 };
+const BRANCH_LOOKUP_TTL_MS = 60 * 1000;
+const unsupportedOrderColumns = new Set();
 
 function isSupabaseReady() {
   const info = getRepositoryRuntimeInfo();
@@ -21,6 +24,137 @@ async function getSupabaseClientAsync() {
 
 function normalizePhone(phone) {
   return getCustomerKey(phone || "");
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
+}
+
+function toNullableUuid(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  return isUuidLike(raw) ? raw : null;
+}
+
+function normalizeBranchText(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+async function readBranchLookupMap() {
+  if (!isSupabaseReady()) return new Map();
+  const now = Date.now();
+  if (branchLookupCache.value && now - branchLookupCache.cachedAt < BRANCH_LOOKUP_TTL_MS) {
+    return branchLookupCache.value;
+  }
+  const client = await getSupabaseClientAsync();
+  if (!client) return new Map();
+
+  const trySelectBranches = async (columns, withIsOpenFilter) => {
+    let query = client.from("branches").select(columns);
+    if (withIsOpenFilter) query = query.eq("is_open", true);
+    return query;
+  };
+  const branchSelectCandidates = [
+    "branch_uuid,branch_code,slug,name,id,data",
+    "branch_uuid,branch_code,name,id,data",
+    "branch_uuid,name,id,data",
+    "name,id,data"
+  ];
+
+  let data = [];
+  let resolved = false;
+  let lastError = null;
+  for (const columns of branchSelectCandidates) {
+    for (const withIsOpenFilter of [true, false]) {
+      try {
+        const result = await trySelectBranches(columns, withIsOpenFilter);
+        if (result?.error) {
+          lastError = result.error;
+          continue;
+        }
+        data = Array.isArray(result?.data) ? result.data : [];
+        resolved = true;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (resolved) break;
+  }
+  if (!resolved && lastError) throw lastError;
+
+  const map = new Map();
+  (data || []).forEach((row) => {
+    const dataObj = row?.data && typeof row.data === "object" ? row.data : {};
+    const branchUuid = String(row?.branch_uuid || dataObj?.branch_uuid || dataObj?.branchUuid || dataObj?.uuid || "").trim();
+    if (!branchUuid) return;
+    const keys = [
+      row?.id,
+      row?.slug,
+      row?.name,
+      row?.branch_code,
+      dataObj?.id,
+      dataObj?.slug,
+      dataObj?.name,
+      dataObj?.branch_code
+    ];
+    keys.forEach((key) => {
+      const raw = String(key || "").trim();
+      if (!raw) return;
+      map.set(raw, branchUuid);
+      const normalized = normalizeBranchText(raw);
+      if (normalized) map.set(normalized, branchUuid);
+    });
+  });
+
+  branchLookupCache = { value: map, cachedAt: now };
+  return map;
+}
+
+async function enrichOrderBranchUuids(order = {}) {
+  let branchLookup = new Map();
+  try {
+    branchLookup = await readBranchLookupMap();
+  } catch (error) {
+    console.warn("[orderRepository] branch lookup map unavailable, skip uuid enrichment", {
+      message: error?.message || String(error || ""),
+      code: error?.code || ""
+    });
+    return order;
+  }
+  if (!branchLookup.size) return order;
+
+  const resolveUuid = (...candidates) => {
+    for (const candidate of candidates) {
+      const raw = String(candidate || "").trim();
+      if (!raw) continue;
+      if (branchLookup.has(raw)) return branchLookup.get(raw);
+      const normalized = normalizeBranchText(raw);
+      if (normalized && branchLookup.has(normalized)) return branchLookup.get(normalized);
+    }
+    return "";
+  };
+
+  const fulfillmentType = String(order?.fulfillmentType || "").toLowerCase();
+  const branchUuid = String(order?.branchUuid || "").trim() || resolveUuid(order?.branchId, order?.branchName);
+  const pickupBranchUuid =
+    String(order?.pickupBranchUuid || "").trim() ||
+    (fulfillmentType === "pickup" ? resolveUuid(order?.pickupBranchId, order?.pickupBranchName, order?.branchId, order?.branchName) : "");
+  const deliveryBranchUuid =
+    String(order?.deliveryBranchUuid || "").trim() ||
+    (fulfillmentType === "delivery" ? resolveUuid(order?.deliveryBranchId, order?.deliveryBranchName, order?.branchId, order?.branchName) : "");
+
+  return {
+    ...order,
+    branchUuid: branchUuid || null,
+    pickupBranchUuid: pickupBranchUuid || null,
+    deliveryBranchUuid: deliveryBranchUuid || null
+  };
 }
 
 function readOrderItemMetadata(item = {}) {
@@ -148,17 +282,9 @@ function getOrderPhoneKey(rawPhone) {
   return `raw:${raw}`;
 }
 
-function isPlaceholderCustomerName(name = "") {
+function _isPlaceholderCustomerName(name = "") {
   const normalized = String(name || "").trim().toLowerCase();
   return normalized === "" || normalized === "khách" || normalized === "khách vãng lai" || normalized === "khach" || normalized === "khach vang lai";
-}
-
-function resolveCustomerNameFromOrder(existingName = "", incomingName = "") {
-  const safeExisting = String(existingName || "").trim();
-  const safeIncoming = String(incomingName || "").trim();
-  if (!isPlaceholderCustomerName(safeExisting)) return safeExisting;
-  if (!isPlaceholderCustomerName(safeIncoming)) return safeIncoming;
-  return safeExisting || safeIncoming;
 }
 
 function toCustomerRow(user = {}) {
@@ -372,6 +498,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
   (orders || []).forEach((order) => {
     const phone = getOrderPhoneKey(order.customer_phone || "");
     if (!phone) return;
+    const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : {};
     const next = {
       id: order.id,
       orderCode: order.order_code || order.id,
@@ -381,6 +508,9 @@ async function readOrdersByPhoneFromTable(options = {}) {
       status: order.status || "pending_zalo",
       fulfillmentType: order.fulfillment_type || "delivery",
       paymentMethod: order.payment_method || "cash",
+      source: order.source || metadata.source || metadata.orderSource || metadata.channel || "online",
+      channel: order.channel || metadata.channel || metadata.source || metadata.orderSource || "online",
+      orderSource: metadata.orderSource || order.source || order.channel || "online",
       subtotal: Number(order.subtotal || 0),
       shippingFee: Number(order.shipping_fee || 0),
       originalShippingFee: Number(order.original_shipping_fee || 0),
@@ -394,8 +524,18 @@ async function readOrdersByPhoneFromTable(options = {}) {
       distanceKm: order.distance_km,
       lat: order.lat,
       lng: order.lng,
+      branchId: order.branch_id || metadata.branchId || "",
+      branchUuid: order.branch_uuid || metadata.branchUuid || "",
       branchName: order.branch_name || "",
       branchAddress: order.branch_address || "",
+      pickupBranchId: order.pickup_branch_id || metadata.pickupBranchId || "",
+      pickupBranchUuid: order.pickup_branch_uuid || metadata.pickupBranchUuid || "",
+      pickupBranchName: order.pickup_branch_name || metadata.pickupBranchName || "",
+      pickupBranchAddress: order.pickup_branch_address || metadata.pickupBranchAddress || "",
+      deliveryBranchId: order.delivery_branch_id || metadata.deliveryBranchId || "",
+      deliveryBranchUuid: order.delivery_branch_uuid || metadata.deliveryBranchUuid || "",
+      deliveryBranchName: order.delivery_branch_name || metadata.deliveryBranchName || "",
+      deliveryBranchAddress: order.delivery_branch_address || metadata.deliveryBranchAddress || "",
       pickupTimeText: order.pickup_time_text || "",
       deliveryAddress: order.delivery_address || "",
       createdAt: order.created_at,
@@ -441,6 +581,7 @@ async function readOrdersForPhoneFromTable(phone) {
 
   return orders.map((order) => {
     const phoneKey = getOrderPhoneKey(order.customer_phone || "");
+    const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : {};
     return {
       id: order.id,
       orderCode: order.order_code || order.id,
@@ -450,6 +591,9 @@ async function readOrdersForPhoneFromTable(phone) {
       status: order.status || "pending_zalo",
       fulfillmentType: order.fulfillment_type || "delivery",
       paymentMethod: order.payment_method || "cash",
+      source: order.source || metadata.source || metadata.orderSource || metadata.channel || "online",
+      channel: order.channel || metadata.channel || metadata.source || metadata.orderSource || "online",
+      orderSource: metadata.orderSource || order.source || order.channel || "online",
       subtotal: Number(order.subtotal || 0),
       shippingFee: Number(order.shipping_fee || 0),
       originalShippingFee: Number(order.original_shipping_fee || 0),
@@ -463,8 +607,18 @@ async function readOrdersForPhoneFromTable(phone) {
       distanceKm: order.distance_km,
       lat: order.lat,
       lng: order.lng,
+      branchId: order.branch_id || metadata.branchId || "",
+      branchUuid: order.branch_uuid || metadata.branchUuid || "",
       branchName: order.branch_name || "",
       branchAddress: order.branch_address || "",
+      pickupBranchId: order.pickup_branch_id || metadata.pickupBranchId || "",
+      pickupBranchUuid: order.pickup_branch_uuid || metadata.pickupBranchUuid || "",
+      pickupBranchName: order.pickup_branch_name || metadata.pickupBranchName || "",
+      pickupBranchAddress: order.pickup_branch_address || metadata.pickupBranchAddress || "",
+      deliveryBranchId: order.delivery_branch_id || metadata.deliveryBranchId || "",
+      deliveryBranchUuid: order.delivery_branch_uuid || metadata.deliveryBranchUuid || "",
+      deliveryBranchName: order.delivery_branch_name || metadata.deliveryBranchName || "",
+      deliveryBranchAddress: order.delivery_branch_address || metadata.deliveryBranchAddress || "",
       pickupTimeText: order.pickup_time_text || "",
       deliveryAddress: order.delivery_address || "",
       createdAt: order.created_at,
@@ -497,8 +651,18 @@ function toOrderRows(order = {}) {
     distance_km: order.distanceKm ?? null,
     lat: order.lat ?? null,
     lng: order.lng ?? null,
+    branch_id: toNullableUuid(order.branchId),
+    branch_uuid: toNullableUuid(order.branchUuid),
     branch_name: String(order.branchName || ""),
     branch_address: String(order.branchAddress || ""),
+    pickup_branch_id: toNullableUuid(order.pickupBranchId),
+    pickup_branch_uuid: toNullableUuid(order.pickupBranchUuid),
+    pickup_branch_name: String(order.pickupBranchName || ""),
+    pickup_branch_address: String(order.pickupBranchAddress || ""),
+    delivery_branch_id: toNullableUuid(order.deliveryBranchId),
+    delivery_branch_uuid: toNullableUuid(order.deliveryBranchUuid),
+    delivery_branch_name: String(order.deliveryBranchName || ""),
+    delivery_branch_address: String(order.deliveryBranchAddress || ""),
     pickup_time_text: String(order.pickupTimeText || ""),
     delivery_address: String(order.deliveryAddress || ""),
     metadata: order
@@ -517,6 +681,48 @@ function toOrderRows(order = {}) {
     metadata: item
   }));
   return { orderRow, itemRows };
+}
+
+function shouldRetryWithTrimmedColumns(error) {
+  const message = String(error?.message || "").toLowerCase();
+  const code = String(error?.code || "").toLowerCase();
+  return (
+    code === "42703" ||
+    code === "pgrst204" ||
+    (message.includes("column") && message.includes("does not exist")) ||
+    (message.includes("could not find the") && message.includes("column"))
+  );
+}
+
+function extractMissingColumnName(error) {
+  const message = String(error?.message || "");
+  const match = message.match(/column\s+"([^"]+)"/i);
+  if (match?.[1]) return match[1];
+  const pgrstMatch = message.match(/could not find the\s+'([^']+)'\s+column/i);
+  return pgrstMatch?.[1] || "";
+}
+
+async function upsertOrderRowWithSchemaFallback(client, orderRow) {
+  const mutableRow = { ...(orderRow || {}) };
+  unsupportedOrderColumns.forEach((column) => {
+    if (column in mutableRow) delete mutableRow[column];
+  });
+  const removedColumns = new Set();
+  let attempts = 0;
+
+  while (attempts < 4) {
+    attempts += 1;
+    const { error } = await client.from("orders").upsert(mutableRow, { onConflict: "id" });
+    if (!error) return;
+    if (!shouldRetryWithTrimmedColumns(error)) throw error;
+    const missingColumn = extractMissingColumnName(error);
+    if (!missingColumn || removedColumns.has(missingColumn)) throw error;
+    removedColumns.add(missingColumn);
+    unsupportedOrderColumns.add(missingColumn);
+    delete mutableRow[missingColumn];
+  }
+
+  throw new Error("orders_upsert_failed_after_schema_fallback");
 }
 
 async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
@@ -563,8 +769,9 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
       if (customerUpsertError) throw customerUpsertError;
     }
 
-    const { error: orderError } = await client.from("orders").upsert(orderRows, { onConflict: "id" });
-    if (orderError) throw orderError;
+    for (const row of orderRows) {
+      await upsertOrderRowWithSchemaFallback(client, row);
+    }
 
     const orderIds = orderRows.map((row) => row.id);
     if (orderIds.length) {
@@ -586,7 +793,8 @@ async function upsertOrderToTable(order = {}) {
   if (!isSupabaseReady()) return order;
   const client = await getSupabaseClientAsync();
   if (!client) return order;
-  const mapped = toOrderRows(order);
+  const normalizedOrder = await enrichOrderBranchUuids(order);
+  const mapped = toOrderRows(normalizedOrder);
   if (!mapped) return order;
   const { orderRow, itemRows } = mapped;
 
@@ -606,8 +814,7 @@ async function upsertOrderToTable(order = {}) {
     if (customerUpsertError) throw customerUpsertError;
   }
 
-  const { error: orderError } = await client.from("orders").upsert(orderRow, { onConflict: "id" });
-  if (orderError) throw orderError;
+  await upsertOrderRowWithSchemaFallback(client, orderRow);
 
   const { error: deleteItemsError } = await client.from("order_items").delete().eq("order_id", orderRow.id);
   if (deleteItemsError) throw deleteItemsError;
@@ -966,8 +1173,7 @@ async function upsertLoyaltyAccountByPhone(phone, loyalty = {}) {
         }))
       );
     }
-  } catch (_error) {
-    // keep fallback from in-memory snapshot
+  } catch {
   }
 
   const row = {
@@ -1048,7 +1254,7 @@ function subscribeCoreDomainRealtime({ tables = [], onChange }) {
   return () => {
     try {
       client.removeChannel(channel);
-    } catch (_error) {
+    } catch {
       // noop
     }
   };

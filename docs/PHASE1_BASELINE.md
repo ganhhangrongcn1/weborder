@@ -8,33 +8,25 @@ Muc tieu phase 1:
 ## Quy uoc bat buoc
 
 1. `src/` la source code duy nhat duoc sua tay.
-2. `src-compiled/` la thu muc generated output, khong sua tay.
+2. Du an chay truc tiep tu `src/main.jsx`; khong con dung `src-compiled/`.
 3. Moi thay doi code can pass:
 - `npm run check:encoding`
 - `npm run build`
-
-## Script moi trong phase 1
-
-- `npm run check:generated`
-- Script: `scripts/check-generated-sync.mjs`
-- Tac dung: kiem tra mapping file tu `src/` sang `src-compiled/` (bao gom `.jsx -> .js`).
 
 ## Build pipeline hien tai
 
 `npm run build` da bao gom:
 1. `check-encoding`
 2. `patch-vite`
-3. `compile-jsx`
-4. `check:generated`
-5. `vite build`
+3. `vite build`
 
 ## Ghi chu van hanh
 
-- Neu `check:generated` fail, chay lai `npm run build` hoac `node scripts/compile-jsx.mjs`.
-- Khong review business logic trong `src-compiled/`; review trong `src/`.
+- Chi review va sua business logic trong `src/`.
+- `src-compiled/` da bi loai bo de tranh nham lan hai nguon source.
 
 ## Scope phase 1 da lam
 
-- Them guardrail generated sync.
+- Chuyen du an ve mot source duy nhat la `src/`.
 - Chuan hoa checklist build + encoding.
 - Khong refactor, khong doi behavior.

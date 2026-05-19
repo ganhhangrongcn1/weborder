@@ -5,8 +5,8 @@ import {
   loyaltySimpleGuestRows,
   loyaltyText
 } from "../data/loyaltyData.js";
-import { createLocalStorageAdapter } from "./adapters/localStorageAdapter.js";
 import { createLoyaltyConfigRepository } from "./repositories/loyaltyConfigRepository.js";
+import { createRepositoryAdapter } from "./repositories/repositoryRuntime.js";
 
 const LOYALTY_RULE_KEY = "ghr_loyalty";
 const LOYALTY_UI_TEXT_KEY = "ghr_loyalty_ui_text";
@@ -51,11 +51,11 @@ function normalizeRulesRows(value) {
   return rows.length ? rows : clone(loyaltyRulesRows);
 }
 
-export function createLoyaltyConfigService(repository = createLoyaltyConfigRepository(createLocalStorageAdapter())) {
+export function createLoyaltyConfigService(repository = createLoyaltyConfigRepository(createRepositoryAdapter())) {
   const service = {
     getLoyaltyRule() {
       return repository.get(LOYALTY_RULE_KEY, {
-        currencyPerPoint: 100,
+        currencyPerPoint: 1000,
         pointPerUnit: 1,
         checkinDailyPoints: 100,
         streakRewards: {
@@ -102,7 +102,7 @@ export function createLoyaltyConfigService(repository = createLoyaltyConfigRepos
   return {
     ...service,
     getLoyaltyRuleAsync: async () => repository.getAsync(LOYALTY_RULE_KEY, {
-      currencyPerPoint: 100,
+      currencyPerPoint: 1000,
       pointPerUnit: 1,
       checkinDailyPoints: 100,
       streakRewards: {

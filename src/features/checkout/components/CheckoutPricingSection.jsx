@@ -1,4 +1,4 @@
-import Icon from "../../../components/Icon.jsx";
+﻿import Icon from "../../../components/Icon.jsx";
 import CheckoutMilestoneSuggest from "./CheckoutMilestoneSuggest.jsx";
 import CheckoutCard from "./CheckoutCard.jsx";
 import CheckoutTotalCard from "./CheckoutTotalCard.jsx";
@@ -33,8 +33,12 @@ export default function CheckoutPricingSection({
   promoDiscount,
   fulfillmentType,
   deliveryDistanceKm,
-  setIsDeliveryFeeModalOpen
+  setIsDeliveryFeeModalOpen,
+  isRegisteredCustomer = false,
+  isQrCounterOrder = false
 }) {
+  const showMemberBenefits = !isQrCounterOrder || isRegisteredCustomer;
+
   return (
     <>
       <CheckoutMilestoneSuggest
@@ -47,30 +51,40 @@ export default function CheckoutPricingSection({
         smartPromotions={smartPromotions}
       />
 
-      <CheckoutCard title="Khuyến mãi">
-        <button onClick={() => setIsPromoModalOpen(true)} className="promo-select">
-          {selectedPromo ? `${selectedPromo.code} · -${formatMoney(selectedPromo.discount)}` : "Chọn mã khuyến mãi"} <span>›</span>
-        </button>
-      </CheckoutCard>
+      {showMemberBenefits ? (
+        <>
+          <CheckoutCard title="Khuyến mãi">
+            <button onClick={() => setIsPromoModalOpen(true)} className="promo-select">
+              {selectedPromo ? `${selectedPromo.code} · -${formatMoney(selectedPromo.discount)}` : "Chọn mã khuyến mãi"} <span>›</span>
+            </button>
+          </CheckoutCard>
 
-      <CheckoutCard title="Dùng điểm thưởng">
-        <div className="points-row">
-          <div>
-            <strong>Bạn có {availablePoints.toLocaleString("vi-VN")} điểm</strong>
-            <span>
-              {usePoints
-                ? `Đã áp dụng -${formatMoney(pointsDiscount)} vào đơn hàng`
-                : `Bạn sẽ nhận được +${earnedPreviewPoints} điểm khi đặt đơn`}
-            </span>
+          <CheckoutCard title="Dùng điểm thưởng">
+            <div className="points-row">
+              <div>
+                <strong>Bạn có {availablePoints.toLocaleString("vi-VN")} điểm</strong>
+                <span>
+                  {usePoints
+                    ? `Đã áp dụng -${formatMoney(pointsDiscount)} vào đơn hàng`
+                    : `Bạn sẽ nhận được +${earnedPreviewPoints} điểm khi đặt đơn`}
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={usePoints}
+                onChange={(event) => setUsePoints(event.target.checked)}
+                className="toggle-input"
+              />
+            </div>
+          </CheckoutCard>
+        </>
+      ) : (
+        <CheckoutCard title="Ưu đãi thành viên">
+          <div className="rounded-2xl bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700">
+            Đăng nhập để dùng voucher và điểm tích lũy của bạn.
           </div>
-          <input
-            type="checkbox"
-            checked={usePoints}
-            onChange={(event) => setUsePoints(event.target.checked)}
-            className="toggle-input"
-          />
-        </div>
-      </CheckoutCard>
+        </CheckoutCard>
+      )}
 
       <CheckoutCard title="Phương thức thanh toán">
         <button className="payment-card active">
@@ -104,4 +118,3 @@ export default function CheckoutPricingSection({
     </>
   );
 }
-

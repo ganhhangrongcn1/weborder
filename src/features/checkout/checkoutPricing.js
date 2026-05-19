@@ -41,18 +41,6 @@ function normalizeCheckoutCoupon(coupon, subtotal, formatMoney, source = "checko
   };
 }
 
-function dedupeByCode(items) {
-  const result = [];
-  const seen = new Set();
-  items.forEach((item) => {
-    const key = String(item?.code || item?.id || "").trim().toUpperCase();
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    result.push(item);
-  });
-  return result;
-}
-
 function dedupeByCodePreferLoyalty(items) {
   const map = new Map();
   (items || []).forEach((item) => {

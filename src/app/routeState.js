@@ -4,9 +4,28 @@ export function normalizePath(pathname = "/") {
   return clean || "/";
 }
 
+function getQrBranchFromPath(pathname = "/") {
+  const path = normalizePath(pathname);
+  const match = path.match(/^\/qr\/([^/]+)(?:\/(menu|checkout|orders|loyalty|account))?$/i);
+  if (!match) return null;
+  return {
+    branchId: decodeURIComponent(match[1] || "").trim(),
+    subPage: String(match[2] || "").toLowerCase()
+  };
+}
+
 export function customerPathToState(pathname = "/") {
   const path = normalizePath(pathname);
 
+  const qrContext = getQrBranchFromPath(path);
+  if (qrContext) {
+    if (qrContext.subPage === "checkout") return { page: "checkout", activeTab: "orders" };
+    if (qrContext.subPage === "orders") return { page: "tracking", activeTab: "orders" };
+    if (qrContext.subPage === "menu") return { page: "menu", activeTab: "menu" };
+    if (qrContext.subPage === "loyalty") return { page: "loyalty", activeTab: "rewards" };
+    if (qrContext.subPage === "account") return { page: "account", activeTab: "account" };
+    return { page: "qr-entry", activeTab: "menu" };
+  }
   if (path === "/menu") return { page: "menu", activeTab: "menu" };
   if (path === "/cart") return { page: "checkout", activeTab: "orders" };
   if (path === "/checkout") return { page: "checkout", activeTab: "orders" };
@@ -20,6 +39,18 @@ export function customerPathToState(pathname = "/") {
 }
 
 export function customerPageToPath(nextPage = "home", nextTab = "home") {
+  const currentPath = typeof window !== "undefined" ? window.location.pathname : "/";
+  const qrContext = getQrBranchFromPath(currentPath);
+  if (qrContext?.branchId) {
+    const encodedBranchId = encodeURIComponent(qrContext.branchId);
+    if (nextPage === "menu" || nextPage === "detail") return `/qr/${encodedBranchId}/menu`;
+    if (nextPage === "checkout") return `/qr/${encodedBranchId}/checkout`;
+    if (nextPage === "tracking") return `/qr/${encodedBranchId}/orders`;
+    if (nextPage === "loyalty") return `/qr/${encodedBranchId}/loyalty`;
+    if (nextPage === "account") return `/qr/${encodedBranchId}/account`;
+    if (nextPage === "home") return `/qr/${encodedBranchId}`;
+  }
+
   if (nextPage === "home") return "/home";
   if (nextPage === "menu" || nextPage === "detail") return "/menu";
   if (nextPage === "checkout") return "/checkout";

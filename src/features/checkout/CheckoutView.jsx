@@ -34,6 +34,7 @@ export default function Checkout({
   openCartItemEditor,
   createOrderFromCheckout,
   userProfile,
+  isRegisteredCustomer,
   currentPhone,
   demoUser,
   demoLoyalty,
@@ -53,10 +54,16 @@ export default function Checkout({
   isBranchOpenNow,
   buildOutOfHoursNotice
 }) {
+  const isQrCounterOrder =
+    String(checkoutPreset?.orderSource || checkoutPreset?.source || "").toLowerCase() === "qr_counter" ||
+    Boolean(checkoutPreset?.qrBranchLocked) ||
+    Boolean(checkoutPreset?.qrAutoPickupNow);
+  const qrLockedBranchId = String(checkoutPreset?.qrBranchId || checkoutPreset?.selectedBranch || "").trim();
+  const qrLockedPickupBranchId = String(checkoutPreset?.selectedBranch || "").trim();
   const [fulfillmentType, setFulfillmentType] = useState(checkoutPreset?.fulfillmentType || "delivery");
   const [selectedBranch, setSelectedBranch] = useState(checkoutPreset?.selectedBranch || "");
   const [isChangingBranch, setIsChangingBranch] = useState(false);
-  const [pickupMode, setPickupMode] = useState(checkoutPreset?.pickupMode || "soon");
+  const [pickupMode, setPickupMode] = useState(isQrCounterOrder ? "soon" : (checkoutPreset?.pickupMode || "soon"));
   const [pickupDate, setPickupDate] = useState(checkoutPreset?.pickupDate || getTodayInputDate());
   const [pickupClock, setPickupClock] = useState(checkoutPreset?.pickupClock || getNearestPickupClock());
   const [usePoints, setUsePoints] = useState(false);
@@ -64,7 +71,6 @@ export default function Checkout({
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDeliveryFeeModalOpen, setIsDeliveryFeeModalOpen] = useState(false);
-  const [isDeliveryConfirmOpen, setIsDeliveryConfirmOpen] = useState(false);
   const [checkoutNotice, setCheckoutNotice] = useState(null);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
   const [pickupContact, setPickupContact] = useState(() => ({
@@ -80,8 +86,6 @@ export default function Checkout({
     deliverySourceBranch,
     deliveryOrigin,
     baseShippingByConfig,
-    shippingNeedsRefresh,
-    setShippingNeedsRefresh,
     syncSelectedDeliveryBranch,
     handleSelectAddress,
     handleSaveAddress
@@ -140,7 +144,7 @@ export default function Checkout({
     [cart]
   );
   const selectedBranchInfo = pickupBranches.find(branch => branch.id === selectedBranch) || pickupBranches[0] || null;
-  const pickupTimeText = pickupMode === "soon" ? "Sẵn sàng sau khoảng 20 phút" : `${pickupClock} - ${pickupDate}`;
+  const pickupTimeText = isQrCounterOrder ? "Đặt liền tại quầy" : (pickupMode === "soon" ? "Sẵn sàng sau khoảng 20 phút" : `${pickupClock} - ${pickupDate}`);
   const pickupDeliveryInfo = useMemo(() => ({
     ...deliveryInfo,
     name: pickupContact.name,
@@ -152,7 +156,6 @@ export default function Checkout({
     deliveryFee: 0
   }), [deliveryInfo, pickupContact.name, pickupContact.phone, selectedBranchInfo?.address]);
   const checkoutDeliveryInfo = fulfillmentType === "pickup" ? pickupDeliveryInfo : deliveryInfo;
-  const isShippingFeeConfirmed = fulfillmentType !== "delivery" || (!shippingNeedsRefresh && deliveryFeeSource === "Goong.io");
   const { updateQty, handlePlaceOrder } = useCheckoutActions({
     setCart,
     createOrderFromCheckout,
@@ -170,6 +173,7 @@ export default function Checkout({
     selectedBranchInfo,
     deliverySourceBranch,
     pickupTimeText,
+    orderSource: isQrCounterOrder ? "qr_counter" : "online",
     navigate,
     onNotice: setCheckoutNotice
   });
@@ -183,6 +187,12 @@ export default function Checkout({
     pickupClock,
     selectedDeliveryBranch: deliverySourceBranch?.id
   });
+  useEffect(() => {
+    if (!isQrCounterOrder) return;
+    if (fulfillmentType !== "pickup") setFulfillmentType("pickup");
+    if (qrLockedPickupBranchId && selectedBranch !== qrLockedPickupBranchId) setSelectedBranch(qrLockedPickupBranchId);
+    if (pickupMode !== "soon") setPickupMode("soon");
+  }, [isQrCounterOrder, fulfillmentType, selectedBranch, qrLockedPickupBranchId, pickupMode]);
   useCheckoutPickupBranchState({
     pickupBranches,
     selectedBranch,
@@ -218,6 +228,11 @@ export default function Checkout({
     userProfile,
     setPickupContact
   });
+  useEffect(() => {
+    if (!isQrCounterOrder || isRegisteredCustomer) return;
+    if (selectedPromo) setSelectedPromo(null);
+    if (usePoints) setUsePoints(false);
+  }, [isQrCounterOrder, isRegisteredCustomer, selectedPromo, usePoints]);
 
   const handleCheckoutPlaceOrder = async () => {
     if (fulfillmentType === "delivery") {
@@ -230,8 +245,6 @@ export default function Checkout({
         });
         return;
       }
-      setIsDeliveryConfirmOpen(true);
-      return;
     }
     await executeCheckoutPlaceOrder();
   };
@@ -262,6 +275,9 @@ export default function Checkout({
       children: [/*#__PURE__*/_jsx(CheckoutFulfillmentSection, {
         fulfillmentType: fulfillmentType,
         setFulfillmentType: setFulfillmentType,
+        forcePickupOnly: isQrCounterOrder,
+        hidePickupSchedule: isQrCounterOrder,
+        lockPickupBranch: isQrCounterOrder,
         setIsAddressModalOpen: setIsAddressModalOpen,
         deliveryInfo: deliveryInfo,
         pickupContact: pickupContact,
@@ -321,6 +337,9 @@ export default function Checkout({
         fulfillmentType: fulfillmentType,
         deliveryDistanceKm: deliveryDistanceKm,
         setIsDeliveryFeeModalOpen: setIsDeliveryFeeModalOpen
+        ,
+        isRegisteredCustomer: isRegisteredCustomer,
+        isQrCounterOrder: isQrCounterOrder
       })]
     }), /*#__PURE__*/_jsx("div", {
       className: "checkout-sticky-cta",
@@ -329,67 +348,7 @@ export default function Checkout({
         className: "cta w-full",
         children: ["Đặt hàng - ", formatMoney(checkoutTotal)]
       })
-    }), isDeliveryConfirmOpen ? /*#__PURE__*/_jsx("div", {
-      className: "checkout-confirm-overlay",
-      role: "presentation",
-      onClick: () => setIsDeliveryConfirmOpen(false),
-      children: /*#__PURE__*/_jsxs("section", {
-        className: "checkout-confirm-modal",
-        role: "dialog",
-        "aria-modal": "true",
-        "aria-label": "Xác nhận giao hàng",
-        onClick: event => event.stopPropagation(),
-        children: [/*#__PURE__*/_jsx("h3", {
-          children: "Xác nhận thông tin giao hàng"
-        }), /*#__PURE__*/_jsx("p", {
-          children: "Kiểm tra lại chi nhánh giao và phí ship trước khi đặt hàng."
-        }), /*#__PURE__*/_jsxs("div", {
-          className: "checkout-confirm-info",
-          children: [/*#__PURE__*/_jsxs("div", {
-            children: [/*#__PURE__*/_jsx("span", {
-              children: "Chi nhánh giao"
-            }), /*#__PURE__*/_jsx("strong", {
-              children: deliverySourceBranch?.name || "Chưa chọn chi nhánh"
-            })]
-          }), /*#__PURE__*/_jsxs("div", {
-            children: [/*#__PURE__*/_jsx("span", {
-              children: "Địa chỉ nhận"
-            }), /*#__PURE__*/_jsx("strong", {
-              children: deliveryInfo?.address || "Chưa có địa chỉ giao"
-            })]
-          }), /*#__PURE__*/_jsxs("div", {
-            children: [/*#__PURE__*/_jsx("span", {
-              children: "Phí ship hiện tại"
-            }), /*#__PURE__*/_jsx("strong", {
-              children: isShippingFeeConfirmed ? formatMoney(checkoutShip || 0) : "Chưa cập nhật theo chi nhánh mới"
-            })]
-          })]
-        }), !isShippingFeeConfirmed ? /*#__PURE__*/_jsx("p", {
-          className: "checkout-confirm-warning",
-          children: "Vui lòng cập nhật địa chỉ để tính lại phí ship chính xác theo chi nhánh đã chọn."
-        }) : null, /*#__PURE__*/_jsxs("div", {
-          className: "checkout-confirm-actions",
-          children: [/*#__PURE__*/_jsx("button", {
-            type: "button",
-            className: "secondary",
-            onClick: () => {
-              setIsDeliveryConfirmOpen(false);
-              setIsAddressModalOpen(true);
-            },
-            children: "Cập nhật địa chỉ"
-          }), /*#__PURE__*/_jsx("button", {
-            type: "button",
-            className: "cta",
-            onClick: async () => {
-              setIsDeliveryConfirmOpen(false);
-              await executeCheckoutPlaceOrder();
-            },
-            disabled: !isShippingFeeConfirmed,
-            children: "Xác nhận đặt hàng"
-          })]
-        })]
-      })
-    }) : null, /*#__PURE__*/_jsx(CheckoutModals, {
+    }), /*#__PURE__*/_jsx(CheckoutModals, {
       isPromoModalOpen: isPromoModalOpen,
       promoCodes: promoCodes,
       selectedPromo: selectedPromo,
@@ -407,7 +366,6 @@ export default function Checkout({
       deliveryOrigin: deliveryOrigin,
       shippingConfig: shippingConfig,
       handleSaveAddress: handleSaveAddress,
-      setShippingNeedsRefresh: setShippingNeedsRefresh,
       isDeliveryFeeModalOpen: isDeliveryFeeModalOpen,
       shippingZonesFromConfig: shippingZonesFromConfig,
       deliveryZones: deliveryZones,

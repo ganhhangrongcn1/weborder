@@ -7,6 +7,9 @@ import { checkoutText } from "../../../data/uiText.js";
 export default function CheckoutFulfillmentSection({
   fulfillmentType,
   setFulfillmentType,
+  forcePickupOnly = false,
+  hidePickupSchedule = false,
+  lockPickupBranch = false,
   setIsAddressModalOpen,
   deliveryInfo,
   pickupContact,
@@ -27,7 +30,7 @@ export default function CheckoutFulfillmentSection({
   return (
     <>
       <div className="fulfillment-tabs">
-        <button onClick={() => setFulfillmentType("delivery")} className={fulfillmentType === "delivery" ? "active" : ""}>Giao tận nơi</button>
+        <button onClick={() => setFulfillmentType("delivery")} disabled={forcePickupOnly} className={fulfillmentType === "delivery" ? "active" : ""}>Giao tận nơi</button>
         <button onClick={() => setFulfillmentType("pickup")} className={fulfillmentType === "pickup" ? "active" : ""}>Đến lấy</button>
       </div>
 
@@ -70,10 +73,11 @@ export default function CheckoutFulfillmentSection({
 
           <CheckoutCard title="Chọn chi nhánh để lấy">
             <div className="space-y-3">
-              {(selectedBranchInfo && !isChangingBranch ? [selectedBranchInfo] : pickupBranches).map((branch) => (
+              {(selectedBranchInfo && !isChangingBranch || lockPickupBranch ? [selectedBranchInfo].filter(Boolean) : pickupBranches).map((branch) => (
                 <button
                   key={branch.id}
                   onClick={() => {
+                    if (lockPickupBranch) return;
                     setSelectedBranch(branch.id);
                     setIsChangingBranch(false);
                   }}
@@ -90,7 +94,7 @@ export default function CheckoutFulfillmentSection({
                   <span className="branch-radio">{selectedBranch === branch.id ? "✓" : ""}</span>
                 </button>
               ))}
-              {selectedBranchInfo && !isChangingBranch ? (
+              {selectedBranchInfo && !isChangingBranch && !lockPickupBranch ? (
                 <button
                   type="button"
                   onClick={() => setIsChangingBranch(true)}
@@ -98,6 +102,11 @@ export default function CheckoutFulfillmentSection({
                 >
                   Bấm vào đổi chi nhánh lấy
                 </button>
+              ) : null}
+              {lockPickupBranch ? (
+                <p className="rounded-2xl bg-orange-50 px-3 py-2 text-xs font-semibold leading-5 text-orange-700">
+                  Đơn này đang khóa theo chi nhánh từ mã QR tại quầy.
+                </p>
               ) : null}
             </div>
           </CheckoutCard>
@@ -109,12 +118,12 @@ export default function CheckoutFulfillmentSection({
           <div className="pickup-time-card">
             <div className="pickup-mode-tabs">
               <button onClick={() => setPickupMode("soon")} className={pickupMode === "soon" ? "active" : ""}>Sớm nhất</button>
-              <button onClick={() => setPickupMode("schedule")} className={pickupMode === "schedule" ? "active" : ""}>Chọn giờ</button>
+              {!hidePickupSchedule ? <button onClick={() => setPickupMode("schedule")} className={pickupMode === "schedule" ? "active" : ""}>Chọn giờ</button> : null}
             </div>
-            {pickupMode === "soon" ? (
+            {pickupMode === "soon" || hidePickupSchedule ? (
               <div className="pickup-soon">
-                <strong>Sẵn sàng sau khoảng 20 phút</strong>
-                <span>Quán sẽ nhắn khi món đã chuẩn bị xong.</span>
+                <strong>{hidePickupSchedule ? "Đặt liền tại quầy" : "Sẵn sàng sau khoảng 20 phút"}</strong>
+                <span>{hidePickupSchedule ? "Quán sẽ ưu tiên làm đơn ngay theo QR tại quầy." : "Quán sẽ nhắn khi món đã chuẩn bị xong."}</span>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">

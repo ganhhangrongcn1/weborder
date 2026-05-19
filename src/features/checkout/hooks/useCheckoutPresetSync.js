@@ -21,7 +21,7 @@ export default function useCheckoutPresetSync({
   selectedDeliveryBranch
 }) {
   useEffect(() => {
-    const nextPreset = {
+    const nextFields = {
       fulfillmentType,
       selectedBranch,
       pickupMode,
@@ -30,7 +30,13 @@ export default function useCheckoutPresetSync({
       selectedDeliveryBranch: selectedDeliveryBranch || ""
     };
 
-    setCheckoutPreset?.((current) => (isSameCheckoutPreset(current, nextPreset) ? current : nextPreset));
+    setCheckoutPreset?.((current) => {
+      const mergedPreset = {
+        ...(current || {}),
+        ...nextFields
+      };
+      return isSameCheckoutPreset(current, mergedPreset) ? current : mergedPreset;
+    });
   }, [
     fulfillmentType,
     selectedBranch,

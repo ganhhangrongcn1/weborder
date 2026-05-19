@@ -12,6 +12,37 @@ import {
 } from "../checkoutDomain.js";
 import { estimateDistanceKm } from "../checkoutHelpers.js";
 import { saveLatestDeliveryAddress } from "../../../services/checkoutService.js";
+import { goongDistanceMatrix } from "../../../services/goongService.js";
+
+function estimateDistanceFromCoordinate(lat, lng, origin) {
+  if (!lat || !lng || !origin?.lat || !origin?.lng) return null;
+  const earthRadiusKm = 6371;
+  const dLat = (Number(lat) - Number(origin.lat)) * Math.PI / 180;
+  const dLng = (Number(lng) - Number(origin.lng)) * Math.PI / 180;
+  const fromLat = Number(origin.lat) * Math.PI / 180;
+  const toLat = Number(lat) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(fromLat) * Math.cos(toLat) * Math.sin(dLng / 2) ** 2;
+  return Math.max(0.1, earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+async function resolveDistanceForDeliveryInfo(deliveryInfo, deliveryOrigin) {
+  const lat = Number(deliveryInfo?.lat || 0);
+  const lng = Number(deliveryInfo?.lng || 0);
+  if (lat && lng && deliveryOrigin?.lat && deliveryOrigin?.lng) {
+    const distance = await goongDistanceMatrix(deliveryOrigin, { lat, lng });
+    const fallbackDistance = estimateDistanceFromCoordinate(lat, lng, deliveryOrigin);
+    return {
+      distanceKm: distance?.distanceKm ?? fallbackDistance ?? null,
+      source: distance?.distanceKm ? "Goong.io" : (fallbackDistance ? "Ước tính theo tọa độ" : "Nhân viên xác nhận")
+    };
+  }
+
+  const fallbackDistance = estimateDistanceKm(deliveryInfo?.address || "");
+  return {
+    distanceKm: fallbackDistance,
+    source: fallbackDistance ? "Demo ước tính" : "Nhân viên xác nhận"
+  };
+}
 
 export default function useCheckoutDeliveryState({
   branches,
@@ -23,7 +54,7 @@ export default function useCheckoutDeliveryState({
   setDemoAddresses,
   deliveryFee
 }) {
-  const lastSelectedBranchRef = useRef(String(selectedDeliveryBranchId || ""));
+  const distanceRequestRef = useRef(0);
 
   const [deliveryInfo, setDeliveryInfo] = useState(() =>
     createInitialDeliveryInfo({
@@ -37,7 +68,6 @@ export default function useCheckoutDeliveryState({
   const [deliveryDistanceKm, setDeliveryDistanceKm] = useState(initialDistance);
   const [deliveryFeeSource, setDeliveryFeeSource] = useState(initialDistance ? "Demo ước tính" : "Chưa có địa chỉ");
   const [shippingConfig, setShippingConfig] = useState(() => loadShippingConfig());
-  const [shippingNeedsRefresh, setShippingNeedsRefresh] = useState(false);
 
   useEffect(() => {
     let disposed = false;
@@ -75,34 +105,54 @@ export default function useCheckoutDeliveryState({
     }
   }, [deliveryEligibleBranches, selectedDeliveryBranchId, setSelectedDeliveryBranchId]);
 
-  const handleSelectAddress = (address) => {
-    const { nextInfo, distanceKm } = buildDeliveryInfoFromAddress({
+  const handleSelectAddress = async (address) => {
+    const { nextInfo } = buildDeliveryInfoFromAddress({
       address,
       shippingConfig,
       deliveryFee
     });
-    setDeliveryInfo(nextInfo);
-    setDeliveryDistanceKm(distanceKm);
-    setDeliveryFeeSource(distanceKm ? "Địa chỉ đã lưu" : "Chưa có địa chỉ");
-    setShippingNeedsRefresh(false);
+    const requestId = distanceRequestRef.current + 1;
+    distanceRequestRef.current = requestId;
+    const resolved = await resolveDistanceForDeliveryInfo(nextInfo, deliveryOrigin);
+    if (requestId !== distanceRequestRef.current) return;
+    const recalculatedDeliveryFee = calculateBaseShippingFeeByConfig(resolved.distanceKm, shippingConfig, deliveryFee);
+    setDeliveryInfo({
+      ...nextInfo,
+      distanceKm: resolved.distanceKm,
+      deliveryFee: recalculatedDeliveryFee,
+      shippingStatus: resolved.distanceKm ? "OK" : "NEED_CONFIRM"
+    });
+    setDeliveryDistanceKm(resolved.distanceKm);
+    setDeliveryFeeSource(resolved.source);
   };
 
-  const handleSaveAddress = (nextInfo) => {
-    const { normalizedInfo, nextDistance, recalculatedDeliveryFee } = normalizeDeliveryInfoOnSave({
+  const handleSaveAddress = async (nextInfo) => {
+    const { normalizedInfo } = normalizeDeliveryInfoOnSave({
       nextInfo,
       shippingConfig,
       deliveryFee
     });
-    setDeliveryInfo(normalizedInfo);
-    setDeliveryDistanceKm(nextDistance);
-    setDeliveryFeeSource(nextInfo.shippingStatus === "OK" ? "Goong.io" : "Nhân viên xác nhận");
-    setShippingNeedsRefresh(false);
+    const requestId = distanceRequestRef.current + 1;
+    distanceRequestRef.current = requestId;
+    const resolved = await resolveDistanceForDeliveryInfo(normalizedInfo, deliveryOrigin);
+    if (requestId !== distanceRequestRef.current) return;
+    const recalculatedDeliveryFee = calculateBaseShippingFeeByConfig(resolved.distanceKm, shippingConfig, deliveryFee);
+    const nextDeliveryInfo = {
+      ...normalizedInfo,
+      distanceKm: resolved.distanceKm,
+      deliveryFee: recalculatedDeliveryFee,
+      shippingStatus: resolved.distanceKm ? "OK" : "NEED_CONFIRM"
+    };
+
+    setDeliveryInfo(nextDeliveryInfo);
+    setDeliveryDistanceKm(resolved.distanceKm);
+    setDeliveryFeeSource(resolved.source);
 
     if (nextInfo.saveToAccount && setDemoAddresses) {
       const nextAddresses = saveLatestDeliveryAddress({
         demoAddresses,
-        nextInfo,
-        nextDistance,
+        nextInfo: nextDeliveryInfo,
+        nextDistance: resolved.distanceKm,
         recalculatedDeliveryFee
       });
       setDemoAddresses(nextAddresses);
@@ -110,22 +160,41 @@ export default function useCheckoutDeliveryState({
   };
 
   useEffect(() => {
-    const currentBranchId = String(selectedDeliveryBranchId || "");
-    const prevBranchId = String(lastSelectedBranchRef.current || "");
-    if (!currentBranchId) return;
-    if (!prevBranchId) {
-      lastSelectedBranchRef.current = currentBranchId;
-      return;
-    }
-    if (currentBranchId === prevBranchId) return;
-
-    lastSelectedBranchRef.current = currentBranchId;
-
     const hasAddress = String(deliveryInfo?.address || "").trim().length > 0;
-    if (hasAddress) {
-      setShippingNeedsRefresh(true);
+    if (!hasAddress || !selectedDeliveryBranchId) return;
+
+    const requestId = distanceRequestRef.current + 1;
+    distanceRequestRef.current = requestId;
+    let disposed = false;
+
+    async function recalculateShippingForBranch() {
+      const resolved = await resolveDistanceForDeliveryInfo(deliveryInfo, deliveryOrigin);
+      if (disposed || requestId !== distanceRequestRef.current) return;
+      const recalculatedDeliveryFee = calculateBaseShippingFeeByConfig(resolved.distanceKm, shippingConfig, deliveryFee);
+      setDeliveryInfo((current) => ({
+        ...current,
+        distanceKm: resolved.distanceKm,
+        deliveryFee: recalculatedDeliveryFee,
+        shippingStatus: resolved.distanceKm ? "OK" : "NEED_CONFIRM"
+      }));
+      setDeliveryDistanceKm(resolved.distanceKm);
+      setDeliveryFeeSource(resolved.source);
     }
-  }, [selectedDeliveryBranchId, deliveryInfo?.address]);
+
+    recalculateShippingForBranch();
+    return () => {
+      disposed = true;
+    };
+  }, [
+    selectedDeliveryBranchId,
+    deliveryOrigin?.lat,
+    deliveryOrigin?.lng,
+    deliveryInfo?.address,
+    deliveryInfo?.lat,
+    deliveryInfo?.lng,
+    shippingConfig,
+    deliveryFee
+  ]);
 
   const baseShippingByConfig = calculateBaseShippingFeeByConfig(deliveryDistanceKm, shippingConfig, deliveryFee);
 
@@ -138,8 +207,6 @@ export default function useCheckoutDeliveryState({
     deliverySourceBranch,
     deliveryOrigin,
     baseShippingByConfig,
-    shippingNeedsRefresh,
-    setShippingNeedsRefresh,
     syncSelectedDeliveryBranch,
     handleSelectAddress,
     handleSaveAddress

@@ -4,6 +4,7 @@ import { createUserStorage, isRegisteredUser } from "../../../services/customerS
 import { customerRepository } from "../../../services/repositories/customerRepository.js";
 import { getDataSource } from "../../../services/repositories/dataSource.js";
 import {
+  getSupabaseCustomerSessionSnapshot,
   loginPhonePasswordAuth,
   registerPhonePasswordAuth,
   syncAuthProfileToCustomerRow,
@@ -20,6 +21,32 @@ const userStorage = createUserStorage({
   getCustomerKey,
   defaultUserDemo
 });
+
+function isPlaceholderName(name = "") {
+  const normalized = String(name || "").trim().toLowerCase();
+  return !normalized || normalized === "khách" || normalized === "khách hàng" || normalized === "khach" || normalized === "khach hang";
+}
+
+function pickCustomerDisplayName(user = {}, authSessionUser = null) {
+  const candidates = [
+    user.name,
+    user.fullName,
+    user.full_name,
+    user.displayName,
+    user.display_name,
+    user.customerName,
+    user.customer_name,
+    user.orderCustomerName,
+    user.receiverName,
+    user.lastOrderName,
+    authSessionUser?.name,
+    authSessionUser?.fullName,
+    authSessionUser?.full_name,
+    authSessionUser?.displayName,
+    authSessionUser?.display_name
+  ];
+  return candidates.map((value) => String(value || "").trim()).find((value) => !isPlaceholderName(value)) || "Khách hàng";
+}
 
 export default function useAccountViewModel({
   navigate,
@@ -62,6 +89,7 @@ export default function useAccountViewModel({
   const [accountNotice, setAccountNotice] = useState(null);
   const [showAllAddresses, setShowAllAddresses] = useState(false);
   const [remoteUser, setRemoteUser] = useState(null);
+  const [authSessionUser, setAuthSessionUser] = useState(null);
   const remoteUserRequestRef = useRef(0);
   const shouldUseSupabaseAuth = getDataSource() === "supabase";
   const accountUser = remoteUser || demoUser || {};
@@ -71,7 +99,7 @@ export default function useAccountViewModel({
   const stats = getOrderStats(demoOrders);
   const rank = getMemberRank(stats.totalSpent);
   const showCustomerTier = rewardFeatureFlags.enableCustomerTier;
-  const displayName = accountUser?.name?.trim() || "Khách hàng";
+  const displayName = pickCustomerDisplayName(accountUser, authSessionUser);
 
   useEffect(() => {
     let disposed = false;
@@ -94,7 +122,7 @@ export default function useAccountViewModel({
           return;
         }
         setRemoteUser(null);
-      } catch (_error) {
+      } catch {
         if (!disposed && requestId === remoteUserRequestRef.current) {
           setRemoteUser(null);
         }
@@ -107,13 +135,38 @@ export default function useAccountViewModel({
     };
   }, [currentPhone, setDemoUser]);
 
+  useEffect(() => {
+    let disposed = false;
+    if (!currentPhone || !shouldUseSupabaseAuth) {
+      setAuthSessionUser(null);
+      return () => {
+        disposed = true;
+      };
+    }
+
+    async function loadAuthSessionUser() {
+      const snapshot = await getSupabaseCustomerSessionSnapshot();
+      if (disposed) return;
+      const sessionPhone = getCustomerKey(snapshot?.phone || "");
+      if (snapshot?.ok && sessionPhone === getCustomerKey(currentPhone)) {
+        setAuthSessionUser(snapshot);
+        return;
+      }
+      setAuthSessionUser(null);
+    }
+
+    loadAuthSessionUser();
+    return () => {
+      disposed = true;
+    };
+  }, [currentPhone, shouldUseSupabaseAuth]);
+
   async function resolveFreshUserAfterLogin(phone, fallbackUser = null) {
     const key = getCustomerKey(phone);
     if (!key) return fallbackUser;
     try {
       await userStorage.hydrateFromRemote?.();
-    } catch (_error) {
-      // Keep fallback.
+    } catch {
     }
     const latest = userStorage.findByPhone(key);
     if (latest) return latest;
@@ -123,8 +176,7 @@ export default function useAccountViewModel({
         userStorage.upsertUser(remote);
         return remote;
       }
-    } catch (_error) {
-      // Keep fallback.
+    } catch {
     }
     return fallbackUser;
   }
@@ -178,8 +230,7 @@ export default function useAccountViewModel({
         }
         try {
           await userStorage.hydrateFromRemote?.();
-        } catch (_error) {
-          // Keep local fallback.
+        } catch {
         }
       }
 
@@ -188,7 +239,7 @@ export default function useAccountViewModel({
       setDemoUser(refreshed);
       setAuthNotice("Đã lưu hồ sơ.");
       setProfileOpen(false);
-    } catch (_error) {
+    } catch {
       setAuthNotice("Không thể lưu hồ sơ lúc này.");
     }
   }
@@ -293,8 +344,7 @@ export default function useAccountViewModel({
       }
       try {
         await userStorage.hydrateFromRemote?.();
-      } catch (_error) {
-        // Keep local fallback.
+      } catch {
       }
       userStorage.upsertUser({
         ...(userStorage.findByPhone(lookupPhone) || {}),
@@ -318,6 +368,7 @@ export default function useAccountViewModel({
     setAuthPhone("");
     setAuthPassword("");
     setAuthMode("lookup");
+    navigate("home", "home");
   }
 
   async function handleDirectLogin() {
@@ -341,8 +392,7 @@ export default function useAccountViewModel({
       }
       try {
         await userStorage.hydrateFromRemote?.();
-      } catch (_error) {
-        // Fallback to local state if hydrate fails.
+      } catch {
       }
       userStorage.upsertUser({
         ...(userStorage.findByPhone(phone) || {}),
@@ -364,6 +414,7 @@ export default function useAccountViewModel({
       setAuthNotice("Đăng nhập thành công.");
       setLoginDraft({ phone: "", password: "" });
       setAuthPhone("");
+      navigate("home", "home");
       return;
     }
     const user = userStorage.findByPhone(phone);
@@ -384,6 +435,7 @@ export default function useAccountViewModel({
     setAuthNotice("Đăng nhập thành công.");
     setLoginDraft({ phone: "", password: "" });
     setAuthPhone("");
+    navigate("home", "home");
   }
 
   function handleVerifyResetPassword() {

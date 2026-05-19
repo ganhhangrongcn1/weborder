@@ -100,8 +100,7 @@ export async function updatePhonePasswordAuth({ phone, password }) {
   try {
     const { data: signInData, error: signInError } = await client.auth.signInWithPassword({ email, password });
     if (!signInError && signInData?.user) return { ok: true };
-  } catch (_error) {
-    // Ignore.
+  } catch {
   }
   return { ok: false, message: "Không thể xác minh tài khoản Supabase cho số này." };
 }

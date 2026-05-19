@@ -3,6 +3,32 @@ import { orderRepository } from "./repositories/orderRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
 import { applyOrderLoyalty, applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfig, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 
+function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
+  const branchId = String(
+    branchInfo?.id ||
+      branchInfo?.branchId ||
+      branchInfo?.legacyId ||
+      branchInfo?.legacy_id ||
+      ""
+  );
+  const branchUuid = String(
+    branchInfo?.branchUuid ||
+      branchInfo?.branch_uuid ||
+      branchInfo?.uuid ||
+      ""
+  );
+  const isPickup = String(fulfillmentType || "").toLowerCase() === "pickup";
+  const isDelivery = String(fulfillmentType || "").toLowerCase() === "delivery";
+  return {
+    branchId,
+    branchUuid,
+    pickupBranchId: isPickup ? branchId : "",
+    pickupBranchUuid: isPickup ? branchUuid : "",
+    deliveryBranchId: isDelivery ? branchId : "",
+    deliveryBranchUuid: isDelivery ? branchUuid : ""
+  };
+}
+
 function getOrderPhoneForLoyalty(order = {}) {
   return order.phone || order.customerPhone || order.customerPhoneKey || order.rawCustomerPhone || "";
 }
@@ -106,7 +132,7 @@ export const orderStorage = {
     );
     if (!updatedOrder) return null;
 
-    // Always sync local cache first for instant UI feedback.
+    // Update runtime state first for instant UI feedback, then persist remotely.
     await this.saveAll(nextByPhone);
 
     // Force remote status update and surface errors (RLS/grant).
@@ -145,7 +171,7 @@ export const orderStorage = {
   }
 };
 
-export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee = 0, originalShippingFee = shippingFee, shippingSupportDiscount = 0, promoDiscount = 0, promoCode = "", promoSource = "", promoVoucherId = "", pointsDiscount = 0, distanceKm = null, lat = null, lng = null, deliveryInfo, fulfillmentType, branchInfo = null, pickupTimeText = "", paymentMethod, userProfile, currentPhone, setDemoOrdersState, loyaltyByPhoneStorage, setDemoLoyaltyState, addressStorage, updateAddress, addAddress, setDefaultAddress, setDemoAddressesState, setUserProfile, getMemberRank, setCurrentOrder, setOrderStatus, setCart, saveDemoUser }) {
+export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee = 0, originalShippingFee = shippingFee, shippingSupportDiscount = 0, promoDiscount = 0, promoCode = "", promoSource = "", promoVoucherId = "", pointsDiscount = 0, distanceKm = null, lat = null, lng = null, deliveryInfo, fulfillmentType, branchInfo = null, pickupTimeText = "", paymentMethod, orderSource = "online", userProfile, currentPhone, setDemoOrdersState, setDemoLoyaltyState, addressStorage, updateAddress, addAddress, setDefaultAddress, setDemoAddressesState, setUserProfile, getMemberRank, setCurrentOrder, setOrderStatus, setCart, saveDemoUser }) {
   if (!cart.length) return null;
   const orderCode = `GHR-${Date.now().toString().slice(-4)}`;
   const createdAt = new Date().toISOString();
@@ -156,6 +182,7 @@ export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee =
     pointsBaseAmount ?? Math.max(subtotalAmount - Number(promoDiscount || 0), 0)
   );
   const pointsEarned = calculateOrderPoints(pointsAmount, getLoyaltyRuleConfig());
+  const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
   const order = {
     id: orderCode,
     orderCode,
@@ -185,18 +212,25 @@ export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee =
     orderCustomerName: deliveryInfo?.name || userProfile.name,
     customerPhone: deliveryInfo?.phone || userProfile.phone,
     fulfillmentType,
-    branchId: branchInfo?.id || "",
+    branchId: branchIdentifiers.branchId,
+    branchUuid: branchIdentifiers.branchUuid,
     branchName: branchInfo?.name || "",
     branchAddress: branchInfo?.address || "",
-    pickupBranchId: fulfillmentType === "pickup" ? (branchInfo?.id || "") : "",
+    pickupBranchId: branchIdentifiers.pickupBranchId,
+    pickupBranchUuid: branchIdentifiers.pickupBranchUuid,
     pickupBranchName: fulfillmentType === "pickup" ? (branchInfo?.name || "") : "",
     pickupBranchAddress: fulfillmentType === "pickup" ? (branchInfo?.address || "") : "",
-    deliveryBranchId: fulfillmentType === "delivery" ? (branchInfo?.id || "") : "",
+    deliveryBranchId: branchIdentifiers.deliveryBranchId,
+    deliveryBranchUuid: branchIdentifiers.deliveryBranchUuid,
     deliveryBranchName: fulfillmentType === "delivery" ? (branchInfo?.name || "") : "",
     deliveryBranchAddress: fulfillmentType === "delivery" ? (branchInfo?.address || "") : "",
     pickupTimeText,
     deliveryAddress: fulfillmentType === "pickup" ? "Khach tu den lay" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
     paymentMethod,
+    source: orderSource,
+    channel: orderSource,
+    platform: orderSource,
+    orderSource,
     pointsEarned
   };
   const savedOrder = orderStorage.addOrder(order);
@@ -277,10 +311,10 @@ export async function createOrderAsync(params) {
     branchInfo = null,
     pickupTimeText = "",
     paymentMethod,
+    orderSource = "online",
     userProfile,
     currentPhone,
     setDemoOrdersState,
-    loyaltyByPhoneStorage,
     setDemoLoyaltyState,
     addressStorage,
     updateAddress,
@@ -306,6 +340,7 @@ export async function createOrderAsync(params) {
   );
   const loyaltyRule = await getLoyaltyRuleConfigAsync();
   const pointsEarned = calculateOrderPoints(pointsAmount, loyaltyRule);
+  const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
   const order = {
     id: orderCode,
     orderCode,
@@ -335,18 +370,25 @@ export async function createOrderAsync(params) {
     orderCustomerName: deliveryInfo?.name || userProfile.name,
     customerPhone: deliveryInfo?.phone || userProfile.phone,
     fulfillmentType,
-    branchId: branchInfo?.id || "",
+    branchId: branchIdentifiers.branchId,
+    branchUuid: branchIdentifiers.branchUuid,
     branchName: branchInfo?.name || "",
     branchAddress: branchInfo?.address || "",
-    pickupBranchId: fulfillmentType === "pickup" ? (branchInfo?.id || "") : "",
+    pickupBranchId: branchIdentifiers.pickupBranchId,
+    pickupBranchUuid: branchIdentifiers.pickupBranchUuid,
     pickupBranchName: fulfillmentType === "pickup" ? (branchInfo?.name || "") : "",
     pickupBranchAddress: fulfillmentType === "pickup" ? (branchInfo?.address || "") : "",
-    deliveryBranchId: fulfillmentType === "delivery" ? (branchInfo?.id || "") : "",
+    deliveryBranchId: branchIdentifiers.deliveryBranchId,
+    deliveryBranchUuid: branchIdentifiers.deliveryBranchUuid,
     deliveryBranchName: fulfillmentType === "delivery" ? (branchInfo?.name || "") : "",
     deliveryBranchAddress: fulfillmentType === "delivery" ? (branchInfo?.address || "") : "",
     pickupTimeText,
     deliveryAddress: fulfillmentType === "pickup" ? "Khach tu den lay" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
     paymentMethod,
+    source: orderSource,
+    channel: orderSource,
+    platform: orderSource,
+    orderSource,
     pointsEarned
   };
 

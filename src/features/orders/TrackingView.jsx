@@ -153,9 +153,9 @@ export default function Tracking({
                 </div>
 
                 <div className="mt-4 space-y-2 rounded-[22px] bg-cream/70 p-3">
-                  {items.slice(0, 3).map((item) => (
+                  {items.slice(0, 3).map((item, index) => (
                     <div
-                      key={item.cartId || `${order.orderCode}-${item.id}-${item.name}`}
+                      key={item.cartId || `${order.orderCode}-${item.id || "item"}-${item.name || "name"}-${index}`}
                       className="flex items-start justify-between gap-3 text-sm"
                     >
                       <div>

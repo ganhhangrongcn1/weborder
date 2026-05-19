@@ -22,6 +22,78 @@ export default function BranchSettings({
   const [shippingSaveMessage, setShippingSaveMessage] = useState("");
   const [branchSaving, setBranchSaving] = useState(false);
   const [shippingSaving, setShippingSaving] = useState(false);
+  const getSiteOrigin = () => {
+    if (typeof window === "undefined") return "";
+    return String(window.location.origin || "").trim();
+  };
+  const inferBranchCodeFromName = (name = "") => {
+    const normalized = String(name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (normalized.includes("30/4")) return "CN01";
+    if (normalized.includes("thich quang duc")) return "CN02";
+    if (normalized.includes("le hong phong")) return "CN03";
+    return "";
+  };
+  const getQrBranchKey = (branch) => {
+    const branchCode = String(branch?.branch_code || branch?.branchCode || "").trim();
+    if (branchCode) return branchCode;
+    const inferredBranchCode = inferBranchCodeFromName(branch?.name);
+    if (inferredBranchCode) return inferredBranchCode;
+    const slug = String(branch?.slug || "").trim();
+    if (slug) return slug;
+    return String(branch?.id || "").trim();
+  };
+  const getBranchQrUrl = (branch) => {
+    const branchKey = encodeURIComponent(getQrBranchKey(branch));
+    return `${getSiteOrigin()}/qr/${branchKey}`;
+  };
+  const getBranchQrImageUrl = (branch) => {
+    const qrData = encodeURIComponent(getBranchQrUrl(branch));
+    return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${qrData}`;
+  };
+  const downloadBranchQr = (branch) => {
+    const anchor = document.createElement("a");
+    anchor.href = getBranchQrImageUrl(branch);
+    anchor.download = `qr-${String(branch?.id || "branch")}.png`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+  };
+  const printBranchQr = (branch) => {
+    const qrUrl = getBranchQrImageUrl(branch);
+    const qrLink = getBranchQrUrl(branch);
+    const printWindow = window.open("", "_blank", "width=800,height=900");
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>QR ${String(branch?.name || "")}</title>
+          <style>
+            body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 24px; }
+            .qr-sheet { max-width: 520px; margin: 0 auto; border: 1px solid #ddd; border-radius: 16px; padding: 20px; text-align: center; }
+            h1 { font-size: 24px; margin: 0 0 8px; }
+            p { margin: 0 0 8px; color: #555; }
+            img { width: 320px; height: 320px; object-fit: contain; margin: 12px auto; display: block; }
+            .link { font-size: 12px; word-break: break-all; color: #666; }
+          </style>
+        </head>
+        <body>
+          <div class="qr-sheet">
+            <h1>${String(branch?.name || "Chi nhánh")}</h1>
+            <p>${String(branch?.address || "")}</p>
+            <p>Quét mã để đặt món tại quầy</p>
+            <img src="${qrUrl}" alt="QR order tại quầy" />
+            <p class="link">${qrLink}</p>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
 
   useEffect(() => {
     setDraftBranches(Array.isArray(branches) ? branches : []);
@@ -99,6 +171,19 @@ export default function BranchSettings({
     );
   };
 
+  const getNextBranchCode = () => {
+    const usedNumbers = (draftBranches || [])
+      .map((item) => String(item?.branch_code || item?.branchCode || "").trim().toUpperCase())
+      .map((code) => {
+        const match = code.match(/^CN(\d{2,})$/);
+        return match ? Number(match[1]) : null;
+      })
+      .filter((value) => Number.isFinite(value));
+    const maxUsed = usedNumbers.length ? Math.max(...usedNumbers) : 0;
+    const nextNumber = Math.max(1, maxUsed + 1);
+    return `CN${String(nextNumber).padStart(2, "0")}`;
+  };
+
   const updateBranchAddress = async (branchId, value) => {
     updateBranchField(branchId, "address", value);
 
@@ -142,7 +227,7 @@ export default function BranchSettings({
       setBranches(draftBranches);
       await syncBranchesToSupabase(draftBranches);
       setBranchSaveMessage("Đã lưu chi nhánh lên Supabase.");
-    } catch (_error) {
+    } catch {
       setBranchSaveMessage("Lưu chi nhánh thất bại. Kiểm tra RLS policy write cho catalog.");
     } finally {
       setBranchSaving(false);
@@ -156,7 +241,7 @@ export default function BranchSettings({
     try {
       await onSaveShippingConfig(draftShippingConfig);
       setShippingSaveMessage("Đã lưu cấu hình phí ship lên Supabase.");
-    } catch (_error) {
+    } catch {
       setShippingSaveMessage("Lưu phí ship thất bại. Kiểm tra RLS policy write cho app_configs.");
     } finally {
       setShippingSaving(false);
@@ -182,6 +267,7 @@ export default function BranchSettings({
                 setDraftBranches([
                   {
                     id: `branch-${Date.now()}`,
+                    branch_code: getNextBranchCode(),
                     name: "Chi nhánh mới",
                     address: "",
                     phone: "",
@@ -214,6 +300,12 @@ export default function BranchSettings({
                 <div className="admin-branch-layout">
                   <div className="admin-branch-main">
                     <div className="admin-edit-fields admin-branch-top-grid">
+                      <AdminInput
+                        className="admin-input"
+                        placeholder="Mã chi nhánh (ví dụ: CN04)"
+                        value={branch.branch_code ?? branch.branchCode ?? ""}
+                        onChange={(event) => updateBranchField(branch.id, "branch_code", String(event.target.value || "").toUpperCase().trim())}
+                      />
                       <AdminInput
                         className="admin-input"
                         placeholder="Tên chi nhánh"
@@ -301,6 +393,34 @@ export default function BranchSettings({
                         />
                       </label>
                     </div>
+                    <div className="admin-input flex flex-col gap-3">
+                      <span className="text-xs font-semibold text-brown/70">QR order tại quầy</span>
+                      <code className="rounded-xl bg-white px-3 py-2 text-[11px] leading-5 text-brown/70">
+                        {getBranchQrUrl(branch)}
+                      </code>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AdminButton
+                          variant="secondary"
+                          onClick={async () => {
+                            const link = getBranchQrUrl(branch);
+                            try {
+                              await navigator.clipboard.writeText(link);
+                              setBranchSaveMessage("Đã copy link QR chi nhánh.");
+                            } catch {
+                              setBranchSaveMessage("Không thể copy tự động. Vui lòng copy thủ công.");
+                            }
+                          }}
+                        >
+                          Copy link
+                        </AdminButton>
+                        <AdminButton variant="secondary" onClick={() => downloadBranchQr(branch)}>
+                          Tải PNG
+                        </AdminButton>
+                        <AdminButton variant="secondary" onClick={() => printBranchQr(branch)}>
+                          In QR
+                        </AdminButton>
+                      </div>
+                    </div>
                   </div>
                   <div className="admin-branch-actions">
                     <AdminButton variant="danger" className="admin-danger" onClick={() => setDraftBranches(draftBranches.filter((item) => item.id !== branch.id))}>
@@ -378,3 +498,4 @@ export default function BranchSettings({
     </>
   );
 }
+

@@ -209,7 +209,7 @@ run()
   .finally(async () => {
     try {
       await cleanup();
-    } catch (_error) {
+    } catch {
       // noop
     }
   });

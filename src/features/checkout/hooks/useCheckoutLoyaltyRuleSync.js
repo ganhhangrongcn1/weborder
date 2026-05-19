@@ -12,7 +12,7 @@ export default function useCheckoutLoyaltyRuleSync({ setLoyaltyRule }) {
         if (remoteRule && typeof remoteRule === "object") {
           setLoyaltyRule(remoteRule);
         }
-      } catch (_error) {
+      } catch {
         // Keep current fallback rule.
       }
     };
@@ -33,4 +33,3 @@ export default function useCheckoutLoyaltyRuleSync({ setLoyaltyRule }) {
     };
   }, [setLoyaltyRule]);
 }
-

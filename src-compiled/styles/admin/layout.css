@@ -1,7 +1,0 @@
-.admin-shell {
-  display: grid;
-  min-height: 100vh;
-  grid-template-columns: 260px 1fr;
-  background: #f6f7fb;
-  color: #172033;
-}

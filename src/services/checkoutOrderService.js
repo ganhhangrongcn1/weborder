@@ -35,7 +35,8 @@ export function buildCreateOrderPayload({
   fulfillmentType,
   selectedBranchInfo,
   deliverySourceBranch,
-  pickupTimeText
+  pickupTimeText,
+  orderSource = "online"
 }) {
   return {
     totalAmount: checkoutTotal,
@@ -54,6 +55,7 @@ export function buildCreateOrderPayload({
     lng: deliveryInfo.lng,
     deliveryInfo,
     fulfillmentType,
+    orderSource,
     branchInfo: fulfillmentType === "pickup" ? selectedBranchInfo : deliverySourceBranch,
     pickupTimeText: fulfillmentType === "pickup" ? pickupTimeText : "",
     paymentMethod: "COD"

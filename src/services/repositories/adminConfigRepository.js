@@ -1,11 +1,8 @@
-import { createLocalStorageAdapter } from "../adapters/localStorageAdapter.js";
-import { createAppConfigRepository, createRuntimeAppConfigRepository } from "./appConfigRepository.js";
+import { createRuntimeAppConfigRepository } from "./appConfigRepository.js";
 import { getDataSource } from "./dataSource.js";
 import { shouldWriteConfigKeyToSupabase } from "./writeThroughPolicy.js";
 
-const localRepository = createAppConfigRepository(createLocalStorageAdapter());
 const SUPABASE_RETRY_COUNT = 1;
-const isDev = Boolean(import.meta?.env?.DEV);
 
 function useRuntimeRepository() {
   return getDataSource() === "supabase";
@@ -15,14 +12,12 @@ function getRuntimeRepository() {
   return createRuntimeAppConfigRepository();
 }
 
-function readLocal(key, fallback) {
-  if (useRuntimeRepository()) return fallback;
-  return localRepository.get(key, fallback);
+function readStaticFallback(_key, fallback) {
+  return fallback;
 }
 
-function writeLocal(key, value) {
-  if (useRuntimeRepository()) return value;
-  return localRepository.set(key, value);
+function writePassthrough(_key, value) {
+  return value;
 }
 
 function wait(ms) {
@@ -47,63 +42,51 @@ async function runWithRetry(task, retries = SUPABASE_RETRY_COUNT) {
 export const adminConfigRepository = {
   getLocal(key, fallback) {
     if (useRuntimeRepository()) return fallback;
-    return readLocal(key, fallback);
+    return readStaticFallback(key, fallback);
   },
   get(key, fallback) {
     if (!useRuntimeRepository()) {
-      return readLocal(key, fallback);
+      return readStaticFallback(key, fallback);
     }
     return getRuntimeRepository().get(key, fallback);
   },
   set(key, value) {
-    const savedLocal = writeLocal(key, value);
+    const savedValue = writePassthrough(key, value);
     if (!useRuntimeRepository() || !shouldWriteConfigKeyToSupabase(key)) {
-      return savedLocal;
+      return savedValue;
     }
-    try {
-      return getRuntimeRepository().set(key, value);
-    } catch (error) {
-      if (isDev) {
-        console.warn(`Supabase sync failed for config key "${key}" in sync set(). Kept local value.`, error);
-      }
-      return savedLocal;
-    }
+    return getRuntimeRepository().set(key, value);
   },
   async getAsync(key, fallback) {
     if (!useRuntimeRepository()) {
-      return readLocal(key, fallback);
+      return readStaticFallback(key, fallback);
     }
     try {
       return await runWithRetry(() => getRuntimeRepository().getAsync(key, fallback));
-    } catch (_error) {
-      console.warn(`Supabase read failed for config key "${key}".`, _error);
-      throw _error;
+    } catch (error) {
+      console.warn(`Supabase read failed for config key "${key}".`, error);
+      throw error;
     }
   },
   async getManyAsync(keys = [], fallbackByKey = {}) {
     if (!useRuntimeRepository()) {
       return Object.fromEntries(
-        keys.map((key) => [key, readLocal(key, fallbackByKey[key])])
+        keys.map((key) => [key, readStaticFallback(key, fallbackByKey[key])])
       );
     }
     try {
       return await runWithRetry(() => getRuntimeRepository().getManyAsync(keys, fallbackByKey));
-    } catch (_error) {
-      console.warn("Supabase batch config read failed.", _error);
-      throw _error;
+    } catch (error) {
+      console.warn("Supabase batch config read failed.", error);
+      throw error;
     }
   },
   async setAsync(key, value) {
-    const savedLocal = writeLocal(key, value);
+    const savedValue = writePassthrough(key, value);
     if (!useRuntimeRepository() || !shouldWriteConfigKeyToSupabase(key)) {
-      return savedLocal;
+      return savedValue;
     }
-    try {
-      await runWithRetry(() => getRuntimeRepository().setAsync(key, value));
-      return value;
-    } catch (_error) {
-      console.warn(`Supabase write failed for config key "${key}". Saved to local fallback.`, _error);
-      return savedLocal;
-    }
+    await runWithRetry(() => getRuntimeRepository().setAsync(key, value));
+    return value;
   }
 };

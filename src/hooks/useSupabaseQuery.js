@@ -28,7 +28,6 @@ export function useSupabaseQuery(fetcher, options = {}) {
   useEffect(() => {
     if (!immediate) return;
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [immediate, run, ...deps]);
 
   return {

@@ -88,7 +88,7 @@ export default function MenuManager({
       } else {
         setSyncStatus("Chưa thể lưu menu lên Supabase ở mode hiện tại.");
       }
-    } catch (_error) {
+    } catch {
       setSyncStatus("Lưu menu lên Supabase thất bại. Kiểm tra RLS policy write cho catalog.");
     } finally {
       setSyncingMenu(false);

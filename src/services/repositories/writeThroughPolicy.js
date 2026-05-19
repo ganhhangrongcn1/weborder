@@ -3,91 +3,89 @@ import { isSupabaseRuntimeWriteEnabled, isSupabaseSeedMigrationEnabled } from ".
 
 export const DATA_FLOW_MODE = {
   localOnly: "local-only",
-  localFirstWithRemoteSync: "local-first-with-remote-sync",
-  supabaseFirstWithLocalFallback: "supabase-first-with-local-fallback",
   supabaseOnly: "supabase-only"
 };
 
 export const DOMAIN_DATA_POLICY = {
   menuCatalog: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   marketingPromos: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   smartPromotions: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   coupons: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   campaigns: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   appConfigs: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   customers: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   customerAddresses: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   orders: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   loyalty: {
-    mode: DATA_FLOW_MODE.supabaseFirstWithLocalFallback,
-    readStrategy: "supabase-first",
-    writeStrategy: "write-through",
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: true,
-    strictRemoteWrite: false
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
   },
   localSession: {
     mode: DATA_FLOW_MODE.localOnly,
@@ -135,12 +133,6 @@ export function shouldWriteDomainToSupabase(domain) {
 
   if (!policy.allowRuntimeWrites) return false;
   if (policy.mode === DATA_FLOW_MODE.localOnly) return false;
-  if (policy.mode === DATA_FLOW_MODE.localFirstWithRemoteSync) {
-    return supabaseReady;
-  }
-  if (policy.mode === DATA_FLOW_MODE.supabaseFirstWithLocalFallback) {
-    return supabaseReady && runtimeWriteEnabled;
-  }
   if (policy.mode === DATA_FLOW_MODE.supabaseOnly) {
     return supabaseReady && runtimeWriteEnabled;
   }
@@ -151,26 +143,8 @@ export function shouldWriteConfigKeyToSupabase(key) {
   const domain = resolveDomainForConfigKey(key);
   if (!shouldWriteDomainToSupabase(domain)) return false;
 
-  // Guard go-live: only allow explicit-safe config writes by default in Supabase mode.
   if (isSupabaseSeedMigrationEnabled()) return true;
-
-  const safeConfigKeys = new Set([
-    "ghr_shipping_config",
-    "ghr_zalo_config",
-    "ghr_hours",
-    "ghr_loyalty",
-    "ghr_menu_schema",
-    "ghr_option_group_presets",
-    "ghr_goong_config",
-    "ghr_goong_api_key",
-    "ghr_goong_maptiles_key",
-    "ghr_loyalty_ui_text",
-    "ghr_loyalty_rule_rows",
-    "ghr_loyalty_bonus_display",
-    "ghr_loyalty_milestones"
-  ]);
-
-  return safeConfigKeys.has(String(key || "").trim());
+  return resolveDomainForConfigKey(key) !== "localSession";
 }
 
 export function isStrictSupabaseDomainMode() {
@@ -179,21 +153,7 @@ export function isStrictSupabaseDomainMode() {
 }
 
 export function shouldAllowLocalFallbackForDomain(domain) {
-  if (isStrictSupabaseDomainMode()) {
-    const protectedDomains = new Set([
-      "menuCatalog",
-      "marketingPromos",
-      "smartPromotions",
-      "coupons",
-      "campaigns",
-      "appConfigs",
-      "customers",
-      "customerAddresses",
-      "orders",
-      "loyalty"
-    ]);
-    if (protectedDomains.has(String(domain || "").trim())) return false;
-  }
+  if (isStrictSupabaseDomainMode()) return false;
   const policy = getDomainDataPolicy(domain);
   return Boolean(policy?.allowFallbackLocal);
 }

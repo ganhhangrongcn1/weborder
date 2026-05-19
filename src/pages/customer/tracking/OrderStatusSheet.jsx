@@ -123,11 +123,11 @@ export default function OrderStatusSheet({
         </div>
 
         <div className="order-detail-list">
-          {orderItems.map((item) => {
+          {orderItems.map((item, index) => {
             const options = [item.spice, ...(item.toppings || []).map((topping) => topping.name), item.note ? `Ghi chú: ${item.note}` : ""].filter(Boolean);
             const lineTotal = item.lineTotal || (item.unitTotal || item.price || 0) * (item.quantity || 1);
             return (
-              <div key={item.cartId || `${order.orderCode}-${item.id}-${item.name}`} className="order-detail-item">
+              <div key={item.cartId || `${order.orderCode}-${item.id || "item"}-${item.name || "name"}-${index}`} className="order-detail-item">
                 <div>
                   <strong>{item.name}</strong>
                   <span>x{item.quantity || 1}</span>

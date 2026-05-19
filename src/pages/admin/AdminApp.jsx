@@ -280,7 +280,7 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
 
         <AdminPageHeader
           title={getAdminPageTitle(section)}
-          description={"Qu\u1ea3n tr\u1ecb v\u1eadn h\u00e0nh c\u1eeda h\u00e0ng, d\u1eef li\u1ec7u demo l\u01b0u localStorage."}
+          description={"Qu\u1ea3n tr\u1ecb v\u1eadn h\u00e0nh c\u1eeda h\u00e0ng, d\u1eef li\u1ec7u v\u1eadn h\u00e0nh l\u01b0u tr\u00ean Supabase."}
           action={isAppearancePage ? <AdminButton onClick={() => setUiDirty(false)}>Lưu thay đổi</AdminButton> : null}
         />
 

@@ -35,9 +35,9 @@ export default function useAdminStoreConfigActions({
     if (supabaseConfigSyncEnabled) {
       try {
         await saveShippingConfigStrictAsync(next);
-      } catch (_error) {
+      } catch (error) {
         await saveShippingConfigAsync(next).catch(() => {});
-        throw _error;
+        throw error;
       }
     }
     return next;

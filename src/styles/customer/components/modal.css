@@ -109,6 +109,7 @@
   z-index: 46;
   width: min(calc(100% - 28px), 402px);
   transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .floating-cart-combo-card {
@@ -126,6 +127,7 @@
   background: rgba(255, 255, 255, 0.92);
   margin: 8px;
   padding: 8px 10px;
+  pointer-events: auto;
 }
 
 .floating-cart-milestone-card p {
@@ -165,6 +167,7 @@
   border-radius: 0;
   background: transparent;
   padding: 10px 12px;
+  pointer-events: auto;
 }
 
 .floating-cart-bar strong {

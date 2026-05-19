@@ -17,7 +17,6 @@ export function createOrderActions({
   setCurrentOrder,
   setOrderStatus,
   setCart,
-  saveDemoOrders,
   demoOrders,
   currentOrder,
   saveDemoUser
@@ -40,7 +39,8 @@ export function createOrderActions({
     fulfillmentType,
     branchInfo = null,
     pickupTimeText = "",
-    paymentMethod
+    paymentMethod,
+    orderSource = "online"
   }) {
     return createOrderAsync({
       cart,
@@ -61,6 +61,7 @@ export function createOrderActions({
       fulfillmentType,
       branchInfo,
       pickupTimeText,
+      orderSource,
       paymentMethod,
       userProfile,
       currentPhone,

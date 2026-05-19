@@ -1,5 +1,4 @@
 import { getConfigTtlMs } from "../repositories/dataStrategyMatrix.js";
-import { isSupabaseStrictModeEnabled } from "../supabase/runtimeFlags.js";
 
 export function createSupabaseConfigAdapter({
   supabaseClient,
@@ -17,7 +16,6 @@ export function createSupabaseConfigAdapter({
   const READ_ERROR_BACKOFF_BASE_MS = 4000;
   const READ_ERROR_BACKOFF_MAX_MS = 30000;
   const isDev = Boolean(import.meta?.env?.DEV);
-  const strictModeEnabled = isSupabaseStrictModeEnabled();
 
   function getTtlMs(key) {
     return getConfigTtlMs(key, SMALL_CONFIG_TTL_MS || DEFAULT_TTL_MS);
@@ -65,29 +63,8 @@ export function createSupabaseConfigAdapter({
     readFailures.delete(key);
   }
 
-  function readLocalFallback(key, fallback) {
-    if (strictModeEnabled) return fallback;
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw == null) return fallback;
-      return JSON.parse(raw);
-    } catch {
-      return fallback;
-    }
-  }
-
-  function writeLocalFallback(key, value) {
-    if (strictModeEnabled) return value;
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      // Ignore storage write errors to keep adapter non-blocking.
-    }
-    return value;
-  }
-
   async function fetchBatch(keys) {
-    if (!supabaseClient) return new Map();
+    if (!supabaseClient) throw new Error("missing_supabase_client");
     const { data, error } = await supabaseClient
       .from(table)
       .select(`${keyColumn},${valueColumn},updated_at`)
@@ -114,9 +91,6 @@ export function createSupabaseConfigAdapter({
           const value = row ? row[valueColumn] : pending.fallback;
           setCache(key, value, row?.updated_at || "");
           clearReadFailure(key);
-          if (row) {
-            writeLocalFallback(key, value);
-          }
           pending.resolve(value ?? pending.fallback);
           inFlight.delete(key);
         });
@@ -125,7 +99,7 @@ export function createSupabaseConfigAdapter({
           markReadFailure(key);
           setCache(key, pending.fallback, "");
           if (isDev) {
-            console.warn(`[supabaseConfigAdapter] fetch failed, fallback local: ${key}`, {
+            console.warn(`[supabaseConfigAdapter] fetch failed for key "${key}".`, {
               message: error?.message || String(error || "")
             });
           }
@@ -137,7 +111,7 @@ export function createSupabaseConfigAdapter({
   }
 
   async function loadAsync(key, fallback) {
-    if (!supabaseClient) return fallback;
+    if (!supabaseClient) throw new Error("missing_supabase_client");
     const cached = getFreshCache(key);
     if (cached) return cached.value ?? fallback;
     if (isInReadBackoff(key)) {
@@ -165,7 +139,7 @@ export function createSupabaseConfigAdapter({
   }
 
   async function saveAsync(key, value) {
-    if (!supabaseClient) return value;
+    if (!supabaseClient) throw new Error("missing_supabase_client");
     const { error } = await supabaseClient
       .from(table)
       .upsert(
@@ -187,22 +161,22 @@ export function createSupabaseConfigAdapter({
 
   return {
     load(key, fallback) {
-      const localValue = readLocalFallback(key, fallback);
-      loadAsync(key, localValue)
+      const cached = getFreshCache(key);
+      const currentValue = cached ? (cached.value ?? fallback) : fallback;
+      loadAsync(key, fallback)
         .then((remoteValue) => {
           if (remoteValue !== undefined) {
-            writeLocalFallback(key, remoteValue);
+            setCache(key, remoteValue, "");
           }
         })
         .catch((error) => {
-          console.warn(`[supabaseConfigAdapter] read failed for key "${key}". Using local fallback.`, error);
+          console.warn(`[supabaseConfigAdapter] read failed for key "${key}".`, error);
         });
-      return localValue;
+      return currentValue;
     },
     save(key, value) {
-      writeLocalFallback(key, value);
       saveAsync(key, value).catch((error) => {
-        console.warn(`[supabaseConfigAdapter] write failed for key "${key}". Kept local fallback.`, error);
+        console.warn(`[supabaseConfigAdapter] write failed for key "${key}".`, error);
       });
       return value;
     },

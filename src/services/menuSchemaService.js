@@ -175,7 +175,7 @@ function isValidMenuSchema(schema) {
 }
 
 export function loadMenuSchema() {
-  // Customer runtime should read menu schema from local cache only.
+  // Customer runtime reads menu schema from the runtime config repository.
   // Remote sync for this key is handled by explicit admin flows.
   const saved = adminConfigRepository.getLocal(MENU_SCHEMA_KEY, null);
   return isValidMenuSchema(saved) ? saved : null;

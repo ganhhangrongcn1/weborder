@@ -17,6 +17,7 @@ export default function useCheckoutActions({
   selectedBranchInfo,
   deliverySourceBranch,
   pickupTimeText,
+  orderSource = "online",
   navigate,
   onNotice
 }) {
@@ -74,7 +75,8 @@ export default function useCheckoutActions({
       fulfillmentType,
       selectedBranchInfo,
       deliverySourceBranch,
-      pickupTimeText
+      pickupTimeText,
+      orderSource
     });
     console.info("[checkout-debug] handlePlaceOrder:payload", {
       totalAmount: orderPayload.totalAmount,

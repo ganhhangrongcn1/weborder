@@ -2,16 +2,13 @@ import { products as productSeed } from "../../../../data/products.js";
 import { normalizePresetDraft } from "../menuManager.utils.js";
 
 export default function useMenuManagerActions({
-  products,
   setProducts,
   toppings,
   setToppings,
   adminCategories,
   setAdminCategories,
-  optionGroupPresets,
   setOptionGroupPresets,
   onEditProduct,
-  selectedPresetId,
   setSelectedPresetId,
   setEditingPresetId,
   setEditingPresetDraft,

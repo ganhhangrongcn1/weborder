@@ -1,5 +1,8 @@
 import { useEffect } from "react";
 
+const homePopupShownKeys = new Set();
+const homePopupSeenAtByKey = new Map();
+
 export default function useHomeEffects({
   selectedDeliveryBranchInfo,
   deliveryBranches,
@@ -60,21 +63,13 @@ export default function useHomeEffects({
   useEffect(() => {
     setHomePopupOpen(false);
     if (!showHomePopup) return undefined;
-    try {
-      if (sessionStorage.getItem(popupSessionKey) === "1") return undefined;
-      const lastSeenAt = Number(localStorage.getItem(popupCooldownKey) || 0);
-      const cooldownMs = Math.max(0, Number(popupCooldownHours || 0)) * 60 * 60 * 1000;
-      if (cooldownMs > 0 && lastSeenAt > 0 && Date.now() - lastSeenAt < cooldownMs) return undefined;
-    } catch {
-      // ignore storage errors
-    }
+    if (homePopupShownKeys.has(popupSessionKey)) return undefined;
+    const lastSeenAt = Number(homePopupSeenAtByKey.get(popupCooldownKey) || 0);
+    const cooldownMs = Math.max(0, Number(popupCooldownHours || 0)) * 60 * 60 * 1000;
+    if (cooldownMs > 0 && lastSeenAt > 0 && Date.now() - lastSeenAt < cooldownMs) return undefined;
     const timer = window.setTimeout(() => {
-      try {
-        sessionStorage.setItem(popupSessionKey, "1");
-        localStorage.setItem(popupCooldownKey, String(Date.now()));
-      } catch {
-        // ignore storage errors
-      }
+      homePopupShownKeys.add(popupSessionKey);
+      homePopupSeenAtByKey.set(popupCooldownKey, Date.now());
       setHomePopupOpen(true);
     }, popupDelaySeconds * 1000);
     return () => window.clearTimeout(timer);

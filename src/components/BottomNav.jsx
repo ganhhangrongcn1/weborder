@@ -1,6 +1,6 @@
-import Icon from "./Icon.jsx";
+﻿import Icon from "./Icon.jsx";
 
-const items = [
+const defaultItems = [
   { id: "home", label: "Trang chủ", icon: "home" },
   { id: "menu", label: "Menu", icon: "menu" },
   { id: "orders", label: "Đơn hàng", icon: "bag" },
@@ -8,7 +8,7 @@ const items = [
   { id: "account", label: "Tài khoản", icon: "user" }
 ];
 
-export default function BottomNav({ activeTab, onChange }) {
+export default function BottomNav({ activeTab, onChange, items = defaultItems }) {
   return (
     <nav className="customer-bottom-nav">
       {items.map((item) => (

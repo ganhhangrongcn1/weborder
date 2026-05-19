@@ -14,8 +14,12 @@ import SuccessPage from "./SuccessPage.jsx";
 import TrackingPage from "../tracking/TrackingPage.jsx";
 import LoyaltyPage from "../loyalty/LoyaltyPage.jsx";
 import AccountPage from "../account/AccountPage.jsx";
+import QrOrderEntryPage from "../../../pages/customer/qr/QrOrderEntryPage.jsx";
 import { orderRepository } from "../../../services/repositories/orderRepository.js";
 import Icon from "../../../components/Icon.jsx";
+
+const voucherPopupSeenKeys = new Set();
+const voucherPopupVisitKeys = new Set();
 
 function isVoucherExpired(voucher) {
   const expiredAt = String(voucher?.expiredAt || voucher?.endAt || voucher?.expiry || "").trim();
@@ -31,6 +35,26 @@ function getVoucherIdentity(voucher) {
   const code = String(voucher?.code || "").trim().toUpperCase();
   const createdAt = String(voucher?.createdAt || "").trim();
   return `${code}-${createdAt}`;
+}
+
+function matchBranchByQrKey(branch = {}, key = "") {
+  const normalizedKey = String(key || "").trim().toLowerCase();
+  if (!normalizedKey) return false;
+  const candidates = [
+    branch?.branch_code,
+    branch?.branchCode,
+    branch?.branch_uuid,
+    branch?.branchUuid,
+    branch?.slug,
+    branch?.id
+  ];
+  return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === normalizedKey);
+}
+
+function resolveQrLockedBranch(branches = [], checkoutPreset = {}) {
+  const key = String(checkoutPreset?.qrBranchId || checkoutPreset?.selectedBranch || "").trim().toLowerCase();
+  if (!key) return null;
+  return (Array.isArray(branches) ? branches : []).find((branch) => matchBranchByQrKey(branch, key)) || null;
 }
 
 export default function CustomerShell({
@@ -90,8 +114,20 @@ export default function CustomerShell({
   setServiceNotice,
   getStoreBlockNotice
 }) {
+  const isQrCounterFlow = String(pageProps?.checkoutPreset?.orderSource || pageProps?.checkoutPreset?.source || "").toLowerCase() === "qr_counter" && Boolean(pageProps?.checkoutPreset?.qrBranchLocked);
+  const qrAllowedPages = ["qr-entry", "menu", "detail", "checkout", "tracking", "success", "loyalty", "account"];
+  const qrBottomNavItems = [
+    { id: "menu", label: "Menu", icon: "menu" },
+    { id: "orders", label: "Đơn hàng", icon: "bag" },
+    { id: "rewards", label: "Ưu đãi", icon: "gift" },
+    { id: "account", label: "Tài khoản", icon: "user" }
+  ];
   const [voucherPopup, setVoucherPopup] = useState(null);
   const [voucherPopupOpen, setVoucherPopupOpen] = useState(false);
+  const qrLockedBranch = useMemo(
+    () => (isQrCounterFlow ? resolveQrLockedBranch(branches, pageProps?.checkoutPreset || {}) : null),
+    [isQrCounterFlow, branches, pageProps?.checkoutPreset]
+  );
 
   const lastCreatedOrderId = orderRepository.getLastCreatedOrderId();
   const forcedLatestOrder = (Array.isArray(profileOrders) ? profileOrders : []).find((order) => {
@@ -147,6 +183,19 @@ export default function CustomerShell({
   );
 
   useEffect(() => {
+    if (!isQrCounterFlow) return;
+    if (qrAllowedPages.includes(page)) return;
+    navigate("menu", "menu");
+  }, [isQrCounterFlow, page, navigate]);
+
+  useEffect(() => {
+    if (!isQrCounterFlow) return;
+    setVoucherPopup(null);
+    setVoucherPopupOpen(false);
+  }, [isQrCounterFlow]);
+
+  useEffect(() => {
+    if (isQrCounterFlow) return;
     if (!currentPhone || !isRegisteredCustomer) {
       setVoucherPopup(null);
       setVoucherPopupOpen(false);
@@ -172,8 +221,8 @@ export default function CustomerShell({
     const phoneKey = String(currentPhone || "").replace(/\D/g, "");
     const seenKey = `ghr_loyalty_voucher_seen_${phoneKey}_${voucherId}`;
     const visitKey = `ghr_loyalty_voucher_visit_${phoneKey}_${voucherId}`;
-    const hasSeen = localStorage.getItem(seenKey) === "1";
-    const shownThisVisit = sessionStorage.getItem(visitKey) === "1";
+    const hasSeen = voucherPopupSeenKeys.has(seenKey);
+    const shownThisVisit = voucherPopupVisitKeys.has(visitKey);
 
     if (hasSeen && shownThisVisit) return;
 
@@ -184,7 +233,7 @@ export default function CustomerShell({
 
     setVoucherPopup({ voucher, coupon: matchedCoupon, seenKey, visitKey });
     setVoucherPopupOpen(true);
-  }, [currentPhone, isRegisteredCustomer, loyaltyVouchers, couponById, couponByCode]);
+  }, [currentPhone, isRegisteredCustomer, loyaltyVouchers, couponById, couponByCode, isQrCounterFlow]);
 
   const handleOpenCheckout = () => {
     const notice = getStoreBlockNotice?.();
@@ -196,14 +245,31 @@ export default function CustomerShell({
   };
 
   const closeVoucherPopup = () => {
-    if (voucherPopup?.seenKey) localStorage.setItem(voucherPopup.seenKey, "1");
-    if (voucherPopup?.visitKey) sessionStorage.setItem(voucherPopup.visitKey, "1");
+    if (voucherPopup?.seenKey) voucherPopupSeenKeys.add(voucherPopup.seenKey);
+    if (voucherPopup?.visitKey) voucherPopupVisitKeys.add(voucherPopup.visitKey);
     setVoucherPopupOpen(false);
   };
 
   const handleVoucherAction = () => {
     closeVoucherPopup();
     navigate("menu", "menu");
+  };
+  const handleQrBottomNav = (tab) => {
+    if (tab === "menu") {
+      navigate("menu", "menu");
+      return;
+    }
+    if (tab === "orders") {
+      navigate("tracking", "orders");
+      return;
+    }
+    if (tab === "rewards") {
+      navigate("loyalty", "rewards");
+      return;
+    }
+    if (tab === "account") {
+      navigate("account", "account");
+    }
   };
 
   return (
@@ -222,6 +288,14 @@ export default function CustomerShell({
         ) : (
           <>
             {page === "home" && <HomePage render={pageProps.Home} {...pageProps} coupons={pageProps.homeCoupons || pageProps.coupons} smartPromotions={pageProps.homeSmartPromotions || pageProps.smartPromotions} openProduct={openOptionModalFromHome} openOptionModal={openOptionModalFromHome} />}
+            {isQrCounterFlow && qrLockedBranch ? (
+              <div className="px-4 pt-3">
+                <div className="rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
+                  Đang đặt tại: <strong>{qrLockedBranch.name}</strong>
+                </div>
+              </div>
+            ) : null}
+            {page === "qr-entry" && <QrOrderEntryPage branches={pageProps.branches} checkoutPreset={pageProps.checkoutPreset} setCheckoutPreset={pageProps.setCheckoutPreset} navigate={pageProps.navigate} isBranchOpenNow={pageProps.isBranchOpenNow} buildOutOfHoursNotice={pageProps.buildOutOfHoursNotice} setServiceNotice={pageProps.setServiceNotice} />}
             {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
             {page === "detail" && <ProductDetailPage render={pageProps.Detail} {...pageProps} />}
             {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
@@ -276,7 +350,11 @@ export default function CustomerShell({
             )}
 
             {toastVisible && <CustomerToast message="Đã thêm vào giỏ" />}
-            {!isWaitingZaloSend && <BottomNav activeTab={activeTab} onChange={handleBottomNav} />}
+            {!isWaitingZaloSend && (
+              isQrCounterFlow
+                ? <BottomNav activeTab={activeTab} onChange={handleQrBottomNav} items={qrBottomNavItems} />
+                : <BottomNav activeTab={activeTab} onChange={handleBottomNav} />
+            )}
             <StoreStatusModal notice={serviceNotice} onClose={() => setServiceNotice?.(null)} />
             <LoyaltyVoucherPopup
               open={voucherPopupOpen}

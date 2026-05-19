@@ -122,7 +122,6 @@ export default function useLoyaltyViewModel({
   const streakWillBreak = loyalty.lastCheckinDate && loyalty.lastCheckinDate !== today && !isYesterday(loyalty.lastCheckinDate);
   const comebackStreak = streakWillBreak ? loyalty.checkinStreak : loyalty.lastMissedStreak;
   const comebackActive = !checkedInToday && comebackStreak >= 3 && loyalty.comebackUsedDate !== today;
-  const nextStreak = checkedInToday ? loyalty.checkinStreak : isYesterday(loyalty.lastCheckinDate) ? loyalty.checkinStreak + 1 : 1;
   const dailyReward = getDailyRewardByRule(loyaltyRule);
   const checkinReward = comebackActive ? dailyReward * 2 : dailyReward;
   const nextMilestone = getNextMilestoneByRule(loyalty.checkinStreak, loyaltyRule);

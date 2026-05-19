@@ -145,7 +145,7 @@ export function normalizeOrderOption(group, option) {
   };
 }
 
-export function getDefaultOrderChoices(product, fallbackToppings = []) {
+export function getDefaultOrderChoices(product, _fallbackToppings = []) {
   const groups = product.optionGroups || [];
   const firstSingleGroup = groups.find((group) => group.type === "single" && group.options?.length);
   const firstSingleOption = firstSingleGroup?.options?.[0];

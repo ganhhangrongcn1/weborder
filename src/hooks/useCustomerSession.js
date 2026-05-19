@@ -74,8 +74,7 @@ export default function useCustomerSession({
         if (authSnapshot?.ok && authSnapshot.phone) {
           try {
             await userStorage?.hydrateFromRemote?.();
-          } catch (_error) {
-            // Continue with best-effort local cache.
+          } catch {
           }
           const restoredUser = await customerRepository.getUserByPhoneAsync(authSnapshot.phone);
           const hydratedUser = restoredUser ? { ...restoredUser } : null;
@@ -100,8 +99,7 @@ export default function useCustomerSession({
       if (pointer?.phone) {
         try {
           await userStorage?.hydrateFromRemote?.();
-        } catch (_error) {
-          // Continue with best-effort local cache.
+        } catch {
         }
         const restoredUser = await customerRepository.getUserByPhoneAsync(pointer.phone);
         if (!disposed && restoredUser) {
@@ -192,8 +190,7 @@ export default function useCustomerSession({
           setDemoLoyaltyState(resolvedLoyalty);
         }
         if (Array.isArray(remoteAddresses)) setDemoAddressesState(remoteAddresses);
-      } catch (_error) {
-        // Keep local fallback state.
+      } catch {
       } finally {
         if (!disposed) setIsSessionBootstrapping(false);
       }
@@ -241,8 +238,7 @@ export default function useCustomerSession({
         if (!disposed && Array.isArray(remoteOrders)) {
           setDemoOrdersState(remoteOrders);
         }
-      } catch (_error) {
-        // Keep current state when refresh fails.
+      } catch {
       } finally {
         if (!disposed) {
           setIsOrdersLoading(false);

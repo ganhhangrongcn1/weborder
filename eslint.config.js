@@ -2,8 +2,7 @@ export default [
   {
     ignores: [
       "dist/**",
-      "node_modules/**",
-      "src-compiled/**"
+      "node_modules/**"
     ]
   },
   {
@@ -21,6 +20,7 @@ export default [
         document: "readonly",
         navigator: "readonly",
         localStorage: "readonly",
+        sessionStorage: "readonly",
         alert: "readonly",
         fetch: "readonly",
         FileReader: "readonly",
@@ -28,6 +28,10 @@ export default [
         Image: "readonly",
         URL: "readonly",
         URLSearchParams: "readonly",
+        CustomEvent: "readonly",
+        PopStateEvent: "readonly",
+        crypto: "readonly",
+        queueMicrotask: "readonly",
         console: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",

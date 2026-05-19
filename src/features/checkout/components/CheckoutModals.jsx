@@ -21,7 +21,6 @@ export default function CheckoutModals({
   deliveryOrigin,
   shippingConfig,
   handleSaveAddress,
-  setShippingNeedsRefresh,
   isDeliveryFeeModalOpen,
   shippingZonesFromConfig,
   deliveryZones,
@@ -58,19 +57,13 @@ export default function CheckoutModals({
           onSelectDeliveryBranch={(nextBranchId) => {
             if (String(nextBranchId || "") === String(selectedDeliveryBranchId || "")) return;
             setSelectedDeliveryBranchId(nextBranchId);
-            setShippingNeedsRefresh?.(true);
-            setCheckoutNotice({
-              icon: "warning",
-              title: "Vui lòng kiểm tra lại địa chỉ nhận hàng",
-              message: "Bạn vừa đổi chi nhánh giao hàng. Hãy chọn lại địa chỉ nhận để cập nhật phí ship chính xác."
-            });
           }}
           onSelectAddress={handleSelectAddress}
           onClose={() => setIsAddressModalOpen(false)}
           deliveryOrigin={deliveryOrigin}
           shippingConfig={shippingConfig}
-          onSave={(nextInfo) => {
-            handleSaveAddress(nextInfo);
+          onSave={async (nextInfo) => {
+            await handleSaveAddress(nextInfo);
             setIsAddressModalOpen(false);
           }}
         />

@@ -180,7 +180,10 @@ export const loyaltyRepository = {
           repository.set(STORAGE_KEYS.loyaltyByPhone, mergedAll);
           loyaltyRemoteCache = { value: mergedAll, cachedAt: Date.now() };
           notifyLoyaltyChanged();
-          return coreSupabaseRepository.writeLoyaltyPhoneToTable(key, mergedForWrite);
+          // Security-first: client should not bulk rewrite loyalty_ledger (DELETE/INSERT).
+          // Event entries are written through RPC apply_loyalty_event in appendEventByPhoneAsync.
+          // Here we only upsert account snapshot metadata.
+          return coreSupabaseRepository.upsertLoyaltyAccountByPhone(key, mergedForWrite);
         })
         .catch((error) => {
           logSupabaseError("write loyalty tables", error, {
@@ -301,7 +304,8 @@ export const loyaltyRepository = {
     if (shouldWriteDomainToSupabase("loyalty")) {
       try {
         if (!isSameLoyaltyPayload(currentRecord, mergedForWrite)) {
-          await coreSupabaseRepository.writeLoyaltyPhoneToTable(key, mergedForWrite);
+          // Security-first: avoid direct loyalty_ledger bulk write from client.
+          await coreSupabaseRepository.upsertLoyaltyAccountByPhone(key, mergedForWrite);
         }
       } catch (error) {
         logSupabaseError("write loyalty tables (async)", error, {
