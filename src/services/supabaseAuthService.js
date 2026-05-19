@@ -3,9 +3,6 @@ import { isSupabaseRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
 import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
 
 const PROFILE_TABLE = "profiles";
-const DEFAULT_PROFILE_ROLE = "customer";
-const DEFAULT_PROFILE_STATUS = "active";
-
 function toPhoneAuthEmail(phone) {
   const key = getCustomerKey(phone);
   if (!key) return "";
@@ -124,8 +121,6 @@ export async function syncCustomerProfileToSupabase({ phone, name = "", email = 
     const profileRow = {
       phone: normalizedPhone,
       registered: true,
-      role: DEFAULT_PROFILE_ROLE,
-      status: DEFAULT_PROFILE_STATUS,
       updated_at: new Date().toISOString()
     };
     if (safeName) profileRow.name = safeName;

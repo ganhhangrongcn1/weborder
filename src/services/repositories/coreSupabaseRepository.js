@@ -375,11 +375,16 @@ async function selectProfileRows(client, columns = "*") {
 }
 
 async function upsertProfileRows(client, rows, options = {}) {
-  const payload = (Array.isArray(rows) ? rows : [rows]).filter(Boolean).map((row) => ({
-    role: DEFAULT_PROFILE_ROLE,
-    status: DEFAULT_PROFILE_STATUS,
-    ...row
-  }));
+  const payload = (Array.isArray(rows) ? rows : [rows]).filter(Boolean).map((row) => {
+    const nextRow = { ...row };
+    if (!Object.prototype.hasOwnProperty.call(nextRow, "role")) {
+      delete nextRow.role;
+    }
+    if (!Object.prototype.hasOwnProperty.call(nextRow, "status")) {
+      delete nextRow.status;
+    }
+    return nextRow;
+  });
   if (!payload.length) return null;
   const profileResult = await client.from(PROFILE_TABLE).upsert(payload, { onConflict: options.onConflict || "phone" });
   if (profileResult?.error) return profileResult;

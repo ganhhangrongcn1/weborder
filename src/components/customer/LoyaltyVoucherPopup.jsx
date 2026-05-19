@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
 
 function formatDate(value) {
   const raw = String(value || "").trim();
@@ -41,7 +42,12 @@ export default function LoyaltyVoucherPopup({
   if (!open || !voucher) return null;
 
   return (
-    <div className="loyalty-voucher-overlay" role="dialog" aria-modal="true" aria-label="Voucher dành cho bạn">
+    <CustomerBottomSheet
+      ariaLabel="Voucher dành cho bạn"
+      onClose={onClose}
+      className="promo-sheet"
+      showHeader={false}
+    >
       <section className="loyalty-voucher-card">
         <button type="button" className="loyalty-voucher-close" onClick={onClose} aria-label="Đóng">X</button>
 
@@ -59,7 +65,6 @@ export default function LoyaltyVoucherPopup({
           Chọn món ngay
         </button>
       </section>
-    </div>
+    </CustomerBottomSheet>
   );
 }
-
