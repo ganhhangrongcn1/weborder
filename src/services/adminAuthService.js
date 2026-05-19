@@ -3,7 +3,6 @@ import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/
 const ADMIN_AUTH_TIMEOUT_MS = 6000;
 const PROFILE_TABLE = "profiles";
 const ADMIN_ALLOWED_ROLES = new Set(["admin", "staff", "kitchen"]);
-const PRIVILEGED_ROLES = ["admin", "staff", "kitchen", "shipper"];
 
 function normalizeEmail(value = "") {
   return String(value || "").trim().toLowerCase();
@@ -39,6 +38,29 @@ function buildUnauthorizedMessage(profile = null) {
   return "Tài khoản này không có quyền vào khu quản trị.";
 }
 
+function normalizeAdminAuthError(error, fallbackMessage) {
+  const rawMessage = String(error?.message || "").trim().toLowerCase();
+  if (!rawMessage) return fallbackMessage;
+
+  if (rawMessage.includes("invalid login credentials")) {
+    return "Email hoặc mật khẩu admin chưa đúng.";
+  }
+
+  if (rawMessage.includes("email not confirmed")) {
+    return "Email admin này chưa được xác nhận trong Supabase Auth.";
+  }
+
+  if (rawMessage.includes("admin_auth_timeout")) {
+    return "Kết nối Supabase đang chậm hoặc bị treo. Bạn thử đăng nhập lại sau vài giây.";
+  }
+
+  if (rawMessage.includes("failed to fetch") || rawMessage.includes("network")) {
+    return "Không kết nối được tới Supabase. Bạn kiểm tra mạng hoặc cấu hình rồi thử lại.";
+  }
+
+  return String(error?.message || fallbackMessage);
+}
+
 async function withTimeout(task, timeoutMs = ADMIN_AUTH_TIMEOUT_MS) {
   let timer = null;
   try {
@@ -63,51 +85,18 @@ async function getClientReady() {
 
 async function readPrivilegedProfile(client, session) {
   const authUserId = String(session?.user?.id || "").trim();
-  const email = normalizeEmail(session?.user?.email);
+  if (!authUserId) return null;
 
-  if (!authUserId && !email) return null;
-
-  let profile = null;
-
-  if (authUserId) {
-    const { data, error } = await client
+  const { data, error } = await withTimeout(() =>
+    client
       .from(PROFILE_TABLE)
       .select("id, auth_user_id, phone, name, email, role, status, registered")
       .eq("auth_user_id", authUserId)
-      .maybeSingle();
-    if (error) throw error;
-    profile = data || null;
-  }
+      .maybeSingle()
+  );
+  if (error) throw error;
 
-  if (!profile && email) {
-    const { data, error } = await client
-      .from(PROFILE_TABLE)
-      .select("id, auth_user_id, phone, name, email, role, status, registered")
-      .ilike("email", email)
-      .in("role", PRIVILEGED_ROLES)
-      .maybeSingle();
-    if (error) throw error;
-    profile = data || null;
-  }
-
-  const normalized = normalizeProfile(profile);
-  if (!normalized) return null;
-
-  if (!normalized.auth_user_id && authUserId && normalized.email === email) {
-    const { data, error } = await client
-      .from(PROFILE_TABLE)
-      .update({
-        auth_user_id: authUserId,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", normalized.id)
-      .select("id, auth_user_id, phone, name, email, role, status, registered")
-      .maybeSingle();
-    if (error) throw error;
-    return normalizeProfile(data || normalized);
-  }
-
-  return normalized;
+  return normalizeProfile(data || null);
 }
 
 async function resolveAdminAccessFromSession(client, session) {
@@ -122,7 +111,7 @@ async function resolveAdminAccessFromSession(client, session) {
     };
   }
 
-  const profile = await readPrivilegedProfile(client, session);
+  const profile = await withTimeout(() => readPrivilegedProfile(client, session));
   if (!canAccessAdmin(profile)) {
     return {
       session: null,
@@ -189,18 +178,28 @@ export async function loginAdminWithPassword({ email, password }) {
   }
   if (!client) return { ok: false, message: "Supabase chưa sẵn sàng." };
 
-  const { data, error } = await client.auth.signInWithPassword({
-    email: String(email || "").trim(),
-    password: String(password || "")
-  });
-  if (error) {
-    return { ok: false, message: String(error.message || "Đăng nhập thất bại.") };
+  let data = null;
+
+  try {
+    const signInResult = await withTimeout(() =>
+      client.auth.signInWithPassword({
+        email: String(email || "").trim(),
+        password: String(password || "")
+      })
+    );
+    data = signInResult?.data || null;
+    const error = signInResult?.error || null;
+    if (error) {
+      return { ok: false, message: normalizeAdminAuthError(error, "Đăng nhập thất bại.") };
+    }
+  } catch (error) {
+    return { ok: false, message: normalizeAdminAuthError(error, "Đăng nhập thất bại.") };
   }
 
   try {
-    const access = await resolveAdminAccessFromSession(client, data?.session || null);
+    const access = await withTimeout(() => resolveAdminAccessFromSession(client, data?.session || null));
     if (!access.session) {
-      await client.auth.signOut();
+      await withTimeout(() => client.auth.signOut()).catch(() => {});
       return {
         ok: false,
         message: access.message || "Tài khoản này không có quyền vào khu quản trị."
@@ -208,10 +207,10 @@ export async function loginAdminWithPassword({ email, password }) {
     }
     return { ok: true, session: access.session, profile: access.profile || null };
   } catch (accessError) {
-    await client.auth.signOut();
+    await withTimeout(() => client.auth.signOut()).catch(() => {});
     return {
       ok: false,
-      message: String(accessError?.message || "Không thể xác minh quyền quản trị.")
+      message: normalizeAdminAuthError(accessError, "Không thể xác minh quyền quản trị.")
     };
   }
 }
@@ -219,7 +218,7 @@ export async function loginAdminWithPassword({ email, password }) {
 export async function logoutAdmin() {
   const client = await getClientReady();
   if (!client) return { ok: false, message: "Supabase chưa sẵn sàng." };
-  const { error } = await client.auth.signOut();
+  const { error } = await withTimeout(() => client.auth.signOut());
   if (error) return { ok: false, message: String(error.message || "Đăng xuất thất bại.") };
   return { ok: true };
 }
@@ -237,7 +236,7 @@ export async function subscribeAdminAuth(onChange) {
         rawSession: session || null,
         profile: null,
         unauthorized: Boolean(session),
-        message: session ? "Không thể xác minh quyền quản trị." : "",
+        message: session ? normalizeAdminAuthError(error, "Không thể xác minh quyền quản trị.") : "",
         error
       });
     }
