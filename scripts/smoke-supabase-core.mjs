@@ -1,4 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
+import { loadLocalEnv } from "./load-env.mjs";
+
+loadLocalEnv();
 
 const url = String(process.env.VITE_SUPABASE_URL || "").trim();
 const anonKey = String(process.env.VITE_SUPABASE_ANON_KEY || "").trim();
@@ -21,19 +24,33 @@ async function assertSelect(table) {
 }
 
 async function run() {
-  await assertSelect("customers");
+  await assertSelect("profiles");
+  await assertSelect("customer_addresses");
   await assertSelect("orders");
   await assertSelect("order_items");
   await assertSelect("loyalty_accounts");
   await assertSelect("loyalty_ledger");
 
-  const customerRow = {
+  const profileRow = {
     phone: probePhone,
     name: "Smoke Test",
-    registered: true
+    registered: true,
+    role: "customer",
+    status: "active"
   };
-  const { error: customerError } = await supabase.from("customers").upsert(customerRow, { onConflict: "phone" });
-  if (customerError) throw new Error(`[customers] upsert failed: ${customerError.message}`);
+  const { error: profileError } = await supabase.from("profiles").upsert(profileRow, { onConflict: "phone" });
+  if (profileError) throw new Error(`[profiles] upsert failed: ${profileError.message}`);
+
+  const addressRow = {
+    customer_phone: probePhone,
+    label: "Smoke Address",
+    receiver_name: "Smoke Test",
+    phone: probePhone,
+    address: "Smoke Address",
+    is_default: true
+  };
+  const { error: addressError } = await supabase.from("customer_addresses").insert(addressRow);
+  if (addressError) throw new Error(`[customer_addresses] insert failed: ${addressError.message}`);
 
   const orderRow = {
     id: probeOrderId,
@@ -79,7 +96,7 @@ async function run() {
   await supabase.from("loyalty_ledger").delete().eq("order_id", probeOrderId);
   await supabase.from("orders").delete().eq("id", probeOrderId);
   await supabase.from("loyalty_accounts").delete().eq("customer_phone", probePhone);
-  await supabase.from("customers").delete().eq("phone", probePhone);
+  await supabase.from("customer_addresses").delete().eq("customer_phone", probePhone);
 
   console.log("Supabase core smoke test passed.");
 }

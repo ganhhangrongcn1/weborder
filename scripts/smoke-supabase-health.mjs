@@ -1,4 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
+import { loadLocalEnv } from "./load-env.mjs";
+
+loadLocalEnv();
 
 const url = String(process.env.VITE_SUPABASE_URL || "").trim();
 const anonKey = String(process.env.VITE_SUPABASE_ANON_KEY || "").trim();
@@ -24,7 +27,7 @@ async function checkTable(table) {
   };
 }
 
-const tables = ["customers", "orders", "products", "app_configs"];
+const tables = ["profiles", "orders", "products", "app_configs"];
 const results = await Promise.all(tables.map(checkTable));
 const failed = results.filter((item) => !item.ok);
 

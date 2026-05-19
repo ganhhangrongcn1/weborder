@@ -1,6 +1,10 @@
-import { getCustomerKey } from "./storageService.js";
+﻿import { getCustomerKey } from "./storageService.js";
 import { isSupabaseRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
 import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
+
+const PROFILE_TABLE = "profiles";
+const DEFAULT_PROFILE_ROLE = "customer";
+const DEFAULT_PROFILE_STATUS = "active";
 
 function toPhoneAuthEmail(phone) {
   const key = getCustomerKey(phone);
@@ -101,6 +105,7 @@ export async function updatePhonePasswordAuth({ phone, password }) {
     const { data: signInData, error: signInError } = await client.auth.signInWithPassword({ email, password });
     if (!signInError && signInData?.user) return { ok: true };
   } catch {
+    // Keep the same compact result shape for callers.
   }
   return { ok: false, message: "Không thể xác minh tài khoản Supabase cho số này." };
 }
@@ -116,23 +121,24 @@ export async function syncCustomerProfileToSupabase({ phone, name = "", email = 
     const safeName = String(name || "").trim();
     const safeEmail = String(email || "").trim();
     const safeAvatarUrl = String(avatarUrl || "").trim();
-    const customerRow = {
+    const profileRow = {
       phone: normalizedPhone,
       registered: true,
+      role: DEFAULT_PROFILE_ROLE,
+      status: DEFAULT_PROFILE_STATUS,
       updated_at: new Date().toISOString()
     };
-    if (safeName) customerRow.name = safeName;
-    if (safeEmail) customerRow.email = safeEmail;
-    // Important: never overwrite existing avatar with empty string.
-    if (safeAvatarUrl) customerRow.avatar_url = safeAvatarUrl;
+    if (safeName) profileRow.name = safeName;
+    if (safeEmail) profileRow.email = safeEmail;
+    if (safeAvatarUrl) profileRow.avatar_url = safeAvatarUrl;
 
-    const { error: customerError } = await client.from("customers").upsert(
-      [customerRow],
+    const { error: profileError } = await client.from(PROFILE_TABLE).upsert(
+      [profileRow],
       { onConflict: "phone" }
     );
-    if (customerError) {
-      console.error("[syncCustomerProfileToSupabase] customer upsert failed", customerError);
-      return { ok: false, message: normalizeAuthError(customerError, "Không thể đồng bộ khách hàng.") };
+    if (profileError) {
+      console.error("[syncCustomerProfileToSupabase] profile upsert failed", profileError);
+      return { ok: false, message: normalizeAuthError(profileError, "Không thể đồng bộ hồ sơ.") };
     }
 
     const { data: authData } = await client.auth.getUser();
@@ -147,7 +153,7 @@ export async function syncCustomerProfileToSupabase({ phone, name = "", email = 
       });
       if (authError) {
         console.error("[syncCustomerProfileToSupabase] auth updateUser failed", authError);
-        return { ok: false, message: normalizeAuthError(authError, "Đã lưu customer nhưng chưa cập nhật auth profile.") };
+        return { ok: false, message: normalizeAuthError(authError, "Đã lưu hồ sơ nhưng chưa cập nhật auth profile.") };
       }
     }
     return { ok: true };
@@ -184,15 +190,15 @@ export async function syncAuthProfileToCustomerRow() {
     if (!phone) return { ok: false, message: "Auth user chưa có số điện thoại hợp lệ." };
     const name = String(meta.full_name || meta.display_name || meta.name || "").trim();
     const email = String(user.email || "").trim();
-    const { data: existingCustomer, error: existingCustomerError } = await client
-      .from("customers")
+    const { data: existingProfile, error: existingProfileError } = await client
+      .from(PROFILE_TABLE)
       .select("phone,name")
       .eq("phone", phone)
       .maybeSingle();
-    if (existingCustomerError) {
-      return { ok: false, message: normalizeAuthError(existingCustomerError, "Không đọc được hồ sơ customer.") };
+    if (existingProfileError) {
+      return { ok: false, message: normalizeAuthError(existingProfileError, "Không đọc được hồ sơ profile.") };
     }
-    const existingName = String(existingCustomer?.name || "").trim();
+    const existingName = String(existingProfile?.name || "").trim();
     const shouldFillName = !existingName && !!name;
     return syncCustomerProfileToSupabase({
       phone,
@@ -200,6 +206,6 @@ export async function syncAuthProfileToCustomerRow() {
       email
     });
   } catch (error) {
-    return { ok: false, message: normalizeAuthError(error, "Lỗi đồng bộ auth -> customers.") };
+    return { ok: false, message: normalizeAuthError(error, "Lỗi đồng bộ auth -> profiles.") };
   }
 }

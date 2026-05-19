@@ -1,4 +1,5 @@
 export const SUPABASE_TABLES = {
+  profiles: "profiles",
   categories: "categories",
   products: "products",
   orders: "orders",

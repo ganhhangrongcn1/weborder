@@ -7,6 +7,10 @@ let ordersWriteQueue = Promise.resolve();
 let branchLookupCache = { value: null, cachedAt: 0 };
 const BRANCH_LOOKUP_TTL_MS = 60 * 1000;
 const unsupportedOrderColumns = new Set();
+const PROFILE_TABLE = "profiles";
+const LEGACY_CUSTOMER_TABLE = "customers";
+const DEFAULT_PROFILE_ROLE = "customer";
+const DEFAULT_PROFILE_STATUS = "active";
 
 function isSupabaseReady() {
   const info = getRepositoryRuntimeInfo();
@@ -299,36 +303,115 @@ function toCustomerRow(user = {}) {
     registered: Boolean(user.registered || user.passwordDemo || user.password_demo),
     total_orders: Number(user.totalOrders || user.total_orders || 0),
     total_spent: Number(user.totalSpent || user.total_spent || 0),
-    member_rank: String(user.memberRank || user.member_rank || "Member")
+    member_rank: String(user.memberRank || user.member_rank || "Member"),
+    role: String(user.role || DEFAULT_PROFILE_ROLE),
+    status: String(user.status || DEFAULT_PROFILE_STATUS)
   };
+  const safeAuthUserId = String(user.authUserId || user.auth_user_id || "").trim();
+  if (safeAuthUserId) row.auth_user_id = safeAuthUserId;
   if (safeName) row.name = safeName;
   if (safeEmail) row.email = safeEmail;
   if (safeAvatarUrl) row.avatar_url = safeAvatarUrl;
   if (safePasswordDemo) row.password_demo = safePasswordDemo;
+  row.metadata = {
+    ...(user.metadata && typeof user.metadata === "object" ? user.metadata : {}),
+    source: user.metadata?.source || "app"
+  };
   return row;
+}
+
+function toLegacyCustomerRow(row = {}) {
+  const phone = normalizePhone(row.phone);
+  if (!phone) return null;
+  const safeRole = String(row.role || DEFAULT_PROFILE_ROLE).trim().toLowerCase();
+  if (safeRole && safeRole !== DEFAULT_PROFILE_ROLE) return null;
+  const safeName = String(row.name || "").trim();
+  const safeEmail = String(row.email || "").trim();
+  const safeAvatarUrl = String(row.avatar_url || row.avatarUrl || "").trim();
+  const safePasswordDemo = String(row.password_demo || row.passwordDemo || "").trim();
+  const safeId = toNullableUuid(row.id);
+  const createdAt = row.created_at || row.createdAt || null;
+  const updatedAt = row.updated_at || row.updatedAt || new Date().toISOString();
+  const legacyRow = {
+    phone,
+    name: safeName,
+    email: safeEmail,
+    avatar_url: safeAvatarUrl,
+    password_demo: safePasswordDemo,
+    registered: Boolean(row.registered || safePasswordDemo),
+    total_orders: Number(row.total_orders || row.totalOrders || 0),
+    total_spent: Number(row.total_spent || row.totalSpent || 0),
+    member_rank: String(row.member_rank || row.memberRank || "Member"),
+    updated_at: updatedAt
+  };
+  if (safeId) legacyRow.id = safeId;
+  if (createdAt) legacyRow.created_at = createdAt;
+  return legacyRow;
 }
 
 function fromCustomerRow(row = {}) {
   return {
+    id: String(row.id || ""),
+    authUserId: String(row.auth_user_id || ""),
     phone: normalizePhone(row.phone),
     name: String(row.name || ""),
     email: String(row.email || ""),
     avatarUrl: String(row.avatar_url || ""),
     passwordDemo: String(row.password_demo || ""),
     registered: Boolean(row.registered),
+    role: String(row.role || DEFAULT_PROFILE_ROLE),
+    status: String(row.status || DEFAULT_PROFILE_STATUS),
     totalOrders: Number(row.total_orders || 0),
     totalSpent: Number(row.total_spent || 0),
     memberRank: String(row.member_rank || "Member"),
+    metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
     createdAt: row.created_at || "",
     updatedAt: row.updated_at || ""
   };
 }
 
-async function readCustomersMapFromTable() {
+async function selectProfileRows(client, columns = "*") {
+  return client.from(PROFILE_TABLE).select(columns).eq("role", DEFAULT_PROFILE_ROLE);
+}
+
+async function upsertProfileRows(client, rows, options = {}) {
+  const payload = (Array.isArray(rows) ? rows : [rows]).filter(Boolean).map((row) => ({
+    role: DEFAULT_PROFILE_ROLE,
+    status: DEFAULT_PROFILE_STATUS,
+    ...row
+  }));
+  if (!payload.length) return null;
+  const profileResult = await client.from(PROFILE_TABLE).upsert(payload, { onConflict: options.onConflict || "phone" });
+  if (profileResult?.error) return profileResult;
+
+  const legacyPayload = payload.map(toLegacyCustomerRow).filter(Boolean);
+  if (legacyPayload.length) {
+    const legacyResult = await client.from(LEGACY_CUSTOMER_TABLE).upsert(legacyPayload, { onConflict: "phone" });
+    if (legacyResult?.error) return legacyResult;
+  }
+
+  return profileResult;
+}
+
+async function ensureProfileExistsByPhone(client, phone, profile = {}) {
+  const key = normalizePhone(phone);
+  if (!key) return null;
+  const safeName = String(profile?.name || profile?.customerName || "").trim();
+  const row = {
+    phone: key,
+    registered: Boolean(profile?.registered)
+  };
+  if (safeName) row.name = safeName;
+  const { error } = await upsertProfileRows(client, row, { onConflict: "phone" });
+  if (error) throw error;
+  return row;
+}
+
+async function readProfilesMapFromTable() {
   if (!isSupabaseReady()) return null;
   const client = await getSupabaseClientAsync();
   if (!client) return null;
-  const { data, error } = await client.from("customers").select("*");
+  const { data, error } = await selectProfileRows(client, "*");
   if (error) throw error;
   if (!Array.isArray(data)) return {};
   return data.reduce((acc, row) => {
@@ -339,24 +422,24 @@ async function readCustomersMapFromTable() {
   }, {});
 }
 
-async function writeCustomersMapToTable(usersMap = {}) {
+async function writeProfilesMapToTable(usersMap = {}) {
   if (!isSupabaseReady()) return usersMap;
   const client = await getSupabaseClientAsync();
   if (!client) return usersMap;
   const rows = Object.values(usersMap || {}).map(toCustomerRow).filter(Boolean);
   if (!rows.length) return usersMap;
-  const { error } = await client.from("customers").upsert(rows, { onConflict: "phone" });
+  const { error } = await upsertProfileRows(client, rows, { onConflict: "phone" });
   if (error) throw error;
   return usersMap;
 }
 
-async function writeCustomerRowToTable(user = {}) {
+async function writeProfileRowToTable(user = {}) {
   if (!isSupabaseReady()) return user;
   const client = await getSupabaseClientAsync();
   if (!client) return user;
   const row = toCustomerRow(user);
   if (!row) return user;
-  const { error } = await client.from("customers").upsert([row], { onConflict: "phone" });
+  const { error } = await upsertProfileRows(client, [row], { onConflict: "phone" });
   if (error) throw error;
   return user;
 }
@@ -422,18 +505,32 @@ async function writeAddressesByPhoneToTable(addressesByPhone = {}) {
   if (!client) return addressesByPhone;
   const phones = Object.keys(addressesByPhone || {}).map((item) => normalizePhone(item)).filter(Boolean);
   if (!phones.length) return addressesByPhone;
+  const addressProfileNameByPhone = new Map();
+  phones.forEach((phone) => {
+    const list = Array.isArray(addressesByPhone[phone]) ? addressesByPhone[phone] : [];
+    const namedAddress = list.find((item) => String(item?.receiverName || item?.name || "").trim());
+    const profileName = String(namedAddress?.receiverName || namedAddress?.name || "").trim();
+    if (profileName) addressProfileNameByPhone.set(phone, profileName);
+  });
 
   const { data: existingCustomers, error: existingCustomersError } = await client
-    .from("customers")
-    .select("phone")
+    .from(PROFILE_TABLE)
+    .select("phone,name")
     .in("phone", phones);
   if (existingCustomersError) throw existingCustomersError;
-  const existingPhones = new Set((existingCustomers || []).map((item) => normalizePhone(item.phone)));
-  const missingCustomerRows = phones
-    .filter((phone) => phone && !existingPhones.has(phone))
-    .map((phone) => ({ phone, registered: false }));
-  if (missingCustomerRows.length) {
-    const { error: customerInsertError } = await client.from("customers").insert(missingCustomerRows);
+  const existingCustomerByPhone = new Map((existingCustomers || []).map((item) => [normalizePhone(item.phone), item]));
+  const profileRows = phones
+    .map((phone) => {
+      const existing = existingCustomerByPhone.get(phone) || null;
+      const fallbackName = addressProfileNameByPhone.get(phone) || "";
+      if (existing?.phone && (String(existing?.name || "").trim() || !fallbackName)) return null;
+      const row = { phone, registered: Boolean(existing?.registered) };
+      if (fallbackName) row.name = fallbackName;
+      return row;
+    })
+    .filter(Boolean);
+  if (profileRows.length) {
+    const { error: customerInsertError } = await upsertProfileRows(client, profileRows);
     if (customerInsertError) throw customerInsertError;
   }
 
@@ -741,14 +838,15 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
         orderRows.map((row) => [
           row.customer_phone,
           {
-            phone: row.customer_phone
+            phone: row.customer_phone,
+            name: row.customer_name
           }
         ])
       ).values()
     );
     if (customerRowsRaw.length) {
       const { data: existingCustomers, error: existingCustomersError } = await client
-        .from("customers")
+        .from(PROFILE_TABLE)
         .select("phone,name,registered")
         .in("phone", customerRowsRaw.map((item) => item.phone));
       if (existingCustomersError) throw existingCustomersError;
@@ -761,11 +859,14 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
           phone: item.phone,
           registered: Boolean(existing?.registered)
         };
+        if (!String(existing?.name || "").trim() && String(item.name || "").trim()) {
+          row.name = String(item.name || "").trim();
+        }
         return {
           ...row
         };
       });
-      const { error: customerUpsertError } = await client.from("customers").upsert(customerRows, { onConflict: "phone" });
+      const { error: customerUpsertError } = await upsertProfileRows(client, customerRows, { onConflict: "phone" });
       if (customerUpsertError) throw customerUpsertError;
     }
 
@@ -801,7 +902,7 @@ async function upsertOrderToTable(order = {}) {
   const customerPhone = normalizePhone(orderRow.customer_phone);
   if (customerPhone) {
     const { data: existingCustomer, error: existingCustomerError } = await client
-      .from("customers")
+      .from(PROFILE_TABLE)
       .select("phone,name,registered")
       .eq("phone", customerPhone)
       .maybeSingle();
@@ -810,7 +911,10 @@ async function upsertOrderToTable(order = {}) {
       phone: customerPhone,
       registered: Boolean(existingCustomer?.registered)
     };
-    const { error: customerUpsertError } = await client.from("customers").upsert(customerRow, { onConflict: "phone" });
+    if (!String(existingCustomer?.name || "").trim() && String(orderRow.customer_name || "").trim()) {
+      customerRow.name = String(orderRow.customer_name || "").trim();
+    }
+    const { error: customerUpsertError } = await upsertProfileRows(client, customerRow, { onConflict: "phone" });
     if (customerUpsertError) throw customerUpsertError;
   }
 
@@ -994,6 +1098,7 @@ async function applyLoyaltyEvent({
   if (!client) return null;
   const key = normalizePhone(phone);
   if (!key) return null;
+  await ensureProfileExistsByPhone(client, key);
   const normalizedEntryType = String(entryType || "OTHER").trim().toUpperCase();
   const normalizedOrderId = String(orderId || "").trim();
 
@@ -1037,7 +1142,7 @@ async function writeLoyaltyByPhoneToTable(loyaltyByPhone = {}) {
   if (!phones.length) return loyaltyByPhone;
 
   const { data: existingCustomers, error: existingCustomersError } = await client
-    .from("customers")
+    .from(PROFILE_TABLE)
     .select("phone")
     .in("phone", phones.map((phone) => normalizePhone(phone)));
   if (existingCustomersError) throw existingCustomersError;
@@ -1047,7 +1152,7 @@ async function writeLoyaltyByPhoneToTable(loyaltyByPhone = {}) {
     .filter((phone) => phone && !existingPhones.has(phone))
     .map((phone) => ({ phone, registered: false }));
   if (missingCustomerRows.length) {
-    const { error: customerInsertError } = await client.from("customers").insert(missingCustomerRows);
+    const { error: customerInsertError } = await upsertProfileRows(client, missingCustomerRows);
     if (customerInsertError) throw customerInsertError;
   }
 
@@ -1140,13 +1245,13 @@ async function upsertLoyaltyAccountByPhone(phone, loyalty = {}) {
   if (!key) return loyalty;
 
   const { data: existingCustomer, error: existingCustomerError } = await client
-    .from("customers")
+    .from(PROFILE_TABLE)
     .select("phone")
     .eq("phone", key)
     .maybeSingle();
   if (existingCustomerError) throw existingCustomerError;
   if (!existingCustomer?.phone) {
-    const { error: customerInsertError } = await client.from("customers").insert({ phone: key, registered: false });
+    const { error: customerInsertError } = await upsertProfileRows(client, { phone: key, registered: false });
     if (customerInsertError) throw customerInsertError;
   }
 
@@ -1196,6 +1301,7 @@ async function upsertLoyaltyEntryByPhone(phone, entry = {}) {
   if (!isSupabaseReady()) return entry;
   const client = await getSupabaseClientAsync();
   if (!client) return entry;
+  await ensureProfileExistsByPhone(client, phone);
   const row = toLoyaltyLedgerRow(phone, entry);
   if (!row) return entry;
   const { error } = await client.from("loyalty_ledger").upsert(row, { onConflict: "id" });
@@ -1213,7 +1319,7 @@ function subscribeCoreDomainRealtime({ tables = [], onChange }) {
     const isAdminOrKitchen = path.includes("/admin") || path.includes("/kitchen");
     if (!isAdminOrKitchen) {
       const blockedCustomerTables = new Set([
-        "customers",
+        PROFILE_TABLE,
         "customer_addresses",
         "loyalty_accounts",
         "loyalty_ledger",
@@ -1281,16 +1387,25 @@ function subscribeCustomerAddressesRealtime(onChange) {
   });
 }
 
-function subscribeCustomersRealtime(onChange) {
+function subscribeProfilesRealtime(onChange) {
   return subscribeCoreDomainRealtime({
-    tables: ["customers"],
+    tables: [PROFILE_TABLE],
     onChange
   });
 }
 
+// Backward-compatible aliases during the customers -> profiles transition.
+const readCustomersMapFromTable = readProfilesMapFromTable;
+const writeCustomersMapToTable = writeProfilesMapToTable;
+const writeCustomerRowToTable = writeProfileRowToTable;
+const subscribeCustomersRealtime = subscribeProfilesRealtime;
+
 export const coreSupabaseRepository = {
+  readProfilesMapFromTable,
   readCustomersMapFromTable,
+  writeProfilesMapToTable,
   writeCustomersMapToTable,
+  writeProfileRowToTable,
   writeCustomerRowToTable,
   readAddressesByPhoneFromTable,
   writeAddressesByPhoneToTable,
@@ -1309,6 +1424,7 @@ export const coreSupabaseRepository = {
   writeLoyaltyPhoneToTable,
   upsertLoyaltyAccountByPhone,
   upsertLoyaltyEntryByPhone,
+  subscribeProfilesRealtime,
   subscribeCustomersRealtime,
   subscribeCustomerAddressesRealtime,
   subscribeOrdersRealtime,

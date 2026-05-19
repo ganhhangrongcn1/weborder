@@ -11,15 +11,42 @@ import useAdminConfigSyncEffect from "./useAdminConfigSyncEffect.js";
 import { getRepositoryRuntimeInfo } from "../../services/repositories/repositoryRuntime.js";
 import { adminNavToPath } from "../../app/routeState.js";
 import AdminPageContent from "./pages/AdminPageContent.jsx";
-import {
-  AdminButton,
-  AdminPageHeader,
-} from "./ui/AdminCommon.jsx";
+import { AdminButton, AdminPageHeader } from "./ui/AdminCommon.jsx";
 import { getAdminSession, loginAdminWithPassword, logoutAdmin, subscribeAdminAuth } from "../../services/adminAuthService.js";
 
-export default function AdminApp({ products, setProducts, toppings, setToppings, promos, setPromos, banners, setBanners, homeContent, setHomeContent, coupons, setCoupons, smartPromotions, setSmartPromotions, campaigns, setCampaigns, branches, setBranches, hours, setHours, deliveryZones, setDeliveryZones, adminCategories, setAdminCategories, normalizeSmartPromotion, orderStorage, routeState }) {
+export default function AdminApp({
+  products,
+  setProducts,
+  toppings,
+  setToppings,
+  promos,
+  setPromos,
+  banners,
+  setBanners,
+  homeContent,
+  setHomeContent,
+  coupons,
+  setCoupons,
+  smartPromotions,
+  setSmartPromotions,
+  campaigns,
+  setCampaigns,
+  branches,
+  setBranches,
+  hours,
+  setHours,
+  deliveryZones,
+  setDeliveryZones,
+  adminCategories,
+  setAdminCategories,
+  normalizeSmartPromotion,
+  orderStorage,
+  routeState
+}) {
   const navigate = useNavigate();
   const [adminSession, setAdminSession] = useState(null);
+  const [adminProfile, setAdminProfile] = useState(null);
+  const [blockedAdminSession, setBlockedAdminSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -94,8 +121,6 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
     toppingsCount
   } = computeAdminDashboardMetrics({ products, ordersSnapshot, crmSnapshot, branches, toppings });
 
-  const vouchersCount = coupons.length;
-
   const {
     saveOptionGroupPresetsState,
     handleAdjustPoints,
@@ -132,6 +157,13 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
       ? "Sync: Supabase"
       : "Sync: Local (fallback)";
 
+  const applyAdminAccessState = (access = {}) => {
+    setAdminSession(access?.session || null);
+    setAdminProfile(access?.profile || null);
+    setBlockedAdminSession(access?.unauthorized ? access?.rawSession || null : null);
+    setLoginMessage(access?.message || "");
+  };
+
   useEffect(() => {
     let disposed = false;
     const authLoadingGuard = setTimeout(() => {
@@ -140,21 +172,22 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
     }, 7000);
 
     getAdminSession()
-      .then(({ session }) => {
+      .then((access) => {
         if (disposed) return;
-        setAdminSession(session || null);
+        applyAdminAccessState(access);
         setAuthLoading(false);
       })
       .catch(() => {
         if (disposed) return;
-        setAdminSession(null);
+        applyAdminAccessState();
         setAuthLoading(false);
       });
 
     let unsub = () => {};
-    subscribeAdminAuth((session) => {
+    subscribeAdminAuth((access) => {
       if (disposed) return;
-      setAdminSession(session || null);
+      applyAdminAccessState(access);
+      setAuthLoading(false);
     }).then((fn) => {
       unsub = typeof fn === "function" ? fn : () => {};
     });
@@ -176,16 +209,26 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
     });
     setLoginSubmitting(false);
     if (!result.ok) {
+      setBlockedAdminSession(null);
+      setAdminSession(null);
+      setAdminProfile(null);
       setLoginMessage(result.message || "Đăng nhập thất bại.");
       return;
     }
     setAdminSession(result.session || null);
+    setAdminProfile(result.profile || null);
+    setBlockedAdminSession(null);
     setLoginPassword("");
+    setLoginMessage("");
   };
 
   const handleAdminLogout = async () => {
     await logoutAdmin();
     setAdminSession(null);
+    setAdminProfile(null);
+    setBlockedAdminSession(null);
+    setLoginPassword("");
+    setLoginMessage("");
   };
 
   const activateNav = (item) => {
@@ -210,7 +253,29 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
     return (
       <div className="admin-app admin-shell admin-layout">
         <main className="admin-main admin-content">
-          <AdminPageHeader title={"Đang kiểm tra phiên đăng nhập"} description={"Vui lòng chờ..."} />
+          <AdminPageHeader title="Đang kiểm tra phiên đăng nhập" description="Vui lòng chờ..." />
+        </main>
+      </div>
+    );
+  }
+
+  if (isSupabaseAdminMode && blockedAdminSession && !adminSession) {
+    return (
+      <div className="admin-app admin-shell admin-layout">
+        <main className="admin-main admin-content">
+          <AdminPageHeader
+            title="Không có quyền truy cập admin"
+            description="Tài khoản hiện tại đã đăng nhập nhưng chưa có role phù hợp trong bảng profiles."
+          />
+          <section className="admin-card" style={{ maxWidth: 520, padding: 16, display: "grid", gap: 12 }}>
+            <p style={{ margin: 0 }}>
+              Đang dùng tài khoản: <strong>{blockedAdminSession?.user?.email || "Không xác định"}</strong>
+            </p>
+            {loginMessage ? <p style={{ color: "#b42318", margin: 0 }}>{loginMessage}</p> : null}
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <AdminButton onClick={handleAdminLogout}>Đăng xuất tài khoản hiện tại</AdminButton>
+            </div>
+          </section>
         </main>
       </div>
     );
@@ -221,8 +286,8 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
       <div className="admin-app admin-shell admin-layout">
         <main className="admin-main admin-content">
           <AdminPageHeader
-            title={"Đăng nhập Admin"}
-            description={"Bạn cần đăng nhập Supabase Auth để chỉnh dữ liệu quản trị."}
+            title="Đăng nhập Admin"
+            description="Bạn cần đăng nhập Supabase Auth bằng tài khoản đã được gán role admin hoặc staff."
           />
           <section className="admin-card" style={{ maxWidth: 420, padding: 16 }}>
             <form onSubmit={handleAdminLogin} style={{ display: "grid", gap: 12 }}>
@@ -274,13 +339,13 @@ export default function AdminApp({ products, setProducts, toppings, setToppings,
           setSelectedBranchFilter={setSelectedBranchFilter}
           branches={branches}
           syncStatusLabel={syncStatusLabel}
-          adminEmail={adminSession?.user?.email || ""}
+          adminEmail={adminProfile?.email || adminSession?.user?.email || ""}
           onLogout={isSupabaseAdminMode ? handleAdminLogout : null}
         />
 
         <AdminPageHeader
           title={getAdminPageTitle(section)}
-          description={"Qu\u1ea3n tr\u1ecb v\u1eadn h\u00e0nh c\u1eeda h\u00e0ng, d\u1eef li\u1ec7u v\u1eadn h\u00e0nh l\u01b0u tr\u00ean Supabase."}
+          description="Quản trị vận hành cửa hàng, dữ liệu vận hành lưu trên Supabase."
           action={isAppearancePage ? <AdminButton onClick={() => setUiDirty(false)}>Lưu thay đổi</AdminButton> : null}
         />
 

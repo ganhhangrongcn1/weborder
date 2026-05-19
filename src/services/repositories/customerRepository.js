@@ -10,6 +10,7 @@ import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "
 const repository = createRuntimeAppConfigRepository();
 const LEGACY_USERS_KEY = "ghr_users_demo";
 const LEGACY_USER_KEY = "ghr_user_demo";
+const CUSTOMER_PROFILE_DOMAIN = "customers";
 let suppressRemoteCustomerWriteUntil = 0;
 const REMOTE_USERS_CACHE_TTL_MS = 8000;
 let usersRemoteCache = { value: null, cachedAt: 0 };
@@ -65,7 +66,7 @@ export const customerRepository = {
     suppressRemoteCustomerWriteUntil = Date.now() + ttl;
   },
   getUsers() {
-    const allowLocalFallback = shouldAllowLocalFallbackForDomain("customers");
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN);
     if (!allowLocalFallback) {
       return normalizeUsersMap(usersRemoteCache.value || {});
     }
@@ -85,7 +86,7 @@ export const customerRepository = {
     const saved = repository.set(STORAGE_KEYS.users, normalized);
     usersRemoteCache = { value: normalized, cachedAt: Date.now() };
     notifyCustomerDataChanged();
-    const shouldWriteRemote = shouldWriteDomainToSupabase("customers");
+    const shouldWriteRemote = shouldWriteDomainToSupabase(CUSTOMER_PROFILE_DOMAIN);
     if (import.meta?.env?.DEV) {
       console.info("[customerRepository] saveUsers", {
         totalUsers: Object.keys(normalized || {}).length,
@@ -97,8 +98,8 @@ export const customerRepository = {
     if (shouldWriteRemote && canWriteRemote) {
       const changedKeys = getChangedUserKeys(previous, normalized);
       changedKeys.forEach((phone) => {
-        coreSupabaseRepository.writeCustomerRowToTable(normalized[phone] || {}).catch((error) => {
-          logSupabaseError("write single customer row", error, { phone });
+        coreSupabaseRepository.writeProfileRowToTable(normalized[phone] || {}).catch((error) => {
+          logSupabaseError("write single profile row", error, { phone });
         });
       });
     }
@@ -128,9 +129,9 @@ export const customerRepository = {
     };
     notifyCustomerDataChanged();
 
-    const shouldWriteRemote = options?.writeRemote !== false && shouldWriteDomainToSupabase("customers");
+    const shouldWriteRemote = options?.writeRemote !== false && shouldWriteDomainToSupabase(CUSTOMER_PROFILE_DOMAIN);
     if (shouldWriteRemote) {
-      await coreSupabaseRepository.writeCustomerRowToTable(nextUser);
+      await coreSupabaseRepository.writeProfileRowToTable(nextUser);
     }
     return nextUser;
   },
@@ -311,10 +312,10 @@ export const customerRepository = {
     }
     if (usersReadInFlight) return usersReadInFlight;
     usersReadInFlight = (async () => {
-    const allowLocalFallback = shouldAllowLocalFallbackForDomain("customers");
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN);
     const fallback = allowLocalFallback ? await repository.getAsync(STORAGE_KEYS.users, {}) : {};
     try {
-      const remote = await coreSupabaseRepository.readCustomersMapFromTable();
+      const remote = await coreSupabaseRepository.readProfilesMapFromTable();
       if (remote && typeof remote === "object" && Object.keys(remote).length) {
         const normalizedRemote = normalizeUsersMap(remote);
         await repository.setAsync(STORAGE_KEYS.users, normalizedRemote);
@@ -322,7 +323,7 @@ export const customerRepository = {
         return normalizedRemote;
       }
     } catch (error) {
-      logSupabaseError("read customers table", error);
+      logSupabaseError("read profiles table", error);
     }
       const normalizedFallback = normalizeUsersMap(fallback);
       usersRemoteCache = { value: normalizedFallback, cachedAt: Date.now() };
@@ -335,10 +336,10 @@ export const customerRepository = {
     }
   },
   async hydrateUsersFromRemote() {
-    const allowLocalFallback = shouldAllowLocalFallbackForDomain("customers");
+    const allowLocalFallback = shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN);
     const localUsers = allowLocalFallback ? normalizeUsersMap(repository.get(STORAGE_KEYS.users, {})) : {};
     try {
-      const remote = await coreSupabaseRepository.readCustomersMapFromTable();
+      const remote = await coreSupabaseRepository.readProfilesMapFromTable();
       if (!remote || typeof remote !== "object" || !Object.keys(remote).length) {
         return localUsers;
       }
@@ -349,7 +350,7 @@ export const customerRepository = {
       }
       return remoteOnly;
     } catch (error) {
-      logSupabaseError("hydrate customers from remote", error);
+      logSupabaseError("hydrate profiles from remote", error);
       return localUsers;
     }
   },
@@ -359,13 +360,13 @@ export const customerRepository = {
     const saved = await repository.setAsync(STORAGE_KEYS.users, normalized);
     usersRemoteCache = { value: normalized, cachedAt: Date.now() };
     notifyCustomerDataChanged();
-    if (shouldWriteDomainToSupabase("customers")) {
+    if (shouldWriteDomainToSupabase(CUSTOMER_PROFILE_DOMAIN)) {
       const changedKeys = getChangedUserKeys(previous, normalized);
       for (const phone of changedKeys) {
         try {
-          await coreSupabaseRepository.writeCustomerRowToTable(normalized[phone] || {});
+          await coreSupabaseRepository.writeProfileRowToTable(normalized[phone] || {});
         } catch (error) {
-          logSupabaseError("write single customer row (async)", error, { phone });
+          logSupabaseError("write single profile row (async)", error, { phone });
         }
       }
     }
@@ -411,11 +412,11 @@ export const customerRepository = {
     });
   },
   subscribeUsersRealtime(onChange) {
-    return coreSupabaseRepository.subscribeCustomersRealtime(async () => {
+    return coreSupabaseRepository.subscribeProfilesRealtime(async () => {
       try {
-        const allowLocalFallback = shouldAllowLocalFallbackForDomain("customers");
+        const allowLocalFallback = shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN);
         const localUsers = allowLocalFallback ? normalizeUsersMap(repository.get(STORAGE_KEYS.users, {})) : {};
-        const remoteUsers = await coreSupabaseRepository.readCustomersMapFromTable();
+        const remoteUsers = await coreSupabaseRepository.readProfilesMapFromTable();
         if (!remoteUsers || typeof remoteUsers !== "object") return;
         const remoteOnly = normalizeUsersMap(remoteUsers);
         if (JSON.stringify(remoteOnly) !== JSON.stringify(localUsers)) {
@@ -424,7 +425,7 @@ export const customerRepository = {
         }
         if (typeof onChange === "function") onChange(remoteOnly);
       } catch (error) {
-        logSupabaseError("realtime customers sync", error);
+        logSupabaseError("realtime profiles sync", error);
       }
     });
   }
