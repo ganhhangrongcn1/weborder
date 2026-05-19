@@ -2,9 +2,9 @@
 
 const defaultItems = [
   { id: "home", label: "Trang chủ", icon: "home" },
-  { id: "menu", label: "Menu", icon: "menu" },
+  { id: "menu", label: "Menu", icon: "dish" },
   { id: "orders", label: "Đơn hàng", icon: "bag" },
-  { id: "rewards", label: "Ưu đãi & Tích điểm", icon: "gift" },
+  { id: "rewards", label: "Ưu đãi", icon: "gift" },
   { id: "account", label: "Tài khoản", icon: "user" }
 ];
 

@@ -14,6 +14,7 @@ const flaticonIds = {
 const fallbackPaths = {
   home: "M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10.5Z",
   menu: "M4 6h16M4 12h16M4 18h16",
+  dish: "M4 11.5a8 8 0 0 1 16 0H4Z M3 15h18 M6 19h12 M8 8.5V5 M12 7.5V4 M16 8.5V5",
   tag: "M20 12l-8 8-9-9V4h7l10 8Z M7 7h.01",
   star: "M12 3l2.8 5.7 6.2.9-4.5 4.4 1.1 6.1L12 18.7 6.4 21.1 7.5 15 3 10.6l6.2-.9L12 3Z",
   bag: "M6 8h12l-1 13H7L6 8Z M9 8a3 3 0 0 1 6 0",

@@ -117,7 +117,7 @@ export default function CustomerShell({
   const isQrCounterFlow = String(pageProps?.checkoutPreset?.orderSource || pageProps?.checkoutPreset?.source || "").toLowerCase() === "qr_counter" && Boolean(pageProps?.checkoutPreset?.qrBranchLocked);
   const qrAllowedPages = ["qr-entry", "menu", "detail", "checkout", "tracking", "success", "loyalty", "account"];
   const qrBottomNavItems = [
-    { id: "menu", label: "Menu", icon: "menu" },
+    { id: "menu", label: "Menu", icon: "dish" },
     { id: "orders", label: "Đơn hàng", icon: "bag" },
     { id: "rewards", label: "Ưu đãi", icon: "gift" },
     { id: "account", label: "Tài khoản", icon: "user" }
