@@ -88,13 +88,15 @@
   display: grid;
   place-items: center;
   background: rgba(58, 31, 20, 0.42);
-  padding: 18px;
+  padding: calc(18px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
   backdrop-filter: blur(4px);
 }
 
 .account-notice-modal {
   display: grid;
   width: min(100%, 360px);
+  max-height: calc(100dvh - 36px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
   gap: 14px;
   border: 1px solid rgba(255, 106, 0, 0.16);
   border-radius: 28px;
@@ -103,6 +105,7 @@
   color: #3a1f14;
   box-shadow: 0 24px 70px rgba(58, 31, 20, 0.26);
   animation: account-notice-in 0.18s ease-out;
+  -webkit-overflow-scrolling: touch;
 }
 
 .account-notice-icon {
@@ -147,6 +150,71 @@
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+.account-page-content {
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 380px) {
+  .flash-card {
+    gap: 12px;
+    border-radius: 22px;
+    padding: 16px;
+  }
+
+  .account-hero {
+    border-radius: 24px;
+    padding: 16px;
+  }
+
+  .account-hero .h-20 {
+    width: 64px;
+    height: 64px;
+  }
+
+  .account-hero h2 {
+    font-size: 18px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .account-hero p {
+    overflow-wrap: anywhere;
+  }
+
+  .account-metric {
+    min-height: 118px;
+    border-radius: 20px;
+    padding: 13px;
+  }
+
+  .account-metric strong,
+  .account-metric small {
+    overflow-wrap: anywhere;
+  }
+
+  .account-page-content .grid.grid-cols-2 {
+    gap: 10px;
+  }
+
+  .account-page-content input {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .account-page-content .flex.gap-2 {
+    align-items: stretch;
+  }
+
+  .account-page-content .flex.gap-2 > button {
+    flex: 0 0 auto;
+  }
+
+  .account-notice-modal {
+    border-radius: 24px;
+    padding: 18px;
   }
 }
 

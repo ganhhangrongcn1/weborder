@@ -153,7 +153,7 @@ export default function OrderSuccess({
   }
 
   return (
-    <section className="grid min-h-[calc(100vh-96px)] place-items-center px-4 py-6">
+    <section className="order-success-page grid min-h-[calc(100vh-96px)] place-items-center px-4 py-6">
       <CustomerCard tone={isConfirmed ? "success" : "notice"} padding="lg" className="text-center">
         <div className={`mx-auto grid h-20 w-20 place-items-center rounded-[24px] text-xl font-black ${isConfirmed ? "bg-green-100 text-green-600" : "bg-orange-100 text-orange-600"}`}>
           {isConfirmed ? "OK" : "..."}

@@ -802,12 +802,21 @@
 .checkout-sticky-cta {
   position: fixed;
   left: 50%;
-  bottom: 72px;
+  bottom: calc(72px + env(safe-area-inset-bottom));
   z-index: 45;
   width: min(100%, 430px);
   transform: translateX(-50%);
   background: linear-gradient(180deg, rgba(255, 247, 236, 0), #fff7ec 28%);
   padding: 18px 16px 10px;
+}
+
+.checkout-sticky-cta .cta:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.checkout-sticky-cta .cta.is-loading {
+  box-shadow: 0 12px 28px rgba(255, 106, 0, 0.22);
 }
 
 .checkout-confirm-overlay {
@@ -1048,4 +1057,213 @@
   color: white;
 }
 
+.checkout-card,
+.checkout-confirm-modal,
+.promo-code-card,
+.delivery-info-box,
+.delivery-branch-select-card {
+  min-width: 0;
+}
+
+.pickup-field input,
+.address-field input,
+.address-field textarea,
+.address-field select {
+  min-height: 48px;
+  font-size: 16px;
+}
+
+.checkout-confirm-overlay {
+  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+}
+
+.checkout-confirm-modal {
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.customer-bottom-sheet.promo-sheet {
+  max-height: calc(92dvh - env(safe-area-inset-top));
+}
+
+.customer-bottom-sheet.promo-sheet .customer-sheet-scroll {
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 380px) {
+  .checkout-card {
+    border-radius: 18px;
+    padding: 14px;
+  }
+
+  .checkout-card-head {
+    align-items: flex-start;
+  }
+
+  .checkout-card-head h2 {
+    line-height: 1.25;
+  }
+
+  .checkout-card-head button {
+    white-space: nowrap;
+  }
+
+  .checkout-cart-item {
+    gap: 9px;
+    padding: 9px;
+  }
+
+  .checkout-cart-item img {
+    width: 62px;
+    height: 62px;
+    border-radius: 16px;
+  }
+
+  .checkout-topping-list span {
+    max-width: 100%;
+  }
+
+  .delivery-info-box,
+  .delivery-branch-select-card {
+    padding: 12px;
+  }
+
+  .info-line {
+    align-items: flex-start;
+  }
+
+  .branch-card {
+    align-items: flex-start;
+    gap: 10px;
+    padding: 11px;
+  }
+
+  .branch-radio {
+    width: 22px;
+    height: 22px;
+    margin-top: 2px;
+  }
+
+  .checkout-card .grid.grid-cols-2,
+  .customer-bottom-sheet.promo-sheet .grid.grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .points-row {
+    align-items: flex-start;
+  }
+
+  .points-row .toggle-input {
+    margin-top: 2px;
+  }
+
+  .payment-card,
+  .promo-select {
+    min-height: 52px;
+  }
+
+  .promo-code-card {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .promo-code-card em {
+    max-width: 96px;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .summary-line,
+  .summary-saving,
+  .summary-final {
+    gap: 10px;
+  }
+
+  .summary-line strong,
+  .summary-saving strong,
+  .summary-final strong {
+    text-align: right;
+  }
+
+  .summary-final {
+    align-items: flex-start;
+  }
+
+  .summary-final strong {
+    font-size: 22px;
+    line-height: 1.15;
+  }
+
+  .checkout-sticky-cta {
+    padding: 16px 14px 10px;
+  }
+
+  .checkout-confirm-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-page-content {
+    padding-bottom: calc(112px + env(safe-area-inset-bottom));
+  }
+
+  .order-success-page {
+    min-height: calc(100dvh - 96px);
+    padding-top: 18px;
+    padding-bottom: calc(112px + env(safe-area-inset-bottom));
+  }
+
+  .order-success-page .customer-card--pad-lg {
+    padding: 18px;
+  }
+
+  .order-success-page .text-3xl {
+    font-size: 24px;
+    overflow-wrap: anywhere;
+  }
+
+  .order-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .order-detail-box {
+    border-radius: 20px;
+    padding: 12px;
+  }
+
+  .order-detail-head {
+    align-items: flex-start;
+  }
+
+  .order-detail-item {
+    gap: 10px;
+    border-radius: 16px;
+    padding: 9px;
+  }
+
+  .order-detail-item div {
+    min-width: 0;
+  }
+
+  .order-detail-item strong,
+  .order-detail-item p,
+  .order-info-grid strong,
+  .order-info-grid small {
+    overflow-wrap: anywhere;
+  }
+
+  .order-detail-item em {
+    max-width: 42%;
+    text-align: right;
+  }
+
+  .order-detail-total {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .order-detail-total strong {
+    text-align: right;
+  }
+}
 

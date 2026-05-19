@@ -370,3 +370,56 @@ button.delivery-app-item:disabled {
   font-size: 10px;
 }
 
+@media (max-width: 380px) {
+  .hero-card {
+    min-height: 214px;
+    border-radius: 24px;
+    padding: 18px 15px;
+  }
+
+  .hero-card::after {
+    right: -38px;
+    bottom: -44px;
+    width: 176px;
+    height: 176px;
+  }
+
+  .hero-food {
+    right: -72px;
+    bottom: -34px;
+    width: 218px;
+    height: 218px;
+    border-width: 7px;
+    opacity: 0.88;
+  }
+
+  .cashback-card {
+    min-height: 78px;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .cashback-card h2 {
+    font-size: 19px;
+  }
+
+  .cashback-card p {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .delivery-app-card {
+    padding: 14px;
+  }
+
+  .delivery-app-item {
+    min-height: 76px;
+    padding: 8px;
+  }
+
+  .delivery-app-logo {
+    width: 70px;
+    min-height: 34px;
+  }
+}
+

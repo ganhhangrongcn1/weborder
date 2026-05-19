@@ -4,7 +4,11 @@
   z-index: 20;
   display: grid;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-inline: -4px;
+  overflow: hidden;
   border-bottom: 1px solid rgba(255, 194, 119, 0.32);
   background: rgba(255, 247, 236, 0.94);
   padding: 0 4px 10px;
@@ -13,6 +17,8 @@
 
 .menu-search {
   display: flex;
+  width: 100%;
+  min-width: 0;
   align-items: center;
   gap: 9px;
   border: 1px solid rgba(255, 106, 0, 0.08);
@@ -33,9 +39,12 @@
 
 .menu-chip-row-wrap {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.menu-chip-row-wrap::before,
 .menu-chip-row-wrap::after {
   content: "";
   position: absolute;
@@ -47,8 +56,7 @@
 }
 
 .menu-chip-row-wrap::before {
-  left: 0;
-  background: linear-gradient(to right, rgba(255, 247, 236, 0.95), rgba(255, 247, 236, 0));
+  display: none;
 }
 
 .menu-chip-row-wrap::after {
@@ -58,6 +66,7 @@
 
 .menu-chip-row {
   flex-wrap: nowrap;
+  max-width: 100%;
   scroll-snap-type: x proximity;
   padding-inline: 0;
 }
@@ -287,5 +296,100 @@
   font-style: normal;
   font-size: 12px;
   font-weight: 950;
+}
+
+@media (max-width: 380px) {
+  .menu-sticky-tools {
+    top: 60px;
+    gap: 8px;
+    margin-inline: -2px;
+    padding: 0 2px 8px;
+  }
+
+  .menu-search {
+    min-height: 46px;
+    border-radius: 18px;
+    padding: 10px 12px;
+  }
+
+  .menu-chip-row-wrap::after {
+    width: 12px;
+    opacity: 0.72;
+  }
+
+  .menu-chip-row {
+    gap: 7px;
+  }
+
+  .chip,
+  .filter-btn,
+  .option {
+    min-height: 38px;
+    border-radius: 14px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .chip-pinned-all {
+    box-shadow: 10px 0 14px rgba(255, 247, 236, 0.84);
+  }
+
+  .menu-addon-section {
+    margin-top: 14px;
+    border-radius: 18px;
+    padding: 13px;
+  }
+
+  .menu-addon-section > h2 {
+    margin-bottom: 10px;
+    font-size: 18px;
+    line-height: 1.12;
+  }
+
+  .menu-addon-section > div:first-child {
+    align-items: flex-start;
+  }
+
+  .menu-addon-section > div:first-child > span {
+    max-width: 96px;
+    text-align: right;
+    line-height: 1.25;
+  }
+
+  .menu-addon-scroll {
+    gap: 8px;
+    padding-bottom: 6px;
+  }
+
+  .menu-addon-card {
+    min-width: 132px;
+    min-height: 118px;
+    border-radius: 16px;
+    padding: 10px;
+  }
+
+  .menu-addon-card h3 {
+    font-size: 13px;
+  }
+
+  .menu-addon-card p {
+    min-height: 30px;
+    font-size: 11px;
+  }
+
+  .menu-addon-card strong {
+    font-size: 13px;
+  }
+
+  .menu-addon-card .addon-plus {
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
+  }
+
+  .addon-stepper button {
+    width: 26px;
+    height: 26px;
+  }
 }
 

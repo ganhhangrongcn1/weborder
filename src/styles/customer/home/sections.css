@@ -85,3 +85,50 @@
 .home2026-section .product-image-wrap {
   width: 100%;
 }
+
+@media (max-width: 380px) {
+  .home2026-shell {
+    gap: 14px;
+    padding: 12px 14px 142px;
+  }
+
+  .home2026-program-grid,
+  .home2026-section > .grid.grid-cols-2 {
+    gap: 9px;
+  }
+
+  .home2026-program-card {
+    min-height: 104px;
+    border-radius: 18px;
+    padding: 11px;
+  }
+
+  .home2026-program-card > span {
+    width: 30px;
+    height: 30px;
+    border-radius: 12px;
+  }
+
+  .home2026-program-card strong {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.22;
+  }
+
+  .home2026-program-card p {
+    font-size: 10.5px;
+    line-height: 1.3;
+  }
+
+  .home2026-section {
+    gap: 10px;
+  }
+
+  .home2026-section-head {
+    gap: 8px;
+  }
+
+  .home2026-section-head h2 {
+    font-size: 18px;
+  }
+}

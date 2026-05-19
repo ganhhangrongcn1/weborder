@@ -9,7 +9,6 @@ import AppEmptyState from "../../components/app/EmptyState.jsx";
 import { formatMoney } from "../../utils/format.js";
 import { getOrderStats } from "../../utils/pureHelpers.js";
 import useAccountViewModel from "./hooks/useAccountViewModel.js";
-import FlaticonCredit from "./components/FlaticonCredit.jsx";
 import AccountNoticeModal from "./components/AccountNoticeModal.jsx";
 
 export default function Account({
@@ -40,7 +39,7 @@ export default function Account({
     return (
       <section>
         <AppHeader title="Tài khoản" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
-        <div className="space-y-4 px-4">
+        <div className="account-page-content space-y-4 px-4">
           <div className="rounded-[28px] bg-white p-4 shadow-soft">
             <div className="grid grid-cols-2 rounded-2xl bg-cream p-1">
               <button onClick={() => vm.setAccountEntryTab("lookup")} className={`rounded-xl px-3 py-2 text-sm font-black ${vm.accountEntryTab === "lookup" ? "bg-white text-orange-600 shadow-sm" : "text-brown/55"}`}>Tra cứu đơn</button>
@@ -187,7 +186,6 @@ export default function Account({
             </>
           )}
         </div>
-        <FlaticonCredit />
         <AccountNoticeModal notice={vm.accountNotice} onClose={() => vm.setAccountNotice(null)} />
       </section>
     );
@@ -196,7 +194,7 @@ export default function Account({
   return (
     <section>
       <AppHeader title="Tài khoản" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
-      <div className="space-y-4 px-4">
+      <div className="account-page-content space-y-4 px-4">
         {vm.authNotice ? <div className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{vm.authNotice}</div> : null}
         <div className="account-hero">
           <div className="flex items-center gap-4">
@@ -268,8 +266,6 @@ export default function Account({
 
         <button onClick={logoutDemoUser} className="w-full rounded-[24px] bg-red-50 py-4 text-sm font-black text-red-600 shadow-soft">Đăng xuất</button>
       </div>
-      <FlaticonCredit />
-
       {vm.profileOpen ? <ProfileModal user={vm.accountUser} onClose={() => vm.setProfileOpen(false)} onSave={vm.handleSaveUser} /> : null}
       {vm.addressModal ? <AccountAddressModal address={vm.addressModal} onClose={() => vm.setAddressModal(null)} onSave={vm.handleSaveAddress} /> : null}
       <AccountNoticeModal notice={vm.accountNotice} onClose={() => vm.setAccountNotice(null)} />

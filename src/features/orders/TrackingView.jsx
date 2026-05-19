@@ -101,7 +101,7 @@ export default function Tracking({
     <section>
       <AppHeader title="Đơn hàng" onBack={() => navigate("home", "home")} />
 
-      <div className="space-y-4 px-4 pb-6">
+      <div className="tracking-page-content space-y-4 px-4 pb-6">
         {shouldShowLoading && (
           <AppEmptyState
             icon="bag"

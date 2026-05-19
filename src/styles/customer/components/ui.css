@@ -263,4 +263,35 @@
   .customer-section-title__text h2 {
     font-size: 17px;
   }
+
+  .customer-card {
+    border-radius: 20px;
+  }
+
+  .customer-card,
+  .customer-card * {
+    min-width: 0;
+  }
+
+  .customer-title-lg {
+    font-size: 20px;
+  }
+
+  .customer-title-md {
+    font-size: 16px;
+  }
+
+  .customer-body {
+    font-size: 13px;
+  }
+
+  .customer-modal-frame {
+    padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .customer-modal-frame__panel {
+    max-height: calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }

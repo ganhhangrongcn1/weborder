@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 18px;
+  padding: calc(18px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
   background: rgba(58, 31, 20, 0.46);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
@@ -14,11 +14,14 @@
 .loyalty-voucher-card {
   position: relative;
   width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 36px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
   border: 1px solid rgba(255, 122, 0, 0.22);
   border-radius: 26px;
   background: #fffaf3;
   padding: 20px 16px 16px;
   box-shadow: 0 20px 60px rgba(58, 31, 20, 0.24);
+  -webkit-overflow-scrolling: touch;
 }
 
 .loyalty-voucher-close {
@@ -79,4 +82,3 @@
 .loyalty-voucher-body strong {
   color: #c2410c;
 }
-

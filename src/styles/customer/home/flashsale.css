@@ -848,3 +848,120 @@
   -webkit-backdrop-filter: blur(3px);
 }
 
+@media (max-width: 380px) {
+  .home2026-countdown {
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+
+  .home2026-flash-scroll {
+    gap: 8px;
+    padding-bottom: 6px;
+  }
+
+  .home2026-flash-card {
+    min-width: min(250px, calc(100vw - 82px));
+    max-width: 250px;
+    gap: 8px;
+    border-radius: 18px;
+    padding: 9px;
+  }
+
+  .home2026-flash-image {
+    width: 64px;
+    height: 64px;
+    border-radius: 15px;
+  }
+
+  .home2026-flash-card h3 {
+    font-size: 12px;
+  }
+
+  .home2026-flash-card strong {
+    font-size: 14px;
+  }
+
+  .home2026-flash-card button {
+    padding: 8px 9px;
+    border-radius: 13px;
+    font-size: 11px;
+  }
+
+  .home2026-flash-deal {
+    border-radius: 16px;
+    padding: 11px 12px;
+  }
+
+  .home2026-deal-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .home2026-deal-head h2 {
+    font-size: 16px;
+    white-space: normal;
+  }
+
+  .home2026-deal-head > button {
+    padding-left: 6px;
+    font-size: 11px;
+  }
+
+  .home2026-deal-timer {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .home2026-flash-main-card {
+    grid-template-columns: 64px minmax(0, 1fr) 40px;
+    gap: 9px;
+    margin-top: 10px;
+  }
+
+  .home2026-flash-main-image img {
+    width: 64px;
+    height: 58px;
+  }
+
+  .home2026-flash-main-info h3 {
+    font-size: 13px;
+  }
+
+  .home2026-flash-main-info p {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 10.5px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .home2026-flash-main-price {
+    gap: 5px;
+    margin-top: 5px;
+  }
+
+  .home2026-flash-main-price strong {
+    font-size: 16px;
+  }
+
+  .home2026-flash-discount {
+    min-width: 38px;
+    height: 28px;
+    font-size: 10px;
+  }
+
+  .home2026-flash-sheet {
+    width: min(430px, 100vw);
+    max-height: calc(86dvh - env(safe-area-inset-top));
+    padding: 10px 14px calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .home2026-flash-sheet-head {
+    gap: 8px;
+  }
+
+  .home2026-flash-sheet-head h2 {
+    font-size: 18px;
+  }
+}

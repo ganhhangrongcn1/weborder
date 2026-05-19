@@ -72,6 +72,7 @@ export default function Checkout({
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDeliveryFeeModalOpen, setIsDeliveryFeeModalOpen] = useState(false);
   const [checkoutNotice, setCheckoutNotice] = useState(null);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
   const [pickupContact, setPickupContact] = useState(() => ({
     name: demoUser?.name || userProfile?.name || "",
@@ -235,18 +236,25 @@ export default function Checkout({
   }, [isQrCounterOrder, isRegisteredCustomer, selectedPromo, usePoints]);
 
   const handleCheckoutPlaceOrder = async () => {
-    if (fulfillmentType === "delivery") {
-      const hasAddress = String(deliveryInfo?.address || "").trim().length > 0;
-      if (!hasAddress || !deliverySourceBranch) {
-        setCheckoutNotice({
-          icon: "warning",
-          title: "Vui lòng kiểm tra địa chỉ giao hàng",
-          message: "Bạn cần chọn địa chỉ nhận và chi nhánh giao trước khi đặt hàng."
-        });
-        return;
+    if (isPlacingOrder) return;
+    setIsPlacingOrder(true);
+
+    try {
+      if (fulfillmentType === "delivery") {
+        const hasAddress = String(deliveryInfo?.address || "").trim().length > 0;
+        if (!hasAddress || !deliverySourceBranch) {
+          setCheckoutNotice({
+            icon: "warning",
+            title: "Vui lòng kiểm tra địa chỉ giao hàng",
+            message: "Bạn cần chọn địa chỉ nhận và chi nhánh giao trước khi đặt hàng."
+          });
+          return;
+        }
       }
+      await executeCheckoutPlaceOrder();
+    } finally {
+      setIsPlacingOrder(false);
     }
-    await executeCheckoutPlaceOrder();
   };
 
   const executeCheckoutPlaceOrder = async () => {
@@ -345,8 +353,9 @@ export default function Checkout({
       className: "checkout-sticky-cta",
       children: /*#__PURE__*/_jsxs("button", {
         onClick: handleCheckoutPlaceOrder,
-        className: "cta w-full",
-        children: ["Đặt hàng - ", formatMoney(checkoutTotal)]
+        className: `cta w-full ${isPlacingOrder ? "is-loading" : ""}`,
+        disabled: isPlacingOrder,
+        children: isPlacingOrder ? "Đang gửi đơn..." : ["Đặt hàng - ", formatMoney(checkoutTotal)]
       })
     }), /*#__PURE__*/_jsx(CheckoutModals, {
       isPromoModalOpen: isPromoModalOpen,

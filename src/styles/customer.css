@@ -24,5 +24,5 @@
 @import "./customer/components/checkout-suggestions.css";
 @import "./customer/components/option-modal.css";
 @import "./customer/components/loyalty-voucher-popup.css";
-@import "./customer/home/popup.css";
 @import "./customer/components/bottom-sheet.css";
+@import "./customer/home/popup.css";
