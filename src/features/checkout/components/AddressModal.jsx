@@ -1,6 +1,7 @@
 import { useState } from "react";
 import GoongAddressPicker from "../../../components/GoongAddressPicker.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
+import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 
 export default function AddressModal({
   value,
@@ -52,23 +53,26 @@ export default function AddressModal({
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-black uppercase text-brown/50">Địa chỉ đã lưu</p>
               {addresses.length > 1 && (
-                <button onClick={() => setShowSaved((current) => !current)} className="text-xs font-black text-orange-600">
+                <CustomerButton variant="ghost" size="sm" onClick={() => setShowSaved((current) => !current)}>
                   {showSaved ? "Thu gọn" : `Xem ${addresses.length} địa chỉ`}
-                </button>
+                </CustomerButton>
               )}
             </div>
             {(showSaved ? addresses.slice(0, 3) : [savedPreview]).map((address) => (
-              <button
+              <CustomerCard
+                as="button"
+                type="button"
                 key={address.id}
                 onClick={() => {
                   onSelectAddress(address);
                   onClose();
                 }}
-                className="w-full rounded-2xl border border-orange-100 bg-white px-3 py-2 text-left text-xs shadow-sm"
+                padding="sm"
+                className="text-left text-xs"
               >
-                <strong className="block text-brown">{address.label}{address.isDefault ? " · GIAO ĐẾN" : ""}</strong>
+                <strong className="block text-brown">{address.label}{address.isDefault ? " · Giao đến" : ""}</strong>
                 <span className="mt-1 block text-brown/55">{address.address}</span>
-              </button>
+              </CustomerCard>
             ))}
           </div>
         )}
@@ -128,17 +132,17 @@ export default function AddressModal({
           }))}
         />
 
-        <label className="flex items-center justify-between rounded-2xl bg-white px-3 py-3 text-sm font-bold text-brown/70">
-          <span>Lưu địa chỉ này vào tài khoản</span>
+        <CustomerCard as="label" padding="sm" className="flex items-center justify-between">
+          <span className="text-sm font-bold text-brown/70">Lưu địa chỉ này vào tài khoản</span>
           <input
             type="checkbox"
             checked={Boolean(draft.saveToAccount)}
             onChange={(event) => updateField("saveToAccount", event.target.checked)}
             className="toggle-input"
           />
-        </label>
+        </CustomerCard>
 
-        <button onClick={() => onSave(draft)} className="cta w-full">Lưu thông tin</button>
+        <CustomerButton full onClick={() => onSave(draft)}>Lưu thông tin</CustomerButton>
       </div>
     </CustomerBottomSheet>
   );

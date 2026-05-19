@@ -74,7 +74,7 @@ export default function HomeInfoCards({
     [deliveryAppBranches, deliveryBranches]
   );
 
-  const legacyApps = deliveryAppsList.length ? deliveryAppsList : ["GrabFood", "ShopeeFood", "Xanh Ngon"];
+  const fallbackApps = deliveryAppsList.length ? deliveryAppsList : ["GrabFood", "ShopeeFood", "Xanh Ngon"];
 
   const openDeliveryApp = (url) => {
     const normalizedUrl = normalizeExternalUrl(url);
@@ -156,7 +156,7 @@ export default function HomeInfoCards({
             </>
           ) : (
             <div className="grid grid-cols-3 gap-2">
-              {legacyApps.map((app, index) => (
+              {fallbackApps.map((app, index) => (
                 <div key={`${app}-${index}`} className="delivery-app-item">
                   <DeliveryAppLogo app={{ name: app }} />
                   <strong>{app}</strong>

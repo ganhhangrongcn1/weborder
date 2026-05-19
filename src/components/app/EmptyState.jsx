@@ -1,3 +1,4 @@
+import { CustomerButton, CustomerCard } from "../customer/CustomerUI.jsx";
 import Icon from "../Icon.jsx";
 
 export default function EmptyState({
@@ -6,23 +7,23 @@ export default function EmptyState({
   message,
   actionText,
   onAction,
-  className = "rounded-2xl bg-white px-4 py-3 text-sm text-brown/55 shadow-soft",
+  className = "",
   center = false
 }) {
   return (
-    <div className={className}>
+    <CustomerCard className={`customer-empty-state ${className}`.trim()} padding="lg">
       {icon && (
-        <span className={`grid h-14 w-14 place-items-center rounded-3xl bg-orange-50 text-orange-600 ${center ? "mx-auto" : ""}`}>
+        <span className={`customer-empty-state__icon ${center ? "mx-auto" : ""}`.trim()}>
           <Icon name={icon} size={24} />
         </span>
       )}
-      {title && <h2 className={`${icon ? "mt-4" : ""} text-lg font-black text-brown ${center ? "text-center" : ""}`}>{title}</h2>}
-      {message && <p className={`${title ? "mt-2" : icon ? "mt-3" : ""} text-sm text-brown/60 ${center ? "text-center" : ""}`}>{message}</p>}
+      {title && <h2 className={center ? "text-center" : ""}>{title}</h2>}
+      {message && <p className={center ? "text-center" : ""}>{message}</p>}
       {actionText && onAction && (
-        <button onClick={onAction} className={`mt-5 rounded-2xl bg-gradient-main py-3 text-sm font-black text-white shadow-orange ${center ? "w-full" : ""}`}>
+        <CustomerButton full={center} onClick={onAction}>
           {actionText}
-        </button>
+        </CustomerButton>
       )}
-    </div>
+    </CustomerCard>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
+import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 
 export default function AccountAddressModal({
   address,
@@ -49,16 +50,16 @@ export default function AccountAddressModal({
           <span>Ghi chú</span>
           <input value={draft.note} onChange={(event) => update("note", event.target.value)} />
         </label>
-        <label className="flex items-center justify-between rounded-2xl bg-white px-3 py-3 text-sm font-bold text-brown/70">
-          <span>Đặt làm địa chỉ mặc định</span>
+        <CustomerCard as="label" padding="sm" className="flex items-center justify-between">
+          <span className="text-sm font-bold text-brown/70">Đặt làm địa chỉ mặc định</span>
           <input
             type="checkbox"
             checked={Boolean(draft.isDefault)}
             onChange={(event) => update("isDefault", event.target.checked)}
             className="toggle-input"
           />
-        </label>
-        <button onClick={() => onSave(draft)} className="cta w-full">Lưu địa chỉ</button>
+        </CustomerCard>
+        <CustomerButton full onClick={() => onSave(draft)}>Lưu địa chỉ</CustomerButton>
       </div>
     </CustomerBottomSheet>
   );

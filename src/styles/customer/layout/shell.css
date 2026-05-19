@@ -1,8 +1,26 @@
 /* Customer mobile app shell */
 .customer-shell {
+  --customer-bg: #fff7ec;
+  --customer-surface: #ffffff;
+  --customer-surface-soft: #fff3df;
+  --customer-text: #3a1f14;
+  --customer-muted: rgba(58, 31, 20, 0.62);
+  --customer-faint: rgba(58, 31, 20, 0.42);
+  --customer-primary: #ff6a00;
+  --customer-primary-strong: #ff4f17;
+  --customer-primary-soft: #fff7ed;
+  --customer-border: rgba(255, 122, 0, 0.12);
+  --customer-radius-sm: 16px;
+  --customer-radius-md: 20px;
+  --customer-radius-lg: 24px;
+  --customer-page-x: 16px;
+  --customer-shadow-soft: 0 12px 34px rgba(58, 31, 20, 0.08);
+  --customer-shadow-orange: 0 12px 24px rgba(255, 90, 31, 0.24);
   width: 100%;
   min-height: 100vh;
   overflow-x: hidden;
+  color: var(--customer-text);
+  font-family: system-ui, Arial, sans-serif;
 }
 
 .customer-shell.bg-app {

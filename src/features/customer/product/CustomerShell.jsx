@@ -6,6 +6,7 @@ import CustomerOptionModal from "../../../components/customer/OptionModal.jsx";
 import CustomerFloatingCartBar from "../../../components/customer/FloatingCartBar.jsx";
 import CustomerToast from "../../../components/customer/Toast.jsx";
 import LoyaltyVoucherPopup from "../../../components/customer/LoyaltyVoucherPopup.jsx";
+import { CustomerLoadingState } from "../../../components/customer/CustomerUI.jsx";
 import HomePage from "../home/HomePage.jsx";
 import MenuPage from "./MenuPage.jsx";
 import ProductDetailPage from "./ProductDetailPage.jsx";
@@ -16,7 +17,6 @@ import LoyaltyPage from "../loyalty/LoyaltyPage.jsx";
 import AccountPage from "../account/AccountPage.jsx";
 import QrOrderEntryPage from "../../../pages/customer/qr/QrOrderEntryPage.jsx";
 import { orderRepository } from "../../../services/repositories/orderRepository.js";
-import Icon from "../../../components/Icon.jsx";
 
 const voucherPopupSeenKeys = new Set();
 const voucherPopupVisitKeys = new Set();
@@ -277,13 +277,7 @@ export default function CustomerShell({
       <main className="mx-auto min-h-screen w-full max-w-[430px] bg-cream pb-24 shadow-preview">
         {isSessionBootstrapping ? (
           <section className="px-4 pt-6">
-            <div className="rounded-[28px] bg-white p-6 text-center shadow-soft">
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                <Icon name="star" size={20} />
-              </div>
-              <h2 className="mt-3 text-base font-black text-brown">Đang tải dữ liệu</h2>
-              <p className="mt-1 text-sm text-brown/60">Đang đồng bộ tài khoản và lịch sử đơn hàng...</p>
-            </div>
+            <CustomerLoadingState message="Đang đồng bộ tài khoản và lịch sử đơn hàng..." />
           </section>
         ) : (
           <>

@@ -1,3 +1,5 @@
+import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
+
 function formatVoucherValue(voucher) {
   const value = Number(voucher?.value || 0);
   if (!value) return "";
@@ -14,7 +16,7 @@ export default function VoucherCard({ voucher, expired }) {
   const statusClass = inactive ? "bg-brown/5 text-brown/45" : "bg-green-50 text-green-600";
 
   return (
-    <div className={`rounded-2xl bg-white px-4 py-3 text-sm shadow-soft ${inactive ? "opacity-45" : ""}`}>
+    <CustomerCard padding="sm" className={`text-sm ${inactive ? "opacity-45" : ""}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <strong className="block truncate text-brown">{voucher.title || voucher.name || "Voucher"}</strong>
@@ -26,6 +28,6 @@ export default function VoucherCard({ voucher, expired }) {
           {statusLabel}
         </span>
       </div>
-    </div>
+    </CustomerCard>
   );
 }

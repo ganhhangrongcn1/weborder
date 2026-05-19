@@ -21,7 +21,7 @@ export default function BottomNav({ activeTab, onChange, items = defaultItems })
           <span className={`customer-bottom-nav__icon ${activeTab === item.id ? "customer-bottom-nav__icon--active" : ""}`}>
             <Icon name={item.icon} size={18} />
           </span>
-          <span>{item.label}</span>
+          <span className="customer-bottom-nav__label">{item.label}</span>
         </button>
       ))}
     </nav>

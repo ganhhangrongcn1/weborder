@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
+import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { defaultUserDemo } from "../../../data/defaultData.js";
 import { processUploadImage } from "../../../utils/imageUpload.js";
 
@@ -94,7 +95,7 @@ export default function ProfileModal({
           <input value={draft.phone || ""} disabled />
         </label>
         <p className="-mt-2 text-xs font-bold text-brown/45">Số điện thoại không thể thay đổi.</p>
-        <div className="rounded-[22px] border border-orange-100 bg-white p-3">
+        <CustomerCard padding="sm">
           <h3 className="text-sm font-black text-brown">Đổi mật khẩu</h3>
           <div className="mt-3 space-y-3">
             <label className="address-field">
@@ -110,9 +111,9 @@ export default function ProfileModal({
               <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
             </label>
           </div>
-        </div>
+        </CustomerCard>
         {message && <p className="rounded-2xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{message}</p>}
-        <button onClick={handleSave} className="cta w-full">Lưu hồ sơ</button>
+        <CustomerButton full onClick={handleSave}>Lưu hồ sơ</CustomerButton>
       </div>
     </CustomerBottomSheet>
   );

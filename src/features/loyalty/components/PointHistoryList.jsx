@@ -1,4 +1,5 @@
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
+import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 
 export default function PointHistoryList({ entries, limit = 5 }) {
@@ -9,10 +10,10 @@ export default function PointHistoryList({ entries, limit = 5 }) {
   return (
     <div className="space-y-2">
       {visibleEntries.map((entry) => (
-        <div key={entry.id} className="rounded-2xl bg-white px-4 py-3 text-sm shadow-soft">
+        <CustomerCard key={entry.id} padding="sm" className="text-sm">
           <span className="block text-brown">{entry.title}</span>
           <strong className="text-orange-600">+{entry.points} điểm</strong>
-        </div>
+        </CustomerCard>
       ))}
       {!safeEntries.length && <AppEmptyState icon={null} message={loyaltyText.noPointHistory} />}
     </div>

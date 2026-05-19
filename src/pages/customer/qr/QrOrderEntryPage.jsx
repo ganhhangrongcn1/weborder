@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
+import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 
 function getBranchKeyFromPath(pathname = "") {
   const match = String(pathname || "").match(/^\/qr\/([^/]+)$/i);
@@ -52,8 +53,7 @@ export default function QrOrderEntryPage({
   );
 
   const branch = useMemo(
-    () =>
-      pickupBranches.find((item) => matchBranchByQrKey(item, branchKey)) || null,
+    () => pickupBranches.find((item) => matchBranchByQrKey(item, branchKey)) || null,
     [pickupBranches, branchKey]
   );
 
@@ -79,8 +79,8 @@ export default function QrOrderEntryPage({
 
   return (
     <section className="px-4 pb-10 pt-5">
-      <div className="rounded-[24px] bg-white p-4 shadow-soft">
-        <div className="mb-3 flex items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50 px-3 py-3">
+      <CustomerCard>
+        <CustomerCard tone="notice" padding="sm" className="mb-3 flex items-start gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-orange-600">
             <Icon name="tag" size={18} />
           </span>
@@ -89,30 +89,30 @@ export default function QrOrderEntryPage({
             <h2 className="mt-1 text-base font-black text-brown">Quét QR đặt món nhanh</h2>
             <p className="mt-1 text-sm text-brown/70">Đơn sẽ được xử lý ngay theo chi nhánh trên mã QR.</p>
           </div>
-        </div>
+        </CustomerCard>
 
         {branch ? (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-brown/10 bg-cream px-3 py-3">
+            <CustomerCard tone="soft" padding="sm">
               <p className="text-xs font-semibold text-brown/60">Chi nhánh phục vụ</p>
               <p className="mt-1 text-sm font-black text-brown">{branch.name}</p>
               <p className="mt-1 text-xs text-brown/65">{branch.address}</p>
-            </div>
-            <button type="button" className="cta w-full" onClick={handleStartOrder}>
+            </CustomerCard>
+            <CustomerButton full size="lg" onClick={handleStartOrder}>
               Bắt đầu đặt món
-            </button>
+            </CustomerButton>
           </div>
         ) : (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-700">
+            <CustomerCard tone="danger" padding="sm" className="text-sm font-semibold text-red-700">
               Mã QR không hợp lệ hoặc chi nhánh đang tắt tự đến lấy.
-            </div>
-            <button type="button" className="w-full rounded-2xl border border-brown/20 py-3 text-sm font-black text-brown" onClick={() => navigate("home", "home")}>
+            </CustomerCard>
+            <CustomerButton full variant="secondary" onClick={() => navigate("home", "home")}>
               Về trang chủ
-            </button>
+            </CustomerButton>
           </div>
         )}
-      </div>
+      </CustomerCard>
     </section>
   );
 }

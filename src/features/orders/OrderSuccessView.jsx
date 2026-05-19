@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Icon from "../../components/Icon.jsx";
+import { CustomerButton, CustomerCard, CustomerModalFrame } from "../../components/customer/CustomerUI.jsx";
 import { loadZaloConfigAsync, renderZaloTemplate, buildZaloLink } from "../../services/zaloService.js";
 import { formatMoney } from "../../utils/format.js";
 
@@ -54,7 +55,7 @@ export default function OrderSuccess({
   const zaloTemplate = String(zaloConfig.template || "");
   const templateWithOrderLink = zaloTemplate.includes("{{order_link}}")
     ? zaloTemplate
-    : `${zaloTemplate}\n🔎 Xem lại đơn hàng: {{order_link}}`;
+    : `${zaloTemplate}\nXem lại đơn hàng: {{order_link}}`;
 
   const orderMessage = renderZaloTemplate(templateWithOrderLink, {
     customer_name: order?.customerName || "Khách",
@@ -152,124 +153,122 @@ export default function OrderSuccess({
   }
 
   return (
-    <section className="grid min-h-[calc(100vh-96px)] place-items-center px-4">
-      <div className="w-full rounded-[30px] bg-success p-7 text-center shadow-soft">
-        <div className={`mx-auto grid h-24 w-24 place-items-center rounded-[28px] text-3xl font-black ${isConfirmed ? "bg-green-100 text-green-600" : "bg-orange-100 text-orange-600"}`}>
+    <section className="grid min-h-[calc(100vh-96px)] place-items-center px-4 py-6">
+      <CustomerCard tone={isConfirmed ? "success" : "notice"} padding="lg" className="text-center">
+        <div className={`mx-auto grid h-20 w-20 place-items-center rounded-[24px] text-xl font-black ${isConfirmed ? "bg-green-100 text-green-600" : "bg-orange-100 text-orange-600"}`}>
           {isConfirmed ? "OK" : "..."}
         </div>
 
-        <h1 className={`mt-6 text-2xl font-black ${isConfirmed ? "text-green-700" : "text-orange-700"}`}>
-          {isConfirmed ? "Đơn hàng đã được gửi xác nhận" : "Còn 1 Bước Nữa Để Quán Nhận Đơn"}
+        <h1 className={`mt-5 text-2xl font-black leading-tight ${isConfirmed ? "text-green-700" : "text-orange-700"}`}>
+          {isConfirmed ? "Đơn hàng đã được gửi xác nhận" : "Còn 1 bước nữa để quán nhận đơn"}
         </h1>
-        <p className="mt-2 text-sm font-bold text-brown/70">
-          {isConfirmed ? "Quán đã nhận thông tin đơn của bạn qua Zalo. Bạn có thể theo dõi trạng thái đơn ngay bên dưới." : "Đơn đang chờ xác nhận từ bạn"}
+        <p className="mt-2 text-sm font-bold leading-6 text-brown/70">
+          {isConfirmed
+            ? "Quán đã nhận thông tin đơn của bạn qua Zalo. Bạn có thể theo dõi trạng thái đơn ngay bên dưới."
+            : "Đơn đang chờ xác nhận từ bạn."}
         </p>
 
-        <div className="mt-6 rounded-[24px] bg-white p-5 shadow-soft">
-          <p className="text-xs font-bold uppercase text-brown/40">Mã đơn hàng</p>
-          <strong className="mt-2 block text-3xl font-black">{order?.orderCode || "GHR-1028"}</strong>
+        <CustomerCard className="mt-6 text-center" padding="md">
+          <p className="customer-caption uppercase">Mã đơn hàng</p>
+          <strong className="mt-2 block text-3xl font-black text-brown">{orderCode}</strong>
           <p className="mt-4 text-sm font-semibold text-brown/65">
             Thời gian đặt<br />
             {order?.createdAt ? new Date(order.createdAt).toLocaleString("vi-VN") : new Date().toLocaleString("vi-VN")}
           </p>
-        </div>
+        </CustomerCard>
 
-        <div className={`mt-4 rounded-[24px] border bg-white/90 p-4 text-left shadow-soft ${isConfirmed ? "border-green-200" : "border-orange-200"}`}>
+        <CustomerCard className={`mt-4 text-left ${isConfirmed ? "border-green-200" : "border-orange-200"}`} padding="md">
           {!isConfirmed && (
-            <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3">
+            <CustomerCard tone="notice" padding="sm" className="mb-4">
               <p className="text-sm font-black text-orange-700">Hướng dẫn gửi đơn</p>
               <div className="mt-3 grid gap-2">
-                <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-orange-100 text-xs font-black text-orange-700">1</span>
-                  <p className="text-sm font-semibold text-brown/80">Bấm nút <strong>GỬI XÁC NHẬN ĐƠN</strong> bên dưới.</p>
-                </div>
-                <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-orange-100 text-xs font-black text-orange-700">2</span>
-                  <p className="text-sm font-semibold text-brown/80">Khi Zalo mở ra, chạm vào ô chat của quán.</p>
-                </div>
-                <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2">
-                  <span className="grid h-6 w-6 place-items-center rounded-full bg-orange-100 text-xs font-black text-orange-700">3</span>
-                  <p className="text-sm font-semibold text-brown/80">Chọn <strong>Dán</strong> rồi bấm <strong>Gửi</strong> là xong.</p>
-                </div>
+                {[
+                  "Bấm nút GỬI XÁC NHẬN ĐƠN bên dưới.",
+                  "Khi Zalo mở ra, chạm vào ô chat của quán.",
+                  "Chọn Dán rồi bấm Gửi là xong."
+                ].map((text, index) => (
+                  <div key={text} className="flex items-center gap-2 rounded-xl bg-white px-3 py-2">
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-orange-100 text-xs font-black text-orange-700">{index + 1}</span>
+                    <p className="text-sm font-semibold text-brown/80">{text}</p>
+                  </div>
+                ))}
               </div>
-            </div>
+            </CustomerCard>
           )}
 
           {isConfirmed ? (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button onClick={() => copyOrderText(true)} className="rounded-2xl bg-green-50 px-3 py-3 text-xs font-black text-green-700">
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              <CustomerButton variant="soft" size="sm" onClick={() => copyOrderText(true)}>
                 Copy lại nội dung đơn
-              </button>
-              <a href={zaloUrl} target="_blank" rel="noreferrer" onClick={reopenZalo} className="rounded-2xl bg-orange-50 px-3 py-3 text-center text-xs font-black text-orange-600">
+              </CustomerButton>
+              <CustomerButton as="a" variant="soft" size="sm" href={zaloUrl} target="_blank" rel="noreferrer" onClick={reopenZalo}>
                 Mở lại Zalo
-              </a>
+              </CustomerButton>
             </div>
           ) : (
-            <div className="mt-3 grid gap-2">
+            <div className="mt-1 grid gap-2">
               {hasOpenedZalo ? (
                 <>
-                  <button onClick={markZaloSent} className="w-full rounded-2xl border border-green-200 bg-green-50 px-3 py-3 text-xs font-black text-green-700">
+                  <CustomerButton variant="secondary" full onClick={markZaloSent}>
                     Tôi đã gửi Zalo rồi
-                  </button>
-                  <button onClick={() => copyOrderText(true)} className="w-full rounded-2xl border border-orange-100 bg-orange-50 px-3 py-3 text-xs font-black text-orange-600">
+                  </CustomerButton>
+                  <CustomerButton variant="soft" full onClick={() => copyOrderText(true)}>
                     Copy lại nội dung đơn
-                  </button>
+                  </CustomerButton>
                 </>
               ) : null}
             </div>
           )}
-        </div>
+        </CustomerCard>
 
         {!isConfirmed && (
           canOpenZalo ? (
-            <a
+            <CustomerButton
+              as="a"
               href={zaloUrl}
               target="_blank"
               rel="noreferrer"
               onClick={copyOrderForZalo}
-              className="mt-5 block w-full rounded-2xl bg-gradient-main py-4 text-center text-sm font-black uppercase tracking-wide text-white shadow-orange"
+              full
+              size="lg"
+              className="mt-5 uppercase"
             >
-              GỬI XÁC NHẬN ĐƠN
-            </a>
+              Gửi xác nhận đơn
+            </CustomerButton>
           ) : (
-            <button
-              type="button"
-              disabled
-              className="mt-5 block w-full cursor-wait rounded-2xl bg-brown/30 py-4 text-center text-sm font-black uppercase text-white shadow-orange"
-            >
+            <CustomerButton full size="lg" className="mt-5 cursor-wait" disabled>
               {isZaloConfigLoading ? "Đang lấy số Zalo..." : "Chưa có số Zalo quán"}
-            </button>
+            </CustomerButton>
           )
         )}
 
         {isConfirmed && (
           <>
-            <button onClick={() => navigate("tracking", "orders")} className="mt-6 w-full rounded-2xl bg-green-600 py-4 text-sm font-black uppercase text-white">
+            <CustomerButton full size="lg" variant="primary" className="mt-6" onClick={() => navigate("tracking", "orders")}>
               Theo dõi đơn hàng
-            </button>
-            <button onClick={() => navigate("menu", "menu")} className="mt-3 w-full rounded-2xl border border-brown/20 bg-white py-4 text-sm font-black uppercase text-brown">
+            </CustomerButton>
+            <CustomerButton full variant="secondary" className="mt-3" onClick={() => navigate("menu", "menu")}>
               Mua lại đơn này
-            </button>
+            </CustomerButton>
           </>
         )}
-      </div>
+      </CustomerCard>
+
       {copyPopup.open && (
-        <div className="fixed inset-0 z-[200] grid place-items-center bg-black/35 px-4">
-          <div className="w-full max-w-[360px] rounded-[24px] bg-white p-5 shadow-soft">
-            <div className={`grid h-12 w-12 place-items-center rounded-2xl ${copyPopup.tone === "error" ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
-              <Icon name={copyPopup.tone === "error" ? "x" : "check"} size={20} />
-            </div>
-            <h3 className="mt-3 text-lg font-black text-brown">{copyPopup.title}</h3>
-            <p className="mt-2 text-sm font-semibold leading-6 text-brown/75">{copyPopup.message}</p>
-            <button
-              type="button"
-              onClick={() => setCopyPopup({ open: false, title: "", message: "", tone: "success" })}
-              className="mt-5 w-full rounded-2xl bg-gradient-main py-3 text-sm font-black uppercase text-white"
-            >
-              Đã hiểu
-            </button>
+        <CustomerModalFrame onBackdropClick={() => setCopyPopup({ open: false, title: "", message: "", tone: "success" })}>
+          <div className={`grid h-12 w-12 place-items-center rounded-2xl ${copyPopup.tone === "error" ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+            <Icon name={copyPopup.tone === "error" ? "x" : "check"} size={20} />
           </div>
-        </div>
+          <h3 className="mt-3 customer-title-md">{copyPopup.title}</h3>
+          <p className="mt-2 customer-body">{copyPopup.message}</p>
+          <CustomerButton
+            full
+            className="mt-5"
+            onClick={() => setCopyPopup({ open: false, title: "", message: "", tone: "success" })}
+          >
+            Đã hiểu
+          </CustomerButton>
+        </CustomerModalFrame>
       )}
     </section>
   );

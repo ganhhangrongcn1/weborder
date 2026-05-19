@@ -1,4 +1,5 @@
 import Icon from "../../../components/Icon.jsx";
+import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { getLoyaltyBonusDisplay, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 
 export default function CheckinCard({
@@ -17,7 +18,7 @@ export default function CheckinCard({
   const loyaltyBonusDisplay = getLoyaltyBonusDisplay();
 
   return (
-    <div className="checkin-card">
+    <CustomerCard className="checkin-card">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="reward-icon"><Icon name="gift" size={17} /></span>
@@ -27,12 +28,12 @@ export default function CheckinCard({
       </div>
 
       {comebackActive && (
-        <div className="mt-3 rounded-2xl bg-orange-50 px-3 py-3 text-xs font-bold leading-5 text-orange-700">
+        <CustomerCard tone="notice" padding="sm" className="mt-3 text-xs font-bold leading-5 text-orange-700">
           {loyaltyText.comebackAlert(comebackStreak)}
-        </div>
+        </CustomerCard>
       )}
 
-      <div className="mt-4 rounded-[22px] bg-cream/80 p-4">
+      <CustomerCard tone="soft" padding="sm" className="mt-4">
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="text-xs font-bold text-brown/55">
@@ -47,11 +48,11 @@ export default function CheckinCard({
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
           <div className="h-full rounded-full bg-gradient-main transition-all" style={{ width: `${progressPercent}%` }} />
         </div>
-      </div>
+      </CustomerCard>
 
-      <button disabled={checkedInToday} onClick={handleCheckin} className="checkin-btn">
+      <CustomerButton disabled={checkedInToday} onClick={handleCheckin} full className="mt-4">
         {checkedInToday ? loyaltyText.checkedInToday : loyaltyText.checkinReward(checkinReward)}
-      </button>
+      </CustomerButton>
 
       <div className="checkin-bonus-grid">
         {loyaltyBonusDisplay.map((reward) => {
@@ -83,6 +84,6 @@ export default function CheckinCard({
           );
         })}
       </div>
-    </div>
+    </CustomerCard>
   );
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import AppSectionTitle from "../../../components/app/SectionTitle.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
+import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
 import PointsCard from "../../../pages/customer/loyalty/PointsCard.jsx";
 import CouponList from "../../../pages/customer/loyalty/CouponList.jsx";
@@ -69,34 +69,32 @@ export default function MemberLoyaltyView({
 
         <PointsCard rows={loyaltyRulesRows} />
         {shouldShowVoucherSection ? (
-          <>
-            <div className="rounded-2xl bg-white px-4 py-3 shadow-soft">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between text-left"
-                onClick={() => setVoucherExpanded((prev) => !prev)}
-              >
-                <span className="text-sm font-black text-brown">{voucherHeader}</span>
-                <span className="text-xs font-bold text-orange-600">
-                  {voucherExpanded ? "Thu gọn" : "Xem"}
-                </span>
-              </button>
-              {voucherExpanded ? (
-                <div className="mt-3">
-                  <CouponList
-                    vouchers={safeVoucherHistory}
-                    isVoucherExpired={isVoucherExpired}
-                    EmptyState={<AppEmptyState icon={null} message="Chưa có voucher" />}
-                  />
-                </div>
-              ) : null}
-            </div>
-          </>
+          <CustomerCard padding="sm">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 text-left"
+              onClick={() => setVoucherExpanded((prev) => !prev)}
+            >
+              <span className="text-sm font-black text-brown">{voucherHeader}</span>
+              <span className="text-xs font-bold text-orange-600">
+                {voucherExpanded ? "Thu gọn" : "Xem"}
+              </span>
+            </button>
+            {voucherExpanded ? (
+              <div className="mt-3">
+                <CouponList
+                  vouchers={safeVoucherHistory}
+                  isVoucherExpired={isVoucherExpired}
+                  EmptyState={<AppEmptyState icon={null} message="Chưa có voucher" />}
+                />
+              </div>
+            ) : null}
+          </CustomerCard>
         ) : null}
-        <div className="rounded-2xl bg-white px-4 py-3 shadow-soft">
+        <CustomerCard padding="sm">
           <button
             type="button"
-            className="flex w-full items-center justify-between text-left"
+            className="flex w-full items-center justify-between gap-3 text-left"
             onClick={() => setHistoryExpanded((prev) => !prev)}
           >
             <span className="text-sm font-black text-brown">{historyHeader}</span>
@@ -109,10 +107,10 @@ export default function MemberLoyaltyView({
               <PointHistoryList entries={safePointHistory} />
             </div>
           ) : null}
-        </div>
+        </CustomerCard>
       </div>
 
-        {rewardFeatureFlags.enableLuckyDraw ? (
+      {rewardFeatureFlags.enableLuckyDraw ? (
         <LuckyVoucherModal luckyVoucher={luckyVoucher} onClose={() => setLuckyVoucher(null)} />
       ) : null}
     </section>

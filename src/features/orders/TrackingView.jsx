@@ -2,9 +2,16 @@ import { useEffect, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import AppHeader from "../../components/app/Header.jsx";
 import AppEmptyState from "../../components/app/EmptyState.jsx";
+import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
 import OrderStatusSheet from "../../pages/customer/tracking/OrderStatusSheet.jsx";
 import { formatMoney } from "../../utils/format.js";
 import { formatTime } from "../../utils/pureHelpers.js";
+
+const STATUS_TONE = {
+  done: "bg-green-50 text-green-700",
+  delivering: "bg-blue-50 text-blue-600",
+  active: "bg-orange-50 text-orange-600"
+};
 
 export default function Tracking({
   navigate,
@@ -70,6 +77,12 @@ export default function Tracking({
     return 0;
   };
 
+  const getStatusTone = (status) => {
+    if (status === "Hoàn tất") return STATUS_TONE.done;
+    if (status === "Đang giao") return STATUS_TONE.delivering;
+    return STATUS_TONE.active;
+  };
+
   const formatOrderTime = (value) => (value ? formatTime(value) : "--");
 
   const closeSelectedOrder = () => {
@@ -94,7 +107,6 @@ export default function Tracking({
             icon="bag"
             title="Đang tải đơn hàng"
             message="Đang đồng bộ lịch sử đơn từ hệ thống..."
-            className="rounded-[28px] bg-white p-6 shadow-soft"
             center
           />
         )}
@@ -110,7 +122,6 @@ export default function Tracking({
             }
             actionText={currentPhone ? "Đặt món ngay" : "Đăng nhập để xem đơn"}
             onAction={() => (currentPhone ? navigate("menu", "menu") : navigate("account", "account"))}
-            className="rounded-[28px] bg-white p-6 shadow-soft"
             center
           />
         )}
@@ -118,61 +129,56 @@ export default function Tracking({
         {!shouldShowLoading &&
           orders.map((order) => {
             const status = getOrderStatus(order);
-            const isDone = status === "Hoàn tất";
-            const isDelivering = status === "Đang giao";
             const items = Array.isArray(order?.items) ? order.items : [];
 
             return (
-              <article
+              <CustomerCard
+                as="article"
                 key={order.orderCode || order.id}
                 onClick={() => setSelectedOrder(order)}
-                className="cursor-pointer rounded-[28px] bg-white p-4 shadow-soft transition active:scale-[0.99]"
+                interactive
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs text-brown/50">{formatOrderTime(order.createdAt)}</p>
-                    <h2 className="mt-1 text-lg font-black text-brown">
+                  <div className="min-w-0">
+                    <p className="customer-caption">{formatOrderTime(order.createdAt)}</p>
+                    <h2 className="mt-1 truncate customer-title-md">
                       {canViewFullOrderCode ? order.orderCode : maskOrderCode(order.orderCode)}
                     </h2>
-                    <p className="mt-1 text-sm text-brown/60">
+                    <p className="mt-1 customer-body">
                       {items.length} món · {formatMoney(order.totalAmount || 0)}
                     </p>
                   </div>
 
-                  <span
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
-                      isDone
-                        ? "bg-green-50 text-green-700"
-                        : isDelivering
-                          ? "bg-blue-50 text-blue-600"
-                          : "bg-orange-50 text-orange-600"
-                    }`}
-                  >
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${getStatusTone(status)}`}>
                     {status}
                   </span>
                 </div>
 
-                <div className="mt-4 space-y-2 rounded-[22px] bg-cream/70 p-3">
+                <CustomerCard tone="soft" padding="sm" className="mt-4 space-y-2 shadow-none">
                   {items.slice(0, 3).map((item, index) => (
                     <div
                       key={item.cartId || `${order.orderCode}-${item.id || "item"}-${item.name || "name"}-${index}`}
                       className="flex items-start justify-between gap-3 text-sm"
                     >
-                      <div>
-                        <p className="font-bold text-brown">{item.name}</p>
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-brown">{item.name}</p>
                         <p className="text-xs text-brown/50">x{item.quantity || 1}</p>
                       </div>
 
-                      <span className="font-black text-orange-600">
+                      <span className="shrink-0 font-black text-orange-600">
                         {formatMoney(item.lineTotal || (item.unitTotal || item.price || 0) * (item.quantity || 1))}
                       </span>
                     </div>
                   ))}
 
-                  {items.length > 3 && <p className="text-xs font-bold text-brown/50">+{items.length - 3} món khác</p>}
-                </div>
+                  {items.length > 3 && <p className="customer-caption">+{items.length - 3} món khác</p>}
+                </CustomerCard>
 
-                <button
+                <CustomerButton
+                  variant="soft"
+                  full
+                  icon="cart"
+                  className="mt-3"
                   onClick={(event) => {
                     event.stopPropagation();
                     const notice = getStoreBlockNotice?.();
@@ -182,12 +188,10 @@ export default function Tracking({
                     }
                     onReorder(order);
                   }}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-[20px] border border-orange-100 bg-orange-50 px-4 py-3 text-sm font-black text-orange-600 shadow-sm"
                 >
-                  <Icon name="cart" size={17} />
                   Mua lại đơn này
-                </button>
-              </article>
+                </CustomerButton>
+              </CustomerCard>
             );
           })}
       </div>

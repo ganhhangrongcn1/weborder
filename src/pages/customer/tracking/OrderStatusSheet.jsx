@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
+import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { formatMoney } from "../../../utils/format.js";
 
 export default function OrderStatusSheet({
@@ -47,15 +48,17 @@ export default function OrderStatusSheet({
       showHeader={false}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold text-brown/50">{formatOrderTime(order.createdAt)}</p>
-          <h2 className="mt-1 text-xl font-black text-brown">{canViewFullOrderCode ? order.orderCode : maskOrderCode(order.orderCode)}</h2>
-          <p className="mt-1 text-sm text-brown/60">{(order.items || []).length} món · {formatMoney(order.totalAmount || 0)}</p>
+        <div className="min-w-0">
+          <p className="customer-caption">{formatOrderTime(order.createdAt)}</p>
+          <h2 className="mt-1 truncate customer-title-lg">{canViewFullOrderCode ? order.orderCode : maskOrderCode(order.orderCode)}</h2>
+          <p className="mt-1 customer-body">{orderItems.length} món · {formatMoney(order.totalAmount || 0)}</p>
         </div>
-        <button onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white text-brown shadow-sm">×</button>
+        <button type="button" onClick={onClose} className="customer-icon-button shrink-0" aria-label="Đóng">
+          ×
+        </button>
       </div>
 
-      <div className="mt-5 space-y-4 rounded-[24px] bg-white p-4 shadow-soft">
+      <CustomerCard className="mt-5 space-y-4">
         {steps.map((item, index) => {
           const active = index <= step;
           const current = index === step;
@@ -65,7 +68,7 @@ export default function OrderStatusSheet({
                 {active ? "✓" : index + 1}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <strong className="text-sm text-brown">{item.title}</strong>
                   {current && <span className="rounded-full bg-orange-50 px-2 py-1 text-[10px] font-black uppercase text-orange-600">Hiện tại</span>}
                 </div>
@@ -74,7 +77,7 @@ export default function OrderStatusSheet({
             </div>
           );
         })}
-      </div>
+      </CustomerCard>
 
       <div className="order-detail-box">
         <div className="order-detail-head">

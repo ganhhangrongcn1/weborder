@@ -1,6 +1,7 @@
 import Icon from "../../../components/Icon.jsx";
 import AppSectionTitle from "../../../components/app/SectionTitle.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
+import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { getLoyaltyRule, getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 
 export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay }) {
@@ -20,13 +21,13 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay }) {
         <strong>--</strong>
         <p><Icon name="star" size={14} /> {loyaltyText.signedOutMessage}</p>
         <span>{loyaltyText.ratioPrefix}{currencyPerPoint.toLocaleString("vi-VN")}đ = {pointPerUnit} điểm</span>
-        <button onClick={() => navigate("account", "account")} className="mt-5 w-full rounded-[20px] bg-white px-4 py-4 text-sm font-black text-orange-600 shadow-soft">
+        <CustomerButton full variant="secondary" className="mt-5" onClick={() => navigate("account", "account")}>
           {loyaltyText.authCta}
-        </button>
+        </CustomerButton>
       </div>
 
       <div className="space-y-4 px-4 pt-4">
-        <div className="checkin-card">
+        <CustomerCard className="checkin-card">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="reward-icon"><Icon name="gift" size={17} /></span>
@@ -34,13 +35,15 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay }) {
             </div>
             <span className="streak-pill">{loyaltyText.signedOutCheckinHint}</span>
           </div>
-          <div className="mt-4 rounded-[22px] bg-cream/80 p-4">
+          <CustomerCard tone="soft" padding="sm" className="mt-4">
             <p className="text-sm font-bold leading-6 text-brown/65">{loyaltyText.signedOutCheckinDetail}</p>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
               <div className="h-full w-0 rounded-full bg-gradient-main" />
             </div>
-          </div>
-          <button onClick={() => navigate("account", "account")} className="checkin-btn">{loyaltyText.checkinLoginHint}</button>
+          </CustomerCard>
+          <CustomerButton full className="mt-4" onClick={() => navigate("account", "account")}>
+            {loyaltyText.checkinLoginHint}
+          </CustomerButton>
           <div className="checkin-bonus-grid opacity-60">
             {safeBonusDisplay.map((reward) => (
               <div key={reward.days}>
@@ -49,9 +52,9 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay }) {
               </div>
             ))}
           </div>
-        </div>
+        </CustomerCard>
 
-        <div className="checkin-card">
+        <CustomerCard className="checkin-card">
           <div className="flex items-center gap-2">
             <span className="reward-icon green"><Icon name="star" size={17} /></span>
             <h2>Quy định điểm thưởng</h2>
@@ -61,7 +64,7 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay }) {
               <div key={row.label}><span>{row.label}</span><strong>{row.value}</strong></div>
             ))}
           </div>
-        </div>
+        </CustomerCard>
 
         <AppSectionTitle title={loyaltyText.luckyGiftTitle} />
         <AppEmptyState icon={null} message={loyaltyText.signedOutLuckyMessage} />

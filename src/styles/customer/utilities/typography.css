@@ -1,3 +1,44 @@
+/* Customer typography tokens */
+.customer-shell {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.customer-shell .customer-title-lg {
+  color: var(--customer-text);
+  font-size: 22px;
+  font-weight: 900 !important;
+  line-height: 1.15;
+}
+
+.customer-shell .customer-title-md {
+  color: var(--customer-text);
+  font-size: 18px;
+  font-weight: 900 !important;
+  line-height: 1.2;
+}
+
+.customer-shell .customer-title-sm {
+  color: var(--customer-text);
+  font-size: 14px;
+  font-weight: 850 !important;
+  line-height: 1.25;
+}
+
+.customer-shell .customer-body {
+  color: var(--customer-muted);
+  font-size: 14px;
+  font-weight: 600 !important;
+  line-height: 1.55;
+}
+
+.customer-shell .customer-caption {
+  color: var(--customer-faint);
+  font-size: 12px;
+  font-weight: 650 !important;
+  line-height: 1.35;
+}
+
 /* Lightweight typography pass */
 .customer-shell,
 .customer-shell button,
@@ -33,6 +74,13 @@
 .customer-shell .cta,
 .customer-shell .cta-small,
 .customer-shell .ghost-small,
+.customer-shell .customer-button,
+.customer-shell .customer-page-header__title,
+.customer-shell .customer-brand-header__logo,
+.customer-shell .customer-brand-header__kicker,
+.customer-shell .customer-brand-header__name,
+.customer-shell .customer-brand-header__points,
+.customer-shell .customer-bottom-nav__item,
 .customer-shell .filter-btn,
 .customer-shell .chip,
 .customer-shell .option,
