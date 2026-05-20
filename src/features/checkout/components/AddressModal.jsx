@@ -46,6 +46,7 @@ export default function AddressModal({
       ariaLabel="Đổi địa chỉ giao hàng"
       onClose={onClose}
       className="promo-sheet"
+      footer={<CustomerButton full onClick={() => onSave(draft)}>Lưu thông tin</CustomerButton>}
     >
       <div className="space-y-3">
         {savedPreview && (
@@ -142,7 +143,6 @@ export default function AddressModal({
           />
         </CustomerCard>
 
-        <CustomerButton full onClick={() => onSave(draft)}>Lưu thông tin</CustomerButton>
       </div>
     </CustomerBottomSheet>
   );

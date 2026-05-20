@@ -1,8 +1,18 @@
-import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
+import { getSupabaseAdminAuthClient, initSupabaseAdminAuthClient } from "./supabase/supabaseRuntimeClient.js";
 
 const ADMIN_AUTH_TIMEOUT_MS = 6000;
 const PROFILE_TABLE = "profiles";
 const ADMIN_ALLOWED_ROLES = new Set(["admin", "staff", "kitchen"]);
+
+function isTransientAdminAuthError(error) {
+  const rawMessage = String(error?.message || error || "").trim().toLowerCase();
+  return (
+    rawMessage.includes("admin_auth_timeout") ||
+    rawMessage.includes("failed to fetch") ||
+    rawMessage.includes("network") ||
+    rawMessage.includes("timeout")
+  );
+}
 
 function normalizeEmail(value = "") {
   return String(value || "").trim().toLowerCase();
@@ -76,11 +86,11 @@ async function withTimeout(task, timeoutMs = ADMIN_AUTH_TIMEOUT_MS) {
 }
 
 async function getClientReady() {
-  const existing = getSupabaseRuntimeClient();
+  const existing = getSupabaseAdminAuthClient();
   if (existing) return existing;
-  const initialized = await withTimeout(() => initSupabaseRuntimeClient());
+  const initialized = await withTimeout(() => initSupabaseAdminAuthClient());
   if (initialized) return initialized;
-  return getSupabaseRuntimeClient();
+  return getSupabaseAdminAuthClient();
 }
 
 async function readPrivilegedProfile(client, session) {
@@ -173,7 +183,7 @@ export async function getAdminSession() {
 export async function loginAdminWithPassword({ email, password }) {
   let client = await getClientReady();
   if (!client) {
-    await initSupabaseRuntimeClient();
+    await initSupabaseAdminAuthClient();
     client = await getClientReady();
   }
   if (!client) return { ok: false, message: "Supabase chưa sẵn sàng." };
@@ -231,11 +241,13 @@ export async function subscribeAdminAuth(onChange) {
       const access = await resolveAdminAccessFromSession(client, session || null);
       onChange(access);
     } catch (error) {
+      const isTransientError = Boolean(session) && isTransientAdminAuthError(error);
       onChange({
-        session: null,
+        session: isTransientError ? session : null,
         rawSession: session || null,
         profile: null,
-        unauthorized: Boolean(session),
+        unauthorized: Boolean(session) && !isTransientError,
+        transientAuthError: isTransientError,
         message: session ? normalizeAdminAuthError(error, "Không thể xác minh quyền quản trị.") : "",
         error
       });

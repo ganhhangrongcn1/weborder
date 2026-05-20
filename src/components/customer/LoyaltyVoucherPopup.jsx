@@ -47,6 +47,11 @@ export default function LoyaltyVoucherPopup({
       onClose={onClose}
       className="promo-sheet"
       showHeader={false}
+      footer={(
+        <button type="button" className="cta w-full" onClick={onPrimaryAction}>
+          Chọn món ngay
+        </button>
+      )}
     >
       <section className="loyalty-voucher-card">
         <button type="button" className="loyalty-voucher-close" onClick={onClose} aria-label="Đóng">X</button>
@@ -61,9 +66,6 @@ export default function LoyaltyVoucherPopup({
           <p><strong>Hướng dẫn:</strong> {guideText}</p>
         </div>
 
-        <button type="button" className="cta w-full" onClick={onPrimaryAction}>
-          Chọn món ngay
-        </button>
       </section>
     </CustomerBottomSheet>
   );

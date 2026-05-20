@@ -16,6 +16,42 @@ const REMOTE_USERS_CACHE_TTL_MS = 8000;
 let usersRemoteCache = { value: null, cachedAt: 0 };
 let usersReadInFlight = null;
 
+function getBrowserLocalStorage() {
+  try {
+    if (typeof window !== "undefined" && window.localStorage) return window.localStorage;
+    if (typeof globalThis !== "undefined" && globalThis.localStorage) return globalThis.localStorage;
+  } catch {
+  }
+  return null;
+}
+
+function readLocalSessionValue(key, fallback = "") {
+  const storage = getBrowserLocalStorage();
+  if (!storage) return fallback;
+  try {
+    const value = storage.getItem(key);
+    return value === null ? fallback : value;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocalSessionValue(key, value = "") {
+  const storage = getBrowserLocalStorage();
+  const safeValue = String(value || "");
+  if (storage) {
+    try {
+      if (safeValue) {
+        storage.setItem(key, safeValue);
+      } else {
+        storage.removeItem(key);
+      }
+    } catch {
+    }
+  }
+  return safeValue;
+}
+
 function notifyCustomerDataChanged() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("ghr:customer-data-changed"));
@@ -142,16 +178,24 @@ export const customerRepository = {
     return users[key] || null;
   },
   saveCurrentPhone(phone) {
-    return repository.set(STORAGE_KEYS.currentPhone, getCustomerKey(phone));
+    const normalizedPhone = getCustomerKey(phone);
+    writeLocalSessionValue(STORAGE_KEYS.currentPhone, normalizedPhone);
+    return repository.set(STORAGE_KEYS.currentPhone, normalizedPhone);
   },
   getCurrentPhone() {
-    return repository.get(STORAGE_KEYS.currentPhone, "");
+    const localPhone = getCustomerKey(readLocalSessionValue(STORAGE_KEYS.currentPhone, ""));
+    return localPhone || repository.get(STORAGE_KEYS.currentPhone, "");
   },
   clearCurrentPhone() {
+    writeLocalSessionValue(STORAGE_KEYS.currentPhone, "");
     return repository.set(STORAGE_KEYS.currentPhone, "");
   },
   saveSessionPointer({ phone = "", customerId = "", authUserId = "" } = {}) {
     const normalizedPhone = getCustomerKey(phone);
+    writeLocalSessionValue(STORAGE_KEYS.currentCustomerPhone, normalizedPhone || "");
+    writeLocalSessionValue(STORAGE_KEYS.currentCustomerId, customerId || "");
+    writeLocalSessionValue(STORAGE_KEYS.currentAuthUserId, authUserId || "");
+    writeLocalSessionValue(STORAGE_KEYS.currentPhone, normalizedPhone || "");
     repository.set(STORAGE_KEYS.currentCustomerPhone, normalizedPhone || "");
     repository.set(STORAGE_KEYS.currentCustomerId, String(customerId || ""));
     repository.set(STORAGE_KEYS.currentAuthUserId, String(authUserId || ""));
@@ -165,13 +209,20 @@ export const customerRepository = {
     };
   },
   getSessionPointer() {
+    const localPhone = readLocalSessionValue(STORAGE_KEYS.currentCustomerPhone, "") || readLocalSessionValue(STORAGE_KEYS.currentPhone, "");
+    const localCustomerId = readLocalSessionValue(STORAGE_KEYS.currentCustomerId, "");
+    const localAuthUserId = readLocalSessionValue(STORAGE_KEYS.currentAuthUserId, "");
     return {
-      phone: getCustomerKey(repository.get(STORAGE_KEYS.currentCustomerPhone, "") || repository.get(STORAGE_KEYS.currentPhone, "")) || "",
-      customerId: String(repository.get(STORAGE_KEYS.currentCustomerId, "") || ""),
-      authUserId: String(repository.get(STORAGE_KEYS.currentAuthUserId, "") || "")
+      phone: getCustomerKey(localPhone || repository.get(STORAGE_KEYS.currentCustomerPhone, "") || repository.get(STORAGE_KEYS.currentPhone, "")) || "",
+      customerId: String(localCustomerId || repository.get(STORAGE_KEYS.currentCustomerId, "") || ""),
+      authUserId: String(localAuthUserId || repository.get(STORAGE_KEYS.currentAuthUserId, "") || "")
     };
   },
   clearSessionPointer() {
+    writeLocalSessionValue(STORAGE_KEYS.currentCustomerPhone, "");
+    writeLocalSessionValue(STORAGE_KEYS.currentCustomerId, "");
+    writeLocalSessionValue(STORAGE_KEYS.currentAuthUserId, "");
+    writeLocalSessionValue(STORAGE_KEYS.currentPhone, "");
     repository.set(STORAGE_KEYS.currentCustomerPhone, "");
     repository.set(STORAGE_KEYS.currentCustomerId, "");
     repository.set(STORAGE_KEYS.currentAuthUserId, "");
@@ -379,12 +430,16 @@ export const customerRepository = {
     return users[key] || null;
   },
   async saveCurrentPhoneAsync(phone) {
-    return repository.setAsync(STORAGE_KEYS.currentPhone, getCustomerKey(phone));
+    const normalizedPhone = getCustomerKey(phone);
+    writeLocalSessionValue(STORAGE_KEYS.currentPhone, normalizedPhone);
+    return repository.setAsync(STORAGE_KEYS.currentPhone, normalizedPhone);
   },
   async getCurrentPhoneAsync() {
-    return repository.getAsync(STORAGE_KEYS.currentPhone, "");
+    const localPhone = getCustomerKey(readLocalSessionValue(STORAGE_KEYS.currentPhone, ""));
+    return localPhone || repository.getAsync(STORAGE_KEYS.currentPhone, "");
   },
   async clearCurrentPhoneAsync() {
+    writeLocalSessionValue(STORAGE_KEYS.currentPhone, "");
     return repository.setAsync(STORAGE_KEYS.currentPhone, "");
   },
   async getCustomersMetaAsync() {

@@ -104,6 +104,22 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
       closeOnBackdrop={true}
       className="option-sheet customer-option-sheet"
       contentClassName="customer-option-sheet-scroll"
+      footer={(
+        <div className="option-modal-footer">
+          <div className="flex items-center justify-between rounded-[22px] bg-orange-50 px-4 py-3">
+            <span className="text-sm font-black uppercase text-brown/70">{optionModalText.subtotal}</span>
+            <div className="text-right">
+              {hasStrikePrice && (
+                <span className="block text-xs font-bold text-brown/35 line-through">
+                  {formatMoney(originalTotal)}
+                </span>
+              )}
+              <strong className="text-xl font-black text-orange-600">{formatMoney(total)}</strong>
+            </div>
+          </div>
+          <button onClick={handleAddToCart} className="cta w-full">{finalSubmitLabel}</button>
+        </div>
+      )}
       showHeader={false}
     >
         <div className="option-modal-sticky-header flex items-start gap-3">
@@ -187,20 +203,6 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
             </div>
           </div>
 
-          <div className="option-modal-footer">
-            <div className="flex items-center justify-between rounded-[22px] bg-orange-50 px-4 py-3">
-              <span className="text-sm font-black uppercase text-brown/70">{optionModalText.subtotal}</span>
-              <div className="text-right">
-                {hasStrikePrice && (
-                  <span className="block text-xs font-bold text-brown/35 line-through">
-                    {formatMoney(originalTotal)}
-                  </span>
-                )}
-                <strong className="text-xl font-black text-orange-600">{formatMoney(total)}</strong>
-              </div>
-            </div>
-            <button onClick={handleAddToCart} className="cta w-full">{finalSubmitLabel}</button>
-          </div>
         </div>
     </CustomerBottomSheet>
   );

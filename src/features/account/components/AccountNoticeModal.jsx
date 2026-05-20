@@ -10,6 +10,11 @@ export default function AccountNoticeModal({ notice, onClose }) {
       onClose={onClose}
       className="promo-sheet"
       showHeader={false}
+      footer={(
+        <button type="button" className="cta w-full" onClick={onClose}>
+          Đã hiểu
+        </button>
+      )}
     >
       <div className="space-y-4 pb-2 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-[18px] bg-[#fff1e6] text-[#ff6a00]">
@@ -23,9 +28,6 @@ export default function AccountNoticeModal({ notice, onClose }) {
             {notice.message}
           </p>
         </div>
-        <button type="button" className="cta w-full" onClick={onClose}>
-          Đã hiểu
-        </button>
       </div>
     </CustomerBottomSheet>
   );

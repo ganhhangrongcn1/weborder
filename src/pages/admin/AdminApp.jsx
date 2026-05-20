@@ -158,6 +158,13 @@ export default function AdminApp({
       : "Sync: Local (fallback)";
 
   const applyAdminAccessState = (access = {}) => {
+    if (access?.transientAuthError && access?.session) {
+      setAdminSession((current) => current || access.session);
+      setAdminProfile((current) => current || access?.profile || null);
+      setBlockedAdminSession(null);
+      setLoginMessage(access?.message || "");
+      return;
+    }
     setAdminSession(access?.session || null);
     setAdminProfile(access?.profile || null);
     setBlockedAdminSession(access?.unauthorized ? access?.rawSession || null : null);

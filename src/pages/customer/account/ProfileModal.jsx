@@ -75,6 +75,7 @@ export default function ProfileModal({
       ariaLabel="Chỉnh sửa hồ sơ"
       onClose={onClose}
       className="promo-sheet"
+      footer={<CustomerButton full onClick={handleSave}>Lưu hồ sơ</CustomerButton>}
     >
       <div className="space-y-3">
         <label className="mx-auto grid h-24 w-24 cursor-pointer place-items-center overflow-hidden rounded-full border-4 border-orange-50 bg-white text-orange-600 shadow-soft">
@@ -113,7 +114,6 @@ export default function ProfileModal({
           </div>
         </CustomerCard>
         {message && <p className="rounded-2xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{message}</p>}
-        <CustomerButton full onClick={handleSave}>Lưu hồ sơ</CustomerButton>
       </div>
     </CustomerBottomSheet>
   );

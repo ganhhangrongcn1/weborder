@@ -13,6 +13,11 @@ export default function LuckyVoucherModal({ luckyVoucher, onClose }) {
       onClose={onClose}
       className="promo-sheet"
       showHeader={false}
+      footer={(
+        <CustomerButton full onClick={onClose}>
+          {loyaltyText.luckyReceive}
+        </CustomerButton>
+      )}
     >
       <div className="text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-3xl bg-orange-50 text-orange-600">
@@ -20,9 +25,6 @@ export default function LuckyVoucherModal({ luckyVoucher, onClose }) {
         </span>
         <h2 className="mt-4 customer-title-lg">{loyaltyText.luckyCongrats}</h2>
         <p className="mt-2 customer-body">{loyaltyText.luckyReceiveLabel(luckyVoucher.title)}</p>
-        <CustomerButton full className="mt-5" onClick={onClose}>
-          {loyaltyText.luckyReceive}
-        </CustomerButton>
       </div>
     </CustomerBottomSheet>
   );

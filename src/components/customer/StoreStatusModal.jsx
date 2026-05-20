@@ -10,6 +10,7 @@ export default function StoreStatusModal({ notice, onClose }) {
       onClose={onClose}
       className="promo-sheet"
       showHeader={false}
+      footer={<button onClick={onClose} className="cta w-full">Đã hiểu</button>}
     >
       <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-orange-50">
         <span className="grid h-10 w-10 place-items-center rounded-full bg-white text-orange-600">
@@ -23,7 +24,6 @@ export default function StoreStatusModal({ notice, onClose }) {
         <h2 className="mt-3 text-2xl font-black leading-tight text-brown">{notice.title}</h2>
         <p className="mt-2 text-sm font-semibold leading-6 text-brown/70">{notice.description}</p>
       </div>
-      <button onClick={onClose} className="cta w-full">Đã hiểu</button>
     </CustomerBottomSheet>
   );
 }

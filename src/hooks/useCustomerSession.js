@@ -18,6 +18,17 @@ async function withTimeout(promise, timeoutMs, fallbackValue) {
   }
 }
 
+function buildRestoredSessionUser(defaultUserDemo, phone, fallback = {}) {
+  const normalizedName = String(fallback?.name || fallback?.fullName || fallback?.displayName || "").trim();
+  return {
+    ...defaultUserDemo,
+    ...fallback,
+    phone,
+    name: normalizedName || fallback?.name || defaultUserDemo?.name || "Khách hàng",
+    registered: true
+  };
+}
+
 export default function useCustomerSession({
   enabled = true,
   ordersRealtimeEnabled = false,
@@ -77,7 +88,13 @@ export default function useCustomerSession({
           } catch {
           }
           const restoredUser = await customerRepository.getUserByPhoneAsync(authSnapshot.phone);
-          const hydratedUser = restoredUser ? { ...restoredUser } : null;
+          const hydratedUser = restoredUser
+            ? { ...restoredUser }
+            : buildRestoredSessionUser(defaultUserDemo, authSnapshot.phone, {
+                name: authSnapshot.name,
+                email: authSnapshot.email || "",
+                authUserId: authSnapshot.authUserId || ""
+              });
           if (!disposed && hydratedUser) {
             restoredPhoneTarget = authSnapshot.phone;
             setRestoreTargetPhone(authSnapshot.phone);
@@ -102,17 +119,18 @@ export default function useCustomerSession({
         } catch {
         }
         const restoredUser = await customerRepository.getUserByPhoneAsync(pointer.phone);
-        if (!disposed && restoredUser) {
+        const hydratedUser = restoredUser || (isSupabaseSource ? buildRestoredSessionUser(defaultUserDemo, pointer.phone) : null);
+        if (!disposed && hydratedUser) {
           restoredPhoneTarget = pointer.phone;
           setRestoreTargetPhone(pointer.phone);
           userStorage.saveCurrentPhone?.(pointer.phone);
           customerRepository.saveSessionPointer({
             phone: pointer.phone,
-            customerId: restoredUser.id || pointer.customerId || pointer.phone,
+            customerId: hydratedUser.id || pointer.customerId || pointer.phone,
             authUserId: pointer.authUserId || ""
           });
           setCurrentPhoneState(pointer.phone);
-          setDemoUserState(restoredUser);
+          setDemoUserState(hydratedUser);
           log("[customer-session] restore from phone pointer");
           return;
         }
@@ -138,7 +156,7 @@ export default function useCustomerSession({
     return () => {
       disposed = true;
     };
-  }, [enabled, isSupabaseSource, userStorage]);
+  }, [defaultUserDemo, enabled, isSupabaseSource, userStorage]);
 
   useEffect(() => {
     if (!enabled) return;

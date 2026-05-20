@@ -1,6 +1,6 @@
 ﻿import { getCustomerKey } from "./storageService.js";
 import { isSupabaseRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
-import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
+import { getSupabaseCustomerAuthClient, initSupabaseCustomerAuthClient } from "./supabase/supabaseRuntimeClient.js";
 
 const PROFILE_TABLE = "profiles";
 function toPhoneAuthEmail(phone) {
@@ -41,13 +41,13 @@ function normalizeAuthError(error, fallback = "Không thể thực hiện xác t
 }
 
 function getClient() {
-  return getSupabaseRuntimeClient();
+  return getSupabaseCustomerAuthClient();
 }
 
 async function getClientReady() {
   const existing = getClient();
   if (existing) return existing;
-  const initialized = await initSupabaseRuntimeClient();
+  const initialized = await initSupabaseCustomerAuthClient();
   if (initialized) return initialized;
   return getClient();
 }

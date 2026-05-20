@@ -28,6 +28,7 @@ export default function AccountAddressModal({
       ariaLabel="Quản lý địa chỉ"
       onClose={onClose}
       className="promo-sheet"
+      footer={<CustomerButton full onClick={() => onSave(draft)}>Lưu địa chỉ</CustomerButton>}
     >
       <div className="space-y-3">
         <label className="address-field">
@@ -59,7 +60,6 @@ export default function AccountAddressModal({
             className="toggle-input"
           />
         </CustomerCard>
-        <CustomerButton full onClick={() => onSave(draft)}>Lưu địa chỉ</CustomerButton>
       </div>
     </CustomerBottomSheet>
   );

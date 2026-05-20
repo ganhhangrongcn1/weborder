@@ -10,6 +10,15 @@ export default function CheckoutNoticeModal({ notice, onClose }) {
       onClose={onClose}
       className="promo-sheet"
       showHeader={false}
+      footer={(
+        <button
+          type="button"
+          className="cta w-full"
+          onClick={onClose}
+        >
+          Đã hiểu
+        </button>
+      )}
     >
       <div className="space-y-4 pb-2">
         <div className="flex items-start gap-3">
@@ -25,13 +34,6 @@ export default function CheckoutNoticeModal({ notice, onClose }) {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          className="cta w-full"
-          onClick={onClose}
-        >
-          Đã hiểu
-        </button>
       </div>
     </CustomerBottomSheet>
   );
