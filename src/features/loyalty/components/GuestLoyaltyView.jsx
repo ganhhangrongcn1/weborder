@@ -2,11 +2,10 @@ import Icon from "../../../components/Icon.jsx";
 import AppSectionTitle from "../../../components/app/SectionTitle.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
 import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
-import { getLoyaltyRule, getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 
-export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay }) {
+export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyaltyRule }) {
   const loyaltyText = getLoyaltyText();
-  const loyaltyRule = getLoyaltyRule();
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
   const loyaltyRulesRows = Array.isArray(getLoyaltyRulesRows()) ? getLoyaltyRulesRows() : [];

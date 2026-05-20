@@ -2,7 +2,7 @@
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 
 const defaultLoyaltyRule = {
-  currencyPerPoint: 1000,
+  currencyPerPoint: 100,
   pointPerUnit: 1,
   redeemPointUnit: 1,
   redeemValue: 1

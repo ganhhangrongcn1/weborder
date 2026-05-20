@@ -39,11 +39,18 @@ export default function Loyalty(props) {
   }
 
   if (!canUseMemberLoyalty) {
-    return <GuestLoyaltyView navigate={navigate} loyaltyBonusDisplay={getLoyaltyBonusDisplay()} />;
+    return (
+      <GuestLoyaltyView
+        navigate={navigate}
+        loyaltyBonusDisplay={getLoyaltyBonusDisplay()}
+        loyaltyRule={vm.loyaltyRule}
+      />
+    );
   }
 
   return (
     <MemberLoyaltyView
+      loyaltyRule={vm.loyaltyRule}
       loyalty={vm.loyalty}
       userProfile={userProfile}
       luckyVoucher={vm.luckyVoucher}

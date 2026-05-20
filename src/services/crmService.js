@@ -15,7 +15,7 @@ export const CRM_CUSTOMERS_KEY = "ghr_customers";
 export const CRM_LOYALTY_KEY = "ghr_loyalty";
 
 const defaultLoyaltyConfig = {
-  currencyPerPoint: 1000,
+  currencyPerPoint: 100,
   pointPerUnit: 1,
   checkinDailyPoints: 100,
   streakRewards: {

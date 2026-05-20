@@ -162,7 +162,7 @@ export function calculateCheckoutPricing({
   const checkoutShip = fulfillmentType === "pickup" ? 0 : Math.max(baseCheckoutShip - autoShipSupport, 0);
   const customerExtraShip = fulfillmentType === "pickup" ? 0 : checkoutShip;
   const promoDiscount = selectedPromo?.discount || 0;
-  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 1000));
+  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
   const redeemPointUnit = Math.max(1, Number(loyaltyRule?.redeemPointUnit || 1));
   const redeemValue = Math.max(1, Number(loyaltyRule?.redeemValue || 1));

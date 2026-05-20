@@ -5,13 +5,14 @@ import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
 import PointsCard from "../../../pages/customer/loyalty/PointsCard.jsx";
 import CouponList from "../../../pages/customer/loyalty/CouponList.jsx";
 import { isVoucherExpired } from "../../../utils/pureHelpers.js";
-import { getLoyaltyRule, getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 import LuckyVoucherModal from "./LuckyVoucherModal.jsx";
 import CheckinCard from "./CheckinCard.jsx";
 import PointHistoryList from "./PointHistoryList.jsx";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
 
 export default function MemberLoyaltyView({
+  loyaltyRule,
   loyalty,
   userProfile,
   luckyVoucher,
@@ -27,7 +28,6 @@ export default function MemberLoyaltyView({
   handleCheckin
 }) {
   const loyaltyText = getLoyaltyText();
-  const loyaltyRule = getLoyaltyRule();
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
   const loyaltyRulesRows = Array.isArray(getLoyaltyRulesRows()) ? getLoyaltyRulesRows() : [];

@@ -9,6 +9,19 @@ import {
   generateLuckyVoucher
 } from "../../../utils/pureHelpers.js";
 
+const DEFAULT_LOYALTY_RULE = {
+  currencyPerPoint: 100,
+  pointPerUnit: 1,
+  checkinDailyPoints: 100,
+  streakRewards: {
+    7: 700,
+    14: 1500,
+    30: 3000
+  },
+  redeemPointUnit: 1,
+  redeemValue: 1
+};
+
 function getStreakRewards(loyaltyRule) {
   const source = loyaltyRule?.streakRewards || {};
   const rows = [7, 14, 30]
@@ -60,19 +73,8 @@ export default function useLoyaltyViewModel({
   }, [setUserProfile]);
 
   const simpleRewardsMode = !rewardFeatureFlags.enableCheckIn && !rewardFeatureFlags.enableLuckyDraw && !rewardFeatureFlags.enableComebackReward && !rewardFeatureFlags.enableMilestoneReward;
-  const loyaltyRule = loyaltyRepository.getLoyaltyRule({
-    currencyPerPoint: 1000,
-    pointPerUnit: 1,
-    checkinDailyPoints: 100,
-    streakRewards: {
-      7: 700,
-      14: 1500,
-      30: 3000
-    },
-    redeemPointUnit: 1,
-    redeemValue: 1
-  });
-  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 1000));
+  const [loyaltyRule, setLoyaltyRule] = useState(() => loyaltyRepository.getLoyaltyRule(DEFAULT_LOYALTY_RULE));
+  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || DEFAULT_LOYALTY_RULE.currencyPerPoint));
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
 
   const [loyalty, setLoyalty] = useState(() => {
@@ -85,6 +87,31 @@ export default function useLoyaltyViewModel({
     });
   });
   const [luckyVoucher, setLuckyVoucher] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function hydrateLoyaltyRule() {
+      try {
+        const remoteRule = await loyaltyRepository.getLoyaltyRuleAsync(DEFAULT_LOYALTY_RULE);
+        if (!active || !remoteRule) return;
+        setLoyaltyRule({
+          ...DEFAULT_LOYALTY_RULE,
+          ...remoteRule,
+          streakRewards: {
+            ...DEFAULT_LOYALTY_RULE.streakRewards,
+            ...(remoteRule.streakRewards || {})
+          }
+        });
+      } catch {
+      }
+    }
+
+    hydrateLoyaltyRule();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -265,6 +292,7 @@ export default function useLoyaltyViewModel({
 
   return {
     simpleRewardsMode,
+    loyaltyRule,
     currencyPerPoint,
     pointPerUnit,
     loyalty,
