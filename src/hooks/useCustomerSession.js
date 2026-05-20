@@ -18,13 +18,22 @@ async function withTimeout(promise, timeoutMs, fallbackValue) {
   }
 }
 
+function isPlaceholderName(name = "") {
+  const normalized = String(name || "").trim().toLowerCase();
+  return !normalized || normalized === "khách" || normalized === "khách hàng" || normalized === "khach" || normalized === "khach hang";
+}
+
 function buildRestoredSessionUser(defaultUserDemo, phone, fallback = {}) {
   const normalizedName = String(fallback?.name || fallback?.fullName || fallback?.displayName || "").trim();
+  const fallbackName = String(defaultUserDemo?.name || "").trim();
+  const resolvedName = isPlaceholderName(normalizedName)
+    ? ""
+    : normalizedName || (isPlaceholderName(fallbackName) ? "" : fallbackName);
   return {
     ...defaultUserDemo,
     ...fallback,
     phone,
-    name: normalizedName || fallback?.name || defaultUserDemo?.name || "Khách hàng",
+    name: resolvedName,
     registered: true
   };
 }
@@ -408,7 +417,10 @@ export default function useCustomerSession({
   // if currentPhone exists, user is treated as signed-in customer in UI flows.
   const isRegisteredCustomer = Boolean(currentPhone);
   const memberProfileName = String(storedCurrentUser?.name || "").trim();
-  const resolvedName = memberProfileName || "Khách hàng";
+  const sessionProfileName = String(sessionCurrentUser?.name || "").trim();
+  const resolvedName = [memberProfileName, sessionProfileName]
+    .map((value) => String(value || "").trim())
+    .find((value) => !isPlaceholderName(value)) || "";
   const activeDemoUser = currentPhone
     ? {
         ...defaultUserDemo,

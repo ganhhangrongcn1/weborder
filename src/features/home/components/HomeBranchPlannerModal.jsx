@@ -51,8 +51,7 @@ export default function HomeBranchPlannerModal({
   if (!open) return null;
 
   const selectedBranch = branches.find((branch) => branch.id === selectedBranchId) || null;
-  const selectedBranchOpen = selectedBranch ? isBranchOpenNow(selectedBranch) : true;
-  const isConfirmDisabled = disabledConfirm || !selectedBranchOpen;
+  const shouldShowConfirm = false;
 
   return createPortal(
     <div
@@ -86,6 +85,7 @@ export default function HomeBranchPlannerModal({
                 onClick={() => {
                   if (!openNow) return;
                   onSelectBranch(branch.id);
+                  onConfirm?.(branch.id);
                 }}
                 className={`branch-card ${selectedBranchId === branch.id ? "branch-card-active" : ""} ${openNow ? "" : "branch-card-closed"}`}
                 disabled={!openNow}
@@ -106,9 +106,11 @@ export default function HomeBranchPlannerModal({
           })}
         </div>
 
-        <div className="branch-picker-footer">
-          <button onClick={onConfirm} className="cta w-full" disabled={isConfirmDisabled}>{confirmLabel}</button>
-        </div>
+        {shouldShowConfirm ? (
+          <div className="branch-picker-footer">
+            <button onClick={onConfirm} className="cta w-full" disabled={disabledConfirm}>{confirmLabel}</button>
+          </div>
+        ) : null}
       </section>
     </div>,
     document.body

@@ -53,7 +53,7 @@ export default function CheckoutPricingSection({
 
       {showMemberBenefits ? (
         <>
-          <CheckoutCard title="Khuyến mãi">
+          <CheckoutCard title="Ưu đãi">
             <button onClick={() => setIsPromoModalOpen(true)} className="promo-select">
               {selectedPromo ? `${selectedPromo.code} · -${formatMoney(selectedPromo.discount)}` : "Chọn mã khuyến mãi"} <span>›</span>
             </button>
@@ -90,8 +90,8 @@ export default function CheckoutPricingSection({
         <button className="payment-card active">
           <Icon name="bag" size={18} />
           <span>
-            <strong>Tiền mặt (COD)</strong>
-            <small>Thanh toán khi nhận hàng</small>
+            <strong>Tiền mặt</strong>
+            <small>Thanh toán khi nhận món</small>
           </span>
         </button>
       </CheckoutCard>

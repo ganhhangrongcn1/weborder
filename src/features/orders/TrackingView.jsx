@@ -99,7 +99,7 @@ export default function Tracking({
 
   return (
     <section>
-      <AppHeader title="Đơn hàng" onBack={() => navigate("home", "home")} />
+      <AppHeader title="Đơn hàng" subtitle="Theo dõi trạng thái và đặt lại món cũ" onBack={() => navigate("home", "home")} />
 
       <div className="tracking-page-content space-y-4 px-4 pb-6">
         {shouldShowLoading && (

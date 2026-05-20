@@ -26,7 +26,9 @@ export default function AppearanceBlockEditor({
   deleteBanner,
   setSelectedHeroId,
   popupUploadRef,
-  handlePopupUpload
+  handlePopupUpload,
+  logoUploadRef,
+  handleLogoUpload
 }) {
   const [activeDeliveryBranchId, setActiveDeliveryBranchId] = useState("");
   const activeDeliveryBranch = deliveryBranchApps.find((branch) => branch.branchId === activeDeliveryBranchId) || deliveryBranchApps[0] || null;
@@ -216,6 +218,14 @@ export default function AppearanceBlockEditor({
                 <AdminInput value={selectedNonHeroBlock?.iconText || "%"} onChange={(event) => updateHomeContent("cashback", { iconText: event.target.value })} />
               </label>
             </div>
+          ) : selectedBlockId === "siteBrand" ? (
+            <SiteBrandEditor
+              selectedNonHeroBlock={selectedNonHeroBlock}
+              uploading={uploading}
+              logoUploadRef={logoUploadRef}
+              handleLogoUpload={handleLogoUpload}
+              updateHomeContent={updateHomeContent}
+            />
           ) : selectedBlockId === "deliveryApps" ? (
             <DeliveryAppsEditor
               selectedNonHeroBlock={selectedNonHeroBlock}
@@ -245,6 +255,34 @@ export default function AppearanceBlockEditor({
   );
 }
 
+function SiteBrandEditor({
+  selectedNonHeroBlock,
+  uploading,
+  logoUploadRef,
+  handleLogoUpload,
+  updateHomeContent
+}) {
+  return (
+    <div className="admin-appearance-fields">
+      <label className="wide">
+        Tên thương hiệu
+        <AdminInput value={selectedNonHeroBlock?.title || ""} onChange={(event) => updateHomeContent("siteBrand", { title: event.target.value })} placeholder="Gánh Hàng Rong" />
+      </label>
+      <div className="wide admin-popup-upload">
+        <strong>Logo hiển thị trên Home</strong>
+        <div className="admin-popup-upload-row">
+          <img src={selectedNonHeroBlock?.logo || FALLBACK_IMAGE} alt="Logo preview" />
+          <label className="admin-popup-upload-trigger">
+            <input ref={logoUploadRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} disabled={uploading} />
+            <span>{uploading ? "Đang xử lý..." : "Chọn logo"}</span>
+          </label>
+        </div>
+        <p className="admin-help-text">Gợi ý dùng ảnh vuông, nền trong suốt hoặc nền sáng.</p>
+      </div>
+    </div>
+  );
+}
+
 function EditorHead({ title, description, uiDirty, onSaveAppearance, action }) {
   return (
     <div className="admin-appearance-subhead">
@@ -270,6 +308,12 @@ function DeliveryAppsEditor({
   updateHomeContent,
   updateDeliveryBranchApp
 }) {
+  useEffect(() => {
+    if (selectedNonHeroBlock?.subtitle) {
+      updateHomeContent("deliveryApps", { subtitle: "" });
+    }
+  }, [selectedNonHeroBlock?.subtitle, updateHomeContent]);
+
   return (
     <div className="admin-appearance-fields">
       <label className="wide">

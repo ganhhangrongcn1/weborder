@@ -1,6 +1,6 @@
 .home2026-shell {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   padding: 14px 16px 128px;
 }
 
@@ -47,12 +47,12 @@
 
 .home2026-section {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .home2026-section-head {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -66,7 +66,7 @@
 
 .home2026-section-head h2 {
   color: #3a1f14;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1.1;
 }
@@ -75,6 +75,22 @@
   color: #ff6a00;
   font-size: 12px;
   font-weight: 800;
+}
+
+.home2026-order-anchor {
+  position: sticky;
+  top: calc(56px + env(safe-area-inset-top));
+  z-index: 18;
+  margin-inline: -16px;
+  background: rgba(255, 247, 236, 0.96);
+  padding: 10px 16px 0;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.home2026-featured-list {
+  display: grid;
+  gap: 10px;
 }
 
 .home2026-section .product-card {
@@ -129,6 +145,12 @@
   }
 
   .home2026-section-head h2 {
-    font-size: 18px;
+    font-size: 17px;
+  }
+
+  .home2026-order-anchor {
+    margin-inline: -14px;
+    padding-right: 14px;
+    padding-left: 14px;
   }
 }

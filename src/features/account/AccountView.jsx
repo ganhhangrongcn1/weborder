@@ -38,7 +38,7 @@ export default function Account({
     const lookupStats = getOrderStats(vm.lookupOrders);
     return (
       <section>
-        <AppHeader title="Tài khoản" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
+        <AppHeader title="Tài khoản" subtitle="Thông tin, điểm thưởng và địa chỉ" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
         <div className="account-page-content space-y-4 px-4">
           <div className="rounded-[28px] bg-white p-4 shadow-soft">
             <div className="grid grid-cols-2 rounded-2xl bg-cream p-1">
@@ -193,7 +193,7 @@ export default function Account({
 
   return (
     <section>
-      <AppHeader title="Tài khoản" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
+      <AppHeader title="Tài khoản" subtitle="Thông tin, điểm thưởng và địa chỉ" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
       <div className="account-page-content space-y-4 px-4">
         {vm.authNotice ? <div className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{vm.authNotice}</div> : null}
         <div className="account-hero">

@@ -9,6 +9,7 @@ export const DELIVERY_APP_OPTIONS = [
 ];
 
 export const HOME_BLOCKS = [
+  { id: "siteBrand", title: "Thương hiệu / Logo", placement: "Trang chủ / Logo và lời chào" },
   { id: "hero", title: "Banner đầu trang", placement: "Trang chủ / Banner lớn đầu trang" },
   { id: "deliveryApps", title: "Banner mua trên app", placement: "Trang chủ / Đặt qua ứng dụng giao hàng" },
   { id: "popupCampaign", title: "Popup trang chủ", placement: "Trang chủ / Popup sau khi tải trang" },
@@ -19,7 +20,8 @@ export const HOME_BLOCKS = [
 ];
 
 export const HOME_BLOCK_DEFAULTS = [
-  { id: "deliveryApps", placement: "Trang chủ / Đặt qua ứng dụng giao hàng", title: "Đặt qua ứng dụng giao hàng", subtitle: "GrabFood, ShopeeFood, Xanh Ngon", active: true, branchApps: [] },
+  { id: "siteBrand", placement: "Trang chủ / Logo và lời chào", title: "Gánh Hàng Rong", logo: "", active: true },
+  { id: "deliveryApps", placement: "Trang chủ / Đặt qua ứng dụng giao hàng", title: "Đặt qua ứng dụng giao hàng", subtitle: "", active: true, branchApps: [] },
   {
     id: "popupCampaign",
     placement: "Trang chủ / Popup sau khi tải trang",

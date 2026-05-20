@@ -3,7 +3,7 @@
 const defaultItems = [
   { id: "home", label: "Trang chủ", icon: "home" },
   { id: "menu", label: "Menu", icon: "dish" },
-  { id: "orders", label: "Đơn hàng", icon: "bag" },
+  { id: "orders", label: "Đơn", icon: "bag" },
   { id: "rewards", label: "Ưu đãi", icon: "gift" },
   { id: "account", label: "Tài khoản", icon: "user" }
 ];

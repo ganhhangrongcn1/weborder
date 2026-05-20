@@ -169,6 +169,7 @@ export default function useHomeComputed({
         ];
 
   const cashbackBlock = safeHomeContent.find((block) => block?.id === "cashback");
+  const siteBrandBlock = safeHomeContent.find((block) => block?.id === "siteBrand");
   const deliveryAppsBlock = safeHomeContent.find((block) => block?.id === "deliveryApps");
   const popupCampaignBlock = safeHomeContent.find((block) => block?.id === "popupCampaign");
   const fulfillmentBlock = safeHomeContent.find((block) => block?.id === "fulfillment");
@@ -228,6 +229,7 @@ export default function useHomeComputed({
     banners,
     heroBlockEnabled,
     cashbackBlock,
+    siteBrandBlock,
     deliveryAppsBlock,
     popupCampaignBlock,
     showCashback,

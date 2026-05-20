@@ -17,14 +17,24 @@ function formatValue(voucher) {
 }
 
 function buildGuide(voucher, coupon) {
-  const configuredGuide =
-    String(voucher?.usageGuide || voucher?.guide || coupon?.usageGuide || coupon?.guide || coupon?.instruction || coupon?.description || coupon?.note || "").trim();
+  const configuredGuide = String(
+    voucher?.usageGuide ||
+    voucher?.guide ||
+    coupon?.usageGuide ||
+    coupon?.guide ||
+    coupon?.instruction ||
+    coupon?.description ||
+    coupon?.note ||
+    ""
+  ).trim();
+
   if (configuredGuide) return configuredGuide;
 
   const minOrder = Number(voucher?.minOrder ?? coupon?.minOrder ?? 0);
   if (minOrder > 0) {
     return `Áp dụng cho đơn từ ${minOrder.toLocaleString("vi-VN")}đ.`;
   }
+
   return "Áp dụng khi thanh toán trên menu chính thức.";
 }
 
@@ -38,34 +48,48 @@ export default function LoyaltyVoucherPopup({
   const valueText = useMemo(() => formatValue(voucher), [voucher]);
   const guideText = useMemo(() => buildGuide(voucher, coupon), [voucher, coupon]);
   const expiresAt = voucher?.expiredAt || voucher?.endAt || voucher?.expiry || coupon?.endAt || "";
+  const voucherCode = String(voucher?.code || coupon?.code || "--").trim();
+  const title = String(voucher?.title || voucher?.name || "").trim() || "Tặng bạn voucher mới";
+  const supportText = String(coupon?.description || coupon?.note || "").trim();
 
   if (!open || !voucher) return null;
 
   return (
     <CustomerBottomSheet
-      ariaLabel="Voucher dành cho bạn"
+      ariaLabel="Quà tặng dành riêng cho bạn"
       onClose={onClose}
-      className="promo-sheet"
+      className="promo-sheet loyalty-voucher-sheet"
+      contentClassName="loyalty-voucher-sheet__scroll"
       showHeader={false}
       footer={(
-        <button type="button" className="cta w-full" onClick={onPrimaryAction}>
-          Chọn món ngay
-        </button>
+        <div className="loyalty-voucher-footer">
+          <button type="button" className="cta w-full" onClick={onPrimaryAction}>
+            Dùng ngay
+          </button>
+        </div>
       )}
     >
       <section className="loyalty-voucher-card">
         <button type="button" className="loyalty-voucher-close" onClick={onClose} aria-label="Đóng">X</button>
 
-        <p className="loyalty-voucher-pill">Ưu đãi & Tích điểm</p>
-        <h2>{voucher?.title || voucher?.name || "Bạn vừa nhận voucher"}</h2>
-        {valueText ? <p className="loyalty-voucher-value">{valueText}</p> : null}
-
-        <div className="loyalty-voucher-body">
-          <p><strong>Mã:</strong> {voucher?.code || coupon?.code || "--"}</p>
-          <p><strong>Thời hạn:</strong> {formatDate(expiresAt)}</p>
-          <p><strong>Hướng dẫn:</strong> {guideText}</p>
+        <div className="loyalty-voucher-hero">
+          <p className="loyalty-voucher-pill">Quà tặng dành riêng cho bạn</p>
+          <h2>{title}</h2>
+          {valueText ? <p className="loyalty-voucher-value">{valueText}</p> : null}
+          <p className="loyalty-voucher-subtitle">Dùng ngay khi đặt món hôm nay để không bỏ lỡ ưu đãi này.</p>
         </div>
 
+        <div className="loyalty-voucher-coupon">
+          <div className="loyalty-voucher-coupon__code">
+            <span>Mã ưu đãi</span>
+            <strong>{voucherCode}</strong>
+          </div>
+          <div className="loyalty-voucher-coupon__meta">
+            <p><strong>Hạn dùng:</strong> {formatDate(expiresAt)}</p>
+            <p><strong>Cách dùng:</strong> {guideText}</p>
+            {supportText ? <p><strong>Lưu ý:</strong> {supportText}</p> : null}
+          </div>
+        </div>
       </section>
     </CustomerBottomSheet>
   );

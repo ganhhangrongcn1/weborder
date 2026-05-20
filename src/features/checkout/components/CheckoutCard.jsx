@@ -4,10 +4,11 @@ export default function CheckoutCard({
   title,
   action,
   onAction,
+  className = "",
   children
 }) {
   return (
-    <CustomerCard as="section" className="checkout-card">
+    <CustomerCard as="section" className={`checkout-card ${className}`.trim()}>
       <div className="checkout-card-head">
         <h2>{title}</h2>
         {action ? (

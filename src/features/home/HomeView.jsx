@@ -29,11 +29,11 @@ import {
 
 const FALLBACK_HOME_BLOCK_ORDER = [
   "hero",
-  "deliveryApps",
   "fulfillment",
-  "flashSale",
   "categorySection",
-  "featuredProducts"
+  "featuredProducts",
+  "flashSale",
+  "deliveryApps"
 ];
 
 const SUPPORTED_HOME_BLOCK_KEYS = new Set([
@@ -72,8 +72,9 @@ function resolveHomeBlockOrder(homeContent) {
   const uniqueConfiguredOrder = Array.from(new Set(configuredOrder));
   const baseOrder = uniqueConfiguredOrder.length ? uniqueConfiguredOrder : FALLBACK_HOME_BLOCK_ORDER;
   return [
-    ...baseOrder,
-    ...FALLBACK_HOME_BLOCK_ORDER.filter((key) => !baseOrder.includes(key))
+    "hero",
+    ...baseOrder.filter((key) => key !== "hero"),
+    ...FALLBACK_HOME_BLOCK_ORDER.filter((key) => key !== "hero" && !baseOrder.includes(key))
   ];
 }
 
@@ -90,6 +91,9 @@ export default function Home({
   branches = [],
   checkoutPreset,
   setCheckoutPreset,
+  userProfile,
+  demoUser,
+  demoLoyalty,
   setServiceNotice,
   getStoreBlockNotice,
   isBranchOpenNow,
@@ -126,8 +130,8 @@ export default function Home({
     flashProducts,
     mainFlashProduct,
     banners,
-    heroBlockEnabled,
     cashbackBlock,
+    siteBrandBlock,
     deliveryAppsBlock,
     popupCampaignBlock,
     showCashback,
@@ -218,23 +222,32 @@ export default function Home({
   });
 
   const homeBlockOrder = useMemo(() => resolveHomeBlockOrder(homeContent), [homeContent]);
+  const pickupBranchInfo = useMemo(
+    () => pickupBranches.find((branch) => branch.id === pickupBranch) || pickupBranches[0] || null,
+    [pickupBranches, pickupBranch]
+  );
 
   const homeBlockRenderers = {
-    hero: () => heroBlockEnabled ? (
+    hero: () => (
       <HomeHero
         subtitle={t.subtitle}
-        searchText={t.search}
         bannerAria={t.bannerAria}
         navigate={navigate}
-        onSearch={() => navigate("menu", "menu")}
         bannerRef={bannerRef}
         handleBannerScroll={() => {}}
         banners={banners}
         activeBanner={activeBanner}
         setActiveBanner={setActiveBanner}
         onBannerClick={(banner) => handleAction(banner)}
+        homeFulfillment={homeFulfillment}
+        selectedDeliveryBranchInfo={selectedDeliveryBranchInfo}
+        pickupBranchInfo={pickupBranchInfo}
+        userProfile={userProfile}
+        demoUser={demoUser}
+        demoLoyalty={demoLoyalty}
+        siteBrand={siteBrandBlock}
       />
-    ) : null,
+    ),
     deliveryApps: () => (
       <HomeInfoCards
         showCashback={false}
@@ -278,7 +291,7 @@ export default function Home({
       /></section>
     ) : null,
     categorySection: () => showCategorySection ? (
-      <section ref={categorySectionRef}><HomeCategorySection
+      <section ref={categorySectionRef} className="home2026-order-anchor"><HomeCategorySection
         categoryTitle={t.categoryTitle}
         viewAll={t.viewAll}
         homeCategories={homeCategories}

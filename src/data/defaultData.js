@@ -3,7 +3,7 @@
 export const defaultHomeContent = [
   { id: "hero", placement: "Trang chủ / Banner lớn đầu trang", title: "Bánh tráng trộn", headline: "Ngon hết ý, giao liền tay!", subtitle: "Combo hot TikTok giảm đến 30%", cta: "Đặt món ngay", secondaryCta: "Mua lại", image: productSeed[0].image, active: true },
   { id: "cashback", placement: "Trang chủ / Thẻ xanh hoàn tiền", title: "Hoàn tiền 10.000đ", subtitle: "Cho các đơn đặt từ Grab, Shopee...", iconText: "%", active: true },
-  { id: "deliveryApps", placement: "Trang chủ / Đặt qua ứng dụng giao hàng", title: "Đặt qua ứng dụng giao hàng", subtitle: "Chọn chi nhánh gần bạn rồi đặt qua app quen thuộc.", active: true, branchApps: [] },
+  { id: "deliveryApps", placement: "Trang chủ / Đặt qua ứng dụng giao hàng", title: "Đặt qua ứng dụng giao hàng", subtitle: "", active: true, branchApps: [] },
   { id: "flashSale", placement: "Trang chủ / Banner cuối trang", title: "Combo xế chiều giảm 30%", headline: "Flash Sale", subtitle: "Mở bán 14:00 - 17:00 mỗi ngày", cta: "Săn ngay", active: true }
 ];
 

@@ -37,12 +37,7 @@ export function createNavigationActions({
 
   function openProduct(product) {
     if (tryBlockStoreAction()) return;
-    const defaults = getDefaultOrderChoices(product);
-    setSelectedProduct(product);
-    setSelectedSpice(defaults.spice);
-    setSelectedToppings(defaults.toppings);
-    setQuantity(1);
-    navigate("detail", "home");
+    openOptionModal(product);
   }
 
   function openOptionModal(product) {

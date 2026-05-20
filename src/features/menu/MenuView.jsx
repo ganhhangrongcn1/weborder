@@ -1,4 +1,4 @@
-﻿import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import ProductCard from "../../components/ProductCard.jsx";
 import Icon from "../../components/Icon.jsx";
 import AppHeader from "../../components/app/Header.jsx";
@@ -20,6 +20,8 @@ export default function Menu({
   cart = [],
   setCart
 }) {
+  const [searchTerm, setSearchTerm] = useState("");
+
   const cartProductCount = useMemo(() => {
     return cart.reduce((map, item) => {
       const key = String(item.id || "").replace(/^addon-/, "");
@@ -41,6 +43,18 @@ export default function Menu({
     const withoutAll = cleaned.filter((item) => item !== allLabel);
     return cleaned.includes(allLabel) ? [allLabel, ...withoutAll] : cleaned;
   }, [categories]);
+
+  const displayProducts = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+
+    return filteredProducts.filter((product) => {
+      const name = String(product?.name || "").toLowerCase();
+      const short = String(product?.short || product?.description || "").toLowerCase();
+      const category = String(product?.category || "").toLowerCase();
+      const badge = String(product?.badge || "").toLowerCase();
+      return !keyword || [name, short, category, badge].some((value) => value.includes(keyword));
+    });
+  }, [filteredProducts, searchTerm]);
 
   const removeOneByKey = (rawKey) => {
     const key = String(rawKey || "").replace(/^addon-/, "");
@@ -84,21 +98,30 @@ export default function Menu({
 
   return (
     <section>
-      <AppHeader title={menuText.title} onBack={() => navigate("home", "home")} />
+      <AppHeader title={menuText.title} subtitle="Chọn món, thêm topping rồi thanh toán" onBack={() => navigate("home", "home")} />
       <div className="space-y-4 px-4 pb-32">
         <div className="menu-sticky-tools">
           <div className="menu-search">
             <Icon name="search" size={17} />
             <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-brown/35"
               placeholder={menuText.searchPlaceholder}
             />
+            {searchTerm ? (
+              <button type="button" onClick={() => setSearchTerm("")} className="menu-search-clear" aria-label="Xóa tìm kiếm">
+                ×
+              </button>
+            ) : null}
           </div>
+
           <div className="menu-chip-row-wrap">
             <div className="no-scrollbar menu-chip-row">
               {displayCategories.map((category, index) => (
                 <button
                   key={category}
+                  type="button"
                   onClick={() => setActiveCategory(category)}
                   className={`chip ${activeCategory === category ? "chip-active" : ""} ${index === 0 && category === "Tất cả" ? "chip-pinned-all" : ""}`}
                 >
@@ -109,18 +132,31 @@ export default function Menu({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          {filteredProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              selectedCount={cartProductCount[product.id] || 0}
-              onOpen={openProduct}
-              onAdd={openOptionModal}
-              onRemove={() => removeOneByKey(product.id)}
-            />
-          ))}
+        <div className="menu-result-row">
+          <span>{displayProducts.length} món</span>
+          {searchTerm ? <strong>Đang tìm “{searchTerm}”</strong> : <strong>{activeCategory}</strong>}
         </div>
+
+        {displayProducts.length ? (
+          <div className="menu-product-list">
+            {displayProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                compact
+                selectedCount={cartProductCount[product.id] || 0}
+                onOpen={openProduct}
+                onAdd={openOptionModal}
+                onRemove={() => removeOneByKey(product.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="menu-empty-state">
+            <strong>Chưa có món phù hợp</strong>
+            <span>Thử đổi danh mục hoặc tìm bằng tên món khác.</span>
+          </div>
+        )}
 
         <div className="menu-addon-section">
           <div className="flex items-end justify-between gap-3">

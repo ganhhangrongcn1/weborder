@@ -89,3 +89,39 @@
 .customer-shell .checkout-sticky-cta button {
   font-weight: 500 !important;
 }
+
+.customer-shell .customer-page-header__title,
+.customer-shell .home2026-location-copy strong,
+.customer-shell .home2026-order-strip strong,
+.customer-shell .home2026-order-strip button,
+.customer-shell .home2026-brand-mark,
+.customer-shell .home2026-greeting-copy strong,
+.customer-shell .home2026-voucher-badge,
+.customer-shell .home2026-brand-logo span,
+.customer-shell .pickup-mode-tabs button span,
+.customer-shell .product-card-copy h3,
+.customer-shell .product-price-stack strong,
+.customer-shell .product-add-btn span,
+.customer-shell .product-card-stepper button,
+.customer-shell .product-card-stepper span,
+.customer-shell .badge,
+.customer-shell .selected-badge,
+.customer-shell .menu-search-clear,
+.customer-shell .menu-result-row strong,
+.customer-shell .menu-empty-state strong {
+  font-weight: 850 !important;
+}
+
+.customer-shell .customer-page-header__subtitle,
+.customer-shell .home2026-location-eyebrow,
+.customer-shell .home2026-greeting-copy span,
+.customer-shell .home2026-location-copy small,
+.customer-shell .home2026-order-strip span,
+.customer-shell .pickup-mode-tabs button small,
+.customer-shell .home2026-fulfillment-note,
+.customer-shell .product-card-copy p,
+.customer-shell .product-price-stack span,
+.customer-shell .menu-result-row,
+.customer-shell .menu-empty-state span {
+  font-weight: 650 !important;
+}

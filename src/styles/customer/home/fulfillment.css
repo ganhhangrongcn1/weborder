@@ -1,29 +1,46 @@
 .pickup-time-card {
   display: grid;
-  gap: 12px;
-  border-radius: 22px;
-  background: #fffaf3;
-  padding: 12px;
+  gap: 10px;
+  border: 1px solid rgba(255, 106, 0, 0.1);
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 10px;
+  box-shadow: 0 10px 24px rgba(58, 31, 20, 0.055);
 }
 
 .pickup-mode-tabs {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 6px;
-  border-radius: 18px;
-  background: white;
+  border-radius: 15px;
+  background: #fff4e8;
   padding: 4px;
 }
 
 .pickup-mode-tabs button {
-  min-height: 40px;
-  border-radius: 14px;
+  display: grid;
+  min-height: 44px;
+  place-items: center;
+  border-radius: 12px;
   color: rgba(58, 31, 20, 0.62);
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 850;
 }
 
 .pickup-mode-tabs button.active {
   background: linear-gradient(135deg, #ff7a00, #ff4f17);
   color: white;
+  box-shadow: 0 8px 18px rgba(255, 90, 31, 0.18);
+}
+
+.pickup-mode-tabs button span {
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.home2026-fulfillment-note {
+  color: rgba(58, 31, 20, 0.58);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
 }

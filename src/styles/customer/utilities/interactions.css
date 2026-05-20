@@ -1,16 +1,16 @@
 .customer-shell .icon-ux {
   transform-origin: center;
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: transform 0.18s ease, opacity 0.18s ease;
 }
 
 .customer-shell button:hover .icon-ux,
 .customer-shell a:hover .icon-ux {
-  transform: scale(1.1);
+  transform: scale(1.06);
 }
 
 .customer-shell button:active .icon-ux,
 .customer-shell a:active .icon-ux {
-  transform: scale(0.95);
+  transform: scale(0.97);
 }
 
 .customer-shell .menu-search .icon-ux {
@@ -51,7 +51,7 @@
 .customer-shell .rounded-\[30px\],
 .customer-shell .rounded-\[24px\],
 .customer-shell .rounded-\[22px\] {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
 }
 
 .customer-shell .product-card:hover,
@@ -75,8 +75,8 @@
 .customer-shell .rounded-\[30px\]:hover,
 .customer-shell .rounded-\[24px\]:hover,
 .customer-shell .rounded-\[22px\]:hover {
-  transform: scale(1.02);
-  box-shadow: 0 14px 28px rgba(58, 31, 20, 0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(58, 31, 20, 0.1);
 }
 
 .customer-shell .product-card:active,
@@ -100,12 +100,39 @@
 .customer-shell .rounded-\[30px\]:active,
 .customer-shell .rounded-\[24px\]:active,
 .customer-shell .rounded-\[22px\]:active {
-  transform: scale(0.98);
+  transform: scale(0.992);
+}
+
+.customer-shell .cta,
+.customer-shell .cta-small,
+.customer-shell .ghost-small,
+.customer-shell .qty-btn,
+.customer-shell .product-add-btn,
+.customer-shell .home2026-action-btn,
+.customer-shell .promo-select,
+.customer-shell .customer-bottom-nav__item,
+.customer-shell .payment-card,
+.customer-shell .delivery-app-item,
+.customer-shell .branch-picker-close {
+  transition: transform 0.16s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.customer-shell .cta:active,
+.customer-shell .cta-small:active,
+.customer-shell .ghost-small:active,
+.customer-shell .qty-btn:active,
+.customer-shell .product-add-btn:active,
+.customer-shell .home2026-action-btn:active,
+.customer-shell .promo-select:active,
+.customer-shell .payment-card:active,
+.customer-shell .delivery-app-item:active,
+.customer-shell .branch-picker-close:active {
+  transform: scale(0.985);
 }
 
 .option-modal-overlay .promo-sheet {
   transform: none !important;
-  transition: box-shadow 0.2s ease, background-color 0.2s ease;
+  transition: box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
 .option-modal-overlay .promo-sheet:hover,

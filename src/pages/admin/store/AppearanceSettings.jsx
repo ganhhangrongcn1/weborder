@@ -134,6 +134,7 @@ export default function AppearanceSettings({
 
   const uploadInputRef = useRef(null);
   const popupUploadRef = useRef(null);
+  const logoUploadRef = useRef(null);
   const cropImageRef = useRef(null);
   const cropViewportRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
@@ -424,6 +425,31 @@ export default function AppearanceSettings({
     }
   };
 
+  const handleLogoUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      alert("Logo nên dưới 3MB để tải nhanh.");
+      event.target.value = "";
+      return;
+    }
+    setUploading(true);
+    try {
+      const result = await processUploadImage(file, { maxWidth: 360, quality: 0.78 });
+      try {
+        const uploaded = await uploadImageToMenuBucket(result.file, { folder: "logos" });
+        updateHomeContent("siteBrand", { logo: uploaded.publicUrl });
+      } catch (_uploadError) {
+        updateHomeContent("siteBrand", { logo: result.dataUrl });
+      }
+    } catch (error) {
+      alert(error?.message || "Không thể tải logo.");
+    } finally {
+      setUploading(false);
+      if (logoUploadRef.current) logoUploadRef.current.value = "";
+    }
+  };
+
   const selectedBlockMeta = blockMetaById[selectedBlockId] || HOME_BLOCKS[0];
   const selectedNonHeroBlock = selectedBlockId === "hero" ? null : getBlockData(selectedBlockId);
   const selectedPopupActionType = selectedBlockId === "popupCampaign" ? normalizeAction(selectedNonHeroBlock) : "block";
@@ -549,6 +575,8 @@ export default function AppearanceSettings({
           setSelectedHeroId={setSelectedHeroId}
           popupUploadRef={popupUploadRef}
           handlePopupUpload={handlePopupUpload}
+          logoUploadRef={logoUploadRef}
+          handleLogoUpload={handleLogoUpload}
         />
       </div>
 

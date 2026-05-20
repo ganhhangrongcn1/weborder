@@ -20,6 +20,33 @@ import { orderRepository } from "../../../services/repositories/orderRepository.
 
 const voucherPopupSeenKeys = new Set();
 const voucherPopupVisitKeys = new Set();
+const voucherPopupDismissedKeys = new Set();
+const voucherPopupPersistedKeys = new Set();
+
+function hasPersistedVoucherPopup(key = "") {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) return false;
+  if (voucherPopupPersistedKeys.has(normalizedKey)) return true;
+  try {
+    const stored = window.localStorage.getItem(normalizedKey);
+    if (stored === "1") {
+      voucherPopupPersistedKeys.add(normalizedKey);
+      return true;
+    }
+  } catch {
+  }
+  return false;
+}
+
+function persistVoucherPopupSeen(key = "") {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) return;
+  voucherPopupPersistedKeys.add(normalizedKey);
+  try {
+    window.localStorage.setItem(normalizedKey, "1");
+  } catch {
+  }
+}
 
 function isVoucherExpired(voucher) {
   const expiredAt = String(voucher?.expiredAt || voucher?.endAt || voucher?.expiry || "").trim();
@@ -140,6 +167,7 @@ export default function CustomerShell({
   const successOrder = forcedLatestOrder || (latestProfileOrderTime > currentOrderTime ? latestProfileOrder : (currentOrder || latestProfileOrder));
   const successStatus = String(successOrder?.status || orderStatus || "").toLowerCase();
   const isWaitingZaloSend = page === "success" && successStatus === "pending_zalo" && !successOrder?.zaloSentAt;
+  const isChoosingProduct = isOptionModalOpen || page === "detail";
 
   const trackingOrderHistory = forcedLatestOrder
     ? [forcedLatestOrder, ...(Array.isArray(composedUserProfile?.orderHistory) ? composedUserProfile.orderHistory : []).filter((order) => {
@@ -221,17 +249,21 @@ export default function CustomerShell({
     const phoneKey = String(currentPhone || "").replace(/\D/g, "");
     const seenKey = `ghr_loyalty_voucher_seen_${phoneKey}_${voucherId}`;
     const visitKey = `ghr_loyalty_voucher_visit_${phoneKey}_${voucherId}`;
+    const dismissedKey = `ghr_loyalty_voucher_dismissed_${phoneKey}_${voucherId}`;
+    const persistedSeenKey = `ghr_loyalty_voucher_seen_once_${phoneKey}_${voucherId}`;
     const hasSeen = voucherPopupSeenKeys.has(seenKey);
     const shownThisVisit = voucherPopupVisitKeys.has(visitKey);
+    const dismissedThisVisit = voucherPopupDismissedKeys.has(dismissedKey);
+    const seenPersisted = hasPersistedVoucherPopup(persistedSeenKey);
 
-    if (hasSeen && shownThisVisit) return;
+    if (seenPersisted || dismissedThisVisit || (hasSeen && shownThisVisit)) return;
 
     const matchedCoupon =
       couponById[String(voucher?.couponId || "").trim()] ||
       couponByCode[String(voucher?.code || "").trim().toUpperCase()] ||
       null;
 
-    setVoucherPopup({ voucher, coupon: matchedCoupon, seenKey, visitKey });
+    setVoucherPopup({ voucher, coupon: matchedCoupon, seenKey, visitKey, dismissedKey, persistedSeenKey });
     setVoucherPopupOpen(true);
   }, [currentPhone, isRegisteredCustomer, loyaltyVouchers, couponById, couponByCode, isQrCounterFlow]);
 
@@ -247,7 +279,10 @@ export default function CustomerShell({
   const closeVoucherPopup = () => {
     if (voucherPopup?.seenKey) voucherPopupSeenKeys.add(voucherPopup.seenKey);
     if (voucherPopup?.visitKey) voucherPopupVisitKeys.add(voucherPopup.visitKey);
+    if (voucherPopup?.dismissedKey) voucherPopupDismissedKeys.add(voucherPopup.dismissedKey);
+    if (voucherPopup?.persistedSeenKey) persistVoucherPopupSeen(voucherPopup.persistedSeenKey);
     setVoucherPopupOpen(false);
+    setVoucherPopup(null);
   };
 
   const handleVoucherAction = () => {
@@ -332,7 +367,7 @@ export default function CustomerShell({
               />
             )}
 
-            {cartCount > 0 && !["checkout", "success"].includes(page) && (
+            {cartCount > 0 && !isChoosingProduct && !["checkout", "success"].includes(page) && (
               <CustomerFloatingCartBar
                 count={cartCount}
                 subtotal={subtotal}
@@ -344,7 +379,7 @@ export default function CustomerShell({
             )}
 
             {toastVisible && <CustomerToast message="Đã thêm vào giỏ" />}
-            {!isWaitingZaloSend && (
+            {!isWaitingZaloSend && !isChoosingProduct && (
               isQrCounterFlow
                 ? <BottomNav activeTab={activeTab} onChange={handleQrBottomNav} items={qrBottomNavItems} />
                 : <BottomNav activeTab={activeTab} onChange={handleBottomNav} />

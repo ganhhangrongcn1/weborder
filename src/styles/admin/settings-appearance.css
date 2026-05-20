@@ -373,6 +373,10 @@
   gap: 12px;
 }
 
+.admin-shell .admin-appearance-fields:has(.admin-delivery-app-branches) > label:nth-of-type(2) {
+  display: none;
+}
+
 .admin-shell .admin-delivery-app-branch {
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-lg);

@@ -34,7 +34,7 @@ export default function CheckoutTotalCard({
   const savedAmount = Math.max(savingOriginalTotal - total, 0);
 
   return (
-    <CheckoutCard title="Tổng cộng">
+    <CheckoutCard title="Tổng cộng" className="checkout-total-card">
       <div className="checkout-total-summary">
         <div className="summary-line">
           <span>Tạm tính ({count} món)</span>

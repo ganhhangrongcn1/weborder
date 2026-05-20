@@ -1,6 +1,6 @@
-﻿import Icon from "../Icon.jsx";
+import Icon from "../Icon.jsx";
 
-export default function Header({ title, onBack, right }) {
+export default function Header({ title, subtitle, onBack, right }) {
   return (
     <header className="customer-page-header">
       <div className="customer-page-header__side">
@@ -13,7 +13,10 @@ export default function Header({ title, onBack, right }) {
           {onBack ? <Icon name="back" /> : <Icon name="gear" />}
         </button>
       </div>
-      <h1 className="customer-page-header__title">{title}</h1>
+      <div className="customer-page-header__copy">
+        <h1 className="customer-page-header__title">{title}</h1>
+        {subtitle ? <p className="customer-page-header__subtitle">{subtitle}</p> : null}
+      </div>
       <div className="customer-page-header__side">{right || <span />}</div>
     </header>
   );

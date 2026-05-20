@@ -27,19 +27,23 @@ export function createHomeFulfillmentActions({
     setDeliveryPlannerOpen(true);
   };
 
-  const confirmDeliveryAndOpenMenu = () => {
-    if (!selectedDeliveryBranchInfo) {
+  const confirmDeliveryAndOpenMenu = (branchId = "") => {
+    const selectedBranchInfo = branchId
+      ? deliveryBranches.find((branch) => branch.id === branchId) || null
+      : selectedDeliveryBranchInfo;
+
+    if (!selectedBranchInfo) {
       setServiceNotice?.(buildStoreOfflineNotice?.());
       return;
     }
-    if (!isBranchOpenNow(selectedDeliveryBranchInfo)) {
-      setServiceNotice?.(buildOutOfHoursNotice?.(selectedDeliveryBranchInfo));
+    if (!isBranchOpenNow(selectedBranchInfo)) {
+      setServiceNotice?.(buildOutOfHoursNotice?.(selectedBranchInfo));
       return;
     }
     setCheckoutPreset?.({
       fulfillmentType: "delivery",
       selectedBranch: pickupBranch,
-      selectedDeliveryBranch: selectedDeliveryBranchInfo?.id || "",
+      selectedDeliveryBranch: selectedBranchInfo.id || "",
       pickupMode,
       pickupDate,
       pickupClock
@@ -58,8 +62,11 @@ export function createHomeFulfillmentActions({
     setDeliveryPlannerOpen(false);
   };
 
-  const confirmPickupAndOpenMenu = () => {
-    const selectedPickupBranchInfo = pickupBranches.find((branch) => branch.id === pickupBranch) || pickupBranches[0] || null;
+  const confirmPickupAndOpenMenu = (branchId = "") => {
+    const selectedPickupBranchInfo = branchId
+      ? pickupBranches.find((branch) => branch.id === branchId) || null
+      : pickupBranches.find((branch) => branch.id === pickupBranch) || pickupBranches[0] || null;
+
     if (!selectedPickupBranchInfo) {
       setServiceNotice?.(buildPickupDisabledNotice?.() || buildStoreOfflineNotice?.());
       return;
@@ -70,7 +77,7 @@ export function createHomeFulfillmentActions({
     }
     setCheckoutPreset?.({
       fulfillmentType: "pickup",
-      selectedBranch: pickupBranch,
+      selectedBranch: selectedPickupBranchInfo.id || pickupBranch,
       selectedDeliveryBranch: selectedDeliveryBranchInfo?.id || "",
       pickupMode,
       pickupDate,

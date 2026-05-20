@@ -1,15 +1,36 @@
-﻿* {
+* {
   box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: #f6f3ee;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100dvh;
   font-family: "Inter", system-ui, -apple-system, Arial, sans-serif;
   font-weight: 500;
-  letter-spacing: -0.2px;
-  background:
-    radial-gradient(circle at top left, rgba(255, 106, 0, 0.1), transparent 34%),
-    linear-gradient(135deg, #fffaf3, #f3eee6);
+  letter-spacing: 0;
+  background: #f6f3ee;
   color: #3a1f14;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+#root {
+  min-height: 100dvh;
 }

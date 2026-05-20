@@ -98,12 +98,11 @@ export default function HomeInfoCards({
       {showDeliveryApps && (
         <article ref={deliveryAppsRef} className="delivery-app-card">
           <h2>{deliveryAppsBlock?.title || "Mua trên app giao hàng"}</h2>
-          {deliveryAppsBlock?.subtitle ? <p className="delivery-app-subtitle">{deliveryAppsBlock.subtitle}</p> : null}
 
           {hasBranchApps ? (
             <>
               <label className="delivery-app-branch-select">
-                <span>Chọn chi nhánh đặt qua app</span>
+                <span>Chi nhánh</span>
                 <button
                   type="button"
                   className="delivery-app-branch-trigger"
@@ -113,11 +112,6 @@ export default function HomeInfoCards({
                   <i>▾</i>
                 </button>
               </label>
-              {activeBranch?.branchName ? (
-                <p className="delivery-app-branch-note">
-                  App đặt hàng của chi nhánh: <strong>{activeBranch.branchName}</strong>
-                </p>
-              ) : null}
               <div className="grid grid-cols-3 gap-2">
                 {(activeBranch?.apps || []).map((app) => {
                   const appUrl = normalizeExternalUrl(app.url);
@@ -141,7 +135,7 @@ export default function HomeInfoCards({
                 onBackdropClose={() => setBranchPickerOpen(false)}
                 onClose={() => setBranchPickerOpen(false)}
                 title="Chọn chi nhánh giao hàng"
-                subtitle="Chọn chi nhánh gần bạn nhất để tiết kiệm phí ship."
+                subtitle=""
                 ariaLabel="Chọn chi nhánh giao hàng"
                 branches={branchPickerItems}
                 selectedBranchId={activeBranch?.branchId || ""}

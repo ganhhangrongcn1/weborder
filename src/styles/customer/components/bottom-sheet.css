@@ -26,8 +26,8 @@
   border: 1px solid rgba(255, 106, 0, 0.12);
   border-radius: 28px 28px 0 0;
   background: #fffaf3;
-  box-shadow: 0 -24px 64px rgba(58, 31, 20, 0.26);
-  animation: customer-sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: 0 -22px 56px rgba(58, 31, 20, 0.22);
+  animation: customer-sheet-up 0.26s cubic-bezier(0.22, 0.88, 0.22, 1);
 }
 
 .customer-bottom-sheet.promo-sheet,
@@ -51,6 +51,7 @@
   margin: 10px auto 6px;
   border-radius: 999px;
   background: rgba(58, 31, 20, 0.16);
+  transition: transform 0.18s ease, background-color 0.18s ease;
 }
 
 .customer-sheet-header {
@@ -187,11 +188,11 @@
 .home2026-flash-main-card:active,
 .delivery-app-card:active,
 .home2026-category-pill:active {
-  transform: scale(0.985);
+  transform: scale(0.992);
 }
 
 .floating-cart-bar:active {
-  transform: translateX(-50%) scale(0.985);
+  transform: translateX(-50%) scale(0.992);
 }
 
 .customer-native-card {
@@ -249,7 +250,7 @@
 @keyframes customer-sheet-up {
   from {
     opacity: 0;
-    transform: translateY(24px) scale(0.98);
+    transform: translateY(22px) scale(0.985);
   }
   to {
     opacity: 1;

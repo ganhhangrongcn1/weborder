@@ -12,6 +12,7 @@ export default function CheckoutFulfillmentSection({
   lockPickupBranch = false,
   setIsAddressModalOpen,
   deliveryInfo,
+  deliverySourceBranch,
   pickupContact,
   setPickupContact,
   selectedBranchInfo,
@@ -35,18 +36,23 @@ export default function CheckoutFulfillmentSection({
       </div>
 
       {fulfillmentType === "delivery" ? (
-        <CheckoutCard title={checkoutText.deliveryTo} action={checkoutText.changeAddress} onAction={() => setIsAddressModalOpen(true)}>
+        <CheckoutCard title={checkoutText.deliveryTo} action="Đổi" onAction={() => setIsAddressModalOpen(true)}>
           <div className="delivery-info-box">
             <InfoLine icon="user" label={checkoutText.customerName} value={deliveryInfo.name} />
             <InfoLine icon="home" label={checkoutText.address} value={deliveryInfo.address} />
             <InfoLine icon="phone" label={checkoutText.phone} value={deliveryInfo.phone} />
           </div>
+          {deliverySourceBranch?.name ? (
+            <div className="checkout-inline-note">
+              <strong>Chi nhánh giao:</strong> <span>{deliverySourceBranch.name}</span>
+            </div>
+          ) : null}
         </CheckoutCard>
       ) : (
         <Fragment>
           <CheckoutCard title="Thông tin người nhận">
             <div className="grid gap-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="checkout-pickup-contact-grid grid grid-cols-2 gap-3">
                 <label className="pickup-field">
                   <span>Tên của bạn</span>
                   <input
@@ -65,13 +71,13 @@ export default function CheckoutFulfillmentSection({
                   />
                 </label>
               </div>
-              <p className="rounded-2xl bg-orange-50 px-3 py-2 text-xs font-semibold leading-5 text-orange-700">
+              <p className="checkout-inline-note">
                 Quán dùng thông tin này để xác nhận người đến lấy và tích điểm cho bạn.
               </p>
             </div>
           </CheckoutCard>
 
-          <CheckoutCard title="Chọn chi nhánh để lấy">
+          <CheckoutCard title="Chi nhánh lấy món">
             <div className="space-y-3">
               {(selectedBranchInfo && !isChangingBranch || lockPickupBranch ? [selectedBranchInfo].filter(Boolean) : pickupBranches).map((branch) => (
                 <button
@@ -98,13 +104,13 @@ export default function CheckoutFulfillmentSection({
                 <button
                   type="button"
                   onClick={() => setIsChangingBranch(true)}
-                  className="w-full text-left text-sm font-semibold text-orange-600"
+                  className="checkout-inline-action"
                 >
-                  Bấm vào đổi chi nhánh lấy
+                  Đổi chi nhánh lấy món
                 </button>
               ) : null}
               {lockPickupBranch ? (
-                <p className="rounded-2xl bg-orange-50 px-3 py-2 text-xs font-semibold leading-5 text-orange-700">
+                <p className="checkout-inline-note">
                   Đơn này đang khóa theo chi nhánh từ mã QR tại quầy.
                 </p>
               ) : null}
@@ -114,7 +120,7 @@ export default function CheckoutFulfillmentSection({
       )}
 
       {fulfillmentType === "delivery" ? null : (
-        <CheckoutCard title="Thời gian đến lấy">
+        <CheckoutCard title="Thời gian nhận món">
           <div className="pickup-time-card">
             <div className="pickup-mode-tabs">
               <button onClick={() => setPickupMode("soon")} className={pickupMode === "soon" ? "active" : ""}>Sớm nhất</button>

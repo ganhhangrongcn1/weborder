@@ -79,7 +79,7 @@
 }
 
 .delivery-app-card h2 {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   color: #111827;
   font-size: 15px;
   font-weight: 950;
@@ -93,23 +93,10 @@
   line-height: 1.4;
 }
 
-.delivery-app-branch-note {
-  margin: 0 0 12px;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-.delivery-app-branch-note strong {
-  color: #111827;
-  font-weight: 950;
-}
-
 .delivery-app-branch-select {
   display: grid;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   color: #475569;
   font-size: 11px;
   font-weight: 900;
@@ -331,9 +318,15 @@ button.delivery-app-item:disabled {
 }
 
 .delivery-app-item strong {
+  display: -webkit-box;
+  overflow: hidden;
   color: #111827;
   font-size: 11px;
   font-weight: 950;
+  line-height: 1.25;
+  text-align: center;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .delivery-app-logo {

@@ -17,9 +17,9 @@ export default function HomeFeaturedProducts({
           {showAllHomeProducts ? collapse : viewMore}
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-3 featured-grid product-grid">
+      <div className="home2026-featured-list">
         {featuredProducts.map((product) => (
-          <ProductCard key={product.id} product={product} onOpen={openOptionModal} onAdd={openOptionModal} />
+          <ProductCard key={product.id} product={product} compact onOpen={openOptionModal} onAdd={openOptionModal} />
         ))}
       </div>
     </section>

@@ -197,7 +197,7 @@ export default function OrderSuccess({
           )}
 
           {isConfirmed ? (
-            <div className="mt-1 grid grid-cols-2 gap-2">
+            <div className="order-success-actions mt-1 grid grid-cols-2 gap-2">
               <CustomerButton variant="soft" size="sm" onClick={() => copyOrderText(true)}>
                 Copy lại nội dung đơn
               </CustomerButton>
