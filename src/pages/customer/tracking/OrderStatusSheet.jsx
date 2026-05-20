@@ -2,11 +2,13 @@ import { Fragment } from "react";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { formatMoney } from "../../../utils/format.js";
+import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 
 export default function OrderStatusSheet({
   order,
   step,
   formatOrderTime,
+  branches = [],
   canViewFullOrderCode,
   maskOrderCode,
   onClose
@@ -20,6 +22,12 @@ export default function OrderStatusSheet({
   const pointsDiscount = Number(order.pointsDiscount || 0);
   const totalValue = Number(order.totalAmount || order.total || 0);
   const isPickupOrder = order.fulfillmentType === "pickup";
+  const isPartnerOrder = order.sourceType === "partner";
+  const sourceBadge = getOrderSourceBadge(order);
+  const branchName = getCanonicalOrderBranchName(order, branches);
+  const displayOrderCode = isPartnerOrder
+    ? order.displayOrderCode || order.orderCode || "FoodApp"
+    : canViewFullOrderCode ? order.orderCode : maskOrderCode(order.orderCode);
   const deliveryStep = {
     title: "Đang giao",
     text: "Đơn đang được giao đến bạn, vui lòng để ý điện thoại nhé."
@@ -50,7 +58,12 @@ export default function OrderStatusSheet({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="customer-caption">{formatOrderTime(order.createdAt)}</p>
-          <h2 className="mt-1 truncate customer-title-lg">{canViewFullOrderCode ? order.orderCode : maskOrderCode(order.orderCode)}</h2>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h2 className="min-w-0 truncate customer-title-lg">{displayOrderCode}</h2>
+            <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[11px] font-black ${sourceBadge.className}`}>
+              {sourceBadge.label}
+            </span>
+          </div>
           <p className="mt-1 customer-body">{orderItems.length} món · {formatMoney(order.totalAmount || 0)}</p>
         </div>
         <button type="button" onClick={onClose} className="customer-icon-button shrink-0" aria-label="Đóng">
@@ -99,7 +112,7 @@ export default function OrderStatusSheet({
             <Fragment>
               <div className="wide">
                 <span>Chi nhánh lấy</span>
-                <strong>{order.branchName || "Gánh Hàng Rong"}</strong>
+                <strong>{branchName || "Gánh Hàng Rong"}</strong>
                 <small>{order.branchAddress}</small>
               </div>
               <div className="wide">

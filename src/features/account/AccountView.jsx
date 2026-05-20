@@ -8,8 +8,41 @@ import AppHeader from "../../components/app/Header.jsx";
 import AppEmptyState from "../../components/app/EmptyState.jsx";
 import { formatMoney } from "../../utils/format.js";
 import { getOrderStats } from "../../utils/pureHelpers.js";
+import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../services/partnerOrderService.js";
 import useAccountViewModel from "./hooks/useAccountViewModel.js";
 import AccountNoticeModal from "./components/AccountNoticeModal.jsx";
+
+function SourceBadge({ order }) {
+  const badge = getOrderSourceBadge(order);
+  return (
+    <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[11px] font-black ${badge.className}`}>
+      {badge.label}
+    </span>
+  );
+}
+
+function getLookupOrderCode(order = {}) {
+  if (order.sourceType === "partner") return order.displayOrderCode || order.orderCode || "FoodApp";
+  return String(order.orderCode || "GHR-****").replace(/GHR-\d{4}/, "GHR-****");
+}
+
+function getAccountOrderCode(order = {}) {
+  if (order.sourceType === "partner") return order.displayOrderCode || order.orderCode || "FoodApp";
+  return order.orderCode || "GHR-****";
+}
+
+function getAccountOrderBranchName(order = {}, branches = []) {
+  return getCanonicalOrderBranchName(order, branches);
+}
+
+function getLookupOrderMeta(order = {}, branches = []) {
+  if (order.sourceType === "partner") {
+    const branchName = getCanonicalOrderBranchName(order, branches) || "Chưa rõ chi nhánh";
+    const statusText = order.orderStatus === "completed" ? "Đã hoàn tất" : "Đang xử lý";
+    return `${branchName} · ${statusText}`;
+  }
+  return `${(order.items || []).length} món · Địa chỉ đã được ẩn`;
+}
 
 export default function Account({
   navigate,
@@ -21,7 +54,8 @@ export default function Account({
   demoAddresses,
   setDemoAddresses,
   demoLoyalty,
-  demoOrders
+  demoOrders,
+  branches = []
 }) {
   const vm = useAccountViewModel({
     navigate,
@@ -82,19 +116,9 @@ export default function Account({
             ) : vm.accountEntryTab === "register" ? (
               <div className="mt-4">
                 <h2 className="text-base font-black text-brown">Tạo tài khoản</h2>
-                <p className="mt-1 text-sm text-brown/60">Nhập số điện thoại để tạo tài khoản. Nếu số này đã từng có đơn, app sẽ yêu cầu mã đơn gần nhất để xác minh.</p>
+                <p className="mt-1 text-sm text-brown/60">Nhập số điện thoại để tạo tài khoản và liên kết lịch sử đơn hàng theo số này.</p>
                 <div className="mt-3 space-y-3">
                   <input value={vm.authPhone} onChange={(event) => vm.setAuthPhone(event.target.value)} placeholder="Số điện thoại" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                  {vm.authMode === "claimBlocked" ? (
-                    <>
-                      <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-orange-700">Số này đã từng đặt hàng. Bạn nhập mã đơn gần nhất để xác minh đúng chủ số điện thoại trước khi tạo tài khoản.</p>
-                      <div className="flex overflow-hidden rounded-2xl border border-orange-100 bg-cream">
-                        <span className="grid place-items-center bg-white px-4 text-sm font-black text-orange-600">GHR-</span>
-                        <input value={vm.claimCode} onChange={(event) => vm.setClaimCode(event.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" maxLength={4} placeholder="1028" className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm font-black tracking-[0.25em] outline-none" />
-                      </div>
-                      <button onClick={vm.handleVerifyRecentOrder} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Xác minh mã đơn</button>
-                    </>
-                  ) : null}
                   <input value={vm.registerDraft.name} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, name: event.target.value }))} placeholder="Tên hiển thị" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                   <input type="password" value={vm.registerDraft.password} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu (ít nhất 6 ký tự)" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                   <input type="password" value={vm.registerDraft.confirmPassword} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))} placeholder="Nhập lại mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
@@ -138,13 +162,16 @@ export default function Account({
                     {vm.lookupOrders.slice(0, 5).map((order) => (
                       <div key={order.id || order.orderCode} className="rounded-[22px] border border-orange-100 bg-cream/50 p-3 text-sm">
                         <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <strong>{String(order.orderCode || "GHR-****").replace(/GHR-\d{4}/, "GHR-****")}</strong>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <strong className="break-all">{getLookupOrderCode(order)}</strong>
+                              <SourceBadge order={order} />
+                            </div>
                             <p className="mt-1 text-brown/55">{new Date(order.createdAt).toLocaleString("vi-VN")}</p>
                           </div>
                           <strong className="text-orange-600">{formatMoney(order.totalAmount || order.total || 0)}</strong>
                         </div>
-                        <p className="mt-2 text-xs text-brown/45">{(order.items || []).length} món · Địa chỉ đã được ẩn</p>
+                        <p className="mt-2 text-xs text-brown/45">{getLookupOrderMeta(order, branches)}</p>
                       </div>
                     ))}
                   </div>
@@ -156,19 +183,6 @@ export default function Account({
                   <div className="space-y-3">
                     <input type="password" value={vm.authPassword} onChange={(event) => vm.setAuthPassword(event.target.value)} placeholder="Nhập mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                     <button onClick={vm.handlePasswordLogin} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Đăng nhập</button>
-                  </div>
-                </AccountPanel>
-              ) : null}
-
-              {vm.lookupPhone && vm.authMode === "claimBlocked" ? (
-                <AccountPanel title="Xác minh để tạo tài khoản">
-                  <div className="space-y-3">
-                    <p className="text-sm text-brown/60">Số này đã từng đặt hàng, bạn cần mã đơn gần nhất để mở đăng ký.</p>
-                    <div className="flex overflow-hidden rounded-2xl border border-orange-100 bg-cream">
-                      <span className="grid place-items-center bg-white px-4 text-sm font-black text-orange-600">GHR-</span>
-                      <input value={vm.claimCode} onChange={(event) => vm.setClaimCode(event.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" maxLength={4} placeholder="1028" className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm font-black tracking-[0.25em] outline-none" />
-                    </div>
-                    <button onClick={vm.handleVerifyRecentOrder} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Xác minh mã đơn</button>
                   </div>
                 </AccountPanel>
               ) : null}
@@ -247,8 +261,14 @@ export default function Account({
         <AccountPanel title="Đơn gần nhất">
           {vm.stats.latestOrder ? (
             <div className="rounded-[22px] border border-orange-100 bg-cream/50 p-3 text-sm">
-              <strong>{vm.stats.latestOrder.orderCode}</strong>
-              <p className="mt-1 text-brown/60">{new Date(vm.stats.latestOrder.createdAt).toLocaleString("vi-VN")} · {formatMoney(vm.stats.latestOrder.totalAmount)}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <strong>{getAccountOrderCode(vm.stats.latestOrder)}</strong>
+                <SourceBadge order={vm.stats.latestOrder} />
+              </div>
+              <p className="mt-1 text-brown/60">{new Date(vm.stats.latestOrder.createdAt).toLocaleString("vi-VN")} · {formatMoney(vm.stats.latestOrder.totalAmount || vm.stats.latestOrder.total || 0)}</p>
+              {getAccountOrderBranchName(vm.stats.latestOrder, branches) ? (
+                <p className="mt-1 truncate text-xs font-semibold text-brown/45">{getAccountOrderBranchName(vm.stats.latestOrder, branches)}</p>
+              ) : null}
               <button onClick={() => vm.navigateToTab("orders")} className="mt-3 rounded-2xl bg-orange-50 px-4 py-2 text-xs font-black text-orange-600">Xem lịch sử đơn</button>
             </div>
           ) : (

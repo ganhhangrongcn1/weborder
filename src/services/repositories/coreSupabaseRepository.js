@@ -260,6 +260,10 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     amount: Number(row.amount || 0),
     title: row.title || "",
     note: row.note || "",
+    source: row.source || "",
+    partnerOrderCode: row.partner_order_code || "",
+    partnerOrderId: row.partner_order_id || "",
+    metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
     createdAt: row.created_at
   }));
   const totalPoints = pointHistory.reduce((sum, entry) => sum + Number(entry?.points || 0), 0);

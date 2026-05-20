@@ -3,6 +3,7 @@ import AppEmptyState from "../../../components/app/EmptyState.jsx";
 import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
 import PointsCard from "../../../pages/customer/loyalty/PointsCard.jsx";
 import { getLoyaltySimpleGuestRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getPointEntryTitle } from "./PointHistoryList.jsx";
 
 export default function SimpleRewardsView({
   navigate,
@@ -48,7 +49,7 @@ export default function SimpleRewardsView({
         <div className="space-y-2">
           {pointHistory.slice(0, 10).map((entry) => (
             <div key={entry.id} className="rounded-2xl bg-white px-4 py-3 text-sm shadow-soft">
-              <span className="block text-brown">{entry.title}</span>
+              <span className="block text-brown">{getPointEntryTitle(entry)}</span>
               <strong className="text-orange-600">+{entry.points} điểm</strong>
             </div>
           ))}

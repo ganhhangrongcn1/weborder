@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "../../../utils/format.js";
 import { getCustomerKey } from "../../../services/storageService.js";
+import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
+import { resolveOrderSourceKey } from "../../../services/partnerOrderService.js";
+import { calculateOrderPoints, getLoyaltyRuleConfig } from "../../../services/loyaltyService.js";
 import {
   toAdminStatus,
   formatOrderTime,
@@ -21,6 +24,10 @@ function getOrderId(order) {
   return order.id || order.orderCode;
 }
 
+function getDisplayOrderCode(order) {
+  return String(order?.displayOrderCode || order?.orderCode || order?.id || "");
+}
+
 function getFulfillmentType(order) {
   return String(order.fulfillmentType || "").toLowerCase() === "pickup" ? "pickup" : "delivery";
 }
@@ -32,39 +39,51 @@ function getOrderBranchName(order) {
     order.branchName
   ].map((value) => String(value || "").trim()).find(Boolean) || "";
 }
+
+function isReadOnlyPartnerOrder(order) {
+  return String(order?.sourceType || "").toLowerCase() === "partner";
+}
 function getOrderSourceMeta(order) {
-  const source = String(order?.orderSource || order?.source || order?.channel || order?.platform || "").trim().toLowerCase();
-  if (source === "qr_counter") {
+  const source = resolveOrderSourceKey(order);
+  if (source === "grabfood") {
     return {
-      label: "QR tại quầy",
+      label: "Grab",
+      className: "is-grab"
+    };
+  }
+  if (source === "shopeefood") {
+    return {
+      label: "Shopee",
+      className: "is-shopee"
+    };
+  }
+  if (source === "xanhngon") {
+    return {
+      label: "Xanh Ngon",
+      className: "is-xanhngon"
+    };
+  }
+  if (source === "pickup") {
+    return {
+      label: "Tự Lấy",
       className: "is-pickup"
     };
   }
+  if (source === "qr_counter") {
+    return {
+      label: "QR tại quầy",
+      className: "is-qr-counter"
+    };
+  }
   return {
-    label: "Online",
-    className: "is-delivery"
+    label: "Website",
+    className: "is-website"
   };
-}
-
-function normalizeName(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function getRegisteredCustomer(order, registeredCustomersByPhone) {
   const phone = getCustomerKey(order.customerPhone || order.phone || order.customerPhoneKey);
   return phone ? registeredCustomersByPhone?.[phone] || null : null;
-}
-
-function hasOrderNameMismatch(order, registeredCustomersByPhone) {
-  const registered = getRegisteredCustomer(order, registeredCustomersByPhone);
-  const registeredName = registered?.name || "";
-  const orderName = order.orderCustomerName || order.customerName || "";
-  return Boolean(registeredName && orderName && normalizeName(registeredName) !== normalizeName(orderName));
 }
 
 function normalizeBranchKey(value) {
@@ -150,15 +169,6 @@ function OrderStatusBadge({ status }) {
   return <span className={`admin-order-status-badge ${getStatusClass(status)}`}>{getStatusLabel(status)}</span>;
 }
 
-function FulfillmentBadge({ type }) {
-  const isPickup = type === "pickup";
-  return (
-    <span className={`admin-order-type-badge ${isPickup ? "is-pickup" : "is-delivery"}`}>
-      {isPickup ? "Tại quầy" : "Ship"}
-    </span>
-  );
-}
-
 function OrderStatsCards({ stats }) {
   const cards = [
     { key: "total", label: "Tổng đơn", value: stats.total, hint: "Theo bộ lọc hiện tại", tone: "orange", icon: "🧾" },
@@ -207,6 +217,8 @@ function OrderTabs({ activeStatus, statusCounts, onChange }) {
 function OrderFilterBar({
   keyword,
   setKeyword,
+  sourceFilter,
+  setSourceFilter,
   fulfillmentFilter,
   setFulfillmentFilter,
   branchFilter,
@@ -214,44 +226,75 @@ function OrderFilterBar({
   branchOptions,
   paymentFilter,
   setPaymentFilter,
+  onApplyQuickFilter,
   onReset
 }) {
+  const quickBranches = branchOptions.slice(0, 3);
   return (
-    <div className="admin-order-filter-bar">
-      <label className="admin-order-search">
-        <span>🔎</span>
-        <input
-          value={keyword}
-          onChange={(event) => setKeyword(event.target.value)}
-          placeholder="Tìm mã đơn, tên khách, số điện thoại..."
-        />
-      </label>
-      <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)}>
-        <option value="all">Tất cả hình thức</option>
-        <option value="delivery">Giao hàng</option>
-        <option value="pickup">Tự đến lấy</option>
-      </select>
-      {branchOptions.length ? (
-        <select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)}>
-          <option value="all">Tất cả chi nhánh</option>
-          {branchOptions.map((branch) => (
-            <option key={branch.value} value={branch.value}>{branch.label}</option>
-          ))}
+    <>
+      <div className="admin-order-filter-bar">
+        <label className="admin-order-search">
+          <span>🔎</span>
+          <input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder="Tìm mã đơn, tên khách, số điện thoại..."
+          />
+        </label>
+        <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)}>
+          <option value="all">Tất cả hình thức</option>
+          <option value="delivery">Giao hàng</option>
+          <option value="pickup">Tự đến lấy</option>
         </select>
-      ) : null}
-      <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}>
-        <option value="all">Tất cả thanh toán</option>
-        <option value="cod">COD</option>
-        <option value="paid">Đã trả trước</option>
-      </select>
-      <button type="button" onClick={onReset}>Xóa lọc</button>
-    </div>
+        <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+          <option value="all">Tất cả nguồn</option>
+          <option value="website">Website</option>
+          <option value="pickup">Tự Lấy</option>
+          <option value="qr_counter">QR Tại Quầy</option>
+          <option value="grabfood">Grab</option>
+          <option value="shopeefood">Shopee</option>
+          <option value="xanhngon">Xanh Ngon</option>
+        </select>
+        {branchOptions.length ? (
+          <select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)}>
+            <option value="all">Tất cả chi nhánh</option>
+            {branchOptions.map((branch) => (
+              <option key={branch.value} value={branch.value}>{branch.label}</option>
+            ))}
+          </select>
+        ) : null}
+        <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}>
+          <option value="all">Tất cả thanh toán</option>
+          <option value="cod">COD</option>
+          <option value="paid">Đã trả trước</option>
+        </select>
+        <button type="button" onClick={onReset}>Xóa lọc</button>
+      </div>
+      <div className="admin-order-quick-filters">
+        <button type="button" onClick={() => onApplyQuickFilter("all")}>Tất cả</button>
+        <button type="button" onClick={() => onApplyQuickFilter("new")}>Đơn mới</button>
+        <button type="button" onClick={() => onApplyQuickFilter("doing")}>Đang làm</button>
+        <button type="button" onClick={() => onApplyQuickFilter("grab")}>Grab</button>
+        <button type="button" onClick={() => onApplyQuickFilter("shopee")}>Shopee</button>
+        <button type="button" onClick={() => onApplyQuickFilter("website")}>Website</button>
+        {quickBranches.map((branch) => (
+          <button key={branch.value} type="button" onClick={() => onApplyQuickFilter("branch", branch.value)}>
+            {branch.label}
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
 
 function OrderStatusSelect({ order, status, updateOrderStatus }) {
   const orderId = getOrderId(order);
   const fulfillmentType = getFulfillmentType(order);
+  const isPartnerOrder = isReadOnlyPartnerOrder(order);
+
+  if (isPartnerOrder) {
+    return <span className="admin-order-status-readonly">Đồng bộ NexPOS</span>;
+  }
 
   return (
     <select
@@ -271,6 +314,8 @@ function OrderStatusSelect({ order, status, updateOrderStatus }) {
 function OrderQuickActions({ order, status, updateOrderStatus }) {
   const orderId = getOrderId(order);
   const fulfillmentType = getFulfillmentType(order);
+  const isPartnerOrder = isReadOnlyPartnerOrder(order);
+  if (isPartnerOrder) return null;
   const quickActions = fulfillmentType === "delivery"
     ? [
         { value: "new", label: "Mới" },
@@ -335,12 +380,13 @@ function OrderList({
           const orderId = getOrderId(order);
           const status = getDisplayStatus(order);
           const fulfillmentType = getFulfillmentType(order);
-          const branchName = getOrderBranchName(order);
           const waitingMinutes = getWaitingMinutes(order.createdAt);
           const isActive = String(activeOrderId) === String(orderId);
-          const nameMismatch = hasOrderNameMismatch(order, registeredCustomersByPhone);
           const settlement = getSettlement(order);
           const sourceMeta = getOrderSourceMeta(order);
+          const partnerNetRevenue = Number(order.realReceived || order.netReceived || order.grossReceived || 0);
+          const netRevenue = partnerNetRevenue > 0 ? partnerNetRevenue : Number(settlement?.netRevenue || 0);
+          const branchName = getOrderBranchName(order);
 
           return (
             <article
@@ -349,19 +395,16 @@ function OrderList({
               onClick={() => onSelectOrder(order)}
             >
               <div className="admin-order-cell admin-order-code-cell">
-                <strong>{order.orderCode || order.id}</strong>
+                <strong>{getDisplayOrderCode(order)}</strong>
                 <small>{waitingMinutes} phút</small>
               </div>
               <div className="admin-order-cell">
                 <strong>{order.customerName || "Khách lẻ"}</strong>
                 <small>{order.customerPhone || order.phone || "--"}</small>
-                {nameMismatch ? <span className="admin-order-name-mismatch-badge">Tên đặt khác tên tài khoản</span> : null}
               </div>
               <div className="admin-order-cell">
-                <FulfillmentBadge type={fulfillmentType} />
                 <small className={`admin-order-type-badge ${sourceMeta.className}`}>{sourceMeta.label}</small>
-                {branchName ? <small className="admin-order-branch-name">{branchName}</small> : null}
-                <small>{String(order.paymentMethod || "COD").toUpperCase()}</small>
+                {branchName ? <small className="admin-order-branch-name" title={branchName}>{branchName}</small> : null}
               </div>
               <div className="admin-order-cell">
                 <span>{formatOrderTime(order.createdAt)}</span>
@@ -370,7 +413,7 @@ function OrderList({
                 <OrderStatusBadge status={status} />
               </div>
               <div className="admin-order-cell admin-order-money">
-                <strong>{formatMoney(Number(settlement?.netRevenue || 0))}</strong>
+                <strong>{formatMoney(netRevenue)}</strong>
                 <small>Tổng thu khách: {formatMoney(Number(order.totalAmount || order.total || 0))}</small>
               </div>
               <div className="admin-order-cell admin-order-row-actions">
@@ -416,20 +459,30 @@ function OrderDetailPanel({
   const settlement = getSettlement(order);
   const branchName = getOrderBranchName(order);
   const sourceMeta = getOrderSourceMeta(order);
+  const sourceKey = resolveOrderSourceKey(order);
+  const isPartnerOrder = String(order?.sourceType || "").toLowerCase() === "partner";
   const registeredCustomer = getRegisteredCustomer(order, registeredCustomersByPhone);
   const orderCustomerName = order.orderCustomerName || order.customerName || "";
-  const nameMismatch = hasOrderNameMismatch(order, registeredCustomersByPhone);
   const addressText = fulfillmentType === "pickup"
     ? [order.branchName || order.pickupBranchName, order.branchAddress || order.pickupBranchAddress].filter(Boolean).join(" - ")
     : order.deliveryAddress;
   const note = order.note || order.customerNote || order.orderNote || "";
+  const totalPromotion = Number(order.totalPromotion || order.discountAmount || promoDiscount || 0);
+  const coFundPromotion = Number(order.coFundPromotion || 0);
+  const appPromotion = Math.max(totalPromotion - coFundPromotion, 0);
+  const partnerGrossReceived = Number(order.grossReceived || 0);
+  const partnerNetReceived = Number(order.realReceived || order.netReceived || 0);
+  const pointsBaseAmount = Number(order.pointsBaseAmount || Math.max(totalValue - shippingFee, 0));
+  const loyaltyRule = getLoyaltyRuleConfig();
+  const estimatedPoints = Math.max(0, calculateOrderPoints(pointsBaseAmount, loyaltyRule));
+  const shouldShowShipperSection = fulfillmentType === "delivery" && !isPartnerOrder && sourceKey === "website";
 
   return (
     <aside className={`admin-order-detail-panel ${isOpen ? "is-open" : ""}`}>
       <div className="admin-order-detail-head">
         <div>
           <span>Chi tiết đơn hàng</span>
-          <h3>{order.orderCode || order.id}</h3>
+          <h3>{getDisplayOrderCode(order)}</h3>
           <small>{formatOrderTime(order.createdAt)}</small>
         </div>
         <button type="button" onClick={onClose}>×</button>
@@ -443,7 +496,7 @@ function OrderDetailPanel({
           </div>
           <div className="admin-order-detail-row">
             <span>Hình thức</span>
-            <FulfillmentBadge type={fulfillmentType} />
+            <strong>{fulfillmentType === "pickup" ? "Tự đến lấy" : "Giao hàng"}</strong>
           </div>
           <div className="admin-order-detail-row">
             <span>Nguồn đơn</span>
@@ -474,12 +527,6 @@ function OrderDetailPanel({
               <strong>{registeredCustomer.name || registeredCustomer.phone}</strong>
             </div>
           ) : null}
-          {nameMismatch ? (
-            <div className="admin-order-detail-row">
-              <span>Lưu ý</span>
-              <strong><span className="admin-order-name-mismatch-badge">Tên đặt khác tên tài khoản</span></strong>
-            </div>
-          ) : null}
         </section>
 
         <section className="admin-order-detail-card">
@@ -507,21 +554,35 @@ function OrderDetailPanel({
           <div className="admin-order-total-lines">
             <div><span>Tạm tính</span><strong>{formatMoney(subtotalValue)}</strong></div>
             <div><span>Phí giao hàng</span><strong>{fulfillmentType === "pickup" ? "0đ (Tự đến lấy)" : formatMoney(shippingFee)}</strong></div>
+            {coFundPromotion > 0 ? <div className="discount"><span>Đồng tài trợ</span><strong>-{formatMoney(coFundPromotion)}</strong></div> : null}
+            {appPromotion > 0 ? <div className="discount"><span>Khuyến mãi app</span><strong>-{formatMoney(appPromotion)}</strong></div> : null}
             {shippingSupport > 0 ? <div className="discount"><span>GHR hỗ trợ ship</span><strong>-{formatMoney(shippingSupport)}</strong></div> : null}
             {promoDiscount > 0 ? <div className="discount"><span>Mã giảm giá {order.promoCode || ""}</span><strong>-{formatMoney(promoDiscount)}</strong></div> : null}
             {pointsDiscount > 0 ? <div className="discount"><span>Dùng điểm thưởng</span><strong>-{formatMoney(pointsDiscount)}</strong></div> : null}
             <div className="grand"><span>Tổng cộng</span><strong>{formatMoney(totalValue)}</strong></div>
+            <div><span>Giá trị tính điểm loyalty</span><strong>{formatMoney(pointsBaseAmount)}</strong></div>
+            <div><span>Điểm dự kiến</span><strong>+{estimatedPoints.toLocaleString("vi-VN")} điểm</strong></div>
           </div>
         </section>
 
-        {fulfillmentType === "delivery" ? (
+        {shouldShowShipperSection ? (
           <section className="admin-order-detail-card admin-order-settlement-card">
             <h4>Đối soát shipper</h4>
             <div className="admin-order-total-lines">
-              <div><span>Khách trả khi nhận</span><strong>{formatMoney(settlement.customerNeedPayWhenReceive)}</strong></div>
+              <div><span>Khách trả khi nhận</span><strong>{formatMoney(settlement.customerNeedPayWhenReceive || totalValue)}</strong></div>
               <div><span>Khách trả phí ship</span><strong>{formatMoney(settlement.shippingFeeCustomer)}</strong></div>
               <div><span>Quán hỗ trợ ship</span><strong>{formatMoney(settlement.shippingSupport)}</strong></div>
               <div className="grand"><span>Shipper nộp lại quán</span><strong>{formatMoney(settlement.shipperPayBackStore)}</strong></div>
+            </div>
+          </section>
+        ) : null}
+
+        {(partnerGrossReceived > 0 || partnerNetReceived > 0) ? (
+          <section className="admin-order-detail-card admin-order-settlement-card">
+            <h4>Đối soát FoodApp</h4>
+            <div className="admin-order-total-lines">
+              {partnerGrossReceived > 0 ? <div><span>Doanh thu trước phí</span><strong>{formatMoney(partnerGrossReceived)}</strong></div> : null}
+              {partnerNetReceived > 0 ? <div className="grand"><span>Quán thực nhận</span><strong>{formatMoney(partnerNetReceived)}</strong></div> : null}
             </div>
           </section>
         ) : null}
@@ -533,7 +594,7 @@ function OrderDetailPanel({
           </section>
         ) : null}
 
-        {fulfillmentType === "delivery" ? (
+        {shouldShowShipperSection ? (
           <section className="admin-order-detail-card">
             <h4>Thông tin gửi shipper</h4>
             <button type="button" className="admin-order-copy-btn" onClick={() => onCopyShipper(orderId)}>
@@ -552,7 +613,16 @@ function OrderDetailPanel({
   );
 }
 
-export default function OrderManager({ ordersSnapshot, updateOrderStatus, branches = [], registeredCustomersByPhone = {} }) {
+export default function OrderManager({
+  ordersSnapshot,
+  updateOrderStatus,
+  branches = [],
+  registeredCustomersByPhone = {},
+  ordersDateFrom = "",
+  ordersDateTo = ""
+}) {
+  const [partnerOrders, setPartnerOrders] = useState([]);
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [activeOrderId, setActiveOrderId] = useState("");
   const [detailPanelOpen, setDetailPanelOpen] = useState(false);
   const [copiedOrderId, setCopiedOrderId] = useState("");
@@ -562,26 +632,56 @@ export default function OrderManager({ ordersSnapshot, updateOrderStatus, branch
   const [branchFilter, setBranchFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
 
+  useEffect(() => {
+    let disposed = false;
+    async function loadPartnerFeed() {
+      const dateRange = {};
+      if (ordersDateFrom) {
+        dateRange.dateFrom = new Date(`${ordersDateFrom}T00:00:00`).toISOString();
+      }
+      if (ordersDateTo) {
+        const endDate = new Date(`${ordersDateTo}T00:00:00`);
+        endDate.setDate(endDate.getDate() + 1);
+        dateRange.dateTo = endDate.toISOString();
+      }
+      const nextPartnerOrders = await readPartnerOrdersForAdmin(dateRange);
+      if (!disposed) {
+        setPartnerOrders(Array.isArray(nextPartnerOrders) ? nextPartnerOrders : []);
+      }
+    }
+    loadPartnerFeed();
+    return () => {
+      disposed = true;
+    };
+  }, [ordersDateFrom, ordersDateTo]);
+
+  const adminOrderFeed = useMemo(
+    () => buildAdminOrderFeed(ordersSnapshot || [], partnerOrders || []),
+    [ordersSnapshot, partnerOrders]
+  );
+
   const branchOptions = useMemo(() => buildBranchOptions(branches), [branches]);
   const selectedBranchOption = useMemo(
     () => branchOptions.find((branch) => branch.value === branchFilter) || null,
     [branchOptions, branchFilter]
   );
 
-  const searchedOrders = useMemo(() => (ordersSnapshot || []).filter((order) => {
+  const searchedOrders = useMemo(() => (adminOrderFeed || []).filter((order) => {
     const key = keyword.trim().toLowerCase();
-    const orderCode = String(order.orderCode || order.id || "").toLowerCase();
+    const orderCode = String(order.displayOrderCode || order.orderCode || order.id || "").toLowerCase();
     const customerName = String(`${order.customerName || ""} ${order.orderCustomerName || ""}`).toLowerCase();
     const customerPhone = String(`${order.customerPhone || ""} ${order.phone || ""} ${order.customerPhoneKey || ""}`).toLowerCase();
     const normalizedSearchPhone = getCustomerKey(key);
     const fulfillmentType = getFulfillmentType(order);
     const paymentMethod = String(order.paymentMethod || "COD").toUpperCase();
+    const source = resolveOrderSourceKey(order);
     const matchKeyword = !key || orderCode.includes(key) || customerName.includes(key) || customerPhone.includes(key) || (normalizedSearchPhone && customerPhone.includes(normalizedSearchPhone));
     const matchFulfillment = fulfillmentFilter === "all" || fulfillmentFilter === fulfillmentType;
     const matchBranch = branchFilter === "all" || matchOrderBranch(order, selectedBranchOption);
+    const matchSource = sourceFilter === "all" || sourceFilter === source;
     const matchPayment = paymentFilter === "all" || (paymentFilter === "cod" ? paymentMethod.includes("COD") : !paymentMethod.includes("COD"));
-    return matchKeyword && matchFulfillment && matchBranch && matchPayment;
-  }), [ordersSnapshot, keyword, fulfillmentFilter, branchFilter, selectedBranchOption, paymentFilter]);
+    return matchKeyword && matchFulfillment && matchBranch && matchSource && matchPayment;
+  }), [adminOrderFeed, keyword, fulfillmentFilter, branchFilter, selectedBranchOption, sourceFilter, paymentFilter]);
 
   const statusCounts = useMemo(() => searchedOrders.reduce((counts, order) => {
     const status = getDisplayStatus(order);
@@ -613,16 +713,22 @@ export default function OrderManager({ ordersSnapshot, updateOrderStatus, branch
 
   const shipperInfoByOrderId = useMemo(() => {
     const result = {};
-    (ordersSnapshot || []).forEach((order) => {
+    (adminOrderFeed || []).forEach((order) => {
       result[getOrderId(order)] = buildShipperInfoText(order, formatMoney);
     });
     return result;
-  }, [ordersSnapshot]);
+  }, [adminOrderFeed]);
 
   const activeOrder = useMemo(() => {
     if (!visibleOrders.length) return null;
     return visibleOrders.find((order) => String(getOrderId(order)) === String(activeOrderId)) || visibleOrders[0];
   }, [visibleOrders, activeOrderId]);
+
+  const safeUpdateOrderStatus = (orderId, nextStatus) => {
+    const targetOrder = adminOrderFeed.find((order) => String(getOrderId(order)) === String(orderId));
+    if (isReadOnlyPartnerOrder(targetOrder)) return;
+    updateOrderStatus(orderId, nextStatus);
+  };
 
   const handleSelectOrder = (order) => {
     setActiveOrderId(getOrderId(order));
@@ -648,8 +754,44 @@ export default function OrderManager({ ordersSnapshot, updateOrderStatus, branch
     setKeyword("");
     setStatusFilter("all");
     setFulfillmentFilter("all");
+    setSourceFilter("all");
     setBranchFilter("all");
     setPaymentFilter("all");
+  };
+
+  const applyQuickFilter = (preset, branchValue = "all") => {
+    if (preset === "all") {
+      resetFilters();
+      return;
+    }
+    if (preset === "new") {
+      setStatusFilter("new");
+      setSourceFilter("all");
+      return;
+    }
+    if (preset === "doing") {
+      setStatusFilter("doing");
+      setSourceFilter("all");
+      return;
+    }
+    if (preset === "grab") {
+      setSourceFilter("grabfood");
+      setStatusFilter("all");
+      return;
+    }
+    if (preset === "shopee") {
+      setSourceFilter("shopeefood");
+      setStatusFilter("all");
+      return;
+    }
+    if (preset === "website") {
+      setSourceFilter("website");
+      setStatusFilter("all");
+      return;
+    }
+    if (preset === "branch") {
+      setBranchFilter(branchValue);
+    }
   };
 
   return (
@@ -672,6 +814,8 @@ export default function OrderManager({ ordersSnapshot, updateOrderStatus, branch
         <OrderFilterBar
           keyword={keyword}
           setKeyword={setKeyword}
+          sourceFilter={sourceFilter}
+          setSourceFilter={setSourceFilter}
           fulfillmentFilter={fulfillmentFilter}
           setFulfillmentFilter={setFulfillmentFilter}
           branchFilter={branchFilter}
@@ -679,20 +823,21 @@ export default function OrderManager({ ordersSnapshot, updateOrderStatus, branch
           branchOptions={branchOptions}
           paymentFilter={paymentFilter}
           setPaymentFilter={setPaymentFilter}
+          onApplyQuickFilter={applyQuickFilter}
           onReset={resetFilters}
         />
         <OrderList
           orders={visibleOrders}
           activeOrderId={activeOrder ? getOrderId(activeOrder) : activeOrderId}
           onSelectOrder={handleSelectOrder}
-          updateOrderStatus={updateOrderStatus}
+          updateOrderStatus={safeUpdateOrderStatus}
           registeredCustomersByPhone={registeredCustomersByPhone}
         />
       </section>
 
       <OrderDetailPanel
         order={activeOrder}
-        updateOrderStatus={updateOrderStatus}
+        updateOrderStatus={safeUpdateOrderStatus}
         shipperText={activeOrder ? shipperInfoByOrderId[getOrderId(activeOrder)] : ""}
         copied={activeOrder ? copiedOrderId === getOrderId(activeOrder) : false}
         onCopyShipper={copyShipperInfo}

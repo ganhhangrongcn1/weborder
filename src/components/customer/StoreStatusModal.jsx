@@ -22,7 +22,7 @@ export default function StoreStatusModal({ notice, onClose }) {
           {notice.badge || "Đang đóng cửa"}
         </span>
         <h2 className="mt-3 text-2xl font-black leading-tight text-brown">{notice.title}</h2>
-        <p className="mt-2 text-sm font-semibold leading-6 text-brown/70">{notice.description}</p>
+        <p className="mt-2 text-sm font-semibold leading-6 text-brown/70">{notice.description || notice.message}</p>
       </div>
     </CustomerBottomSheet>
   );

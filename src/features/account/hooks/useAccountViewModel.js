@@ -12,6 +12,7 @@ import {
 } from "../../../services/supabaseAuthService.js";
 import { addAddress, updateAddress, deleteAddress, setDefaultAddress } from "../../../services/addressService.js";
 import { orderStorage } from "../../../services/orderService.js";
+import { getPartnerOrdersByPhone, mergeCustomerLookupOrders } from "../../../services/partnerOrderService.js";
 import { getMemberRank } from "../../../utils/profile.js";
 import { getOrderStats } from "../../../utils/pureHelpers.js";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
@@ -67,7 +68,6 @@ export default function useAccountViewModel({
     password: "",
     confirmPassword: ""
   });
-  const [claimCode, setClaimCode] = useState("");
   const [accountEntryTab, setAccountEntryTab] = useState("lookup");
   const [loginDraft, setLoginDraft] = useState({
     phone: "",
@@ -90,13 +90,17 @@ export default function useAccountViewModel({
   const [showAllAddresses, setShowAllAddresses] = useState(false);
   const [remoteUser, setRemoteUser] = useState(null);
   const [authSessionUser, setAuthSessionUser] = useState(null);
+  const [accountPartnerOrders, setAccountPartnerOrders] = useState([]);
   const remoteUserRequestRef = useRef(0);
   const shouldUseSupabaseAuth = getDataSource() === "supabase";
   const accountUser = remoteUser || demoUser || {};
 
   const addresses = demoAddresses || [];
   const visibleAddresses = showAllAddresses ? addresses : addresses.slice(0, 3);
-  const stats = getOrderStats(demoOrders);
+  const accountOrders = currentPhone
+    ? mergeCustomerLookupOrders(demoOrders || [], accountPartnerOrders)
+    : demoOrders || [];
+  const stats = getOrderStats(accountOrders);
   const rank = getMemberRank(stats.totalSpent);
   const showCustomerTier = rewardFeatureFlags.enableCustomerTier;
   const displayName = pickCustomerDisplayName(accountUser, authSessionUser);
@@ -160,6 +164,29 @@ export default function useAccountViewModel({
       disposed = true;
     };
   }, [currentPhone, shouldUseSupabaseAuth]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function loadAccountPartnerOrders() {
+      if (!currentPhone) {
+        setAccountPartnerOrders([]);
+        return;
+      }
+
+      try {
+        const nextOrders = await getPartnerOrdersByPhone(currentPhone);
+        if (!disposed) setAccountPartnerOrders(nextOrders);
+      } catch {
+        if (!disposed) setAccountPartnerOrders([]);
+      }
+    }
+
+    loadAccountPartnerOrders();
+    return () => {
+      disposed = true;
+    };
+  }, [currentPhone]);
 
   async function resolveFreshUserAfterLogin(phone, fallbackUser = null) {
     const key = getCustomerKey(phone);
@@ -293,14 +320,17 @@ export default function useAccountViewModel({
       const existingUser = shouldUseSupabaseAuth
         ? (await customerRepository.getUserByPhoneAsync(phone)) || localUser
         : localUser;
-      const orders = shouldUseSupabaseAuth
-        ? await orderStorage.getByPhoneAsync(phone)
-        : orderStorage.getByPhone(phone);
+      const [orders, partnerOrders] = await Promise.all([
+        shouldUseSupabaseAuth
+          ? orderStorage.getByPhoneAsync(phone)
+          : Promise.resolve(orderStorage.getByPhone(phone)),
+        getPartnerOrdersByPhone(phone)
+      ]);
+      const mergedOrders = mergeCustomerLookupOrders(orders, partnerOrders);
       setLookupPhone(phone);
       setLookupUser(existingUser);
-      setLookupOrders(orders);
+      setLookupOrders(mergedOrders);
       setAuthPassword("");
-      setClaimCode("");
       setRegisterDraft({
         name: existingUser?.name || "",
         password: "",
@@ -310,12 +340,12 @@ export default function useAccountViewModel({
       if (hasRegisteredAccount) {
         setLoginDraft((draft) => ({ ...draft, phone }));
       }
-      setAuthMode(hasRegisteredAccount ? "login" : orders.length ? "claimBlocked" : "register");
+      setAuthMode(hasRegisteredAccount ? "login" : "register");
       setAuthNotice(
         hasRegisteredAccount
           ? "Số này đã có tài khoản. Nhập mật khẩu để mở điểm, địa chỉ và voucher."
-          : orders.length
-            ? "Số này đã từng đặt hàng. Để tạo tài khoản và nhận lại điểm, bạn cần xác minh mã đơn gần nhất."
+          : mergedOrders.length
+            ? "Số này đã từng đặt hàng. Bạn có thể tạo tài khoản để liên kết lịch sử và điểm."
             : "Vui lòng đăng ký tài khoản để nhận điểm tích lũy, lưu voucher và xem lịch sử đơn hàng đầy đủ."
       );
     } finally {
@@ -422,7 +452,7 @@ export default function useAccountViewModel({
       setAccountEntryTab("lookup");
       setAuthPhone(phone);
       setAuthNotice(
-        "Số này chưa có tài khoản. Bạn hãy tra cứu số điện thoại để tạo tài khoản từ đơn đã đặt hoặc tạo tài khoản mới."
+        "Số này chưa có tài khoản. Bạn có thể tạo tài khoản mới bằng số điện thoại này."
       );
       return;
     }
@@ -508,16 +538,6 @@ export default function useAccountViewModel({
       setAuthNotice("Số này đã có tài khoản. Bạn đăng nhập bằng mật khẩu đã tạo nhé.");
       return;
     }
-    const orders = orderStorage.getByPhone(registerPhone);
-    const hasVerifiedRecentOrder = authMode === "register" && lookupPhone === registerPhone;
-    if (orders.length && !hasVerifiedRecentOrder) {
-      setLookupPhone(registerPhone);
-      setLookupUser(existingUser);
-      setLookupOrders(orders);
-      setAuthMode("claimBlocked");
-      setAuthNotice("Số này đã từng đặt hàng. Để tạo tài khoản và nhận lại điểm, bạn cần xác minh mã đơn gần nhất.");
-      return;
-    }
     if (!registerDraft.name.trim()) {
       alert("Vui lòng nhập tên khách.");
       return;
@@ -576,30 +596,6 @@ export default function useAccountViewModel({
     setAuthMode("lookup");
   }
 
-  async function handleVerifyRecentOrder() {
-    const enteredCode = `GHR-${String(claimCode || "").replace(/\D/g, "").slice(0, 4)}`;
-    const latestOrder = [...lookupOrders].sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0))[0];
-    const latestOrderCode = String(latestOrder?.orderCode || "").toUpperCase();
-    if (!latestOrderCode || latestOrderCode !== enteredCode) {
-      showWrongOrderCodeNotice();
-      return;
-    }
-    if (lookupPhone) {
-      const localUser = userStorage.findByPhone(lookupPhone);
-      const existingUser = shouldUseSupabaseAuth
-        ? (await customerRepository.getUserByPhoneAsync(lookupPhone)) || localUser
-        : localUser;
-      if (hasMemberAccount(existingUser)) {
-        setLoginDraft((draft) => ({ ...draft, phone: lookupPhone }));
-        setAuthMode("login");
-        setAuthNotice("Số này đã có tài khoản member. Bạn nhập mật khẩu để đăng nhập nhé.");
-        return;
-      }
-    }
-    setAuthMode("register");
-    setAuthNotice("Xác minh thành công. Tạo mật khẩu để hoàn tất tài khoản.");
-  }
-
   return {
     profileOpen,
     setProfileOpen,
@@ -611,8 +607,6 @@ export default function useAccountViewModel({
     setAuthPassword,
     registerDraft,
     setRegisterDraft,
-    claimCode,
-    setClaimCode,
     accountEntryTab,
     setAccountEntryTab,
     loginDraft,
@@ -653,7 +647,6 @@ export default function useAccountViewModel({
     handleDirectLogin,
     handleVerifyResetPassword,
     handleUpdatePasswordFromOrder,
-    handleRegister,
-    handleVerifyRecentOrder
+    handleRegister
   };
 }
