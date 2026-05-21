@@ -1,6 +1,7 @@
 import { formatMoney } from "../utils/format.js";
 
 function getProductBadge(product, badgeText) {
+  if (product?.flashPromoId) return "⚡ Flash Sale";
   if (badgeText) return badgeText;
   if (Number(product?.originalPrice || 0) > Number(product?.price || 0)) return "Giá tốt";
   return "";
@@ -11,6 +12,7 @@ export default function ProductCard({ product, compact = false, onOpen, onAdd, o
   const hasDiscount = Number(product?.originalPrice || 0) > Number(product?.price || 0);
   const rootClass = [
     compact ? "product-row" : "product-card",
+    product?.flashPromoId ? "product-flash-sale" : "",
     selectedCount ? "product-selected" : ""
   ].filter(Boolean).join(" ");
 
@@ -37,6 +39,7 @@ export default function ProductCard({ product, compact = false, onOpen, onAdd, o
           <div className="product-price-stack">
             {hasDiscount ? <span>{formatMoney(product.originalPrice)}</span> : null}
             <strong>{formatMoney(product.price)}</strong>
+            {product?.flashPromoId ? <small>Đang giảm sốc</small> : null}
           </div>
 
           {selectedCount > 0 ? (

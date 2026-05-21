@@ -965,3 +965,84 @@
     font-size: 18px;
   }
 }
+
+/* Final flash sale highlight */
+.home2026-flash-deal {
+  border: 1px solid rgba(255, 106, 0, 0.18);
+  background: #fffaf5;
+  box-shadow: 0 12px 26px rgba(58, 31, 20, 0.06);
+}
+
+.home2026-flash-deal::before {
+  display: block;
+  height: 4px;
+  background: #ff6a00;
+}
+
+.home2026-deal-head {
+  border-bottom-color: rgba(255, 106, 0, 0.16);
+}
+
+.home2026-deal-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #e93b22;
+  font-weight: 950;
+}
+
+.home2026-deal-head h2::before {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: #ff6a00;
+  color: #fff;
+  content: "\26A1";
+  font-size: 13px;
+  box-shadow: none;
+}
+
+.home2026-deal-timer {
+  color: rgba(58, 31, 20, 0.56);
+  font-weight: 850;
+}
+
+.home2026-timer-boxes em {
+  background: #ffe7e3;
+  color: #e93b22;
+  box-shadow: inset 0 0 0 1px rgba(233, 59, 34, 0.08);
+}
+
+.home2026-flash-main-card {
+  border: 1px solid rgba(255, 106, 0, 0.14);
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 9px;
+  box-shadow: 0 8px 18px rgba(58, 31, 20, 0.05);
+}
+
+.home2026-flash-main-image {
+  box-shadow: 0 8px 18px rgba(58, 31, 20, 0.08);
+}
+
+.home2026-flash-main-info::after {
+  width: max-content;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: #fff0e8;
+  padding: 4px 9px;
+  color: #e93b22;
+  content: "Mua ngay";
+  font-size: 10px;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 1px rgba(255, 106, 0, 0.12);
+}
+
+.home2026-flash-discount {
+  min-width: 52px;
+  height: 36px;
+  background: #ff6a00;
+  box-shadow: 0 8px 16px rgba(255, 106, 0, 0.18);
+}

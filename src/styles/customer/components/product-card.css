@@ -26,6 +26,38 @@
   transform: scale(0.99);
 }
 
+.product-flash-sale {
+  border-color: rgba(255, 79, 23, 0.55);
+  background:
+    radial-gradient(circle at 96% 12%, rgba(255, 176, 0, 0.18), transparent 34%),
+    linear-gradient(135deg, rgba(255, 241, 232, 0.98), rgba(255, 255, 255, 0.96) 48%),
+    #ffffff;
+  box-shadow: 0 14px 30px rgba(255, 79, 23, 0.18);
+}
+
+.product-flash-sale::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, #ff4f17, #ffb000);
+  content: "";
+}
+
+.product-flash-sale::after {
+  position: absolute;
+  right: 54px;
+  bottom: 12px;
+  z-index: 1;
+  border-radius: 999px;
+  background: rgba(255, 79, 23, 0.1);
+  padding: 4px 8px;
+  color: #f0441f;
+  content: "HOT DEAL";
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
 .product-image-wrap,
 .product-row-image {
   position: relative;
@@ -143,6 +175,13 @@
   line-height: 1.15;
 }
 
+.product-price-stack small {
+  color: rgba(240, 68, 31, 0.78);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.05;
+}
+
 .product-row .product-price-stack strong {
   font-size: 13.75px;
   font-weight: 820 !important;
@@ -182,6 +221,11 @@
   background: #ff6a00;
   color: #ffffff;
   box-shadow: 0 10px 20px rgba(255, 90, 31, 0.22);
+}
+
+.product-flash-sale .product-add-btn {
+  background: linear-gradient(135deg, #ff4f17, #ff8a00);
+  box-shadow: 0 12px 24px rgba(255, 79, 23, 0.28);
 }
 
 .product-row .product-add-btn {
@@ -249,6 +293,17 @@
   font-size: 9px;
   font-weight: 850;
   line-height: 1.1;
+}
+
+.customer-shell .product-flash-sale .badge {
+  background: linear-gradient(135deg, #ff2f1f, #ff8a00);
+  padding: 5px 9px;
+  font-size: 9.5px;
+  box-shadow: 0 8px 16px rgba(255, 79, 23, 0.28);
+}
+
+.product-flash-sale .product-price-stack strong {
+  color: #f0441f;
 }
 
 @media (max-width: 380px) {

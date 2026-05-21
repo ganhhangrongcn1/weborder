@@ -66,6 +66,49 @@ function hashPopupCampaign(value) {
   return Math.abs(hash).toString(36);
 }
 
+function getProductDiscountAmount(product = {}) {
+  const originalPrice = Number(product?.originalPrice || 0);
+  const price = Number(product?.price || 0);
+  return originalPrice > price ? originalPrice - price : 0;
+}
+
+function sortDiscountedProductsFirst(products = []) {
+  return [...products].sort((first, second) => {
+    const firstDiscount = getProductDiscountAmount(first);
+    const secondDiscount = getProductDiscountAmount(second);
+    if (firstDiscount !== secondDiscount) return secondDiscount - firstDiscount;
+    return 0;
+  });
+}
+
+function findMatchingFlashPromo(product = {}, flashPromos = []) {
+  return flashPromos.find((promo) => {
+    const scope = promo?.condition?.applyScope || "product";
+    const categoryIds = toIdList(promo?.condition?.categoryIds);
+    const productIds = toIdList(promo?.condition?.productIds);
+    if (scope === "category") return categoryIds.includes(String(product?.category || ""));
+    return productIds.includes(String(product?.id || ""));
+  }) || null;
+}
+
+function applyFlashSaleToProduct(product = {}, flashPromos = []) {
+  const matched = findMatchingFlashPromo(product, flashPromos);
+  if (!matched) return product;
+  const basePrice = Number(product?.originalPrice || product?.price || 0);
+  const salePrice = calculateSalePrice(basePrice, matched);
+  if (salePrice <= 0 || salePrice >= basePrice) return product;
+  const discountPercent = Math.round(((basePrice - salePrice) / basePrice) * 100);
+  return {
+    ...product,
+    price: salePrice,
+    originalPrice: basePrice,
+    salePrice,
+    discountPercent,
+    flashPromoId: matched.id,
+    badge: product.badge || "Flash Sale"
+  };
+}
+
 export default function useHomeComputed({
   smartPromotions,
   products,
@@ -81,9 +124,9 @@ export default function useHomeComputed({
   const safeHomeContent = Array.isArray(homeContent) ? homeContent : [];
   const visibleProducts = products.filter((product) => product.visible !== false);
 
-  const flashProducts = useMemo(() => {
+  const activeFlashPromos = useMemo(() => {
     const now = new Date();
-    const flashPromos = [...(smartPromotions || [])]
+    return [...(smartPromotions || [])]
       .filter((promo) => promo?.type === "flash_sale" && promo?.active !== false)
       .filter((promo) => {
         const sold = Number(promo?.condition?.soldCount || 0);
@@ -98,35 +141,24 @@ export default function useHomeComputed({
         return true;
       })
       .sort((a, b) => Number(a?.priority || 99) - Number(b?.priority || 99));
+  }, [smartPromotions, parseDateTime]);
 
-    if (!flashPromos.length) return [];
+  const homePricedProducts = useMemo(
+    () => visibleProducts.map((product) => applyFlashSaleToProduct(product, activeFlashPromos)),
+    [visibleProducts, activeFlashPromos]
+  );
+
+  const flashProducts = useMemo(() => {
+    if (!activeFlashPromos.length) return [];
 
     return visibleProducts
       .map((product) => {
-        const matched = flashPromos.find((promo) => {
-          const scope = promo?.condition?.applyScope || "product";
-          const categoryIds = toIdList(promo?.condition?.categoryIds);
-          const productIds = toIdList(promo?.condition?.productIds);
-          if (scope === "category") return categoryIds.includes(String(product?.category || ""));
-          return productIds.includes(String(product?.id || ""));
-        });
-        if (!matched) return null;
-        const basePrice = Number(product?.originalPrice || product?.price || 0);
-        const salePrice = calculateSalePrice(basePrice, matched);
-        if (salePrice <= 0 || salePrice >= basePrice) return null;
-        const discountPercent = Math.round(((basePrice - salePrice) / basePrice) * 100);
-        return {
-          ...product,
-          price: salePrice,
-          originalPrice: basePrice,
-          salePrice,
-          discountPercent,
-          flashPromoId: matched.id
-        };
+        const saleProduct = applyFlashSaleToProduct(product, activeFlashPromos);
+        return saleProduct.flashPromoId ? saleProduct : null;
       })
       .filter(Boolean)
       .slice(0, 10);
-  }, [smartPromotions, visibleProducts, parseDateTime]);
+  }, [activeFlashPromos, visibleProducts]);
 
   const mainFlashProduct = flashProducts[0] || null;
   const homeShippingConfig = DEFAULT_SHIPPING_CONFIG;
@@ -207,16 +239,18 @@ export default function useHomeComputed({
 
   const visibleCategoryNames = categories.filter((category) => {
     if (category === homeText.all) return true;
-    return visibleProducts.some((product) => product.category === category);
+    return homePricedProducts.some((product) => product.category === category);
   });
   const homeCategories = buildHomeCategories(visibleCategoryNames, homeText);
   const activeHomeCategory = homeCategories.some((category) => category.value === homeCategory)
     ? homeCategory
     : homeCategories[0]?.value || categories[0] || homeText.all;
   const filteredHomeProducts = activeHomeCategory === homeCategories[0]?.value
-    ? visibleProducts
-    : visibleProducts.filter((product) => product.category === activeHomeCategory);
-  const featuredProducts = (filteredHomeProducts.length ? filteredHomeProducts : visibleProducts).slice(0, showAllHomeProducts ? 8 : 4);
+    ? homePricedProducts
+    : homePricedProducts.filter((product) => product.category === activeHomeCategory);
+  const featuredProducts = sortDiscountedProductsFirst(
+    filteredHomeProducts.length ? filteredHomeProducts : homePricedProducts
+  ).slice(0, showAllHomeProducts ? 8 : 4);
 
   return {
     visibleProducts,
