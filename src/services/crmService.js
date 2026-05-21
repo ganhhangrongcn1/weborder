@@ -1,4 +1,5 @@
 import { getCustomerKey } from "./storageService.js";
+import { readPartnerOrdersForAdmin } from "./adminOrderFeedService.js";
 import { customerRepository } from "./repositories/customerRepository.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
@@ -239,7 +240,13 @@ export function buildCustomersFromOrders(orderStorage) {
 }
 
 export async function buildCustomersFromOrdersAsync(orderStorage, options = {}) {
-  const orders = await orderStorage?.getAllAsync?.(options?.dateRange || {}) || [];
+  const dateRange = options?.dateRange || {};
+  const webOrders = await orderStorage?.getAllAsync?.(dateRange) || [];
+  const partnerOrders = await readPartnerOrdersForAdmin(dateRange);
+  const orders = [
+    ...(Array.isArray(webOrders) ? webOrders : []),
+    ...(Array.isArray(partnerOrders) ? partnerOrders : [])
+  ];
   const uniquePhones = Array.from(
     new Set(
       orders
@@ -383,7 +390,8 @@ function buildCustomersSnapshotFromSources({
       const spentPoints = Math.abs(Math.min(0, Number(spentPointsRaw || 0)));
       const otherAdjustPoints = sumPointsByType(phoneLoyalty.pointHistory, (type) => !["ORDER_EARN", "CHECKIN", "MILESTONE", "ORDER_SPEND"].includes(type));
       const totalFromHistory = (phoneLoyalty.pointHistory || []).reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
-      const currentPoints = Math.max(0, Number((phoneLoyalty.pointHistory || []).length ? totalFromHistory : (phoneLoyalty.totalPoints || autoPoints || 0)));
+      const hasPointHistory = (phoneLoyalty.pointHistory || []).length > 0;
+      const currentPoints = Math.max(0, Number(hasPointHistory ? totalFromHistory : (phoneLoyalty.totalPoints || 0)));
       const bonusPointsFromHistory = checkinAndRewardPoints + otherAdjustPoints - spentPoints;
       const unifiedVouchers = [
         ...(Array.isArray(phoneLoyalty.voucherHistory) ? phoneLoyalty.voucherHistory : [])
@@ -407,9 +415,9 @@ function buildCustomersSnapshotFromSources({
         orderCustomerName: customer.lastOrderName,
         nameMismatch,
         autoPoints: orderEarnedPoints || autoPoints,
-        manualAdjust: (phoneLoyalty.pointHistory || []).length
+        manualAdjust: hasPointHistory
           ? bonusPointsFromHistory
-          : Number(currentPoints || 0) - Number(orderEarnedPoints || autoPoints || 0),
+          : Number(currentPoints || 0) - Number(orderEarnedPoints || 0),
         checkinAndRewardPoints,
         spentPoints,
         otherAdjustPoints,
@@ -422,12 +430,7 @@ function buildCustomersSnapshotFromSources({
         tier: getCustomerTier(customer.totalSpent),
         daysSinceLastOrder: getDaysSince(lastOrderAt),
         vouchers: resolvedVouchers,
-        pointsHistory: phoneLoyalty.pointHistory.length ? phoneLoyalty.pointHistory : [{
-          type: "AUTO_FROM_ORDER",
-          points: autoPoints,
-          note: `Tự cộng từ ${customer.totalOrders} đơn`,
-          createdAt: lastOrderAt || new Date().toISOString()
-        }]
+        pointsHistory: phoneLoyalty.pointHistory
       };
     })
     .sort((a, b) => new Date(b.lastOrderAt || 0) - new Date(a.lastOrderAt || 0));

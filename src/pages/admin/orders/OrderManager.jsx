@@ -165,6 +165,21 @@ function getStatusClass(status) {
   return STATUS_META[status]?.className || STATUS_META.doing.className;
 }
 
+function hasClaimedPartnerPoints(order = {}) {
+  const status = String(order?.pointStatus || order?.point_status || "").trim().toLowerCase();
+  return ["claimed", "completed", "done", "success"].includes(status);
+}
+
+function getPointStatusText(order = {}, estimatedPoints = 0) {
+  if (!isReadOnlyPartnerOrder(order)) {
+    return estimatedPoints > 0 ? `Dự kiến +${estimatedPoints.toLocaleString("vi-VN")} điểm` : "Không có điểm";
+  }
+  if (hasClaimedPartnerPoints(order)) {
+    return estimatedPoints > 0 ? `Đã cộng +${estimatedPoints.toLocaleString("vi-VN")} điểm` : "Đã cộng điểm";
+  }
+  return estimatedPoints > 0 ? `Chưa cộng điểm (+${estimatedPoints.toLocaleString("vi-VN")} điểm dự kiến)` : "Chưa cộng điểm";
+}
+
 function OrderStatusBadge({ status }) {
   return <span className={`admin-order-status-badge ${getStatusClass(status)}`}>{getStatusLabel(status)}</span>;
 }
@@ -475,6 +490,7 @@ function OrderDetailPanel({
   const pointsBaseAmount = Number(order.pointsBaseAmount || Math.max(totalValue - shippingFee, 0));
   const loyaltyRule = getLoyaltyRuleConfig();
   const estimatedPoints = Math.max(0, calculateOrderPoints(pointsBaseAmount, loyaltyRule));
+  const pointStatusText = getPointStatusText(order, estimatedPoints);
   const shouldShowShipperSection = fulfillmentType === "delivery" && !isPartnerOrder && sourceKey === "website";
 
   return (
@@ -511,6 +527,10 @@ function OrderDetailPanel({
           <div className="admin-order-detail-row">
             <span>Thanh toán</span>
             <strong>{String(order.paymentMethod || "COD").toUpperCase()}</strong>
+          </div>
+          <div className="admin-order-detail-row">
+            <span>Tích điểm</span>
+            <strong>{pointStatusText}</strong>
           </div>
         </section>
 
@@ -561,7 +581,12 @@ function OrderDetailPanel({
             {pointsDiscount > 0 ? <div className="discount"><span>Dùng điểm thưởng</span><strong>-{formatMoney(pointsDiscount)}</strong></div> : null}
             <div className="grand"><span>Tổng cộng</span><strong>{formatMoney(totalValue)}</strong></div>
             <div><span>Giá trị tính điểm loyalty</span><strong>{formatMoney(pointsBaseAmount)}</strong></div>
-            <div><span>Điểm dự kiến</span><strong>+{estimatedPoints.toLocaleString("vi-VN")} điểm</strong></div>
+            {!isPartnerOrder || hasClaimedPartnerPoints(order) ? (
+              <div>
+                <span>{isPartnerOrder ? "Điểm đã cộng" : "Điểm dự kiến"}</span>
+                <strong>+{estimatedPoints.toLocaleString("vi-VN")} điểm</strong>
+              </div>
+            ) : null}
           </div>
         </section>
 

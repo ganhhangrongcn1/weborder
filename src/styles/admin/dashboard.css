@@ -701,6 +701,108 @@
   background: linear-gradient(90deg, #fb923c, #f97316);
 }
 
+.admin-dashboard-channel-donut-wrap {
+  display: grid;
+  gap: 18px;
+  padding: 18px;
+}
+
+.admin-dashboard-channel-donut {
+  position: relative;
+  width: min(220px, 100%);
+  aspect-ratio: 1;
+  margin: 0 auto;
+}
+
+.admin-dashboard-channel-donut svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.admin-dashboard-channel-donut-bg,
+.admin-dashboard-channel-donut-segment {
+  fill: none;
+  stroke-width: 7;
+}
+
+.admin-dashboard-channel-donut-bg {
+  stroke: #eef2f7;
+}
+
+.admin-dashboard-channel-donut-segment {
+  stroke-linecap: butt;
+  transition: stroke-dasharray 180ms ease, stroke-dashoffset 180ms ease;
+}
+
+.admin-dashboard-channel-donut-center {
+  position: absolute;
+  inset: 50%;
+  display: grid;
+  width: 96px;
+  height: 96px;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.admin-dashboard-channel-donut-center strong {
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.admin-dashboard-channel-donut-center span {
+  margin-top: -22px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.admin-dashboard-channel-legend {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-dashboard-channel-legend-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e8edf5;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+
+.admin-dashboard-channel-legend-row i {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85);
+}
+
+.admin-dashboard-channel-legend-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-dashboard-channel-legend-row span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .admin-dashboard-product-row {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) auto;

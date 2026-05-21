@@ -8,8 +8,8 @@
   max-width: 100%;
   min-width: 0;
   margin-inline: -4px;
-  overflow: hidden;
-  border-bottom: 1px solid rgba(255, 194, 119, 0.32);
+  overflow: visible;
+  border-bottom: 0;
   background: rgba(255, 247, 236, 0.94);
   padding: 0 4px 10px;
   backdrop-filter: blur(14px);
@@ -39,14 +39,15 @@
 /* Final Menu app overrides */
 .menu-sticky-tools {
   gap: 8px;
-  margin-inline: -16px;
-  padding: 0 16px 10px;
+  margin-inline: 0;
+  overflow: visible;
+  padding: 0 0 10px;
 }
 
 @media (max-width: 380px) {
   .menu-sticky-tools {
-    margin-inline: -14px;
-    padding: 0 14px 8px;
+    margin-inline: 0;
+    padding: 0 0 8px;
   }
 
 }
@@ -54,8 +55,9 @@
 /* Menu app polish */
 .menu-sticky-tools {
   gap: 8px;
-  margin-inline: -16px;
-  padding: 0 16px 10px;
+  margin-inline: 0;
+  overflow: visible;
+  padding: 0 0 10px;
 }
 
 .menu-search {
@@ -128,8 +130,8 @@
 
 @media (max-width: 380px) {
   .menu-sticky-tools {
-    margin-inline: -14px;
-    padding: 0 14px 8px;
+    margin-inline: 0;
+    padding: 0 0 8px;
   }
 
   .menu-search {
@@ -148,7 +150,9 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
+  border-bottom: 1px solid rgba(255, 194, 119, 0.42);
+  overflow: visible;
+  padding-bottom: 9px;
 }
 
 .menu-chip-row-wrap::after {
@@ -166,15 +170,17 @@
 }
 
 .menu-chip-row-wrap::after {
-  right: 0;
-  background: linear-gradient(to left, rgba(255, 247, 236, 0.95), rgba(255, 247, 236, 0));
+  display: none;
 }
 
 .menu-chip-row {
   flex-wrap: nowrap;
   max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding: 0 2px;
+  scroll-padding-inline: 2px;
   scroll-snap-type: x proximity;
-  padding-inline: 0;
 }
 
 .chip,
@@ -403,8 +409,8 @@
   .menu-sticky-tools {
     top: calc(60px + env(safe-area-inset-top));
     gap: 8px;
-    margin-inline: -2px;
-    padding: 0 2px 8px;
+    margin-inline: 0;
+    padding: 0 0 8px;
   }
 
   .menu-search {
@@ -414,8 +420,7 @@
   }
 
   .menu-chip-row-wrap::after {
-    width: 12px;
-    opacity: 0.72;
+    display: none;
   }
 
   .menu-chip-row {
@@ -496,14 +501,15 @@
 /* Final Menu app overrides */
 .menu-sticky-tools {
   gap: 8px;
-  margin-inline: -16px;
-  padding: 0 16px 10px;
+  margin-inline: 0;
+  overflow: visible;
+  padding: 0 0 10px;
 }
 
 @media (max-width: 380px) {
   .menu-sticky-tools {
-    margin-inline: -14px;
-    padding: 0 14px 8px;
+    margin-inline: 0;
+    padding: 0 0 8px;
   }
 
 }

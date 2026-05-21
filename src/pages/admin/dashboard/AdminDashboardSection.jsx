@@ -1,5 +1,6 @@
 ﻿import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.jsx";
+import { resolveOrderSourceKey } from "../../../services/partnerOrderService.js";
 import { getSettlement } from "../orders/orderManager.utils.js";
 import {
   AdminBadge,
@@ -29,13 +30,13 @@ function formatOrderTime(value) {
 }
 
 function getOrderBranch(order) {
-  return [order.deliveryBranchName, order.pickupBranchName, order.branchName]
+  return [order.deliveryBranchName, order.pickupBranchName, order.branchName, order.branch_name, order.nexposSiteName, order.nexposHubName]
     .map((value) => String(value || "").trim())
     .find(Boolean) || "--";
 }
 
 function getOrderChannel(order) {
-  return String(order.source || order.channel || order.platform || "").trim();
+  return resolveOrderSourceKey(order);
 }
 
 function getOrderSourceMeta(order) {
@@ -45,6 +46,7 @@ function getOrderSourceMeta(order) {
   if (normalized.includes("grab")) return { label: "Grab", tone: "success", className: "is-grab" };
   if (normalized.includes("shopee")) return { label: "Shopee", tone: "warning", className: "is-shopee" };
   if (normalized.includes("xanh")) return { label: "Xanh Ngon", tone: "info", className: "is-xanh-ngon" };
+  if (normalized.includes("website")) return { label: "Website", tone: "brand", className: "is-website" };
   if (normalized.includes("pickup") || normalized.includes("đến lấy") || normalized.includes("den lay")) {
     return { label: "Đến lấy", tone: "brand", className: "is-pickup" };
   }
@@ -77,11 +79,37 @@ function buildTopProducts(orders = []) {
 function buildChannels(orders = []) {
   const map = new Map();
   orders.forEach((order) => {
-    const channel = String(order.source || order.channel || order.platform || "").trim();
+    const channel = getOrderSourceMeta(order).label;
     if (!channel) return;
     map.set(channel, (map.get(channel) || 0) + 1);
   });
   return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+}
+
+function getChannelColor(name = "") {
+  const normalized = String(name || "").toLowerCase();
+  if (normalized.includes("grab")) return "#16a34a";
+  if (normalized.includes("shopee")) return "#f97316";
+  if (normalized.includes("xanh")) return "#0f766e";
+  if (normalized.includes("website")) return "#2563eb";
+  if (normalized.includes("qr")) return "#7c3aed";
+  if (normalized.includes("lấy") || normalized.includes("pickup")) return "#d97706";
+  return "#64748b";
+}
+
+function buildDonutSegments(channels = [], total = 0) {
+  let offset = 0;
+  return channels.map((channel) => {
+    const value = total ? channel.count / total : 0;
+    const segment = {
+      ...channel,
+      color: getChannelColor(channel.name),
+      dashArray: `${value} ${Math.max(0, 1 - value)}`,
+      dashOffset: -offset
+    };
+    offset += value;
+    return segment;
+  });
 }
 
 function getDateKey(date) {
@@ -104,14 +132,22 @@ function buildRevenueSeries(orders = []) {
     if (!dayMap.has(key)) {
       dayMap.set(key, { key, label: formatChartDate(createdAt), value: 0, date: new Date(createdAt) });
     }
-    const totalAmount = Number(order.totalAmount || order.total || 0);
-    const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
-    dayMap.get(key).value += Math.max(totalAmount - shippingFee, 0);
+    dayMap.get(key).value += getDashboardOrderRevenue(order);
   });
 
   return [...dayMap.values()]
     .sort((a, b) => a.date.getTime() - b.date.getTime())
     .map((item) => ({ key: item.key, label: item.label, value: item.value }));
+}
+
+function getDashboardOrderRevenue(order = {}) {
+  const partnerRevenue = Number(order.realReceived || order.netReceived || order.grossReceived || 0);
+  if (String(order.sourceType || "").toLowerCase() === "partner" && partnerRevenue > 0) {
+    return partnerRevenue;
+  }
+  const totalAmount = Number(order.totalAmount || order.total || 0);
+  const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
+  return Math.max(totalAmount - shippingFee, 0);
 }
 
 function buildSmoothRevenuePath(points = []) {
@@ -183,16 +219,13 @@ export default function AdminDashboardSection({
   const topProductMax = Math.max(...topProducts.map((item) => item.quantity), 1);
   const channels = buildChannels(ordersSnapshot);
   const channelTotal = channels.reduce((sum, channel) => sum + channel.count, 0);
+  const channelSegments = buildDonutSegments(channels, channelTotal);
   const averageOrder = ordersTotal ? Math.round(todayRevenue / ordersTotal) : 0;
   const completionCount = ordersSnapshot.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
   const completionRate = ordersTotal ? Math.round((completionCount / ordersTotal) * 100) : 0;
 
   const chartOrdersTotal = chartOrdersSnapshot.length;
-  const chartRevenueTotal = chartOrdersSnapshot.reduce((sum, order) => {
-    const totalAmount = Number(order.totalAmount || order.total || 0);
-    const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
-    return sum + Math.max(totalAmount - shippingFee, 0);
-  }, 0);
+  const chartRevenueTotal = chartOrdersSnapshot.reduce((sum, order) => sum + getDashboardOrderRevenue(order), 0);
   const chartAverageOrder = chartOrdersTotal ? Math.round(chartRevenueTotal / chartOrdersTotal) : 0;
   const chartCompletionCount = chartOrdersSnapshot.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
   const chartOrdersNew = chartOrdersSnapshot.filter((order) => String(order.status || "").toLowerCase() === "pending_zalo").length;
@@ -353,19 +386,41 @@ export default function AdminDashboardSection({
 
         <AdminPanel title="Đơn hàng theo kênh" description="Chỉ hiển thị khi đơn có dữ liệu kênh/source." className="admin-dashboard-channel-card">
           {channels.length ? (
-            <div className="admin-dashboard-channel-list">
-              {channels.map((channel) => {
+            <div className="admin-dashboard-channel-donut-wrap">
+              <div className="admin-dashboard-channel-donut">
+                <svg viewBox="0 0 42 42" aria-label="Biểu đồ tỷ trọng đơn hàng theo kênh" role="img">
+                  <circle className="admin-dashboard-channel-donut-bg" cx="21" cy="21" r="15.9155" pathLength="1" />
+                  {channelSegments.map((channel) => (
+                    <circle
+                      key={channel.name}
+                      className="admin-dashboard-channel-donut-segment"
+                      cx="21"
+                      cy="21"
+                      r="15.9155"
+                      pathLength="1"
+                      stroke={channel.color}
+                      strokeDasharray={channel.dashArray}
+                      strokeDashoffset={channel.dashOffset}
+                    />
+                  ))}
+                </svg>
+                <div className="admin-dashboard-channel-donut-center">
+                  <strong>{channelTotal}</strong>
+                  <span>đơn</span>
+                </div>
+              </div>
+              <div className="admin-dashboard-channel-legend">
+                {channelSegments.map((channel) => {
                 const percent = channelTotal ? Math.round((channel.count / channelTotal) * 100) : 0;
                 return (
-                  <div key={channel.name} className="admin-dashboard-channel-row">
-                    <div>
-                      <strong>{channel.name}</strong>
-                      <span>{channel.count} đơn · {percent}%</span>
-                    </div>
-                    <em><i style={{ width: `${percent}%` }} /></em>
+                  <div key={channel.name} className="admin-dashboard-channel-legend-row">
+                    <i style={{ backgroundColor: channel.color }} />
+                    <strong>{channel.name}</strong>
+                    <span>{channel.count} đơn · {percent}%</span>
                   </div>
                 );
               })}
+              </div>
             </div>
           ) : <div className="admin-dashboard-empty-note">Chưa có dữ liệu kênh bán hàng trong đơn.</div>}
         </AdminPanel>
@@ -404,15 +459,15 @@ export default function AdminDashboardSection({
                 {filteredRecentOrders.map((order) => {
                   const status = getOrderStatusMeta(order.status);
                   const source = getOrderSourceMeta(order);
-                  const settlement = getSettlement(order);
+                  const netRevenue = getDashboardOrderRevenue(order) || Number(getSettlement(order)?.netRevenue || 0);
                   return (
                     <AdminTableRow key={order.id || order.orderCode}>
-                      <span className="admin-dashboard-order-code"><strong>{order.orderCode || order.id}</strong></span>
+                      <span className="admin-dashboard-order-code"><strong>{order.displayOrderCode || order.orderCode || order.id}</strong></span>
                       <AdminBadge tone={source.tone} className={`admin-dashboard-source-badge ${source.className}`}>{source.label}</AdminBadge>
                       <span>{order.orderCustomerName || order.customerName || order.phone || "Khách lẻ"}</span>
                       <span>{formatOrderTime(order.createdAt)}</span>
                       <span>{getOrderBranch(order)}</span>
-                      <strong>{formatMoney(Number(settlement?.netRevenue || 0))}</strong>
+                      <strong>{formatMoney(netRevenue)}</strong>
                       <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
                     </AdminTableRow>
                   );

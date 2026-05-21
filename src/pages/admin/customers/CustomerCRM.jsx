@@ -2,6 +2,7 @@
 import Icon from "../../../components/Icon.jsx";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { getCustomerLoyaltyDetailAsync } from "../../../services/crmService.js";
+import { getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 import { formatMoney } from "../../../utils/format.js";
 
 function formatDateTime(value) {
@@ -17,6 +18,11 @@ function getOrderStatusLabel(status) {
   if (normalized === "confirmed") return "Đã xác nhận";
   if (normalized === "delivering") return "Đang giao";
   return "Chờ xác nhận";
+}
+
+function OrderSourceBadge({ order }) {
+  const badge = getOrderSourceBadge(order);
+  return <em className={`crm-soft-badge ${badge.className || ""}`}>{badge.label}</em>;
 }
 
 function getInitials(name, phone) {
@@ -72,6 +78,11 @@ function getVoucherSortWeight(voucher) {
   if (voucher?.canceled) return 2;
   if (voucher?.used) return 1;
   return 0;
+}
+
+function formatCustomerPoints(customer) {
+  const points = Number(customer?.currentPoints || 0);
+  return points > 0 ? points.toLocaleString("vi-VN") : "";
 }
 
 function CrmStatCard({ icon, title, value, subtitle, tone }) {
@@ -315,14 +326,13 @@ export default function CustomerCRM({
                     <span>
                       <span className="crm-badge-stack">
                         <em className={`crm-soft-badge ${getCustomerTypeClass(customer)}`}>{getCustomerTypeLabel(customer)}</em>
-                        {customer.nameMismatch ? <em className="crm-soft-badge crm-soft-badge--care">Khác tên</em> : null}
                         {showCustomerTier ? <em className={`crm-tier-badge crm-tier-badge--${getTierTone(customer.tier)}`}>{customer.tier}</em> : null}
                       </span>
                     </span>
                     <strong>{Number(customer.totalOrders || 0).toLocaleString("vi-VN")}</strong>
                     <strong>{formatMoney(customer.totalSpent)}</strong>
                     <small>{formatDateTime(customer.lastOrderAt)}</small>
-                    <strong>{Number(customer.currentPoints || 0).toLocaleString("vi-VN")}</strong>
+                    <strong>{formatCustomerPoints(customer)}</strong>
                   </button>
                 );
               })}
@@ -346,7 +356,6 @@ export default function CustomerCRM({
                 <div className="crm-detail-badges">
                   {showCustomerTier ? <em className={`crm-tier-badge crm-tier-badge--${getTierTone(selectedCustomer.tier)}`}>{selectedCustomer.tier}</em> : null}
                   <em className={`crm-soft-badge ${getCustomerTypeClass(selectedCustomer)}`}>{getCustomerTypeLabel(selectedCustomer)}</em>
-                  {selectedCustomer.nameMismatch ? <em className="crm-soft-badge crm-soft-badge--care">Tên đặt đơn khác tài khoản</em> : null}
                   {isVipCustomer(selectedCustomer) ? <em className="crm-soft-badge">VIP</em> : null}
                   {needsCare(selectedCustomer) ? <em className="crm-soft-badge crm-soft-badge--care">Cần chăm sóc</em> : null}
                 </div>
@@ -376,7 +385,7 @@ export default function CustomerCRM({
                     <strong>{Number((selectedLoyaltyDetail?.totalPoints ?? selectedCustomer.currentPoints) || 0).toLocaleString("vi-VN")}</strong>
                   </div>
                   <div className="crm-points-grid">
-                    <span>Từ đơn hàng: {Number((selectedLoyaltyDetail?.orderEarn ?? selectedCustomer.autoPoints) || 0).toLocaleString("vi-VN")}</span>
+                    <span>Từ đơn hàng: {Number((selectedLoyaltyDetail?.orderEarn ?? 0) || 0).toLocaleString("vi-VN")}</span>
                     <span>Điểm danh/thưởng: {Number((selectedLoyaltyDetail?.checkin ?? selectedCustomer.checkinAndRewardPoints) || 0).toLocaleString("vi-VN")}</span>
                     <span>Đã dùng điểm: -{Number((selectedLoyaltyDetail?.spend ?? selectedCustomer.spentPoints) || 0).toLocaleString("vi-VN")}</span>
                     <span>Điều chỉnh khác: {Number((selectedLoyaltyDetail?.other ?? selectedCustomer.otherAdjustPoints) || 0).toLocaleString("vi-VN")}</span>
@@ -392,7 +401,8 @@ export default function CustomerCRM({
                     {visibleDetailOrders.map((order) => (
                       <article key={order.id || order.orderCode}>
                         <div>
-                          <strong>{order.orderCode || order.id}</strong>
+                          <strong>{order.displayOrderCode || order.orderCode || order.id}</strong>
+                          <OrderSourceBadge order={order} />
                           <small>{formatDateTime(order.createdAt)}</small>
                         </div>
                         <div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { buildCustomersFromOrdersAsync } from "../../../services/crmService.js";
+import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
 import { STORAGE_KEYS } from "../../../services/repositories/storageKeys.js";
 
 function buildDateRangeFromInputs(dateFromValue = "", dateToValue = "") {
@@ -53,6 +54,14 @@ function buildChartRangeFromPreset(preset = "7d") {
   return buildDateRangeFromInputs(toDateInputText(start), end);
 }
 
+async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartnerOrders = false } = {}) {
+  const webOrders = await orderStorage?.getAllAsync?.(dateRange);
+  const safeWebOrders = Array.isArray(webOrders) ? webOrders : [];
+  if (!includePartnerOrders) return safeWebOrders;
+  const partnerOrders = await readPartnerOrdersForAdmin(dateRange);
+  return buildAdminOrderFeed(safeWebOrders, partnerOrders);
+}
+
 export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const {
     section = "dashboard",
@@ -78,7 +87,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     const refreshOrdersOnly = async () => {
       const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
       try {
-        const nextOrders = await orderStorage?.getAllAsync?.(dateRange);
+        const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
+          includePartnerOrders: section === "dashboard"
+        });
         if (disposed) return;
         setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
       } catch (error) {
@@ -99,7 +110,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     const refreshChartOrders = async () => {
       const dateRange = buildChartRangeFromPreset(dashboardChartPreset);
       try {
-        const nextOrders = await orderStorage?.getAllAsync?.(dateRange);
+        const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
+          includePartnerOrders: true
+        });
         if (disposed) return;
         setChartOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
       } catch (error) {
@@ -136,7 +149,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
       const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
       const [ordersResult, crmResult] = await Promise.allSettled([
-        orderStorage?.getAllAsync?.(dateRange),
+        loadOrdersSnapshot(orderStorage, dateRange, {
+          includePartnerOrders: section === "dashboard"
+        }),
         buildCustomersFromOrdersAsync(orderStorage, { dateRange })
       ]);
       if (disposed) return;
