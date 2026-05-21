@@ -3,7 +3,7 @@
   top: 0;
   z-index: 30;
   display: grid;
-  min-height: calc(64px + env(safe-area-inset-top));
+  min-height: calc(80px + env(safe-area-inset-top));
   grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 8px;
