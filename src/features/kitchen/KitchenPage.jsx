@@ -116,6 +116,59 @@ function SourceFilterSelect({ value, onChange }) {
   );
 }
 
+function KitchenRequestAuditBadge({ audit, onReset }) {
+  const total60m = Number(audit?.total60m || 0);
+  const total5m = Number(audit?.total5m || 0);
+  const topTables = (audit?.byTable || [])
+    .slice(0, 3)
+    .map((item) => `${item.key}: ${item.count}`)
+    .join(" · ");
+
+  return (
+    <div
+      title="Chỉ đếm request Supabase phát sinh từ màn hình bếp trên máy này trong 60 phút gần nhất."
+      style={{
+        marginLeft: "auto",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        minHeight: 34,
+        border: "1px dashed #cbd5e1",
+        background: "#f8fafc",
+        borderRadius: 8,
+        padding: "6px 8px",
+        color: "#475569",
+        fontSize: 12,
+        fontWeight: 800
+      }}
+    >
+      <span>Bếp đọc: {total60m} req/60p</span>
+      <span style={{ color: "#64748b", fontWeight: 700 }}>5p: {total5m}</span>
+      {topTables ? (
+        <span style={{ color: "#64748b", fontWeight: 700, maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {topTables}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={onReset}
+        style={{
+          border: "1px solid #cbd5e1",
+          background: "#ffffff",
+          color: "#475569",
+          borderRadius: 6,
+          padding: "4px 7px",
+          fontSize: 11,
+          fontWeight: 900,
+          cursor: "pointer"
+        }}
+      >
+        Reset
+      </button>
+    </div>
+  );
+}
+
 function KitchenLoginScreen({ error, loading, onLogin, submitting }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -272,6 +325,8 @@ export default function KitchenPage() {
     updatingOrderId,
     updatingItemKey,
     claimingGiftOrderId,
+    requestAudit,
+    resetRequestAudit,
     loadMoreDoneOrders,
     markDone,
     toggleItemDone,
@@ -524,6 +579,7 @@ export default function KitchenPage() {
             <FilterButton active={statusFilter === "all"} onClick={() => handleStatusFilterChange("all")}>
               Tất cả trạng thái
             </FilterButton>
+            <KitchenRequestAuditBadge audit={requestAudit} onReset={resetRequestAudit} />
           </div>
         </header>
 

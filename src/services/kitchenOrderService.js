@@ -1,6 +1,7 @@
 import { initSupabaseRuntimeClient, getSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
 import { normalizePartnerSource, resolveOrderSourceKey } from "./partnerOrderService.js";
 import { applyOrderLoyaltyAsync } from "./loyaltyService.js";
+import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 
 const KITCHEN_SOURCE = {
   website: "website",
@@ -728,6 +729,7 @@ async function readOrderItems(client, orderIds = []) {
     .from("order_items")
     .select(WEBSITE_ITEM_COLUMNS)
     .in("order_id", orderIds);
+  recordKitchenRequest("read website items", "order_items");
 
   if (error) throw error;
 
@@ -746,6 +748,7 @@ async function readPartnerOrderItems(client, orderIds = []) {
     .from("partner_order_items")
     .select(PARTNER_ITEM_COLUMNS)
     .in("partner_order_id", orderIds);
+  recordKitchenRequest("read partner items", "partner_order_items");
 
   if (error) throw error;
 
@@ -791,6 +794,7 @@ async function stampPartnerKitchenDoneAt(client, rows = []) {
       })
       .eq("id", id)
       .is("kitchen_done_at", null);
+    recordKitchenRequest("stamp partner done time", "partner_orders", "write");
 
     if (!error) stampedIds.push(id);
   }));
@@ -822,11 +826,13 @@ export async function getWebsiteKitchenOrders(options = {}) {
 
   if (dateFrom) query = query.gte("created_at", dateFrom);
   if (dateTo) query = query.lt("created_at", dateTo);
+  query = applyWebsiteBranchFilter(query, options.branchUuid);
   if (shouldLimitDone) {
-    query = applyWebsiteBranchFilter(applyWebsiteDoneFilter(query), options.branchUuid).limit(doneLimit);
+    query = applyWebsiteDoneFilter(query).limit(doneLimit);
   }
 
   const { data, error } = await query;
+  recordKitchenRequest("read website orders", "orders");
   if (error) throw error;
 
   const orderRows = getArray(data);
@@ -850,11 +856,13 @@ export async function getPartnerKitchenOrders(options = {}) {
 
   if (dateFrom) query = query.gte("order_time", dateFrom);
   if (dateTo) query = query.lt("order_time", dateTo);
+  query = applyPartnerBranchFilter(query, options.branchUuid);
   if (shouldLimitDone) {
-    query = applyPartnerBranchFilter(applyPartnerDoneFilter(query), options.branchUuid).limit(doneLimit);
+    query = applyPartnerDoneFilter(query).limit(doneLimit);
   }
 
   const { data, error } = await query;
+  recordKitchenRequest("read partner orders", "partner_orders");
   if (error) throw error;
 
   const orderRows = await stampPartnerKitchenDoneAt(client, getArray(data));
@@ -930,6 +938,7 @@ export async function markKitchenOrderDone(order = {}) {
         updated_at: updatedAt
       })
       .eq("id", id);
+    recordKitchenRequest("mark partner done", "partner_orders", "write");
 
     if (error) {
       return {
@@ -953,6 +962,7 @@ export async function markKitchenOrderDone(order = {}) {
       updated_at: updatedAt
     })
     .eq("id", id);
+  recordKitchenRequest("mark website done", "orders", "write");
 
   if (error) {
     return {
@@ -1007,6 +1017,7 @@ export async function updateKitchenOrderItemStatus(order = {}, item = {}, nextSt
       })
       .eq("id", itemId)
       .eq("partner_order_id", orderId);
+    recordKitchenRequest("update partner item", "partner_order_items", "write");
 
     if (error) {
       return {
@@ -1039,6 +1050,7 @@ export async function updateKitchenOrderItemStatus(order = {}, item = {}, nextSt
   }
 
   const { error } = await query;
+  recordKitchenRequest("update website item", "order_items", "write");
 
   if (error) {
     return {

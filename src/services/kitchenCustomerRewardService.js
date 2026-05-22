@@ -6,6 +6,7 @@ import {
 } from "./supabase/supabaseRuntimeClient.js";
 import { getCustomerTier } from "./crmService.js";
 import { getCustomerKey } from "./storageService.js";
+import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 
 const MONTHLY_GIFT_CODE = "MONTHLY_3_ORDERS";
 const MONTHLY_GIFT_NAME = "Quà khách quen tháng";
@@ -250,6 +251,7 @@ async function readMonthlyWebsiteOrders(client, range) {
     .select("id,order_code,customer_name,customer_phone,status,created_at,metadata")
     .gte("created_at", range.dateFrom)
     .lt("created_at", range.dateTo);
+  recordKitchenRequest("gift monthly website orders", "orders");
 
   if (error) throw error;
 
@@ -276,6 +278,7 @@ async function readAllTimeWebsiteOrdersByPhones(client, phoneKeys = []) {
       .in("customer_phone", phoneKeys)
   ];
   const [byPhoneRaw] = await Promise.all(byPhoneTasks);
+  recordKitchenRequest("gift all-time website orders", "orders");
   if (byPhoneRaw.error) throw byPhoneRaw.error;
 
   const rowMap = new Map();
@@ -305,6 +308,7 @@ async function readMonthlyPartnerOrders(client, range) {
     .select("id,order_code,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,order_time,raw_data")
     .gte("order_time", range.dateFrom)
     .lt("order_time", range.dateTo);
+  recordKitchenRequest("gift monthly partner orders", "partner_orders");
 
   if (error) throw error;
 
@@ -335,6 +339,8 @@ async function readAllTimePartnerOrdersByPhones(client, phoneKeys = []) {
       .in("customer_phone", phoneKeys)
   ];
   const [byPhoneKey, byPhoneRaw] = await Promise.all(byPhoneTasks);
+  recordKitchenRequest("gift all-time partner orders by phone key", "partner_orders");
+  recordKitchenRequest("gift all-time partner orders by phone", "partner_orders");
   if (byPhoneKey.error) throw byPhoneKey.error;
   if (byPhoneRaw.error) throw byPhoneRaw.error;
 
@@ -368,6 +374,7 @@ async function readGiftClaims(client, customerKeys = [], monthKey = "") {
     .eq("reward_month", monthKey)
     .eq("gift_code", MONTHLY_GIFT_CODE)
     .in("customer_key", customerKeys);
+  recordKitchenRequest("gift claims", "monthly_customer_gifts");
 
   if (error) throw error;
 
@@ -384,6 +391,7 @@ async function readCustomerProfiles(client, phoneKeys = []) {
     .from("profiles")
     .select("phone,total_orders,total_spent,member_rank")
     .in("phone", phoneKeys);
+  recordKitchenRequest("gift profiles", "profiles");
 
   if (error) throw error;
 
@@ -604,6 +612,7 @@ export async function claimMonthlyCustomerGift(order = {}, options = {}) {
     .insert(row)
     .select("*")
     .single();
+  recordKitchenRequest("claim monthly gift", "monthly_customer_gifts", "write");
 
   if (error) {
     if (error.code === "23505") {
@@ -614,6 +623,7 @@ export async function claimMonthlyCustomerGift(order = {}, options = {}) {
         .eq("reward_month", monthKey)
         .eq("gift_code", MONTHLY_GIFT_CODE)
         .maybeSingle();
+      recordKitchenRequest("read existing gift claim", "monthly_customer_gifts");
 
       clearGiftStatsCacheForCustomer(monthKey, identity.key);
 

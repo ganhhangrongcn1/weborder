@@ -13,6 +13,10 @@ import {
   sortKitchenDoneOrders,
   sortKitchenOrdersForBoard
 } from "../features/kitchen/kitchenOrderGrouping.js";
+import {
+  getKitchenRequestAuditSnapshot,
+  resetKitchenRequestAudit
+} from "../services/kitchenRequestAuditService.js";
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
 const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
@@ -203,6 +207,81 @@ function isRealtimeItemTable(table = "") {
   return table === "order_items" || table === "partner_order_items";
 }
 
+function getRealtimeEventType(change = {}) {
+  return String(change?.payload?.eventType || change?.payload?.type || "").toUpperCase();
+}
+
+function normalizeRealtimeValue(value) {
+  return String(value ?? "").trim();
+}
+
+function realtimeValueChanged(nextValue, currentValue) {
+  return normalizeRealtimeValue(nextValue) !== normalizeRealtimeValue(currentValue);
+}
+
+function getOrderRealtimeComparableValue(order = {}, table = "", field = "") {
+  const raw = order.raw || {};
+  if (table === "orders") {
+    if (field === "status") return raw.status || order.status;
+    if (field === "kitchen_status") return raw.kitchen_status || order.kitchenStatus;
+    if (field === "kitchen_done_at") return raw.kitchen_done_at || order.kitchenDoneAt;
+    if (field === "created_at") return raw.created_at || order.createdAt;
+  }
+
+  if (table === "partner_orders") {
+    if (field === "order_status") return raw.order_status || order.status;
+    if (field === "nexpos_status") return raw.nexpos_status || order.nexposStatus;
+    if (field === "kitchen_work_status") return raw.kitchen_work_status || order.kitchenStatus;
+    if (field === "kitchen_done_at") return raw.kitchen_done_at || order.kitchenDoneAt;
+    if (field === "order_time") return raw.order_time || order.createdAt;
+  }
+
+  return raw[field] || order[field];
+}
+
+function orderRealtimeHasImportantChange(change = {}, currentOrders = []) {
+  const eventType = getRealtimeEventType(change);
+  if (eventType === "INSERT" || eventType === "DELETE") return true;
+
+  const table = String(change?.table || "");
+  if (table !== "orders" && table !== "partner_orders") return true;
+
+  const row = change?.payload?.new || {};
+  const matchedOrder = findOrderByRealtimeOrderId(getRealtimeOrderId(change), currentOrders);
+  if (!matchedOrder) return true;
+
+  const fields = table === "orders"
+    ? ["status", "kitchen_status", "kitchen_done_at", "created_at"]
+    : ["order_status", "nexpos_status", "kitchen_work_status", "kitchen_done_at", "order_time"];
+
+  return fields.some((field) => (
+    Object.prototype.hasOwnProperty.call(row, field) &&
+      realtimeValueChanged(row[field], getOrderRealtimeComparableValue(matchedOrder, table, field))
+  ));
+}
+
+function itemRealtimeHasImportantChange(change = {}) {
+  const eventType = getRealtimeEventType(change);
+  if (eventType === "INSERT" || eventType === "DELETE") return true;
+  if (eventType !== "UPDATE") return true;
+
+  const oldRow = change?.payload?.old || {};
+  const newRow = change?.payload?.new || {};
+  const fields = change?.table === "order_items"
+    ? ["product_id", "product_name", "quantity", "note", "toppings", "spice", "kitchen_item_status", "metadata"]
+    : ["item_key", "web_product_id", "partner_item_id", "web_product_name", "partner_item_name", "quantity", "note", "options", "kitchen_item_status"];
+
+  const oldHasComparableFields = fields.some((field) => Object.prototype.hasOwnProperty.call(oldRow, field));
+  if (!oldHasComparableFields) {
+    return fields.some((field) => Object.prototype.hasOwnProperty.call(newRow, field));
+  }
+
+  return fields.some((field) => (
+    Object.prototype.hasOwnProperty.call(newRow, field) &&
+      realtimeValueChanged(JSON.stringify(newRow[field] ?? ""), JSON.stringify(oldRow[field] ?? ""))
+  ));
+}
+
 function getKitchenOrderIds(order = {}) {
   return [
     order.id,
@@ -224,6 +303,7 @@ function findOrderByRealtimeOrderId(orderId = "", currentOrders = []) {
 
 function shouldReloadForItemRealtime(change = {}, currentOrders = []) {
   if (!isRealtimeItemTable(change?.table)) return true;
+  if (!itemRealtimeHasImportantChange(change)) return false;
 
   const matchedOrder = findOrderByRealtimeOrderId(getRealtimeOrderId(change), currentOrders);
   if (!matchedOrder) return false;
@@ -231,6 +311,69 @@ function shouldReloadForItemRealtime(change = {}, currentOrders = []) {
 
   const orderTimeValue = getTimeValue(matchedOrder.createdAt || matchedOrder.orderTime || matchedOrder.raw?.created_at || matchedOrder.raw?.order_time);
   return Boolean(orderTimeValue && Date.now() - orderTimeValue <= RECENT_ORDER_ITEM_SYNC_MS);
+}
+
+function shouldReloadForKitchenRealtime(change = {}, currentOrders = []) {
+  if (isRealtimeItemTable(change?.table)) {
+    return shouldReloadForItemRealtime(change, currentOrders);
+  }
+
+  return orderRealtimeHasImportantChange(change, currentOrders);
+}
+
+function getRealtimeBranchCandidates(row = {}, table = "") {
+  if (table === "orders") {
+    return [
+      row.branch_uuid,
+      row.pickup_branch_uuid,
+      row.delivery_branch_uuid,
+      row.branch_id,
+      row.pickup_branch_id,
+      row.delivery_branch_id,
+      row.branch_name,
+      row.pickup_branch_name,
+      row.delivery_branch_name
+    ];
+  }
+
+  if (table === "partner_orders") {
+    return [
+      row.branch_uuid,
+      row.branch_id,
+      row.branch_name,
+      row.nexpos_site_name,
+      row.nexpos_hub_name
+    ];
+  }
+
+  return [];
+}
+
+function realtimeEventMatchesBranch(change = {}, options = {}, currentOrders = []) {
+  const branchUuid = normalizeText(options?.branchUuid);
+  const branchId = normalizeText(options?.branchId);
+  const branchName = normalizeText(options?.branchName);
+  const branchAlias = normalizeText(options?.branchAlias);
+  if (!branchUuid && !branchId && !branchName && !branchAlias) return true;
+
+  if (isRealtimeItemTable(change?.table)) {
+    return Boolean(findOrderByRealtimeOrderId(getRealtimeOrderId(change), currentOrders));
+  }
+
+  const row = change?.payload?.new || change?.payload?.old || {};
+  const candidates = getRealtimeBranchCandidates(row, change?.table)
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (!candidates.length) return true;
+
+  return candidates.some((candidate) => {
+    const key = normalizeText(candidate);
+    if (branchUuid && key === branchUuid) return true;
+    if (branchId && key === branchId) return true;
+    if (branchName && (key === branchName || key.includes(branchName) || branchName.includes(key))) return true;
+    if (branchAlias && (key === branchAlias || key.includes(branchAlias) || branchAlias.includes(key))) return true;
+    return false;
+  });
 }
 
 function realtimeEventMatchesDate(change = {}, dateRange = {}, currentOrders = []) {
@@ -361,6 +504,7 @@ export default function useKitchenOrders(options = null) {
   const [doneOrderLimit, setDoneOrderLimit] = useState(DONE_ORDER_PAGE_SIZE);
   const [search, setSearch] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
+  const [requestAudit, setRequestAudit] = useState(() => getKitchenRequestAuditSnapshot());
   const [updatingOrderId, setUpdatingOrderId] = useState("");
   const [updatingItemKey] = useState("");
   const [claimingGiftOrderId, setClaimingGiftOrderId] = useState("");
@@ -434,10 +578,7 @@ export default function useKitchenOrders(options = null) {
       const dateRange = getDateRange(dateFilter);
       const result = await getKitchenOrders({
         ...(options || {}),
-        ...dateRange,
-        statusFilter,
-        sourceFilter,
-        doneLimit: statusFilter === "done" ? doneOrderLimit + 1 : 0
+        ...dateRange
       });
       const giftResult = await enrichKitchenOrdersWithMonthlyGifts(result.orders || [], {
         dateKey: dateFilter,
@@ -454,6 +595,7 @@ export default function useKitchenOrders(options = null) {
           : ""
       );
       setLastUpdatedAt(new Date().toISOString());
+      setRequestAudit(getKitchenRequestAuditSnapshot());
     } catch (err) {
       setError(err?.message || "Không tải được danh sách đơn bếp.");
     } finally {
@@ -461,7 +603,7 @@ export default function useKitchenOrders(options = null) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateFilter, doneOrderLimit, enabled, sourceFilter, stabilizeRecentlyClosedOrders, statusFilter, options]);
+  }, [dateFilter, enabled, stabilizeRecentlyClosedOrders, options]);
 
   useEffect(() => {
     if (!enabled) {
@@ -473,6 +615,15 @@ export default function useKitchenOrders(options = null) {
   }, [enabled, loadOrders]);
 
   useEffect(() => {
+    if (!enabled || typeof window === "undefined") return undefined;
+    const timer = window.setInterval(() => {
+      setRequestAudit(getKitchenRequestAuditSnapshot());
+    }, 30000);
+
+    return () => window.clearInterval(timer);
+  }, [enabled]);
+
+  useEffect(() => {
     if (!enabled) return undefined;
     let alive = true;
     let unsubscribe = () => {};
@@ -481,8 +632,9 @@ export default function useKitchenOrders(options = null) {
       unsubscribe = await subscribeKitchenOrderChanges((change) => {
         if (!alive) return;
         const dateRange = getDateRange(dateFilter);
+        if (!realtimeEventMatchesBranch(change, options, currentOrdersRef.current)) return;
         if (!realtimeEventMatchesDate(change, dateRange, currentOrdersRef.current)) return;
-        if (!shouldReloadForItemRealtime(change, currentOrdersRef.current)) return;
+        if (!shouldReloadForKitchenRealtime(change, currentOrdersRef.current)) return;
 
         if (realtimeReloadTimerRef.current) {
           window.clearTimeout(realtimeReloadTimerRef.current);
@@ -536,6 +688,11 @@ export default function useKitchenOrders(options = null) {
     setDoneOrderLimit((limit) => limit + DONE_ORDER_PAGE_SIZE);
   }, []);
 
+  const resetRequestAudit = useCallback(() => {
+    resetKitchenRequestAudit();
+    setRequestAudit(getKitchenRequestAuditSnapshot());
+  }, []);
+
   const stats = useMemo(() => {
     const activeOrders = orders.filter((order) => orderMatchesStatus(order, "active"));
     const doneOrders = orders.filter((order) => orderMatchesStatus(order, "done"));
@@ -587,6 +744,7 @@ export default function useKitchenOrders(options = null) {
       setOrders(previousOrders);
       setError(err?.message || "Không cập nhật được trạng thái đơn.");
     } finally {
+      setRequestAudit(getKitchenRequestAuditSnapshot());
       setUpdatingOrderId("");
     }
   }, [orders, updatingOrderId]);
@@ -629,6 +787,7 @@ export default function useKitchenOrders(options = null) {
       setOrders(previousOrders);
       setError(err?.message || "Không xác nhận được quà khách quen.");
     } finally {
+      setRequestAudit(getKitchenRequestAuditSnapshot());
       setClaimingGiftOrderId("");
     }
   }, [claimingGiftOrderId, dateFilter, options, orders]);
@@ -650,6 +809,8 @@ export default function useKitchenOrders(options = null) {
     search,
     setSearch,
     lastUpdatedAt,
+    requestAudit,
+    resetRequestAudit,
     updatingOrderId,
     updatingItemKey,
     claimingGiftOrderId,
