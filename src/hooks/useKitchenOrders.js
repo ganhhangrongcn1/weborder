@@ -16,7 +16,7 @@ import {
 } from "../features/kitchen/kitchenOrderGrouping.js";
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
-const RECENTLY_CLOSED_SUPPRESS_MS = 10000;
+const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
 
 function getTodayDateKey() {
   const now = new Date();
@@ -181,6 +181,11 @@ function getRecentlyClosedExpiresAt(order = {}, recentlyClosed = new Map()) {
   }, 0);
 }
 
+function ordersShareRuntimeKey(first = {}, second = {}) {
+  const firstKeys = new Set(getKitchenOrderRuntimeKeys(first));
+  return getKitchenOrderRuntimeKeys(second).some((key) => firstKeys.has(key));
+}
+
 function getKitchenItemKey(item = {}) {
   return String(item?.sourceItemId || item?.id || "").trim();
 }
@@ -221,15 +226,10 @@ function realtimeEventMatchesDate(change = {}, dateRange = {}, currentOrders = [
 }
 
 function shouldSuppressAfterDoneAction(order = {}, action = null) {
-  const nextStatus = normalizeText(action?.nextStatus);
-  const nextKitchenStatus = normalizeText(action?.nextKitchenStatus);
-
   return Boolean(
     action?.settleOrder ||
       order.sourceType === "partner" ||
-      action?.type === "partner_done" ||
-      ["done", "completed"].includes(nextStatus) ||
-      nextKitchenStatus === "done"
+      action?.type === "partner_done"
   );
 }
 
@@ -347,26 +347,40 @@ export default function useKitchenOrders(options = null) {
     currentOrdersRef.current = orders;
   }, [orders]);
 
-  const filterRecentlyClosedOrders = useCallback((list = []) => {
+  const stabilizeRecentlyClosedOrders = useCallback((list = [], currentOrders = []) => {
     const now = Date.now();
     const recentlyClosed = recentlyClosedOrderKeysRef.current;
+    const stableOrders = [];
 
-    return (Array.isArray(list) ? list : []).filter((order) => {
+    (Array.isArray(list) ? list : []).forEach((order) => {
       const expiresAt = getRecentlyClosedExpiresAt(order, recentlyClosed);
-      if (!expiresAt) return true;
+      if (!expiresAt) {
+        stableOrders.push(order);
+        return;
+      }
 
       if (expiresAt <= now) {
         forgetRecentlyClosedOrder(order, recentlyClosed);
-        return true;
+        stableOrders.push(order);
+        return;
       }
 
       if (!orderMatchesStatus(order, "active")) {
         forgetRecentlyClosedOrder(order, recentlyClosed);
-        return true;
+        stableOrders.push(order);
+        return;
       }
 
-      return false;
+      const optimisticClosedOrder = (Array.isArray(currentOrders) ? currentOrders : []).find((currentOrder) => (
+        ordersShareRuntimeKey(currentOrder, order) && !orderMatchesStatus(currentOrder, "active")
+      ));
+
+      if (optimisticClosedOrder) {
+        stableOrders.push(optimisticClosedOrder);
+      }
     });
+
+    return stableOrders;
   }, []);
 
   const loadOrders = useCallback(async ({ silent = false, force = false } = {}) => {
@@ -398,7 +412,9 @@ export default function useKitchenOrders(options = null) {
       });
       const hasReadError = Boolean(result.errors?.length || giftResult.error);
 
-      setOrders(filterRecentlyClosedOrders(giftResult.orders || result.orders || []));
+      setOrders((currentOrders) => (
+        stabilizeRecentlyClosedOrders(giftResult.orders || result.orders || [], currentOrders)
+      ));
       setError(
         hasReadError
           ? "Một nguồn đơn chưa đọc được. Các nguồn còn lại vẫn đang hiển thị."
@@ -412,7 +428,7 @@ export default function useKitchenOrders(options = null) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateFilter, enabled, filterRecentlyClosedOrders, options]);
+  }, [dateFilter, enabled, stabilizeRecentlyClosedOrders, options]);
 
   useEffect(() => {
     if (!enabled) {

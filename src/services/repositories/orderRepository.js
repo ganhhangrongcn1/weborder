@@ -8,6 +8,7 @@ import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "
 
 const repository = createRuntimeAppConfigRepository();
 const REMOTE_CACHE_TTL_MS = 8000;
+const CUSTOMER_REALTIME_SYNC_DELAY_MS = 900;
 let ordersRemoteCache = { value: null, cachedAt: 0 };
 let ordersReadInFlight = null;
 
@@ -269,24 +270,9 @@ export const orderRepository = {
     const key = getCustomerKey(phone);
     if (!key) return () => {};
     if (!canWriteOrdersToSupabase()) return () => {};
+    let syncTimer = null;
 
-    const handleChange = async ({ table, payload }) => {
-      if (table === "order_items") {
-        const changedOrderId = String(payload?.new?.order_id || payload?.old?.order_id || "").trim();
-        const localOrders = this.getByPhone(key);
-        const belongsToPhone = localOrders.some((order) => {
-          const orderId = String(order?.id || "").trim();
-          const orderCode = String(order?.orderCode || "").trim();
-          return changedOrderId && (changedOrderId === orderId || changedOrderId === orderCode);
-        });
-        if (!belongsToPhone) return;
-      } else {
-        const changedPhone = getCustomerKey(
-          payload?.new?.customer_phone || payload?.old?.customer_phone || ""
-        );
-        if (changedPhone && changedPhone !== key) return;
-      }
-
+    const syncOrders = async () => {
       try {
         const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(key);
         const all = this.getAllByPhone();
@@ -306,6 +292,46 @@ export const orderRepository = {
       }
     };
 
-    return coreSupabaseRepository.subscribeOrdersRealtime(handleChange);
+    const scheduleSync = () => {
+      if (typeof window === "undefined") {
+        syncOrders();
+        return;
+      }
+      if (syncTimer) window.clearTimeout(syncTimer);
+      syncTimer = window.setTimeout(() => {
+        syncTimer = null;
+        syncOrders();
+      }, CUSTOMER_REALTIME_SYNC_DELAY_MS);
+    };
+
+    const handleChange = ({ table, payload }) => {
+      if (table === "order_items") {
+        const changedOrderId = String(payload?.new?.order_id || payload?.old?.order_id || "").trim();
+        const localOrders = this.getByPhone(key);
+        const belongsToPhone = localOrders.some((order) => {
+          const orderId = String(order?.id || "").trim();
+          const orderCode = String(order?.orderCode || "").trim();
+          return changedOrderId && (changedOrderId === orderId || changedOrderId === orderCode);
+        });
+        if (!belongsToPhone) return;
+      } else {
+        const changedPhone = getCustomerKey(
+          payload?.new?.customer_phone || payload?.old?.customer_phone || ""
+        );
+        if (changedPhone && changedPhone !== key) return;
+      }
+
+      scheduleSync();
+    };
+
+    const unsubscribe = coreSupabaseRepository.subscribeOrdersRealtime(handleChange);
+
+    return () => {
+      if (syncTimer && typeof window !== "undefined") {
+        window.clearTimeout(syncTimer);
+        syncTimer = null;
+      }
+      unsubscribe?.();
+    };
   }
 };

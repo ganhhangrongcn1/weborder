@@ -11,6 +11,58 @@ const PROFILE_TABLE = "profiles";
 const LEGACY_CUSTOMER_TABLE = "customers";
 const DEFAULT_PROFILE_ROLE = "customer";
 const DEFAULT_PROFILE_STATUS = "active";
+const CUSTOMER_ORDER_COLUMNS = [
+  "id",
+  "order_code",
+  "customer_phone",
+  "customer_name",
+  "fulfillment_type",
+  "payment_method",
+  "status",
+  "subtotal",
+  "shipping_fee",
+  "original_shipping_fee",
+  "shipping_support_discount",
+  "promo_discount",
+  "promo_code",
+  "points_discount",
+  "points_earned",
+  "total_amount",
+  "distance_km",
+  "lat",
+  "lng",
+  "branch_id",
+  "branch_uuid",
+  "branch_name",
+  "branch_address",
+  "pickup_branch_id",
+  "pickup_branch_uuid",
+  "pickup_branch_name",
+  "pickup_branch_address",
+  "delivery_branch_id",
+  "delivery_branch_uuid",
+  "delivery_branch_name",
+  "delivery_branch_address",
+  "pickup_time_text",
+  "delivery_address",
+  "kitchen_status",
+  "kitchen_done_at",
+  "created_at",
+  "metadata"
+].join(",");
+const CUSTOMER_ORDER_ITEM_COLUMNS = [
+  "order_id",
+  "product_id",
+  "product_name",
+  "quantity",
+  "unit_price",
+  "line_total",
+  "spice",
+  "note",
+  "toppings",
+  "option_groups",
+  "metadata"
+].join(",");
 
 function isSupabaseReady() {
   const info = getRepositoryRuntimeInfo();
@@ -598,7 +650,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
   if (!client) return null;
   const dateFrom = String(options?.dateFrom || "").trim();
   const dateTo = String(options?.dateTo || "").trim();
-  let ordersQuery = client.from("orders").select("*");
+  let ordersQuery = client.from("orders").select(CUSTOMER_ORDER_COLUMNS);
   if (dateFrom) {
     ordersQuery = ordersQuery.gte("created_at", dateFrom);
   }
@@ -613,7 +665,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
   if (orderIds.length) {
     const { data: itemRows, error: itemError } = await client
       .from("order_items")
-      .select("*")
+      .select(CUSTOMER_ORDER_ITEM_COLUMNS)
       .in("order_id", orderIds);
     if (itemError) throw itemError;
     items = Array.isArray(itemRows) ? itemRows : [];
@@ -689,7 +741,7 @@ async function readOrdersForPhoneFromTable(phone) {
 
   const { data: orders, error: orderError } = await client
     .from("orders")
-    .select("*")
+    .select(CUSTOMER_ORDER_COLUMNS)
     .eq("customer_phone", customerPhone)
     .order("created_at", { ascending: false });
   if (orderError) throw orderError;
@@ -700,7 +752,7 @@ async function readOrdersForPhoneFromTable(phone) {
   if (orderIds.length) {
     const { data: itemRows, error: itemError } = await client
       .from("order_items")
-      .select("*")
+      .select(CUSTOMER_ORDER_ITEM_COLUMNS)
       .in("order_id", orderIds);
     if (itemError) throw itemError;
     items = Array.isArray(itemRows) ? itemRows : [];
