@@ -242,20 +242,26 @@ function mapPartnerOrderItemRow(row = {}) {
   };
 }
 
-export async function getPartnerOrdersByPhone(phone) {
+export async function getPartnerOrdersByPhone(phone, options = {}) {
   const phoneKey = getCustomerKey(phone);
   if (!phoneKey) return [];
 
   const client = getSupabaseRuntimeClient() || await initSupabaseRuntimeClient();
   if (!client) return [];
+  const limit = Number(options?.limit || 0);
 
-  const { data, error } = await client
+  let ordersQuery = client
     .from("partner_orders")
     .select(
       "id,order_code,display_order_code,partner_source,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,customer_name,customer_phone,customer_phone_key,total_amount,points_base_amount,order_status,nexpos_status,kitchen_status,point_status,order_time,created_at"
     )
     .eq("customer_phone_key", phoneKey)
     .order("order_time", { ascending: false });
+  if (Number.isFinite(limit) && limit > 0) {
+    ordersQuery = ordersQuery.limit(Math.floor(limit));
+  }
+
+  const { data, error } = await ordersQuery;
 
   if (error) {
     if (import.meta?.env?.DEV) {

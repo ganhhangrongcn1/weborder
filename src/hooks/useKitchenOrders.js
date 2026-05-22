@@ -3,8 +3,7 @@ import {
   getKitchenOrders,
   getNextKitchenOrderAction,
   markKitchenOrderDone,
-  subscribeKitchenOrderChanges,
-  updateKitchenOrderItemStatus
+  subscribeKitchenOrderChanges
 } from "../services/kitchenOrderService.js";
 import {
   claimMonthlyCustomerGift,
@@ -16,7 +15,10 @@ import {
 } from "../features/kitchen/kitchenOrderGrouping.js";
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
+const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
+const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
+const DONE_ORDER_PAGE_SIZE = 20;
 
 function getTodayDateKey() {
   const now = new Date();
@@ -197,6 +199,40 @@ function getRealtimeOrderId(change = {}) {
   return String(row.id || row.order_code || row.display_order_code || "").trim();
 }
 
+function isRealtimeItemTable(table = "") {
+  return table === "order_items" || table === "partner_order_items";
+}
+
+function getKitchenOrderIds(order = {}) {
+  return [
+    order.id,
+    order.orderCode,
+    order.displayOrderCode,
+    order.raw?.id,
+    order.raw?.order_code,
+    order.raw?.display_order_code
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+}
+
+function findOrderByRealtimeOrderId(orderId = "", currentOrders = []) {
+  const key = String(orderId || "").trim();
+  if (!key) return null;
+  return (Array.isArray(currentOrders) ? currentOrders : []).find((order) => (
+    getKitchenOrderIds(order).includes(key)
+  )) || null;
+}
+
+function shouldReloadForItemRealtime(change = {}, currentOrders = []) {
+  if (!isRealtimeItemTable(change?.table)) return true;
+
+  const matchedOrder = findOrderByRealtimeOrderId(getRealtimeOrderId(change), currentOrders);
+  if (!matchedOrder) return false;
+  if (!Array.isArray(matchedOrder.items) || matchedOrder.items.length === 0) return true;
+
+  const orderTimeValue = getTimeValue(matchedOrder.createdAt || matchedOrder.orderTime || matchedOrder.raw?.created_at || matchedOrder.raw?.order_time);
+  return Boolean(orderTimeValue && Date.now() - orderTimeValue <= RECENT_ORDER_ITEM_SYNC_MS);
+}
+
 function realtimeEventMatchesDate(change = {}, dateRange = {}, currentOrders = []) {
   const row = change?.payload?.new || change?.payload?.old || {};
 
@@ -211,18 +247,7 @@ function realtimeEventMatchesDate(change = {}, dateRange = {}, currentOrders = [
   const changedOrderId = getRealtimeOrderId(change);
   if (!changedOrderId) return true;
 
-  return (Array.isArray(currentOrders) ? currentOrders : []).some((order) => {
-    const orderIds = [
-      order.id,
-      order.orderCode,
-      order.displayOrderCode,
-      order.raw?.id,
-      order.raw?.order_code,
-      order.raw?.display_order_code
-    ].map((value) => String(value || "").trim()).filter(Boolean);
-
-    return orderIds.includes(changedOrderId);
-  });
+  return Boolean(findOrderByRealtimeOrderId(changedOrderId, currentOrders));
 }
 
 function shouldSuppressAfterDoneAction(order = {}, action = null) {
@@ -333,10 +358,11 @@ export default function useKitchenOrders(options = null) {
   const [dateFilter, setDateFilter] = useState(() => getTodayDateKey());
   const [sourceFilter, setSourceFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("active");
+  const [doneOrderLimit, setDoneOrderLimit] = useState(DONE_ORDER_PAGE_SIZE);
   const [search, setSearch] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
   const [updatingOrderId, setUpdatingOrderId] = useState("");
-  const [updatingItemKey, setUpdatingItemKey] = useState("");
+  const [updatingItemKey] = useState("");
   const [claimingGiftOrderId, setClaimingGiftOrderId] = useState("");
   const loadingOrdersRef = useRef(false);
   const realtimeReloadTimerRef = useRef(null);
@@ -346,6 +372,10 @@ export default function useKitchenOrders(options = null) {
   useEffect(() => {
     currentOrdersRef.current = orders;
   }, [orders]);
+
+  useEffect(() => {
+    setDoneOrderLimit(DONE_ORDER_PAGE_SIZE);
+  }, [dateFilter, sourceFilter, statusFilter]);
 
   const stabilizeRecentlyClosedOrders = useCallback((list = [], currentOrders = []) => {
     const now = Date.now();
@@ -404,7 +434,10 @@ export default function useKitchenOrders(options = null) {
       const dateRange = getDateRange(dateFilter);
       const result = await getKitchenOrders({
         ...(options || {}),
-        ...dateRange
+        ...dateRange,
+        statusFilter,
+        sourceFilter,
+        doneLimit: statusFilter === "done" ? doneOrderLimit + 1 : 0
       });
       const giftResult = await enrichKitchenOrdersWithMonthlyGifts(result.orders || [], {
         dateKey: dateFilter,
@@ -428,7 +461,7 @@ export default function useKitchenOrders(options = null) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateFilter, enabled, stabilizeRecentlyClosedOrders, options]);
+  }, [dateFilter, doneOrderLimit, enabled, sourceFilter, stabilizeRecentlyClosedOrders, statusFilter, options]);
 
   useEffect(() => {
     if (!enabled) {
@@ -449,6 +482,7 @@ export default function useKitchenOrders(options = null) {
         if (!alive) return;
         const dateRange = getDateRange(dateFilter);
         if (!realtimeEventMatchesDate(change, dateRange, currentOrdersRef.current)) return;
+        if (!shouldReloadForItemRealtime(change, currentOrdersRef.current)) return;
 
         if (realtimeReloadTimerRef.current) {
           window.clearTimeout(realtimeReloadTimerRef.current);
@@ -456,7 +490,7 @@ export default function useKitchenOrders(options = null) {
         realtimeReloadTimerRef.current = window.setTimeout(() => {
           realtimeReloadTimerRef.current = null;
           loadOrders({ silent: true });
-        }, REALTIME_RELOAD_DELAY_MS);
+        }, isRealtimeItemTable(change.table) ? ITEM_REALTIME_RELOAD_DELAY_MS : REALTIME_RELOAD_DELAY_MS);
       });
     }
 
@@ -480,10 +514,27 @@ export default function useKitchenOrders(options = null) {
       return true;
     });
 
-    return statusFilter === "done"
-      ? sortKitchenDoneOrders(matchedOrders)
-      : sortKitchenOrdersForBoard(matchedOrders);
-  }, [orders, search, sourceFilter, statusFilter]);
+    if (statusFilter === "done") {
+      return sortKitchenDoneOrders(matchedOrders).slice(0, doneOrderLimit);
+    }
+
+    return sortKitchenOrdersForBoard(matchedOrders);
+  }, [doneOrderLimit, orders, search, sourceFilter, statusFilter]);
+
+  const canLoadMoreDoneOrders = useMemo(() => {
+    if (statusFilter !== "done") return false;
+    const doneMatches = orders.filter((order) => {
+      if (!orderMatchesSource(order, sourceFilter)) return false;
+      if (!orderMatchesStatus(order, "done")) return false;
+      if (!orderMatchesSearch(order, search)) return false;
+      return true;
+    });
+    return doneMatches.length > doneOrderLimit;
+  }, [doneOrderLimit, orders, search, sourceFilter, statusFilter]);
+
+  const loadMoreDoneOrders = useCallback(() => {
+    setDoneOrderLimit((limit) => limit + DONE_ORDER_PAGE_SIZE);
+  }, []);
 
   const stats = useMemo(() => {
     const activeOrders = orders.filter((order) => orderMatchesStatus(order, "active"));
@@ -540,33 +591,15 @@ export default function useKitchenOrders(options = null) {
     }
   }, [orders, updatingOrderId]);
 
-  const toggleItemDone = useCallback(async (order, item) => {
+  const toggleItemDone = useCallback((order, item) => {
     const orderId = String(order?.id || "").trim();
     const itemId = getKitchenItemKey(item);
     if (!orderId || !itemId || updatingItemKey) return;
 
     const nextStatus = item.status === "done" ? "pending" : "done";
-    const nextKey = `${order.sourceType}-${orderId}-${itemId}`;
-    const previousOrders = orders;
-
-    setUpdatingItemKey(nextKey);
     setError("");
     setOrders((currentOrders) => currentOrders.map(patchItemStatus(order, item, nextStatus)));
-
-    try {
-      const result = await updateKitchenOrderItemStatus(order, item, nextStatus);
-      if (!result.ok) {
-        setOrders(previousOrders);
-        setError(result.message || "Không cập nhật được trạng thái món.");
-        return;
-      }
-    } catch (err) {
-      setOrders(previousOrders);
-      setError(err?.message || "Không cập nhật được trạng thái món.");
-    } finally {
-      setUpdatingItemKey("");
-    }
-  }, [orders, updatingItemKey]);
+  }, [updatingItemKey]);
 
   const claimGift = useCallback(async (order) => {
     const orderId = String(order?.id || "").trim();
@@ -603,6 +636,7 @@ export default function useKitchenOrders(options = null) {
   return {
     orders,
     filteredOrders,
+    canLoadMoreDoneOrders,
     stats,
     loading,
     refreshing,
@@ -619,6 +653,7 @@ export default function useKitchenOrders(options = null) {
     updatingOrderId,
     updatingItemKey,
     claimingGiftOrderId,
+    loadMoreDoneOrders,
     markDone,
     toggleItemDone,
     claimGift,

@@ -106,6 +106,40 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function toPositiveInteger(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function canUseDoneQueryLimit(options = {}) {
+  return (
+    toText(options.statusFilter) === "done" &&
+    toText(options.sourceFilter || "all") === "all" &&
+    toText(options.branchUuid) &&
+    toPositiveInteger(options.doneLimit) > 0
+  );
+}
+
+function applyWebsiteBranchFilter(query, branchUuid = "") {
+  const uuid = toText(branchUuid);
+  if (!uuid) return query;
+  return query.or(`branch_uuid.eq.${uuid},pickup_branch_uuid.eq.${uuid},delivery_branch_uuid.eq.${uuid}`);
+}
+
+function applyPartnerBranchFilter(query, branchUuid = "") {
+  const uuid = toText(branchUuid);
+  if (!uuid) return query;
+  return query.eq("branch_uuid", uuid);
+}
+
+function applyWebsiteDoneFilter(query) {
+  return query.or("status.in.(done,completed,complete),kitchen_status.in.(done,completed,complete)");
+}
+
+function applyPartnerDoneFilter(query) {
+  return query.or("kitchen_work_status.in.(done,completed,complete),order_status.in.(done,completed,complete),nexpos_status.in.(FINISH,finish,finished,completed,done)");
+}
+
 function toText(value = "") {
   return String(value || "").trim();
 }
@@ -782,10 +816,15 @@ export async function getWebsiteKitchenOrders(options = {}) {
 
   const dateFrom = toText(options.dateFrom);
   const dateTo = toText(options.dateTo);
+  const shouldLimitDone = canUseDoneQueryLimit(options);
+  const doneLimit = toPositiveInteger(options.doneLimit);
   let query = client.from("orders").select(WEBSITE_ORDER_COLUMNS).order("created_at", { ascending: false });
 
   if (dateFrom) query = query.gte("created_at", dateFrom);
   if (dateTo) query = query.lt("created_at", dateTo);
+  if (shouldLimitDone) {
+    query = applyWebsiteBranchFilter(applyWebsiteDoneFilter(query), options.branchUuid).limit(doneLimit);
+  }
 
   const { data, error } = await query;
   if (error) throw error;
@@ -805,10 +844,15 @@ export async function getPartnerKitchenOrders(options = {}) {
 
   const dateFrom = toText(options.dateFrom);
   const dateTo = toText(options.dateTo);
+  const shouldLimitDone = canUseDoneQueryLimit(options);
+  const doneLimit = toPositiveInteger(options.doneLimit);
   let query = client.from("partner_orders").select(PARTNER_ORDER_COLUMNS).order("order_time", { ascending: false });
 
   if (dateFrom) query = query.gte("order_time", dateFrom);
   if (dateTo) query = query.lt("order_time", dateTo);
+  if (shouldLimitDone) {
+    query = applyPartnerBranchFilter(applyPartnerDoneFilter(query), options.branchUuid).limit(doneLimit);
+  }
 
   const { data, error } = await query;
   if (error) throw error;

@@ -6,6 +6,8 @@ import { getSupabaseCustomerSessionSnapshot, logoutCustomerAuthSession } from ".
 import { customerRepository } from "../services/repositories/customerRepository.js";
 import { resolveVoucherUsageFromOrders } from "../services/loyaltyService.js";
 
+const CUSTOMER_TRACKING_INITIAL_LIMIT = 5;
+
 async function withTimeout(promise, timeoutMs, fallbackValue) {
   let timeoutId = null;
   const timeoutPromise = new Promise((resolve) => {
@@ -198,7 +200,11 @@ export default function useCustomerSession({
 
         const [remoteOrders, remoteLoyalty, remoteAddresses] = await Promise.all([
           orderStorage?.getByPhoneAsync
-            ? withTimeout(orderStorage.getByPhoneAsync(currentPhone), 6000, orderStorage.getByPhone(currentPhone))
+            ? withTimeout(
+                orderStorage.getByPhoneAsync(currentPhone, { limit: CUSTOMER_TRACKING_INITIAL_LIMIT }),
+                6000,
+                orderStorage.getByPhone(currentPhone).slice(0, CUSTOMER_TRACKING_INITIAL_LIMIT)
+              )
             : Promise.resolve(orderStorage.getByPhone(currentPhone)),
           loyaltyRepository?.getByPhoneAsync
             ? loyaltyRepository.getByPhoneAsync(currentPhone, defaultLoyaltyData)
@@ -262,7 +268,11 @@ export default function useCustomerSession({
     (async () => {
       try {
         const remoteOrders = orderStorage?.getByPhoneAsync
-          ? await withTimeout(orderStorage.getByPhoneAsync(orderLookupPhone), 6000, orderStorage.getByPhone(orderLookupPhone))
+          ? await withTimeout(
+              orderStorage.getByPhoneAsync(orderLookupPhone, { limit: CUSTOMER_TRACKING_INITIAL_LIMIT }),
+              6000,
+              orderStorage.getByPhone(orderLookupPhone).slice(0, CUSTOMER_TRACKING_INITIAL_LIMIT)
+            )
           : orderStorage.getByPhone(orderLookupPhone);
         if (!disposed && Array.isArray(remoteOrders)) {
           setDemoOrdersState(remoteOrders);
@@ -283,7 +293,11 @@ export default function useCustomerSession({
     (async () => {
       try {
         const remoteOrders = orderStorage?.getByPhoneAsync
-          ? await withTimeout(orderStorage.getByPhoneAsync(orderLookupPhone), 6000, orderStorage.getByPhone(orderLookupPhone))
+          ? await withTimeout(
+              orderStorage.getByPhoneAsync(orderLookupPhone, { limit: CUSTOMER_TRACKING_INITIAL_LIMIT }),
+              6000,
+              orderStorage.getByPhone(orderLookupPhone).slice(0, CUSTOMER_TRACKING_INITIAL_LIMIT)
+            )
           : orderStorage.getByPhone(orderLookupPhone);
         if (!disposed && Array.isArray(remoteOrders)) {
           setDemoOrdersState(remoteOrders);

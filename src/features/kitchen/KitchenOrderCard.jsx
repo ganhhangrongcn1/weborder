@@ -23,7 +23,7 @@ function saveProgress(storageKey, progress = {}) {
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(progress));
   } catch {
-    // Local progress is a convenience only. Supabase remains the source of truth.
+    // Local progress is a convenience only for this kitchen screen.
   }
 }
 
@@ -468,6 +468,53 @@ export default function KitchenOrderCard({
     saveProgress(TOPPING_PROGRESS_STORAGE_KEY, nextProgress);
   }
 
+  function handleResetProgress(event) {
+    event.stopPropagation();
+    onFocusOrder?.(`${order.sourceType || "order"}-${order.id || ""}`);
+
+    const itemKeys = items.map((item) => `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`);
+
+    setUnitProgress((currentProgress) => {
+      const nextProgress = { ...currentProgress };
+      let changed = false;
+
+      itemKeys.forEach((itemKey) => {
+        Object.keys(nextProgress).forEach((key) => {
+          if (key.startsWith(`${itemKey}-`)) {
+            delete nextProgress[key];
+            changed = true;
+          }
+        });
+      });
+
+      if (changed) saveProgress(UNIT_PROGRESS_STORAGE_KEY, nextProgress);
+      return changed ? nextProgress : currentProgress;
+    });
+
+    setToppingProgress((currentProgress) => {
+      const nextProgress = { ...currentProgress };
+      let changed = false;
+
+      itemKeys.forEach((itemKey) => {
+        Object.keys(nextProgress).forEach((key) => {
+          if (key.startsWith(`${itemKey}-`)) {
+            delete nextProgress[key];
+            changed = true;
+          }
+        });
+      });
+
+      if (changed) saveProgress(TOPPING_PROGRESS_STORAGE_KEY, nextProgress);
+      return changed ? nextProgress : currentProgress;
+    });
+
+    items.forEach((item) => {
+      if (item.status === "done") {
+        onToggleItemDone?.(order, item);
+      }
+    });
+  }
+
   return (
     <article
       onClick={() => onSelectOrder?.(`${order.sourceType || "order"}-${order.id || ""}`)}
@@ -770,7 +817,7 @@ export default function KitchenOrderCard({
         </button>
         <button
           type="button"
-          onClick={(event) => event.stopPropagation()}
+          onClick={handleResetProgress}
           style={{
             border: "1px solid #dbe3ef",
             background: "#ffffff",

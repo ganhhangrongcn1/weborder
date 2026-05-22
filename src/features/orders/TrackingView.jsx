@@ -14,10 +14,13 @@ import {
   mergeCustomerLookupOrders
 } from "../../services/partnerOrderService.js";
 import { calculateOrderPoints, getLoyaltyRuleConfig } from "../../services/loyaltyService.js";
+import { orderStorage } from "../../services/orderService.js";
 import {
   getCustomerOrderDisplayStatus,
   getCustomerOrderStatusToneClass
 } from "../../services/customerOrderStatusService.js";
+
+const ORDER_HISTORY_PAGE_SIZE = 4;
 
 export default function Tracking({
   navigate,
@@ -35,12 +38,46 @@ export default function Tracking({
   setServiceNotice
 }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [visibleOrderCount, setVisibleOrderCount] = useState(ORDER_HISTORY_PAGE_SIZE);
+  const [loadedHistoryOrders, setLoadedHistoryOrders] = useState([]);
+  const [isHistoryOrdersLoading, setIsHistoryOrdersLoading] = useState(false);
   const [partnerOrders, setPartnerOrders] = useState([]);
   const [isPartnerOrdersLoading, setIsPartnerOrdersLoading] = useState(false);
   const [claimingOrderId, setClaimingOrderId] = useState("");
 
   const historyOrders = Array.isArray(userProfile?.orderHistory) ? userProfile.orderHistory : [];
+  const baseHistoryOrders = loadedHistoryOrders.length ? loadedHistoryOrders : historyOrders;
   const fallbackOrder = currentPhone && currentOrder ? [currentOrder] : [];
+
+  useEffect(() => {
+    setVisibleOrderCount(ORDER_HISTORY_PAGE_SIZE);
+    setLoadedHistoryOrders([]);
+    setPartnerOrders([]);
+  }, [currentPhone]);
+
+  useEffect(() => {
+    let disposed = false;
+    async function loadHistoryOrders() {
+      if (!currentPhone) {
+        setLoadedHistoryOrders([]);
+        return;
+      }
+      setIsHistoryOrdersLoading(true);
+      try {
+        const nextOrders = await orderStorage.getByPhoneAsync(currentPhone, {
+          limit: visibleOrderCount + 1
+        });
+        if (!disposed) setLoadedHistoryOrders(nextOrders);
+      } finally {
+        if (!disposed) setIsHistoryOrdersLoading(false);
+      }
+    }
+
+    loadHistoryOrders();
+    return () => {
+      disposed = true;
+    };
+  }, [currentPhone, visibleOrderCount]);
 
   useEffect(() => {
     let disposed = false;
@@ -51,7 +88,9 @@ export default function Tracking({
       }
       setIsPartnerOrdersLoading(true);
       try {
-        const nextOrders = await getPartnerOrdersByPhone(currentPhone);
+        const nextOrders = await getPartnerOrdersByPhone(currentPhone, {
+          limit: visibleOrderCount + 1
+        });
         if (!disposed) setPartnerOrders(nextOrders);
       } finally {
         if (!disposed) setIsPartnerOrdersLoading(false);
@@ -62,10 +101,10 @@ export default function Tracking({
     return () => {
       disposed = true;
     };
-  }, [currentPhone]);
+  }, [currentPhone, visibleOrderCount]);
 
   const mergedOrders = mergeCustomerLookupOrders(
-    [...historyOrders, ...fallbackOrder]
+    [...baseHistoryOrders, ...fallbackOrder]
     .filter(Boolean)
     .reduce((acc, item) => {
       const key = String(item?.id || item?.orderCode || "").trim();
@@ -79,6 +118,8 @@ export default function Tracking({
   );
 
   const orders = [...mergedOrders].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
+  const visibleOrders = orders.slice(0, visibleOrderCount);
+  const canLoadMoreOrders = orders.length > visibleOrderCount;
   const canViewFullOrderCode = Boolean(currentPhone);
   const maskOrderCode = (code) => String(code || "GHR-****").replace(/GHR-\d{4}/i, "GHR-****");
 
@@ -94,7 +135,7 @@ export default function Tracking({
     if (matchedOrder) setSelectedOrder(matchedOrder);
   }, [orders, selectedOrder]);
 
-  const shouldShowLoading = (isOrdersLoading || isPartnerOrdersLoading) && orders.length === 0;
+  const shouldShowLoading = (isOrdersLoading || isHistoryOrdersLoading || isPartnerOrdersLoading) && orders.length === 0;
   const shouldShowEmpty = !shouldShowLoading && orders.length === 0;
 
   const formatOrderTime = (value) => (value ? formatTime(value) : "--");
@@ -221,7 +262,7 @@ export default function Tracking({
         )}
 
         {!shouldShowLoading &&
-          orders.map((order) => {
+          visibleOrders.map((order) => {
             const statusMeta = getCustomerOrderDisplayStatus(order);
             const status = statusMeta.label;
             const items = Array.isArray(order?.items) ? order.items : [];
@@ -325,6 +366,17 @@ export default function Tracking({
               </CustomerCard>
             );
           })}
+
+        {!shouldShowLoading && canLoadMoreOrders ? (
+          <CustomerButton
+            variant="soft"
+            full
+            disabled={isHistoryOrdersLoading || isPartnerOrdersLoading}
+            onClick={() => setVisibleOrderCount((count) => count + ORDER_HISTORY_PAGE_SIZE)}
+          >
+            {isHistoryOrdersLoading || isPartnerOrdersLoading ? "Đang tải thêm..." : "Xem thêm đơn hàng"}
+          </CustomerButton>
+        ) : null}
       </div>
 
       {selectedOrder && (

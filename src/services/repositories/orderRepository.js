@@ -9,6 +9,7 @@ import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "
 const repository = createRuntimeAppConfigRepository();
 const REMOTE_CACHE_TTL_MS = 8000;
 const CUSTOMER_REALTIME_SYNC_DELAY_MS = 900;
+const DEFAULT_CUSTOMER_ORDER_SYNC_LIMIT = 6;
 let ordersRemoteCache = { value: null, cachedAt: 0 };
 let ordersReadInFlight = null;
 
@@ -200,11 +201,15 @@ export const orderRepository = {
     }
     return saved;
   },
-  async getByPhoneAsync(phone) {
+  async getByPhoneAsync(phone, options = {}) {
     const key = getCustomerKey(phone);
     if (!key) return [];
+    const limit = Number(options?.limit || 0);
     try {
-      const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(key);
+      const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(
+        key,
+        Number.isFinite(limit) && limit > 0 ? { limit: Math.floor(limit) } : undefined
+      );
       if (Array.isArray(remoteOrders)) {
         const all = normalizeOrdersByPhoneMap(await repository.getAsync(STORAGE_KEYS.ordersByPhone, {}));
         const nextAll = normalizeOrdersByPhoneMap({ ...all, [key]: remoteOrders });
@@ -216,7 +221,8 @@ export const orderRepository = {
       console.warn("[orderRepository] read orders by phone failed", error);
     }
     const all = await this.getAllByPhoneAsync();
-    return Array.isArray(all[key]) ? all[key] : [];
+    const fallbackOrders = Array.isArray(all[key]) ? all[key] : [];
+    return Number.isFinite(limit) && limit > 0 ? fallbackOrders.slice(0, Math.floor(limit)) : fallbackOrders;
   },
   async getAllAsync(options = {}) {
     const all = await this.getAllByPhoneAsync(options);
@@ -274,7 +280,10 @@ export const orderRepository = {
 
     const syncOrders = async () => {
       try {
-        const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(key);
+        const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(
+          key,
+          { limit: DEFAULT_CUSTOMER_ORDER_SYNC_LIMIT }
+        );
         const all = this.getAllByPhone();
         const merged = normalizeOrdersByPhoneMap({
           ...all,

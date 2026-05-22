@@ -732,18 +732,24 @@ async function readOrdersByPhoneFromTable(options = {}) {
   return map;
 }
 
-async function readOrdersForPhoneFromTable(phone) {
+async function readOrdersForPhoneFromTable(phone, options = {}) {
   if (!isSupabaseReady()) return [];
   const client = await getSupabaseClientAsync();
   if (!client) return [];
   const customerPhone = normalizePhone(phone);
   if (!customerPhone) return [];
+  const limit = Number(options?.limit || 0);
 
-  const { data: orders, error: orderError } = await client
+  let ordersQuery = client
     .from("orders")
     .select(CUSTOMER_ORDER_COLUMNS)
     .eq("customer_phone", customerPhone)
     .order("created_at", { ascending: false });
+  if (Number.isFinite(limit) && limit > 0) {
+    ordersQuery = ordersQuery.limit(Math.floor(limit));
+  }
+
+  const { data: orders, error: orderError } = await ordersQuery;
   if (orderError) throw orderError;
   if (!Array.isArray(orders) || !orders.length) return [];
 

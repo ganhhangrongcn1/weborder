@@ -49,8 +49,8 @@ export const orderStorage = {
   getByPhone(phone) {
     return orderRepository.getByPhone(phone);
   },
-  async getByPhoneAsync(phone) {
-    return orderRepository.getByPhoneAsync(phone);
+  async getByPhoneAsync(phone, options = {}) {
+    return orderRepository.getByPhoneAsync(phone, options);
   },
   subscribeRealtimeByPhone(phone, onSynced) {
     return orderRepository.subscribeRealtimeByPhone(phone, onSynced);
@@ -397,7 +397,7 @@ export async function createOrderAsync(params) {
     saveDemoUser({ phone: order.phone, registered: true });
   }
   if (getCustomerKey(currentPhone) === order.phone) {
-    const latestOrders = await orderStorage.getByPhoneAsync(order.phone);
+    const latestOrders = await orderStorage.getByPhoneAsync(order.phone, { limit: 5 });
     setDemoOrdersState(latestOrders);
   }
 

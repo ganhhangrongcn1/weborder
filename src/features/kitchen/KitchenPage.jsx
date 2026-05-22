@@ -256,6 +256,7 @@ export default function KitchenPage() {
   const {
     orders,
     filteredOrders,
+    canLoadMoreDoneOrders,
     stats,
     loading,
     refreshing,
@@ -271,6 +272,7 @@ export default function KitchenPage() {
     updatingOrderId,
     updatingItemKey,
     claimingGiftOrderId,
+    loadMoreDoneOrders,
     markDone,
     toggleItemDone,
     claimGift,
@@ -719,6 +721,26 @@ export default function KitchenPage() {
                 </div>
               );
             })}
+            {!loading && statusFilter === "done" && canLoadMoreDoneOrders ? (
+              <button
+                type="button"
+                onClick={loadMoreDoneOrders}
+                disabled={refreshing}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#334155",
+                  borderRadius: 10,
+                  padding: "13px 16px",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  cursor: refreshing ? "not-allowed" : "pointer",
+                  opacity: refreshing ? 0.72 : 1
+                }}
+              >
+                {refreshing ? "Đang tải thêm..." : "Xem thêm đơn hoàn thành"}
+              </button>
+            ) : null}
             </div>
 
             <KitchenOrderStrip
