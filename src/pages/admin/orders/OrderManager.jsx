@@ -304,6 +304,8 @@ function OrderFilterBar({
 }
 
 function OrderStatusSelect({ order, status, updateOrderStatus }) {
+  return <span className="admin-order-status-readonly">Chi nhánh xử lý</span>;
+
   const orderId = getOrderId(order);
   const fulfillmentType = getFulfillmentType(order);
   const isPartnerOrder = isReadOnlyPartnerOrder(order);
@@ -633,7 +635,6 @@ function OrderDetailPanel({
 
       <div className="admin-order-detail-actions">
         <OrderStatusSelect order={order} status={status} updateOrderStatus={updateOrderStatus} />
-        <OrderQuickActions order={order} status={status} updateOrderStatus={updateOrderStatus} />
       </div>
     </aside>
   );

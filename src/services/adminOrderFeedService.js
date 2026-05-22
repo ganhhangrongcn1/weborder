@@ -111,10 +111,46 @@ function normalizeWebOrder(order = {}) {
   };
 }
 
+function getAdminOrderFeedKey(order = {}) {
+  const sourceType = String(order?.sourceType || "").trim().toLowerCase();
+  const source = sourceType === "partner" ? "partner" : "website";
+  const rawData = order?.rawData && typeof order.rawData === "object" ? order.rawData : {};
+  const key = String(
+    order?.displayOrderCode ||
+      order?.orderCode ||
+      order?.id ||
+      rawData?.display_order_code ||
+      rawData?.order_code ||
+      rawData?.id ||
+      ""
+  ).trim();
+
+  return key ? `${source}:${key}` : `${source}:unknown-${Math.random()}`;
+}
+
+function preferRicherOrder(current = {}, incoming = {}) {
+  const currentItems = Array.isArray(current?.items) ? current.items.length : 0;
+  const incomingItems = Array.isArray(incoming?.items) ? incoming.items.length : 0;
+  if (incomingItems > currentItems) return incoming;
+
+  const currentUpdated = new Date(current?.updatedAt || current?.createdAt || 0).getTime();
+  const incomingUpdated = new Date(incoming?.updatedAt || incoming?.createdAt || 0).getTime();
+  if (Number.isFinite(incomingUpdated) && incomingUpdated > currentUpdated) return incoming;
+
+  return current;
+}
+
 export function buildAdminOrderFeed(webOrders = [], partnerOrders = []) {
   const normalizedWebOrders = (Array.isArray(webOrders) ? webOrders : []).map(normalizeWebOrder);
   const normalizedPartnerOrders = Array.isArray(partnerOrders) ? partnerOrders : [];
-  return [...normalizedWebOrders, ...normalizedPartnerOrders].sort((a, b) => {
+  const dedupedOrders = [...normalizedWebOrders, ...normalizedPartnerOrders].reduce((map, order) => {
+    const key = getAdminOrderFeedKey(order);
+    const current = map.get(key);
+    map.set(key, current ? preferRicherOrder(current, order) : order);
+    return map;
+  }, new Map());
+
+  return [...dedupedOrders.values()].sort((a, b) => {
     const aTime = new Date(a?.createdAt || 0).getTime();
     const bTime = new Date(b?.createdAt || 0).getTime();
     return bTime - aTime;
@@ -162,4 +198,37 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } =
   }
 
   return (orderRows || []).map((order) => mapPartnerOrderRow(order, itemsByOrderId));
+}
+
+export async function subscribeAdminOrderChanges(onChange) {
+  const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
+  if (!client || typeof onChange !== "function") return () => {};
+
+  const channel = client
+    .channel(`admin-order-feed-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "orders" },
+      (payload) => onChange({ table: "orders", payload })
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "order_items" },
+      (payload) => onChange({ table: "order_items", payload })
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "partner_orders" },
+      (payload) => onChange({ table: "partner_orders", payload })
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "partner_order_items" },
+      (payload) => onChange({ table: "partner_order_items", payload })
+    )
+    .subscribe();
+
+  return () => {
+    client.removeChannel(channel);
+  };
 }

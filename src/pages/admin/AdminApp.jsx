@@ -70,6 +70,9 @@ export default function AdminApp({
     setCrmSnapshot,
     adminRequestAudit,
     resetAdminRequestAudit,
+    adminOrdersRealtimePending,
+    adminOrdersRealtimeCount,
+    refreshAdminOrdersFromRealtime,
     customerAdminTab,
     setCustomerAdminTab,
     optionGroupPresets,
@@ -406,6 +409,9 @@ export default function AdminApp({
           setCrmSnapshot={setCrmSnapshot}
           adminRequestAudit={adminRequestAudit}
           resetAdminRequestAudit={resetAdminRequestAudit}
+          adminOrdersRealtimePending={adminOrdersRealtimePending}
+          adminOrdersRealtimeCount={adminOrdersRealtimeCount}
+          refreshAdminOrdersFromRealtime={refreshAdminOrdersFromRealtime}
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           onAdjustPoints={handleAdjustPoints}

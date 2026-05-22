@@ -29,7 +29,7 @@ const defaultLoyaltyConfig = {
   redeemValue: 1,
   byPhone: {}
 };
-const CRM_SUPPORT_CACHE_TTL_MS = 8000;
+const CRM_SUPPORT_CACHE_TTL_MS = 60000;
 let crmSupportCache = { value: null, cachedAt: 0 };
 let crmSupportInFlight = null;
 

@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { buildCustomersFromOrderListAsync } from "../../../services/crmService.js";
-import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
+import {
+  buildAdminOrderFeed,
+  readPartnerOrdersForAdmin,
+  subscribeAdminOrderChanges
+} from "../../../services/adminOrderFeedService.js";
 import {
   getAdminRequestAuditSnapshot,
   recordAdminRequest,
@@ -8,7 +12,8 @@ import {
 } from "../../../services/adminRequestAuditService.js";
 import { STORAGE_KEYS } from "../../../services/repositories/storageKeys.js";
 
-const SNAPSHOT_CACHE_TTL_MS = 8000;
+const SNAPSHOT_CACHE_TTL_MS = 60000;
+const ADMIN_REALTIME_NOTICE_DELAY_MS = 2000;
 const ordersSnapshotCache = new Map();
 const ordersSnapshotInFlight = new Map();
 
@@ -121,6 +126,27 @@ function getWebOrdersOnly(orders = []) {
   return (Array.isArray(orders) ? orders : []).filter((order) => order?.sourceType !== "partner");
 }
 
+function getTimeValue(value = "") {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function realtimeEventMatchesDateRange(change = {}, dateRange = {}) {
+  const table = String(change?.table || "");
+  if (table === "order_items" || table === "partner_order_items") return true;
+
+  const row = change?.payload?.new || change?.payload?.old || {};
+  const timeValue = getTimeValue(table === "partner_orders" ? row.order_time || row.created_at : row.created_at);
+  if (!timeValue) return true;
+
+  const fromValue = getTimeValue(dateRange.dateFrom);
+  const toValue = getTimeValue(dateRange.dateTo);
+  if (fromValue && timeValue < fromValue) return false;
+  if (toValue && timeValue >= toValue) return false;
+  return true;
+}
+
 export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const {
     section = "dashboard",
@@ -136,8 +162,23 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const [chartOrdersSnapshot, setChartOrdersSnapshot] = useState([]);
   const [crmSnapshot, setCrmSnapshot] = useState({ customers: [], loyaltyConfig: {} });
   const [adminRequestAudit, setAdminRequestAudit] = useState(() => getAdminRequestAuditSnapshot());
+  const [adminOrdersRealtimePending, setAdminOrdersRealtimePending] = useState(false);
+  const [adminOrdersRealtimeCount, setAdminOrdersRealtimeCount] = useState(0);
   const [customerAdminTab, setCustomerAdminTab] = useState("crm");
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState("");
+
+  const loadActiveOrdersSnapshot = async ({ force = false } = {}) => {
+    const dateRange = buildDateRangeFromInputs(ordersDateFrom, ordersDateTo);
+    if (force) clearOrdersSnapshotCache();
+    const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
+      includePartnerOrders: true
+    });
+    setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
+    setAdminOrdersRealtimePending(false);
+    setAdminOrdersRealtimeCount(0);
+    setAdminRequestAudit(getAdminRequestAuditSnapshot());
+    return nextOrders;
+  };
 
   useEffect(() => {
     let disposed = false;
@@ -145,6 +186,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
 
     const refreshOrdersOnly = async () => {
+      if (section === "customers") return;
+
       const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
       try {
         const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
@@ -165,6 +208,44 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       disposed = true;
     };
   }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo]);
+
+  useEffect(() => {
+    if (section !== "orders") {
+      setAdminOrdersRealtimePending(false);
+      setAdminOrdersRealtimeCount(0);
+      return undefined;
+    }
+
+    let alive = true;
+    let noticeTimer = null;
+    let unsubscribe = () => {};
+
+    async function startRealtime() {
+      unsubscribe = await subscribeAdminOrderChanges((change) => {
+        if (!alive) return;
+        const dateRange = buildDateRangeFromInputs(ordersDateFrom, ordersDateTo);
+        if (!realtimeEventMatchesDateRange(change, dateRange)) return;
+        if (noticeTimer) window.clearTimeout(noticeTimer);
+        noticeTimer = window.setTimeout(() => {
+          noticeTimer = null;
+          if (!alive) return;
+          setAdminOrdersRealtimePending(true);
+          setAdminOrdersRealtimeCount((count) => count + 1);
+        }, ADMIN_REALTIME_NOTICE_DELAY_MS);
+      });
+    }
+
+    startRealtime();
+
+    return () => {
+      alive = false;
+      if (noticeTimer) {
+        window.clearTimeout(noticeTimer);
+        noticeTimer = null;
+      }
+      unsubscribe?.();
+    };
+  }, [ordersDateFrom, ordersDateTo, section]);
 
   useEffect(() => {
     let disposed = false;
@@ -289,6 +370,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     setCrmSnapshot,
     adminRequestAudit,
     resetAdminRequestAudit: resetAdminAudit,
+    adminOrdersRealtimePending,
+    adminOrdersRealtimeCount,
+    refreshAdminOrdersFromRealtime: () => loadActiveOrdersSnapshot({ force: true }),
     customerAdminTab,
     setCustomerAdminTab,
     selectedCustomerPhone,

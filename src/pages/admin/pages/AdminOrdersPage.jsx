@@ -10,6 +10,9 @@ export default function AdminOrdersPage({
   setCrmSnapshot,
   adminRequestAudit,
   resetAdminRequestAudit,
+  adminOrdersRealtimePending,
+  adminOrdersRealtimeCount,
+  refreshAdminOrdersFromRealtime,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
   onAdjustPoints,
@@ -119,6 +122,42 @@ export default function AdminOrdersPage({
       <div style={{ marginBottom: 12 }}>
         <AdminRequestAuditBadge audit={adminRequestAudit} onReset={resetAdminRequestAudit} />
       </div>
+
+      {adminOrdersRealtimePending ? (
+        <div
+          style={{
+            marginBottom: 12,
+            border: "1px solid #fed7aa",
+            background: "#fff7ed",
+            color: "#c2410c",
+            borderRadius: 10,
+            padding: "10px 12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            fontSize: 13,
+            fontWeight: 900
+          }}
+        >
+          <span>Có cập nhật đơn mới ({adminOrdersRealtimeCount}). Bấm để tải danh sách mới.</span>
+          <button
+            type="button"
+            onClick={refreshAdminOrdersFromRealtime}
+            style={{
+              border: "1px solid #f97316",
+              background: "#ffffff",
+              color: "#c2410c",
+              borderRadius: 8,
+              padding: "8px 12px",
+              fontWeight: 900,
+              cursor: "pointer"
+            }}
+          >
+            Cập nhật đơn
+          </button>
+        </div>
+      ) : null}
 
       <AdminOrdersCrmSection
         section="orders"
