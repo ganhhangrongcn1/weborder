@@ -11,6 +11,8 @@ const MONTHLY_GIFT_CODE = "MONTHLY_3_ORDERS";
 const MONTHLY_GIFT_NAME = "Quà khách quen tháng";
 const MONTHLY_GIFT_THRESHOLD = 3;
 const CANCELLED_STATUS_KEYS = new Set(["cancelled", "canceled", "cancel", "refunded"]);
+const MONTHLY_GIFT_STATS_CACHE_TTL_MS = 3 * 60 * 1000;
+const monthlyGiftStatsCache = new Map();
 
 function toText(value = "") {
   return String(value || "").trim();
@@ -66,6 +68,59 @@ function getMonthRange(monthKey = "") {
     dateFrom: start.toISOString(),
     dateTo: end.toISOString()
   };
+}
+
+function getOrderIdentitySignature(order = {}) {
+  const raw = getObject(order.raw);
+  return toText(
+    order.stableKey ||
+      order.id ||
+      order.orderCode ||
+      order.displayOrderCode ||
+      raw.id ||
+      raw.order_code ||
+      raw.display_order_code
+  );
+}
+
+function buildGiftStatsCacheKey(monthKey = "", customerKeys = [], phoneKeys = [], orders = []) {
+  const customerPart = [...customerKeys].sort().join(",");
+  const phonePart = [...phoneKeys].sort().join(",");
+  const orderPart = (Array.isArray(orders) ? orders : [])
+    .map(getOrderIdentitySignature)
+    .filter(Boolean)
+    .sort()
+    .join(",");
+
+  return `${monthKey}|customers:${customerPart}|phones:${phonePart}|orders:${orderPart}`;
+}
+
+function getFreshGiftStatsCache(cacheKey = "") {
+  const entry = monthlyGiftStatsCache.get(cacheKey);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > MONTHLY_GIFT_STATS_CACHE_TTL_MS) {
+    monthlyGiftStatsCache.delete(cacheKey);
+    return null;
+  }
+  return entry.value;
+}
+
+function setGiftStatsCache(cacheKey = "", value = {}) {
+  if (!cacheKey) return;
+  monthlyGiftStatsCache.set(cacheKey, {
+    cachedAt: Date.now(),
+    value
+  });
+}
+
+function clearGiftStatsCacheForCustomer(monthKey = "", customerKey = "") {
+  const key = toText(customerKey);
+  if (!key) return;
+  monthlyGiftStatsCache.forEach((_, cacheKey) => {
+    if (cacheKey.startsWith(`${monthKey}|`) && cacheKey.includes(key)) {
+      monthlyGiftStatsCache.delete(cacheKey);
+    }
+  });
 }
 
 async function getReadClient() {
@@ -358,6 +413,7 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
   const identities = list.map(resolveKitchenCustomerIdentity);
   const customerKeys = [...new Set(identities.map((identity) => identity.key).filter(Boolean))];
   const phoneKeys = [...new Set(identities.filter((identity) => identity.type === "phone").map((identity) => identity.key))];
+  const cacheKey = buildGiftStatsCacheKey(monthKey, customerKeys, phoneKeys, list);
 
   if (!customerKeys.length) {
     return {
@@ -370,6 +426,28 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
   }
 
   try {
+    if (!options.force) {
+      const cachedStats = getFreshGiftStatsCache(cacheKey);
+      if (cachedStats) {
+        return {
+          orders: list.map((order) => {
+            const identity = resolveKitchenCustomerIdentity(order);
+            return {
+              ...order,
+              monthlyGift: buildMonthlyGiftInfo(order, {
+                monthKey,
+                monthlyOrderCount: cachedStats.monthlyCounts.get(identity.key) || 0,
+                claim: cachedStats.giftClaims.get(identity.key) || null,
+                profile: cachedStats.profiles.get(identity.key) || null,
+                allTimeStats: cachedStats.allTimeStatsMap.get(identity.key) || null
+              })
+            };
+          }),
+          error: ""
+        };
+      }
+    }
+
     const client = await getReadClient();
     if (!client) throw new Error("Supabase chưa sẵn sàng.");
 
@@ -379,15 +457,23 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
       readGiftClaims(client, customerKeys, monthKey),
       readCustomerProfiles(client, phoneKeys)
     ]);
+    const dynamicPhoneKeys = phoneKeys.filter((phone) => !profiles.has(phone));
     const [allTimeWebsiteOrders, allTimePartnerOrders] = await Promise.all([
-      readAllTimeWebsiteOrdersByPhones(client, phoneKeys),
-      readAllTimePartnerOrdersByPhones(client, phoneKeys)
+      readAllTimeWebsiteOrdersByPhones(client, dynamicPhoneKeys),
+      readAllTimePartnerOrdersByPhones(client, dynamicPhoneKeys)
     ]);
     const monthlyCounts = countMonthlyOrders([...websiteOrders, ...partnerOrders], new Set(customerKeys));
     const allTimeStatsMap = mergeCountStats(
       mergeCountStats(new Map(), allTimeWebsiteOrders),
       allTimePartnerOrders
     );
+    const stats = {
+      monthlyCounts,
+      giftClaims,
+      profiles,
+      allTimeStatsMap
+    };
+    setGiftStatsCache(cacheKey, stats);
 
     return {
       orders: list.map((order) => {
@@ -480,6 +566,8 @@ export async function claimMonthlyCustomerGift(order = {}, options = {}) {
         .eq("gift_code", MONTHLY_GIFT_CODE)
         .maybeSingle();
 
+      clearGiftStatsCacheForCustomer(monthKey, identity.key);
+
       return {
         ok: true,
         alreadyClaimed: true,
@@ -493,6 +581,8 @@ export async function claimMonthlyCustomerGift(order = {}, options = {}) {
       message: error.message || "Không xác nhận được quà khách quen."
     };
   }
+
+  clearGiftStatsCacheForCustomer(monthKey, identity.key);
 
   return {
     ok: true,
