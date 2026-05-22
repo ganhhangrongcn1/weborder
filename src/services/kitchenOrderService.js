@@ -21,6 +21,86 @@ const PLATFORM_LABELS = {
   xanh_ngon: "Xanh Ngon"
 };
 
+const WEBSITE_ORDER_COLUMNS = [
+  "id",
+  "order_code",
+  "customer_phone",
+  "customer_name",
+  "fulfillment_type",
+  "payment_method",
+  "status",
+  "subtotal",
+  "shipping_fee",
+  "total_amount",
+  "branch_name",
+  "metadata",
+  "created_at",
+  "updated_at",
+  "branch_uuid",
+  "pickup_branch_uuid",
+  "delivery_branch_uuid",
+  "branch_id",
+  "pickup_branch_id",
+  "delivery_branch_id",
+  "pickup_branch_name",
+  "delivery_branch_name",
+  "kitchen_status",
+  "kitchen_done_at"
+].join(",");
+
+const WEBSITE_ITEM_COLUMNS = [
+  "id",
+  "order_id",
+  "product_id",
+  "product_name",
+  "quantity",
+  "note",
+  "toppings",
+  "spice",
+  "kitchen_item_status",
+  "metadata"
+].join(",");
+
+const PARTNER_ORDER_COLUMNS = [
+  "id",
+  "order_code",
+  "display_order_code",
+  "partner_source",
+  "branch_id",
+  "branch_name",
+  "customer_name",
+  "customer_phone",
+  "customer_phone_key",
+  "total_amount",
+  "order_status",
+  "kitchen_status",
+  "order_time",
+  "created_at",
+  "updated_at",
+  "raw_data",
+  "nexpos_order_id",
+  "nexpos_hub_name",
+  "nexpos_site_name",
+  "branch_uuid",
+  "nexpos_status",
+  "kitchen_work_status",
+  "kitchen_done_at"
+].join(",");
+
+const PARTNER_ITEM_COLUMNS = [
+  "id",
+  "partner_order_id",
+  "item_key",
+  "web_product_id",
+  "partner_item_id",
+  "web_product_name",
+  "partner_item_name",
+  "quantity",
+  "note",
+  "options",
+  "kitchen_item_status"
+].join(",");
+
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -612,7 +692,7 @@ async function readOrderItems(client, orderIds = []) {
 
   const { data, error } = await client
     .from("order_items")
-    .select("*")
+    .select(WEBSITE_ITEM_COLUMNS)
     .in("order_id", orderIds);
 
   if (error) throw error;
@@ -630,7 +710,7 @@ async function readPartnerOrderItems(client, orderIds = []) {
 
   const { data, error } = await client
     .from("partner_order_items")
-    .select("*")
+    .select(PARTNER_ITEM_COLUMNS)
     .in("partner_order_id", orderIds);
 
   if (error) throw error;
@@ -702,7 +782,7 @@ export async function getWebsiteKitchenOrders(options = {}) {
 
   const dateFrom = toText(options.dateFrom);
   const dateTo = toText(options.dateTo);
-  let query = client.from("orders").select("*").order("created_at", { ascending: false });
+  let query = client.from("orders").select(WEBSITE_ORDER_COLUMNS).order("created_at", { ascending: false });
 
   if (dateFrom) query = query.gte("created_at", dateFrom);
   if (dateTo) query = query.lt("created_at", dateTo);
@@ -725,7 +805,7 @@ export async function getPartnerKitchenOrders(options = {}) {
 
   const dateFrom = toText(options.dateFrom);
   const dateTo = toText(options.dateTo);
-  let query = client.from("partner_orders").select("*").order("order_time", { ascending: false });
+  let query = client.from("partner_orders").select(PARTNER_ORDER_COLUMNS).order("order_time", { ascending: false });
 
   if (dateFrom) query = query.gte("order_time", dateFrom);
   if (dateTo) query = query.lt("order_time", dateTo);

@@ -15,7 +15,7 @@ import {
   sortKitchenOrdersForBoard
 } from "../features/kitchen/kitchenOrderGrouping.js";
 
-const REALTIME_RELOAD_DELAY_MS = 500;
+const REALTIME_RELOAD_DELAY_MS = 2000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 10000;
 
 function getTodayDateKey() {
@@ -37,6 +37,24 @@ function getDateRange(dateKey = "") {
     dateFrom: start.toISOString(),
     dateTo: end.toISOString()
   };
+}
+
+function getTimeValue(value = "") {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isTimeInRange(value = "", range = {}) {
+  const timeValue = getTimeValue(value);
+  if (!timeValue) return false;
+
+  const fromValue = getTimeValue(range.dateFrom);
+  const toValue = getTimeValue(range.dateTo);
+
+  if (fromValue && timeValue < fromValue) return false;
+  if (toValue && timeValue >= toValue) return false;
+  return true;
 }
 
 function normalizeText(value = "") {
@@ -114,27 +132,105 @@ function isSameKitchenOrder(first = {}, second = {}) {
   );
 }
 
-function getKitchenOrderRuntimeKey(order = {}) {
-  const id = String(
-    order?.stableKey ||
-      order?.raw?.stable_key ||
-      order?.raw?.nexpos_order_id ||
-      order?.raw?.display_order_code ||
-      order?.displayOrderCode ||
-      order?.orderCode ||
-      order?.id ||
-      ""
-  ).trim();
+function normalizeKitchenOrderRuntimeKey(order = {}, value = "") {
+  const id = String(value || "").trim();
   if (!id) return "";
-  return id.includes(":") ? id : `${String(order?.sourceType || "order").trim()}:${id}`;
+  if (id.includes(":")) return id;
+  return `${String(order?.sourceType || "order").trim() || "order"}:${id}`;
+}
+
+function getKitchenOrderRuntimeKeys(order = {}) {
+  const raw = order?.raw && typeof order.raw === "object" ? order.raw : {};
+  const keys = [
+    order?.stableKey,
+    raw?.stable_key,
+    raw?.nexpos_order_id,
+    raw?.display_order_code,
+    raw?.order_code,
+    raw?.id,
+    order?.displayOrderCode,
+    order?.orderCode,
+    order?.id
+  ]
+    .map((value) => normalizeKitchenOrderRuntimeKey(order, value))
+    .filter(Boolean);
+
+  return Array.from(new Set(keys));
+}
+
+function getKitchenOrderRuntimeKey(order = {}) {
+  return getKitchenOrderRuntimeKeys(order)[0] || "";
+}
+
+function rememberRecentlyClosedOrder(order = {}, expiresAt = 0, recentlyClosed = new Map()) {
+  getKitchenOrderRuntimeKeys(order).forEach((key) => {
+    recentlyClosed.set(key, expiresAt);
+  });
+}
+
+function forgetRecentlyClosedOrder(order = {}, recentlyClosed = new Map()) {
+  getKitchenOrderRuntimeKeys(order).forEach((key) => {
+    recentlyClosed.delete(key);
+  });
+}
+
+function getRecentlyClosedExpiresAt(order = {}, recentlyClosed = new Map()) {
+  return getKitchenOrderRuntimeKeys(order).reduce((latestExpiresAt, key) => {
+    const expiresAt = Number(recentlyClosed.get(key) || 0);
+    return expiresAt > latestExpiresAt ? expiresAt : latestExpiresAt;
+  }, 0);
 }
 
 function getKitchenItemKey(item = {}) {
   return String(item?.sourceItemId || item?.id || "").trim();
 }
 
+function getRealtimeOrderId(change = {}) {
+  const row = change?.payload?.new || change?.payload?.old || {};
+  if (change?.table === "order_items") return String(row.order_id || "").trim();
+  if (change?.table === "partner_order_items") return String(row.partner_order_id || "").trim();
+  return String(row.id || row.order_code || row.display_order_code || "").trim();
+}
+
+function realtimeEventMatchesDate(change = {}, dateRange = {}, currentOrders = []) {
+  const row = change?.payload?.new || change?.payload?.old || {};
+
+  if (change?.table === "orders") {
+    return isTimeInRange(row.created_at, dateRange);
+  }
+
+  if (change?.table === "partner_orders") {
+    return isTimeInRange(row.order_time || row.created_at, dateRange);
+  }
+
+  const changedOrderId = getRealtimeOrderId(change);
+  if (!changedOrderId) return true;
+
+  return (Array.isArray(currentOrders) ? currentOrders : []).some((order) => {
+    const orderIds = [
+      order.id,
+      order.orderCode,
+      order.displayOrderCode,
+      order.raw?.id,
+      order.raw?.order_code,
+      order.raw?.display_order_code
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+
+    return orderIds.includes(changedOrderId);
+  });
+}
+
 function shouldSuppressAfterDoneAction(order = {}, action = null) {
-  return Boolean(action?.settleOrder || order.sourceType === "partner" || action?.type === "partner_done");
+  const nextStatus = normalizeText(action?.nextStatus);
+  const nextKitchenStatus = normalizeText(action?.nextKitchenStatus);
+
+  return Boolean(
+    action?.settleOrder ||
+      order.sourceType === "partner" ||
+      action?.type === "partner_done" ||
+      ["done", "completed"].includes(nextStatus) ||
+      nextKitchenStatus === "done"
+  );
 }
 
 function getKitchenItemDisplayStatus(status = "") {
@@ -245,23 +341,27 @@ export default function useKitchenOrders(options = null) {
   const loadingOrdersRef = useRef(false);
   const realtimeReloadTimerRef = useRef(null);
   const recentlyClosedOrderKeysRef = useRef(new Map());
+  const currentOrdersRef = useRef([]);
+
+  useEffect(() => {
+    currentOrdersRef.current = orders;
+  }, [orders]);
 
   const filterRecentlyClosedOrders = useCallback((list = []) => {
     const now = Date.now();
     const recentlyClosed = recentlyClosedOrderKeysRef.current;
 
     return (Array.isArray(list) ? list : []).filter((order) => {
-      const key = getKitchenOrderRuntimeKey(order);
-      if (!key || !recentlyClosed.has(key)) return true;
+      const expiresAt = getRecentlyClosedExpiresAt(order, recentlyClosed);
+      if (!expiresAt) return true;
 
-      const expiresAt = recentlyClosed.get(key);
       if (expiresAt <= now) {
-        recentlyClosed.delete(key);
+        forgetRecentlyClosedOrder(order, recentlyClosed);
         return true;
       }
 
       if (!orderMatchesStatus(order, "active")) {
-        recentlyClosed.delete(key);
+        forgetRecentlyClosedOrder(order, recentlyClosed);
         return true;
       }
 
@@ -329,8 +429,11 @@ export default function useKitchenOrders(options = null) {
     let unsubscribe = () => {};
 
     async function startRealtime() {
-      unsubscribe = await subscribeKitchenOrderChanges(() => {
+      unsubscribe = await subscribeKitchenOrderChanges((change) => {
         if (!alive) return;
+        const dateRange = getDateRange(dateFilter);
+        if (!realtimeEventMatchesDate(change, dateRange, currentOrdersRef.current)) return;
+
         if (realtimeReloadTimerRef.current) {
           window.clearTimeout(realtimeReloadTimerRef.current);
         }
@@ -351,7 +454,7 @@ export default function useKitchenOrders(options = null) {
       }
       unsubscribe?.();
     };
-  }, [enabled, loadOrders]);
+  }, [dateFilter, enabled, loadOrders]);
 
   const filteredOrders = useMemo(() => {
     const matchedOrders = orders.filter((order) => {
@@ -393,7 +496,11 @@ export default function useKitchenOrders(options = null) {
     const shouldSuppressReloadEcho = shouldSuppressAfterDoneAction(order, action);
     const orderRuntimeKey = getKitchenOrderRuntimeKey(order);
     if (shouldSuppressReloadEcho && orderRuntimeKey) {
-      recentlyClosedOrderKeysRef.current.set(orderRuntimeKey, Date.now() + RECENTLY_CLOSED_SUPPRESS_MS);
+      rememberRecentlyClosedOrder(
+        order,
+        Date.now() + RECENTLY_CLOSED_SUPPRESS_MS,
+        recentlyClosedOrderKeysRef.current
+      );
     }
 
     setUpdatingOrderId(orderId);
@@ -403,13 +510,13 @@ export default function useKitchenOrders(options = null) {
     try {
       const result = await markKitchenOrderDone(order);
       if (!result.ok) {
-        if (orderRuntimeKey) recentlyClosedOrderKeysRef.current.delete(orderRuntimeKey);
+        if (orderRuntimeKey) forgetRecentlyClosedOrder(order, recentlyClosedOrderKeysRef.current);
         setOrders(previousOrders);
         setError(result.message || "Không cập nhật được trạng thái đơn.");
         return;
       }
     } catch (err) {
-      if (orderRuntimeKey) recentlyClosedOrderKeysRef.current.delete(orderRuntimeKey);
+      if (orderRuntimeKey) forgetRecentlyClosedOrder(order, recentlyClosedOrderKeysRef.current);
       setOrders(previousOrders);
       setError(err?.message || "Không cập nhật được trạng thái đơn.");
     } finally {

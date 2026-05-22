@@ -606,10 +606,10 @@ async function readStructuredBranches(fallback) {
   if (!client) return fallback;
 
   const selectCandidates = [
-    "id,name,address,phone,map,lat,lng,open,time,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,legacy_id,is_open,data,updated_at",
-    "id,name,address,phone,map,lat,lng,open,time,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,is_open,data,updated_at",
-    "id,name,address,phone,map,lat,lng,open,time,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,data,updated_at",
-    "id,name,address,phone,map,lat,lng,open,time,slug,branch_code,branch_uuid,data,updated_at",
+    "id,name,address,phone,map_url,lat,lng,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,legacy_id,is_open,data,updated_at",
+    "id,name,address,phone,map_url,lat,lng,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,is_open,data,updated_at",
+    "id,name,address,phone,map_url,lat,lng,open_time,close_time,ship_enabled,pickup_enabled,slug,branch_code,branch_uuid,data,updated_at",
+    "id,name,address,phone,map_url,lat,lng,slug,branch_code,branch_uuid,data,updated_at",
     "id,name,data,slug,branch_code,branch_uuid,updated_at",
     "id,name,data,updated_at"
   ];
@@ -638,11 +638,11 @@ async function readStructuredBranches(fallback) {
       name: normalizeText(meta?.name ?? row?.name, ""),
       address: String(meta?.address ?? row?.address ?? ""),
       phone: String(meta?.phone ?? row?.phone ?? ""),
-      map: String(meta?.map ?? row?.map ?? ""),
+      map: String(meta?.map ?? meta?.map_url ?? row?.map_url ?? ""),
       lat: String(meta?.lat ?? row?.lat ?? ""),
       lng: String(meta?.lng ?? row?.lng ?? ""),
       open: normalizeBoolean(meta?.open ?? row?.open ?? row?.is_open, true),
-      time: String(meta?.time ?? row?.time ?? ""),
+      time: String(meta?.time ?? [row?.open_time, row?.close_time].filter(Boolean).join(" - ") ?? ""),
       openTime: String(meta?.openTime ?? row?.open_time ?? ""),
       closeTime: String(meta?.closeTime ?? row?.close_time ?? ""),
       shipEnabled: normalizeBoolean(meta?.shipEnabled ?? row?.ship_enabled, true),
