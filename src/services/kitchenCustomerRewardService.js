@@ -83,32 +83,36 @@ function getOrderIdentitySignature(order = {}) {
   );
 }
 
-function buildGiftStatsCacheKey(monthKey = "", customerKeys = [], phoneKeys = [], orders = []) {
-  const customerPart = [...customerKeys].sort().join(",");
-  const phonePart = [...phoneKeys].sort().join(",");
-  const orderPart = (Array.isArray(orders) ? orders : [])
-    .map(getOrderIdentitySignature)
-    .filter(Boolean)
-    .sort()
-    .join(",");
-
-  return `${monthKey}|customers:${customerPart}|phones:${phonePart}|orders:${orderPart}`;
+function buildGiftStatsCacheKey(monthKey = "", customerKey = "") {
+  const month = toText(monthKey);
+  const key = toText(customerKey);
+  return month && key ? `${month}|customer:${key}` : "";
 }
 
-function getFreshGiftStatsCache(cacheKey = "") {
+function getFreshGiftStatsCache(cacheKey = "", visibleOrderSignatures = []) {
   const entry = monthlyGiftStatsCache.get(cacheKey);
   if (!entry) return null;
   if (Date.now() - entry.cachedAt > MONTHLY_GIFT_STATS_CACHE_TTL_MS) {
     monthlyGiftStatsCache.delete(cacheKey);
     return null;
   }
+
+  const cachedSignatures = entry.orderSignatures instanceof Set ? entry.orderSignatures : new Set();
+  const hasUnknownVisibleOrder = (Array.isArray(visibleOrderSignatures) ? visibleOrderSignatures : [])
+    .some((signature) => signature && !cachedSignatures.has(signature));
+  if (hasUnknownVisibleOrder) {
+    monthlyGiftStatsCache.delete(cacheKey);
+    return null;
+  }
+
   return entry.value;
 }
 
-function setGiftStatsCache(cacheKey = "", value = {}) {
+function setGiftStatsCache(cacheKey = "", value = {}, orderSignatures = []) {
   if (!cacheKey) return;
   monthlyGiftStatsCache.set(cacheKey, {
     cachedAt: Date.now(),
+    orderSignatures: new Set((Array.isArray(orderSignatures) ? orderSignatures : []).filter(Boolean)),
     value
   });
 }
@@ -116,11 +120,7 @@ function setGiftStatsCache(cacheKey = "", value = {}) {
 function clearGiftStatsCacheForCustomer(monthKey = "", customerKey = "") {
   const key = toText(customerKey);
   if (!key) return;
-  monthlyGiftStatsCache.forEach((_, cacheKey) => {
-    if (cacheKey.startsWith(`${monthKey}|`) && cacheKey.includes(key)) {
-      monthlyGiftStatsCache.delete(cacheKey);
-    }
-  });
+  monthlyGiftStatsCache.delete(buildGiftStatsCacheKey(monthKey, key));
 }
 
 async function getReadClient() {
@@ -217,6 +217,31 @@ function mergeCountStats(base = new Map(), rows = []) {
   });
 
   return base;
+}
+
+function groupVisibleOrderSignaturesByCustomer(orders = []) {
+  const map = new Map();
+
+  (Array.isArray(orders) ? orders : []).forEach((order) => {
+    const identity = resolveKitchenCustomerIdentity(order);
+    if (!identity.key) return;
+    const signature = getOrderIdentitySignature(order);
+    if (!signature) return;
+    const signatures = map.get(identity.key) || [];
+    signatures.push(signature);
+    map.set(identity.key, signatures);
+  });
+
+  return map;
+}
+
+function buildStatsForCustomer(customerKey = "", stats = {}) {
+  return {
+    monthlyOrderCount: stats.monthlyCounts?.get(customerKey) || 0,
+    claim: stats.giftClaims?.get(customerKey) || null,
+    profile: stats.profiles?.get(customerKey) || null,
+    allTimeStats: stats.allTimeStatsMap?.get(customerKey) || null
+  };
 }
 
 async function readMonthlyWebsiteOrders(client, range) {
@@ -413,7 +438,7 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
   const identities = list.map(resolveKitchenCustomerIdentity);
   const customerKeys = [...new Set(identities.map((identity) => identity.key).filter(Boolean))];
   const phoneKeys = [...new Set(identities.filter((identity) => identity.type === "phone").map((identity) => identity.key))];
-  const cacheKey = buildGiftStatsCacheKey(monthKey, customerKeys, phoneKeys, list);
+  const visibleSignaturesByCustomer = groupVisibleOrderSignaturesByCustomer(list);
 
   if (!customerKeys.length) {
     return {
@@ -426,43 +451,60 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
   }
 
   try {
+    const cachedStatsByCustomer = new Map();
+    const missingCustomerKeys = [];
+
     if (!options.force) {
-      const cachedStats = getFreshGiftStatsCache(cacheKey);
-      if (cachedStats) {
+      customerKeys.forEach((customerKey) => {
+        const cacheKey = buildGiftStatsCacheKey(monthKey, customerKey);
+        const cachedStats = getFreshGiftStatsCache(cacheKey, visibleSignaturesByCustomer.get(customerKey) || []);
+        if (cachedStats) {
+          cachedStatsByCustomer.set(customerKey, cachedStats);
+        } else {
+          missingCustomerKeys.push(customerKey);
+        }
+      });
+
+      if (!missingCustomerKeys.length) {
         return {
           orders: list.map((order) => {
             const identity = resolveKitchenCustomerIdentity(order);
+            const cachedStats = cachedStatsByCustomer.get(identity.key) || {};
             return {
               ...order,
               monthlyGift: buildMonthlyGiftInfo(order, {
                 monthKey,
-                monthlyOrderCount: cachedStats.monthlyCounts.get(identity.key) || 0,
-                claim: cachedStats.giftClaims.get(identity.key) || null,
-                profile: cachedStats.profiles.get(identity.key) || null,
-                allTimeStats: cachedStats.allTimeStatsMap.get(identity.key) || null
+                monthlyOrderCount: cachedStats.monthlyOrderCount || 0,
+                claim: cachedStats.claim || null,
+                profile: cachedStats.profile || null,
+                allTimeStats: cachedStats.allTimeStats || null
               })
             };
           }),
           error: ""
         };
       }
+    } else {
+      missingCustomerKeys.push(...customerKeys);
     }
 
     const client = await getReadClient();
     if (!client) throw new Error("Supabase chưa sẵn sàng.");
 
+    const missingCustomerSet = new Set(missingCustomerKeys);
+    const missingPhoneKeys = phoneKeys.filter((phone) => missingCustomerSet.has(phone));
     const [websiteOrders, partnerOrders, giftClaims, profiles] = await Promise.all([
       readMonthlyWebsiteOrders(client, range),
       readMonthlyPartnerOrders(client, range),
-      readGiftClaims(client, customerKeys, monthKey),
-      readCustomerProfiles(client, phoneKeys)
+      readGiftClaims(client, missingCustomerKeys, monthKey),
+      readCustomerProfiles(client, missingPhoneKeys)
     ]);
-    const dynamicPhoneKeys = phoneKeys.filter((phone) => !profiles.has(phone));
+    const dynamicPhoneKeys = missingPhoneKeys.filter((phone) => !profiles.has(phone));
     const [allTimeWebsiteOrders, allTimePartnerOrders] = await Promise.all([
       readAllTimeWebsiteOrdersByPhones(client, dynamicPhoneKeys),
       readAllTimePartnerOrdersByPhones(client, dynamicPhoneKeys)
     ]);
-    const monthlyCounts = countMonthlyOrders([...websiteOrders, ...partnerOrders], new Set(customerKeys));
+    const monthlyCounts = countMonthlyOrders([...websiteOrders, ...partnerOrders], missingCustomerSet);
     const allTimeStatsMap = mergeCountStats(
       mergeCountStats(new Map(), allTimeWebsiteOrders),
       allTimePartnerOrders
@@ -473,19 +515,26 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
       profiles,
       allTimeStatsMap
     };
-    setGiftStatsCache(cacheKey, stats);
+
+    missingCustomerKeys.forEach((customerKey) => {
+      const cacheKey = buildGiftStatsCacheKey(monthKey, customerKey);
+      const customerStats = buildStatsForCustomer(customerKey, stats);
+      cachedStatsByCustomer.set(customerKey, customerStats);
+      setGiftStatsCache(cacheKey, customerStats, visibleSignaturesByCustomer.get(customerKey) || []);
+    });
 
     return {
       orders: list.map((order) => {
         const identity = resolveKitchenCustomerIdentity(order);
+        const customerStats = cachedStatsByCustomer.get(identity.key) || {};
         return {
           ...order,
           monthlyGift: buildMonthlyGiftInfo(order, {
             monthKey,
-            monthlyOrderCount: monthlyCounts.get(identity.key) || 0,
-            claim: giftClaims.get(identity.key) || null,
-            profile: profiles.get(identity.key) || null,
-            allTimeStats: allTimeStatsMap.get(identity.key) || null
+            monthlyOrderCount: customerStats.monthlyOrderCount || 0,
+            claim: customerStats.claim || null,
+            profile: customerStats.profile || null,
+            allTimeStats: customerStats.allTimeStats || null
           })
         };
       }),
