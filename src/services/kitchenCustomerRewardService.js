@@ -12,7 +12,7 @@ const MONTHLY_GIFT_CODE = "MONTHLY_3_ORDERS";
 const MONTHLY_GIFT_NAME = "Quà khách quen tháng";
 const MONTHLY_GIFT_THRESHOLD = 3;
 const CANCELLED_STATUS_KEYS = new Set(["cancelled", "canceled", "cancel", "refunded"]);
-const MONTHLY_GIFT_STATS_CACHE_TTL_MS = 3 * 60 * 1000;
+const MONTHLY_GIFT_STATS_CACHE_TTL_MS = 15 * 60 * 1000;
 const monthlyGiftStatsCache = new Map();
 
 function toText(value = "") {
@@ -245,6 +245,11 @@ function buildStatsForCustomer(customerKey = "", stats = {}) {
   };
 }
 
+function profileNeedsAllTimeFallback(profile = null) {
+  if (!profile) return true;
+  return toNumber(profile.total_orders, 0) <= 0;
+}
+
 async function readMonthlyWebsiteOrders(client, range) {
   const { data, error } = await client
     .from("orders")
@@ -411,10 +416,16 @@ function buildMonthlyGiftInfo(order = {}, options = {}) {
   const profileTotalOrders = toNumber(profile?.total_orders, 0);
   const dynamicTotalSpent = toNumber(allTimeStats?.totalSpent, 0);
   const dynamicTotalOrders = toNumber(allTimeStats?.totalOrders, 0);
-  const totalSpent = Math.max(profileTotalSpent, dynamicTotalSpent);
-  const totalOrderCount = Math.max(profileTotalOrders, dynamicTotalOrders, monthlyOrderCount);
-  const memberTier = toText(profile?.member_rank) && profile?.member_rank !== "Member"
-    ? toText(profile.member_rank)
+  const profileMemberRank = toText(profile?.member_rank);
+  const hasProfileLifetimeStats = Boolean(
+    profile && (profileTotalOrders > 0 || profileTotalSpent > 0 || (profileMemberRank && profileMemberRank !== "Member"))
+  );
+  const totalSpent = hasProfileLifetimeStats ? profileTotalSpent : dynamicTotalSpent;
+  const totalOrderCount = hasProfileLifetimeStats
+    ? Math.max(profileTotalOrders, monthlyOrderCount)
+    : Math.max(dynamicTotalOrders, monthlyOrderCount);
+  const memberTier = profileMemberRank && profileMemberRank !== "Member"
+    ? profileMemberRank
     : getCustomerTier(totalSpent);
 
   return {
@@ -507,7 +518,7 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
       readGiftClaims(client, missingCustomerKeys, monthKey),
       readCustomerProfiles(client, missingPhoneKeys)
     ]);
-    const dynamicPhoneKeys = missingPhoneKeys.filter((phone) => !profiles.has(phone));
+    const dynamicPhoneKeys = missingPhoneKeys.filter((phone) => profileNeedsAllTimeFallback(profiles.get(phone)));
     const [allTimeWebsiteOrders, allTimePartnerOrders] = await Promise.all([
       readAllTimeWebsiteOrdersByPhones(client, dynamicPhoneKeys),
       readAllTimePartnerOrdersByPhones(client, dynamicPhoneKeys)

@@ -141,23 +141,159 @@ function getActionButtonTone(actionType = "", fallbackColor = "#111827") {
   };
 }
 
-function Badge({ children, tone }) {
+function getMemberTierTone(memberTier = "") {
+  const value = String(memberTier || "").toLowerCase();
+
+  if (value.includes("kim")) return { background: "#f0fdff", border: "#a5f3fc", color: "#0e7490" };
+  if (value.includes("vàng") || value.includes("vang")) return { background: "#fffaf0", border: "#fde68a", color: "#b45309" };
+  if (value.includes("bạc") || value.includes("bac")) return { background: "#f8fafc", border: "#e2e8f0", color: "#475569" };
+
+  return { background: "#fff7ed", border: "#fed7aa", color: "#c2410c" };
+}
+
+function getMonthlyCountTone(count = 0) {
+  const safeCount = Number(count || 0);
+  if (safeCount >= 3) return { background: "#f0fdf4", border: "#bbf7d0", color: "#15803d" };
+  if (safeCount === 2) return { background: "#fffbeb", border: "#fde68a", color: "#b45309" };
+  return { background: "#fff7ed", border: "#fed7aa", color: "#c2410c" };
+}
+
+function getGiftBadgeTone(gift = null, monthlyOrderCount = 0) {
+  if (gift?.claimed) return { background: "#f0fdf4", border: "#bbf7d0", color: "#15803d" };
+  if (Number(monthlyOrderCount || 0) >= Number(gift?.threshold || 3)) {
+    return { background: "#fffbeb", border: "#fde68a", color: "#b45309" };
+  }
+
+  return { background: "#f5f3ff", border: "#ddd6fe", color: "#6d28d9" };
+}
+
+function KitchenIcon({ name, size = 14 }) {
+  const paths = {
+    badge: (
+      <>
+        <path d="M4 5.5 12 2l8 3.5v6.25c0 4.5-3.1 8.2-8 10.25-4.9-2.05-8-5.75-8-10.25V5.5Z" />
+        <path d="M9 12.2 11.1 14.3 15.4 10" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7.5v5l3.25 2" />
+      </>
+    ),
+    gift: (
+      <>
+        <path d="M4 10h16v10H4V10Z" />
+        <path d="M4 10h16M12 10v10M7.5 6.5c0-1.1.9-2 2-2 2.5 0 2.5 3.5 2.5 5.5-2 0-4.5-1-4.5-3.5ZM16.5 6.5c0-1.1-.9-2-2-2-2.5 0-2.5 3.5-2.5 5.5 2 0 4.5-1 4.5-3.5Z" />
+      </>
+    ),
+    order: (
+      <>
+        <path d="M7 3.5h10l2 2V20l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2L7 20V3.5Z" />
+        <path d="M10 8h4.5M10 12h5.5M10 16h3.5" />
+      </>
+    ),
+    phone: (
+      <>
+        <path d="M8.2 4.2 10 8 8.6 9.4c1 2.1 2.9 4 5 5L15 13l3.8 1.8c.45.2.7.7.55 1.2-.55 1.95-2.35 3.2-4.35 2.85C10.1 18 6 13.9 5.15 9 4.8 7 6.05 5.2 8 4.65c.5-.15 1 .1 1.2.55Z" />
+      </>
+    ),
+    repeat: (
+      <>
+        <path d="M17 2.5 20.5 6 17 9.5" />
+        <path d="M3.5 10V8a2 2 0 0 1 2-2h15" />
+        <path d="M7 21.5 3.5 18 7 14.5" />
+        <path d="M20.5 14v2a2 2 0 0 1-2 2h-15" />
+      </>
+    ),
+    shop: (
+      <>
+        <path d="M4 10h16l-1.5-5h-13L4 10Z" />
+        <path d="M6 10v9h12v-9" />
+        <path d="M9 19v-5h6v5" />
+      </>
+    ),
+    spark: (
+      <>
+        <path d="M12 3l1.5 5L18 10l-4.5 2L12 17l-1.5-5L6 10l4.5-2L12 3Z" />
+        <path d="M19.5 15.5 21 17l-1.5 1.5L18 17l1.5-1.5ZM4.5 15.5 6 17l-1.5 1.5L3 17l1.5-1.5Z" />
+      </>
+    ),
+    timer: (
+      <>
+        <path d="M9 2.5h6" />
+        <path d="M12 7v5l3 1.8" />
+        <circle cx="12" cy="13" r="7.5" />
+      </>
+    ),
+    trophy: (
+      <>
+        <path d="M8 4h8v4.5a4 4 0 0 1-8 0V4Z" />
+        <path d="M8 6H5.5A2.5 2.5 0 0 0 8 10M16 6h2.5A2.5 2.5 0 0 1 16 10M12 12.5V17M9 20h6M10 17h4" />
+      </>
+    )
+  };
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ flex: "0 0 auto", opacity: 0.78 }}
+    >
+      {paths[name] || paths.badge}
+    </svg>
+  );
+}
+
+function Badge({ children, tone, icon = "" }) {
   return (
     <span
       style={{
         display: "inline-flex",
         alignItems: "center",
+        gap: 5,
         border: `1px solid ${tone.border}`,
         background: tone.background,
         color: tone.color,
         borderRadius: 999,
-        padding: "5px 9px",
-        fontSize: 12,
-        fontWeight: 900,
+        padding: "4px 8px",
+        fontSize: 11,
+        fontWeight: 760,
+        lineHeight: 1.1,
         whiteSpace: "nowrap"
       }}
     >
+      {icon ? <KitchenIcon name={icon} size={12} /> : null}
       {children}
+    </span>
+  );
+}
+
+function InfoLine({ children, color = "#475569", icon, strong = false }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        minWidth: 0,
+        color,
+        fontSize: strong ? 14 : 13,
+        fontWeight: strong ? 780 : 680,
+        lineHeight: 1.25
+      }}
+    >
+      <KitchenIcon name={icon} size={strong ? 14 : 13} />
+      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {children}
+      </span>
     </span>
   );
 }
@@ -178,16 +314,16 @@ function OptionChip({ children, optionLabel = "" }) {
         borderRadius: 999,
         padding: parsedOption?.group ? "5px 9px 6px" : "5px 8px",
         fontSize: 11,
-        fontWeight: 800,
+        fontWeight: 700,
         lineHeight: 1.15
       }}
     >
       {parsedOption?.group ? (
         <>
-          <span style={{ color: "#64748b", fontSize: 10, fontWeight: 750 }}>
+          <span style={{ color: "#64748b", fontSize: 10, fontWeight: 650 }}>
             {parsedOption.group}
           </span>
-          <strong style={{ color: "#111827", fontSize: 12, fontWeight: 950 }}>
+          <strong style={{ color: "#111827", fontSize: 12, fontWeight: 780 }}>
             {parsedOption.value || children}
           </strong>
         </>
@@ -550,76 +686,102 @@ export default function KitchenOrderCard({
         }}
       >
         <div style={{ minWidth: 0, display: "grid", gap: 9 }}>
-          <h3
+          <div
             style={{
-              margin: 0,
+              display: "grid",
+              gridTemplateColumns: "18px minmax(0, 1fr)",
+              gap: 6,
+              alignItems: "center",
               color: theme.code,
-              fontSize: 24,
-              lineHeight: 1.1,
-              fontWeight: 950,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap"
+              minWidth: 0
             }}
           >
-            {order.orderCode || order.id || "Chưa có mã đơn"}
-          </h3>
+            <KitchenIcon name="order" size={16} />
+            <h3
+              style={{
+                margin: 0,
+                color: "inherit",
+                fontSize: 22,
+                lineHeight: 1.1,
+                fontWeight: 840,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap"
+              }}
+            >
+              {order.orderCode || order.id || "Chưa có mã đơn"}
+            </h3>
+          </div>
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
             {active ? (
-              <Badge tone={{ background: theme.border, border: theme.border, color: "#ffffff" }}>
+              <Badge tone={{ background: theme.border, border: theme.border, color: "#ffffff" }} icon="badge">
                 ĐANG CHỌN
               </Badge>
             ) : null}
-            <Badge tone={{ background: platformTone.background, border: platformTone.border, color: platformTone.color }}>
+            <Badge tone={{ background: platformTone.background, border: platformTone.border, color: platformTone.color }} icon="shop">
               {order.platform || "Nguồn khác"}
             </Badge>
-            <Badge tone={getStatusTone(order.kitchenStatus)}>{order.displayStatus}</Badge>
+            <Badge tone={getStatusTone(order.kitchenStatus)} icon={isKitchenOrderDone(order) ? "badge" : "spark"}>
+              {order.displayStatus}
+            </Badge>
           </div>
           <strong
             style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
               color: theme.code,
-              fontSize: 20,
+              fontSize: 18,
+              fontWeight: 760,
+              lineHeight: 1.15,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap"
             }}
           >
+            <KitchenIcon name="shop" size={15} />
             {order.displayOrderCode || order.orderCode || order.id}
           </strong>
-          <span style={{ color: theme.text, fontSize: 14 }}>
+          <InfoLine icon="clock" color={theme.text}>
             {formatTime(order.createdAt)}
-          </span>
+          </InfoLine>
         </div>
 
-        <div style={{ display: "grid", gap: 9, color: "#0f172a", fontWeight: 800 }}>
-          <div>
+        <div style={{ display: "grid", gap: 9, color: "#0f172a", fontWeight: 680 }}>
+          <InfoLine icon="phone" color="#0f172a" strong>
             {order.customerName || "Khách"}
             {order.customerPhone ? ` - ${order.customerPhone}` : ""}
-          </div>
+          </InfoLine>
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            <OptionChip>{monthlyGift?.memberTier || "Đồng"} · {totalOrderCount} đơn</OptionChip>
-            <OptionChip>Lần {monthlyOrderCount || 1} tháng này</OptionChip>
-            <OptionChip>{monthlyGiftBadgeText}</OptionChip>
+            <Badge tone={getMemberTierTone(monthlyGift?.memberTier || "Đồng")} icon="trophy">
+              {monthlyGift?.memberTier || "Đồng"} · {totalOrderCount} đơn
+            </Badge>
+            <Badge tone={getMonthlyCountTone(monthlyOrderCount)} icon="repeat">
+              Lần {monthlyOrderCount || 1} tháng này
+            </Badge>
+            <Badge tone={getGiftBadgeTone(monthlyGift, monthlyOrderCount)} icon="gift">
+              {monthlyGiftBadgeText}
+            </Badge>
           </div>
-          <strong style={{ color: isKitchenOrderDone(order) ? "#334155" : "#059669" }}>
+          <InfoLine icon="timer" color={isKitchenOrderDone(order) ? "#334155" : "#059669"} strong>
             {formatOrderTiming(order)}
-          </strong>
+          </InfoLine>
         </div>
 
         <div style={{ textAlign: "right", display: "grid", gap: 6, justifyItems: "end" }}>
-          <strong style={{ color: "#334155", fontSize: 22 }}>
+          <strong style={{ color: "#334155", fontSize: 21, fontWeight: 780 }}>
             {doneItems}/{totalItems}
           </strong>
           <ProgressBoxes doneItems={doneItems} totalItems={totalItems} accent={theme.border} />
           {totalToppings ? (
             <>
-              <span style={{ color: "#92400e", fontSize: 11, fontWeight: 900 }}>
+              <span style={{ color: "#92400e", fontSize: 11, fontWeight: 760 }}>
                 Topping {doneToppings}/{totalToppings}
               </span>
               <ProgressBoxes doneItems={doneToppings} totalItems={totalToppings} accent="#f59e0b" />
             </>
           ) : null}
-          <span style={{ color: "#475569", fontSize: 12, fontWeight: 800 }}>
+          <span style={{ color: "#475569", fontSize: 12, fontWeight: 680 }}>
             {canMarkDone ? order.displayStatus : closedOrderLabel}
           </span>
           <MonthlyGiftCard
@@ -670,6 +832,8 @@ export default function KitchenOrderCard({
             const itemDone = item.status === "done" || Boolean(unitProgress[unitKey]);
             const itemUpdating = updatingItemKey === itemKey;
             const paidToppings = getPaidToppings(item);
+            const paidToppingLabels = new Set(paidToppings.map((option) => option.label));
+            const displayOptions = (item.options || []).filter((option) => !paidToppingLabels.has(option));
 
             return (
               <button
@@ -713,6 +877,7 @@ export default function KitchenOrderCard({
                       color: itemDone ? "#64748b" : "#111827",
                       fontSize: 15,
                       lineHeight: 1.15,
+                      fontWeight: 760,
                       overflowWrap: "anywhere",
                       textDecoration: itemDone ? "line-through" : "none"
                     }}
@@ -721,7 +886,7 @@ export default function KitchenOrderCard({
                   </strong>
                   <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <OptionChip>Món #{itemNumber}</OptionChip>
-                    {item.options?.map((option) => (
+                    {displayOptions.map((option) => (
                       <OptionChip key={`${itemKey}-${option}`} optionLabel={option}>
                         {option}
                       </OptionChip>
