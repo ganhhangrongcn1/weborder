@@ -119,36 +119,79 @@ function SourceFilterSelect({ value, onChange }) {
 function KitchenRequestAuditBadge({ audit, onReset }) {
   const total60m = Number(audit?.total60m || 0);
   const total5m = Number(audit?.total5m || 0);
-  const topTables = (audit?.byTable || [])
-    .slice(0, 3)
-    .map((item) => `${item.key}: ${item.count}`)
+  const labelMap = {
+    orders: "orders",
+    order_items: "order_items",
+    partner_orders: "partner_orders",
+    partner_order_items: "partner_order_items",
+    profiles: "khách hàng",
+    monthly_customer_gifts: "quà tháng",
+    "read website orders": "đơn web/QR",
+    "read website items": "món web/QR",
+    "read partner orders": "đơn app",
+    "read partner items": "món app",
+    "gift monthly website orders": "quà: đơn web tháng",
+    "gift monthly partner orders": "quà: đơn app tháng",
+    "gift all-time website orders": "quà: lịch sử web",
+    "gift all-time partner orders by phone key": "quà: lịch sử app key",
+    "gift all-time partner orders by phone": "quà: lịch sử app phone",
+    "gift profiles": "khách hàng/profile",
+    "gift claims": "quà đã tặng",
+    "claim monthly gift": "bấm tặng quà",
+    "read existing gift claim": "kiểm tra quà trùng",
+    "mark partner done": "xong đơn app",
+    "mark website done": "xong đơn web",
+    "stamp partner done time": "chốt giờ app"
+  };
+  const formatAuditRows = (rows = [], limit = 10) => (rows || [])
+    .slice(0, limit)
+    .map((item) => `${labelMap[item.key] || item.key}: ${item.count}`)
     .join(" · ");
+  const tableText = formatAuditRows(audit?.byTable, 8);
+  const scopeText = formatAuditRows(audit?.byScope, 12);
+  const tooltip = [
+    "Chỉ đếm request Supabase phát sinh từ màn hình bếp trên máy này trong 60 phút gần nhất.",
+    tableText ? `Theo bảng: ${tableText}` : "",
+    scopeText ? `Theo lý do: ${scopeText}` : ""
+  ].filter(Boolean).join("\n");
 
   return (
     <div
-      title="Chỉ đếm request Supabase phát sinh từ màn hình bếp trên máy này trong 60 phút gần nhất."
+      title={tooltip}
       style={{
         marginLeft: "auto",
-        display: "flex",
-        alignItems: "center",
+        display: "grid",
+        gridTemplateColumns: "auto auto minmax(260px, 1fr) auto",
+        alignItems: "start",
         gap: 8,
         minHeight: 34,
+        maxWidth: "100%",
         border: "1px dashed #cbd5e1",
         background: "#f8fafc",
         borderRadius: 8,
         padding: "6px 8px",
         color: "#475569",
         fontSize: 12,
-        fontWeight: 800
+        fontWeight: 800,
+        lineHeight: 1.35
       }}
     >
       <span>Bếp đọc: {total60m} req/60p</span>
       <span style={{ color: "#64748b", fontWeight: 700 }}>5p: {total5m}</span>
-      {topTables ? (
-        <span style={{ color: "#64748b", fontWeight: 700, maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {topTables}
-        </span>
-      ) : null}
+      <span
+        style={{
+          color: "#64748b",
+          display: "grid",
+          gap: 3,
+          fontWeight: 700,
+          minWidth: 0,
+          whiteSpace: "normal",
+          wordBreak: "break-word"
+        }}
+      >
+        {tableText ? <span>Bảng: {tableText}</span> : null}
+        {scopeText ? <span>Lý do: {scopeText}</span> : null}
+      </span>
       <button
         type="button"
         onClick={onReset}

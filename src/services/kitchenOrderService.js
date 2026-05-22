@@ -1078,18 +1078,8 @@ export async function subscribeKitchenOrderChanges(onChange) {
     )
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "order_items" },
-      (payload) => onChange({ table: "order_items", payload })
-    )
-    .on(
-      "postgres_changes",
       { event: "*", schema: "public", table: "partner_orders" },
       (payload) => onChange({ table: "partner_orders", payload })
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "partner_order_items" },
-      (payload) => onChange({ table: "partner_order_items", payload })
     )
     .subscribe();
 

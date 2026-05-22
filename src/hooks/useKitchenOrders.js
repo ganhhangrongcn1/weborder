@@ -23,6 +23,8 @@ const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
 const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
 const DONE_ORDER_PAGE_SIZE = 20;
+const KITCHEN_SOURCE_WEBSITE = "website";
+const KITCHEN_SOURCE_PARTNER = "partner";
 
 function getTodayDateKey() {
   const now = new Date();
@@ -207,6 +209,13 @@ function isRealtimeItemTable(table = "") {
   return table === "order_items" || table === "partner_order_items";
 }
 
+function getRealtimeSourceType(change = {}) {
+  const table = String(change?.table || "");
+  if (table === "orders" || table === "order_items") return KITCHEN_SOURCE_WEBSITE;
+  if (table === "partner_orders" || table === "partner_order_items") return KITCHEN_SOURCE_PARTNER;
+  return "";
+}
+
 function getRealtimeEventType(change = {}) {
   return String(change?.payload?.eventType || change?.payload?.type || "").toUpperCase();
 }
@@ -319,6 +328,23 @@ function shouldReloadForKitchenRealtime(change = {}, currentOrders = []) {
   }
 
   return orderRealtimeHasImportantChange(change, currentOrders);
+}
+
+function sortOrdersByTimeDesc(list = []) {
+  return [...(Array.isArray(list) ? list : [])].sort((first, second) => (
+    getTimeValue(second.createdAt || second.orderTime || second.updatedAt) -
+      getTimeValue(first.createdAt || first.orderTime || first.updatedAt)
+  ));
+}
+
+function mergeOrdersBySource(currentOrders = [], refreshedOrders = [], sourceType = "") {
+  const source = String(sourceType || "").trim();
+  if (!source) return sortOrdersByTimeDesc(refreshedOrders);
+
+  return sortOrdersByTimeDesc([
+    ...(Array.isArray(currentOrders) ? currentOrders : []).filter((order) => order?.sourceType !== source),
+    ...(Array.isArray(refreshedOrders) ? refreshedOrders : [])
+  ]);
 }
 
 function getRealtimeBranchCandidates(row = {}, table = "") {
@@ -557,7 +583,7 @@ export default function useKitchenOrders(options = null) {
     return stableOrders;
   }, []);
 
-  const loadOrders = useCallback(async ({ silent = false, force = false } = {}) => {
+  const loadOrders = useCallback(async ({ silent = false, force = false, sourceType = "" } = {}) => {
     if (!enabled) {
       setOrders([]);
       setLoading(false);
@@ -576,9 +602,11 @@ export default function useKitchenOrders(options = null) {
 
     try {
       const dateRange = getDateRange(dateFilter);
+      const partialSourceType = String(sourceType || "").trim();
       const result = await getKitchenOrders({
         ...(options || {}),
-        ...dateRange
+        ...dateRange,
+        ...(partialSourceType ? { sources: [partialSourceType] } : {})
       });
       const giftResult = await enrichKitchenOrdersWithMonthlyGifts(result.orders || [], {
         dateKey: dateFilter,
@@ -586,9 +614,12 @@ export default function useKitchenOrders(options = null) {
       });
       const hasReadError = Boolean(result.errors?.length || giftResult.error);
 
-      setOrders((currentOrders) => (
-        stabilizeRecentlyClosedOrders(giftResult.orders || result.orders || [], currentOrders)
-      ));
+      setOrders((currentOrders) => {
+        const nextOrders = partialSourceType
+          ? mergeOrdersBySource(currentOrders, giftResult.orders || result.orders || [], partialSourceType)
+          : giftResult.orders || result.orders || [];
+        return stabilizeRecentlyClosedOrders(nextOrders, currentOrders);
+      });
       setError(
         hasReadError
           ? "Một nguồn đơn chưa đọc được. Các nguồn còn lại vẫn đang hiển thị."
@@ -636,12 +667,13 @@ export default function useKitchenOrders(options = null) {
         if (!realtimeEventMatchesDate(change, dateRange, currentOrdersRef.current)) return;
         if (!shouldReloadForKitchenRealtime(change, currentOrdersRef.current)) return;
 
+        const sourceType = getRealtimeSourceType(change);
         if (realtimeReloadTimerRef.current) {
           window.clearTimeout(realtimeReloadTimerRef.current);
         }
         realtimeReloadTimerRef.current = window.setTimeout(() => {
           realtimeReloadTimerRef.current = null;
-          loadOrders({ silent: true });
+          loadOrders({ silent: true, sourceType });
         }, isRealtimeItemTable(change.table) ? ITEM_REALTIME_RELOAD_DELAY_MS : REALTIME_RELOAD_DELAY_MS);
       });
     }
