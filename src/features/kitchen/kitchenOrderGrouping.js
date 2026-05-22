@@ -44,9 +44,7 @@ export function getKitchenOrderTimeValue(order = {}) {
 export function getKitchenOrderDoneTimeValue(order = {}) {
   return getTimeValue(
     order.doneAt,
-    getRawValue(order, "kitchen_done_at"),
-    order.updatedAt,
-    order.createdAt
+    getRawValue(order, "kitchen_done_at")
   );
 }
 
@@ -76,7 +74,28 @@ export function sortKitchenOrdersForBoard(orders = []) {
       const firstDoneTime = getKitchenOrderDoneTimeValue(first);
       const secondDoneTime = getKitchenOrderDoneTimeValue(second);
       if (firstDoneTime !== secondDoneTime) return secondDoneTime - firstDoneTime;
+
+      const firstOrderTime = getKitchenOrderTimeValue(first);
+      const secondOrderTime = getKitchenOrderTimeValue(second);
+      if (firstOrderTime !== secondOrderTime) return secondOrderTime - firstOrderTime;
     }
+
+    return toText(first.displayOrderCode || first.orderCode || first.id).localeCompare(
+      toText(second.displayOrderCode || second.orderCode || second.id),
+      "vi"
+    );
+  });
+}
+
+export function sortKitchenDoneOrders(orders = []) {
+  return [...orders].sort((first, second) => {
+    const firstDoneTime = getKitchenOrderDoneTimeValue(first);
+    const secondDoneTime = getKitchenOrderDoneTimeValue(second);
+    if (firstDoneTime !== secondDoneTime) return secondDoneTime - firstDoneTime;
+
+    const firstOrderTime = getKitchenOrderTimeValue(first);
+    const secondOrderTime = getKitchenOrderTimeValue(second);
+    if (firstOrderTime !== secondOrderTime) return secondOrderTime - firstOrderTime;
 
     return toText(first.displayOrderCode || first.orderCode || first.id).localeCompare(
       toText(second.displayOrderCode || second.orderCode || second.id),

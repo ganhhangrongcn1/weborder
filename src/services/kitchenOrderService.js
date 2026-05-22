@@ -76,6 +76,11 @@ function getPlatformLabel(source = "") {
   return PLATFORM_LABELS[key] || "Khác";
 }
 
+function buildKitchenStableKey(sourceType = "", ...values) {
+  const key = values.map(toText).find(Boolean);
+  return key ? `${toText(sourceType || "order")}:${key}` : "";
+}
+
 function normalizeKitchenStatus(...values) {
   const combined = values.map((value) => toText(value).toLowerCase()).filter(Boolean);
 
@@ -507,6 +512,7 @@ function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
 
   return {
     id,
+    stableKey: buildKitchenStableKey(KITCHEN_SOURCE.website, id, orderCode),
     orderCode,
     displayOrderCode: toText(metadata.displayOrderCode || orderCode),
     sourceType: KITCHEN_SOURCE.website,
@@ -543,6 +549,7 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
   const source = normalizePartnerSource(row.partner_source || rawData.source || "");
   const id = toText(row.id || row.order_code);
   const orderCode = toText(row.order_code || id);
+  const displayOrderCode = toText(row.display_order_code || orderCode);
   const nexposStatus = toText(row.nexpos_status || rawData.status);
   const nexposState = normalizeNexposOrderState(
     nexposStatus,
@@ -556,8 +563,17 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
 
   return {
     id,
+    stableKey: buildKitchenStableKey(
+      KITCHEN_SOURCE.partner,
+      row.nexpos_order_id,
+      rawData.nexpos_order_id,
+      rawData.order_id,
+      displayOrderCode,
+      orderCode,
+      id
+    ),
     orderCode,
-    displayOrderCode: toText(row.display_order_code || orderCode),
+    displayOrderCode,
     sourceType: KITCHEN_SOURCE.partner,
     source,
     platform: getPlatformLabel(source),
@@ -627,6 +643,59 @@ async function readPartnerOrderItems(client, orderIds = []) {
   }, new Map());
 }
 
+function shouldStampPartnerKitchenDoneAt(row = {}) {
+  if (toText(row.kitchen_done_at)) return false;
+
+  const rawData = getObject(row.raw_data);
+  const nexposState = normalizeNexposOrderState(
+    row.nexpos_status,
+    rawData.status,
+    rawData.order_status,
+    row.order_status
+  );
+
+  return nexposState === "done";
+}
+
+async function stampPartnerKitchenDoneAt(client, rows = []) {
+  const rowsToStamp = getArray(rows).filter(shouldStampPartnerKitchenDoneAt);
+  if (!rowsToStamp.length) return rows;
+
+  const stampedAt = new Date().toISOString();
+  const stampedIds = [];
+
+  await Promise.all(rowsToStamp.map(async (row) => {
+    const id = toText(row.id);
+    if (!id) return;
+
+    const { error } = await client
+      .from("partner_orders")
+      .update({
+        kitchen_work_status: "done",
+        kitchen_done_at: stampedAt,
+        updated_at: stampedAt
+      })
+      .eq("id", id)
+      .is("kitchen_done_at", null);
+
+    if (!error) stampedIds.push(id);
+  }));
+
+  if (!stampedIds.length) return rows;
+
+  const stampedIdSet = new Set(stampedIds);
+  return getArray(rows).map((row) => {
+    if (!stampedIdSet.has(toText(row.id))) return row;
+
+    return {
+      ...row,
+      kitchen_work_status: "done",
+      kitchen_done_at: stampedAt,
+      updated_at: stampedAt
+    };
+  });
+}
+
 export async function getWebsiteKitchenOrders(options = {}) {
   const client = await getClient();
   if (!client) return [];
@@ -664,7 +733,7 @@ export async function getPartnerKitchenOrders(options = {}) {
   const { data, error } = await query;
   if (error) throw error;
 
-  const orderRows = getArray(data);
+  const orderRows = await stampPartnerKitchenDoneAt(client, getArray(data));
   const orderIds = orderRows.map((row) => row.id).filter(Boolean);
   const itemsByOrderId = await readPartnerOrderItems(client, orderIds);
 

@@ -248,6 +248,7 @@ export default function useCustomerSession({
     const unsubscribe = orderStorage?.subscribeRealtimeByPhone?.(orderLookupPhone, (orders) => {
       if (Array.isArray(orders)) {
         setDemoOrdersState(orders);
+        if (orders[0]) setCurrentOrder(orders[0]);
       }
     });
     return () => {
@@ -265,6 +266,7 @@ export default function useCustomerSession({
           : orderStorage.getByPhone(orderLookupPhone);
         if (!disposed && Array.isArray(remoteOrders)) {
           setDemoOrdersState(remoteOrders);
+          if (remoteOrders[0]) setCurrentOrder(remoteOrders[0]);
         }
       } catch {
       }
@@ -285,6 +287,7 @@ export default function useCustomerSession({
           : orderStorage.getByPhone(orderLookupPhone);
         if (!disposed && Array.isArray(remoteOrders)) {
           setDemoOrdersState(remoteOrders);
+          if (remoteOrders[0]) setCurrentOrder(remoteOrders[0]);
         }
       } catch {
       } finally {

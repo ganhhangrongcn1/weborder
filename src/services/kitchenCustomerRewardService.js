@@ -1,0 +1,504 @@
+import {
+  getSupabaseKitchenAuthClient,
+  getSupabaseRuntimeClient,
+  initSupabaseKitchenAuthClient,
+  initSupabaseRuntimeClient
+} from "./supabase/supabaseRuntimeClient.js";
+import { getCustomerTier } from "./crmService.js";
+import { getCustomerKey } from "./storageService.js";
+
+const MONTHLY_GIFT_CODE = "MONTHLY_3_ORDERS";
+const MONTHLY_GIFT_NAME = "Quà khách quen tháng";
+const MONTHLY_GIFT_THRESHOLD = 3;
+const CANCELLED_STATUS_KEYS = new Set(["cancelled", "canceled", "cancel", "refunded"]);
+
+function toText(value = "") {
+  return String(value || "").trim();
+}
+
+function toNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeStatus(value = "") {
+  return toText(value).toLowerCase();
+}
+
+function normalizeTextKey(value = "") {
+  return toText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function isCancelledOrder(...statuses) {
+  return statuses.some((status) => CANCELLED_STATUS_KEYS.has(normalizeStatus(status)));
+}
+
+function getMonthKey(value = "") {
+  const raw = toText(value);
+  if (/^\d{4}-\d{2}/.test(raw)) return raw.slice(0, 7);
+
+  const date = raw ? new Date(raw) : new Date();
+  if (Number.isNaN(date.getTime())) return getMonthKey(new Date().toISOString());
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+function getMonthRange(monthKey = "") {
+  const safeMonthKey = /^\d{4}-\d{2}$/.test(monthKey) ? monthKey : getMonthKey();
+  const start = new Date(`${safeMonthKey}-01T00:00:00`);
+  const end = new Date(start);
+  end.setMonth(start.getMonth() + 1);
+
+  return {
+    monthKey: safeMonthKey,
+    dateFrom: start.toISOString(),
+    dateTo: end.toISOString()
+  };
+}
+
+async function getReadClient() {
+  return getSupabaseKitchenAuthClient() || getSupabaseRuntimeClient() || (await initSupabaseKitchenAuthClient()) || (await initSupabaseRuntimeClient());
+}
+
+async function getWriteClient() {
+  return getSupabaseKitchenAuthClient() || (await initSupabaseKitchenAuthClient()) || getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
+}
+
+export function resolveKitchenCustomerIdentity(order = {}) {
+  const raw = getObject(order.raw);
+  const metadata = getObject(raw.metadata || raw.raw_data);
+  const rawData = getObject(raw.raw_data);
+  const phone = getCustomerKey(
+    order.customerPhone ||
+      order.customerPhoneKey ||
+      raw.customer_phone_key ||
+      raw.customer_phone ||
+      rawData.customer_phone_key ||
+      rawData.customer_phone ||
+      metadata.customerPhone ||
+      metadata.phone
+  );
+
+  if (phone) {
+    return {
+      key: phone,
+      type: "phone",
+      phone,
+      name: toText(order.customerName || raw.customer_name || metadata.customerName)
+    };
+  }
+
+  const externalId = toText(
+    raw.customer_id ||
+      raw.customerId ||
+      rawData.customer_id ||
+      rawData.customerId ||
+      metadata.customerId ||
+      metadata.customer_id
+  );
+
+  if (externalId) {
+    return {
+      key: `external-${normalizeTextKey(externalId)}`,
+      type: "external_id",
+      phone: "",
+      name: toText(order.customerName || raw.customer_name || metadata.customerName)
+    };
+  }
+
+  const name = toText(order.customerName || raw.customer_name || metadata.customerName);
+  const nameKey = normalizeTextKey(name);
+
+  if (nameKey && !["khach", "khach-le", "guest"].includes(nameKey)) {
+    return {
+      key: `name-${nameKey}`,
+      type: "name",
+      phone: "",
+      name
+    };
+  }
+
+  return {
+    key: "",
+    type: "",
+    phone: "",
+    name
+  };
+}
+
+function countMonthlyOrders(rows = [], keySet = new Set()) {
+  const counts = new Map();
+
+  rows.forEach((order) => {
+    const identity = resolveKitchenCustomerIdentity(order);
+    if (!identity.key || !keySet.has(identity.key)) return;
+    counts.set(identity.key, (counts.get(identity.key) || 0) + 1);
+  });
+
+  return counts;
+}
+
+function mergeCountStats(base = new Map(), rows = []) {
+  rows.forEach((row) => {
+    const identity = resolveKitchenCustomerIdentity(row);
+    if (!identity.key) return;
+
+    const current = base.get(identity.key) || { totalOrders: 0, totalSpent: 0 };
+    current.totalOrders += 1;
+    current.totalSpent += Math.max(0, toNumber(row.totalAmount, 0));
+    base.set(identity.key, current);
+  });
+
+  return base;
+}
+
+async function readMonthlyWebsiteOrders(client, range) {
+  const { data, error } = await client
+    .from("orders")
+    .select("id,order_code,customer_name,customer_phone,status,created_at,metadata")
+    .gte("created_at", range.dateFrom)
+    .lt("created_at", range.dateTo);
+
+  if (error) throw error;
+
+  return (data || [])
+    .filter((row) => !isCancelledOrder(row.status))
+    .map((row) => ({
+      id: row.id,
+      orderCode: row.order_code,
+      sourceType: "website",
+      customerName: row.customer_name,
+      customerPhone: row.customer_phone || getObject(row.metadata).phone || "",
+      customerPhoneKey: "",
+      raw: row
+    }));
+}
+
+async function readAllTimeWebsiteOrdersByPhones(client, phoneKeys = []) {
+  if (!phoneKeys.length) return [];
+
+  const byPhoneTasks = [
+    client
+      .from("orders")
+      .select("id,order_code,customer_name,customer_phone,status,total_amount,metadata")
+      .in("customer_phone", phoneKeys)
+  ];
+  const [byPhoneRaw] = await Promise.all(byPhoneTasks);
+  if (byPhoneRaw.error) throw byPhoneRaw.error;
+
+  const rowMap = new Map();
+  [...(byPhoneRaw.data || [])].forEach((row) => {
+    const id = toText(row.id);
+    if (!id || rowMap.has(id)) return;
+    rowMap.set(id, row);
+  });
+
+  return [...rowMap.values()]
+    .filter((row) => !isCancelledOrder(row.status))
+    .map((row) => ({
+      id: row.id,
+      orderCode: row.order_code,
+      sourceType: "website",
+      customerName: row.customer_name,
+      customerPhone: row.customer_phone || getObject(row.metadata).phone || "",
+      customerPhoneKey: "",
+      totalAmount: toNumber(row.total_amount, 0),
+      raw: row
+    }));
+}
+
+async function readMonthlyPartnerOrders(client, range) {
+  const { data, error } = await client
+    .from("partner_orders")
+    .select("id,order_code,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,order_time,raw_data")
+    .gte("order_time", range.dateFrom)
+    .lt("order_time", range.dateTo);
+
+  if (error) throw error;
+
+  return (data || [])
+    .filter((row) => !isCancelledOrder(row.order_status, row.nexpos_status, getObject(row.raw_data).status))
+    .map((row) => ({
+      id: row.id,
+      orderCode: row.order_code,
+      sourceType: "partner",
+      customerName: row.customer_name,
+      customerPhone: row.customer_phone || row.customer_phone_key,
+      customerPhoneKey: row.customer_phone_key,
+      raw: row
+    }));
+}
+
+async function readAllTimePartnerOrdersByPhones(client, phoneKeys = []) {
+  if (!phoneKeys.length) return [];
+
+  const byPhoneTasks = [
+    client
+      .from("partner_orders")
+      .select("id,order_code,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,total_amount,raw_data")
+      .in("customer_phone_key", phoneKeys),
+    client
+      .from("partner_orders")
+      .select("id,order_code,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,total_amount,raw_data")
+      .in("customer_phone", phoneKeys)
+  ];
+  const [byPhoneKey, byPhoneRaw] = await Promise.all(byPhoneTasks);
+  if (byPhoneKey.error) throw byPhoneKey.error;
+  if (byPhoneRaw.error) throw byPhoneRaw.error;
+
+  const rowMap = new Map();
+  [...(byPhoneKey.data || []), ...(byPhoneRaw.data || [])].forEach((row) => {
+    const id = toText(row.id);
+    if (!id || rowMap.has(id)) return;
+    rowMap.set(id, row);
+  });
+
+  return [...rowMap.values()]
+    .filter((row) => !isCancelledOrder(row.order_status, row.nexpos_status, getObject(row.raw_data).status))
+    .map((row) => ({
+      id: row.id,
+      orderCode: row.order_code,
+      sourceType: "partner",
+      customerName: row.customer_name,
+      customerPhone: row.customer_phone || row.customer_phone_key,
+      customerPhoneKey: row.customer_phone_key,
+      totalAmount: toNumber(row.total_amount, 0),
+      raw: row
+    }));
+}
+
+async function readGiftClaims(client, customerKeys = [], monthKey = "") {
+  if (!customerKeys.length) return new Map();
+
+  const { data, error } = await client
+    .from("monthly_customer_gifts")
+    .select("*")
+    .eq("reward_month", monthKey)
+    .eq("gift_code", MONTHLY_GIFT_CODE)
+    .in("customer_key", customerKeys);
+
+  if (error) throw error;
+
+  return (data || []).reduce((map, row) => {
+    map.set(row.customer_key, row);
+    return map;
+  }, new Map());
+}
+
+async function readCustomerProfiles(client, phoneKeys = []) {
+  if (!phoneKeys.length) return new Map();
+
+  const { data, error } = await client
+    .from("profiles")
+    .select("phone,total_orders,total_spent,member_rank")
+    .in("phone", phoneKeys);
+
+  if (error) throw error;
+
+  return (data || []).reduce((map, row) => {
+    map.set(getCustomerKey(row.phone), row);
+    return map;
+  }, new Map());
+}
+
+function buildMonthlyGiftInfo(order = {}, options = {}) {
+  const identity = resolveKitchenCustomerIdentity(order);
+  const claim = options.claim || null;
+  const profile = options.profile || null;
+  const allTimeStats = options.allTimeStats || null;
+  const monthlyOrderCount = toNumber(options.monthlyOrderCount, 0);
+  const profileTotalSpent = toNumber(profile?.total_spent, 0);
+  const profileTotalOrders = toNumber(profile?.total_orders, 0);
+  const dynamicTotalSpent = toNumber(allTimeStats?.totalSpent, 0);
+  const dynamicTotalOrders = toNumber(allTimeStats?.totalOrders, 0);
+  const totalSpent = Math.max(profileTotalSpent, dynamicTotalSpent);
+  const totalOrderCount = Math.max(profileTotalOrders, dynamicTotalOrders, monthlyOrderCount);
+  const memberTier = toText(profile?.member_rank) && profile?.member_rank !== "Member"
+    ? toText(profile.member_rank)
+    : getCustomerTier(totalSpent);
+
+  return {
+    customerKey: identity.key,
+    customerKeyType: identity.type,
+    customerName: identity.name || order.customerName || "",
+    customerPhone: identity.phone || order.customerPhone || "",
+    giftCode: MONTHLY_GIFT_CODE,
+    giftName: MONTHLY_GIFT_NAME,
+    threshold: MONTHLY_GIFT_THRESHOLD,
+    rewardMonth: options.monthKey,
+    monthlyOrderCount,
+    totalOrderCount,
+    totalSpent,
+    memberTier,
+    eligible: Boolean(identity.key && monthlyOrderCount >= MONTHLY_GIFT_THRESHOLD),
+    claimed: Boolean(claim),
+    claimedAt: claim?.claimed_at || "",
+    claimedOrderCode: claim?.claimed_order_code || "",
+    claimedByName: claim?.claimed_by_name || "",
+    canClaim: Boolean(identity.key && monthlyOrderCount >= MONTHLY_GIFT_THRESHOLD && !claim)
+  };
+}
+
+export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options = {}) {
+  const list = Array.isArray(orders) ? orders : [];
+  const monthKey = getMonthKey(options.dateKey || options.dateFrom || new Date().toISOString());
+  const range = getMonthRange(monthKey);
+  const identities = list.map(resolveKitchenCustomerIdentity);
+  const customerKeys = [...new Set(identities.map((identity) => identity.key).filter(Boolean))];
+  const phoneKeys = [...new Set(identities.filter((identity) => identity.type === "phone").map((identity) => identity.key))];
+
+  if (!customerKeys.length) {
+    return {
+      orders: list.map((order) => ({
+        ...order,
+        monthlyGift: buildMonthlyGiftInfo(order, { monthKey })
+      })),
+      error: ""
+    };
+  }
+
+  try {
+    const client = await getReadClient();
+    if (!client) throw new Error("Supabase chưa sẵn sàng.");
+
+    const [websiteOrders, partnerOrders, giftClaims, profiles] = await Promise.all([
+      readMonthlyWebsiteOrders(client, range),
+      readMonthlyPartnerOrders(client, range),
+      readGiftClaims(client, customerKeys, monthKey),
+      readCustomerProfiles(client, phoneKeys)
+    ]);
+    const [allTimeWebsiteOrders, allTimePartnerOrders] = await Promise.all([
+      readAllTimeWebsiteOrdersByPhones(client, phoneKeys),
+      readAllTimePartnerOrdersByPhones(client, phoneKeys)
+    ]);
+    const monthlyCounts = countMonthlyOrders([...websiteOrders, ...partnerOrders], new Set(customerKeys));
+    const allTimeStatsMap = mergeCountStats(
+      mergeCountStats(new Map(), allTimeWebsiteOrders),
+      allTimePartnerOrders
+    );
+
+    return {
+      orders: list.map((order) => {
+        const identity = resolveKitchenCustomerIdentity(order);
+        return {
+          ...order,
+          monthlyGift: buildMonthlyGiftInfo(order, {
+            monthKey,
+            monthlyOrderCount: monthlyCounts.get(identity.key) || 0,
+            claim: giftClaims.get(identity.key) || null,
+            profile: profiles.get(identity.key) || null,
+            allTimeStats: allTimeStatsMap.get(identity.key) || null
+          })
+        };
+      }),
+      error: ""
+    };
+  } catch (error) {
+    return {
+      orders: list.map((order) => ({
+        ...order,
+        monthlyGift: buildMonthlyGiftInfo(order, { monthKey })
+      })),
+      error: error?.message || "Không đọc được chương trình quà khách quen."
+    };
+  }
+}
+
+export async function claimMonthlyCustomerGift(order = {}, options = {}) {
+  const identity = resolveKitchenCustomerIdentity(order);
+  const currentGift = order.monthlyGift || {};
+  const monthKey = currentGift.rewardMonth || getMonthKey(options.dateKey || order.createdAt || new Date().toISOString());
+
+  if (!identity.key) {
+    return {
+      ok: false,
+      message: "Đơn này chưa có đủ thông tin để xác định khách nhận quà."
+    };
+  }
+
+  if (toNumber(currentGift.monthlyOrderCount, 0) < MONTHLY_GIFT_THRESHOLD) {
+    return {
+      ok: false,
+      message: "Khách chưa đủ 3 đơn trong tháng để nhận quà."
+    };
+  }
+
+  const client = await getWriteClient();
+  if (!client) {
+    return {
+      ok: false,
+      message: "Supabase chưa sẵn sàng để xác nhận quà."
+    };
+  }
+
+  const row = {
+    customer_key: identity.key,
+    customer_key_type: identity.type || "phone",
+    customer_name: identity.name || order.customerName || "",
+    customer_phone: identity.phone || order.customerPhone || "",
+    reward_month: monthKey,
+    order_count_at_claim: toNumber(currentGift.monthlyOrderCount, 0),
+    gift_code: MONTHLY_GIFT_CODE,
+    gift_name: MONTHLY_GIFT_NAME,
+    claimed_order_source: order.sourceType || order.source || "",
+    claimed_order_id: String(order.id || ""),
+    claimed_order_code: String(order.displayOrderCode || order.orderCode || order.id || ""),
+    claimed_by_profile_id: options.profileId || null,
+    claimed_by_name: options.profileName || "",
+    metadata: {
+      platform: order.platform || "",
+      branchName: order.branchName || "",
+      totalOrderCount: toNumber(currentGift.totalOrderCount, 0)
+    }
+  };
+
+  const { data, error } = await client
+    .from("monthly_customer_gifts")
+    .insert(row)
+    .select("*")
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
+      const { data: existing } = await client
+        .from("monthly_customer_gifts")
+        .select("*")
+        .eq("customer_key", identity.key)
+        .eq("reward_month", monthKey)
+        .eq("gift_code", MONTHLY_GIFT_CODE)
+        .maybeSingle();
+
+      return {
+        ok: true,
+        alreadyClaimed: true,
+        gift: existing || null,
+        message: "Khách này đã được tặng quà trong tháng."
+      };
+    }
+
+    return {
+      ok: false,
+      message: error.message || "Không xác nhận được quà khách quen."
+    };
+  }
+
+  return {
+    ok: true,
+    gift: data,
+    message: "Đã xác nhận tặng quà khách quen."
+  };
+}
+
+export { MONTHLY_GIFT_CODE, MONTHLY_GIFT_NAME, MONTHLY_GIFT_THRESHOLD, getMonthKey };

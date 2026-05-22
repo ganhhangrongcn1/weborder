@@ -262,8 +262,8 @@ export default function CustomerShell({
   useEffect(() => {
     if (serviceNotice) return;
     const orders = [
-      ...(currentOrder ? [currentOrder] : []),
-      ...(Array.isArray(profileOrders) ? profileOrders : [])
+      ...(Array.isArray(profileOrders) ? profileOrders : []),
+      ...(currentOrder ? [currentOrder] : [])
     ];
     const seenOrderIds = new Set();
     const uniqueOrders = orders.filter((order) => {

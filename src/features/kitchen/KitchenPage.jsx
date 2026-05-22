@@ -19,6 +19,16 @@ const STAT_CARDS = [
   { id: "partner", label: "Đối tác" }
 ];
 
+const SOURCE_FILTER_OPTIONS = [
+  { value: "all", label: "T\u1ea5t c\u1ea3 ngu\u1ed3n" },
+  { value: "website", label: "Website" },
+  { value: "qr_counter", label: "QR t\u1ea1i qu\u1ea7y" },
+  { value: "pickup", label: "T\u1ef1 l\u1ea5y" },
+  { value: "grabfood", label: "GrabFood" },
+  { value: "shopeefood", label: "ShopeeFood" },
+  { value: "xanhngon", label: "Xanh Ngon" }
+];
+
 function formatUpdatedTime(value = "") {
   if (!value) return "Chưa tải";
   const date = new Date(value);
@@ -49,6 +59,60 @@ function FilterButton({ active, children, onClick }) {
     >
       {children}
     </button>
+  );
+}
+
+function SourceFilterSelect({ value, onChange }) {
+  return (
+    <label
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        minWidth: 172,
+        height: 42
+      }}
+    >
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        style={{
+          width: "100%",
+          height: "100%",
+          appearance: "none",
+          border: "1px solid #d1d5db",
+          background: "#ffffff",
+          color: "#374151",
+          borderRadius: 8,
+          padding: "0 34px 0 12px",
+          fontSize: 13,
+          fontWeight: 800,
+          lineHeight: "42px",
+          cursor: "pointer",
+          boxShadow: "0 1px 0 rgba(15, 23, 42, 0.03)",
+          outline: "none"
+        }}
+      >
+        {SOURCE_FILTER_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          right: 12,
+          width: 0,
+          height: 0,
+          borderLeft: "5px solid transparent",
+          borderRight: "5px solid transparent",
+          borderTop: "6px solid #475569",
+          pointerEvents: "none"
+        }}
+      />
+    </label>
   );
 }
 
@@ -206,8 +270,10 @@ export default function KitchenPage() {
     setSearch,
     updatingOrderId,
     updatingItemKey,
+    claimingGiftOrderId,
     markDone,
     toggleItemDone,
+    claimGift,
     reload
   } = useKitchenOrders(kitchenOrderOptions);
   const {
@@ -258,6 +324,31 @@ export default function KitchenPage() {
     setActiveDishKey("");
     setActiveOrderKey((currentKey) => (currentKey === orderKey ? "" : currentKey));
     markDone(order);
+  }
+
+  function clearActiveSelection() {
+    setActiveDishKey("");
+    setActiveOrderKey("");
+  }
+
+  function handleSearchChange(value = "") {
+    clearActiveSelection();
+    setSearch(value);
+  }
+
+  function handleDateFilterChange(value = "") {
+    clearActiveSelection();
+    setDateFilter(value);
+  }
+
+  function handleSourceFilterChange(value = "all") {
+    clearActiveSelection();
+    setSourceFilter(value);
+  }
+
+  function handleStatusFilterChange(value = "active") {
+    clearActiveSelection();
+    setStatusFilter(value);
   }
 
   function handleSelectDish(dishKey = "") {
@@ -337,7 +428,7 @@ export default function KitchenPage() {
             </span>
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => handleSearchChange(event.target.value)}
               placeholder="Tìm mã đơn, khách, món..."
               style={{
                 width: 250,
@@ -351,7 +442,7 @@ export default function KitchenPage() {
             <input
               type="date"
               value={dateFilter}
-              onChange={(event) => setDateFilter(event.target.value)}
+              onChange={(event) => handleDateFilterChange(event.target.value)}
               style={{
                 width: 176,
                 border: "1px solid #cbd5e1",
@@ -360,7 +451,7 @@ export default function KitchenPage() {
                 fontSize: 13
               }}
             />
-            <FilterButton active={dateFilter === getTodayDateKey()} onClick={() => setDateFilter(getTodayDateKey())}>
+            <FilterButton active={dateFilter === getTodayDateKey()} onClick={() => handleDateFilterChange(getTodayDateKey())}>
               Hôm nay
             </FilterButton>
             <button
@@ -417,26 +508,18 @@ export default function KitchenPage() {
             </button>
           </div>
 
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <FilterButton active={sourceFilter === "all"} onClick={() => setSourceFilter("all")}>
-              Tất cả
-            </FilterButton>
-            <FilterButton active={sourceFilter === "partner"} onClick={() => setSourceFilter("partner")}>
-              Đối tác
-            </FilterButton>
-            <FilterButton active={sourceFilter === "website"} onClick={() => setSourceFilter("website")}>
-              Website
-            </FilterButton>
-            <FilterButton active={statusFilter === "active"} onClick={() => setStatusFilter("active")}>
+          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <SourceFilterSelect value={sourceFilter} onChange={handleSourceFilterChange} />
+            <FilterButton active={statusFilter === "active"} onClick={() => handleStatusFilterChange("active")}>
               Đang xử lý
             </FilterButton>
-            <FilterButton active={statusFilter === "done"} onClick={() => setStatusFilter("done")}>
+            <FilterButton active={statusFilter === "done"} onClick={() => handleStatusFilterChange("done")}>
               Hoàn thành
             </FilterButton>
-            <FilterButton active={statusFilter === "cancelled"} onClick={() => setStatusFilter("cancelled")}>
+            <FilterButton active={statusFilter === "cancelled"} onClick={() => handleStatusFilterChange("cancelled")}>
               Đã hủy
             </FilterButton>
-            <FilterButton active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
+            <FilterButton active={statusFilter === "all"} onClick={() => handleStatusFilterChange("all")}>
               Tất cả trạng thái
             </FilterButton>
           </div>
@@ -489,7 +572,7 @@ export default function KitchenPage() {
           >
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => handleSearchChange(event.target.value)}
               placeholder="Tìm mã đơn, khách, món..."
               style={{
                 width: "100%",
@@ -503,7 +586,7 @@ export default function KitchenPage() {
             <input
               type="date"
               value={dateFilter}
-              onChange={(event) => setDateFilter(event.target.value)}
+              onChange={(event) => handleDateFilterChange(event.target.value)}
               style={{
                 border: "1px solid #d1d5db",
                 borderRadius: 8,
@@ -511,31 +594,22 @@ export default function KitchenPage() {
                 fontSize: 14
               }}
             />
-            <FilterButton active={dateFilter === getTodayDateKey()} onClick={() => setDateFilter(getTodayDateKey())}>
+            <FilterButton active={dateFilter === getTodayDateKey()} onClick={() => handleDateFilterChange(getTodayDateKey())}>
               Hôm nay
             </FilterButton>
           </div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <FilterButton active={sourceFilter === "all"} onClick={() => setSourceFilter("all")}>
-              Tất cả nguồn
-            </FilterButton>
-            <FilterButton active={sourceFilter === "website"} onClick={() => setSourceFilter("website")}>
-              Website
-            </FilterButton>
-            <FilterButton active={sourceFilter === "partner"} onClick={() => setSourceFilter("partner")}>
-              Đối tác
-            </FilterButton>
-            <FilterButton active={statusFilter === "active"} onClick={() => setStatusFilter("active")}>
+            <FilterButton active={statusFilter === "active"} onClick={() => handleStatusFilterChange("active")}>
               Đang xử lý
             </FilterButton>
-            <FilterButton active={statusFilter === "done"} onClick={() => setStatusFilter("done")}>
+            <FilterButton active={statusFilter === "done"} onClick={() => handleStatusFilterChange("done")}>
               Đã xong
             </FilterButton>
-            <FilterButton active={statusFilter === "cancelled"} onClick={() => setStatusFilter("cancelled")}>
+            <FilterButton active={statusFilter === "cancelled"} onClick={() => handleStatusFilterChange("cancelled")}>
               Đã hủy
             </FilterButton>
-            <FilterButton active={statusFilter === "all"} onClick={() => setStatusFilter("all")}>
+            <FilterButton active={statusFilter === "all"} onClick={() => handleStatusFilterChange("all")}>
               Tất cả trạng thái
             </FilterButton>
           </div>
@@ -637,8 +711,10 @@ export default function KitchenPage() {
                   order={order}
                   updating={String(updatingOrderId) === String(order.id)}
                   updatingItemKey={updatingItemKey}
+                  claimingGift={String(claimingGiftOrderId) === String(order.id)}
                   onMarkDone={handleMarkOrderDone}
                   onToggleItemDone={toggleItemDone}
+                  onClaimGift={claimGift}
                 />
                 </div>
               );

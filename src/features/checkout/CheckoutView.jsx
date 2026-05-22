@@ -270,7 +270,7 @@ export default function Checkout({
 
   useEffect(() => {
     if (!isQrCounterOrder || isRegisteredCustomer) return;
-    if (selectedPromo) setSelectedPromo(null);
+    if (selectedPromo?.source === "loyalty") setSelectedPromo(null);
     if (usePoints) setUsePoints(false);
   }, [isQrCounterOrder, isRegisteredCustomer, selectedPromo, usePoints]);
 

@@ -42,11 +42,17 @@ const ADMIN_ORDER_SOURCE_TONES = {
     strong: "#991b1b"
   },
   xanhngon: {
-    background: "#ecfdf5",
-    soft: "#f0fdfa",
-    border: "#99f6e4",
-    color: "#047857",
-    strong: "#064e3b"
+    background: "#dcfff5",
+    soft: "#effff9",
+    border: "#f2a900",
+    color: "#0f766e",
+    strong: "#075f55",
+    cardBackground: "#d8fff3",
+    cardSoft: "#effff9",
+    cardBorder: "#0f766e",
+    cardButton: "#7fc4ba",
+    cardCode: "#0f766e",
+    cardText: "#075f55"
   },
   neutral: {
     background: "#f1f5f9",
@@ -108,10 +114,10 @@ export function getKitchenOrderTheme(order = {}) {
   const tone = getKitchenPlatformTone(order.platform || order.source || "");
 
   return {
-    background: `linear-gradient(135deg, ${tone.background} 0%, ${tone.soft} 100%)`,
-    border: tone.color,
-    button: tone.color,
-    code: tone.color,
-    text: tone.strong
+    background: `linear-gradient(135deg, ${tone.cardBackground || tone.background} 0%, ${tone.cardSoft || tone.soft} 100%)`,
+    border: tone.cardBorder || tone.color,
+    button: tone.cardButton || tone.color,
+    code: tone.cardCode || tone.color,
+    text: tone.cardText || tone.strong
   };
 }

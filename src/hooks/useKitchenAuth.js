@@ -69,15 +69,16 @@ export default function useKitchenAuth() {
   }, []);
 
   const logout = useCallback(async () => {
+    // Optimistic logout: clear UI session immediately, then sign out in background.
     setSubmitting(true);
-    try {
-      await logoutKitchen();
-      setSession(null);
-      setProfile(null);
-      setError("");
-    } finally {
-      setSubmitting(false);
-    }
+    setSession(null);
+    setProfile(null);
+    setError("");
+    setSubmitting(false);
+
+    logoutKitchen().catch((err) => {
+      console.error("[kitchen-auth] background signOut failed", err);
+    });
   }, []);
 
   return {

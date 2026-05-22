@@ -51,14 +51,14 @@ export default function CheckoutPricingSection({
         smartPromotions={smartPromotions}
       />
 
+      <CheckoutCard title="Ưu đãi">
+        <button onClick={() => setIsPromoModalOpen(true)} className="promo-select">
+          {selectedPromo ? `${selectedPromo.code} · -${formatMoney(selectedPromo.discount)}` : "Chọn mã khuyến mãi"} <span>›</span>
+        </button>
+      </CheckoutCard>
+
       {showMemberBenefits ? (
         <>
-          <CheckoutCard title="Ưu đãi">
-            <button onClick={() => setIsPromoModalOpen(true)} className="promo-select">
-              {selectedPromo ? `${selectedPromo.code} · -${formatMoney(selectedPromo.discount)}` : "Chọn mã khuyến mãi"} <span>›</span>
-            </button>
-          </CheckoutCard>
-
           <CheckoutCard title="Dùng điểm thưởng">
             <div className="points-row">
               <div>
@@ -81,7 +81,7 @@ export default function CheckoutPricingSection({
       ) : (
         <CheckoutCard title="Ưu đãi thành viên">
           <div className="rounded-2xl bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700">
-            Đăng nhập để dùng voucher và điểm tích lũy của bạn.
+            Đăng nhập để dùng voucher thành viên và điểm tích lũy của bạn.
           </div>
         </CheckoutCard>
       )}

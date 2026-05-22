@@ -1,4 +1,5 @@
 import {
+  getKitchenOrderDoneTimeValue,
   getKitchenOrderKey,
   getKitchenOrderTimeValue,
   isKitchenOrderDone
@@ -9,6 +10,19 @@ function formatWaitingMinutes(timeValue = 0) {
   if (!timeValue || !Number.isFinite(timeValue)) return "Chưa có giờ";
   const minutes = Math.max(0, Math.floor((Date.now() - timeValue) / 60000));
   return `Chờ ${minutes}'`;
+}
+
+function formatDoneTime(order = {}) {
+  const timeValue = getKitchenOrderDoneTimeValue(order);
+  if (!timeValue || !Number.isFinite(timeValue)) return "Đã xong";
+
+  const date = new Date(timeValue);
+  if (Number.isNaN(date.getTime())) return "Đã xong";
+
+  return `Xong lúc ${date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit"
+  })}`;
 }
 
 function SmallBadge({ children, tone }) {
@@ -23,7 +37,10 @@ function SmallBadge({ children, tone }) {
         padding: "4px 8px",
         fontSize: 11,
         fontWeight: 900,
-        whiteSpace: "nowrap"
+        whiteSpace: "nowrap",
+        maxWidth: 74,
+        overflow: "hidden",
+        textOverflow: "ellipsis"
       }}
     >
       {children}
@@ -44,7 +61,8 @@ function OrderStripItem({ active, hasActiveOrder, order, onClick }) {
       type="button"
       onClick={() => onClick?.(active ? "" : orderKey)}
       style={{
-        flex: "0 0 138px",
+        flex: "0 0 150px",
+        width: 150,
         textAlign: "left",
         border: active ? `2px solid ${tone.color}` : `1px solid ${done ? "#cbd5e1" : tone.color}`,
         background: active ? tone.background : done ? "#f8fafc" : tone.soft,
@@ -74,10 +92,10 @@ function OrderStripItem({ active, hasActiveOrder, order, onClick }) {
         >
           {order.displayOrderCode || order.orderCode || "Chưa có mã"}
         </strong>
-        <SmallBadge tone={{ background: "#ffffff", color: tone.color }}>{order.platform || "Khác"}</SmallBadge>
+        <SmallBadge tone={{ background: tone.background, color: tone.color }}>{order.platform || "Khác"}</SmallBadge>
       </div>
       <div style={{ display: "grid", gap: 2, color: "#334155", fontSize: 12, lineHeight: 1.2 }}>
-        <span>{formatWaitingMinutes(getKitchenOrderTimeValue(order))}</span>
+        <span>{done ? formatDoneTime(order) : formatWaitingMinutes(getKitchenOrderTimeValue(order))}</span>
         <span>{done || pendingItems === 0 ? statusLabel : `${pendingItems} món chờ`}</span>
       </div>
     </button>

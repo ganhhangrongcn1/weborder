@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { getKitchenRecipeOptions, parseKitchenOptionLabel } from "./kitchenOptionDisplay.js";
-import { getKitchenOrderTimeValue } from "./kitchenOrderGrouping.js";
+import {
+  getKitchenOrderDoneTimeValue,
+  getKitchenOrderTimeValue,
+  isKitchenOrderDone
+} from "./kitchenOrderGrouping.js";
 import { getNextKitchenOrderAction } from "../../services/kitchenOrderService.js";
 import { getKitchenOrderTheme, getKitchenPlatformTone } from "./kitchenPlatformTheme.js";
 
@@ -52,6 +56,49 @@ function formatWaitingMinutes(order = {}) {
   if (!timeValue || !Number.isFinite(timeValue)) return "Chưa có giờ";
   const minutes = Math.max(0, Math.floor((Date.now() - timeValue) / 60000));
   return `Chờ ${minutes} phút`;
+}
+
+function formatDoneTime(order = {}) {
+  const timeValue = getKitchenOrderDoneTimeValue(order);
+  if (!timeValue || !Number.isFinite(timeValue)) return "Đã xong";
+
+  const date = new Date(timeValue);
+  if (Number.isNaN(date.getTime())) return "Đã xong";
+
+  return `Xong lúc ${date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit"
+  })}`;
+}
+
+function formatOrderTiming(order = {}) {
+  const status = String(order?.kitchenStatus || order?.status || "").toLowerCase();
+  if (status === "cancelled") return "Đã hủy";
+  return isKitchenOrderDone(order) ? formatDoneTime(order) : formatWaitingMinutes(order);
+}
+
+function formatClaimedGiftTime(value = "") {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit"
+  });
+}
+
+function getMonthlyGiftBadgeText(gift = null, monthlyOrderCount = 0) {
+  const threshold = Number(gift?.threshold || 3);
+  const count = Number(monthlyOrderCount || 0);
+
+  if (gift?.claimed) return "Quà tháng: đã tặng";
+  if (count >= threshold) return "Quà tháng: đủ điều kiện";
+
+  const missing = Math.max(0, threshold - count);
+  return `Quà tháng: còn ${missing} đơn`;
 }
 
 function getStatusTone(status = "") {
@@ -226,6 +273,68 @@ function ToppingCheck({ checked, label, onClick }) {
   );
 }
 
+function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
+  if (!gift?.eligible) return null;
+
+  const claimed = Boolean(gift.claimed);
+  const claimedTime = formatClaimedGiftTime(gift.claimedAt);
+
+  return (
+    <div
+      style={{
+        border: claimed ? "1px solid #86efac" : "1px solid #fbbf24",
+        background: claimed ? "#f0fdf4" : "#fffbeb",
+        color: claimed ? "#166534" : "#92400e",
+        borderRadius: 10,
+        padding: "6px 10px",
+        display: "inline-grid",
+        gridTemplateColumns: "minmax(0, 1fr) auto",
+        gap: 8,
+        alignItems: "center",
+        width: "fit-content",
+        maxWidth: "100%",
+        justifySelf: "start"
+      }}
+    >
+      <div style={{ minWidth: 0, display: "grid", gap: 1 }}>
+        <strong style={{ fontSize: 12, fontWeight: 900, lineHeight: 1.2 }}>
+          {claimed ? "Đã tặng quà tháng này" : "Đủ điều kiện tặng quà"}
+        </strong>
+        <span style={{ fontSize: 11, fontWeight: 800, color: claimed ? "#15803d" : "#a16207", lineHeight: 1.2 }}>
+          Tháng này: {gift.monthlyOrderCount || 0} đơn
+          {claimed && gift.claimedOrderCode ? ` · Đơn xác nhận ${gift.claimedOrderCode}` : ""}
+          {claimedTime ? ` · ${claimedTime}` : ""}
+        </span>
+      </div>
+
+      {!claimed ? (
+        <button
+          type="button"
+          disabled={claiming}
+          onClick={(event) => {
+            event.stopPropagation();
+            onClaim?.();
+          }}
+          style={{
+            border: "1px solid #f59e0b",
+            background: "#f59e0b",
+            color: "#ffffff",
+            borderRadius: 8,
+            padding: "6px 9px",
+            fontSize: 11,
+            fontWeight: 900,
+            cursor: claiming ? "not-allowed" : "pointer",
+            opacity: claiming ? 0.72 : 1,
+            whiteSpace: "nowrap"
+          }}
+        >
+          {claiming ? "Đang lưu..." : "Đã tặng quà"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function KitchenOrderCard({
   active = false,
   dimmed = false,
@@ -235,7 +344,9 @@ export default function KitchenOrderCard({
   onSelectOrder,
   order,
   onMarkDone,
+  onClaimGift,
   onToggleItemDone,
+  claimingGift = false,
   updating = false,
   updatingItemKey = ""
 }) {
@@ -282,6 +393,10 @@ export default function KitchenOrderCard({
   const orderReadyToConfirm = allItemsChecked && allToppingsChecked;
   const actionButtonTone = getActionButtonTone(nextOrderAction?.type, theme.button);
   const isActionButtonEnabled = canMarkDone && (!nextOrderAction?.requiresReady || orderReadyToConfirm);
+  const monthlyGift = order.monthlyGift || null;
+  const monthlyOrderCount = Number(monthlyGift?.monthlyOrderCount || 0);
+  const totalOrderCount = Number(monthlyGift?.totalOrderCount || monthlyOrderCount || 0);
+  const monthlyGiftBadgeText = getMonthlyGiftBadgeText(monthlyGift, monthlyOrderCount);
   const closedOrderLabel = isCancelled
     ? "Đơn đã hủy"
     : isPreorder
@@ -366,7 +481,6 @@ export default function KitchenOrderCard({
         borderRadius: 16,
         padding: 12,
         display: "grid",
-        gridTemplateRows: "auto auto minmax(96px, auto) auto",
         gap: 10,
         color: theme.text,
         cursor: "pointer",
@@ -436,11 +550,13 @@ export default function KitchenOrderCard({
             {order.customerPhone ? ` - ${order.customerPhone}` : ""}
           </div>
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            <OptionChip>Đồng · 1 đơn</OptionChip>
-            <OptionChip>Lần 1 tháng này</OptionChip>
-            <OptionChip>Tháng này 1/3 đơn</OptionChip>
+            <OptionChip>{monthlyGift?.memberTier || "Đồng"} · {totalOrderCount} đơn</OptionChip>
+            <OptionChip>Lần {monthlyOrderCount || 1} tháng này</OptionChip>
+            <OptionChip>{monthlyGiftBadgeText}</OptionChip>
           </div>
-          <strong style={{ color: "#059669" }}>{formatWaitingMinutes(order)}</strong>
+          <strong style={{ color: isKitchenOrderDone(order) ? "#334155" : "#059669" }}>
+            {formatOrderTiming(order)}
+          </strong>
         </div>
 
         <div style={{ textAlign: "right", display: "grid", gap: 6, justifyItems: "end" }}>
@@ -459,6 +575,11 @@ export default function KitchenOrderCard({
           <span style={{ color: "#475569", fontSize: 12, fontWeight: 800 }}>
             {canMarkDone ? order.displayStatus : closedOrderLabel}
           </span>
+          <MonthlyGiftCard
+            claiming={claimingGift}
+            gift={monthlyGift}
+            onClaim={() => onClaimGift?.(order)}
+          />
         </div>
       </div>
 

@@ -6,9 +6,17 @@ import {
   subscribeKitchenOrderChanges,
   updateKitchenOrderItemStatus
 } from "../services/kitchenOrderService.js";
-import { sortKitchenOrdersForBoard } from "../features/kitchen/kitchenOrderGrouping.js";
+import {
+  claimMonthlyCustomerGift,
+  enrichKitchenOrdersWithMonthlyGifts
+} from "../services/kitchenCustomerRewardService.js";
+import {
+  sortKitchenDoneOrders,
+  sortKitchenOrdersForBoard
+} from "../features/kitchen/kitchenOrderGrouping.js";
 
 const REALTIME_RELOAD_DELAY_MS = 500;
+const RECENTLY_CLOSED_SUPPRESS_MS = 10000;
 
 function getTodayDateKey() {
   const now = new Date();
@@ -49,6 +57,34 @@ function orderMatchesStatus(order = {}, statusFilter = "active") {
   return !["done", "completed", "cancelled", "preorder"].includes(orderStatus) && !(order.sourceType === "partner" && ["done", "completed", "cancelled", "preorder"].includes(status));
 }
 
+function normalizeSourceKey(value = "") {
+  const key = normalizeText(value);
+  if (!key) return "other";
+  if (["grab", "grabfood"].includes(key)) return "grabfood";
+  if (["shopee", "shopeefood"].includes(key)) return "shopeefood";
+  if (["xanhngon", "xanh_ngon", "xanh ngon"].includes(key)) return "xanhngon";
+  if (["weborder", "online"].includes(key)) return "website";
+  return key;
+}
+
+function orderMatchesSource(order = {}, sourceFilter = "all") {
+  const filter = normalizeText(sourceFilter);
+  if (filter === "all") return true;
+
+  const sourceType = normalizeText(order.sourceType);
+  const source = normalizeSourceKey(order.source);
+
+  if (filter === "partner") return sourceType === "partner";
+  if (filter === "website") return sourceType === "website" && source === "website";
+  if (filter === "pickup") return sourceType === "website" && source === "pickup";
+  if (filter === "qr_counter") return sourceType === "website" && source === "qr_counter";
+  if (filter === "grabfood") return source === "grabfood";
+  if (filter === "shopeefood") return source === "shopeefood";
+  if (filter === "xanhngon") return source === "xanhngon";
+
+  return source === filter;
+}
+
 function orderMatchesSearch(order = {}, search = "") {
   const query = normalizeText(search);
   if (!query) return true;
@@ -78,8 +114,27 @@ function isSameKitchenOrder(first = {}, second = {}) {
   );
 }
 
+function getKitchenOrderRuntimeKey(order = {}) {
+  const id = String(
+    order?.stableKey ||
+      order?.raw?.stable_key ||
+      order?.raw?.nexpos_order_id ||
+      order?.raw?.display_order_code ||
+      order?.displayOrderCode ||
+      order?.orderCode ||
+      order?.id ||
+      ""
+  ).trim();
+  if (!id) return "";
+  return id.includes(":") ? id : `${String(order?.sourceType || "order").trim()}:${id}`;
+}
+
 function getKitchenItemKey(item = {}) {
   return String(item?.sourceItemId || item?.id || "").trim();
+}
+
+function shouldSuppressAfterDoneAction(order = {}, action = null) {
+  return Boolean(action?.settleOrder || order.sourceType === "partner" || action?.type === "partner_done");
 }
 
 function getKitchenItemDisplayStatus(status = "") {
@@ -155,6 +210,24 @@ function patchItemStatus(targetOrder = {}, targetItem = {}, nextStatus = "pendin
   };
 }
 
+function patchMonthlyGiftClaim(targetOrder = {}, gift = {}) {
+  return (order = {}) => {
+    if (!isSameKitchenOrder(order, targetOrder)) return order;
+
+    return {
+      ...order,
+      monthlyGift: {
+        ...(order.monthlyGift || {}),
+        claimed: true,
+        canClaim: false,
+        claimedAt: gift?.claimed_at || new Date().toISOString(),
+        claimedOrderCode: gift?.claimed_order_code || order.displayOrderCode || order.orderCode || "",
+        claimedByName: gift?.claimed_by_name || ""
+      }
+    };
+  };
+}
+
 export default function useKitchenOrders(options = null) {
   const enabled = options?.enabled !== false;
   const [orders, setOrders] = useState([]);
@@ -168,8 +241,33 @@ export default function useKitchenOrders(options = null) {
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
   const [updatingOrderId, setUpdatingOrderId] = useState("");
   const [updatingItemKey, setUpdatingItemKey] = useState("");
+  const [claimingGiftOrderId, setClaimingGiftOrderId] = useState("");
   const loadingOrdersRef = useRef(false);
   const realtimeReloadTimerRef = useRef(null);
+  const recentlyClosedOrderKeysRef = useRef(new Map());
+
+  const filterRecentlyClosedOrders = useCallback((list = []) => {
+    const now = Date.now();
+    const recentlyClosed = recentlyClosedOrderKeysRef.current;
+
+    return (Array.isArray(list) ? list : []).filter((order) => {
+      const key = getKitchenOrderRuntimeKey(order);
+      if (!key || !recentlyClosed.has(key)) return true;
+
+      const expiresAt = recentlyClosed.get(key);
+      if (expiresAt <= now) {
+        recentlyClosed.delete(key);
+        return true;
+      }
+
+      if (!orderMatchesStatus(order, "active")) {
+        recentlyClosed.delete(key);
+        return true;
+      }
+
+      return false;
+    });
+  }, []);
 
   const loadOrders = useCallback(async ({ silent = false, force = false } = {}) => {
     if (!enabled) {
@@ -194,10 +292,15 @@ export default function useKitchenOrders(options = null) {
         ...(options || {}),
         ...dateRange
       });
+      const giftResult = await enrichKitchenOrdersWithMonthlyGifts(result.orders || [], {
+        dateKey: dateFilter,
+        dateFrom: dateRange.dateFrom
+      });
+      const hasReadError = Boolean(result.errors?.length || giftResult.error);
 
-      setOrders(result.orders || []);
+      setOrders(filterRecentlyClosedOrders(giftResult.orders || result.orders || []));
       setError(
-        result.errors?.length
+        hasReadError
           ? "Một nguồn đơn chưa đọc được. Các nguồn còn lại vẫn đang hiển thị."
           : ""
       );
@@ -209,7 +312,7 @@ export default function useKitchenOrders(options = null) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dateFilter, enabled, options]);
+  }, [dateFilter, enabled, filterRecentlyClosedOrders, options]);
 
   useEffect(() => {
     if (!enabled) {
@@ -251,12 +354,16 @@ export default function useKitchenOrders(options = null) {
   }, [enabled, loadOrders]);
 
   const filteredOrders = useMemo(() => {
-    return sortKitchenOrdersForBoard(orders.filter((order) => {
-      if (sourceFilter !== "all" && order.sourceType !== sourceFilter) return false;
+    const matchedOrders = orders.filter((order) => {
+      if (!orderMatchesSource(order, sourceFilter)) return false;
       if (!orderMatchesStatus(order, statusFilter)) return false;
       if (!orderMatchesSearch(order, search)) return false;
       return true;
-    }));
+    });
+
+    return statusFilter === "done"
+      ? sortKitchenDoneOrders(matchedOrders)
+      : sortKitchenOrdersForBoard(matchedOrders);
   }, [orders, search, sourceFilter, statusFilter]);
 
   const stats = useMemo(() => {
@@ -283,6 +390,12 @@ export default function useKitchenOrders(options = null) {
     if (!action) return;
 
     const previousOrders = orders;
+    const shouldSuppressReloadEcho = shouldSuppressAfterDoneAction(order, action);
+    const orderRuntimeKey = getKitchenOrderRuntimeKey(order);
+    if (shouldSuppressReloadEcho && orderRuntimeKey) {
+      recentlyClosedOrderKeysRef.current.set(orderRuntimeKey, Date.now() + RECENTLY_CLOSED_SUPPRESS_MS);
+    }
+
     setUpdatingOrderId(orderId);
     setError("");
     setOrders((currentOrders) => currentOrders.map(patchOrderAction(order, action)));
@@ -290,11 +403,13 @@ export default function useKitchenOrders(options = null) {
     try {
       const result = await markKitchenOrderDone(order);
       if (!result.ok) {
+        if (orderRuntimeKey) recentlyClosedOrderKeysRef.current.delete(orderRuntimeKey);
         setOrders(previousOrders);
         setError(result.message || "Không cập nhật được trạng thái đơn.");
         return;
       }
     } catch (err) {
+      if (orderRuntimeKey) recentlyClosedOrderKeysRef.current.delete(orderRuntimeKey);
       setOrders(previousOrders);
       setError(err?.message || "Không cập nhật được trạng thái đơn.");
     } finally {
@@ -330,6 +445,38 @@ export default function useKitchenOrders(options = null) {
     }
   }, [orders, updatingItemKey]);
 
+  const claimGift = useCallback(async (order) => {
+    const orderId = String(order?.id || "").trim();
+    if (!orderId || claimingGiftOrderId) return;
+
+    const previousOrders = orders;
+    setClaimingGiftOrderId(orderId);
+    setError("");
+
+    try {
+      const result = await claimMonthlyCustomerGift(order, {
+        dateKey: dateFilter,
+        profileId: options?.profileId || "",
+        profileName: options?.profileName || ""
+      });
+
+      if (!result.ok) {
+        setError(result.message || "Không xác nhận được quà khách quen.");
+        return;
+      }
+
+      setOrders((currentOrders) => currentOrders.map(patchMonthlyGiftClaim(order, result.gift || {})));
+      if (result.alreadyClaimed) {
+        setError(result.message || "Khách này đã được tặng quà trong tháng.");
+      }
+    } catch (err) {
+      setOrders(previousOrders);
+      setError(err?.message || "Không xác nhận được quà khách quen.");
+    } finally {
+      setClaimingGiftOrderId("");
+    }
+  }, [claimingGiftOrderId, dateFilter, options, orders]);
+
   return {
     orders,
     filteredOrders,
@@ -348,8 +495,10 @@ export default function useKitchenOrders(options = null) {
     lastUpdatedAt,
     updatingOrderId,
     updatingItemKey,
+    claimingGiftOrderId,
     markDone,
     toggleItemDone,
+    claimGift,
     reload: () => loadOrders({ silent: true, force: true })
   };
 }
