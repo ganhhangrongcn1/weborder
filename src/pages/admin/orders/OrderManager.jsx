@@ -19,6 +19,7 @@ const STATUS_META = {
   delivering: { label: "Đang giao", className: "admin-order-status-delivering" },
   done: { label: "Hoàn thành", className: "admin-order-status-done" }
 };
+const ORDER_PAGE_SIZE = 25;
 
 function getOrderId(order) {
   return order.id || order.orderCode;
@@ -656,9 +657,20 @@ export default function OrderManager({
   const [fulfillmentFilter, setFulfillmentFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const snapshotHasPartnerOrders = useMemo(
+    () => (ordersSnapshot || []).some((order) => order?.sourceType === "partner"),
+    [ordersSnapshot]
+  );
 
   useEffect(() => {
     let disposed = false;
+    if (snapshotHasPartnerOrders) {
+      setPartnerOrders([]);
+      return () => {
+        disposed = true;
+      };
+    }
     async function loadPartnerFeed() {
       const dateRange = {};
       if (ordersDateFrom) {
@@ -678,7 +690,7 @@ export default function OrderManager({
     return () => {
       disposed = true;
     };
-  }, [ordersDateFrom, ordersDateTo]);
+  }, [ordersDateFrom, ordersDateTo, snapshotHasPartnerOrders]);
 
   const adminOrderFeed = useMemo(
     () => buildAdminOrderFeed(ordersSnapshot || [], partnerOrders || []),
@@ -719,6 +731,16 @@ export default function OrderManager({
     if (statusFilter === "all") return searchedOrders;
     return searchedOrders.filter((order) => getDisplayStatus(order) === statusFilter);
   }, [searchedOrders, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ORDER_PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pagedOrders = useMemo(() => {
+    const start = (safeCurrentPage - 1) * ORDER_PAGE_SIZE;
+    return visibleOrders.slice(start, start + ORDER_PAGE_SIZE);
+  }, [safeCurrentPage, visibleOrders]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [keyword, statusFilter, fulfillmentFilter, sourceFilter, branchFilter, paymentFilter, ordersDateFrom, ordersDateTo]);
 
   const orderStats = useMemo(() => {
     const overdue = searchedOrders.filter((order) => getWaitingMinutes(order.createdAt) > 15).length;
@@ -852,12 +874,66 @@ export default function OrderManager({
           onReset={resetFilters}
         />
         <OrderList
-          orders={visibleOrders}
+          orders={pagedOrders}
           activeOrderId={activeOrder ? getOrderId(activeOrder) : activeOrderId}
           onSelectOrder={handleSelectOrder}
           updateOrderStatus={safeUpdateOrderStatus}
           registeredCustomersByPhone={registeredCustomersByPhone}
         />
+        {visibleOrders.length > ORDER_PAGE_SIZE ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              padding: "12px 4px 0",
+              color: "#64748b",
+              fontSize: 13,
+              fontWeight: 800
+            }}
+          >
+            <span>
+              Hiển thị {pagedOrders.length} / {visibleOrders.length} đơn · Trang {safeCurrentPage}/{totalPages}
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                disabled={safeCurrentPage <= 1}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                style={{
+                  border: "1px solid #d7deea",
+                  background: "#ffffff",
+                  color: "#334155",
+                  borderRadius: 10,
+                  padding: "9px 13px",
+                  fontWeight: 900,
+                  cursor: safeCurrentPage <= 1 ? "not-allowed" : "pointer",
+                  opacity: safeCurrentPage <= 1 ? 0.55 : 1
+                }}
+              >
+                Trước
+              </button>
+              <button
+                type="button"
+                disabled={safeCurrentPage >= totalPages}
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                style={{
+                  border: "1px solid #f97316",
+                  background: "#fff7ed",
+                  color: "#c2410c",
+                  borderRadius: 10,
+                  padding: "9px 13px",
+                  fontWeight: 900,
+                  cursor: safeCurrentPage >= totalPages ? "not-allowed" : "pointer",
+                  opacity: safeCurrentPage >= totalPages ? 0.55 : 1
+                }}
+              >
+                Tiếp
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <OrderDetailPanel

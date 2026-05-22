@@ -1,4 +1,6 @@
-import { buildCustomersFromOrdersAsync, adjustCustomerPoints, resetCustomerPoints, giftVoucherToCustomer, cancelCustomerVoucher } from "../../../services/crmService.js";
+import { buildCustomersFromOrderListAsync, buildCustomersFromOrdersAsync, adjustCustomerPoints, resetCustomerPoints, giftVoucherToCustomer, cancelCustomerVoucher } from "../../../services/crmService.js";
+import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
+import { recordAdminRequest } from "../../../services/adminRequestAuditService.js";
 
 export default function useAdminOrderCrmActions({
   orderStorage,
@@ -27,20 +29,26 @@ export default function useAdminOrderCrmActions({
     });
   };
 
-  const reloadOrdersSnapshot = async () => {
-    const all = await orderStorage?.getAllAsync?.();
-    setOrdersSnapshot(Array.isArray(all) ? all : []);
-  };
-
   const refreshCrmSnapshot = async () => {
-    const nextSnapshot = await buildCustomersFromOrdersAsync(orderStorage);
+    const [webOrdersResult, partnerOrdersResult] = await Promise.allSettled([
+      orderStorage?.getAllAsync?.(),
+      readPartnerOrdersForAdmin()
+    ]);
+    const webOrders = webOrdersResult.status === "fulfilled" ? webOrdersResult.value : [];
+    recordAdminRequest("order updated web orders", "orders");
+    const partnerOrders = partnerOrdersResult.status === "fulfilled" ? partnerOrdersResult.value : [];
+    const combinedOrders = buildAdminOrderFeed(webOrders, partnerOrders);
+    const nextSnapshot = await buildCustomersFromOrderListAsync(combinedOrders, orderStorage);
     setCrmSnapshot(nextSnapshot);
-    await reloadOrdersSnapshot();
+    setOrdersSnapshot(Array.isArray(webOrders) ? webOrders : []);
     return nextSnapshot;
   };
 
   const refreshCrmOnly = async () => {
-    const nextSnapshot = await buildCustomersFromOrdersAsync(orderStorage, { skipReconcile: true });
+    const nextSnapshot = await buildCustomersFromOrdersAsync(orderStorage, {
+      skipReconcile: true,
+      forceSupportRefresh: true
+    });
     setCrmSnapshot(nextSnapshot);
     return nextSnapshot;
   };

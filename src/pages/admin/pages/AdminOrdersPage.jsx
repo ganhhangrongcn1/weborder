@@ -1,4 +1,5 @@
 import AdminOrdersCrmSection from "../AdminOrdersCrmSection.jsx";
+import AdminRequestAuditBadge from "../AdminRequestAuditBadge.jsx";
 import { AdminInput, AdminSelect } from "../ui/index.js";
 
 export default function AdminOrdersPage({
@@ -7,6 +8,8 @@ export default function AdminOrdersPage({
   onOrderUpdated,
   crmSnapshot,
   setCrmSnapshot,
+  adminRequestAudit,
+  resetAdminRequestAudit,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
   onAdjustPoints,
@@ -111,6 +114,10 @@ export default function AdminOrdersPage({
             </label>
           </>
         ) : null}
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <AdminRequestAuditBadge audit={adminRequestAudit} onReset={resetAdminRequestAudit} />
       </div>
 
       <AdminOrdersCrmSection

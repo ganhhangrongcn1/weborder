@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
-import { buildCustomersFromOrdersAsync } from "../../../services/crmService.js";
+import { buildCustomersFromOrderListAsync } from "../../../services/crmService.js";
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
+import {
+  getAdminRequestAuditSnapshot,
+  recordAdminRequest,
+  resetAdminRequestAudit
+} from "../../../services/adminRequestAuditService.js";
 import { STORAGE_KEYS } from "../../../services/repositories/storageKeys.js";
+
+const SNAPSHOT_CACHE_TTL_MS = 8000;
+const ordersSnapshotCache = new Map();
+const ordersSnapshotInFlight = new Map();
 
 function buildDateRangeFromInputs(dateFromValue = "", dateToValue = "") {
   const fromText = String(dateFromValue || "").trim();
@@ -55,11 +64,61 @@ function buildChartRangeFromPreset(preset = "7d") {
 }
 
 async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartnerOrders = false } = {}) {
+  const cacheKey = buildOrdersSnapshotCacheKey(dateRange, includePartnerOrders);
+  const cached = ordersSnapshotCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < SNAPSHOT_CACHE_TTL_MS) {
+    return cached.value;
+  }
+  if (ordersSnapshotInFlight.has(cacheKey)) {
+    return ordersSnapshotInFlight.get(cacheKey);
+  }
+
+  const request = loadOrdersSnapshotUncached(orderStorage, dateRange, { includePartnerOrders })
+    .then((value) => {
+      ordersSnapshotCache.set(cacheKey, {
+        cachedAt: Date.now(),
+        value
+      });
+      if (includePartnerOrders) {
+        ordersSnapshotCache.set(buildOrdersSnapshotCacheKey(dateRange, false), {
+          cachedAt: Date.now(),
+          value: getWebOrdersOnly(value)
+        });
+      }
+      return value;
+    })
+    .finally(() => {
+      ordersSnapshotInFlight.delete(cacheKey);
+    });
+
+  ordersSnapshotInFlight.set(cacheKey, request);
+  return request;
+}
+
+async function loadOrdersSnapshotUncached(orderStorage, dateRange = {}, { includePartnerOrders = false } = {}) {
   const webOrders = await orderStorage?.getAllAsync?.(dateRange);
+  recordAdminRequest("read web orders snapshot", "orders");
   const safeWebOrders = Array.isArray(webOrders) ? webOrders : [];
   if (!includePartnerOrders) return safeWebOrders;
   const partnerOrders = await readPartnerOrdersForAdmin(dateRange);
   return buildAdminOrderFeed(safeWebOrders, partnerOrders);
+}
+
+function buildOrdersSnapshotCacheKey(dateRange = {}, includePartnerOrders = false) {
+  return [
+    includePartnerOrders ? "with-partner" : "web-only",
+    String(dateRange?.dateFrom || ""),
+    String(dateRange?.dateTo || "")
+  ].join("|");
+}
+
+function clearOrdersSnapshotCache() {
+  ordersSnapshotCache.clear();
+  ordersSnapshotInFlight.clear();
+}
+
+function getWebOrdersOnly(orders = []) {
+  return (Array.isArray(orders) ? orders : []).filter((order) => order?.sourceType !== "partner");
 }
 
 export default function useAdminOrderCrmState(orderStorage, options = {}) {
@@ -76,6 +135,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const [ordersSnapshot, setOrdersSnapshot] = useState([]);
   const [chartOrdersSnapshot, setChartOrdersSnapshot] = useState([]);
   const [crmSnapshot, setCrmSnapshot] = useState({ customers: [], loyaltyConfig: {} });
+  const [adminRequestAudit, setAdminRequestAudit] = useState(() => getAdminRequestAuditSnapshot());
   const [customerAdminTab, setCustomerAdminTab] = useState("crm");
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState("");
 
@@ -88,10 +148,11 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
       try {
         const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
-          includePartnerOrders: section === "dashboard"
+          includePartnerOrders: section === "dashboard" || section === "orders"
         });
         if (disposed) return;
         setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
+        setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
         console.error("[admin][orders] failed to load snapshot", error);
@@ -115,6 +176,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         });
         if (disposed) return;
         setChartOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
+        setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
         console.error("[admin][chart-orders] failed to load snapshot", error);
@@ -135,9 +197,13 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         const activeDateFrom = section === "customers" ? customersDateFrom : dashboardDateFrom;
         const activeDateTo = section === "customers" ? customersDateTo : dashboardDateTo;
         const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
-        const nextCrm = await buildCustomersFromOrdersAsync(orderStorage, { dateRange });
+        const crmOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
+          includePartnerOrders: true
+        });
+        const nextCrm = await buildCustomersFromOrderListAsync(crmOrders, orderStorage, { dateRange });
         if (disposed) return;
         setCrmSnapshot(nextCrm);
+        setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
         console.error("[admin][crm] failed to load snapshot", error);
@@ -148,23 +214,33 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       const activeDateFrom = section === "orders" ? ordersDateFrom : section === "customers" ? customersDateFrom : dashboardDateFrom;
       const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
       const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
-      const [ordersResult, crmResult] = await Promise.allSettled([
-        loadOrdersSnapshot(orderStorage, dateRange, {
-          includePartnerOrders: section === "dashboard"
-        }),
-        buildCustomersFromOrdersAsync(orderStorage, { dateRange })
-      ]);
+      clearOrdersSnapshotCache();
+      const ordersResult = await loadOrdersSnapshot(orderStorage, dateRange, {
+        includePartnerOrders: true
+      })
+        .then((value) => ({ status: "fulfilled", value }))
+        .catch((reason) => ({ status: "rejected", reason }));
       if (disposed) return;
-      const nextOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
-      const nextCrm = crmResult.status === "fulfilled" ? crmResult.value : { customers: [], loyaltyConfig: {} };
+      const combinedOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
+      const shouldRefreshCrm = section !== "orders";
+      const crmResult = shouldRefreshCrm && ordersResult.status === "fulfilled"
+        ? await buildCustomersFromOrderListAsync(combinedOrders, orderStorage, { dateRange })
+            .then((value) => ({ status: "fulfilled", value }))
+            .catch((reason) => ({ status: "rejected", reason }))
+        : { status: "skipped", value: null };
+      if (disposed) return;
+      const nextOrders = section === "dashboard" || section === "orders" ? combinedOrders : getWebOrdersOnly(combinedOrders);
       if (ordersResult.status === "rejected") {
         console.error("[admin][orders] failed to load snapshot", ordersResult.reason);
       }
       if (crmResult.status === "rejected") {
         console.error("[admin][crm] failed to load snapshot", crmResult.reason);
       }
-      setCrmSnapshot(nextCrm);
+      if (crmResult.status === "fulfilled") {
+        setCrmSnapshot(crmResult.value);
+      }
       setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
+      setAdminRequestAudit(getAdminRequestAuditSnapshot());
     };
 
     const handleStorageChange = (event) => {
@@ -173,7 +249,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
     window.addEventListener("ghr:orders-changed", refreshAll);
     window.addEventListener("storage", handleStorageChange);
-    refreshCrmOnly();
+    if (section !== "orders") {
+      refreshCrmOnly();
+    }
 
     return () => {
       disposed = true;
@@ -182,6 +260,26 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     };
   }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo]);
 
+  useEffect(() => {
+    const syncAudit = () => {
+      setAdminRequestAudit(getAdminRequestAuditSnapshot());
+    };
+    const timer = window.setInterval(() => {
+      syncAudit();
+    }, 30000);
+    window.addEventListener("ghr:admin-request-audit-changed", syncAudit);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("ghr:admin-request-audit-changed", syncAudit);
+    };
+  }, []);
+
+  const resetAdminAudit = () => {
+    resetAdminRequestAudit();
+    setAdminRequestAudit(getAdminRequestAuditSnapshot());
+  };
+
   return {
     ordersSnapshot,
     setOrdersSnapshot,
@@ -189,6 +287,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     setChartOrdersSnapshot,
     crmSnapshot,
     setCrmSnapshot,
+    adminRequestAudit,
+    resetAdminRequestAudit: resetAdminAudit,
     customerAdminTab,
     setCustomerAdminTab,
     selectedCustomerPhone,

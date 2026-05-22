@@ -1,6 +1,8 @@
 ﻿import OrderManager from "./orders/OrderManager.jsx";
 import AdminCustomerSection from "./customers/AdminCustomerSection.jsx";
-import { buildCustomersFromOrdersAsync, getCustomerTier } from "../../services/crmService.js";
+import { buildCustomersFromOrderListAsync, getCustomerTier } from "../../services/crmService.js";
+import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../services/adminOrderFeedService.js";
+import { recordAdminRequest } from "../../services/adminRequestAuditService.js";
 import { customerRepository } from "../../services/repositories/customerRepository.js";
 
 function mapAdminStatusToOrderStatus(nextStatus) {
@@ -72,15 +74,27 @@ export default function AdminOrdersCrmSection({
     ? buildDateRangeFromInputs(customersDateFrom, customersDateTo)
     : buildDateRangeFromInputs(ordersDateFrom, ordersDateTo);
 
-  const refreshCrm = async () => {
-    const [ordersResult, crmResult] = await Promise.allSettled([
+  const refreshCrm = async ({ forceSupportRefresh = false } = {}) => {
+    const [ordersResult, partnerOrdersResult] = await Promise.allSettled([
       orderStorage?.getAllAsync?.(activeDateRange),
-      buildCustomersFromOrdersAsync(orderStorage, { dateRange: activeDateRange })
+      readPartnerOrdersForAdmin(activeDateRange)
     ]);
     const nextOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
+    recordAdminRequest("manual refresh web orders", "orders");
+    const partnerOrders = partnerOrdersResult.status === "fulfilled" ? partnerOrdersResult.value : [];
+    const combinedOrders = buildAdminOrderFeed(nextOrders, partnerOrders);
+    const crmResult = await buildCustomersFromOrderListAsync(combinedOrders, orderStorage, {
+      dateRange: activeDateRange,
+      forceSupportRefresh
+    })
+      .then((value) => ({ status: "fulfilled", value }))
+      .catch((reason) => ({ status: "rejected", reason }));
     const nextCrm = crmResult.status === "fulfilled" ? crmResult.value : { customers: [], loyaltyConfig: {} };
     if (ordersResult.status === "rejected") {
       console.error("[admin][orders] failed to refresh", ordersResult.reason);
+    }
+    if (partnerOrdersResult.status === "rejected") {
+      console.error("[admin][partner-orders] failed to refresh", partnerOrdersResult.reason);
     }
     if (crmResult.status === "rejected") {
       console.error("[admin][crm] failed to refresh", crmResult.reason);
@@ -92,7 +106,7 @@ export default function AdminOrdersCrmSection({
 
   const saveLoyaltyConfig = async (nextConfig) => {
     onSaveLoyaltyConfig?.(nextConfig || crmSnapshot?.loyaltyConfig || {});
-    return await refreshCrm();
+    return await refreshCrm({ forceSupportRefresh: true });
   };
 
   const updateOrderStatus = async (orderId, nextStatus) => {

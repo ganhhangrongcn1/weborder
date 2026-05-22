@@ -1,5 +1,6 @@
 import { getCustomerKey } from "./storageService.js";
 import { readPartnerOrdersForAdmin } from "./adminOrderFeedService.js";
+import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { customerRepository } from "./repositories/customerRepository.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
@@ -28,6 +29,9 @@ const defaultLoyaltyConfig = {
   redeemValue: 1,
   byPhone: {}
 };
+const CRM_SUPPORT_CACHE_TTL_MS = 8000;
+let crmSupportCache = { value: null, cachedAt: 0 };
+let crmSupportInFlight = null;
 
 function getPhoneRecord(allByPhone, phone) {
   const key = getCustomerKey(phone);
@@ -130,6 +134,64 @@ export function saveLoyaltyConfig(next) {
 
 function sumNumericPoints(entries = []) {
   return entries.reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
+}
+
+async function loadCrmSupportSnapshot({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && crmSupportCache.value && now - crmSupportCache.cachedAt < CRM_SUPPORT_CACHE_TTL_MS) {
+    return crmSupportCache.value;
+  }
+  if (!force && crmSupportInFlight) return crmSupportInFlight;
+
+  crmSupportInFlight = (async () => {
+    const [
+      loyaltyResult,
+      customerMetaResult,
+      registeredUsersResult,
+      loyaltyByPhoneResult
+    ] = await Promise.allSettled([
+      loyaltyRepository.getCrmConfigAsync(defaultLoyaltyConfig),
+      customerRepository.getCustomersMetaAsync(),
+      customerRepository.getUsersAsync(),
+      coreSupabaseRepository.readLoyaltyAccountsSummaryFromTable()
+    ]);
+    recordAdminRequest("crm loyalty config", "app_configs");
+    recordAdminRequest("crm customer meta", "app_configs");
+    recordAdminRequest("crm registered profiles", "profiles");
+    recordAdminRequest("crm loyalty summary", "loyalty_accounts");
+
+    const snapshot = {
+      loyalty: loyaltyResult.status === "fulfilled" ? loyaltyResult.value : defaultLoyaltyConfig,
+      customerMeta: customerMetaResult.status === "fulfilled" ? customerMetaResult.value : {},
+      registeredUsers: registeredUsersResult.status === "fulfilled" ? registeredUsersResult.value : {},
+      loyaltyByPhone: loyaltyByPhoneResult.status === "fulfilled" ? (loyaltyByPhoneResult.value || {}) : {}
+    };
+
+    if (loyaltyResult.status === "rejected") {
+      console.error("[crmService] load loyalty config failed", loyaltyResult.reason);
+    }
+    if (customerMetaResult.status === "rejected") {
+      console.error("[crmService] load customer meta failed", customerMetaResult.reason);
+    }
+    if (registeredUsersResult.status === "rejected") {
+      console.error("[crmService] load registered users failed", registeredUsersResult.reason);
+    }
+    if (loyaltyByPhoneResult.status === "rejected") {
+      console.error("[crmService] load loyalty-by-phone failed", loyaltyByPhoneResult.reason);
+    }
+
+    crmSupportCache = {
+      value: snapshot,
+      cachedAt: Date.now()
+    };
+    return snapshot;
+  })();
+
+  try {
+    return await crmSupportInFlight;
+  } finally {
+    crmSupportInFlight = null;
+  }
 }
 
 export function recalculateAllLoyaltyFromOrders(orderStorage) {
@@ -247,9 +309,14 @@ export async function buildCustomersFromOrdersAsync(orderStorage, options = {}) 
     ...(Array.isArray(webOrders) ? webOrders : []),
     ...(Array.isArray(partnerOrders) ? partnerOrders : [])
   ];
+  return buildCustomersFromOrderListAsync(orders, orderStorage, options);
+}
+
+export async function buildCustomersFromOrderListAsync(orders = [], orderStorage, options = {}) {
+  const safeOrders = Array.isArray(orders) ? orders : [];
   const uniquePhones = Array.from(
     new Set(
-      orders
+      safeOrders
         .map((order) => getCustomerKey(order.customerPhone || order.phone || ""))
         .filter(Boolean)
     )
@@ -265,38 +332,15 @@ export async function buildCustomersFromOrdersAsync(orderStorage, options = {}) 
     });
   }
 
-  const [
-    loyaltyResult,
-    customerMetaResult,
-    registeredUsersResult,
-    loyaltyByPhoneResult
-  ] = await Promise.allSettled([
-    loyaltyRepository.getCrmConfigAsync(defaultLoyaltyConfig),
-    customerRepository.getCustomersMetaAsync(),
-    customerRepository.getUsersAsync(),
-    coreSupabaseRepository.readLoyaltyAccountsSummaryFromTable()
-  ]);
-
-  const loyalty = loyaltyResult.status === "fulfilled" ? loyaltyResult.value : defaultLoyaltyConfig;
-  const customerMeta = customerMetaResult.status === "fulfilled" ? customerMetaResult.value : {};
-  const registeredUsers = registeredUsersResult.status === "fulfilled" ? registeredUsersResult.value : {};
-  const loyaltyByPhone = loyaltyByPhoneResult.status === "fulfilled" ? (loyaltyByPhoneResult.value || {}) : {};
-
-  if (loyaltyResult.status === "rejected") {
-    console.error("[crmService] load loyalty config failed", loyaltyResult.reason);
-  }
-  if (customerMetaResult.status === "rejected") {
-    console.error("[crmService] load customer meta failed", customerMetaResult.reason);
-  }
-  if (registeredUsersResult.status === "rejected") {
-    console.error("[crmService] load registered users failed", registeredUsersResult.reason);
-  }
-  if (loyaltyByPhoneResult.status === "rejected") {
-    console.error("[crmService] load loyalty-by-phone failed", loyaltyByPhoneResult.reason);
-  }
+  const {
+    loyalty,
+    customerMeta,
+    registeredUsers,
+    loyaltyByPhone
+  } = await loadCrmSupportSnapshot({ force: options?.forceSupportRefresh === true });
 
   return buildCustomersSnapshotFromSources({
-    orders,
+    orders: safeOrders,
     loyalty,
     customerMeta,
     registeredUsers,

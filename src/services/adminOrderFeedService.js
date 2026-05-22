@@ -1,5 +1,6 @@
 import { initSupabaseRuntimeClient, getSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
 import { normalizePartnerSource, resolveOrderSourceKey } from "./partnerOrderService.js";
+import { recordAdminRequest } from "./adminRequestAuditService.js";
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -133,6 +134,7 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } =
   if (dateTo) query = query.lt("order_time", dateTo);
 
   const { data: orderRows, error: orderError } = await query;
+  recordAdminRequest("read partner orders", "partner_orders");
   if (orderError) {
     console.warn("[adminOrderFeedService] read partner_orders failed", orderError);
     return [];
@@ -145,6 +147,7 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } =
       .from("partner_order_items")
       .select("id,item_key,partner_order_id,partner_item_name,web_product_name,quantity,unit_price,line_total,options,note,item_status")
       .in("partner_order_id", orderIds);
+    recordAdminRequest("read partner order items", "partner_order_items");
 
     if (itemError) {
       console.warn("[adminOrderFeedService] read partner_order_items failed", itemError);

@@ -68,6 +68,8 @@ export default function AdminApp({
     setShippingConfig,
     crmSnapshot,
     setCrmSnapshot,
+    adminRequestAudit,
+    resetAdminRequestAudit,
     customerAdminTab,
     setCustomerAdminTab,
     optionGroupPresets,
@@ -402,6 +404,8 @@ export default function AdminApp({
           onOrderUpdated={handleOrderUpdated}
           crmSnapshot={crmSnapshot}
           setCrmSnapshot={setCrmSnapshot}
+          adminRequestAudit={adminRequestAudit}
+          resetAdminRequestAudit={resetAdminRequestAudit}
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           onAdjustPoints={handleAdjustPoints}
