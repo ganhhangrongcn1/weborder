@@ -13,6 +13,10 @@ const CLIENT_SCOPES = {
   admin: {
     globalKey: "__GHR_SUPABASE_ADMIN_AUTH_CLIENT__",
     storageKey: "ghr-admin-auth"
+  },
+  kitchen: {
+    globalKey: "__GHR_SUPABASE_KITCHEN_AUTH_CLIENT__",
+    storageKey: "ghr-kitchen-auth"
   }
 };
 
@@ -92,4 +96,12 @@ export async function initSupabaseAdminAuthClient() {
 
 export function getSupabaseAdminAuthClient() {
   return getScopedExistingClient("admin");
+}
+
+export async function initSupabaseKitchenAuthClient() {
+  return createSupabaseClientForScope("kitchen");
+}
+
+export function getSupabaseKitchenAuthClient() {
+  return getScopedExistingClient("kitchen");
 }

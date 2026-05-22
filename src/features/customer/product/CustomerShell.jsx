@@ -22,6 +22,84 @@ const voucherPopupSeenKeys = new Set();
 const voucherPopupVisitKeys = new Set();
 const voucherPopupDismissedKeys = new Set();
 const voucherPopupPersistedKeys = new Set();
+const orderStatusPopupPersistedKeys = new Set();
+
+function normalizeOrderStatusText(value = "") {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function hasPersistedOrderStatusPopup(key = "") {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) return false;
+  if (orderStatusPopupPersistedKeys.has(normalizedKey)) return true;
+  try {
+    const stored = window.localStorage.getItem(normalizedKey);
+    if (stored === "1") {
+      orderStatusPopupPersistedKeys.add(normalizedKey);
+      return true;
+    }
+  } catch {
+  }
+  return false;
+}
+
+function persistOrderStatusPopupSeen(key = "") {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) return;
+  orderStatusPopupPersistedKeys.add(normalizedKey);
+  try {
+    window.localStorage.setItem(normalizedKey, "1");
+  } catch {
+  }
+}
+
+function isWebsiteCustomerOrder(order = {}) {
+  const sourceType = normalizeOrderStatusText(order.sourceType || order.source_type);
+  return sourceType !== "partner";
+}
+
+function getOrderStatusPopupCandidate(order = {}, phone = "") {
+  if (!order || !isWebsiteCustomerOrder(order)) return null;
+
+  const status = normalizeOrderStatusText(order.status || order.orderStatus || order.order_status);
+  const fulfillmentType = normalizeOrderStatusText(order.fulfillmentType || order.fulfillment_type);
+  const source = normalizeOrderStatusText(order.source || order.channel || order.orderSource || order.platform);
+  const orderId = String(order.id || order.orderCode || "").trim();
+  const phoneKey = String(phone || order.phone || order.customerPhone || "").replace(/\D/g, "");
+  if (!orderId || !phoneKey) return null;
+
+  if (status === "readyforpickup" && (fulfillmentType === "pickup" || source === "qrcounter")) {
+    return {
+      key: `ghr_order_status_popup_${phoneKey}_${orderId}_ready_pickup`,
+      notice: {
+        type: "order_ready_pickup",
+        badge: "Món đã xong",
+        title: "Món của bạn đã sẵn sàng",
+        description: `Đơn ${order.orderCode || orderId} đã chuẩn bị xong. Bạn có thể đến quầy để nhận món nhé.`
+      }
+    };
+  }
+
+  if (status === "delivering" && fulfillmentType === "delivery") {
+    return {
+      key: `ghr_order_status_popup_${phoneKey}_${orderId}_delivering`,
+      notice: {
+        type: "order_delivering",
+        badge: "Đang giao",
+        title: "Đơn hàng đang được giao",
+        description: `Đơn ${order.orderCode || orderId} đã được giao cho shipper. Bạn để ý điện thoại để shipper liên hệ khi tới nơi nhé.`
+      }
+    };
+  }
+
+  return null;
+}
 
 function hasPersistedVoucherPopup(key = "") {
   const normalizedKey = String(key || "").trim();
@@ -180,6 +258,29 @@ export default function CustomerShell({
     ...composedUserProfile,
     orderHistory: trackingOrderHistory
   };
+
+  useEffect(() => {
+    if (serviceNotice) return;
+    const orders = [
+      ...(currentOrder ? [currentOrder] : []),
+      ...(Array.isArray(profileOrders) ? profileOrders : [])
+    ];
+    const seenOrderIds = new Set();
+    const uniqueOrders = orders.filter((order) => {
+      const id = String(order?.id || order?.orderCode || "").trim();
+      if (!id || seenOrderIds.has(id)) return false;
+      seenOrderIds.add(id);
+      return true;
+    });
+
+    const candidate = uniqueOrders
+      .map((order) => getOrderStatusPopupCandidate(order, currentPhone))
+      .find((item) => item && !hasPersistedOrderStatusPopup(item.key));
+
+    if (!candidate) return;
+    persistOrderStatusPopupSeen(candidate.key);
+    setServiceNotice?.(candidate.notice);
+  }, [currentPhone, currentOrder, profileOrders, serviceNotice, setServiceNotice]);
 
   const loyaltyVouchers = Array.isArray(profileLoyalty?.voucherHistory) ? profileLoyalty.voucherHistory : [];
   const loyaltyCoupons = useMemo(

@@ -9,6 +9,7 @@ import AppEmptyState from "../../components/app/EmptyState.jsx";
 import { formatMoney } from "../../utils/format.js";
 import { getOrderStats } from "../../utils/pureHelpers.js";
 import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../services/partnerOrderService.js";
+import { getCustomerOrderDisplayStatus } from "../../services/customerOrderStatusService.js";
 import useAccountViewModel from "./hooks/useAccountViewModel.js";
 import AccountNoticeModal from "./components/AccountNoticeModal.jsx";
 
@@ -38,7 +39,7 @@ function getAccountOrderBranchName(order = {}, branches = []) {
 function getLookupOrderMeta(order = {}, branches = []) {
   if (order.sourceType === "partner") {
     const branchName = getCanonicalOrderBranchName(order, branches) || "Chưa rõ chi nhánh";
-    const statusText = order.orderStatus === "completed" ? "Đã hoàn tất" : "Đang xử lý";
+    const statusText = getCustomerOrderDisplayStatus(order).label;
     return `${branchName} · ${statusText}`;
   }
   return `${(order.items || []).length} món · Địa chỉ đã được ẩn`;

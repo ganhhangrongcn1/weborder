@@ -270,11 +270,23 @@ export const orderRepository = {
     if (!key) return () => {};
     if (!canWriteOrdersToSupabase()) return () => {};
 
-    const handleChange = async ({ payload }) => {
-      const changedPhone = getCustomerKey(
-        payload?.new?.customer_phone || payload?.old?.customer_phone || ""
-      );
-      if (changedPhone && changedPhone !== key) return;
+    const handleChange = async ({ table, payload }) => {
+      if (table === "order_items") {
+        const changedOrderId = String(payload?.new?.order_id || payload?.old?.order_id || "").trim();
+        const localOrders = this.getByPhone(key);
+        const belongsToPhone = localOrders.some((order) => {
+          const orderId = String(order?.id || "").trim();
+          const orderCode = String(order?.orderCode || "").trim();
+          return changedOrderId && (changedOrderId === orderId || changedOrderId === orderCode);
+        });
+        if (!belongsToPhone) return;
+      } else {
+        const changedPhone = getCustomerKey(
+          payload?.new?.customer_phone || payload?.old?.customer_phone || ""
+        );
+        if (changedPhone && changedPhone !== key) return;
+      }
+
       try {
         const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(key);
         const all = this.getAllByPhone();

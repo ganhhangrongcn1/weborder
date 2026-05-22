@@ -14,12 +14,10 @@ import {
   mergeCustomerLookupOrders
 } from "../../services/partnerOrderService.js";
 import { calculateOrderPoints, getLoyaltyRuleConfig } from "../../services/loyaltyService.js";
-
-const STATUS_TONE = {
-  done: "bg-green-50 text-green-700",
-  delivering: "bg-blue-50 text-blue-600",
-  active: "bg-orange-50 text-orange-600"
-};
+import {
+  getCustomerOrderDisplayStatus,
+  getCustomerOrderStatusToneClass
+} from "../../services/customerOrderStatusService.js";
 
 export default function Tracking({
   navigate,
@@ -98,29 +96,6 @@ export default function Tracking({
 
   const shouldShowLoading = (isOrdersLoading || isPartnerOrdersLoading) && orders.length === 0;
   const shouldShowEmpty = !shouldShowLoading && orders.length === 0;
-
-  const getOrderStatus = (order) => {
-    const status = String(order?.status || order?.orderStatus || "").toLowerCase();
-    if (status === "pending_zalo" || status === "new") return "Chờ xác nhận";
-    if (status === "delivering" || status === "đang giao") return "Đang giao";
-    if (status === "completed" || status === "done" || status === "hoàn tất") return "Hoàn tất";
-    return "Đang thực hiện";
-  };
-
-  const getOrderStep = (order) => {
-    const status = String(order?.status || order?.orderStatus || "").toLowerCase();
-    const isDeliveryOrder = String(order?.fulfillmentType || "").toLowerCase() !== "pickup";
-    if (status === "completed" || status === "done" || status === "hoàn tất") return isDeliveryOrder ? 3 : 2;
-    if (isDeliveryOrder && (status === "delivering" || status === "đang giao")) return 2;
-    if (["confirmed", "preparing", "cooking", "đang làm"].includes(status)) return 1;
-    return 0;
-  };
-
-  const getStatusTone = (status) => {
-    if (status === "Hoàn tất") return STATUS_TONE.done;
-    if (status === "Đang giao") return STATUS_TONE.delivering;
-    return STATUS_TONE.active;
-  };
 
   const formatOrderTime = (value) => (value ? formatTime(value) : "--");
 
@@ -247,7 +222,8 @@ export default function Tracking({
 
         {!shouldShowLoading &&
           orders.map((order) => {
-            const status = getOrderStatus(order);
+            const statusMeta = getCustomerOrderDisplayStatus(order);
+            const status = statusMeta.label;
             const items = Array.isArray(order?.items) ? order.items : [];
             const isPartnerOrder = order?.sourceType === "partner";
             const sourceBadge = getOrderSourceBadge(order);
@@ -282,7 +258,7 @@ export default function Tracking({
                     <span className={`rounded-full border px-3 py-1 text-xs font-black ${sourceBadge.className}`}>
                       {sourceBadge.label}
                     </span>
-                    <span className={`rounded-full px-3 py-1 text-xs font-black ${getStatusTone(status)}`}>
+                    <span className={`rounded-full px-3 py-1 text-xs font-black ${getCustomerOrderStatusToneClass(statusMeta)}`}>
                       {status}
                     </span>
                   </div>
@@ -352,9 +328,9 @@ export default function Tracking({
       </div>
 
       {selectedOrder && (
-        <OrderStatusSheet
-          order={selectedOrder}
-          step={getOrderStep(selectedOrder)}
+            <OrderStatusSheet
+              order={selectedOrder}
+              step={getCustomerOrderDisplayStatus(selectedOrder).step}
           formatOrderTime={formatOrderTime}
           branches={branches}
           canViewFullOrderCode={canViewFullOrderCode}

@@ -41,6 +41,7 @@ function buildRestoredSessionUser(defaultUserDemo, phone, fallback = {}) {
 export default function useCustomerSession({
   enabled = true,
   ordersRealtimeEnabled = false,
+  guestOrderPhone = "",
   forceRefreshOrdersOnTracking = false,
   demoData,
   getCurrentRegisteredPhone,
@@ -71,6 +72,7 @@ export default function useCustomerSession({
   const [restoreTargetPhone, setRestoreTargetPhone] = useState("");
   const [currentPhone, setCurrentPhoneState] = useState(() => getCurrentRegisteredPhone());
   const isSupabaseSource = getDataSource() === "supabase";
+  const orderLookupPhone = currentPhone || getCustomerKey(guestOrderPhone);
 
   useEffect(() => {
     setHasFetchedOrdersOnce(false);
@@ -236,14 +238,14 @@ export default function useCustomerSession({
       setHasFetchedOrdersOnce(true);
       return;
     }
-    if (!currentPhone && !isSessionRestoring) {
+    if (!orderLookupPhone && !isSessionRestoring) {
       setHasFetchedOrdersOnce(true);
     }
-  }, [currentPhone, enabled, forceRefreshOrdersOnTracking, isSessionRestoring]);
+  }, [enabled, forceRefreshOrdersOnTracking, isSessionRestoring, orderLookupPhone]);
 
   useEffect(() => {
-    if (!enabled || !ordersRealtimeEnabled || !currentPhone) return undefined;
-    const unsubscribe = orderStorage?.subscribeRealtimeByPhone?.(currentPhone, (orders) => {
+    if (!enabled || !ordersRealtimeEnabled || !orderLookupPhone) return undefined;
+    const unsubscribe = orderStorage?.subscribeRealtimeByPhone?.(orderLookupPhone, (orders) => {
       if (Array.isArray(orders)) {
         setDemoOrdersState(orders);
       }
@@ -251,17 +253,36 @@ export default function useCustomerSession({
     return () => {
       if (typeof unsubscribe === "function") unsubscribe();
     };
-  }, [currentPhone, enabled, orderStorage, ordersRealtimeEnabled]);
+  }, [enabled, orderLookupPhone, orderStorage, ordersRealtimeEnabled]);
 
   useEffect(() => {
-    if (!enabled || !forceRefreshOrdersOnTracking || !currentPhone) return;
+    if (!enabled || currentPhone || !orderLookupPhone) return;
+    let disposed = false;
+    (async () => {
+      try {
+        const remoteOrders = orderStorage?.getByPhoneAsync
+          ? await withTimeout(orderStorage.getByPhoneAsync(orderLookupPhone), 6000, orderStorage.getByPhone(orderLookupPhone))
+          : orderStorage.getByPhone(orderLookupPhone);
+        if (!disposed && Array.isArray(remoteOrders)) {
+          setDemoOrdersState(remoteOrders);
+        }
+      } catch {
+      }
+    })();
+    return () => {
+      disposed = true;
+    };
+  }, [currentPhone, enabled, orderLookupPhone, orderStorage]);
+
+  useEffect(() => {
+    if (!enabled || !forceRefreshOrdersOnTracking || !orderLookupPhone) return;
     let disposed = false;
     setIsOrdersLoading(true);
     (async () => {
       try {
         const remoteOrders = orderStorage?.getByPhoneAsync
-          ? await withTimeout(orderStorage.getByPhoneAsync(currentPhone), 6000, orderStorage.getByPhone(currentPhone))
-          : orderStorage.getByPhone(currentPhone);
+          ? await withTimeout(orderStorage.getByPhoneAsync(orderLookupPhone), 6000, orderStorage.getByPhone(orderLookupPhone))
+          : orderStorage.getByPhone(orderLookupPhone);
         if (!disposed && Array.isArray(remoteOrders)) {
           setDemoOrdersState(remoteOrders);
         }
@@ -276,7 +297,7 @@ export default function useCustomerSession({
     return () => {
       disposed = true;
     };
-  }, [currentPhone, enabled, forceRefreshOrdersOnTracking, orderStorage]);
+  }, [enabled, forceRefreshOrdersOnTracking, orderLookupPhone, orderStorage]);
 
   // Realtime address sync is disabled in customer runtime to prevent
   // repeated full-table reads and request spam on Account page.
@@ -409,7 +430,7 @@ export default function useCustomerSession({
     }
   }
 
-  const profileOrders = currentPhone ? demoOrders : [];
+  const profileOrders = orderLookupPhone ? demoOrders : [];
   const profileLoyalty = currentPhone ? demoLoyalty : defaultLoyaltyData;
   const storedCurrentUser = currentPhone ? userStorage.findByPhone(currentPhone) : null;
   const sessionCurrentUser = currentPhone && getCustomerKey(demoUser?.phone) === currentPhone ? demoUser : null;

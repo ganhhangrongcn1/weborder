@@ -86,14 +86,17 @@ export function createOrderActions({
     const targetOrder = currentOrder || demoOrders[0] || null;
     const targetOrderId = targetOrder?.id || targetOrder?.orderCode || "";
     const zaloSentAt = new Date().toISOString();
+    const nextStatus = String(targetOrder?.status || "").toLowerCase() === "pending_zalo"
+      ? "confirmed"
+      : targetOrder?.status || "confirmed";
     const savedOrder = targetOrderId
-      ? orderStorage.updateOrder(targetOrderId, { zaloSentAt }) || { ...targetOrder, zaloSentAt }
+      ? orderStorage.updateOrder(targetOrderId, { zaloSentAt, status: nextStatus }) || { ...targetOrder, zaloSentAt, status: nextStatus }
       : null;
     const targetPhone = savedOrder?.phone || targetOrder?.phone || targetOrder?.customerPhone || currentPhone || "";
     const latestOrdersByPhone = targetPhone ? orderStorage.getByPhone(targetPhone) : [];
 
-    setOrderStatus(targetOrder?.status || "pending_zalo");
-    setCurrentOrder(order => order ? { ...order, zaloSentAt } : savedOrder);
+    setOrderStatus(nextStatus);
+    setCurrentOrder(order => order ? { ...order, zaloSentAt, status: nextStatus } : savedOrder);
     if (currentPhone && latestOrdersByPhone.length) {
       setDemoOrdersState(latestOrdersByPhone);
     }
@@ -101,9 +104,10 @@ export function createOrderActions({
       ...profile,
       orderHistory: (latestOrdersByPhone.length ? latestOrdersByPhone : profile.orderHistory).map((order) => {
         const id = order.id || order.orderCode;
-        return String(id) === String(targetOrderId) ? { ...order, zaloSentAt } : order;
+        return String(id) === String(targetOrderId) ? { ...order, zaloSentAt, status: nextStatus } : order;
       })
     }));
+    return savedOrder;
   }
 
   return {

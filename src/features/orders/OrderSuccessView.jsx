@@ -34,9 +34,10 @@ export default function OrderSuccess({
   const [zaloConfig, setZaloConfig] = useState({ phone: "", template: "" });
   const [isZaloConfigLoading, setIsZaloConfigLoading] = useState(true);
   const [copyPopup, setCopyPopup] = useState({ open: false, title: "", message: "", tone: "success" });
+  const [isLocallyConfirmed, setIsLocallyConfirmed] = useState(false);
 
   const effectiveStatus = String(order?.status || orderStatus || "").toLowerCase();
-  const isConfirmed = Boolean(order?.zaloSentAt) || ["confirmed", "preparing", "cooking", "delivering", "done", "completed"].includes(effectiveStatus);
+  const isConfirmed = isLocallyConfirmed || Boolean(order?.zaloSentAt) || ["confirmed", "preparing", "cooking", "ready_for_pickup", "ready_for_delivery", "delivering", "done", "completed"].includes(effectiveStatus);
   const rawZaloPhone = String(branchPhone || "0788422424").replace(/\D/g, "") || "0788422424";
   const isPickup = order?.fulfillmentType === "pickup";
 
@@ -138,8 +139,10 @@ export default function OrderSuccess({
 
   async function copyOrderForZalo() {
     if (!canOpenZalo) return;
+    setHasOpenedZalo(true);
     await copyOrderText(false);
     confirmCurrentOrder();
+    setIsLocallyConfirmed(true);
   }
 
   function reopenZalo() {
@@ -150,6 +153,8 @@ export default function OrderSuccess({
 
   function markZaloSent() {
     confirmCurrentOrder();
+    setIsLocallyConfirmed(true);
+    navigate("tracking", "orders");
   }
 
   return (
@@ -270,6 +275,7 @@ export default function OrderSuccess({
           </CustomerButton>
         </CustomerModalFrame>
       )}
+
     </section>
   );
 }

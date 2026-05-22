@@ -1,6 +1,7 @@
 ﻿export function toAdminStatus(status) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "pending_zalo" || normalized === "new") return "new";
+  if (normalized === "ready_for_pickup" || normalized === "ready_for_delivery") return "doing";
   if (normalized === "delivering" || normalized === "đang giao") return "delivering";
   if (normalized === "done" || normalized === "completed" || normalized === "hoàn tất") return "done";
   return "doing";

@@ -42,6 +42,13 @@ export function getUserStorage() {
 export default function useCustomerRuntimeState({ domainState, demoData, onRouteChange, sessionEnabled = true }) {
   const { uiState, productState, coreState } = domainState;
   const [serviceNotice, setServiceNotice] = useState(null);
+  const guestOrderPhone = getCustomerKey(
+    coreState.currentOrder?.phone ||
+      coreState.currentOrder?.customerPhone ||
+      coreState.currentOrder?.customerPhoneKey ||
+      coreState.currentOrder?.rawCustomerPhone ||
+      ""
+  );
   const applyRouteChange = (nextPath) => {
     if (!nextPath) return;
     if (window.location.pathname === nextPath) return;
@@ -109,7 +116,8 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     setDemoAddressesState
   } = useCustomerSession({
     enabled: sessionEnabled,
-    ordersRealtimeEnabled: uiState.page === "tracking",
+    ordersRealtimeEnabled: true,
+    guestOrderPhone,
     forceRefreshOrdersOnTracking: uiState.page === "tracking",
     demoData,
     getCurrentRegisteredPhone: () => getCurrentRegisteredPhone({ userStorage }),

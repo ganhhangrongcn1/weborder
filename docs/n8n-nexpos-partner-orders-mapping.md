@@ -67,6 +67,7 @@ other/empty  -> other
 
 ```txt
 DOING  -> order_status = preparing, kitchen_status = cooking
+PRE_ORDER -> order_status = preorder, kitchen_status = preorder
 FINISH -> order_status = completed, kitchen_status = served
 CANCEL/CANCELLED -> order_status = cancelled, kitchen_status = cancelled
 ```
@@ -75,6 +76,14 @@ For kitchen screens, if you want finished historical orders not to appear as act
 
 ```txt
 kitchen_status in ('pending', 'cooking', 'ready')
+```
+
+Current kitchen screen also reads `partner_orders.nexpos_status` and `raw_data.status` directly:
+
+```txt
+FINISH/COMPLETED/DONE -> show in Đã xong
+PRE_ORDER             -> hide from Đang làm until NexPOS changes status
+CANCEL/CANCELED/CANCELLED -> show in Đã hủy
 ```
 
 ## Branches seen in sample

@@ -40,6 +40,32 @@ function toNullableUuid(value) {
   return isUuidLike(raw) ? raw : null;
 }
 
+function getSelectedOptionGroupRows(item = {}) {
+  const toppings = Array.isArray(item.toppings) ? item.toppings : [];
+  const selectedByGroup = toppings.reduce((map, topping) => {
+    const groupId = String(topping?.groupId || topping?.group_id || "").trim();
+    const groupName = String(topping?.groupName || topping?.group_name || topping?.group || "").trim();
+    const key = groupId || groupName;
+    if (!key) return map;
+    const current = map.get(key) || {
+      id: groupId,
+      name: groupName,
+      type: topping?.type || "",
+      options: []
+    };
+    current.options.push({
+      id: topping?.id || "",
+      name: topping?.name || topping?.label || "",
+      price: Number(topping?.price || 0),
+      quantity: Number(topping?.quantity || 1)
+    });
+    map.set(key, current);
+    return map;
+  }, new Map());
+
+  return [...selectedByGroup.values()];
+}
+
 function normalizeBranchText(value = "") {
   return String(value || "")
     .normalize("NFD")
@@ -612,6 +638,8 @@ async function readOrdersByPhoneFromTable(options = {}) {
       customerPhone: phone,
       customerName: order.customer_name || "",
       status: order.status || "pending_zalo",
+      kitchenStatus: order.kitchen_status || metadata.kitchenStatus || "",
+      kitchenDoneAt: order.kitchen_done_at || metadata.kitchenDoneAt || "",
       fulfillmentType: order.fulfillment_type || "delivery",
       paymentMethod: order.payment_method || "cash",
       source: order.source || metadata.source || metadata.orderSource || metadata.channel || "online",
@@ -695,6 +723,8 @@ async function readOrdersForPhoneFromTable(phone) {
       customerPhone: phoneKey,
       customerName: order.customer_name || "",
       status: order.status || "pending_zalo",
+      kitchenStatus: order.kitchen_status || metadata.kitchenStatus || "",
+      kitchenDoneAt: order.kitchen_done_at || metadata.kitchenDoneAt || "",
       fulfillmentType: order.fulfillment_type || "delivery",
       paymentMethod: order.payment_method || "cash",
       source: order.source || metadata.source || metadata.orderSource || metadata.channel || "online",
@@ -773,7 +803,7 @@ function toOrderRows(order = {}) {
     delivery_address: String(order.deliveryAddress || ""),
     metadata: order
   };
-  const itemRows = (order.items || []).map((item) => ({
+  const itemRows = (order.items || []).map((item, index) => ({
     order_id: id,
     product_id: String(item.id || ""),
     product_name: String(item.name || ""),
@@ -783,8 +813,11 @@ function toOrderRows(order = {}) {
     spice: String(item.spice || ""),
     note: String(item.note || ""),
     toppings: Array.isArray(item.toppings) ? item.toppings : [],
-    option_groups: Array.isArray(item.optionGroups) ? item.optionGroups : [],
-    metadata: item
+    option_groups: getSelectedOptionGroupRows(item),
+    metadata: {
+      ...item,
+      ghrOrderIndex: Number(item.ghrOrderIndex ?? index)
+    }
   }));
   return { orderRow, itemRows };
 }
@@ -1439,3 +1472,5 @@ export const coreSupabaseRepository = {
   subscribeOrdersRealtime,
   subscribeLoyaltyRealtime
 };
+
+export { getSelectedOptionGroupRows };

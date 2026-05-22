@@ -1,7 +1,17 @@
 ﻿export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableItem, CheckoutCard, addonCategory, formatMoney, Icon }) {
+  const isSpiceOption = (item, topping) => {
+    const spiceText = String(item.spice || "").trim();
+    const groupName = String(topping.groupName || "").trim();
+    const toppingName = String(topping.name || "").trim();
+
+    if (!spiceText || !groupName || !toppingName) return false;
+    return spiceText === `${groupName}: ${toppingName}`;
+  };
+
   const getToppingRows = (item) => {
     const rows = {};
     (item.toppings || []).forEach((topping) => {
+      if (isSpiceOption(item, topping)) return;
       const key = topping.id || topping.name;
       rows[key] = rows[key] || { name: topping.name, quantity: 0 };
       rows[key].quantity += Number(topping.quantity || 1);
