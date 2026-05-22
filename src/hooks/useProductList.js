@@ -8,7 +8,6 @@ import {
 import { subscribeCatalogRealtime } from "../services/repositories/catalogSupabaseRepository.js";
 import { adminConfigRepository } from "../services/repositories/adminConfigRepository.js";
 import { getDataSource } from "../services/repositories/dataSource.js";
-import { initSupabaseRuntimeClient } from "../services/supabase/supabaseRuntimeClient.js";
 import {
   isMenuSchemaBridgeMigrationEnabled,
   isSupabaseConfigSyncEnabled,
@@ -145,13 +144,6 @@ function getRouteLazyKeys(pathname = "/") {
 function getActiveRealtimeKeys(currentPage, pathname = "/") {
   const page = String(currentPage || "").toLowerCase();
   const path = String(pathname || "").toLowerCase();
-  if (page === "menu") {
-    return [
-      CATALOG_CONFIG_KEYS.products,
-      CATALOG_CONFIG_KEYS.categories,
-      CATALOG_CONFIG_KEYS.toppings
-    ];
-  }
   if (page !== "admin") return [];
   if (path.includes("/admin/menu")) {
     return [
@@ -349,43 +341,6 @@ export default function useProductList({
     ,
     isStrictSupabaseMode
   ]);
-
-  useEffect(() => {
-    if (!supabaseConfigSyncEnabled && !shouldForceSupabaseCatalogRead) return undefined;
-    let disposed = false;
-    let timerId = null;
-
-    const hydrateFromStandardTables = async () => {
-      await initSupabaseRuntimeClient();
-      if (disposed) return;
-      catalogConfigRepository
-        .getManyAsync([
-          { key: CATALOG_CONFIG_KEYS.branches, fallback: defaultBranches },
-          { key: CATALOG_CONFIG_KEYS.hours, fallback: defaultStoreHours }
-        ].map((entry) => ({
-          ...entry,
-          fallback: resolveStrictCatalogFallback(entry.key, entry.fallback, isStrictSupabaseMode)
-        })))
-        .then((remoteValues) => {
-          if (disposed) return;
-          const remoteBranches = remoteValues[CATALOG_CONFIG_KEYS.branches];
-          const remoteHours = remoteValues[CATALOG_CONFIG_KEYS.hours];
-          if (Array.isArray(remoteBranches)) setBranches(remoteBranches);
-          if (remoteHours && typeof remoteHours === "object") {
-            setHours(normalizeHours(remoteHours, defaultStoreHours));
-          }
-        })
-        .catch(() => {});
-    };
-
-    hydrateFromStandardTables();
-    timerId = window.setTimeout(hydrateFromStandardTables, 1500);
-
-    return () => {
-      disposed = true;
-      if (timerId) window.clearTimeout(timerId);
-    };
-  }, [supabaseConfigSyncEnabled, shouldForceSupabaseCatalogRead, defaultBranches, defaultStoreHours, isStrictSupabaseMode]);
 
   useEffect(() => {
     if (!supabaseConfigSyncEnabled && !shouldForceSupabaseCatalogRead) return undefined;

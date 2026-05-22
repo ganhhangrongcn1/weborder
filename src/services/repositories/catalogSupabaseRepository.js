@@ -15,23 +15,23 @@ const CATALOG_TABLE_BY_KEY = {
 };
 
 const MINUTE = 60 * 1000;
-const CATALOG_TTL_MS = 5 * MINUTE;
+const CATALOG_TTL_MS = 15 * MINUTE;
 const CATALOG_KEY_TTL_MS = {
-  ghr_products: 5 * MINUTE,
-  ghr_categories: 5 * MINUTE,
-  ghr_toppings: 5 * MINUTE,
-  ghr_home_content: 5 * MINUTE,
-  ghr_banners: 5 * MINUTE,
-  ghr_promos: 2 * MINUTE,
-  ghr_smart_promotions: 2 * MINUTE,
-  ghr_coupons: 2 * MINUTE,
-  ghr_campaigns: 2 * MINUTE,
-  ghr_shipping_config: 2 * MINUTE,
-  ghr_branches: 2 * MINUTE,
-  ghr_hours: 2 * MINUTE,
-  ghr_zones: 2 * MINUTE,
-  ghr_loyalty: 5 * MINUTE,
-  ghr_zalo_config: 5 * MINUTE
+  ghr_products: 20 * MINUTE,
+  ghr_categories: 20 * MINUTE,
+  ghr_toppings: 20 * MINUTE,
+  ghr_home_content: 20 * MINUTE,
+  ghr_banners: 20 * MINUTE,
+  ghr_promos: 10 * MINUTE,
+  ghr_smart_promotions: 10 * MINUTE,
+  ghr_coupons: 10 * MINUTE,
+  ghr_campaigns: 10 * MINUTE,
+  ghr_shipping_config: 10 * MINUTE,
+  ghr_branches: 10 * MINUTE,
+  ghr_hours: 10 * MINUTE,
+  ghr_zones: 10 * MINUTE,
+  ghr_loyalty: 20 * MINUTE,
+  ghr_zalo_config: 20 * MINUTE
 };
 const catalogReadCache = new Map();
 const catalogInFlight = new Map();
