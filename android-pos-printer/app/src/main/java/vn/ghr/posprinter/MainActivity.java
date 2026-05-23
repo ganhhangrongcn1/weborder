@@ -1,6 +1,5 @@
 package vn.ghr.posprinter;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
@@ -9,12 +8,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
@@ -23,6 +22,7 @@ import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.StrictMode;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -33,14 +33,15 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -48,17 +49,26 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 
 public class MainActivity extends Activity {
     private static final String PREFS_NAME = "ghr_pos_printer";
     private static final String KEY_WEB_URL = "web_url";
     private static final String KEY_USB_DEVICE = "usb_device";
+    private static final String KEY_PRINTER_MODE = "printer_mode";
+    private static final String KEY_LAN_HOST = "lan_host";
+    private static final String KEY_LAN_PORT = "lan_port";
+    private static final String PRINTER_MODE_USB = "usb";
+    private static final String PRINTER_MODE_LAN = "lan";
     private static final String DEFAULT_WEB_URL = "https://your-domain.com/admin/kitchen";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posprinter.USB_PERMISSION";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
+    private static final int DEFAULT_LAN_PORT = 9100;
 
     private WebView webView;
     private TextView statusText;
+    private TextView printerText;
     private SharedPreferences prefs;
     private UsbManager usbManager;
     private PendingIntent permissionIntent;
@@ -73,6 +83,7 @@ public class MainActivity extends Activity {
             if (granted && device != null) {
                 saveSelectedDevice(device);
                 status("Đã cấp quyền máy in USB.");
+                updatePrinterStatus();
                 if (!pendingPrintText.isEmpty()) {
                     String text = pendingPrintText;
                     pendingPrintText = "";
@@ -80,6 +91,7 @@ public class MainActivity extends Activity {
                 }
             } else {
                 status("Chưa cấp quyền máy in USB.");
+                updatePrinterStatus();
             }
         }
     };
@@ -87,6 +99,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder().permitAll().build());
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         usbManager = (UsbManager) getSystemService(USB_SERVICE);
         permissionIntent = PendingIntent.getBroadcast(
@@ -104,6 +117,7 @@ public class MainActivity extends Activity {
 
         setContentView(buildLayout());
         setupWebView();
+        updatePrinterStatus();
         loadKitchenUrl();
     }
 
@@ -116,43 +130,79 @@ public class MainActivity extends Activity {
     private View buildLayout() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.WHITE);
+        root.setBackgroundColor(Color.rgb(248, 250, 252));
 
-        LinearLayout bar = new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(10), dp(8), dp(10), dp(8));
-        bar.setBackgroundColor(Color.rgb(15, 118, 110));
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(12), dp(10), dp(12), dp(10));
+        header.setBackgroundColor(Color.WHITE);
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(getResources().getIdentifier("logo_icon", "drawable", getPackageName()));
+        logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        logo.setBackground(makeRoundRect(Color.rgb(255, 205, 0), 12, 0, Color.TRANSPARENT));
+        logo.setClipToOutline(false);
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(48), dp(48));
+        header.addView(logo, logoParams);
+
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        brand.setPadding(dp(10), 0, dp(8), 0);
 
         TextView title = new TextView(this);
-        title.setText("GHR POS Printer");
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(16);
+        title.setText("Gánh Hàng Rong");
+        title.setTextColor(Color.rgb(15, 23, 42));
+        title.setTextSize(17);
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        bar.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        brand.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("POS Printer · Xprinter 80mm");
+        subtitle.setTextColor(Color.rgb(71, 85, 105));
+        subtitle.setTextSize(12);
+        subtitle.setTypeface(Typeface.DEFAULT_BOLD);
+        brand.addView(subtitle);
+
+        header.addView(brand, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
         Button reloadButton = makeTopButton("Tải lại");
         reloadButton.setOnClickListener(view -> loadKitchenUrl());
-        bar.addView(reloadButton);
+        header.addView(reloadButton);
 
-        Button testButton = makeTopButton("In test");
+        Button testButton = makePrimaryButton("In test");
         testButton.setOnClickListener(view -> printTestBill());
-        bar.addView(testButton);
+        header.addView(testButton);
 
         Button settingsButton = makeTopButton("Cài đặt");
         settingsButton.setOnClickListener(view -> showSettingsDialog());
-        bar.addView(settingsButton);
+        header.addView(settingsButton);
 
-        root.addView(bar);
+        root.addView(header);
+
+        LinearLayout statusBar = new LinearLayout(this);
+        statusBar.setOrientation(LinearLayout.HORIZONTAL);
+        statusBar.setGravity(Gravity.CENTER_VERTICAL);
+        statusBar.setPadding(dp(12), dp(8), dp(12), dp(8));
+        statusBar.setBackgroundColor(Color.rgb(241, 245, 249));
+
+        printerText = new TextView(this);
+        printerText.setTextColor(Color.rgb(15, 118, 110));
+        printerText.setTextSize(13);
+        printerText.setTypeface(Typeface.DEFAULT_BOLD);
+        statusBar.addView(printerText, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
         statusText = new TextView(this);
-        statusText.setText("Máy in: Xprinter USB | Khổ giấy: 80mm");
-        statusText.setTextColor(Color.rgb(51, 65, 85));
-        statusText.setTextSize(13);
-        statusText.setPadding(dp(10), dp(6), dp(10), dp(6));
-        root.addView(statusText);
+        statusText.setText("Đang khởi động POS...");
+        statusText.setTextColor(Color.rgb(71, 85, 105));
+        statusText.setTextSize(12);
+        statusText.setGravity(Gravity.RIGHT);
+        statusBar.addView(statusText, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+        root.addView(statusBar);
 
         webView = new WebView(this);
+        webView.setBackgroundColor(Color.WHITE);
         root.addView(webView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 0,
@@ -168,7 +218,24 @@ public class MainActivity extends Activity {
         button.setTextSize(12);
         button.setAllCaps(false);
         button.setTextColor(Color.rgb(15, 23, 42));
+        button.setBackground(makeRoundRect(Color.rgb(255, 255, 255), 8, 1, Color.rgb(203, 213, 225)));
+        button.setPadding(dp(10), 0, dp(10), 0);
         return button;
+    }
+
+    private Button makePrimaryButton(String label) {
+        Button button = makeTopButton(label);
+        button.setTextColor(Color.WHITE);
+        button.setBackground(makeRoundRect(Color.rgb(20, 184, 166), 8, 1, Color.rgb(15, 118, 110)));
+        return button;
+    }
+
+    private GradientDrawable makeRoundRect(int color, int radiusDp, int strokeWidthDp, int strokeColor) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(radiusDp));
+        if (strokeWidthDp > 0) drawable.setStroke(dp(strokeWidthDp), strokeColor);
+        return drawable;
     }
 
     private void setupWebView() {
@@ -197,7 +264,7 @@ public class MainActivity extends Activity {
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             url = "https://" + url;
         }
-        status("Đang mở Kitchen: " + url);
+        status("Đang mở Kitchen");
         webView.loadUrl(url);
     }
 
@@ -209,6 +276,7 @@ public class MainActivity extends Activity {
         TextView urlLabel = new TextView(this);
         urlLabel.setText("Link web Kitchen online");
         urlLabel.setTextColor(Color.rgb(15, 23, 42));
+        urlLabel.setTypeface(Typeface.DEFAULT_BOLD);
         content.addView(urlLabel);
 
         EditText urlInput = new EditText(this);
@@ -218,9 +286,73 @@ public class MainActivity extends Activity {
         content.addView(urlInput);
 
         TextView printerLabel = new TextView(this);
-        printerLabel.setText("\nMáy in: Xprinter USB\nKhổ giấy: 80mm");
+        printerLabel.setText("\nMáy in: Xprinter 80mm");
         printerLabel.setTextColor(Color.rgb(51, 65, 85));
         content.addView(printerLabel);
+
+        TextView modeLabel = new TextView(this);
+        modeLabel.setText("\nKiểu kết nối");
+        modeLabel.setTextColor(Color.rgb(15, 23, 42));
+        modeLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(modeLabel);
+
+        LinearLayout modeRow = new LinearLayout(this);
+        modeRow.setOrientation(LinearLayout.HORIZONTAL);
+        modeRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        Button usbModeButton = new Button(this);
+        usbModeButton.setText("USB");
+        usbModeButton.setAllCaps(false);
+        modeRow.addView(usbModeButton, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+        Button lanModeButton = new Button(this);
+        lanModeButton.setText("LAN/WiFi");
+        lanModeButton.setAllCaps(false);
+        modeRow.addView(lanModeButton, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        content.addView(modeRow);
+
+        final String[] selectedMode = {getPrinterMode()};
+        Runnable refreshModeButtons = () -> {
+            boolean lanMode = PRINTER_MODE_LAN.equals(selectedMode[0]);
+            usbModeButton.setBackground(makeRoundRect(lanMode ? Color.WHITE : Color.rgb(20, 184, 166), 8, 1, Color.rgb(15, 118, 110)));
+            usbModeButton.setTextColor(lanMode ? Color.rgb(15, 23, 42) : Color.WHITE);
+            lanModeButton.setBackground(makeRoundRect(lanMode ? Color.rgb(20, 184, 166) : Color.WHITE, 8, 1, Color.rgb(15, 118, 110)));
+            lanModeButton.setTextColor(lanMode ? Color.WHITE : Color.rgb(15, 23, 42));
+        };
+        usbModeButton.setOnClickListener(view -> {
+            selectedMode[0] = PRINTER_MODE_USB;
+            refreshModeButtons.run();
+        });
+        lanModeButton.setOnClickListener(view -> {
+            selectedMode[0] = PRINTER_MODE_LAN;
+            refreshModeButtons.run();
+        });
+        refreshModeButtons.run();
+
+        TextView lanLabel = new TextView(this);
+        lanLabel.setText("\nIP máy in LAN/WiFi");
+        lanLabel.setTextColor(Color.rgb(15, 23, 42));
+        lanLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(lanLabel);
+
+        EditText lanHostInput = new EditText(this);
+        lanHostInput.setSingleLine(true);
+        lanHostInput.setInputType(InputType.TYPE_CLASS_PHONE);
+        lanHostInput.setHint("Ví dụ: 192.168.1.88");
+        lanHostInput.setText(prefs.getString(KEY_LAN_HOST, ""));
+        content.addView(lanHostInput);
+
+        TextView portLabel = new TextView(this);
+        portLabel.setText("Port máy in");
+        portLabel.setTextColor(Color.rgb(15, 23, 42));
+        portLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(portLabel);
+
+        EditText lanPortInput = new EditText(this);
+        lanPortInput.setSingleLine(true);
+        lanPortInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        lanPortInput.setText(String.valueOf(getLanPort()));
+        content.addView(lanPortInput);
 
         Button choosePrinterButton = new Button(this);
         choosePrinterButton.setText("Chọn máy in USB");
@@ -232,7 +364,13 @@ public class MainActivity extends Activity {
                 .setTitle("Cài đặt POS")
                 .setView(content)
                 .setPositiveButton("Lưu", (dialog, which) -> {
-                    prefs.edit().putString(KEY_WEB_URL, urlInput.getText().toString().trim()).apply();
+                    prefs.edit()
+                            .putString(KEY_WEB_URL, urlInput.getText().toString().trim())
+                            .putString(KEY_PRINTER_MODE, selectedMode[0])
+                            .putString(KEY_LAN_HOST, lanHostInput.getText().toString().trim())
+                            .putInt(KEY_LAN_PORT, parsePort(lanPortInput.getText().toString()))
+                            .apply();
+                    updatePrinterStatus();
                     loadKitchenUrl();
                 })
                 .setNegativeButton("Đóng", null)
@@ -243,6 +381,7 @@ public class MainActivity extends Activity {
         HashMap<String, UsbDevice> devices = usbManager.getDeviceList();
         if (devices.isEmpty()) {
             toast("Chưa thấy máy in USB. Kiểm tra dây USB/OTG.");
+            updatePrinterStatus();
             return;
         }
 
@@ -263,6 +402,7 @@ public class MainActivity extends Activity {
         if (usbManager.hasPermission(device)) {
             saveSelectedDevice(device);
             status("Đã chọn máy in USB.");
+            updatePrinterStatus();
             return;
         }
         usbManager.requestPermission(device, permissionIntent);
@@ -285,6 +425,55 @@ public class MainActivity extends Activity {
         return new ArrayList<>(devices.values()).get(0);
     }
 
+    private String getPrinterMode() {
+        String mode = prefs.getString(KEY_PRINTER_MODE, PRINTER_MODE_USB);
+        return PRINTER_MODE_LAN.equals(mode) ? PRINTER_MODE_LAN : PRINTER_MODE_USB;
+    }
+
+    private int parsePort(String value) {
+        try {
+            int port = Integer.parseInt(String.valueOf(value == null ? "" : value).trim());
+            return port > 0 && port <= 65535 ? port : DEFAULT_LAN_PORT;
+        } catch (Exception error) {
+            return DEFAULT_LAN_PORT;
+        }
+    }
+
+    private int getLanPort() {
+        return prefs.getInt(KEY_LAN_PORT, DEFAULT_LAN_PORT);
+    }
+
+    private void updatePrinterStatus() {
+        if (printerText == null) return;
+
+        if (PRINTER_MODE_LAN.equals(getPrinterMode())) {
+            String host = prefs.getString(KEY_LAN_HOST, "").trim();
+            if (host.isEmpty()) {
+                printerText.setText("Máy in LAN/WiFi: chưa nhập IP");
+                printerText.setTextColor(Color.rgb(194, 65, 12));
+                return;
+            }
+
+            printerText.setText("Máy in LAN/WiFi: " + host + ":" + getLanPort());
+            printerText.setTextColor(Color.rgb(15, 118, 110));
+            return;
+        }
+
+        UsbDevice device = getSelectedDevice();
+
+        if (device == null) {
+            printerText.setText("Máy in: chưa kết nối USB");
+            printerText.setTextColor(Color.rgb(185, 28, 28));
+            return;
+        }
+
+        boolean hasPermission = usbManager.hasPermission(device);
+        printerText.setText(hasPermission
+                ? "Máy in: Xprinter USB sẵn sàng"
+                : "Máy in: cần cấp quyền USB");
+        printerText.setTextColor(hasPermission ? Color.rgb(15, 118, 110) : Color.rgb(194, 65, 12));
+    }
+
     private void printTestBill() {
         String time = new SimpleDateFormat("HH:mm dd/MM/yyyy", new Locale("vi", "VN")).format(new Date());
         printReceiptText(
@@ -300,15 +489,54 @@ public class MainActivity extends Activity {
     }
 
     private boolean printReceiptText(String text) {
+        if (PRINTER_MODE_LAN.equals(getPrinterMode())) {
+            return printReceiptTextViaLan(text);
+        }
+
+        return printReceiptTextViaUsb(text);
+    }
+
+    private boolean printReceiptTextViaLan(String text) {
+        String host = prefs.getString(KEY_LAN_HOST, "").trim();
+        int port = getLanPort();
+        if (host.isEmpty()) {
+            status("Chưa nhập IP máy in LAN/WiFi.");
+            updatePrinterStatus();
+            return false;
+        }
+
+        try (Socket socket = new Socket()) {
+            status("Đang kết nối máy in LAN/WiFi...");
+            socket.connect(new InetSocketAddress(host, port), 5000);
+            socket.setSoTimeout(5000);
+
+            OutputStream outputStream = socket.getOutputStream();
+            outputStream.write(buildEscPosRaster(text));
+            outputStream.flush();
+
+            status("Đã gửi bill tới Xprinter LAN/WiFi.");
+            updatePrinterStatus();
+            return true;
+        } catch (Exception error) {
+            status("Không kết nối được máy in LAN/WiFi.");
+            updatePrinterStatus();
+            return false;
+        }
+    }
+
+    private boolean printReceiptTextViaUsb(String text) {
         UsbDevice device = getSelectedDevice();
         if (device == null) {
             status("Chưa thấy máy in USB.");
+            updatePrinterStatus();
             return false;
         }
 
         if (!usbManager.hasPermission(device)) {
             pendingPrintText = text;
+            status("Đang xin quyền USB.");
             usbManager.requestPermission(device, permissionIntent);
+            updatePrinterStatus();
             return false;
         }
 
@@ -357,6 +585,7 @@ public class MainActivity extends Activity {
             }
 
             status("Đã gửi bill tới Xprinter USB.");
+            updatePrinterStatus();
             return true;
         } finally {
             try {

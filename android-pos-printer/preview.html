@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GHR POS Preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #e5e7eb;
+        color: #0f172a;
+        font-family: system-ui, Arial, sans-serif;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .device {
+        width: min(100%, 1180px);
+        aspect-ratio: 16 / 9;
+        min-height: 560px;
+        border: 10px solid #111827;
+        border-radius: 22px;
+        background: #f8fafc;
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+      }
+
+      .header {
+        height: 70px;
+        background: #ffffff;
+        border-bottom: 1px solid #e2e8f0;
+        display: grid;
+        grid-template-columns: 48px minmax(0, 1fr) auto auto auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+      }
+
+      .logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: #ffcd00;
+        object-fit: cover;
+        display: block;
+      }
+
+      .brand {
+        min-width: 0;
+        display: grid;
+        gap: 2px;
+      }
+
+      .brand strong {
+        font-size: 17px;
+        line-height: 1.1;
+      }
+
+      .brand span {
+        color: #475569;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      button {
+        height: 38px;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #0f172a;
+        border-radius: 8px;
+        padding: 0 12px;
+        font-size: 12px;
+        font-weight: 900;
+        font-family: inherit;
+      }
+
+      .primary {
+        border-color: #0f766e;
+        background: #14b8a6;
+        color: #ffffff;
+      }
+
+      .status {
+        min-height: 38px;
+        background: #f1f5f9;
+        border-bottom: 1px solid #e2e8f0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .printer-ready {
+        color: #0f766e;
+        font-weight: 900;
+      }
+
+      .printer-warning {
+        color: #c2410c;
+        font-weight: 900;
+      }
+
+      .message {
+        color: #475569;
+        text-align: right;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .webview {
+        min-height: 0;
+        background:
+          linear-gradient(90deg, rgba(248, 250, 252, 0.98), rgba(248, 250, 252, 0.9)),
+          radial-gradient(circle at 20% 10%, rgba(20, 184, 166, 0.16), transparent 26%);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .orders {
+        min-width: 0;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .toolbar {
+        height: 52px;
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .search {
+        flex: 1;
+        height: 36px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .chip {
+        height: 36px;
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        background: #ffffff;
+        color: #374151;
+        display: grid;
+        place-items: center;
+        padding: 0 12px;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .chip.active {
+        background: #111827;
+        border-color: #111827;
+        color: #ffffff;
+      }
+
+      .order-card {
+        border: 2px solid #0f766e;
+        background: #ecfdf5;
+        border-radius: 16px;
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      }
+
+      .order-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: start;
+      }
+
+      .order-code {
+        display: grid;
+        gap: 7px;
+      }
+
+      .order-code h2 {
+        margin: 0;
+        color: #064e3b;
+        font-size: 22px;
+        line-height: 1.1;
+      }
+
+      .badges {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+
+      .badge {
+        border-radius: 999px;
+        border: 1px solid #99f6e4;
+        background: #ccfbf1;
+        color: #0f766e;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .customer {
+        text-align: right;
+        color: #0f172a;
+        font-size: 14px;
+        font-weight: 900;
+      }
+
+      .items {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .item {
+        min-height: 108px;
+        border: 1px solid #dbe3ef;
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 10px;
+        display: grid;
+        gap: 8px;
+        align-content: start;
+      }
+
+      .item strong {
+        font-size: 14px;
+        line-height: 1.2;
+      }
+
+      .option {
+        width: fit-content;
+        border: 1px solid #cbd5e1;
+        background: #f8fafc;
+        color: #475569;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 10px;
+      }
+
+      .done {
+        border-color: #16a34a;
+        background: #16a34a;
+        color: #ffffff;
+      }
+
+      .reset {
+        background: #ffffff;
+      }
+
+      .panel {
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 14px;
+        display: grid;
+        align-content: start;
+        gap: 12px;
+      }
+
+      .panel h3 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .metric {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px;
+        display: grid;
+        gap: 4px;
+      }
+
+      .metric span {
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .metric strong {
+        font-size: 22px;
+      }
+
+      @media (max-width: 800px) {
+        body {
+          padding: 0;
+        }
+
+        .device {
+          width: 100%;
+          min-height: 100vh;
+          border: 0;
+          border-radius: 0;
+        }
+
+        .header {
+          grid-template-columns: 44px minmax(0, 1fr);
+          height: auto;
+        }
+
+        .header button {
+          width: 100%;
+        }
+
+        .status,
+        .webview {
+          grid-template-columns: 1fr;
+        }
+
+        .message {
+          text-align: left;
+        }
+
+        .items,
+        .actions {
+          grid-template-columns: 1fr;
+        }
+
+        .panel {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="device" aria-label="GHR POS preview">
+      <header class="header">
+        <img class="logo" src="app/src/main/res/drawable/logo_icon.jpg" alt="Gánh Hàng Rong" />
+        <div class="brand">
+          <strong>Gánh Hàng Rong</strong>
+          <span>POS Printer · Xprinter 80mm</span>
+        </div>
+        <button type="button">Tải lại</button>
+        <button class="primary" type="button">In test</button>
+        <button type="button">Cài đặt</button>
+      </header>
+
+      <section class="status">
+        <div>
+          <span class="printer-ready">Máy in LAN/WiFi: 192.168.1.88:9100</span>
+          <span class="printer-warning" hidden>Máy in: cần cấp quyền USB</span>
+        </div>
+        <div class="message">POS đang chờ lệnh in từ iPad.</div>
+      </section>
+
+      <section class="webview">
+        <div class="orders">
+          <div class="toolbar">
+            <div class="search">Tìm mã đơn, khách, món...</div>
+            <div class="chip active">Đang xử lý</div>
+            <div class="chip">Hoàn thành</div>
+            <div class="chip">Tất cả</div>
+          </div>
+
+          <article class="order-card">
+            <div class="order-head">
+              <div class="order-code">
+                <h2>GH-1028</h2>
+                <div class="badges">
+                  <span class="badge">Website</span>
+                  <span class="badge">Đang chờ</span>
+                  <span class="badge">CN Phú Hòa</span>
+                </div>
+              </div>
+              <div class="customer">
+                Chị Linh<br />
+                0909 000 000
+              </div>
+            </div>
+
+            <div class="items">
+              <div class="item">
+                <strong>Bánh tráng trộn đặc biệt</strong>
+                <span class="option">Không cay</span>
+                <span class="option">Trứng cút</span>
+              </div>
+              <div class="item">
+                <strong>Bánh tráng cuốn sốt me</strong>
+                <span class="option">Thêm khô bò</span>
+              </div>
+              <div class="item">
+                <strong>Trà tắc xí muội</strong>
+                <span class="option">Ít đá</span>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="done" type="button">Đã chuẩn bị xong</button>
+              <button class="primary" type="button">In bill</button>
+              <button class="reset" type="button">Reset</button>
+            </div>
+          </article>
+        </div>
+
+        <aside class="panel">
+          <h3>Tổng quan bếp</h3>
+          <div class="metric">
+            <span>Đơn đang xử lý</span>
+            <strong>8</strong>
+          </div>
+          <div class="metric">
+            <span>Chờ in bill</span>
+            <strong>0</strong>
+          </div>
+          <div class="metric">
+            <span>Máy in</span>
+            <strong style="font-size: 17px;">Sẵn sàng</strong>
+          </div>
+        </aside>
+      </section>
+    </main>
+  </body>
+</html>

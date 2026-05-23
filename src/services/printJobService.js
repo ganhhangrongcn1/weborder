@@ -1,5 +1,10 @@
 import { buildReceiptHtml, buildReceiptText } from "./printerService.js";
-import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
+import {
+  getSupabaseKitchenAuthClient,
+  getSupabaseRuntimeClient,
+  initSupabaseKitchenAuthClient,
+  initSupabaseRuntimeClient
+} from "./supabase/supabaseRuntimeClient.js";
 
 const PRINT_JOB_STATUS = {
   pending: "pending",
@@ -56,7 +61,12 @@ function getOrderCode(order = {}) {
 }
 
 async function getClient() {
-  return getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
+  return (
+    getSupabaseKitchenAuthClient() ||
+    (await initSupabaseKitchenAuthClient()) ||
+    getSupabaseRuntimeClient() ||
+    (await initSupabaseRuntimeClient())
+  );
 }
 
 export function getPrintDeviceId() {
