@@ -59,12 +59,16 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private static final String PREFS_NAME = "ghr_pos_printer";
     private static final String KEY_WEB_URL = "web_url";
+    private static final String KEY_KITCHEN_SOURCE = "kitchen_source";
     private static final String KEY_USB_DEVICE = "usb_device";
     private static final String KEY_PRINTER_MODE = "printer_mode";
     private static final String KEY_LAN_HOST = "lan_host";
     private static final String KEY_LAN_PORT = "lan_port";
     private static final String PRINTER_MODE_USB = "usb";
     private static final String PRINTER_MODE_LAN = "lan";
+    private static final String KITCHEN_SOURCE_LOCAL = "local";
+    private static final String KITCHEN_SOURCE_ONLINE = "online";
+    private static final String LOCAL_KITCHEN_URL = "file:///android_asset/kitchen/index.html#/kitchen";
     private static final String DEFAULT_WEB_URL = "https://ganhhangrong.vn/kitchen";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posprinter.USB_PERMISSION";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
@@ -242,10 +246,16 @@ public class MainActivity extends Activity {
     }
 
     private void setupWebView() {
+        WebView.setWebContentsDebuggingEnabled(true);
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
@@ -286,11 +296,17 @@ public class MainActivity extends Activity {
     }
 
     private void loadKitchenUrl() {
+        if (KITCHEN_SOURCE_LOCAL.equals(getKitchenSource())) {
+            status("Đang mở Kitchen trong APK");
+            webView.loadUrl(LOCAL_KITCHEN_URL);
+            return;
+        }
+
         String url = prefs.getString(KEY_WEB_URL, DEFAULT_WEB_URL);
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             url = "https://" + url;
         }
-        status("Đang mở Kitchen");
+        status("Đang mở Kitchen online");
         webView.loadUrl(url);
     }
 
@@ -310,6 +326,47 @@ public class MainActivity extends Activity {
         urlInput.setInputType(InputType.TYPE_TEXT_VARIATION_URI);
         urlInput.setText(prefs.getString(KEY_WEB_URL, DEFAULT_WEB_URL));
         content.addView(urlInput);
+
+        TextView sourceLabel = new TextView(this);
+        sourceLabel.setText("\nNguồn Kitchen");
+        sourceLabel.setTextColor(Color.rgb(15, 23, 42));
+        sourceLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(sourceLabel);
+
+        LinearLayout sourceRow = new LinearLayout(this);
+        sourceRow.setOrientation(LinearLayout.HORIZONTAL);
+        sourceRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        Button localSourceButton = new Button(this);
+        localSourceButton.setText("Trong APK");
+        localSourceButton.setAllCaps(false);
+        sourceRow.addView(localSourceButton, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+        Button onlineSourceButton = new Button(this);
+        onlineSourceButton.setText("Online");
+        onlineSourceButton.setAllCaps(false);
+        sourceRow.addView(onlineSourceButton, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        content.addView(sourceRow);
+
+        final String[] selectedKitchenSource = {getKitchenSource()};
+        Runnable refreshKitchenSource = () -> {
+            boolean onlineSource = KITCHEN_SOURCE_ONLINE.equals(selectedKitchenSource[0]);
+            localSourceButton.setBackground(makeRoundRect(onlineSource ? Color.WHITE : Color.rgb(20, 184, 166), 8, 1, Color.rgb(15, 118, 110)));
+            localSourceButton.setTextColor(onlineSource ? Color.rgb(15, 23, 42) : Color.WHITE);
+            onlineSourceButton.setBackground(makeRoundRect(onlineSource ? Color.rgb(20, 184, 166) : Color.WHITE, 8, 1, Color.rgb(15, 118, 110)));
+            onlineSourceButton.setTextColor(onlineSource ? Color.WHITE : Color.rgb(15, 23, 42));
+            urlInput.setEnabled(onlineSource);
+            urlInput.setAlpha(onlineSource ? 1f : 0.55f);
+        };
+        localSourceButton.setOnClickListener(view -> {
+            selectedKitchenSource[0] = KITCHEN_SOURCE_LOCAL;
+            refreshKitchenSource.run();
+        });
+        onlineSourceButton.setOnClickListener(view -> {
+            selectedKitchenSource[0] = KITCHEN_SOURCE_ONLINE;
+            refreshKitchenSource.run();
+        });
+        refreshKitchenSource.run();
 
         TextView printerLabel = new TextView(this);
         printerLabel.setText("\nMáy in: Xprinter 80mm");
@@ -404,6 +461,7 @@ public class MainActivity extends Activity {
                 .setPositiveButton("Lưu", (dialog, which) -> {
                     prefs.edit()
                             .putString(KEY_WEB_URL, urlInput.getText().toString().trim())
+                            .putString(KEY_KITCHEN_SOURCE, selectedKitchenSource[0])
                             .putString(KEY_PRINTER_MODE, selectedMode[0])
                             .putString(KEY_LAN_HOST, lanHostInput.getText().toString().trim())
                             .putInt(KEY_LAN_PORT, parsePort(lanPortInput.getText().toString()))
@@ -466,6 +524,11 @@ public class MainActivity extends Activity {
     private String getPrinterMode() {
         String mode = prefs.getString(KEY_PRINTER_MODE, PRINTER_MODE_USB);
         return PRINTER_MODE_LAN.equals(mode) ? PRINTER_MODE_LAN : PRINTER_MODE_USB;
+    }
+
+    private String getKitchenSource() {
+        String source = prefs.getString(KEY_KITCHEN_SOURCE, KITCHEN_SOURCE_LOCAL);
+        return KITCHEN_SOURCE_ONLINE.equals(source) ? KITCHEN_SOURCE_ONLINE : KITCHEN_SOURCE_LOCAL;
     }
 
     private int parsePort(String value) {
