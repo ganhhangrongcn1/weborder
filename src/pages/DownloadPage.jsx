@@ -1,4 +1,5 @@
-import { getAppDownloads } from "../services/downloadService.js";
+import { useEffect, useState } from "react";
+import { getAppDownloads, getFallbackAppDownloads } from "../services/downloadService.js";
 
 function formatDate(value = "") {
   const date = value ? new Date(value) : null;
@@ -22,8 +23,26 @@ function DownloadIcon() {
 }
 
 export default function DownloadPage() {
-  const downloads = getAppDownloads();
+  const [downloads, setDownloads] = useState(() => getFallbackAppDownloads());
+  const [loading, setLoading] = useState(true);
   const latest = downloads[0];
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadDownloads() {
+      setLoading(true);
+      const nextDownloads = await getAppDownloads();
+      if (!mounted) return;
+      setDownloads(nextDownloads);
+      setLoading(false);
+    }
+
+    loadDownloads();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <main
@@ -82,6 +101,22 @@ export default function DownloadPage() {
           </div>
         </header>
 
+        {loading ? (
+          <div
+            style={{
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              borderRadius: 12,
+              padding: 14,
+              color: "#475569",
+              fontSize: 13,
+              fontWeight: 800
+            }}
+          >
+            Đang kiểm tra phiên bản mới nhất...
+          </div>
+        ) : null}
+
         {downloads.map((item) => (
           <article
             key={item.id}
@@ -98,7 +133,7 @@ export default function DownloadPage() {
             <div style={{ display: "grid", gap: 8 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <h2 style={{ margin: 0, fontSize: 22 }}>{item.appName}</h2>
-                {item.id === latest.id ? (
+                {item.id === latest?.id ? (
                   <span
                     style={{
                       border: "1px solid #99f6e4",
@@ -164,7 +199,7 @@ export default function DownloadPage() {
                 lineHeight: 1.45
               }}
             >
-              {item.notes.map((note) => (
+              {(item.notes || []).map((note) => (
                 <span key={note}>{note}</span>
               ))}
             </div>
@@ -188,7 +223,7 @@ export default function DownloadPage() {
           <strong style={{ color: "#78350f", fontSize: 14 }}>Hướng dẫn cài trên máy POS Android</strong>
           <span>1. Bấm Tải APK và mở file vừa tải.</span>
           <span>2. Nếu máy hỏi quyền cài ứng dụng ngoài CH Play, chọn Cho phép.</span>
-          <span>3. Mở GHR POS, vào Cài đặt, chọn USB hoặc LAN/WiFi rồi bấm In test.</span>
+          <span>3. Mở GHR Print Station, đăng nhập tài khoản chi nhánh, chọn máy in rồi bấm In test.</span>
         </section>
       </section>
     </main>

@@ -114,7 +114,8 @@ export const CONFIG_KEY_DOMAIN_MAP = {
   ghr_branches: "appConfigs",
   ghr_zones: "appConfigs",
   ghr_menu_schema: "appConfigs",
-  ghr_loyalty: "appConfigs"
+  ghr_loyalty: "appConfigs",
+  ghr_app_downloads: "appConfigs"
 };
 
 export function resolveDomainForConfigKey(key) {

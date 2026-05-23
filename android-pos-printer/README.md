@@ -1,64 +1,82 @@
-# GHR POS Printer APK
+# GHR Print Station APK
 
-App Android WebView cho máy POS Android dùng máy in Xprinter 80mm. App hỗ trợ cả USB và LAN/WiFi qua TCP port `9100`.
+App Android native cho máy POS Android dùng máy in Xprinter 80mm. App này không cần mở Kitchen bằng WebView nữa, chỉ làm nhiệm vụ nhận lệnh in bill khách từ Supabase `print_jobs` rồi in ra máy in USB hoặc LAN/WiFi.
 
 ## Chức năng
 
-- Mở Kitchen đóng gói sẵn trong APK bằng WebView.
-- Có chế độ dự phòng mở Kitchen online: `https://ganhhangrong.vn/kitchen`.
-- Expose bridge `window.GhrPrinter` để web gọi in bill khách.
-- Web Kitchen chạy trong APK sẽ tự nhận `print_jobs` realtime từ Supabase.
-- Chọn kiểu in `USB` hoặc `LAN/WiFi`.
+- Đăng nhập tài khoản bếp/chi nhánh bằng Supabase Auth.
+- Tự lấy `branch_uuid` từ `profiles.metadata.branch_uuid` của tài khoản đã đăng nhập.
+- Chọn máy in `USB` hoặc `LAN/WiFi`.
 - Với `USB`: chỉ hiện nút chọn máy in USB và xin quyền USB.
-- Với `LAN/WiFi`: chỉ hiện ô IP máy in và port, mặc định `9100`.
-- In test.
-- In bill dạng ảnh raster ESC/POS để giữ tiếng Việt có dấu ổn định hơn text ESC/POS thường.
+- Với `LAN/WiFi`: hiện ô nhập IP máy in và port, mặc định `9100`.
+- Bật/tắt trạm in.
+- Tự kiểm tra `print_jobs` khoảng 3 giây/lần khi trạm in đang bật.
+- Claim job `pending` thành `printing` trước khi in để tránh nhiều máy in trùng bill.
+- In xong cập nhật job thành `printed`; in lỗi cập nhật thành `failed`.
+- In test trực tiếp từ APK.
+- In dạng ảnh raster ESC/POS để giữ tiếng Việt có dấu ổn định hơn text ESC/POS thường.
+
+## Flow in bill
+
+```txt
+iPad/POS mở web Kitchen
+↓
+Bấm In bill trong đơn
+↓
+Web Kitchen tạo print_jobs trên Supabase
+↓
+POS Android Print Station kiểm tra print_jobs theo branch_uuid
+↓
+POS claim job pending thành printing
+↓
+POS in bill qua USB hoặc LAN/WiFi
+↓
+POS cập nhật job thành printed hoặc failed
+```
+
+## Cài đặt trên POS
+
+1. Cài APK vào máy POS Android.
+2. Mở app `GHR Print Station`.
+3. Nhập email và mật khẩu tài khoản bếp/chi nhánh.
+4. Bấm `Đăng nhập chi nhánh`.
+5. App sẽ tự lấy chi nhánh từ `profiles.metadata.branch_uuid`.
+6. Chọn kiểu máy in:
+   - `USB`: bấm `Chọn máy in USB`, cấp quyền USB.
+   - `LAN/WiFi`: nhập IP máy in, ví dụ `192.168.1.88`, port `9100`.
+7. Bấm `Lưu cài đặt`.
+8. Bấm `In test` để kiểm tra máy in.
+9. Bấm `Bật trạm in`.
+10. Trên iPad/POS khác, mở web Kitchen và bấm `In bill`.
+
+## Yêu cầu tài khoản
+
+Trong bảng `profiles`, tài khoản đăng nhập cần có:
+
+```txt
+auth_user_id = id của user trong Supabase Auth
+status = active
+role = admin hoặc staff hoặc kitchen
+metadata.branch_uuid = uuid chi nhánh
+metadata.branch_name = tên chi nhánh, không bắt buộc nhưng nên có
+```
 
 ## Build APK
 
 Mở thư mục `android-pos-printer` bằng Android Studio, chờ Gradle sync, sau đó chọn:
 
-`Build > Build Bundle(s) / APK(s) > Build APK(s)`
+```txt
+Build > Build Bundle(s) / APK(s) > Build APK(s)
+```
 
 APK debug sẽ nằm trong:
 
-`android-pos-printer/app/build/outputs/apk/debug/app-debug.apk`
-
-## Cài đặt trên POS
-
-1. Cài APK vào máy POS Android.
-2. Mở app, bấm `Cài đặt`.
-3. Nguồn Kitchen mặc định là `Trong APK`. Chỉ chọn `Online` khi cần mở bản web trực tiếp.
-4. Nếu dùng `Online`, giữ link mặc định `https://ganhhangrong.vn/kitchen` hoặc nhập link Kitchen khác nếu cần.
-5. Chọn kiểu máy in:
-   - `USB`: bấm `Chọn máy in USB`, cấp quyền USB.
-   - `LAN/WiFi`: nhập IP máy in, ví dụ `192.168.1.88`, port `9100`.
-6. Bấm `In test`.
-7. Mở Kitchen trên iPad hoặc POS, bấm `In bill` trong đơn.
-8. POS Android đang mở app sẽ tự nhận lệnh `print_jobs` và in ra Xprinter.
-
-## Build Kitchen vào APK
-
-Chạy lệnh này trước khi build APK nếu muốn cập nhật Kitchen đóng gói sẵn:
-
 ```txt
-npm run build:apk-web
+android-pos-printer/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Lệnh này build web vào:
+## Ghi chú
 
-```txt
-android-pos-printer/app/src/main/assets/kitchen
-```
-
-## Flow in bill
-
-```txt
-iPad/POS bấm In bill
-→ Web Kitchen tạo print_jobs trên Supabase
-→ Web Kitchen trong APK POS subscribe realtime
-→ POS claim job pending thành printing
-→ POS gọi window.GhrPrinter
-→ Xprinter in bill qua USB hoặc LAN/WiFi
-→ POS cập nhật job thành printed hoặc failed
-```
+- App này dùng Supabase REST, không phụ thuộc Android System WebView.
+- Muốn đổi link Supabase hoặc anon key thì sửa trong `MainActivity.java`.
+- Nếu muốn app in khi bị tắt hẳn hoặc bị Android kill nền, bước sau nên nâng cấp thành Foreground Service.

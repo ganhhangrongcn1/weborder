@@ -7,7 +7,7 @@ export const navGroups = [
     title: "Vận hành",
     items: [
       { id: "orders-main", label: "Đơn hàng", section: "orders" },
-      { id: "customer-main", label: "Khách hàng / CRM", section: "customers" },
+      { id: "customer-main", label: "Khách hàng / CRM", section: "customers" }
     ]
   },
   {
@@ -16,13 +16,14 @@ export const navGroups = [
       { id: "menu-main", label: "Menu", section: "menu" },
       { id: "store-branches", label: "Quản lý chi nhánh", section: "store", sub: "branches" },
       { id: "store-zalo", label: "Cấu hình Zalo", section: "store", sub: "zalo" },
+      { id: "store-downloads", label: "File APK POS", section: "store", sub: "downloads" }
     ]
   },
   {
     title: "Giao diện & KM",
     items: [
       { id: "store-ui", label: "Quản lý giao diện", section: "promo", sub: "ui" },
-      { id: "promo-campaign", label: "Chương trình khuyến mãi", section: "promo", sub: "campaign" },
+      { id: "promo-campaign", label: "Chương trình khuyến mãi", section: "promo", sub: "campaign" }
     ]
   }
 ];
@@ -34,6 +35,7 @@ export const navIconMap = {
   "menu-main": "menu",
   "store-branches": "home",
   "store-zalo": "phone",
+  "store-downloads": "download",
   "store-ui": "star",
   "promo-campaign": "gift"
 };
@@ -43,6 +45,7 @@ export const dashboardQuickActions = [
   { id: "menu-main", label: "Menu" },
   { id: "customer-main", label: "Khách hàng / CRM" },
   { id: "store-branches", label: "Chi nhánh" },
+  { id: "store-downloads", label: "File APK POS" },
   { id: "promo-campaign", label: "Khuyến mãi" }
 ];
 
