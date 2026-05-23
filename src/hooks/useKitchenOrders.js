@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getKitchenOrders,
   getNextKitchenOrderAction,
@@ -23,6 +23,7 @@ const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
 const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
 const DONE_ORDER_PAGE_SIZE = 20;
+const CLAIM_GIFT_TIMEOUT_MS = 12000;
 const KITCHEN_SOURCE_WEBSITE = "website";
 const KITCHEN_SOURCE_PARTNER = "partner";
 
@@ -610,7 +611,8 @@ export default function useKitchenOrders(options = null) {
       });
       const giftResult = await enrichKitchenOrdersWithMonthlyGifts(result.orders || [], {
         dateKey: dateFilter,
-        dateFrom: dateRange.dateFrom
+        dateFrom: dateRange.dateFrom,
+        maxGiftOrders: 30
       });
       const hasReadError = Boolean(result.errors?.length || giftResult.error);
 
@@ -622,13 +624,13 @@ export default function useKitchenOrders(options = null) {
       });
       setError(
         hasReadError
-          ? "Một nguồn đơn chưa đọc được. Các nguồn còn lại vẫn đang hiển thị."
+          ? "Mot nguon don chua doc duoc. Cac nguon con lai van dang hien thi."
           : ""
       );
       setLastUpdatedAt(new Date().toISOString());
       setRequestAudit(getKitchenRequestAuditSnapshot());
     } catch (err) {
-      setError(err?.message || "Không tải được danh sách đơn bếp.");
+      setError(err?.message || "Khong tai duoc danh sach don bep.");
     } finally {
       loadingOrdersRef.current = false;
       setLoading(false);
@@ -768,13 +770,13 @@ export default function useKitchenOrders(options = null) {
       if (!result.ok) {
         if (orderRuntimeKey) forgetRecentlyClosedOrder(order, recentlyClosedOrderKeysRef.current);
         setOrders(previousOrders);
-        setError(result.message || "Không cập nhật được trạng thái đơn.");
+        setError(result.message || "Khong cap nhat duoc trang thai don.");
         return;
       }
     } catch (err) {
       if (orderRuntimeKey) forgetRecentlyClosedOrder(order, recentlyClosedOrderKeysRef.current);
       setOrders(previousOrders);
-      setError(err?.message || "Không cập nhật được trạng thái đơn.");
+      setError(err?.message || "Khong cap nhat duoc trang thai don.");
     } finally {
       setRequestAudit(getKitchenRequestAuditSnapshot());
       setUpdatingOrderId("");
@@ -800,29 +802,44 @@ export default function useKitchenOrders(options = null) {
     setError("");
 
     try {
-      const result = await claimMonthlyCustomerGift(order, {
+      const claimRequest = claimMonthlyCustomerGift(order, {
         dateKey: dateFilter,
         profileId: options?.profileId || "",
         profileName: options?.profileName || ""
       });
+      const timeoutRequest = new Promise((_, reject) => {
+        window.setTimeout(() => {
+          reject(new Error("Xác nhận tặng quà quá thời gian, vui lòng thử lại."));
+        }, CLAIM_GIFT_TIMEOUT_MS);
+      });
+      const result = await Promise.race([claimRequest, timeoutRequest]);
 
       if (!result.ok) {
-        setError(result.message || "Không xác nhận được quà khách quen.");
+        setError(result.message || "Khong xac nhan duoc qua khach quen.");
         return;
       }
 
-      setOrders((currentOrders) => currentOrders.map(patchMonthlyGiftClaim(order, result.gift || {})));
+      if (!result.gift && !result.alreadyClaimed) {
+        setError("Khong xac nhan duoc ban ghi tang qua tren he thong. Vui long thu lai.");
+        return;
+      }
+
+      if (result.gift) {
+        setOrders((currentOrders) => currentOrders.map(patchMonthlyGiftClaim(order, result.gift || {})));
+      }
+
+      await loadOrders({ silent: true, force: true });
       if (result.alreadyClaimed) {
-        setError(result.message || "Khách này đã được tặng quà trong tháng.");
+        setError(result.message || "Khach nay da duoc tang qua trong thang.");
       }
     } catch (err) {
       setOrders(previousOrders);
-      setError(err?.message || "Không xác nhận được quà khách quen.");
+      setError(err?.message || "Khong xac nhan duoc qua khach quen.");
     } finally {
       setRequestAudit(getKitchenRequestAuditSnapshot());
       setClaimingGiftOrderId("");
     }
-  }, [claimingGiftOrderId, dateFilter, options, orders]);
+  }, [claimingGiftOrderId, dateFilter, options, orders, loadOrders]);
 
   return {
     orders,
@@ -855,3 +872,4 @@ export default function useKitchenOrders(options = null) {
 }
 
 export { getTodayDateKey };
+

@@ -36,6 +36,35 @@ function getPaidToppings(item = {}) {
   return getKitchenRecipeOptions(item.options).filter((option) => option.group === "Ngon Hơn Khi Ăn Cùng" && option.value);
 }
 
+function normalizeKitchenOptionText(value = "") {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/Ä‘/g, "d")
+    .replace(/\s+/g, " ");
+}
+
+function buildPaidToppingOptionKeys(paidToppings = []) {
+  return new Set(
+    (paidToppings || [])
+      .flatMap((option) => [
+        option.label,
+        option.value,
+        option.group && option.value ? `${option.group}: ${option.value}` : ""
+      ])
+      .map(normalizeKitchenOptionText)
+      .filter(Boolean)
+  );
+}
+
+function isPaidToppingDisplayOption(option = "", paidToppingKeys = new Set()) {
+  const parsed = parseKitchenOptionLabel(option);
+  if (normalizeKitchenOptionText(parsed.group) === "ngon hon khi an cung") return true;
+  return paidToppingKeys.has(normalizeKitchenOptionText(option));
+}
+
 function formatTime(value = "") {
   if (!value) return "Chưa có giờ";
   const date = new Date(value);
@@ -472,6 +501,7 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
 }
 
 export default function KitchenOrderCard({
+  compact = false,
   active = false,
   dimmed = false,
   highlightedDishKey = "",
@@ -480,10 +510,12 @@ export default function KitchenOrderCard({
   onSelectOrder,
   order,
   onMarkDone,
+  onPrintBill,
   onClaimGift,
   onToggleItemDone,
   claimingGift = false,
   updating = false,
+  printingBill = false,
   updatingItemKey = ""
 }) {
   const items = Array.isArray(order.items) ? order.items : [];
@@ -680,8 +712,8 @@ export default function KitchenOrderCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(260px, 1fr) minmax(230px, 0.9fr) auto",
-          gap: 16,
+          gridTemplateColumns: compact ? "1fr" : "minmax(260px, 1fr) minmax(230px, 0.9fr) auto",
+          gap: compact ? 10 : 16,
           alignItems: "start"
         }}
       >
@@ -701,7 +733,7 @@ export default function KitchenOrderCard({
               style={{
                 margin: 0,
                 color: "inherit",
-                fontSize: 22,
+                fontSize: compact ? 19 : 22,
                 lineHeight: 1.1,
                 fontWeight: 840,
                 overflow: "hidden",
@@ -731,7 +763,7 @@ export default function KitchenOrderCard({
               alignItems: "center",
               gap: 6,
               color: theme.code,
-              fontSize: 18,
+              fontSize: compact ? 16 : 18,
               fontWeight: 760,
               lineHeight: 1.15,
               overflow: "hidden",
@@ -747,7 +779,7 @@ export default function KitchenOrderCard({
           </InfoLine>
         </div>
 
-        <div style={{ display: "grid", gap: 9, color: "#0f172a", fontWeight: 680 }}>
+        <div style={{ display: "grid", gap: compact ? 7 : 9, color: "#0f172a", fontWeight: 680 }}>
           <InfoLine icon="phone" color="#0f172a" strong>
             {order.customerName || "Khách"}
             {order.customerPhone ? ` - ${order.customerPhone}` : ""}
@@ -768,8 +800,8 @@ export default function KitchenOrderCard({
           </InfoLine>
         </div>
 
-        <div style={{ textAlign: "right", display: "grid", gap: 6, justifyItems: "end" }}>
-          <strong style={{ color: "#334155", fontSize: 21, fontWeight: 780 }}>
+        <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: 6, justifyItems: compact ? "start" : "end" }}>
+          <strong style={{ color: "#334155", fontSize: compact ? 18 : 21, fontWeight: 780 }}>
             {doneItems}/{totalItems}
           </strong>
           <ProgressBoxes doneItems={doneItems} totalItems={totalItems} accent={theme.border} />
@@ -815,12 +847,12 @@ export default function KitchenOrderCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: displayItems.length <= 1 ? "1fr" : "repeat(auto-fit, minmax(190px, 1fr))",
+          gridTemplateColumns: compact ? "1fr" : (displayItems.length <= 1 ? "1fr" : "repeat(auto-fit, minmax(190px, 1fr))"),
           gridAutoRows: "auto",
           alignItems: "start",
           gap: 10,
-          maxHeight: 420,
-          overflowY: "auto",
+          maxHeight: compact ? "none" : 420,
+          overflowY: compact ? "visible" : "auto",
           paddingRight: 4
         }}
       >
@@ -832,8 +864,8 @@ export default function KitchenOrderCard({
             const itemDone = item.status === "done" || Boolean(unitProgress[unitKey]);
             const itemUpdating = updatingItemKey === itemKey;
             const paidToppings = getPaidToppings(item);
-            const paidToppingLabels = new Set(paidToppings.map((option) => option.label));
-            const displayOptions = (item.options || []).filter((option) => !paidToppingLabels.has(option));
+            const paidToppingKeys = buildPaidToppingOptionKeys(paidToppings);
+            const displayOptions = (item.options || []).filter((option) => !isPaidToppingDisplayOption(option, paidToppingKeys));
 
             return (
               <button
@@ -947,7 +979,7 @@ export default function KitchenOrderCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) auto",
+          gridTemplateColumns: compact ? "1fr" : "minmax(0, 1fr) auto auto",
           gap: 10,
           alignItems: "center"
         }}
@@ -979,6 +1011,27 @@ export default function KitchenOrderCard({
                 ? "Chưa đủ món"
                 : nextOrderAction?.label || "Cập nhật đơn"
               : closedOrderLabel}
+        </button>
+        <button
+          type="button"
+          disabled={printingBill}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPrintBill?.(order);
+          }}
+          style={{
+            border: "1px solid #0f766e",
+            background: printingBill ? "#99f6e4" : "#14b8a6",
+            color: "#ffffff",
+            borderRadius: 10,
+            padding: "12px 14px",
+            fontSize: 13,
+            fontWeight: 900,
+            cursor: printingBill ? "not-allowed" : "pointer",
+            opacity: printingBill ? 0.76 : 1
+          }}
+        >
+          {printingBill ? "Đang in..." : "In bill"}
         </button>
         <button
           type="button"

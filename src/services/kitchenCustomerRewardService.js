@@ -11,7 +11,23 @@ import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 const MONTHLY_GIFT_CODE = "MONTHLY_3_ORDERS";
 const MONTHLY_GIFT_NAME = "Quà khách quen tháng";
 const MONTHLY_GIFT_THRESHOLD = 3;
+const DEFAULT_GIFT_ENRICHMENT_LIMIT = 30;
 const CANCELLED_STATUS_KEYS = new Set(["cancelled", "canceled", "cancel", "refunded"]);
+const GIFT_ENRICHMENT_CLOSED_STATUS_KEYS = new Set([
+  "done",
+  "completed",
+  "complete",
+  "finish",
+  "finished",
+  "served",
+  "cancelled",
+  "canceled",
+  "cancel",
+  "refunded",
+  "preorder",
+  "pre_order",
+  "scheduled"
+]);
 const MONTHLY_GIFT_STATS_CACHE_TTL_MS = 15 * 60 * 1000;
 const monthlyGiftStatsCache = new Map();
 
@@ -44,6 +60,38 @@ function normalizeTextKey(value = "") {
 
 function isCancelledOrder(...statuses) {
   return statuses.some((status) => CANCELLED_STATUS_KEYS.has(normalizeStatus(status)));
+}
+
+function isGiftEnrichmentCandidate(order = {}) {
+  const raw = getObject(order.raw);
+  const statuses = [
+    order.kitchenStatus,
+    order.status,
+    order.nexposState,
+    order.nexposStatus,
+    raw.kitchen_status,
+    raw.kitchen_work_status,
+    raw.order_status,
+    raw.status,
+    raw.nexpos_state,
+    raw.nexpos_status
+  ];
+
+  return !statuses.some((status) => GIFT_ENRICHMENT_CLOSED_STATUS_KEYS.has(normalizeStatus(status)));
+}
+
+function getOrderTimeValue(order = {}) {
+  const raw = getObject(order.raw);
+  const value = order.createdAt || order.orderTime || order.updatedAt || raw.created_at || raw.order_time || raw.updated_at;
+  const time = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
+}
+
+function selectGiftEnrichmentOrders(orders = [], maxOrders = DEFAULT_GIFT_ENRICHMENT_LIMIT) {
+  const limit = Math.max(1, toNumber(maxOrders, DEFAULT_GIFT_ENRICHMENT_LIMIT));
+  return (Array.isArray(orders) ? orders : [])
+    .sort((left, right) => getOrderTimeValue(right) - getOrderTimeValue(left))
+    .slice(0, limit);
 }
 
 function getMonthKey(value = "") {
@@ -99,11 +147,27 @@ function getFreshGiftStatsCache(cacheKey = "", visibleOrderSignatures = []) {
   }
 
   const cachedSignatures = entry.orderSignatures instanceof Set ? entry.orderSignatures : new Set();
-  const hasUnknownVisibleOrder = (Array.isArray(visibleOrderSignatures) ? visibleOrderSignatures : [])
-    .some((signature) => signature && !cachedSignatures.has(signature));
-  if (hasUnknownVisibleOrder) {
-    monthlyGiftStatsCache.delete(cacheKey);
-    return null;
+  const unknownVisibleSignatures = (Array.isArray(visibleOrderSignatures) ? visibleOrderSignatures : [])
+    .filter((signature) => signature && !cachedSignatures.has(signature));
+  if (unknownVisibleSignatures.length) {
+    const nextSignatures = new Set([...cachedSignatures, ...unknownVisibleSignatures]);
+    const currentValue = entry.value || {};
+    const nextValue = {
+      ...currentValue,
+      monthlyOrderCount: toNumber(currentValue.monthlyOrderCount, 0) + unknownVisibleSignatures.length,
+      allTimeStats: currentValue.allTimeStats
+        ? {
+            ...currentValue.allTimeStats,
+            totalOrders: toNumber(currentValue.allTimeStats.totalOrders, 0) + unknownVisibleSignatures.length
+          }
+        : currentValue.allTimeStats
+    };
+    monthlyGiftStatsCache.set(cacheKey, {
+      cachedAt: Date.now(),
+      orderSignatures: nextSignatures,
+      value: nextValue
+    });
+    return nextValue;
   }
 
   return entry.value;
@@ -220,6 +284,27 @@ function mergeCountStats(base = new Map(), rows = []) {
   return base;
 }
 
+function buildPhoneQueryVariants(phoneKeys = []) {
+  const variants = new Set();
+
+  (Array.isArray(phoneKeys) ? phoneKeys : []).forEach((phoneKey) => {
+    const normalized = getCustomerKey(phoneKey);
+    if (!normalized) return;
+
+    variants.add(normalized);
+
+    const localDigits = normalized.slice(1); // 9 digits after leading 0
+    if (localDigits) {
+      variants.add(localDigits);
+      variants.add(`84${localDigits}`);
+      variants.add(`+84${localDigits}`);
+      variants.add(`0084${localDigits}`);
+    }
+  });
+
+  return [...variants];
+}
+
 function groupVisibleOrderSignaturesByCustomer(orders = []) {
   const map = new Map();
 
@@ -234,6 +319,18 @@ function groupVisibleOrderSignaturesByCustomer(orders = []) {
   });
 
   return map;
+}
+
+function countVisibleOrdersByCustomer(orders = []) {
+  const counts = new Map();
+
+  (Array.isArray(orders) ? orders : []).forEach((order) => {
+    const identity = resolveKitchenCustomerIdentity(order);
+    if (!identity.key) return;
+    counts.set(identity.key, (counts.get(identity.key) || 0) + 1);
+  });
+
+  return counts;
 }
 
 function buildStatsForCustomer(customerKey = "", stats = {}) {
@@ -275,12 +372,14 @@ async function readMonthlyWebsiteOrders(client, range) {
 
 async function readAllTimeWebsiteOrdersByPhones(client, phoneKeys = []) {
   if (!phoneKeys.length) return [];
+  const phoneVariants = buildPhoneQueryVariants(phoneKeys);
+  if (!phoneVariants.length) return [];
 
   const byPhoneTasks = [
     client
       .from("orders")
       .select("id,order_code,customer_name,customer_phone,status,total_amount,metadata")
-      .in("customer_phone", phoneKeys)
+      .in("customer_phone", phoneVariants)
   ];
   const [byPhoneRaw] = await Promise.all(byPhoneTasks);
   recordKitchenRequest("gift all-time website orders", "orders");
@@ -332,16 +431,18 @@ async function readMonthlyPartnerOrders(client, range) {
 
 async function readAllTimePartnerOrdersByPhones(client, phoneKeys = []) {
   if (!phoneKeys.length) return [];
+  const phoneVariants = buildPhoneQueryVariants(phoneKeys);
+  if (!phoneVariants.length) return [];
 
   const byPhoneTasks = [
     client
       .from("partner_orders")
       .select("id,order_code,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,total_amount,raw_data")
-      .in("customer_phone_key", phoneKeys),
+      .in("customer_phone_key", phoneVariants),
     client
       .from("partner_orders")
       .select("id,order_code,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,total_amount,raw_data")
-      .in("customer_phone", phoneKeys)
+      .in("customer_phone", phoneVariants)
   ];
   const [byPhoneKey, byPhoneRaw] = await Promise.all(byPhoneTasks);
   recordKitchenRequest("gift all-time partner orders by phone key", "partner_orders");
@@ -391,11 +492,13 @@ async function readGiftClaims(client, customerKeys = [], monthKey = "") {
 
 async function readCustomerProfiles(client, phoneKeys = []) {
   if (!phoneKeys.length) return new Map();
+  const phoneVariants = buildPhoneQueryVariants(phoneKeys);
+  if (!phoneVariants.length) return new Map();
 
   const { data, error } = await client
     .from("profiles")
     .select("phone,total_orders,total_spent,member_rank")
-    .in("phone", phoneKeys);
+    .in("phone", phoneVariants);
   recordKitchenRequest("gift profiles", "profiles");
 
   if (error) throw error;
@@ -454,10 +557,13 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
   const list = Array.isArray(orders) ? orders : [];
   const monthKey = getMonthKey(options.dateKey || options.dateFrom || new Date().toISOString());
   const range = getMonthRange(monthKey);
-  const identities = list.map(resolveKitchenCustomerIdentity);
+  const enrichmentList = selectGiftEnrichmentOrders(list, options.maxGiftOrders);
+  const identities = enrichmentList.map(resolveKitchenCustomerIdentity);
   const customerKeys = [...new Set(identities.map((identity) => identity.key).filter(Boolean))];
+  const enrichmentCustomerKeySet = new Set(customerKeys);
   const phoneKeys = [...new Set(identities.filter((identity) => identity.type === "phone").map((identity) => identity.key))];
-  const visibleSignaturesByCustomer = groupVisibleOrderSignaturesByCustomer(list);
+  const visibleSignaturesByCustomer = groupVisibleOrderSignaturesByCustomer(enrichmentList);
+  const visibleCountsByCustomer = countVisibleOrdersByCustomer(enrichmentList);
 
   if (!customerKeys.length) {
     return {
@@ -488,12 +594,20 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
         return {
           orders: list.map((order) => {
             const identity = resolveKitchenCustomerIdentity(order);
+            if (!enrichmentCustomerKeySet.has(identity.key)) {
+              return {
+                ...order,
+                monthlyGift: buildMonthlyGiftInfo(order, { monthKey })
+              };
+            }
+
             const cachedStats = cachedStatsByCustomer.get(identity.key) || {};
+            const fallbackMonthlyCount = visibleCountsByCustomer.get(identity.key) || 0;
             return {
               ...order,
               monthlyGift: buildMonthlyGiftInfo(order, {
                 monthKey,
-                monthlyOrderCount: cachedStats.monthlyOrderCount || 0,
+                monthlyOrderCount: Math.max(toNumber(cachedStats.monthlyOrderCount, 0), fallbackMonthlyCount),
                 claim: cachedStats.claim || null,
                 profile: cachedStats.profile || null,
                 allTimeStats: cachedStats.allTimeStats || null
@@ -538,19 +652,32 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
     missingCustomerKeys.forEach((customerKey) => {
       const cacheKey = buildGiftStatsCacheKey(monthKey, customerKey);
       const customerStats = buildStatsForCustomer(customerKey, stats);
-      cachedStatsByCustomer.set(customerKey, customerStats);
-      setGiftStatsCache(cacheKey, customerStats, visibleSignaturesByCustomer.get(customerKey) || []);
+      const fallbackMonthlyCount = visibleCountsByCustomer.get(customerKey) || 0;
+      const normalizedCustomerStats = {
+        ...customerStats,
+        monthlyOrderCount: Math.max(toNumber(customerStats.monthlyOrderCount, 0), fallbackMonthlyCount)
+      };
+      cachedStatsByCustomer.set(customerKey, normalizedCustomerStats);
+      setGiftStatsCache(cacheKey, normalizedCustomerStats, visibleSignaturesByCustomer.get(customerKey) || []);
     });
 
     return {
       orders: list.map((order) => {
         const identity = resolveKitchenCustomerIdentity(order);
+        if (!enrichmentCustomerKeySet.has(identity.key)) {
+          return {
+            ...order,
+            monthlyGift: buildMonthlyGiftInfo(order, { monthKey })
+          };
+        }
+
         const customerStats = cachedStatsByCustomer.get(identity.key) || {};
+        const fallbackMonthlyCount = visibleCountsByCustomer.get(identity.key) || 0;
         return {
           ...order,
           monthlyGift: buildMonthlyGiftInfo(order, {
             monthKey,
-            monthlyOrderCount: customerStats.monthlyOrderCount || 0,
+            monthlyOrderCount: Math.max(toNumber(customerStats.monthlyOrderCount, 0), fallbackMonthlyCount),
             claim: customerStats.claim || null,
             profile: customerStats.profile || null,
             allTimeStats: customerStats.allTimeStats || null

@@ -1,10 +1,16 @@
-import { useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import useKitchenAuth from "../../hooks/useKitchenAuth.js";
 import useKitchenNewOrderAlert from "../../hooks/useKitchenNewOrderAlert.js";
 import useKitchenOrders, { getTodayDateKey } from "../../hooks/useKitchenOrders.js";
 import KitchenDishSummaryPanel from "./KitchenDishSummaryPanel.jsx";
 import KitchenOrderCard from "./KitchenOrderCard.jsx";
 import KitchenOrderStrip from "./KitchenOrderStrip.jsx";
+import {
+  getPrinterConfig,
+  printCustomerBill,
+  printXprinterTestBill,
+  testPrinterConnection
+} from "../../services/printerService.js";
 import {
   getKitchenItemGroupKey,
   getKitchenOrderKey,
@@ -28,6 +34,8 @@ const SOURCE_FILTER_OPTIONS = [
   { value: "shopeefood", label: "ShopeeFood" },
   { value: "xanhngon", label: "Xanh Ngon" }
 ];
+
+const PRINTER_SETTINGS_STORAGE_KEY = "ghr:kitchen-printer-settings:v1";
 
 function formatUpdatedTime(value = "") {
   if (!value) return "Chưa tải";
@@ -60,6 +68,19 @@ function FilterButton({ active, children, onClick }) {
       {children}
     </button>
   );
+}
+
+function ToolbarIcon({ name, size = 15 }) {
+  const map = {
+    search: "⌕",
+    calendar: "◷",
+    refresh: "↻",
+    printer: "⎙",
+    bellOff: "🔕",
+    logout: "⇥"
+  };
+
+  return <span aria-hidden="true" style={{ fontSize: size, lineHeight: 1 }}>{map[name] || "•"}</span>;
 }
 
 function SourceFilterSelect({ value, onChange }) {
@@ -116,6 +137,36 @@ function SourceFilterSelect({ value, onChange }) {
   );
 }
 
+function readPrinterSettings() {
+  const defaults = getPrinterConfig();
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(PRINTER_SETTINGS_STORAGE_KEY) || "{}");
+    return {
+      mode: saved.mode || defaults.mode || "webPrint",
+      bridgeUrl: saved.bridgeUrl || defaults.bridgeUrl || "",
+      printerName: saved.printerName || defaults.printerName || "Xprinter",
+      receiptWidthMm: String(saved.receiptWidthMm || defaults.receiptWidthMm || 80),
+      storeName: saved.storeName || defaults.storeName || "Gánh Hàng Rong"
+    };
+  } catch {
+    return {
+      mode: defaults.mode || "webPrint",
+      bridgeUrl: defaults.bridgeUrl || "",
+      printerName: defaults.printerName || "Xprinter",
+      receiptWidthMm: String(defaults.receiptWidthMm || 80),
+      storeName: defaults.storeName || "Gánh Hàng Rong"
+    };
+  }
+}
+
+function savePrinterSettings(settings = {}) {
+  try {
+    window.localStorage.setItem(PRINTER_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Bỏ qua nếu trình duyệt chặn localStorage.
+  }
+}
+
 function KitchenRequestAuditBadge({ audit, onReset }) {
   const total60m = Number(audit?.total60m || 0);
   const total5m = Number(audit?.total5m || 0);
@@ -146,7 +197,7 @@ function KitchenRequestAuditBadge({ audit, onReset }) {
   const formatAuditRows = (rows = [], limit = 10) => (rows || [])
     .slice(0, limit)
     .map((item) => `${labelMap[item.key] || item.key}: ${item.count}`)
-    .join(" · ");
+    .join(" - ");
   const tableText = formatAuditRows(audit?.byTable, 8);
   const scopeText = formatAuditRows(audit?.byScope, 12);
   const tooltip = [
@@ -227,7 +278,7 @@ function KitchenLoginScreen({ error, loading, onLogin, submitting }) {
         minHeight: "100vh",
         background: "#f6f7fb",
         color: "#1f2933",
-        fontFamily: "system-ui, Arial, sans-serif",
+        fontFamily: "Inter, system-ui, Arial, sans-serif",
         display: "grid",
         placeItems: "center",
         padding: 24
@@ -331,6 +382,15 @@ function KitchenLoginScreen({ error, loading, onLogin, submitting }) {
 export default function KitchenPage() {
   const [activeDishKey, setActiveDishKey] = useState("");
   const [activeOrderKey, setActiveOrderKey] = useState("");
+  const [isPrinterModalOpen, setIsPrinterModalOpen] = useState(false);
+  const [printerSettings, setPrinterSettings] = useState(() => readPrinterSettings());
+  const [printerNotice, setPrinterNotice] = useState("");
+  const [printerLoading, setPrinterLoading] = useState(false);
+  const [printingOrderKey, setPrintingOrderKey] = useState("");
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === "undefined" ? 1280 : window.innerWidth,
+    height: typeof window === "undefined" ? 800 : window.innerHeight
+  }));
   const orderRefs = useRef({});
   const {
     session,
@@ -380,6 +440,18 @@ export default function KitchenPage() {
     soundEnabled,
     toggleSound
   } = useKitchenNewOrderAlert(orders, Boolean(session && profile));
+
+  useEffect(() => {
+    function handleResize() {
+      setViewport({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   if (authLoading || !session || !profile) {
     return (
@@ -463,38 +535,85 @@ export default function KitchenPage() {
     setActiveOrderKey("");
   }
 
+  function getPrinterRuntimeOptions() {
+    return {
+      mode: printerSettings.mode,
+      bridgeUrl: String(printerSettings.bridgeUrl || "").trim(),
+      printerName: String(printerSettings.printerName || "").trim(),
+      receiptWidthMm: Number(printerSettings.receiptWidthMm) === 58 ? 58 : 80,
+      storeName: String(printerSettings.storeName || "").trim()
+    };
+  }
+
+  function handlePrinterSettingChange(field, value) {
+    setPrinterSettings((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleSavePrinterSettings() {
+    savePrinterSettings(printerSettings);
+    setPrinterNotice("Đã lưu cài đặt máy in trên thiết bị này.");
+  }
+
+  async function handleTestPrinterConnection() {
+    setPrinterLoading(true);
+    const result = await testPrinterConnection(getPrinterRuntimeOptions());
+    setPrinterNotice(result.message || (result.ok ? "Kết nối máy in thành công." : "Kết nối máy in thất bại."));
+    setPrinterLoading(false);
+  }
+
+  async function handlePrintTestBill() {
+    setPrinterLoading(true);
+    const result = await printXprinterTestBill(getPrinterRuntimeOptions());
+    setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in test." : "In test thất bại."));
+    setPrinterLoading(false);
+  }
+
+  async function handlePrintBill(order) {
+    const orderKey = getKitchenOrderKey(order);
+    setPrintingOrderKey(orderKey);
+    const result = await printCustomerBill(order, getPrinterRuntimeOptions());
+    setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in bill." : "In bill thất bại."));
+    setPrintingOrderKey("");
+  }
+
+  const isMobile = viewport.width <= 900;
+  const isLandscapeMobile = isMobile && viewport.width > viewport.height;
+  const boardColumns = isMobile
+    ? (isLandscapeMobile ? "minmax(0, 1fr) minmax(300px, 0.72fr)" : "1fr")
+    : "minmax(0, 1fr) minmax(430px, 0.62fr)";
+
   return (
     <main
       style={{
-        height: "100vh",
+        minHeight: "100dvh",
         background: "#f8fafc",
         color: "#1f2933",
-        fontFamily: "system-ui, Arial, sans-serif",
-        padding: 8,
+        fontFamily: "Inter, system-ui, Arial, sans-serif",
+        padding: isMobile ? 6 : 8,
         boxSizing: "border-box",
-        overflow: "hidden"
+        overflow: isMobile ? "auto" : "hidden"
       }}
     >
       <section
         style={{
           maxWidth: "100%",
-          height: "100%",
+          minHeight: isMobile ? "auto" : "100%",
           margin: "0 auto",
           display: "grid",
           gridTemplateRows: "auto minmax(0, 1fr)",
-          gap: 8
+          gap: isMobile ? 6 : 8
         }}
       >
         <header
           style={{
             display: "grid",
-            gridTemplateColumns: "320px minmax(0, 1fr)",
+            gridTemplateColumns: isMobile ? "1fr" : "320px minmax(0, 1fr)",
             alignItems: "start",
-            gap: "10px 16px",
+            gap: isMobile ? 10 : "10px 16px",
             border: "1px solid #e5e7eb",
             background: "#ffffff",
-            borderRadius: 18,
-            padding: 12,
+            borderRadius: isMobile ? 12 : 18,
+            padding: isMobile ? 10 : 12,
             boxShadow: "0 6px 18px rgba(15, 23, 42, 0.05)"
           }}
         >
@@ -514,7 +633,7 @@ export default function KitchenPage() {
               style={{
                 margin: 0,
                 color: "#111827",
-                fontSize: 28,
+                fontSize: isMobile ? 22 : 28,
                 lineHeight: 1.15
               }}
             >
@@ -522,35 +641,70 @@ export default function KitchenPage() {
             </h1>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "flex-start" : "flex-end", gap: 8, flexWrap: "wrap" }}>
             <span style={{ color: "#334155", fontSize: 13, fontWeight: 800 }}>
               {displayName}
             </span>
-            <input
-              value={search}
-              onChange={(event) => handleSearchChange(event.target.value)}
-              placeholder="Tìm mã đơn, khách, món..."
+            <label
               style={{
-                width: 250,
+                display: "inline-grid",
+                gridTemplateColumns: "16px minmax(0, 1fr)",
+                alignItems: "center",
+                gap: 8,
+                width: isMobile ? "min(100%, 240px)" : 250,
                 border: "1px solid #cbd5e1",
                 borderRadius: 10,
-                padding: "10px 12px",
-                fontSize: 13,
-                boxSizing: "border-box"
+                padding: "0 12px",
+                height: 42,
+                boxSizing: "border-box",
+                color: "#64748b"
               }}
-            />
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(event) => handleDateFilterChange(event.target.value)}
+            >
+              <ToolbarIcon name="search" />
+              <input
+                value={search}
+                onChange={(event) => handleSearchChange(event.target.value)}
+                placeholder="Tìm mã đơn, khách, món..."
+                style={{
+                  width: "100%",
+                  border: "none",
+                  outline: "none",
+                  fontSize: 13,
+                  color: "#334155",
+                  background: "transparent"
+                }}
+              />
+            </label>
+            <label
               style={{
-                width: 176,
+                display: "inline-grid",
+                gridTemplateColumns: "16px minmax(0, 1fr)",
+                alignItems: "center",
+                gap: 8,
+                width: isMobile ? "min(100%, 170px)" : 176,
                 border: "1px solid #cbd5e1",
                 borderRadius: 10,
-                padding: "9px 12px",
-                fontSize: 13
+                padding: "0 12px",
+                height: 42,
+                boxSizing: "border-box",
+                color: "#64748b"
               }}
-            />
+            >
+              <ToolbarIcon name="calendar" />
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(event) => handleDateFilterChange(event.target.value)}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  outline: "none",
+                  fontSize: 13,
+                  color: "#334155",
+                  background: "transparent"
+                }}
+              />
+            </label>
             <FilterButton active={dateFilter === getTodayDateKey()} onClick={() => handleDateFilterChange(getTodayDateKey())}>
               Hôm nay
             </FilterButton>
@@ -571,7 +725,29 @@ export default function KitchenPage() {
                 minWidth: 70
               }}
             >
-              Tải lại
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <ToolbarIcon name="refresh" />
+                Tải lại
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPrinterModalOpen(true)}
+              style={{
+                border: "1px solid #0f766e",
+                background: "#ccfbf1",
+                color: "#115e59",
+                borderRadius: 8,
+                padding: "10px 13px",
+                fontSize: 13,
+                fontWeight: 900,
+                cursor: "pointer"
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <ToolbarIcon name="printer" />
+                Máy in
+              </span>
             </button>
             <button
               type="button"
@@ -587,7 +763,10 @@ export default function KitchenPage() {
                 cursor: "pointer"
               }}
             >
-              {soundEnabled ? "Chuông bật" : "Bật chuông"}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <ToolbarIcon name="bellOff" />
+                {soundEnabled ? "Chuông bật" : "Bật chuông"}
+              </span>
             </button>
             <button
               type="button"
@@ -604,7 +783,10 @@ export default function KitchenPage() {
                 cursor: submitting ? "not-allowed" : "pointer"
               }}
             >
-              Đăng xuất
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <ToolbarIcon name="logout" />
+                Đăng xuất
+              </span>
             </button>
           </div>
 
@@ -622,7 +804,7 @@ export default function KitchenPage() {
             <FilterButton active={statusFilter === "all"} onClick={() => handleStatusFilterChange("all")}>
               Tất cả trạng thái
             </FilterButton>
-            <KitchenRequestAuditBadge audit={requestAudit} onReset={resetRequestAudit} />
+            {false ? <KitchenRequestAuditBadge audit={requestAudit} onReset={resetRequestAudit} /> : null}
           </div>
         </header>
 
@@ -733,21 +915,46 @@ export default function KitchenPage() {
 
         <section
           style={{
+            border: "1px solid #e5e7eb",
+            background: "#ffffff",
+            borderRadius: 8,
+            padding: 10,
+            display: "none",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap"
+          }}
+        >
+          <FilterButton active={!isPrinterModalOpen} onClick={() => setIsPrinterModalOpen(false)}>
+            Đơn bếp
+          </FilterButton>
+          <FilterButton active={isPrinterModalOpen} onClick={() => setIsPrinterModalOpen(true)}>
+            Máy in
+          </FilterButton>
+          {printerNotice ? (
+            <span style={{ marginLeft: "auto", color: "#334155", fontSize: 13, fontWeight: 700 }}>
+              {printerNotice}
+            </span>
+          ) : null}
+        </section>
+
+        <section
+          style={{
             display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) minmax(430px, 0.62fr)",
-            gap: 10,
+            gridTemplateColumns: boardColumns,
+            gap: isMobile ? 8 : 10,
             alignItems: "stretch",
             minHeight: 0,
-            height: "100%"
+            height: isMobile ? "auto" : "100%"
           }}
         >
           <div
             style={{
               display: "grid",
               gridTemplateRows: "minmax(0, 1fr) auto",
-              gap: 10,
+              gap: isMobile ? 8 : 10,
               minHeight: 0,
-              overflow: "hidden"
+              overflow: isMobile ? "visible" : "hidden"
             }}
           >
             <div
@@ -755,7 +962,7 @@ export default function KitchenPage() {
                 display: "grid",
                 gap: 10,
                 alignContent: "start",
-                overflowY: "auto",
+                overflowY: isMobile ? "visible" : "auto",
                 minHeight: 0,
                 paddingRight: 4,
                 paddingBottom: 12
@@ -803,6 +1010,7 @@ export default function KitchenPage() {
                   }}
                 >
                 <KitchenOrderCard
+                  compact={isMobile}
                   active={activeOrderKey === orderKey}
                   dimmed={Boolean(activeOrderKey && activeOrderKey !== orderKey)}
                   highlightedDishKey={highlightedByDish ? activeDishKey : ""}
@@ -812,8 +1020,10 @@ export default function KitchenPage() {
                   order={order}
                   updating={String(updatingOrderId) === String(order.id)}
                   updatingItemKey={updatingItemKey}
+                  printingBill={printingOrderKey === orderKey}
                   claimingGift={String(claimingGiftOrderId) === String(order.id)}
                   onMarkDone={handleMarkOrderDone}
+                  onPrintBill={handlePrintBill}
                   onToggleItemDone={toggleItemDone}
                   onClaimGift={claimGift}
                 />
@@ -856,7 +1066,204 @@ export default function KitchenPage() {
             onSelectDish={handleSelectDish}
           />
         </section>
+        {isPrinterModalOpen ? (
+          <div
+            role="presentation"
+            onClick={() => setIsPrinterModalOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 50,
+              background: "rgba(15, 23, 42, 0.45)",
+              display: "grid",
+              placeItems: "center",
+              padding: 16
+            }}
+          >
+          <section
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "min(760px, 100%)",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              border: "1px solid #e5e7eb",
+              background: "#ffffff",
+              borderRadius: 12,
+              padding: 16,
+              display: "grid",
+              gap: 14,
+              alignContent: "start"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>
+                Cài đặt máy in
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsPrinterModalOpen(false)}
+                style={{
+                  border: "1px solid #d1d5db",
+                  background: "#ffffff",
+                  color: "#374151",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  cursor: "pointer"
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
+              <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
+                Chế độ in
+                <select
+                  value={printerSettings.mode}
+                  onChange={(event) => handlePrinterSettingChange("mode", event.target.value)}
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    fontSize: 14,
+                    color: "#0f172a",
+                    background: "#ffffff"
+                  }}
+                >
+                  <option value="webPrint">Web print</option>
+                  <option value="bridge">Bridge (Xprinter)</option>
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
+                Tên máy in
+                <input
+                  value={printerSettings.printerName}
+                  onChange={(event) => handlePrinterSettingChange("printerName", event.target.value)}
+                  placeholder="Xprinter"
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    fontSize: 14
+                  }}
+                />
+              </label>
+              <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
+                Khổ giấy
+                <select
+                  value={printerSettings.receiptWidthMm}
+                  onChange={(event) => handlePrinterSettingChange("receiptWidthMm", event.target.value)}
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    fontSize: 14,
+                    color: "#0f172a",
+                    background: "#ffffff"
+                  }}
+                >
+                  <option value="80">80 mm</option>
+                  <option value="58">58 mm</option>
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
+                Tên cửa hàng in trên bill
+                <input
+                  value={printerSettings.storeName}
+                  onChange={(event) => handlePrinterSettingChange("storeName", event.target.value)}
+                  placeholder="Gánh Hàng Rong"
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    fontSize: 14
+                  }}
+                />
+              </label>
+            </div>
+            <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
+              Bridge URL (chỉ dùng khi chọn Bridge)
+              <input
+                value={printerSettings.bridgeUrl}
+                onChange={(event) => handlePrinterSettingChange("bridgeUrl", event.target.value)}
+                placeholder="http://192.168.1.10:3001"
+                style={{
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  padding: "10px 12px",
+                  fontSize: 14
+                }}
+              />
+            </label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <button
+                type="button"
+                onClick={handleSavePrinterSettings}
+                disabled={printerLoading}
+                style={{
+                  border: "1px solid #0f766e",
+                  background: "#14b8a6",
+                  color: "#ffffff",
+                  borderRadius: 8,
+                  padding: "10px 13px",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  cursor: printerLoading ? "not-allowed" : "pointer",
+                  opacity: printerLoading ? 0.72 : 1
+                }}
+              >
+                Lưu cài đặt
+              </button>
+              <button
+                type="button"
+                onClick={handleTestPrinterConnection}
+                disabled={printerLoading}
+                style={{
+                  border: "1px solid #2563eb",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  borderRadius: 8,
+                  padding: "10px 13px",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  cursor: printerLoading ? "not-allowed" : "pointer",
+                  opacity: printerLoading ? 0.72 : 1
+                }}
+              >
+                {printerLoading ? "Đang xử lý..." : "Kiểm tra kết nối"}
+              </button>
+              <button
+                type="button"
+                onClick={handlePrintTestBill}
+                disabled={printerLoading}
+                style={{
+                  border: "1px solid #16a34a",
+                  background: "#16a34a",
+                  color: "#ffffff",
+                  borderRadius: 8,
+                  padding: "10px 13px",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  cursor: printerLoading ? "not-allowed" : "pointer",
+                  opacity: printerLoading ? 0.72 : 1
+                }}
+              >
+                {printerLoading ? "Đang xử lý..." : "In test"}
+              </button>
+            </div>
+          </section>
+          </div>
+        ) : null}
       </section>
     </main>
   );
 }
+
+
+
+
+
+
