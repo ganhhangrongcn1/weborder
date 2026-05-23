@@ -328,6 +328,96 @@ function buildBridgeUrl(path = "", bridgeUrl = "") {
   return `${baseUrl}/${cleanPath}`;
 }
 
+function getAndroidPrinterBridge() {
+  if (typeof window === "undefined") return null;
+  const bridge = window.GhrPrinter;
+  return bridge && typeof bridge.printCustomerBill === "function" ? bridge : null;
+}
+
+export function hasAndroidPrinterBridge() {
+  return Boolean(getAndroidPrinterBridge());
+}
+
+function parseBridgeResult(value, fallbackMessage = "") {
+  if (!value) {
+    return {
+      ok: true,
+      message: fallbackMessage || "Đã gửi lệnh in bill."
+    };
+  }
+
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return {
+      ok: Boolean(parsed?.ok),
+      message: parsed?.message || fallbackMessage || (parsed?.ok ? "Đã gửi lệnh in bill." : "In bill thất bại.")
+    };
+  } catch {
+    return {
+      ok: true,
+      message: String(value)
+    };
+  }
+}
+
+async function printViaAndroidBridge(order = {}, options = {}) {
+  const bridge = getAndroidPrinterBridge();
+  if (!bridge) {
+    return {
+      ok: false,
+      message: "Không tìm thấy app POS để in USB."
+    };
+  }
+
+  try {
+    const payload = JSON.stringify({
+      printerName: getPrinterConfig(options).printerName,
+      receiptWidthMm: getPrinterConfig(options).receiptWidthMm,
+      type: "customer_bill",
+      text: buildReceiptText(order, options),
+      html: buildReceiptHtml(order, options),
+      order: normalizeReceiptOrder(order, options)
+    });
+    return parseBridgeResult(bridge.printCustomerBill(payload), "Đã gửi bill tới máy in USB.");
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.message || "App POS không in được bill USB."
+    };
+  }
+}
+
+async function testAndroidBridge(options = {}) {
+  const bridge = getAndroidPrinterBridge();
+  if (!bridge) {
+    return {
+      ok: false,
+      mode: "androidBridge",
+      message: "Không tìm thấy app POS để kiểm tra máy in USB."
+    };
+  }
+
+  try {
+    if (typeof bridge.printTestBill === "function") {
+      return parseBridgeResult(bridge.printTestBill(JSON.stringify({
+        receiptWidthMm: getPrinterConfig(options).receiptWidthMm
+      })), "Đã gửi bill test tới máy in USB.");
+    }
+
+    return {
+      ok: true,
+      mode: "androidBridge",
+      message: "App POS đã sẵn sàng nhận lệnh in USB."
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      mode: "androidBridge",
+      message: error?.message || "Không kiểm tra được app POS."
+    };
+  }
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_BRIDGE_TIMEOUT_MS) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -412,6 +502,11 @@ function printViaBrowser(order = {}, options = {}) {
 
 export async function testPrinterConnection(options = {}) {
   const config = getPrinterConfig(options);
+  const androidBridge = getAndroidPrinterBridge();
+
+  if (androidBridge) {
+    return testAndroidBridge(options);
+  }
 
   if (config.mode === PRINTER_MODE.webPrint) {
     return {
@@ -449,6 +544,11 @@ export async function testPrinterConnection(options = {}) {
 }
 
 export async function printCustomerBill(order = {}, options = {}) {
+  const androidBridge = getAndroidPrinterBridge();
+  if (androidBridge) {
+    return printViaAndroidBridge(order, options);
+  }
+
   const config = getPrinterConfig(options);
 
   if (config.mode === PRINTER_MODE.bridge) {

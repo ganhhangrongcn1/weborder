@@ -7,10 +7,21 @@ import KitchenOrderCard from "./KitchenOrderCard.jsx";
 import KitchenOrderStrip from "./KitchenOrderStrip.jsx";
 import {
   getPrinterConfig,
+  hasAndroidPrinterBridge,
   printCustomerBill,
   printXprinterTestBill,
   testPrinterConnection
 } from "../../services/printerService.js";
+import {
+  DEFAULT_PRINTER_KEY,
+  claimPrintJob,
+  createCustomerBillPrintJob,
+  getPrintDeviceId,
+  markPrintJobFailed,
+  markPrintJobPrinted,
+  readPendingPrintJobs,
+  subscribePrintJobs
+} from "../../services/printJobService.js";
 import {
   getKitchenItemGroupKey,
   getKitchenOrderKey,
@@ -387,6 +398,7 @@ export default function KitchenPage() {
   const [printerNotice, setPrinterNotice] = useState("");
   const [printerLoading, setPrinterLoading] = useState(false);
   const [printingOrderKey, setPrintingOrderKey] = useState("");
+  const processingPrintJobsRef = useRef(new Set());
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 1280 : window.innerWidth,
     height: typeof window === "undefined" ? 800 : window.innerHeight
@@ -440,6 +452,78 @@ export default function KitchenPage() {
     soundEnabled,
     toggleSound
   } = useKitchenNewOrderAlert(orders, Boolean(session && profile));
+
+  useEffect(() => {
+    if (!session || !profile || !hasAndroidPrinterBridge()) return undefined;
+
+    let stopped = false;
+    let unsubscribe = () => {};
+    const deviceId = getPrintDeviceId();
+    const branchUuid = profile?.branchUuid || "";
+    const printerKey = DEFAULT_PRINTER_KEY;
+    const printerOptions = {
+      mode: printerSettings.mode,
+      bridgeUrl: String(printerSettings.bridgeUrl || "").trim(),
+      printerName: String(printerSettings.printerName || "").trim(),
+      receiptWidthMm: Number(printerSettings.receiptWidthMm) === 58 ? 58 : 80,
+      storeName: String(printerSettings.storeName || "").trim()
+    };
+
+    async function processPrintJob(job = {}) {
+      if (!job?.id || stopped || processingPrintJobsRef.current.has(job.id)) return;
+      processingPrintJobsRef.current.add(job.id);
+
+      try {
+        const claimedJob = await claimPrintJob(job, { deviceId });
+        if (!claimedJob || stopped) return;
+
+        const payload = claimedJob.payload || {};
+        const order = payload.order || {};
+        const result = await printCustomerBill(order, {
+          ...printerOptions,
+          receiptWidthMm: Number(payload.receiptWidthMm) === 58 ? 58 : printerOptions.receiptWidthMm,
+          printerName: payload.printerName || printerOptions.printerName,
+          storeName: payload.storeName || printerOptions.storeName
+        });
+
+        if (result.ok) {
+          await markPrintJobPrinted(claimedJob);
+          setPrinterNotice(`POS đã in bill ${claimedJob.order_code || ""}.`.trim());
+        } else {
+          await markPrintJobFailed(claimedJob, result.message);
+          setPrinterNotice(result.message || "POS in bill thất bại.");
+        }
+      } catch (error) {
+        await markPrintJobFailed(job, error?.message || "POS in bill thất bại.");
+        setPrinterNotice(error?.message || "POS in bill thất bại.");
+      } finally {
+        processingPrintJobsRef.current.delete(job.id);
+      }
+    }
+
+    async function startPrintStation() {
+      setPrinterNotice("POS đang chờ lệnh in từ iPad.");
+
+      unsubscribe = await subscribePrintJobs({
+        branchUuid,
+        printerKey,
+        deviceId,
+        onPendingJob: processPrintJob
+      });
+
+      const pendingJobs = await readPendingPrintJobs({ branchUuid, printerKey });
+      if (!stopped) {
+        pendingJobs.forEach((job) => processPrintJob(job));
+      }
+    }
+
+    startPrintStation();
+
+    return () => {
+      stopped = true;
+      unsubscribe();
+    };
+  }, [profile, printerSettings, session]);
 
   useEffect(() => {
     function handleResize() {
@@ -571,8 +655,13 @@ export default function KitchenPage() {
   async function handlePrintBill(order) {
     const orderKey = getKitchenOrderKey(order);
     setPrintingOrderKey(orderKey);
-    const result = await printCustomerBill(order, getPrinterRuntimeOptions());
-    setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in bill." : "In bill thất bại."));
+    const result = await createCustomerBillPrintJob(order, {
+      branchUuid: profile?.branchUuid || "",
+      printerKey: DEFAULT_PRINTER_KEY,
+      requestedBy: profile?.email || profile?.name || "",
+      printerOptions: getPrinterRuntimeOptions()
+    });
+    setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in bill tới máy POS." : "Gửi lệnh in thất bại."));
     setPrintingOrderKey("");
   }
 
