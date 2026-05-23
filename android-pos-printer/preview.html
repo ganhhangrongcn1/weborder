@@ -21,6 +21,7 @@
       }
 
       .device {
+        position: relative;
         width: min(100%, 1180px);
         aspect-ratio: 16 / 9;
         min-height: 560px;
@@ -312,6 +313,74 @@
         font-size: 22px;
       }
 
+      .settings-preview {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(15, 23, 42, 0.35);
+        pointer-events: none;
+      }
+
+      .dialog {
+        width: min(92%, 360px);
+        background: #ffffff;
+        border-radius: 4px;
+        padding: 18px;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.28);
+        display: grid;
+        gap: 10px;
+      }
+
+      .dialog h4 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .field {
+        display: grid;
+        gap: 4px;
+      }
+
+      .field span {
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .input-line {
+        border-bottom: 1px solid #94a3b8;
+        padding: 7px 0;
+        color: #0f172a;
+        font-size: 14px;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .segmented button:first-child {
+        border-radius: 8px 0 0 8px;
+      }
+
+      .segmented button:last-child {
+        border-radius: 0 8px 8px 0;
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 16px;
+        padding-top: 6px;
+      }
+
+      .text-button {
+        border: 0;
+        background: transparent;
+        color: #0f766e;
+        padding: 0;
+      }
+
       @media (max-width: 800px) {
         body {
           padding: 0;
@@ -438,6 +507,28 @@
             <strong style="font-size: 17px;">Sẵn sàng</strong>
           </div>
         </aside>
+      </section>
+
+      <section class="settings-preview" aria-label="Cài đặt POS preview">
+        <div class="dialog">
+          <h4>Cài đặt POS</h4>
+          <label class="field">
+            <span>Link web Kitchen online</span>
+            <div class="input-line">https://ganhhangrong.vn/kitchen</div>
+          </label>
+          <div class="field">
+            <span>Máy in: Xprinter 80mm</span>
+            <div class="segmented">
+              <button class="primary" type="button">USB</button>
+              <button type="button">LAN/WiFi</button>
+            </div>
+          </div>
+          <button type="button">Chọn máy in USB</button>
+          <div class="dialog-actions">
+            <button class="text-button" type="button">Đóng</button>
+            <button class="text-button" type="button">Lưu</button>
+          </div>
+        </div>
       </section>
     </main>
   </body>

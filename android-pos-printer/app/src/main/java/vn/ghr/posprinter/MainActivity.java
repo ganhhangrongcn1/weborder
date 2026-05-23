@@ -42,6 +42,8 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -49,8 +51,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.net.InetSocketAddress;
-import java.net.Socket;
 
 public class MainActivity extends Activity {
     private static final String PREFS_NAME = "ghr_pos_printer";
@@ -61,7 +61,7 @@ public class MainActivity extends Activity {
     private static final String KEY_LAN_PORT = "lan_port";
     private static final String PRINTER_MODE_USB = "usb";
     private static final String PRINTER_MODE_LAN = "lan";
-    private static final String DEFAULT_WEB_URL = "https://your-domain.com/admin/kitchen";
+    private static final String DEFAULT_WEB_URL = "https://ganhhangrong.vn/kitchen";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posprinter.USB_PERMISSION";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
     private static final int DEFAULT_LAN_PORT = 9100;
@@ -142,7 +142,6 @@ public class MainActivity extends Activity {
         logo.setImageResource(getResources().getIdentifier("logo_icon", "drawable", getPackageName()));
         logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
         logo.setBackground(makeRoundRect(Color.rgb(255, 205, 0), 12, 0, Color.TRANSPARENT));
-        logo.setClipToOutline(false);
         LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(dp(48), dp(48));
         header.addView(logo, logoParams);
 
@@ -311,54 +310,66 @@ public class MainActivity extends Activity {
         modeRow.addView(lanModeButton, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         content.addView(modeRow);
 
-        final String[] selectedMode = {getPrinterMode()};
-        Runnable refreshModeButtons = () -> {
-            boolean lanMode = PRINTER_MODE_LAN.equals(selectedMode[0]);
-            usbModeButton.setBackground(makeRoundRect(lanMode ? Color.WHITE : Color.rgb(20, 184, 166), 8, 1, Color.rgb(15, 118, 110)));
-            usbModeButton.setTextColor(lanMode ? Color.rgb(15, 23, 42) : Color.WHITE);
-            lanModeButton.setBackground(makeRoundRect(lanMode ? Color.rgb(20, 184, 166) : Color.WHITE, 8, 1, Color.rgb(15, 118, 110)));
-            lanModeButton.setTextColor(lanMode ? Color.WHITE : Color.rgb(15, 23, 42));
-        };
-        usbModeButton.setOnClickListener(view -> {
-            selectedMode[0] = PRINTER_MODE_USB;
-            refreshModeButtons.run();
-        });
-        lanModeButton.setOnClickListener(view -> {
-            selectedMode[0] = PRINTER_MODE_LAN;
-            refreshModeButtons.run();
-        });
-        refreshModeButtons.run();
+        LinearLayout usbPanel = new LinearLayout(this);
+        usbPanel.setOrientation(LinearLayout.VERTICAL);
+        usbPanel.setPadding(0, dp(10), 0, 0);
+
+        Button choosePrinterButton = new Button(this);
+        choosePrinterButton.setText("Chọn máy in USB");
+        choosePrinterButton.setAllCaps(false);
+        choosePrinterButton.setOnClickListener(view -> showUsbDevicePicker());
+        usbPanel.addView(choosePrinterButton);
+        content.addView(usbPanel);
+
+        LinearLayout lanPanel = new LinearLayout(this);
+        lanPanel.setOrientation(LinearLayout.VERTICAL);
+        lanPanel.setPadding(0, dp(10), 0, 0);
 
         TextView lanLabel = new TextView(this);
-        lanLabel.setText("\nIP máy in LAN/WiFi");
+        lanLabel.setText("IP máy in LAN/WiFi");
         lanLabel.setTextColor(Color.rgb(15, 23, 42));
         lanLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        content.addView(lanLabel);
+        lanPanel.addView(lanLabel);
 
         EditText lanHostInput = new EditText(this);
         lanHostInput.setSingleLine(true);
         lanHostInput.setInputType(InputType.TYPE_CLASS_PHONE);
         lanHostInput.setHint("Ví dụ: 192.168.1.88");
         lanHostInput.setText(prefs.getString(KEY_LAN_HOST, ""));
-        content.addView(lanHostInput);
+        lanPanel.addView(lanHostInput);
 
         TextView portLabel = new TextView(this);
         portLabel.setText("Port máy in");
         portLabel.setTextColor(Color.rgb(15, 23, 42));
         portLabel.setTypeface(Typeface.DEFAULT_BOLD);
-        content.addView(portLabel);
+        lanPanel.addView(portLabel);
 
         EditText lanPortInput = new EditText(this);
         lanPortInput.setSingleLine(true);
         lanPortInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         lanPortInput.setText(String.valueOf(getLanPort()));
-        content.addView(lanPortInput);
+        lanPanel.addView(lanPortInput);
+        content.addView(lanPanel);
 
-        Button choosePrinterButton = new Button(this);
-        choosePrinterButton.setText("Chọn máy in USB");
-        choosePrinterButton.setAllCaps(false);
-        choosePrinterButton.setOnClickListener(view -> showUsbDevicePicker());
-        content.addView(choosePrinterButton);
+        final String[] selectedMode = {getPrinterMode()};
+        Runnable refreshMode = () -> {
+            boolean lanMode = PRINTER_MODE_LAN.equals(selectedMode[0]);
+            usbModeButton.setBackground(makeRoundRect(lanMode ? Color.WHITE : Color.rgb(20, 184, 166), 8, 1, Color.rgb(15, 118, 110)));
+            usbModeButton.setTextColor(lanMode ? Color.rgb(15, 23, 42) : Color.WHITE);
+            lanModeButton.setBackground(makeRoundRect(lanMode ? Color.rgb(20, 184, 166) : Color.WHITE, 8, 1, Color.rgb(15, 118, 110)));
+            lanModeButton.setTextColor(lanMode ? Color.WHITE : Color.rgb(15, 23, 42));
+            usbPanel.setVisibility(lanMode ? View.GONE : View.VISIBLE);
+            lanPanel.setVisibility(lanMode ? View.VISIBLE : View.GONE);
+        };
+        usbModeButton.setOnClickListener(view -> {
+            selectedMode[0] = PRINTER_MODE_USB;
+            refreshMode.run();
+        });
+        lanModeButton.setOnClickListener(view -> {
+            selectedMode[0] = PRINTER_MODE_LAN;
+            refreshMode.run();
+        });
+        refreshMode.run();
 
         new AlertDialog.Builder(this)
                 .setTitle("Cài đặt POS")
@@ -478,7 +489,7 @@ public class MainActivity extends Activity {
         String time = new SimpleDateFormat("HH:mm dd/MM/yyyy", new Locale("vi", "VN")).format(new Date());
         printReceiptText(
                 "GÁNH HÀNG RONG\n" +
-                "Bill test Xprinter USB\n" +
+                "Bill test Xprinter\n" +
                 "Giờ: " + time + "\n" +
                 "--------------------------------\n" +
                 "1 x Dòng test tiếng Việt có dấu\n" +
@@ -713,8 +724,8 @@ public class MainActivity extends Activity {
                 }
                 boolean ok = printReceiptText(text);
                 return ok
-                        ? "{\"ok\":true,\"message\":\"Đã gửi bill tới Xprinter USB.\"}"
-                        : "{\"ok\":false,\"message\":\"Chưa in được bill. Kiểm tra máy in USB.\"}";
+                        ? "{\"ok\":true,\"message\":\"Đã gửi bill tới Xprinter.\"}"
+                        : "{\"ok\":false,\"message\":\"Chưa in được bill. Kiểm tra máy in.\"}";
             } catch (Exception error) {
                 return "{\"ok\":false,\"message\":\"Dữ liệu bill không hợp lệ.\"}";
             }
@@ -730,7 +741,7 @@ public class MainActivity extends Activity {
                     "Cảm ơn quý khách!"
             );
             return ok
-                    ? "{\"ok\":true,\"message\":\"Đã gửi bill test tới Xprinter USB.\"}"
+                    ? "{\"ok\":true,\"message\":\"Đã gửi bill test tới Xprinter.\"}"
                     : "{\"ok\":false,\"message\":\"Chưa in được bill test.\"}";
         }
     }

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppAdminRoutes from "../features/app/AppAdminRoutes.jsx";
 import AppCustomerRoutes from "../features/app/AppCustomerRoutes.jsx";
 import KitchenPage from "../features/kitchen/KitchenPage.jsx";
+import DownloadPage from "../pages/DownloadPage.jsx";
 
 export default function AppRoutes({ adminAppProps, customerRouteProps }) {
   return (
@@ -24,6 +25,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/qr/:branchId/account" element={<AppCustomerRoutes {...customerRouteProps} />} />
 
       <Route path="/kitchen" element={<KitchenPage />} />
+      <Route path="/download" element={<DownloadPage />} />
 
       <Route path="/admin" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/menu" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
