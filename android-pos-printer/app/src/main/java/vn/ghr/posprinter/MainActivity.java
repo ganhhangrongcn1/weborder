@@ -95,6 +95,7 @@ public class MainActivity extends Activity {
     private static final String JOB_TYPE = "customer_bill";
     private static final String SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
     private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
+    private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posprinter.USB_PERMISSION";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
     private static final int BIG_TEXT_SIZE = 84;
@@ -141,6 +142,7 @@ public class MainActivity extends Activity {
     private boolean realtimeJoined = false;
     private int realtimeRef = 1;
     private long lastRealtimeIssueLogAt = 0;
+    private Bitmap fixedQrBitmap;
     private WebSocket realtimeSocket;
 
     private final Runnable realtimeHeartbeatRunnable = new Runnable() {
@@ -708,8 +710,6 @@ public class MainActivity extends Activity {
         startKeepAliveService();
         updateStationUi();
         log("Đã bật trạm in cho chi nhánh " + getBranchLabel() + ".");
-        startRealtime();
-        pollOnceAsync();
     }
 
     private void stopStation() {
@@ -1348,7 +1348,7 @@ public class MainActivity extends Activity {
         paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
 
         int padding = 16;
-        Bitmap qrBitmap = createQrBitmap(qrUrl, dp(150));
+        Bitmap qrBitmap = getFixedQrBitmap(dp(150));
         List<String> lines = expandReceiptLines(text, paint, width - padding * 2);
         int height = Math.max(160, padding * 2 + estimateReceiptHeight(lines, qrBitmap));
 
@@ -1431,6 +1431,13 @@ public class MainActivity extends Activity {
             result.addAll(wrapLines(line, paint, maxWidth));
         }
         return result;
+    }
+
+    private synchronized Bitmap getFixedQrBitmap(int size) {
+        if (fixedQrBitmap == null) {
+            fixedQrBitmap = createQrBitmap(LOYALTY_QR_URL, size);
+        }
+        return fixedQrBitmap;
     }
 
     private Bitmap createQrBitmap(String qrUrl, int size) {

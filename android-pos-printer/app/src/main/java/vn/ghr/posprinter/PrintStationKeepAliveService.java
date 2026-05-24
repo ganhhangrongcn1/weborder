@@ -16,22 +16,30 @@ public class PrintStationKeepAliveService extends Service {
     private static final int NOTIFICATION_ID = 30604;
 
     private PowerManager.WakeLock wakeLock;
+    private PrintStationEngine printStationEngine;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
         acquireWakeLock();
+        printStationEngine = new PrintStationEngine(this);
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForeground(NOTIFICATION_ID, buildNotification());
+        if (printStationEngine == null) printStationEngine = new PrintStationEngine(this);
+        printStationEngine.start();
         return START_STICKY;
     }
 
     @Override
     public void onDestroy() {
+        if (printStationEngine != null) {
+            printStationEngine.stop();
+            printStationEngine = null;
+        }
         releaseWakeLock();
         super.onDestroy();
     }
