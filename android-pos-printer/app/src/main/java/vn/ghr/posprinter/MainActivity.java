@@ -97,10 +97,13 @@ public class MainActivity extends Activity {
     private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posprinter.USB_PERMISSION";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
+    private static final int BIG_TEXT_SIZE = 84;
+    private static final int BIG_TEXT_MIN_SIZE = 42;
+    private static final int BIG_LINE_HEIGHT = 100;
     private static final int DEFAULT_LAN_PORT = 9100;
-    private static final int POLL_INTERVAL_MS = 30000;
     private static final int REALTIME_HEARTBEAT_MS = 25000;
     private static final int REALTIME_RECONNECT_MS = 8000;
+    private static final int REALTIME_LOG_THROTTLE_MS = 120000;
     private static final int MAX_JOBS_PER_POLL = 3;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -137,16 +140,8 @@ public class MainActivity extends Activity {
     private boolean realtimeConnecting = false;
     private boolean realtimeJoined = false;
     private int realtimeRef = 1;
+    private long lastRealtimeIssueLogAt = 0;
     private WebSocket realtimeSocket;
-
-    private final Runnable pollRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (!stationRunning) return;
-            pollOnceAsync();
-            handler.postDelayed(this, POLL_INTERVAL_MS);
-        }
-    };
 
     private final Runnable realtimeHeartbeatRunnable = new Runnable() {
         @Override
@@ -154,6 +149,13 @@ public class MainActivity extends Activity {
             if (!stationRunning || realtimeSocket == null) return;
             sendRealtimeEvent("phoenix", "heartbeat", new JSONObject());
             handler.postDelayed(this, REALTIME_HEARTBEAT_MS);
+        }
+    };
+
+    private final Runnable realtimeReconnectRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (stationRunning && realtimeSocket == null) startRealtime();
         }
     };
 
@@ -215,10 +217,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         stationRunning = false;
-        handler.removeCallbacks(pollRunnable);
+        handler.removeCallbacks(realtimeReconnectRunnable);
         closeRealtime();
         unregisterReceiver(usbReceiver);
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        moveTaskToBack(true);
     }
 
     private View buildLayout() {
@@ -666,7 +673,6 @@ public class MainActivity extends Activity {
 
     private void clearAuthSession(boolean clearEmail) {
         stationRunning = false;
-        handler.removeCallbacks(pollRunnable);
         SharedPreferences.Editor editor = prefs.edit()
                 .remove(KEY_ACCESS_TOKEN)
                 .remove(KEY_REFRESH_TOKEN)
@@ -699,21 +705,41 @@ public class MainActivity extends Activity {
 
         stationRunning = true;
         prefs.edit().putBoolean(KEY_STATION_ENABLED, true).apply();
+        startKeepAliveService();
         updateStationUi();
         log("Đã bật trạm in cho chi nhánh " + getBranchLabel() + ".");
-        handler.removeCallbacks(pollRunnable);
         startRealtime();
         pollOnceAsync();
-        handler.postDelayed(pollRunnable, POLL_INTERVAL_MS);
     }
 
     private void stopStation() {
         stationRunning = false;
         prefs.edit().putBoolean(KEY_STATION_ENABLED, false).apply();
-        handler.removeCallbacks(pollRunnable);
+        handler.removeCallbacks(realtimeReconnectRunnable);
         closeRealtime();
+        stopKeepAliveService();
         updateStationUi();
         log("Đã tắt trạm in.");
+    }
+
+    private void startKeepAliveService() {
+        try {
+            Intent intent = new Intent(this, PrintStationKeepAliveService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent);
+            } else {
+                startService(intent);
+            }
+        } catch (Exception error) {
+            log("Khong bat duoc che do giu app song: " + shortError(error));
+        }
+    }
+
+    private void stopKeepAliveService() {
+        try {
+            stopService(new Intent(this, PrintStationKeepAliveService.class));
+        } catch (Exception ignored) {
+        }
     }
 
     private void updateStationUi() {
@@ -907,25 +933,25 @@ public class MainActivity extends Activity {
                     realtimeJoined = false;
                     realtimeSocket = null;
                     handler.removeCallbacks(realtimeHeartbeatRunnable);
-                    log("Realtime tạm ngắt, dùng kiểm tra dự phòng 30 giây.");
+                    logRealtimeIssue("Realtime tam ngat, app se tu ket noi lai.");
                     if (stationRunning) scheduleRealtimeReconnect();
                 }
             });
         } catch (Exception error) {
             realtimeConnecting = false;
-            log("Không mở được realtime: " + shortError(error));
+            logRealtimeIssue("Khong mo duoc realtime: " + shortError(error));
             scheduleRealtimeReconnect();
         }
     }
 
     private void scheduleRealtimeReconnect() {
-        handler.postDelayed(() -> {
-            if (stationRunning && realtimeSocket == null) startRealtime();
-        }, REALTIME_RECONNECT_MS);
+        handler.removeCallbacks(realtimeReconnectRunnable);
+        handler.postDelayed(realtimeReconnectRunnable, REALTIME_RECONNECT_MS);
     }
 
     private void closeRealtime() {
         handler.removeCallbacks(realtimeHeartbeatRunnable);
+        handler.removeCallbacks(realtimeReconnectRunnable);
         realtimeConnecting = false;
         realtimeJoined = false;
         if (realtimeSocket != null) {
@@ -1350,7 +1376,7 @@ public class MainActivity extends Activity {
             if ("@@QR".equals(line) && qrBitmap != null) {
                 height += qrBitmap.getHeight() + 20;
             } else if (line.startsWith("@@BIG:")) {
-                height += 58;
+                height += BIG_LINE_HEIGHT;
             } else {
                 height += 34;
             }
@@ -1366,8 +1392,9 @@ public class MainActivity extends Activity {
         if (center) text = line.substring(9);
         if ("@@QR".equals(line)) return y;
 
-        paint.setTextSize(big ? 42 : 24);
+        paint.setTextSize(big ? BIG_TEXT_SIZE : 24);
         paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, big ? Typeface.BOLD : Typeface.NORMAL));
+        if (big) fitTextToWidth(paint, text, width - padding * 2, BIG_TEXT_SIZE, BIG_TEXT_MIN_SIZE);
         Paint.FontMetrics metrics = paint.getFontMetrics();
         int baseline = y + Math.round(-metrics.ascent);
 
@@ -1378,7 +1405,14 @@ public class MainActivity extends Activity {
             canvas.drawText(text, padding, baseline, paint);
         }
 
-        return y + (big ? 58 : 34);
+        return y + (big ? BIG_LINE_HEIGHT : 34);
+    }
+
+    private void fitTextToWidth(Paint paint, String text, int maxWidth, int maxTextSize, int minTextSize) {
+        paint.setTextSize(maxTextSize);
+        while (paint.measureText(text) > maxWidth && paint.getTextSize() > minTextSize) {
+            paint.setTextSize(paint.getTextSize() - 2);
+        }
     }
 
     private List<String> expandReceiptLines(String text, Paint paint, int maxWidth) {
@@ -1609,6 +1643,13 @@ public class MainActivity extends Activity {
             if (logText != null) logText.setText(next);
             status(message);
         });
+    }
+
+    private void logRealtimeIssue(String message) {
+        long now = System.currentTimeMillis();
+        if (now - lastRealtimeIssueLogAt < REALTIME_LOG_THROTTLE_MS) return;
+        lastRealtimeIssueLogAt = now;
+        log(message);
     }
 
     private void toast(String message) {

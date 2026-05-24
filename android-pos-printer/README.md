@@ -10,8 +10,9 @@ App Android native cho máy POS Android dùng máy in Xprinter 80mm. App này kh
 - Với `USB`: chỉ hiện nút chọn máy in USB và xin quyền USB.
 - Với `LAN/WiFi`: hiện ô nhập IP máy in và port, mặc định `9100`.
 - Bật/tắt trạm in.
+- Khi bật trạm in, APK chạy foreground service để có thể chuyển qua iPOS mà vẫn giữ trạm in sống.
 - Nhận lệnh in mới gần như ngay lập tức bằng Supabase Realtime.
-- Tự kiểm tra `print_jobs` dự phòng khoảng 30 giây/lần nếu realtime/mạng bị rớt.
+- Nhận lệnh in bằng Supabase Realtime, không chạy polling định kỳ để giảm request.
 - Claim job `pending` thành `printing` trước khi in để tránh nhiều máy in trùng bill.
 - In xong cập nhật job thành `printed`; in lỗi cập nhật thành `failed`.
 - In test trực tiếp từ APK.
@@ -96,4 +97,5 @@ android-pos-printer/app/build/outputs/apk/debug/app-debug.apk
 
 - App này dùng Supabase REST, không phụ thuộc Android System WebView.
 - Muốn đổi link Supabase hoặc anon key thì sửa trong `MainActivity.java`.
-- Nếu muốn app in khi bị tắt hẳn hoặc bị Android kill nền, bước sau nên nâng cấp thành Foreground Service.
+- App đã có foreground service giữ trạm in khi chuyển qua app khác như iPOS. Nếu người dùng tắt trạm in hoặc force stop APK thì app sẽ ngừng nhận lệnh in.
+- Nếu realtime bị mạng/POS chặn, có thể bấm `Kiểm tra lệnh in` trong APK để kéo job pending thủ công.

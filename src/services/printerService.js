@@ -366,10 +366,11 @@ function buildReceiptHtml(order = {}, options = {}) {
       }
       .order-code {
         text-align: center;
-        font-size: 26px;
-        line-height: 1.1;
+        font-size: 46px;
+        line-height: 1.02;
         font-weight: 1000;
         letter-spacing: 0;
+        overflow-wrap: anywhere;
       }
       .center { text-align: center; }
       .muted { color: #333333; }
