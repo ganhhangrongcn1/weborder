@@ -145,6 +145,7 @@ public class MainActivity extends Activity {
     private int realtimeRef = 1;
     private long lastRealtimeIssueLogAt = 0;
     private Bitmap fixedQrBitmap;
+    private byte[] fixedFooterRasterBytes;
     private WebSocket realtimeSocket;
 
     private final Runnable realtimeHeartbeatRunnable = new Runnable() {
@@ -1320,10 +1321,26 @@ public class MainActivity extends Activity {
     }
 
     private byte[] buildEscPosRaster(String text, String qrUrl) {
-        Bitmap bitmap = renderTextBitmap(text, RECEIPT_WIDTH_DOTS_80MM, qrUrl);
+        ReceiptRasterParts parts = splitReceiptFooter(text);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         output.write(0x1B);
         output.write(0x40);
+
+        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
+        if (!parts.footerText.trim().isEmpty()) {
+            byte[] footerBytes = getFixedFooterRasterBytes(parts.footerText, qrUrl);
+            output.write(footerBytes, 0, footerBytes.length);
+        }
+
+        output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
+        output.write(0x1D);
+        output.write(0x56);
+        output.write(0x42);
+        output.write(0x00);
+        return output.toByteArray();
+    }
+
+    private void writeRasterBitmap(ByteArrayOutputStream output, Bitmap bitmap) {
         output.write(0x1D);
         output.write(0x76);
         output.write(0x30);
@@ -1354,13 +1371,44 @@ public class MainActivity extends Activity {
                 output.write(value);
             }
         }
+    }
 
-        output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
-        output.write(0x1D);
-        output.write(0x56);
-        output.write(0x42);
-        output.write(0x00);
-        return output.toByteArray();
+    private synchronized byte[] getFixedFooterRasterBytes(String footerText, String qrUrl) {
+        if (fixedFooterRasterBytes == null) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            writeRasterBitmap(output, renderTextBitmap(footerText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
+            fixedFooterRasterBytes = output.toByteArray();
+        }
+        return fixedFooterRasterBytes;
+    }
+
+    private ReceiptRasterParts splitReceiptFooter(String text) {
+        String value = String.valueOf(text == null ? "" : text);
+        int qrIndex = value.indexOf("@@QR");
+        if (qrIndex < 0) return new ReceiptRasterParts(value, "");
+
+        int qrLineBreak = value.lastIndexOf('\n', Math.max(0, qrIndex - 1));
+        if (qrLineBreak < 0) return new ReceiptRasterParts(value, "");
+
+        int titleLineBreak = value.lastIndexOf('\n', Math.max(0, qrLineBreak - 1));
+        if (titleLineBreak < 0) return new ReceiptRasterParts(value, "");
+
+        int footerStart = value.lastIndexOf('\n', Math.max(0, titleLineBreak - 1));
+        if (footerStart < 0) footerStart = titleLineBreak;
+
+        String bodyText = value.substring(0, footerStart).trim();
+        String footerText = value.substring(footerStart + 1).trim();
+        return new ReceiptRasterParts(bodyText, footerText);
+    }
+
+    private static class ReceiptRasterParts {
+        final String bodyText;
+        final String footerText;
+
+        ReceiptRasterParts(String bodyText, String footerText) {
+            this.bodyText = bodyText == null ? "" : bodyText;
+            this.footerText = footerText == null ? "" : footerText;
+        }
     }
 
     private Bitmap renderTextBitmap(String text, int width, String qrUrl) {
