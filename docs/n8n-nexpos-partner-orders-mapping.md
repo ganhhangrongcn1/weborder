@@ -30,6 +30,29 @@
 | `order_time` | `order_time` | ISO time. |
 | `raw_data` | whole order object | Store full JSON for debugging. |
 
+## Upsert rule
+
+Do not upsert `partner_orders` by `order_code`.
+
+Grab/Shopee display codes such as `GF-406` can repeat or be reused, so `order_code`
+must be treated as a display/search code only. Use this conflict target instead:
+
+```txt
+partner_source + nexpos_order_id
+```
+
+Recommended n8n/Supabase flow:
+
+```txt
+1. Upsert partner_orders on conflict (partner_source, nexpos_order_id).
+2. Read/return the inserted partner_orders.id.
+3. Delete existing partner_order_items where partner_order_id = returned id.
+4. Insert the current dishes again with that partner_order_id.
+```
+
+When the incoming `nexpos_order_id` is different, even if `order_code` is the same,
+it must create a new `partner_orders` row.
+
 ## Item fields
 
 | Supabase column | NexPOS field | Note |

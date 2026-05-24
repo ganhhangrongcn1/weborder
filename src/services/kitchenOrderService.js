@@ -602,6 +602,35 @@ function mapPartnerKitchenItem(row = {}) {
   };
 }
 
+function mapPartnerRawDishToKitchenItem(dish = {}, order = {}, index = 0) {
+  const rawData = getObject(order.raw_data);
+  const orderId = toText(order.id || order.order_code || rawData.order_id || rawData.id);
+  const itemId = toText(dish.item_id || dish.model_id || dish.code || index);
+  const quantity = toNumber(dish.quantity, 1) || 1;
+  const status = normalizeKitchenStatus(order.kitchen_work_status, order.kitchen_status);
+
+  return {
+    id: `raw-dish-${orderId || "order"}-${itemId || index}`,
+    sourceItemId: "",
+    orderId,
+    productId: itemId,
+    name: toText(dish.name) || "Không tên món",
+    quantity,
+    note: toText(dish.note || dish.description),
+    options: flattenOptionLabels(dish.options),
+    status,
+    displayStatus: getDisplayStatus(status),
+    raw: dish
+  };
+}
+
+function mapPartnerRawDishesToKitchenItems(row = {}) {
+  const rawData = getObject(row.raw_data);
+  return getArray(rawData.dishes)
+    .filter((dish) => getObject(dish).is_gift !== true)
+    .map((dish, index) => mapPartnerRawDishToKitchenItem(getObject(dish), row, index));
+}
+
 function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
   const metadata = getObject(row.metadata);
   const source = resolveOrderSourceKey({
@@ -665,6 +694,7 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
   const id = toText(row.id || row.order_code);
   const orderCode = toText(row.order_code || id);
   const displayOrderCode = toText(row.display_order_code || orderCode);
+  const items = itemsByOrderId.get(id) || mapPartnerRawDishesToKitchenItems(row);
   const nexposStatus = toText(row.nexpos_status || rawData.status);
   const nexposState = normalizeNexposOrderState(
     nexposStatus,
@@ -713,7 +743,7 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     totalAmount: toNumber(row.total_amount, 0),
     createdAt: toText(row.order_time || row.created_at),
     updatedAt: toText(row.updated_at),
-    items: itemsByOrderId.get(id) || [],
+    items,
     raw: row
   };
 }
