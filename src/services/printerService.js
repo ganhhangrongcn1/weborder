@@ -138,8 +138,8 @@ function normalizeReceiptItem(item = {}) {
   return {
     name: toText(item.name || item.productName || item.product_name || "Món"),
     quantity: Math.max(1, Math.floor(toNumber(item.quantity, 1))),
-    price: toNumber(item.price || item.unitPrice || item.unit_price),
-    total: toNumber(item.total || item.totalPrice || item.total_price || item.lineTotal),
+    price: toNumber(item.price ?? item.unitPrice ?? item.unitTotal ?? item.unit_price),
+    total: toNumber(item.total ?? item.totalPrice ?? item.total_price ?? item.lineTotal ?? item.line_total),
     note: toText(item.note),
     options
   };
