@@ -261,7 +261,7 @@ function pushLoyaltyFooter(lines, width) {
 function buildReceiptText(order = {}, options = {}) {
   const config = getPrinterConfig(options);
   const receipt = normalizeReceiptOrder(order, options);
-  const width = config.receiptWidthMm === 58 ? 32 : 42;
+  const width = config.receiptWidthMm === 58 ? 32 : 48;
   const showMoney = !isPartnerAppReceipt(receipt);
   const includeLoyaltyFooter = options.includeLoyaltyFooter !== false;
   const lines = [
@@ -377,7 +377,7 @@ function buildReceiptHtml(order = {}, options = {}) {
       .muted { color: #333333; }
       .line {
         border-top: 1px dashed #111111;
-        margin: 8px 0;
+        margin: 8px -2px;
       }
       .row, .item {
         display: grid;
