@@ -14,7 +14,7 @@ const PRINT_JOB_STATUS = {
 };
 
 const DEFAULT_PRINTER_KEY = "cashier-80mm";
-const PRINT_JOB_COLUMNS = [
+const PRINT_JOB_STATUS_COLUMNS = [
   "id",
   "branch_uuid",
   "printer_key",
@@ -23,7 +23,6 @@ const PRINT_JOB_COLUMNS = [
   "order_id",
   "order_code",
   "source_type",
-  "payload",
   "requested_by",
   "requested_at",
   "claimed_by_device",
@@ -34,6 +33,10 @@ const PRINT_JOB_COLUMNS = [
   "retry_count",
   "created_at",
   "updated_at"
+].join(",");
+const PRINT_JOB_COLUMNS = [
+  PRINT_JOB_STATUS_COLUMNS,
+  "payload"
 ].join(",");
 
 function toText(value = "") {
@@ -84,7 +87,9 @@ export function getPrintDeviceId() {
 }
 
 export function buildCustomerBillPrintPayload(order = {}, printerOptions = {}) {
-  return buildPrintPayload(order, printerOptions);
+  const payload = buildPrintPayload(order, printerOptions);
+  const { html, ...printJobPayload } = payload;
+  return printJobPayload;
 }
 
 export async function createCustomerBillPrintJob(order = {}, options = {}) {
@@ -115,7 +120,7 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
   const { data, error } = await client
     .from("print_jobs")
     .insert(row)
-    .select(PRINT_JOB_COLUMNS)
+    .select(PRINT_JOB_STATUS_COLUMNS)
     .maybeSingle();
   if (error) {
     return {
@@ -137,7 +142,7 @@ export async function readRecentPrintJobs(options = {}) {
 
   let query = client
     .from("print_jobs")
-    .select(PRINT_JOB_COLUMNS)
+    .select(PRINT_JOB_STATUS_COLUMNS)
     .eq("job_type", "customer_bill")
     .eq("printer_key", toText(options.printerKey || DEFAULT_PRINTER_KEY))
     .order("created_at", { ascending: false })

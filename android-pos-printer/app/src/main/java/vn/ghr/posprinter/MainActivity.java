@@ -93,6 +93,7 @@ public class MainActivity extends Activity {
     private static final String PROFILE_TABLE = "profiles";
     private static final String PRINTER_KEY = "cashier-80mm";
     private static final String JOB_TYPE = "customer_bill";
+    private static final String PRINT_JOB_SELECT = "id,order_code,payload,retry_count";
     private static final String SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
     private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
     private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
@@ -812,7 +813,7 @@ public class MainActivity extends Activity {
 
         status("Đang kiểm tra lệnh in...");
         String url = SUPABASE_URL + "/rest/v1/print_jobs"
-                + "?select=*"
+                + "?select=" + PRINT_JOB_SELECT
                 + "&status=eq.pending"
                 + "&job_type=eq." + enc(JOB_TYPE)
                 + "&printer_key=eq." + enc(PRINTER_KEY)
@@ -850,7 +851,7 @@ public class MainActivity extends Activity {
                 + "&job_type=eq." + enc(JOB_TYPE)
                 + "&printer_key=eq." + enc(PRINTER_KEY)
                 + "&status=eq.pending"
-                + "&select=*";
+                + "&select=" + PRINT_JOB_SELECT;
         JSONArray result = new JSONArray(httpRequest("PATCH", url, body.toString(), true));
         if (result.length() == 0) return null;
 
