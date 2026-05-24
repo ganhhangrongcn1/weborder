@@ -1,4 +1,4 @@
-import { buildReceiptHtml, buildReceiptText } from "./printerService.js";
+import { buildPrintPayload } from "./printerService.js";
 import {
   getSupabaseKitchenAuthClient,
   getSupabaseRuntimeClient,
@@ -84,15 +84,7 @@ export function getPrintDeviceId() {
 }
 
 export function buildCustomerBillPrintPayload(order = {}, printerOptions = {}) {
-  return {
-    type: "customer_bill",
-    receiptWidthMm: Number(printerOptions.receiptWidthMm) === 58 ? 58 : 80,
-    printerName: toText(printerOptions.printerName || "Xprinter"),
-    storeName: toText(printerOptions.storeName || "Gánh Hàng Rong"),
-    text: buildReceiptText(order, printerOptions),
-    html: buildReceiptHtml(order, printerOptions),
-    order
-  };
+  return buildPrintPayload(order, printerOptions);
 }
 
 export async function createCustomerBillPrintJob(order = {}, options = {}) {

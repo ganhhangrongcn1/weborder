@@ -34,8 +34,19 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.common.BitMatrix;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.WebSocket;
+import okhttp3.WebSocketListener;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -52,9 +63,12 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
     private static final String PREFS_NAME = "ghr_pos_printer";
@@ -84,9 +98,16 @@ public class MainActivity extends Activity {
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posprinter.USB_PERMISSION";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
     private static final int DEFAULT_LAN_PORT = 9100;
-    private static final int POLL_INTERVAL_MS = 3000;
+    private static final int POLL_INTERVAL_MS = 30000;
+    private static final int REALTIME_HEARTBEAT_MS = 25000;
+    private static final int REALTIME_RECONNECT_MS = 8000;
+    private static final int MAX_JOBS_PER_POLL = 3;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final OkHttpClient realtimeClient = new OkHttpClient.Builder()
+            .readTimeout(0, TimeUnit.MILLISECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build();
     private SharedPreferences prefs;
     private UsbManager usbManager;
     private PendingIntent permissionIntent;
@@ -102,13 +123,21 @@ public class MainActivity extends Activity {
     private Button stationButton;
     private Button usbModeButton;
     private Button lanModeButton;
+    private LinearLayout loginPanel;
+    private LinearLayout loggedInPanel;
     private LinearLayout usbPanel;
     private LinearLayout lanPanel;
+    private TextView accountSummaryText;
 
     private String selectedMode = PRINTER_MODE_USB;
     private String pendingPrintText = "";
+    private String pendingPrintQrUrl = "";
     private boolean stationRunning = false;
     private boolean polling = false;
+    private boolean realtimeConnecting = false;
+    private boolean realtimeJoined = false;
+    private int realtimeRef = 1;
+    private WebSocket realtimeSocket;
 
     private final Runnable pollRunnable = new Runnable() {
         @Override
@@ -116,6 +145,15 @@ public class MainActivity extends Activity {
             if (!stationRunning) return;
             pollOnceAsync();
             handler.postDelayed(this, POLL_INTERVAL_MS);
+        }
+    };
+
+    private final Runnable realtimeHeartbeatRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!stationRunning || realtimeSocket == null) return;
+            sendRealtimeEvent("phoenix", "heartbeat", new JSONObject());
+            handler.postDelayed(this, REALTIME_HEARTBEAT_MS);
         }
     };
 
@@ -131,8 +169,10 @@ public class MainActivity extends Activity {
                 updatePrinterStatus();
                 if (!pendingPrintText.isEmpty()) {
                     String text = pendingPrintText;
+                    String qrUrl = pendingPrintQrUrl;
                     pendingPrintText = "";
-                    printReceiptText(text);
+                    pendingPrintQrUrl = "";
+                    printReceiptPayload(text, qrUrl);
                 }
             } else {
                 status("Chưa cấp quyền máy in USB.");
@@ -174,7 +214,9 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        stationRunning = false;
         handler.removeCallbacks(pollRunnable);
+        closeRealtime();
         unregisterReceiver(usbReceiver);
         super.onDestroy();
     }
@@ -233,28 +275,7 @@ public class MainActivity extends Activity {
         printerText = makeInfoText("", Color.rgb(15, 118, 110));
         root.addView(printerText, fullWidthParams());
 
-        root.addView(makeSectionTitle("Tài khoản chi nhánh"));
-        emailInput = makeInput("Email tài khoản bếp/chi nhánh");
-        emailInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        root.addView(emailInput, fullWidthParams());
-
-        passwordInput = makeInput("Mật khẩu");
-        passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        root.addView(passwordInput, fullWidthParams());
-
-        LinearLayout authRow = new LinearLayout(this);
-        authRow.setOrientation(LinearLayout.HORIZONTAL);
-
-        Button loginButton = makeButton("Đăng nhập chi nhánh", true);
-        loginButton.setOnClickListener(view -> loginAsync());
-        authRow.addView(loginButton, new LinearLayout.LayoutParams(0, dp(50), 1));
-
-        Button logoutButton = makeButton("Đăng xuất", false);
-        logoutButton.setOnClickListener(view -> logout());
-        LinearLayout.LayoutParams logoutParams = new LinearLayout.LayoutParams(0, dp(50), 1);
-        logoutParams.setMargins(dp(8), 0, 0, 0);
-        authRow.addView(logoutButton, logoutParams);
-        root.addView(authRow, fullWidthParams());
+        root.addView(buildAuthSection());
 
         root.addView(makeSectionTitle("Kết nối máy in"));
         LinearLayout modeRow = new LinearLayout(this);
@@ -296,11 +317,11 @@ public class MainActivity extends Activity {
         root.addView(lanPanel);
 
         LinearLayout actionRow = new LinearLayout(this);
-        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        actionRow.setOrientation(LinearLayout.VERTICAL);
 
         Button saveButton = makeButton("Lưu cài đặt", false);
         saveButton.setOnClickListener(view -> saveSettingsFromInputs());
-        actionRow.addView(saveButton, new LinearLayout.LayoutParams(0, dp(50), 1));
+        actionRow.addView(saveButton, tallButtonParams());
 
         stationButton = makeButton("Bật trạm in", true);
         stationButton.setOnClickListener(view -> {
@@ -311,29 +332,25 @@ public class MainActivity extends Activity {
                 startStation();
             }
         });
-        LinearLayout.LayoutParams stationParams = new LinearLayout.LayoutParams(0, dp(50), 1);
-        stationParams.setMargins(dp(8), 0, 0, 0);
-        actionRow.addView(stationButton, stationParams);
+        actionRow.addView(stationButton, tallButtonParams());
         root.addView(actionRow, fullWidthParams());
 
         LinearLayout printRow = new LinearLayout(this);
-        printRow.setOrientation(LinearLayout.HORIZONTAL);
+        printRow.setOrientation(LinearLayout.VERTICAL);
 
         Button checkButton = makeButton("Kiểm tra lệnh in", false);
         checkButton.setOnClickListener(view -> {
             saveSettingsFromInputs();
             pollOnceAsync();
         });
-        printRow.addView(checkButton, new LinearLayout.LayoutParams(0, dp(50), 1));
+        printRow.addView(checkButton, tallButtonParams());
 
         Button testButton = makeButton("In test", false);
         testButton.setOnClickListener(view -> {
             saveSettingsFromInputs();
             printTestBill();
         });
-        LinearLayout.LayoutParams testParams = new LinearLayout.LayoutParams(0, dp(50), 1);
-        testParams.setMargins(dp(8), 0, 0, 0);
-        printRow.addView(testButton, testParams);
+        printRow.addView(testButton, tallButtonParams());
         root.addView(printRow, fullWidthParams());
 
         root.addView(makeSectionTitle("Nhật ký"));
@@ -345,6 +362,42 @@ public class MainActivity extends Activity {
         root.addView(logText, fullWidthParams());
 
         return scrollView;
+    }
+
+    private View buildAuthSection() {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+
+        loginPanel = new LinearLayout(this);
+        loginPanel.setOrientation(LinearLayout.VERTICAL);
+        loginPanel.addView(makeSectionTitle("Tài khoản chi nhánh"));
+
+        emailInput = makeInput("Email tài khoản bếp/chi nhánh");
+        emailInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        loginPanel.addView(emailInput, fullWidthParams());
+
+        passwordInput = makeInput("Mật khẩu");
+        passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        loginPanel.addView(passwordInput, fullWidthParams());
+
+        Button loginButton = makeButton("Đăng nhập chi nhánh", true);
+        loginButton.setOnClickListener(view -> loginAsync());
+        loginPanel.addView(loginButton, tallButtonParams());
+        wrapper.addView(loginPanel);
+
+        loggedInPanel = new LinearLayout(this);
+        loggedInPanel.setOrientation(LinearLayout.VERTICAL);
+        loggedInPanel.addView(makeSectionTitle("Tài khoản đang dùng"));
+
+        accountSummaryText = makeInfoText("", Color.rgb(15, 118, 110));
+        loggedInPanel.addView(accountSummaryText, fullWidthParams());
+
+        Button logoutButton = makeButton("Đăng xuất", false);
+        logoutButton.setOnClickListener(view -> logout());
+        loggedInPanel.addView(logoutButton, tallButtonParams());
+        wrapper.addView(loggedInPanel);
+
+        return wrapper;
     }
 
     private void loadSettingsToInputs() {
@@ -384,13 +437,14 @@ public class MainActivity extends Activity {
                 String refreshToken = auth.optString("refresh_token", "");
                 String authUserId = user == null ? "" : user.optString("id", "");
                 String authEmail = user == null ? email : user.optString("email", email);
+                JSONObject authUserMetadata = user == null ? null : user.optJSONObject("user_metadata");
 
                 if (accessToken.isEmpty() || authUserId.isEmpty()) {
                     throw new Exception("Supabase chưa trả session hợp lệ.");
                 }
 
                 JSONObject profile = readProfile(accessToken, authUserId, authEmail);
-                applyProfileSession(accessToken, refreshToken, authUserId, authEmail, profile);
+                applyProfileSession(accessToken, refreshToken, authUserId, authEmail, profile, authUserMetadata);
                 runOnUiThread(() -> passwordInput.setText(""));
                 log("Đăng nhập thành công: " + getBranchLabel() + ".");
             } catch (Exception error) {
@@ -428,7 +482,7 @@ public class MainActivity extends Activity {
     }
 
     private JSONObject readProfile(String accessToken, String authUserId, String email) throws Exception {
-        String select = "id,auth_user_id,phone,name,email,role,status,registered,metadata";
+        String select = "*";
         String urlByUser = SUPABASE_URL + "/rest/v1/" + PROFILE_TABLE
                 + "?select=" + select
                 + "&auth_user_id=eq." + enc(authUserId)
@@ -446,7 +500,7 @@ public class MainActivity extends Activity {
         throw new Exception("Tài khoản này chưa có hồ sơ trong bảng profiles.");
     }
 
-    private void applyProfileSession(String accessToken, String refreshToken, String authUserId, String authEmail, JSONObject profile) throws Exception {
+    private void applyProfileSession(String accessToken, String refreshToken, String authUserId, String authEmail, JSONObject profile, JSONObject authUserMetadata) throws Exception {
         String role = profile.optString("role", "").trim().toLowerCase(Locale.US);
         String status = profile.optString("status", "").trim().toLowerCase(Locale.US);
         if (!"active".equals(status)) {
@@ -459,22 +513,13 @@ public class MainActivity extends Activity {
         JSONObject metadata = profile.optJSONObject("metadata");
         if (metadata == null) metadata = new JSONObject();
 
-        String branchUuid = firstText(
-                metadata.optString("branch_uuid", ""),
-                metadata.optString("branchUuid", "")
-        );
+        JSONObject branchInfo = resolveBranchInfo(accessToken, profile, metadata, authUserMetadata);
+        String branchUuid = branchInfo.optString("branchUuid", "");
         if (branchUuid.isEmpty()) {
-            throw new Exception("Profile chưa có metadata.branch_uuid.");
+            throw new Exception("Không tìm thấy branch_uuid cho tài khoản này.");
         }
-
-        String branchName = firstText(
-                metadata.optString("branch_name", ""),
-                metadata.optString("branchName", "")
-        );
-        String branchAlias = firstText(
-                metadata.optString("branch_alias", ""),
-                metadata.optString("branchAlias", "")
-        );
+        String branchName = branchInfo.optString("branchName", "");
+        String branchAlias = branchInfo.optString("branchAlias", "");
         String profileName = firstText(profile.optString("name", ""), authEmail);
 
         prefs.edit()
@@ -492,6 +537,125 @@ public class MainActivity extends Activity {
             emailInput.setText(authEmail);
             updateStationUi();
         });
+    }
+
+    private JSONObject resolveBranchInfo(String accessToken, JSONObject profile, JSONObject metadata, JSONObject authUserMetadata) throws Exception {
+        if (authUserMetadata == null) authUserMetadata = new JSONObject();
+
+        String directUuid = firstText(
+                profile.optString("branch_uuid", ""),
+                profile.optString("branchUuid", ""),
+                metadata.optString("branch_uuid", ""),
+                metadata.optString("branchUuid", ""),
+                authUserMetadata.optString("branch_uuid", ""),
+                authUserMetadata.optString("branchUuid", "")
+        );
+        String directName = firstText(
+                profile.optString("branch_name", ""),
+                profile.optString("branchName", ""),
+                metadata.optString("branch_name", ""),
+                metadata.optString("branchName", ""),
+                authUserMetadata.optString("branch_name", ""),
+                authUserMetadata.optString("branchName", "")
+        );
+        String directAlias = firstText(
+                profile.optString("branch_alias", ""),
+                profile.optString("branchAlias", ""),
+                metadata.optString("branch_alias", ""),
+                metadata.optString("branchAlias", ""),
+                authUserMetadata.optString("branch_alias", ""),
+                authUserMetadata.optString("branchAlias", "")
+        );
+        if (!directUuid.isEmpty()) {
+            return buildBranchInfo(directUuid, directName, directAlias);
+        }
+
+        JSONObject branch = findBranchForProfile(accessToken, profile, metadata, authUserMetadata);
+        if (branch != null) {
+            JSONObject data = branch.optJSONObject("data");
+            if (data == null) data = new JSONObject();
+            String branchUuid = firstText(
+                    branch.optString("branch_uuid", ""),
+                    branch.optString("branchUuid", ""),
+                    data.optString("branch_uuid", ""),
+                    data.optString("branchUuid", ""),
+                    data.optString("uuid", "")
+            );
+            String branchName = firstText(branch.optString("name", ""), data.optString("name", ""), directName);
+            String branchAlias = firstText(branch.optString("slug", ""), branch.optString("branch_code", ""), directAlias);
+            if (!branchUuid.isEmpty()) return buildBranchInfo(branchUuid, branchName, branchAlias);
+        }
+
+        throw new Exception("Profile chưa có branch_uuid. Vui lòng gán chi nhánh cho tài khoản này trong Admin/Supabase.");
+    }
+
+    private JSONObject buildBranchInfo(String branchUuid, String branchName, String branchAlias) throws Exception {
+        JSONObject result = new JSONObject();
+        result.put("branchUuid", branchUuid);
+        result.put("branchName", branchName);
+        result.put("branchAlias", branchAlias);
+        return result;
+    }
+
+    private JSONObject findBranchForProfile(String accessToken, JSONObject profile, JSONObject metadata, JSONObject authUserMetadata) {
+        String branchId = firstText(
+                profile.optString("branch_id", ""),
+                profile.optString("branchId", ""),
+                metadata.optString("branch_id", ""),
+                metadata.optString("branchId", ""),
+                authUserMetadata.optString("branch_id", ""),
+                authUserMetadata.optString("branchId", "")
+        );
+        String branchCode = firstText(
+                profile.optString("branch_code", ""),
+                profile.optString("branchCode", ""),
+                metadata.optString("branch_code", ""),
+                metadata.optString("branchCode", ""),
+                authUserMetadata.optString("branch_code", ""),
+                authUserMetadata.optString("branchCode", "")
+        );
+        String branchSlug = firstText(
+                profile.optString("branch_slug", ""),
+                profile.optString("branchSlug", ""),
+                metadata.optString("branch_slug", ""),
+                metadata.optString("branchSlug", ""),
+                metadata.optString("slug", ""),
+                authUserMetadata.optString("branch_slug", ""),
+                authUserMetadata.optString("branchSlug", ""),
+                authUserMetadata.optString("slug", "")
+        );
+        String branchName = firstText(
+                profile.optString("branch_name", ""),
+                profile.optString("branchName", ""),
+                metadata.optString("branch_name", ""),
+                metadata.optString("branchName", ""),
+                authUserMetadata.optString("branch_name", ""),
+                authUserMetadata.optString("branchName", "")
+        );
+
+        JSONObject byId = readBranchByField(accessToken, "id", branchId, false);
+        if (byId != null) return byId;
+        JSONObject byCode = readBranchByField(accessToken, "branch_code", branchCode, false);
+        if (byCode != null) return byCode;
+        JSONObject bySlug = readBranchByField(accessToken, "slug", branchSlug, false);
+        if (bySlug != null) return bySlug;
+        return readBranchByField(accessToken, "name", branchName, true);
+    }
+
+    private JSONObject readBranchByField(String accessToken, String field, String value, boolean ilike) {
+        String cleanValue = String.valueOf(value == null ? "" : value).trim();
+        if (cleanValue.isEmpty()) return null;
+        try {
+            String operator = ilike ? "ilike" : "eq";
+            String url = SUPABASE_URL + "/rest/v1/branches"
+                    + "?select=id,name,slug,branch_code,branch_uuid,data"
+                    + "&" + field + "=" + operator + "." + enc(cleanValue)
+                    + "&limit=1";
+            JSONArray rows = new JSONArray(httpRequest("GET", url, null, false, accessToken));
+            return rows.length() > 0 ? rows.getJSONObject(0) : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private void logout() {
@@ -538,27 +702,39 @@ public class MainActivity extends Activity {
         updateStationUi();
         log("Đã bật trạm in cho chi nhánh " + getBranchLabel() + ".");
         handler.removeCallbacks(pollRunnable);
-        pollRunnable.run();
+        startRealtime();
+        pollOnceAsync();
+        handler.postDelayed(pollRunnable, POLL_INTERVAL_MS);
     }
 
     private void stopStation() {
         stationRunning = false;
         prefs.edit().putBoolean(KEY_STATION_ENABLED, false).apply();
         handler.removeCallbacks(pollRunnable);
+        closeRealtime();
         updateStationUi();
         log("Đã tắt trạm in.");
     }
 
     private void updateStationUi() {
         if (stationText == null || stationButton == null) return;
+        boolean loggedIn = !prefs.getString(KEY_ACCESS_TOKEN, "").trim().isEmpty()
+                && !prefs.getString(KEY_BRANCH_UUID, "").trim().isEmpty();
+
+        if (loginPanel != null) loginPanel.setVisibility(loggedIn ? View.GONE : View.VISIBLE);
+        if (loggedInPanel != null) loggedInPanel.setVisibility(loggedIn ? View.VISIBLE : View.GONE);
+        if (accountSummaryText != null && loggedIn) {
+            String email = prefs.getString(KEY_AUTH_EMAIL, "").trim();
+            String branch = getBranchLabel();
+            accountSummaryText.setText((email.isEmpty() ? "Đã đăng nhập" : email) + "\nChi nhánh: " + branch);
+        }
+
         if (stationRunning) {
             stationText.setText("Trạm in đang bật · " + getBranchLabel());
             stationText.setTextColor(Color.rgb(15, 118, 110));
             stationButton.setText("Tắt trạm in");
             stationButton.setBackground(makeRoundRect(Color.rgb(239, 68, 68), 8, 1, Color.rgb(185, 28, 28)));
         } else {
-            boolean loggedIn = !prefs.getString(KEY_ACCESS_TOKEN, "").trim().isEmpty()
-                    && !prefs.getString(KEY_BRANCH_UUID, "").trim().isEmpty();
             stationText.setText(loggedIn ? "Đã đăng nhập · " + getBranchLabel() : "Chưa đăng nhập chi nhánh");
             stationText.setTextColor(loggedIn ? Color.rgb(15, 118, 110) : Color.rgb(185, 28, 28));
             stationButton.setText("Bật trạm in");
@@ -595,7 +771,7 @@ public class MainActivity extends Activity {
                 + "&printer_key=eq." + enc(PRINTER_KEY)
                 + "&branch_uuid=eq." + enc(branchUuid)
                 + "&order=created_at.asc"
-                + "&limit=5";
+                + "&limit=" + MAX_JOBS_PER_POLL;
 
         JSONArray jobs = new JSONArray(httpRequest("GET", url, null, false));
         if (jobs.length() == 0) {
@@ -623,6 +799,9 @@ public class MainActivity extends Activity {
 
         String url = SUPABASE_URL + "/rest/v1/print_jobs"
                 + "?id=eq." + enc(jobId)
+                + "&branch_uuid=eq." + enc(prefs.getString(KEY_BRANCH_UUID, "").trim())
+                + "&job_type=eq." + enc(JOB_TYPE)
+                + "&printer_key=eq." + enc(PRINTER_KEY)
                 + "&status=eq.pending"
                 + "&select=*";
         JSONArray result = new JSONArray(httpRequest("PATCH", url, body.toString(), true));
@@ -641,11 +820,12 @@ public class MainActivity extends Activity {
         try {
             JSONObject payload = job.optJSONObject("payload");
             String text = payload == null ? "" : payload.optString("text", "");
+            String loyaltyUrl = payload == null ? "" : payload.optString("loyaltyUrl", "");
             if (text.trim().isEmpty()) {
                 throw new Exception("Bill chưa có nội dung để in.");
             }
 
-            boolean ok = printReceiptText(text);
+            boolean ok = printReceiptPayload(text, loyaltyUrl);
             if (!ok) throw new Exception("Máy in chưa nhận bill.");
 
             markJobPrinted(jobId);
@@ -675,6 +855,144 @@ public class MainActivity extends Activity {
             body.put("retry_count", retryCount);
             body.put("updated_at", nowIso());
             httpRequest("PATCH", SUPABASE_URL + "/rest/v1/print_jobs?id=eq." + enc(jobId), body.toString(), false);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void startRealtime() {
+        if (realtimeConnecting || realtimeSocket != null) return;
+
+        String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
+        String token = prefs.getString(KEY_ACCESS_TOKEN, "").trim();
+        if (branchUuid.isEmpty() || token.isEmpty()) return;
+
+        realtimeConnecting = true;
+        realtimeJoined = false;
+        try {
+            String realtimeUrl = SUPABASE_URL.replace("https://", "wss://").replace("http://", "ws://")
+                    + "/realtime/v1/websocket?apikey=" + enc(SUPABASE_ANON_KEY)
+                    + "&vsn=1.0.0";
+            Request request = new Request.Builder()
+                    .url(realtimeUrl)
+                    .addHeader("apikey", SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + token)
+                    .build();
+
+            realtimeSocket = realtimeClient.newWebSocket(request, new WebSocketListener() {
+                @Override
+                public void onOpen(WebSocket webSocket, Response response) {
+                    realtimeConnecting = false;
+                    sendRealtimeJoin();
+                    handler.removeCallbacks(realtimeHeartbeatRunnable);
+                    handler.postDelayed(realtimeHeartbeatRunnable, REALTIME_HEARTBEAT_MS);
+                }
+
+                @Override
+                public void onMessage(WebSocket webSocket, String text) {
+                    handleRealtimeMessage(text);
+                }
+
+                @Override
+                public void onClosed(WebSocket webSocket, int code, String reason) {
+                    realtimeConnecting = false;
+                    realtimeJoined = false;
+                    realtimeSocket = null;
+                    handler.removeCallbacks(realtimeHeartbeatRunnable);
+                    if (stationRunning) scheduleRealtimeReconnect();
+                }
+
+                @Override
+                public void onFailure(WebSocket webSocket, Throwable throwable, Response response) {
+                    realtimeConnecting = false;
+                    realtimeJoined = false;
+                    realtimeSocket = null;
+                    handler.removeCallbacks(realtimeHeartbeatRunnable);
+                    log("Realtime tạm ngắt, dùng kiểm tra dự phòng 30 giây.");
+                    if (stationRunning) scheduleRealtimeReconnect();
+                }
+            });
+        } catch (Exception error) {
+            realtimeConnecting = false;
+            log("Không mở được realtime: " + shortError(error));
+            scheduleRealtimeReconnect();
+        }
+    }
+
+    private void scheduleRealtimeReconnect() {
+        handler.postDelayed(() -> {
+            if (stationRunning && realtimeSocket == null) startRealtime();
+        }, REALTIME_RECONNECT_MS);
+    }
+
+    private void closeRealtime() {
+        handler.removeCallbacks(realtimeHeartbeatRunnable);
+        realtimeConnecting = false;
+        realtimeJoined = false;
+        if (realtimeSocket != null) {
+            realtimeSocket.close(1000, "station stopped");
+            realtimeSocket = null;
+        }
+    }
+
+    private void sendRealtimeJoin() {
+        try {
+            String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
+            JSONObject change = new JSONObject();
+            change.put("event", "INSERT");
+            change.put("schema", "public");
+            change.put("table", "print_jobs");
+            change.put("filter", "branch_uuid=eq." + branchUuid);
+
+            JSONArray changes = new JSONArray();
+            changes.put(change);
+
+            JSONObject config = new JSONObject();
+            config.put("broadcast", new JSONObject().put("self", false));
+            config.put("presence", new JSONObject().put("key", ""));
+            config.put("postgres_changes", changes);
+
+            JSONObject payload = new JSONObject();
+            payload.put("config", config);
+            payload.put("access_token", prefs.getString(KEY_ACCESS_TOKEN, ""));
+
+            sendRealtimeEvent("realtime:public:print_jobs", "phx_join", payload);
+        } catch (Exception error) {
+            log("Không đăng ký realtime được: " + shortError(error));
+        }
+    }
+
+    private void sendRealtimeEvent(String topic, String event, JSONObject payload) {
+        try {
+            WebSocket socket = realtimeSocket;
+            if (socket == null) return;
+            JSONObject message = new JSONObject();
+            message.put("topic", topic);
+            message.put("event", event);
+            message.put("payload", payload == null ? new JSONObject() : payload);
+            message.put("ref", nextRealtimeRef());
+            socket.send(message.toString());
+        } catch (Exception ignored) {
+        }
+    }
+
+    private synchronized String nextRealtimeRef() {
+        realtimeRef += 1;
+        return String.valueOf(realtimeRef);
+    }
+
+    private void handleRealtimeMessage(String text) {
+        try {
+            JSONObject message = new JSONObject(text);
+            String event = message.optString("event", "");
+            if ("phx_reply".equals(event) && !realtimeJoined) {
+                realtimeJoined = true;
+                log("Realtime đã sẵn sàng, có bill mới sẽ in ngay.");
+                return;
+            }
+            if ("postgres_changes".equals(event)) {
+                log("Có lệnh in mới từ realtime.");
+                pollOnceAsync();
+            }
         } catch (Exception ignored) {
         }
     }
@@ -823,26 +1141,36 @@ public class MainActivity extends Activity {
 
     private void printTestBill() {
         String time = new SimpleDateFormat("HH:mm dd/MM/yyyy", new Locale("vi", "VN")).format(new Date());
-        printReceiptText(
-                "GÁNH HÀNG RONG\n" +
-                "Bill test Xprinter 80mm\n" +
+        printReceiptPayload(
+                "@@CENTER:GÁNH HÀNG RONG\n" +
+                "@@CENTER:MÃ ĐƠN\n" +
+                "@@BIG:TEST-XPRINTER\n" +
+                "------------------------------------------\n" +
+                "Nguồn: Bếp\n" +
                 "Giờ: " + time + "\n" +
-                "--------------------------------\n" +
+                "------------------------------------------\n" +
                 "1 x Dòng test tiếng Việt có dấu\n" +
-                "TỔNG                         0\n" +
-                "--------------------------------\n" +
-                "Cảm ơn quý khách!"
+                "------------------------------------------\n" +
+                "@@CENTER:Quét QR để tích điểm\n" +
+                "@@QR\n" +
+                "@@CENTER:Hotline: 0933 799 061\n" +
+                "@@CENTER:Cảm ơn quý khách!",
+                "https://ganhhangrong.vn/loyalty?source=receipt"
         );
     }
 
     private boolean printReceiptText(String text) {
-        if (PRINTER_MODE_LAN.equals(getPrinterMode())) {
-            return printReceiptTextViaLan(text);
-        }
-        return printReceiptTextViaUsb(text);
+        return printReceiptPayload(text, "");
     }
 
-    private boolean printReceiptTextViaLan(String text) {
+    private boolean printReceiptPayload(String text, String qrUrl) {
+        if (PRINTER_MODE_LAN.equals(getPrinterMode())) {
+            return printReceiptTextViaLan(text, qrUrl);
+        }
+        return printReceiptTextViaUsb(text, qrUrl);
+    }
+
+    private boolean printReceiptTextViaLan(String text, String qrUrl) {
         String host = prefs.getString(KEY_LAN_HOST, "").trim();
         int port = getLanPort();
         if (host.isEmpty()) {
@@ -857,7 +1185,7 @@ public class MainActivity extends Activity {
             socket.setSoTimeout(5000);
 
             OutputStream outputStream = socket.getOutputStream();
-            outputStream.write(buildEscPosRaster(text));
+            outputStream.write(buildEscPosRaster(text, qrUrl));
             outputStream.flush();
 
             status("Đã gửi bill tới Xprinter LAN/WiFi.");
@@ -870,7 +1198,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private boolean printReceiptTextViaUsb(String text) {
+    private boolean printReceiptTextViaUsb(String text, String qrUrl) {
         UsbDevice device = getSelectedDevice();
         if (device == null) {
             status("Chưa thấy máy in USB.");
@@ -880,6 +1208,7 @@ public class MainActivity extends Activity {
 
         if (!usbManager.hasPermission(device)) {
             pendingPrintText = text;
+            pendingPrintQrUrl = qrUrl;
             status("Đang xin quyền USB.");
             usbManager.requestPermission(device, permissionIntent);
             updatePrinterStatus();
@@ -918,7 +1247,7 @@ public class MainActivity extends Activity {
                 return false;
             }
 
-            byte[] data = buildEscPosRaster(text);
+            byte[] data = buildEscPosRaster(text, qrUrl);
             int offset = 0;
             while (offset < data.length) {
                 int chunkSize = Math.min(4096, data.length - offset);
@@ -942,8 +1271,8 @@ public class MainActivity extends Activity {
         }
     }
 
-    private byte[] buildEscPosRaster(String text) {
-        Bitmap bitmap = renderTextBitmap(text, RECEIPT_WIDTH_DOTS_80MM);
+    private byte[] buildEscPosRaster(String text, String qrUrl) {
+        Bitmap bitmap = renderTextBitmap(text, RECEIPT_WIDTH_DOTS_80MM, qrUrl);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         output.write(0x1B);
         output.write(0x40);
@@ -986,28 +1315,108 @@ public class MainActivity extends Activity {
         return output.toByteArray();
     }
 
-    private Bitmap renderTextBitmap(String text, int width) {
+    private Bitmap renderTextBitmap(String text, int width, String qrUrl) {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(Color.BLACK);
         paint.setTextSize(24);
         paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
 
         int padding = 16;
-        int lineHeight = 34;
-        List<String> lines = wrapLines(text, paint, width - padding * 2);
-        int height = Math.max(160, padding * 2 + lines.size() * lineHeight);
+        Bitmap qrBitmap = createQrBitmap(qrUrl, dp(150));
+        List<String> lines = expandReceiptLines(text, paint, width - padding * 2);
+        int height = Math.max(160, padding * 2 + estimateReceiptHeight(lines, qrBitmap));
 
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         canvas.drawColor(Color.WHITE);
 
-        int y = padding + 24;
+        int y = padding;
         for (String line : lines) {
-            canvas.drawText(line, padding, y, paint);
-            y += lineHeight;
+            if ("@@QR".equals(line) && qrBitmap != null) {
+                int left = (width - qrBitmap.getWidth()) / 2;
+                canvas.drawBitmap(qrBitmap, left, y + 6, null);
+                y += qrBitmap.getHeight() + 20;
+                continue;
+            }
+            y = drawReceiptLine(canvas, paint, line, padding, y, width);
         }
 
         return bitmap;
+    }
+
+    private int estimateReceiptHeight(List<String> lines, Bitmap qrBitmap) {
+        int height = 0;
+        for (String line : lines) {
+            if ("@@QR".equals(line) && qrBitmap != null) {
+                height += qrBitmap.getHeight() + 20;
+            } else if (line.startsWith("@@BIG:")) {
+                height += 58;
+            } else {
+                height += 34;
+            }
+        }
+        return height;
+    }
+
+    private int drawReceiptLine(Canvas canvas, Paint paint, String line, int padding, int y, int width) {
+        boolean big = line.startsWith("@@BIG:");
+        boolean center = line.startsWith("@@CENTER:");
+        String text = line;
+        if (big) text = line.substring(6);
+        if (center) text = line.substring(9);
+        if ("@@QR".equals(line)) return y;
+
+        paint.setTextSize(big ? 42 : 24);
+        paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, big ? Typeface.BOLD : Typeface.NORMAL));
+        Paint.FontMetrics metrics = paint.getFontMetrics();
+        int baseline = y + Math.round(-metrics.ascent);
+
+        if (big || center) {
+            float x = (width - paint.measureText(text)) / 2f;
+            canvas.drawText(text, Math.max(padding, x), baseline, paint);
+        } else {
+            canvas.drawText(text, padding, baseline, paint);
+        }
+
+        return y + (big ? 58 : 34);
+    }
+
+    private List<String> expandReceiptLines(String text, Paint paint, int maxWidth) {
+        List<String> result = new ArrayList<>();
+        String[] rawLines = text.split("\\n", -1);
+        for (String rawLine : rawLines) {
+            String line = rawLine.trim();
+            if (line.isEmpty()) {
+                result.add("");
+                continue;
+            }
+            if (line.startsWith("@@BIG:") || line.startsWith("@@CENTER:") || "@@QR".equals(line)) {
+                result.add(line);
+                continue;
+            }
+            result.addAll(wrapLines(line, paint, maxWidth));
+        }
+        return result;
+    }
+
+    private Bitmap createQrBitmap(String qrUrl, int size) {
+        String value = String.valueOf(qrUrl == null ? "" : qrUrl).trim();
+        if (value.isEmpty()) return null;
+        try {
+            Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
+            hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
+            hints.put(EncodeHintType.MARGIN, 1);
+            BitMatrix matrix = new MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, size, size, hints);
+            Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) {
+                    bitmap.setPixel(x, y, matrix.get(x, y) ? Color.BLACK : Color.WHITE);
+                }
+            }
+            return bitmap;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private List<String> wrapLines(String text, Paint paint, int maxWidth) {
@@ -1040,8 +1449,10 @@ public class MainActivity extends Activity {
         Button button = new Button(this);
         button.setText(label);
         button.setAllCaps(false);
-        button.setTextSize(14);
+        button.setTextSize(16);
         button.setTypeface(Typeface.DEFAULT_BOLD);
+        button.setMinHeight(dp(58));
+        button.setGravity(Gravity.CENTER);
         button.setTextColor(primary ? Color.WHITE : Color.rgb(15, 23, 42));
         button.setBackground(makeRoundRect(
                 primary ? Color.rgb(20, 184, 166) : Color.WHITE,
@@ -1056,8 +1467,9 @@ public class MainActivity extends Activity {
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setHint(hint);
-        input.setTextSize(14);
-        input.setPadding(dp(12), 0, dp(12), 0);
+        input.setTextSize(18);
+        input.setMinHeight(dp(62));
+        input.setPadding(dp(14), 0, dp(14), 0);
         input.setBackground(makeRoundRect(Color.WHITE, 8, 1, Color.rgb(203, 213, 225)));
         return input;
     }
@@ -1087,6 +1499,15 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(0, 0, 0, dp(8));
+        return params;
+    }
+
+    private LinearLayout.LayoutParams tallButtonParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(58)
         );
         params.setMargins(0, 0, 0, dp(8));
         return params;

@@ -6,6 +6,19 @@ const PRINTER_MODE = {
 const DEFAULT_RECEIPT_WIDTH_MM = 80;
 const DEFAULT_STORE_NAME = "Gánh Hàng Rong";
 const DEFAULT_BRIDGE_TIMEOUT_MS = 6000;
+const LOYALTY_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
+const SUPPORT_HOTLINE = "0933 799 061";
+
+const APP_SOURCE_KEYS = [
+  "grab",
+  "grabfood",
+  "shopee",
+  "shopeefood",
+  "xanh",
+  "xanhngon",
+  "nexpos",
+  "partner"
+];
 
 function toText(value = "") {
   return String(value || "").trim();
@@ -47,7 +60,8 @@ function getPrinterConfig(overrides = {}) {
     printerName: toText(overrides.printerName || env.VITE_PRINTER_NAME || "Xprinter"),
     receiptWidthMm: toReceiptWidth(overrides.receiptWidthMm || env.VITE_RECEIPT_WIDTH_MM),
     storeName: toText(overrides.storeName || env.VITE_RECEIPT_STORE_NAME || DEFAULT_STORE_NAME),
-    timeoutMs: toNumber(overrides.timeoutMs || env.VITE_PRINT_BRIDGE_TIMEOUT_MS, DEFAULT_BRIDGE_TIMEOUT_MS)
+    timeoutMs: toNumber(overrides.timeoutMs || env.VITE_PRINT_BRIDGE_TIMEOUT_MS, DEFAULT_BRIDGE_TIMEOUT_MS),
+    loyaltyUrl: toText(overrides.loyaltyUrl || env.VITE_RECEIPT_LOYALTY_URL || LOYALTY_QR_URL)
   };
 }
 
@@ -64,11 +78,11 @@ function formatDateTime(value = "") {
   });
 }
 
-function buildLine(char = "-", width = 32) {
+function buildLine(char = "-", width = 42) {
   return char.repeat(width);
 }
 
-function splitText(value = "", limit = 32) {
+function splitText(value = "", limit = 42) {
   const text = toText(value);
   if (!text) return [""];
 
@@ -91,15 +105,30 @@ function splitText(value = "", limit = 32) {
   return lines;
 }
 
-function alignMoneyLine(label = "", value = "", width = 32) {
+function alignMoneyLine(label = "", value = "", width = 42) {
   const left = toText(label);
   const right = toText(value);
   const gap = Math.max(1, width - left.length - right.length);
   return `${left}${" ".repeat(gap)}${right}`;
 }
 
+function normalizeSource(value = "") {
+  return toText(value).toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function isPartnerAppReceipt(receipt = {}) {
+  const sourceText = [
+    receipt.platform,
+    receipt.sourceType,
+    receipt.partnerSource,
+    receipt.orderSource,
+    receipt.channel
+  ].map(normalizeSource).join(" ");
+  return APP_SOURCE_KEYS.some((key) => sourceText.includes(key));
+}
+
 function normalizeReceiptItem(item = {}) {
-  const options = getArray(item.options || item.toppings)
+  const options = getArray(item.options || item.toppings || item.optionGroups)
     .map((option) => {
       if (typeof option === "string") return option;
       return toText(option?.label || option?.name || option?.value);
@@ -110,7 +139,7 @@ function normalizeReceiptItem(item = {}) {
     name: toText(item.name || item.productName || item.product_name || "Món"),
     quantity: Math.max(1, Math.floor(toNumber(item.quantity, 1))),
     price: toNumber(item.price || item.unitPrice || item.unit_price),
-    total: toNumber(item.total || item.totalPrice || item.total_price),
+    total: toNumber(item.total || item.totalPrice || item.total_price || item.lineTotal),
     note: toText(item.note),
     options
   };
@@ -118,25 +147,52 @@ function normalizeReceiptItem(item = {}) {
 
 function normalizeReceiptOrder(order = {}, config = {}) {
   const metadata = getObject(order.metadata);
-  const raw = getObject(order.raw);
-  const rawMetadata = getObject(raw.metadata);
+  const raw = getObject(order.raw || order.rawData || order.raw_data);
+  const rawMetadata = getObject(raw.metadata || raw.raw_data);
   const items = getArray(order.items).map(normalizeReceiptItem);
+
+  const source = toText(
+    order.platform ||
+      order.partnerSource ||
+      order.partner_source ||
+      order.sourceType ||
+      order.source ||
+      metadata.source ||
+      metadata.channel ||
+      "Website"
+  );
 
   return {
     orderCode: toText(order.displayOrderCode || order.orderCode || order.order_code || order.id),
-    platform: toText(order.platform || order.source || order.sourceType || "Website"),
-    branchName: toText(order.branchName || order.branch_name || config.branchName),
+    platform: source,
+    sourceType: toText(order.sourceType || order.source || metadata.source),
+    partnerSource: toText(order.partnerSource || order.partner_source || metadata.partnerSource),
+    orderSource: toText(order.orderSource || metadata.orderSource),
+    channel: toText(order.channel || metadata.channel),
+    branchName: toText(order.branchName || order.branch_name || metadata.branchName || raw.branch_name || config.branchName),
+    branchAddress: toText(order.branchAddress || order.branch_address || metadata.branchAddress || raw.branch_address),
+    branchPhone: toText(order.branchPhone || order.branch_phone || metadata.branchPhone || raw.branch_phone),
     customerName: toText(order.customerName || order.customer_name || "Khách"),
     customerPhone: toText(order.customerPhone || order.customer_phone),
     customerAddress: toText(order.customerAddress || order.address || metadata.address || rawMetadata.address),
     fulfillmentType: toText(order.fulfillmentType || order.fulfillment_type || metadata.fulfillmentType),
     paymentMethod: toText(order.paymentMethod || order.payment_method || metadata.paymentMethod),
     note: toText(order.note || metadata.note || rawMetadata.note),
+    promoCode: toText(order.promoCode || order.promo_code || metadata.promoCode || metadata.couponCode),
     createdAt: toText(order.createdAt || order.created_at || order.orderTime || order.order_time),
-    subtotal: toNumber(order.subtotal || metadata.subtotal),
-    shippingFee: toNumber(order.shippingFee || order.shipping_fee || metadata.shippingFee),
-    discount: toNumber(order.discount || metadata.discount),
-    totalAmount: toNumber(order.totalAmount || order.total_amount || metadata.totalAmount),
+    subtotal: toNumber(order.subtotal ?? order.subtotal_amount ?? metadata.subtotal),
+    shippingFee: toNumber(order.shippingFee ?? order.shipping_fee ?? metadata.shippingFee),
+    discount: toNumber(
+      order.discount ??
+        order.discountAmount ??
+        order.discount_amount ??
+        order.promoDiscount ??
+        order.promo_discount ??
+        metadata.discount ??
+        metadata.discountAmount ??
+        metadata.promoDiscount
+    ),
+    totalAmount: toNumber(order.totalAmount ?? order.total_amount ?? metadata.totalAmount),
     items
   };
 }
@@ -151,52 +207,89 @@ function getReceiptTotal(order = {}) {
   return Math.max(0, itemTotal + order.shippingFee - order.discount);
 }
 
+function pushOrderMeta(lines, receipt, width) {
+  if (receipt.branchName) lines.push(`Chi nhánh: ${receipt.branchName}`);
+  lines.push(`Nguồn: ${receipt.platform || "Website"}`);
+  lines.push(`Giờ: ${formatDateTime(receipt.createdAt)}`);
+  if (receipt.customerName || receipt.customerPhone) {
+    lines.push(`Khách: ${receipt.customerName || "Khách"}${receipt.customerPhone ? ` - ${receipt.customerPhone}` : ""}`);
+  }
+  if (receipt.customerAddress) splitText(`Địa chỉ: ${receipt.customerAddress}`, width).forEach((line) => lines.push(line));
+  if (receipt.fulfillmentType) lines.push(`Hình thức: ${receipt.fulfillmentType}`);
+  if (receipt.paymentMethod) lines.push(`Thanh toán: ${receipt.paymentMethod}`);
+}
+
+function pushItemsText(lines, receipt, width, showMoney) {
+  if (!receipt.items.length) {
+    lines.push("Chưa có chi tiết món.");
+    return;
+  }
+
+  receipt.items.forEach((item, index) => {
+    if (index > 0) lines.push(buildLine("-", width));
+    const lineTotal = item.total > 0 ? item.total : item.price * item.quantity;
+    const itemLabel = `${item.quantity} x ${item.name}`;
+    splitText(itemLabel, width).forEach((line, lineIndex) => {
+      if (showMoney && lineIndex === 0) {
+        lines.push(alignMoneyLine(line, lineTotal ? toMoney(lineTotal) : "", width));
+      } else {
+        lines.push(line);
+      }
+    });
+    item.options.forEach((option) => lines.push(`  + ${option}`));
+    if (item.note) splitText(`  Ghi chú: ${item.note}`, width).forEach((line) => lines.push(line));
+  });
+}
+
+function pushBranchFooter(lines, receipt, width) {
+  if (!receipt.branchName && !receipt.branchAddress && !receipt.branchPhone) return;
+  lines.push(buildLine("-", width));
+  lines.push("@@CENTER:Thông tin chi nhánh");
+  if (receipt.branchName) splitText(receipt.branchName, width).forEach((line) => lines.push(`@@CENTER:${line}`));
+  if (receipt.branchAddress) splitText(receipt.branchAddress, width).forEach((line) => lines.push(`@@CENTER:${line}`));
+  if (receipt.branchPhone) lines.push(`@@CENTER:${receipt.branchPhone}`);
+}
+
+function pushLoyaltyFooter(lines, width) {
+  lines.push(buildLine("-", width));
+  lines.push("@@CENTER:Quét QR để tích điểm");
+  lines.push("@@QR");
+  lines.push(`@@CENTER:Hotline: ${SUPPORT_HOTLINE}`);
+  lines.push("@@CENTER:Cảm ơn quý khách!");
+}
+
 function buildReceiptText(order = {}, options = {}) {
   const config = getPrinterConfig(options);
   const receipt = normalizeReceiptOrder(order, options);
   const width = config.receiptWidthMm === 58 ? 32 : 42;
+  const showMoney = !isPartnerAppReceipt(receipt);
   const lines = [
-    config.storeName.toUpperCase(),
-    receipt.branchName,
-    buildLine("-", width),
-    `Đơn: ${receipt.orderCode || "Chưa có mã"}`,
-    `Nguồn: ${receipt.platform}`,
-    `Giờ: ${formatDateTime(receipt.createdAt)}`,
-    `Khách: ${receipt.customerName}${receipt.customerPhone ? ` - ${receipt.customerPhone}` : ""}`
-  ].filter(Boolean);
+    "@@CENTER:GÁNH HÀNG RONG",
+    "@@CENTER:MÃ ĐƠN",
+    `@@BIG:${receipt.orderCode || "CHƯA CÓ MÃ"}`,
+    buildLine("-", width)
+  ];
 
-  if (receipt.customerAddress) lines.push(`Địa chỉ: ${receipt.customerAddress}`);
-  if (receipt.fulfillmentType) lines.push(`Hình thức: ${receipt.fulfillmentType}`);
-  if (receipt.paymentMethod) lines.push(`Thanh toán: ${receipt.paymentMethod}`);
-
+  pushOrderMeta(lines, receipt, width);
   lines.push(buildLine("-", width));
+  pushItemsText(lines, receipt, width, showMoney);
 
-  if (receipt.items.length) {
-    receipt.items.forEach((item) => {
-      const lineTotal = item.total > 0 ? item.total : item.price * item.quantity;
-      splitText(`${item.quantity} x ${item.name}`, width).forEach((line, index) => {
-        lines.push(index === 0 ? alignMoneyLine(line, lineTotal ? toMoney(lineTotal) : "", width) : line);
-      });
-      item.options.forEach((option) => lines.push(`  + ${option}`));
-      if (item.note) lines.push(`  Ghi chú: ${item.note}`);
-    });
-  } else {
-    lines.push("Chưa có chi tiết món.");
+  if (showMoney) {
+    lines.push(buildLine("-", width));
+    if (receipt.subtotal > 0) lines.push(alignMoneyLine("Tạm tính", toMoney(receipt.subtotal), width));
+    if (receipt.promoCode) lines.push(alignMoneyLine("Mã giảm giá", receipt.promoCode, width));
+    if (receipt.discount > 0) lines.push(alignMoneyLine("Giảm giá", `-${toMoney(receipt.discount)}`, width));
+    if (receipt.shippingFee > 0) lines.push(alignMoneyLine("Phí ship", toMoney(receipt.shippingFee), width));
+    lines.push(alignMoneyLine("TỔNG CẦN THU", toMoney(getReceiptTotal(receipt)), width));
   }
-
-  lines.push(buildLine("-", width));
-  if (receipt.subtotal > 0) lines.push(alignMoneyLine("Tạm tính", toMoney(receipt.subtotal), width));
-  if (receipt.shippingFee > 0) lines.push(alignMoneyLine("Phí giao", toMoney(receipt.shippingFee), width));
-  if (receipt.discount > 0) lines.push(alignMoneyLine("Giảm giá", `-${toMoney(receipt.discount)}`, width));
-  lines.push(alignMoneyLine("TỔNG", toMoney(getReceiptTotal(receipt)), width));
 
   if (receipt.note) {
     lines.push(buildLine("-", width));
     splitText(`Ghi chú đơn: ${receipt.note}`, width).forEach((line) => lines.push(line));
   }
 
-  lines.push(buildLine("-", width));
-  lines.push("Cảm ơn quý khách!");
+  pushBranchFooter(lines, receipt, width);
+  pushLoyaltyFooter(lines, width);
 
   return lines.join("\n");
 }
@@ -210,9 +303,14 @@ function escapeHtml(value = "") {
     .replace(/'/g, "&#039;");
 }
 
+function qrImageUrl(value = LOYALTY_QR_URL) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=170x170&margin=8&data=${encodeURIComponent(value)}`;
+}
+
 function buildReceiptHtml(order = {}, options = {}) {
   const config = getPrinterConfig(options);
   const receipt = normalizeReceiptOrder(order, options);
+  const showMoney = !isPartnerAppReceipt(receipt);
   const total = getReceiptTotal(receipt);
 
   const itemRows = receipt.items.length
@@ -228,7 +326,7 @@ function buildReceiptHtml(order = {}, options = {}) {
             ${optionRows}
             ${noteRow}
           </div>
-          <strong>${lineTotal ? toMoney(lineTotal) : ""}</strong>
+          ${showMoney ? `<strong>${lineTotal ? toMoney(lineTotal) : ""}</strong>` : ""}
         </div>
       `;
     }).join("")
@@ -252,13 +350,26 @@ function buildReceiptHtml(order = {}, options = {}) {
       }
       .receipt {
         width: ${config.receiptWidthMm}mm;
-        padding: 10px 8px;
+        padding: 10px 8px 14px;
       }
       h1 {
-        margin: 0 0 4px;
+        margin: 0 0 2px;
         text-align: center;
-        font-size: 17px;
+        font-size: 16px;
         line-height: 1.15;
+      }
+      .order-label {
+        margin-top: 4px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .order-code {
+        text-align: center;
+        font-size: 26px;
+        line-height: 1.1;
+        font-weight: 1000;
+        letter-spacing: 0;
       }
       .center { text-align: center; }
       .muted { color: #333333; }
@@ -272,7 +383,11 @@ function buildReceiptHtml(order = {}, options = {}) {
         gap: 8px;
         align-items: start;
       }
-      .item { padding: 5px 0; }
+      .item {
+        padding: 7px 0;
+        border-bottom: 1px dashed #111111;
+      }
+      .item:last-child { border-bottom: 0; }
       .sub {
         margin-top: 2px;
         color: #333333;
@@ -281,20 +396,32 @@ function buildReceiptHtml(order = {}, options = {}) {
       .total {
         margin-top: 5px;
         font-size: 15px;
-        font-weight: 800;
+        font-weight: 900;
       }
       .empty {
         padding: 8px 0;
         color: #333333;
+      }
+      .qr {
+        display: block;
+        width: 36mm;
+        height: 36mm;
+        margin: 8px auto 6px;
+      }
+      .thanks {
+        margin-top: 6px;
+        text-align: center;
+        font-weight: 800;
       }
     </style>
   </head>
   <body>
     <main class="receipt">
       <h1>${escapeHtml(config.storeName)}</h1>
-      ${receipt.branchName ? `<div class="center muted">${escapeHtml(receipt.branchName)}</div>` : ""}
+      <div class="order-label">MÃ ĐƠN</div>
+      <div class="order-code">${escapeHtml(receipt.orderCode || "CHƯA CÓ MÃ")}</div>
       <div class="line"></div>
-      <div><strong>Đơn:</strong> ${escapeHtml(receipt.orderCode || "Chưa có mã")}</div>
+      ${receipt.branchName ? `<div><strong>Chi nhánh:</strong> ${escapeHtml(receipt.branchName)}</div>` : ""}
       <div><strong>Nguồn:</strong> ${escapeHtml(receipt.platform)}</div>
       <div><strong>Giờ:</strong> ${escapeHtml(formatDateTime(receipt.createdAt))}</div>
       <div><strong>Khách:</strong> ${escapeHtml(receipt.customerName)}${receipt.customerPhone ? ` - ${escapeHtml(receipt.customerPhone)}` : ""}</div>
@@ -303,14 +430,27 @@ function buildReceiptHtml(order = {}, options = {}) {
       ${receipt.paymentMethod ? `<div><strong>Thanh toán:</strong> ${escapeHtml(receipt.paymentMethod)}</div>` : ""}
       <div class="line"></div>
       ${itemRows}
-      <div class="line"></div>
-      ${receipt.subtotal > 0 ? `<div class="row"><span>Tạm tính</span><strong>${toMoney(receipt.subtotal)}</strong></div>` : ""}
-      ${receipt.shippingFee > 0 ? `<div class="row"><span>Phí giao</span><strong>${toMoney(receipt.shippingFee)}</strong></div>` : ""}
-      ${receipt.discount > 0 ? `<div class="row"><span>Giảm giá</span><strong>-${toMoney(receipt.discount)}</strong></div>` : ""}
-      <div class="row total"><span>TỔNG</span><strong>${toMoney(total)}</strong></div>
+      ${showMoney ? `
+        <div class="line"></div>
+        ${receipt.subtotal > 0 ? `<div class="row"><span>Tạm tính</span><strong>${toMoney(receipt.subtotal)}</strong></div>` : ""}
+        ${receipt.promoCode ? `<div class="row"><span>Mã giảm giá</span><strong>${escapeHtml(receipt.promoCode)}</strong></div>` : ""}
+        ${receipt.discount > 0 ? `<div class="row"><span>Giảm giá</span><strong>-${toMoney(receipt.discount)}</strong></div>` : ""}
+        ${receipt.shippingFee > 0 ? `<div class="row"><span>Phí ship</span><strong>${toMoney(receipt.shippingFee)}</strong></div>` : ""}
+        <div class="row total"><span>TỔNG CẦN THU</span><strong>${toMoney(total)}</strong></div>
+      ` : ""}
       ${receipt.note ? `<div class="line"></div><div><strong>Ghi chú đơn:</strong> ${escapeHtml(receipt.note)}</div>` : ""}
+      ${(receipt.branchName || receipt.branchAddress || receipt.branchPhone) ? `
+        <div class="line"></div>
+        <div class="center"><strong>Thông tin chi nhánh</strong></div>
+        ${receipt.branchName ? `<div class="center">${escapeHtml(receipt.branchName)}</div>` : ""}
+        ${receipt.branchAddress ? `<div class="center">${escapeHtml(receipt.branchAddress)}</div>` : ""}
+        ${receipt.branchPhone ? `<div class="center">${escapeHtml(receipt.branchPhone)}</div>` : ""}
+      ` : ""}
       <div class="line"></div>
-      <div class="center">Cảm ơn quý khách!</div>
+      <div class="center"><strong>Quét QR để tích điểm</strong></div>
+      <img class="qr" src="${qrImageUrl(config.loyaltyUrl)}" alt="QR tích điểm" />
+      <div class="center"><strong>Hotline: ${SUPPORT_HOTLINE}</strong></div>
+      <div class="thanks">Cảm ơn quý khách!</div>
     </main>
     <script>
       window.addEventListener("load", () => {
@@ -360,6 +500,19 @@ function parseBridgeResult(value, fallbackMessage = "") {
   }
 }
 
+function buildPrintPayload(order = {}, options = {}) {
+  const config = getPrinterConfig(options);
+  return {
+    printerName: config.printerName,
+    receiptWidthMm: config.receiptWidthMm,
+    type: "customer_bill",
+    text: buildReceiptText(order, options),
+    html: buildReceiptHtml(order, options),
+    loyaltyUrl: config.loyaltyUrl,
+    order: normalizeReceiptOrder(order, options)
+  };
+}
+
 async function printViaAndroidBridge(order = {}, options = {}) {
   const bridge = getAndroidPrinterBridge();
   if (!bridge) {
@@ -370,15 +523,7 @@ async function printViaAndroidBridge(order = {}, options = {}) {
   }
 
   try {
-    const payload = JSON.stringify({
-      printerName: getPrinterConfig(options).printerName,
-      receiptWidthMm: getPrinterConfig(options).receiptWidthMm,
-      type: "customer_bill",
-      text: buildReceiptText(order, options),
-      html: buildReceiptHtml(order, options),
-      order: normalizeReceiptOrder(order, options)
-    });
-    return parseBridgeResult(bridge.printCustomerBill(payload), "Đã gửi bill tới máy in USB.");
+    return parseBridgeResult(bridge.printCustomerBill(JSON.stringify(buildPrintPayload(order, options))), "Đã gửi bill tới máy in USB.");
   } catch (error) {
     return {
       ok: false,
@@ -423,11 +568,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_BRIDGE_TI
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, {
+    return await fetch(url, {
       ...options,
       signal: controller.signal
     });
-    return response;
   } finally {
     window.clearTimeout(timeout);
   }
@@ -448,14 +592,7 @@ async function printViaBridge(order = {}, options = {}) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({
-          printerName: config.printerName,
-          receiptWidthMm: config.receiptWidthMm,
-          type: "customer_bill",
-          text: buildReceiptText(order, options),
-          html: buildReceiptHtml(order, options),
-          order: normalizeReceiptOrder(order, options)
-        })
+        body: JSON.stringify(buildPrintPayload(order, options))
       },
       config.timeoutMs
     );
@@ -562,6 +699,7 @@ export async function printXprinterTestBill(options = {}) {
   const testOrder = {
     orderCode: "TEST-XPRINTER",
     platform: "Bếp",
+    branchName: "Gánh Hàng Rong - Đường 30/4",
     customerName: "Khách thử máy",
     createdAt: new Date().toISOString(),
     items: [
@@ -578,4 +716,4 @@ export async function printXprinterTestBill(options = {}) {
   return printCustomerBill(testOrder, options);
 }
 
-export { PRINTER_MODE, buildReceiptHtml, buildReceiptText, getPrinterConfig };
+export { PRINTER_MODE, buildReceiptHtml, buildReceiptText, buildPrintPayload, getPrinterConfig };

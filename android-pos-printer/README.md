@@ -10,7 +10,8 @@ App Android native cho máy POS Android dùng máy in Xprinter 80mm. App này kh
 - Với `USB`: chỉ hiện nút chọn máy in USB và xin quyền USB.
 - Với `LAN/WiFi`: hiện ô nhập IP máy in và port, mặc định `9100`.
 - Bật/tắt trạm in.
-- Tự kiểm tra `print_jobs` khoảng 3 giây/lần khi trạm in đang bật.
+- Nhận lệnh in mới gần như ngay lập tức bằng Supabase Realtime.
+- Tự kiểm tra `print_jobs` dự phòng khoảng 30 giây/lần nếu realtime/mạng bị rớt.
 - Claim job `pending` thành `printing` trước khi in để tránh nhiều máy in trùng bill.
 - In xong cập nhật job thành `printed`; in lỗi cập nhật thành `failed`.
 - In test trực tiếp từ APK.
@@ -25,7 +26,7 @@ Bấm In bill trong đơn
 ↓
 Web Kitchen tạo print_jobs trên Supabase
 ↓
-POS Android Print Station kiểm tra print_jobs theo branch_uuid
+POS Android Print Station nhận realtime theo branch_uuid
 ↓
 POS claim job pending thành printing
 ↓
@@ -60,6 +61,22 @@ role = admin hoặc staff hoặc kitchen
 metadata.branch_uuid = uuid chi nhánh
 metadata.branch_name = tên chi nhánh, không bắt buộc nhưng nên có
 ```
+
+Nếu profile chưa có `metadata.branch_uuid`, APK sẽ thử dò thêm các trường sau:
+
+```txt
+profiles.branch_uuid
+profiles.branch_id
+profiles.branch_code
+profiles.branch_slug
+profiles.branch_name
+auth.user_metadata.branch_uuid
+auth.user_metadata.branch_id
+auth.user_metadata.branch_code
+auth.user_metadata.branch_name
+```
+
+Khi chỉ có `branch_id`, `branch_code`, `branch_slug` hoặc `branch_name`, APK sẽ đọc bảng `branches` để lấy lại `branches.branch_uuid`.
 
 ## Build APK
 

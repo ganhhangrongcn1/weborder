@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GHR Bill Preview</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #e5e7eb;
+      color: #111;
+      font-family: system-ui, Arial, sans-serif;
+      padding: 24px;
+    }
+
+    .wrap {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      align-items: start;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .panel {
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+    }
+
+    .panel h2 {
+      margin: 0;
+      color: #0f172a;
+      font-size: 18px;
+    }
+
+    .receipt {
+      width: 302px;
+      min-height: 720px;
+      background: #fff;
+      padding: 12px 10px 18px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .brand {
+      margin: 0 0 2px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .order-label {
+      margin-top: 4px;
+      text-align: center;
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    .order-code {
+      text-align: center;
+      font-weight: 1000;
+      font-size: 30px;
+      line-height: 1.1;
+    }
+
+    .line {
+      border-top: 1px dashed #111;
+      margin: 8px 0;
+    }
+
+    .row,
+    .item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+    }
+
+    .item {
+      padding: 7px 0;
+      border-bottom: 1px dashed #111;
+    }
+
+    .item:last-child {
+      border-bottom: 0;
+    }
+
+    .sub {
+      margin-top: 2px;
+      color: #333;
+      font-size: 11px;
+    }
+
+    .total {
+      margin-top: 5px;
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .center {
+      text-align: center;
+    }
+
+    .qr {
+      display: block;
+      width: 138px;
+      height: 138px;
+      margin: 8px auto 6px;
+      image-rendering: pixelated;
+    }
+
+    .thanks {
+      margin-top: 6px;
+      text-align: center;
+      font-weight: 900;
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="panel">
+      <h2>Website / QR / Tự lấy</h2>
+      <article class="receipt">
+        <h1 class="brand">Gánh Hàng Rong</h1>
+        <div class="order-label">MÃ ĐƠN</div>
+        <div class="order-code">SF-5205</div>
+        <div class="line"></div>
+        <div><strong>Chi nhánh:</strong> Gánh Hàng Rong - Đường 30/4</div>
+        <div><strong>Nguồn:</strong> QR tại quầy</div>
+        <div><strong>Giờ:</strong> 24/05/2026 17:40</div>
+        <div><strong>Khách:</strong> Anh Minh - 0933 000 000</div>
+        <div><strong>Hình thức:</strong> Tự lấy</div>
+        <div><strong>Thanh toán:</strong> Thu tại quầy</div>
+        <div class="line"></div>
+        <div class="item">
+          <div>
+            <strong>1 x Trà Tắc Thái Đỏ - Size L</strong>
+            <div class="sub">+ Chờ lâu nhất: 3 phút</div>
+          </div>
+          <strong>35,000</strong>
+        </div>
+        <div class="item">
+          <div>
+            <strong>2 x Bánh mì que</strong>
+            <div class="sub">Ghi chú: ít cay</div>
+          </div>
+          <strong>40,000</strong>
+        </div>
+        <div class="line"></div>
+        <div class="row"><span>Tạm tính</span><strong>75,000</strong></div>
+        <div class="row"><span>Mã giảm giá</span><strong>GHR10</strong></div>
+        <div class="row"><span>Giảm giá</span><strong>-10,000</strong></div>
+        <div class="row"><span>Phí ship</span><strong>0</strong></div>
+        <div class="row total"><span>TỔNG CẦN THU</span><strong>65,000</strong></div>
+        <div class="line"></div>
+        <div class="center"><strong>Thông tin chi nhánh</strong></div>
+        <div class="center">Gánh Hàng Rong - Đường 30/4</div>
+        <div class="line"></div>
+        <div class="center"><strong>Quét QR để tích điểm</strong></div>
+        <img class="qr" alt="QR tích điểm" src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&margin=8&data=https%3A%2F%2Fganhhangrong.vn%2Floyalty%3Fsource%3Dreceipt" />
+        <div class="center"><strong>Hotline: 0933 799 061</strong></div>
+        <div class="thanks">Cảm ơn quý khách!</div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>App / Nexpos</h2>
+      <article class="receipt">
+        <h1 class="brand">Gánh Hàng Rong</h1>
+        <div class="order-label">MÃ ĐƠN</div>
+        <div class="order-code">GF-1842</div>
+        <div class="line"></div>
+        <div><strong>Chi nhánh:</strong> Gánh Hàng Rong - 277 Thích Quảng Đức</div>
+        <div><strong>Nguồn:</strong> GrabFood</div>
+        <div><strong>Giờ:</strong> 24/05/2026 17:42</div>
+        <div><strong>Khách:</strong> Khách app</div>
+        <div class="line"></div>
+        <div class="item">
+          <div>
+            <strong>1 x Bún thịt nướng</strong>
+            <div class="sub">+ Không hành</div>
+          </div>
+        </div>
+        <div class="item">
+          <div>
+            <strong>1 x Trà tắc</strong>
+            <div class="sub">Ghi chú: ít đá</div>
+          </div>
+        </div>
+        <div class="line"></div>
+        <div class="center"><strong>Thông tin chi nhánh</strong></div>
+        <div class="center">Gánh Hàng Rong - 277 Thích Quảng Đức</div>
+        <div class="line"></div>
+        <div class="center"><strong>Quét QR để tích điểm</strong></div>
+        <img class="qr" alt="QR tích điểm" src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&margin=8&data=https%3A%2F%2Fganhhangrong.vn%2Floyalty%3Fsource%3Dreceipt" />
+        <div class="center"><strong>Hotline: 0933 799 061</strong></div>
+        <div class="thanks">Cảm ơn quý khách!</div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
