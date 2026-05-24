@@ -105,6 +105,7 @@ public class MainActivity extends Activity {
     private static final int REALTIME_HEARTBEAT_MS = 25000;
     private static final int REALTIME_RECONNECT_MS = 8000;
     private static final int REALTIME_LOG_THROTTLE_MS = 120000;
+    private static final int PRINT_POLL_INTERVAL_MS = 30000;
     private static final int MAX_JOBS_PER_POLL = 3;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -158,6 +159,15 @@ public class MainActivity extends Activity {
         @Override
         public void run() {
             if (stationRunning && realtimeSocket == null) startRealtime();
+        }
+    };
+
+    private final Runnable printPollingRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!stationRunning) return;
+            pollOnceAsync();
+            handler.postDelayed(this, PRINT_POLL_INTERVAL_MS);
         }
     };
 
@@ -219,6 +229,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         stationRunning = false;
+        handler.removeCallbacks(printPollingRunnable);
         handler.removeCallbacks(realtimeReconnectRunnable);
         closeRealtime();
         unregisterReceiver(usbReceiver);
@@ -709,12 +720,15 @@ public class MainActivity extends Activity {
         prefs.edit().putBoolean(KEY_STATION_ENABLED, true).apply();
         startKeepAliveService();
         updateStationUi();
+        pollOnceAsync();
+        schedulePrintPolling();
         log("Đã bật trạm in cho chi nhánh " + getBranchLabel() + ".");
     }
 
     private void stopStation() {
         stationRunning = false;
         prefs.edit().putBoolean(KEY_STATION_ENABLED, false).apply();
+        handler.removeCallbacks(printPollingRunnable);
         handler.removeCallbacks(realtimeReconnectRunnable);
         closeRealtime();
         stopKeepAliveService();
@@ -780,6 +794,13 @@ public class MainActivity extends Activity {
                 polling = false;
             }
         }).start();
+    }
+
+    private void schedulePrintPolling() {
+        handler.removeCallbacks(printPollingRunnable);
+        if (stationRunning) {
+            handler.postDelayed(printPollingRunnable, PRINT_POLL_INTERVAL_MS);
+        }
     }
 
     private void processPendingJobs() throws Exception {
