@@ -97,6 +97,12 @@ public class MainActivity extends Activity {
     private static final String SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
     private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
     private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
+    private static final String DEFAULT_RECEIPT_FOOTER_TEXT =
+            "------------------------------------------\n" +
+            "@@CENTER:QuÃ©t QR Ä‘á»ƒ tÃ­ch Ä‘iá»ƒm\n" +
+            "@@QR\n" +
+            "@@CENTER:Hotline: 0933 799 061\n" +
+            "@@CENTER:Cáº£m Æ¡n quÃ½ khÃ¡ch!";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posprinter.USB_PERMISSION";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
     private static final int BIG_TEXT_SIZE = 84;
@@ -1327,10 +1333,9 @@ public class MainActivity extends Activity {
         output.write(0x40);
 
         writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
-        if (!parts.footerText.trim().isEmpty()) {
-            byte[] footerBytes = getFixedFooterRasterBytes(parts.footerText, qrUrl);
-            output.write(footerBytes, 0, footerBytes.length);
-        }
+        String footerText = parts.footerText.trim().isEmpty() ? DEFAULT_RECEIPT_FOOTER_TEXT : parts.footerText;
+        byte[] footerBytes = getFixedFooterRasterBytes(footerText);
+        output.write(footerBytes, 0, footerBytes.length);
 
         output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
         output.write(0x1D);
@@ -1373,10 +1378,10 @@ public class MainActivity extends Activity {
         }
     }
 
-    private synchronized byte[] getFixedFooterRasterBytes(String footerText, String qrUrl) {
+    private synchronized byte[] getFixedFooterRasterBytes(String footerText) {
         if (fixedFooterRasterBytes == null) {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
-            writeRasterBitmap(output, renderTextBitmap(footerText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
+            writeRasterBitmap(output, renderTextBitmap(footerText, RECEIPT_WIDTH_DOTS_80MM, LOYALTY_QR_URL));
             fixedFooterRasterBytes = output.toByteArray();
         }
         return fixedFooterRasterBytes;

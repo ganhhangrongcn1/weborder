@@ -263,6 +263,7 @@ function buildReceiptText(order = {}, options = {}) {
   const receipt = normalizeReceiptOrder(order, options);
   const width = config.receiptWidthMm === 58 ? 32 : 42;
   const showMoney = !isPartnerAppReceipt(receipt);
+  const includeLoyaltyFooter = options.includeLoyaltyFooter !== false;
   const lines = [
     "@@CENTER:GÁNH HÀNG RONG",
     "@@CENTER:MÃ ĐƠN",
@@ -289,7 +290,7 @@ function buildReceiptText(order = {}, options = {}) {
   }
 
   pushBranchFooter(lines, receipt, width);
-  pushLoyaltyFooter(lines, width);
+  if (includeLoyaltyFooter) pushLoyaltyFooter(lines, width);
 
   return lines.join("\n");
 }
@@ -520,8 +521,10 @@ function buildPrintJobPayload(order = {}, options = {}) {
     printerName: config.printerName,
     receiptWidthMm: config.receiptWidthMm,
     type: "customer_bill",
-    text: buildReceiptText(order, options),
-    loyaltyUrl: config.loyaltyUrl,
+    text: buildReceiptText(order, {
+      ...options,
+      includeLoyaltyFooter: false
+    }),
     order: normalizeReceiptOrder(order, options)
   };
 }
