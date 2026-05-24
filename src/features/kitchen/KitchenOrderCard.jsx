@@ -520,14 +520,38 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
   if (!gift?.eligible) return null;
 
   const claimed = Boolean(gift.claimed);
-  const claimedTime = formatClaimedGiftTime(gift.claimedAt);
+
+  if (claimed) {
+    return (
+      <span
+        style={{
+          border: "1px solid #86efac",
+          background: "#f0fdf4",
+          color: "#166534",
+          borderRadius: 999,
+          padding: "5px 9px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifySelf: "end",
+          width: "fit-content",
+          maxWidth: "100%",
+          fontSize: 11,
+          fontWeight: 900,
+          lineHeight: 1.1,
+          whiteSpace: "nowrap"
+        }}
+      >
+        Đã nhận quà
+      </span>
+    );
+  }
 
   return (
     <div
       style={{
-        border: claimed ? "1px solid #86efac" : "1px solid #fbbf24",
-        background: claimed ? "#f0fdf4" : "#fffbeb",
-        color: claimed ? "#166534" : "#92400e",
+        border: "1px solid #fbbf24",
+        background: "#fffbeb",
+        color: "#92400e",
         borderRadius: 10,
         padding: "6px 10px",
         display: "inline-grid",
@@ -541,39 +565,35 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
     >
       <div style={{ minWidth: 0, display: "grid", gap: 1 }}>
         <strong style={{ fontSize: 12, fontWeight: 900, lineHeight: 1.2 }}>
-          {claimed ? "Đã tặng quà tháng này" : "Đủ điều kiện tặng quà"}
+          Đủ điều kiện tặng quà
         </strong>
-        <span style={{ fontSize: 11, fontWeight: 800, color: claimed ? "#15803d" : "#a16207", lineHeight: 1.2 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: "#a16207", lineHeight: 1.2 }}>
           Tháng này: {gift.monthlyOrderCount || 0} đơn
-          {claimed && gift.claimedOrderCode ? ` · Đơn xác nhận ${gift.claimedOrderCode}` : ""}
-          {claimedTime ? ` · ${claimedTime}` : ""}
         </span>
       </div>
 
-      {!claimed ? (
-        <button
-          type="button"
-          disabled={claiming}
-          onClick={(event) => {
-            event.stopPropagation();
-            onClaim?.();
-          }}
-          style={{
-            border: "1px solid #f59e0b",
-            background: "#f59e0b",
-            color: "#ffffff",
-            borderRadius: 8,
-            padding: "6px 9px",
-            fontSize: 11,
-            fontWeight: 900,
-            cursor: claiming ? "not-allowed" : "pointer",
-            opacity: claiming ? 0.72 : 1,
-            whiteSpace: "nowrap"
-          }}
-        >
-          {claiming ? "Đang lưu..." : "Đã tặng quà"}
-        </button>
-      ) : null}
+      <button
+        type="button"
+        disabled={claiming}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClaim?.();
+        }}
+        style={{
+          border: "1px solid #f59e0b",
+          background: "#f59e0b",
+          color: "#ffffff",
+          borderRadius: 8,
+          padding: "6px 9px",
+          fontSize: 11,
+          fontWeight: 900,
+          cursor: claiming ? "not-allowed" : "pointer",
+          opacity: claiming ? 0.72 : 1,
+          whiteSpace: "nowrap"
+        }}
+      >
+        {claiming ? "Đang lưu..." : "Đã tặng quà"}
+      </button>
     </div>
   );
 }
