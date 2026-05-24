@@ -1,4 +1,4 @@
-import { buildPrintPayload } from "./printerService.js";
+import { buildPrintJobPayload } from "./printerService.js";
 import {
   getSupabaseKitchenAuthClient,
   getSupabaseRuntimeClient,
@@ -87,9 +87,7 @@ export function getPrintDeviceId() {
 }
 
 export function buildCustomerBillPrintPayload(order = {}, printerOptions = {}) {
-  const payload = buildPrintPayload(order, printerOptions);
-  const { html, ...printJobPayload } = payload;
-  return printJobPayload;
+  return buildPrintJobPayload(order, printerOptions);
 }
 
 export async function createCustomerBillPrintJob(order = {}, options = {}) {

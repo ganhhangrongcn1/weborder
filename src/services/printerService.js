@@ -514,6 +514,18 @@ function buildPrintPayload(order = {}, options = {}) {
   };
 }
 
+function buildPrintJobPayload(order = {}, options = {}) {
+  const config = getPrinterConfig(options);
+  return {
+    printerName: config.printerName,
+    receiptWidthMm: config.receiptWidthMm,
+    type: "customer_bill",
+    text: buildReceiptText(order, options),
+    loyaltyUrl: config.loyaltyUrl,
+    order: normalizeReceiptOrder(order, options)
+  };
+}
+
 async function printViaAndroidBridge(order = {}, options = {}) {
   const bridge = getAndroidPrinterBridge();
   if (!bridge) {
@@ -717,4 +729,4 @@ export async function printXprinterTestBill(options = {}) {
   return printCustomerBill(testOrder, options);
 }
 
-export { PRINTER_MODE, buildReceiptHtml, buildReceiptText, buildPrintPayload, getPrinterConfig };
+export { PRINTER_MODE, buildReceiptHtml, buildReceiptText, buildPrintJobPayload, buildPrintPayload, getPrinterConfig };
