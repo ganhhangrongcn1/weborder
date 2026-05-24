@@ -170,6 +170,74 @@ function getActionButtonTone(actionType = "", fallbackColor = "#111827") {
   };
 }
 
+function getPrintButtonConfig(printBillState = {}, printingBill = false) {
+  const status = String(printBillState?.status || "").toLowerCase();
+
+  if (printingBill || status === "submitting") {
+    return {
+      label: "Đang gửi...",
+      disabled: true,
+      background: "#99f6e4",
+      border: "#0f766e",
+      color: "#0f766e",
+      opacity: 0.78
+    };
+  }
+
+  if (status === "pending") {
+    return {
+      label: "Đã gửi lệnh",
+      disabled: true,
+      background: "#e0f2fe",
+      border: "#0284c7",
+      color: "#075985",
+      opacity: 0.92
+    };
+  }
+
+  if (status === "printing") {
+    return {
+      label: "Đang in...",
+      disabled: true,
+      background: "#ccfbf1",
+      border: "#0f766e",
+      color: "#0f766e",
+      opacity: 0.9
+    };
+  }
+
+  if (status === "printed") {
+    return {
+      label: "In lại",
+      disabled: false,
+      background: "#dcfce7",
+      border: "#16a34a",
+      color: "#166534",
+      opacity: 1
+    };
+  }
+
+  if (status === "failed") {
+    return {
+      label: "In lỗi - In lại",
+      disabled: false,
+      background: "#fff7ed",
+      border: "#f97316",
+      color: "#c2410c",
+      opacity: 1
+    };
+  }
+
+  return {
+    label: "In bill",
+    disabled: false,
+    background: "#14b8a6",
+    border: "#0f766e",
+    color: "#ffffff",
+    opacity: 1
+  };
+}
+
 function getMemberTierTone(memberTier = "") {
   const value = String(memberTier || "").toLowerCase();
 
@@ -527,6 +595,7 @@ export default function KitchenOrderCard({
   claimingGift = false,
   updating = false,
   printingBill = false,
+  printBillState = {},
   updatingItemKey = ""
 }) {
   const items = Array.isArray(order.items) ? order.items : [];
@@ -572,6 +641,7 @@ export default function KitchenOrderCard({
   const orderReadyToConfirm = allItemsChecked && allToppingsChecked;
   const actionButtonTone = getActionButtonTone(nextOrderAction?.type, theme.button);
   const isActionButtonEnabled = canMarkDone && (!nextOrderAction?.requiresReady || orderReadyToConfirm);
+  const printButtonConfig = getPrintButtonConfig(printBillState, printingBill);
   const monthlyGift = order.monthlyGift || null;
   const monthlyOrderCount = Number(monthlyGift?.monthlyOrderCount || 0);
   const totalOrderCount = Number(monthlyGift?.totalOrderCount || monthlyOrderCount || 0);
@@ -1038,24 +1108,24 @@ export default function KitchenOrderCard({
         </button>
         <button
           type="button"
-          disabled={printingBill}
+          disabled={printButtonConfig.disabled}
           onClick={(event) => {
             event.stopPropagation();
             onPrintBill?.(order);
           }}
           style={{
-            border: "1px solid #0f766e",
-            background: printingBill ? "#99f6e4" : "#14b8a6",
-            color: "#ffffff",
+            border: `1px solid ${printButtonConfig.border}`,
+            background: printButtonConfig.background,
+            color: printButtonConfig.color,
             borderRadius: 10,
             padding: "12px 14px",
             fontSize: 13,
             fontWeight: 900,
-            cursor: printingBill ? "not-allowed" : "pointer",
-            opacity: printingBill ? 0.76 : 1
+            cursor: printButtonConfig.disabled ? "not-allowed" : "pointer",
+            opacity: printButtonConfig.opacity
           }}
         >
-          {printingBill ? "Đang in..." : "In bill"}
+          {printButtonConfig.label}
         </button>
         <button
           type="button"

@@ -18,6 +18,8 @@ import {
   markPrintJobFailed,
   markPrintJobPrinted,
   readPendingPrintJobs,
+  readRecentPrintJobs,
+  subscribePrintJobChanges,
   subscribePrintJobs
 } from "../../services/printJobService.js";
 import {
@@ -166,6 +168,66 @@ function readPrinterSettings() {
       storeName: defaults.storeName || "Gánh Hàng Rong"
     };
   }
+}
+
+function toText(value = "") {
+  return String(value || "").trim();
+}
+
+function getPrintJobTimeValue(job = {}) {
+  const value = job.printed_at || job.failed_at || job.updated_at || job.claimed_at || job.requested_at || job.created_at;
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
+}
+
+function getPrintJobOrderKeys(job = {}) {
+  return [
+    job.order_id,
+    job.order_code
+  ].map(toText).filter(Boolean);
+}
+
+function getOrderPrintKeys(order = {}) {
+  return [
+    order.id,
+    order.orderCode,
+    order.order_code,
+    order.displayOrderCode,
+    order.display_order_code
+  ].map(toText).filter(Boolean);
+}
+
+function getOrderPrintState(order = {}, jobsByOrderKey = {}, printingOrderKey = "") {
+  const orderKeys = getOrderPrintKeys(order);
+  const orderKey = getKitchenOrderKey(order);
+  const jobs = orderKeys.map((key) => jobsByOrderKey[key]).filter(Boolean);
+  const latestJob = jobs.sort((first, second) => getPrintJobTimeValue(second) - getPrintJobTimeValue(first))[0] || null;
+
+  if (printingOrderKey && printingOrderKey === orderKey) {
+    return {
+      status: "submitting",
+      job: latestJob
+    };
+  }
+
+  return {
+    status: toText(latestJob?.status),
+    job: latestJob
+  };
+}
+
+function upsertPrintJobIntoMap(currentMap = {}, job = {}) {
+  const keys = getPrintJobOrderKeys(job);
+  if (!keys.length) return currentMap;
+
+  const nextMap = { ...currentMap };
+  keys.forEach((key) => {
+    const currentJob = nextMap[key];
+    if (!currentJob || getPrintJobTimeValue(job) >= getPrintJobTimeValue(currentJob)) {
+      nextMap[key] = job;
+    }
+  });
+  return nextMap;
 }
 
 function KitchenRequestAuditBadge({ audit, onReset }) {
@@ -386,6 +448,7 @@ export default function KitchenPage() {
   const [printerSettings] = useState(() => readPrinterSettings());
   const [printerNotice, setPrinterNotice] = useState("");
   const [printingOrderKey, setPrintingOrderKey] = useState("");
+  const [printJobsByOrderKey, setPrintJobsByOrderKey] = useState({});
   const processingPrintJobsRef = useRef(new Set());
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 1280 : window.innerWidth,
@@ -440,6 +503,46 @@ export default function KitchenPage() {
     soundEnabled,
     toggleSound
   } = useKitchenNewOrderAlert(orders, Boolean(session && profile));
+
+  useEffect(() => {
+    if (!session || !profile) return undefined;
+
+    let stopped = false;
+    let unsubscribe = () => {};
+    const branchUuid = profile?.branchUuid || "";
+    const printerKey = DEFAULT_PRINTER_KEY;
+    const deviceId = getPrintDeviceId();
+
+    async function startPrintJobStatusSync() {
+      const recentJobs = await readRecentPrintJobs({
+        branchUuid,
+        printerKey,
+        limit: 120
+      });
+
+      if (!stopped && recentJobs.length) {
+        setPrintJobsByOrderKey((currentMap) => (
+          recentJobs.reduce((nextMap, job) => upsertPrintJobIntoMap(nextMap, job), currentMap)
+        ));
+      }
+
+      unsubscribe = await subscribePrintJobChanges({
+        branchUuid,
+        printerKey,
+        deviceId,
+        onJobChange: (job) => {
+          setPrintJobsByOrderKey((currentMap) => upsertPrintJobIntoMap(currentMap, job));
+        }
+      });
+    }
+
+    startPrintJobStatusSync();
+
+    return () => {
+      stopped = true;
+      unsubscribe();
+    };
+  }, [profile, session]);
 
   useEffect(() => {
     if (!session || !profile || !hasAndroidPrinterBridge()) return undefined;
@@ -626,14 +729,34 @@ export default function KitchenPage() {
   async function handlePrintBill(order) {
     const orderKey = getKitchenOrderKey(order);
     setPrintingOrderKey(orderKey);
-    const result = await createCustomerBillPrintJob(order, {
-      branchUuid: profile?.branchUuid || "",
-      printerKey: DEFAULT_PRINTER_KEY,
-      requestedBy: profile?.email || profile?.name || "",
-      printerOptions: getPrinterRuntimeOptions()
-    });
-    setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in bill tới máy POS." : "Gửi lệnh in thất bại."));
-    setPrintingOrderKey("");
+    try {
+      const result = await createCustomerBillPrintJob(order, {
+        branchUuid: profile?.branchUuid || "",
+        printerKey: DEFAULT_PRINTER_KEY,
+        requestedBy: profile?.email || profile?.name || "",
+        printerOptions: getPrinterRuntimeOptions()
+      });
+
+      if (result.ok) {
+        const now = new Date().toISOString();
+        const job = result.job || {
+          id: `local-${orderKey}-${Date.now()}`,
+          order_id: toText(order.id),
+          order_code: toText(order.displayOrderCode || order.orderCode || order.id),
+          status: "pending",
+          requested_at: now,
+          created_at: now,
+          updated_at: now
+        };
+        setPrintJobsByOrderKey((currentMap) => upsertPrintJobIntoMap(currentMap, job));
+      }
+
+      setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in bill tới máy POS." : "Gửi lệnh in thất bại."));
+    } catch (error) {
+      setPrinterNotice(error?.message || "Gửi lệnh in thất bại.");
+    } finally {
+      setPrintingOrderKey("");
+    }
   }
 
   const isMobile = viewport.width <= 900;
@@ -1040,6 +1163,7 @@ export default function KitchenPage() {
             {filteredOrders.map((order) => {
               const orderKey = getKitchenOrderKey(order);
               const highlightedByDish = orderContainsKitchenItemGroup(order, activeDishKey);
+              const printBillState = getOrderPrintState(order, printJobsByOrderKey, printingOrderKey);
 
               return (
                 <div
@@ -1062,6 +1186,7 @@ export default function KitchenPage() {
                   updating={String(updatingOrderId) === String(order.id)}
                   updatingItemKey={updatingItemKey}
                   printingBill={printingOrderKey === orderKey}
+                  printBillState={printBillState}
                   claimingGift={String(claimingGiftOrderId) === String(order.id)}
                   onMarkDone={handleMarkOrderDone}
                   onPrintBill={handlePrintBill}

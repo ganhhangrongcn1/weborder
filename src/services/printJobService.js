@@ -112,7 +112,11 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
     updated_at: now
   };
 
-  const { error } = await client.from("print_jobs").insert(row);
+  const { data, error } = await client
+    .from("print_jobs")
+    .insert(row)
+    .select(PRINT_JOB_COLUMNS)
+    .maybeSingle();
   if (error) {
     return {
       ok: false,
@@ -122,8 +126,33 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
 
   return {
     ok: true,
+    job: data || null,
     message: "Đã gửi lệnh in bill tới máy POS."
   };
+}
+
+export async function readRecentPrintJobs(options = {}) {
+  const client = await getClient();
+  if (!client) return [];
+
+  let query = client
+    .from("print_jobs")
+    .select(PRINT_JOB_COLUMNS)
+    .eq("job_type", "customer_bill")
+    .eq("printer_key", toText(options.printerKey || DEFAULT_PRINTER_KEY))
+    .order("created_at", { ascending: false })
+    .limit(Math.max(1, Math.min(Number(options.limit || 80), 200)));
+
+  const branchUuid = toText(options.branchUuid);
+  if (branchUuid) query = query.eq("branch_uuid", branchUuid);
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn("[printJobService] read recent print jobs failed", error);
+    return [];
+  }
+
+  return Array.isArray(data) ? data : [];
 }
 
 export async function readPendingPrintJobs(options = {}) {
@@ -234,6 +263,32 @@ export async function subscribePrintJobs(options = {}) {
         if (printerKey && toText(job.printer_key || DEFAULT_PRINTER_KEY) !== printerKey) return;
         if (branchUuid && toText(job.branch_uuid) !== branchUuid) return;
         options.onPendingJob(job);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    client.removeChannel(channel);
+  };
+}
+
+export async function subscribePrintJobChanges(options = {}) {
+  const client = await getClient();
+  if (!client || typeof options.onJobChange !== "function") return () => {};
+
+  const channel = client
+    .channel(`print-job-status-${toText(options.deviceId || getPrintDeviceId())}-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "print_jobs" },
+      (payload) => {
+        const job = payload?.new || {};
+        const branchUuid = toText(options.branchUuid);
+        const printerKey = toText(options.printerKey || DEFAULT_PRINTER_KEY);
+        if (toText(job.job_type || "customer_bill") !== "customer_bill") return;
+        if (printerKey && toText(job.printer_key || DEFAULT_PRINTER_KEY) !== printerKey) return;
+        if (branchUuid && toText(job.branch_uuid) !== branchUuid) return;
+        options.onJobChange(job, payload);
       }
     )
     .subscribe();
