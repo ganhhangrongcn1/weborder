@@ -8,9 +8,7 @@ import KitchenOrderStrip from "./KitchenOrderStrip.jsx";
 import {
   getPrinterConfig,
   hasAndroidPrinterBridge,
-  printCustomerBill,
-  printXprinterTestBill,
-  testPrinterConnection
+  printCustomerBill
 } from "../../services/printerService.js";
 import {
   DEFAULT_PRINTER_KEY,
@@ -167,14 +165,6 @@ function readPrinterSettings() {
       receiptWidthMm: String(defaults.receiptWidthMm || 80),
       storeName: defaults.storeName || "Gánh Hàng Rong"
     };
-  }
-}
-
-function savePrinterSettings(settings = {}) {
-  try {
-    window.localStorage.setItem(PRINTER_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Bỏ qua nếu trình duyệt chặn localStorage.
   }
 }
 
@@ -393,10 +383,8 @@ function KitchenLoginScreen({ error, loading, onLogin, submitting }) {
 export default function KitchenPage() {
   const [activeDishKey, setActiveDishKey] = useState("");
   const [activeOrderKey, setActiveOrderKey] = useState("");
-  const [isPrinterModalOpen, setIsPrinterModalOpen] = useState(false);
-  const [printerSettings, setPrinterSettings] = useState(() => readPrinterSettings());
+  const [printerSettings] = useState(() => readPrinterSettings());
   const [printerNotice, setPrinterNotice] = useState("");
-  const [printerLoading, setPrinterLoading] = useState(false);
   const [printingOrderKey, setPrintingOrderKey] = useState("");
   const processingPrintJobsRef = useRef(new Set());
   const [viewport, setViewport] = useState(() => ({
@@ -607,6 +595,12 @@ export default function KitchenPage() {
     setStatusFilter(value);
   }
 
+  function handleReload() {
+    clearActiveSelection();
+    setStatusFilter("active");
+    reload();
+  }
+
   function handleSelectDish(dishKey = "") {
     setActiveDishKey((currentKey) => {
       const nextKey = currentKey === dishKey ? "" : dishKey;
@@ -629,29 +623,6 @@ export default function KitchenPage() {
     };
   }
 
-  function handlePrinterSettingChange(field, value) {
-    setPrinterSettings((current) => ({ ...current, [field]: value }));
-  }
-
-  function handleSavePrinterSettings() {
-    savePrinterSettings(printerSettings);
-    setPrinterNotice("Đã lưu cài đặt máy in trên thiết bị này.");
-  }
-
-  async function handleTestPrinterConnection() {
-    setPrinterLoading(true);
-    const result = await testPrinterConnection(getPrinterRuntimeOptions());
-    setPrinterNotice(result.message || (result.ok ? "Kết nối máy in thành công." : "Kết nối máy in thất bại."));
-    setPrinterLoading(false);
-  }
-
-  async function handlePrintTestBill() {
-    setPrinterLoading(true);
-    const result = await printXprinterTestBill(getPrinterRuntimeOptions());
-    setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in test." : "In test thất bại."));
-    setPrinterLoading(false);
-  }
-
   async function handlePrintBill(order) {
     const orderKey = getKitchenOrderKey(order);
     setPrintingOrderKey(orderKey);
@@ -666,15 +637,18 @@ export default function KitchenPage() {
   }
 
   const isMobile = viewport.width <= 900;
-  const isLandscapeMobile = isMobile && viewport.width > viewport.height;
+  const isTabletBoard = viewport.width > 900 && viewport.width < 1100;
   const boardColumns = isMobile
-    ? (isLandscapeMobile ? "minmax(0, 1fr) minmax(300px, 0.72fr)" : "1fr")
-    : "minmax(0, 1fr) minmax(430px, 0.62fr)";
+    ? "1fr"
+    : isTabletBoard
+      ? "minmax(0, 1fr) minmax(360px, 0.55fr)"
+      : "minmax(0, 1fr) minmax(390px, 0.58fr)";
 
   return (
     <main
       style={{
         minHeight: "100dvh",
+        height: isMobile ? "auto" : "100dvh",
         background: "#f8fafc",
         color: "#1f2933",
         fontFamily: "Inter, system-ui, Arial, sans-serif",
@@ -687,6 +661,7 @@ export default function KitchenPage() {
         style={{
           maxWidth: "100%",
           minHeight: isMobile ? "auto" : "100%",
+          height: isMobile ? "auto" : "100%",
           margin: "0 auto",
           display: "grid",
           gridTemplateRows: "auto minmax(0, 1fr)",
@@ -799,7 +774,7 @@ export default function KitchenPage() {
             </FilterButton>
             <button
               type="button"
-              onClick={reload}
+              onClick={handleReload}
               disabled={refreshing}
               style={{
                 border: "1px solid #16a34a",
@@ -817,25 +792,6 @@ export default function KitchenPage() {
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <ToolbarIcon name="refresh" />
                 Tải lại
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsPrinterModalOpen(true)}
-              style={{
-                border: "1px solid #0f766e",
-                background: "#ccfbf1",
-                color: "#115e59",
-                borderRadius: 8,
-                padding: "10px 13px",
-                fontSize: 13,
-                fontWeight: 900,
-                cursor: "pointer"
-              }}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <ToolbarIcon name="printer" />
-                Máy in
               </span>
             </button>
             <button
@@ -1014,12 +970,6 @@ export default function KitchenPage() {
             flexWrap: "wrap"
           }}
         >
-          <FilterButton active={!isPrinterModalOpen} onClick={() => setIsPrinterModalOpen(false)}>
-            Đơn bếp
-          </FilterButton>
-          <FilterButton active={isPrinterModalOpen} onClick={() => setIsPrinterModalOpen(true)}>
-            Máy in
-          </FilterButton>
           {printerNotice ? (
             <span style={{ marginLeft: "auto", color: "#334155", fontSize: 13, fontWeight: 700 }}>
               {printerNotice}
@@ -1034,7 +984,8 @@ export default function KitchenPage() {
             gap: isMobile ? 8 : 10,
             alignItems: "stretch",
             minHeight: 0,
-            height: isMobile ? "auto" : "100%"
+            height: isMobile ? "auto" : "100%",
+            overflow: isMobile ? "visible" : "hidden"
           }}
         >
           <div
@@ -1100,6 +1051,7 @@ export default function KitchenPage() {
                 >
                 <KitchenOrderCard
                   compact={isMobile}
+                  tabletCompact={isTabletBoard}
                   active={activeOrderKey === orderKey}
                   dimmed={Boolean(activeOrderKey && activeOrderKey !== orderKey)}
                   highlightedDishKey={highlightedByDish ? activeDishKey : ""}
@@ -1155,197 +1107,6 @@ export default function KitchenPage() {
             onSelectDish={handleSelectDish}
           />
         </section>
-        {isPrinterModalOpen ? (
-          <div
-            role="presentation"
-            onClick={() => setIsPrinterModalOpen(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 50,
-              background: "rgba(15, 23, 42, 0.45)",
-              display: "grid",
-              placeItems: "center",
-              padding: 16
-            }}
-          >
-          <section
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "min(760px, 100%)",
-              maxHeight: "85vh",
-              overflowY: "auto",
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-              borderRadius: 12,
-              padding: 16,
-              display: "grid",
-              gap: 14,
-              alignContent: "start"
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>
-                Cài đặt máy in
-              </h2>
-              <button
-                type="button"
-                onClick={() => setIsPrinterModalOpen(false)}
-                style={{
-                  border: "1px solid #d1d5db",
-                  background: "#ffffff",
-                  color: "#374151",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                  fontSize: 13,
-                  fontWeight: 900,
-                  cursor: "pointer"
-                }}
-              >
-                Đóng
-              </button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12 }}>
-              <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
-                Chế độ in
-                <select
-                  value={printerSettings.mode}
-                  onChange={(event) => handlePrinterSettingChange("mode", event.target.value)}
-                  style={{
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    padding: "10px 12px",
-                    fontSize: 14,
-                    color: "#0f172a",
-                    background: "#ffffff"
-                  }}
-                >
-                  <option value="webPrint">Web print</option>
-                  <option value="bridge">Bridge (Xprinter)</option>
-                </select>
-              </label>
-              <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
-                Tên máy in
-                <input
-                  value={printerSettings.printerName}
-                  onChange={(event) => handlePrinterSettingChange("printerName", event.target.value)}
-                  placeholder="Xprinter"
-                  style={{
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    padding: "10px 12px",
-                    fontSize: 14
-                  }}
-                />
-              </label>
-              <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
-                Khổ giấy
-                <select
-                  value={printerSettings.receiptWidthMm}
-                  onChange={(event) => handlePrinterSettingChange("receiptWidthMm", event.target.value)}
-                  style={{
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    padding: "10px 12px",
-                    fontSize: 14,
-                    color: "#0f172a",
-                    background: "#ffffff"
-                  }}
-                >
-                  <option value="80">80 mm</option>
-                  <option value="58">58 mm</option>
-                </select>
-              </label>
-              <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
-                Tên cửa hàng in trên bill
-                <input
-                  value={printerSettings.storeName}
-                  onChange={(event) => handlePrinterSettingChange("storeName", event.target.value)}
-                  placeholder="Gánh Hàng Rong"
-                  style={{
-                    border: "1px solid #cbd5e1",
-                    borderRadius: 8,
-                    padding: "10px 12px",
-                    fontSize: 14
-                  }}
-                />
-              </label>
-            </div>
-            <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 800 }}>
-              Bridge URL (chỉ dùng khi chọn Bridge)
-              <input
-                value={printerSettings.bridgeUrl}
-                onChange={(event) => handlePrinterSettingChange("bridgeUrl", event.target.value)}
-                placeholder="http://192.168.1.10:3001"
-                style={{
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 8,
-                  padding: "10px 12px",
-                  fontSize: 14
-                }}
-              />
-            </label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <button
-                type="button"
-                onClick={handleSavePrinterSettings}
-                disabled={printerLoading}
-                style={{
-                  border: "1px solid #0f766e",
-                  background: "#14b8a6",
-                  color: "#ffffff",
-                  borderRadius: 8,
-                  padding: "10px 13px",
-                  fontSize: 13,
-                  fontWeight: 900,
-                  cursor: printerLoading ? "not-allowed" : "pointer",
-                  opacity: printerLoading ? 0.72 : 1
-                }}
-              >
-                Lưu cài đặt
-              </button>
-              <button
-                type="button"
-                onClick={handleTestPrinterConnection}
-                disabled={printerLoading}
-                style={{
-                  border: "1px solid #2563eb",
-                  background: "#2563eb",
-                  color: "#ffffff",
-                  borderRadius: 8,
-                  padding: "10px 13px",
-                  fontSize: 13,
-                  fontWeight: 900,
-                  cursor: printerLoading ? "not-allowed" : "pointer",
-                  opacity: printerLoading ? 0.72 : 1
-                }}
-              >
-                {printerLoading ? "Đang xử lý..." : "Kiểm tra kết nối"}
-              </button>
-              <button
-                type="button"
-                onClick={handlePrintTestBill}
-                disabled={printerLoading}
-                style={{
-                  border: "1px solid #16a34a",
-                  background: "#16a34a",
-                  color: "#ffffff",
-                  borderRadius: 8,
-                  padding: "10px 13px",
-                  fontSize: 13,
-                  fontWeight: 900,
-                  cursor: printerLoading ? "not-allowed" : "pointer",
-                  opacity: printerLoading ? 0.72 : 1
-                }}
-              >
-                {printerLoading ? "Đang xử lý..." : "In test"}
-              </button>
-            </div>
-          </section>
-          </div>
-        ) : null}
       </section>
     </main>
   );

@@ -281,36 +281,38 @@ function KitchenIcon({ name, size = 14 }) {
   );
 }
 
-function Badge({ children, tone, icon = "" }) {
+function Badge({ children, tone, icon = "", compact = false }) {
+  const isCompact = compact || ["trophy", "repeat", "gift"].includes(icon);
+
   return (
     <span
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 5,
+        gap: isCompact ? 3 : 5,
         border: `1px solid ${tone.border}`,
         background: tone.background,
         color: tone.color,
         borderRadius: 999,
-        padding: "4px 8px",
-        fontSize: 11,
-        fontWeight: 760,
+        padding: isCompact ? "3px 7px" : "4px 8px",
+        fontSize: isCompact ? 10 : 11,
+        fontWeight: isCompact ? 720 : 760,
         lineHeight: 1.1,
         whiteSpace: "nowrap"
       }}
     >
-      {icon ? <KitchenIcon name={icon} size={12} /> : null}
+      {icon ? <KitchenIcon name={icon} size={isCompact ? 10 : 12} /> : null}
       {children}
     </span>
   );
 }
 
-function InfoLine({ children, color = "#475569", icon, strong = false }) {
+function InfoLine({ children, color = "#475569", icon, strong = false, wrap = false }) {
   return (
     <span
       style={{
         display: "inline-flex",
-        alignItems: "center",
+        alignItems: wrap ? "flex-start" : "center",
         gap: 6,
         minWidth: 0,
         color,
@@ -320,7 +322,15 @@ function InfoLine({ children, color = "#475569", icon, strong = false }) {
       }}
     >
       <KitchenIcon name={icon} size={strong ? 14 : 13} />
-      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span
+        style={{
+          minWidth: 0,
+          overflow: wrap ? "visible" : "hidden",
+          overflowWrap: wrap ? "anywhere" : "normal",
+          textOverflow: wrap ? "clip" : "ellipsis",
+          whiteSpace: wrap ? "normal" : "nowrap"
+        }}
+      >
         {children}
       </span>
     </span>
@@ -502,6 +512,7 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
 
 export default function KitchenOrderCard({
   compact = false,
+  tabletCompact = false,
   active = false,
   dimmed = false,
   highlightedDishKey = "",
@@ -570,6 +581,15 @@ export default function KitchenOrderCard({
     : isPreorder
       ? "Đơn đặt trước"
       : "Đơn đã xong";
+
+  const isNarrowLayout = compact || tabletCompact;
+  const itemGridColumns = compact
+    ? "1fr"
+    : displayItems.length <= 1
+      ? "1fr"
+      : tabletCompact
+        ? "repeat(auto-fit, minmax(170px, 1fr))"
+        : "repeat(auto-fit, minmax(190px, 1fr))";
 
   useEffect(() => {
     setUnitProgress((currentProgress) => {
@@ -712,8 +732,12 @@ export default function KitchenOrderCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: compact ? "1fr" : "minmax(260px, 1fr) minmax(230px, 0.9fr) auto",
-          gap: compact ? 10 : 16,
+          gridTemplateColumns: compact
+            ? "1fr"
+            : tabletCompact
+              ? "minmax(0, 1.1fr) minmax(190px, 0.85fr) auto"
+              : "minmax(260px, 1fr) minmax(230px, 0.9fr) auto",
+          gap: isNarrowLayout ? 10 : 16,
           alignItems: "start"
         }}
       >
@@ -733,7 +757,7 @@ export default function KitchenOrderCard({
               style={{
                 margin: 0,
                 color: "inherit",
-                fontSize: compact ? 19 : 22,
+                fontSize: isNarrowLayout ? 20 : 22,
                 lineHeight: 1.1,
                 fontWeight: 840,
                 overflow: "hidden",
@@ -763,7 +787,7 @@ export default function KitchenOrderCard({
               alignItems: "center",
               gap: 6,
               color: theme.code,
-              fontSize: compact ? 16 : 18,
+              fontSize: isNarrowLayout ? 16 : 18,
               fontWeight: 760,
               lineHeight: 1.15,
               overflow: "hidden",
@@ -779,12 +803,12 @@ export default function KitchenOrderCard({
           </InfoLine>
         </div>
 
-        <div style={{ display: "grid", gap: compact ? 7 : 9, color: "#0f172a", fontWeight: 680 }}>
-          <InfoLine icon="phone" color="#0f172a" strong>
+        <div style={{ display: "grid", gap: isNarrowLayout ? 6 : 9, color: "#0f172a", fontWeight: 680, minWidth: 0 }}>
+          <InfoLine icon="phone" color="#0f172a" strong wrap={isNarrowLayout}>
             {order.customerName || "Khách"}
             {order.customerPhone ? ` - ${order.customerPhone}` : ""}
           </InfoLine>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: isNarrowLayout ? 5 : 7, flexWrap: "wrap" }}>
             <Badge tone={getMemberTierTone(monthlyGift?.memberTier || "Đồng")} icon="trophy">
               {monthlyGift?.memberTier || "Đồng"} · {totalOrderCount} đơn
             </Badge>
@@ -800,8 +824,8 @@ export default function KitchenOrderCard({
           </InfoLine>
         </div>
 
-        <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: 6, justifyItems: compact ? "start" : "end" }}>
-          <strong style={{ color: "#334155", fontSize: compact ? 18 : 21, fontWeight: 780 }}>
+        <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: 6, justifyItems: compact ? "start" : "end", minWidth: 0 }}>
+          <strong style={{ color: "#334155", fontSize: isNarrowLayout ? 18 : 21, fontWeight: 780 }}>
             {doneItems}/{totalItems}
           </strong>
           <ProgressBoxes doneItems={doneItems} totalItems={totalItems} accent={theme.border} />
@@ -847,7 +871,7 @@ export default function KitchenOrderCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: compact ? "1fr" : (displayItems.length <= 1 ? "1fr" : "repeat(auto-fit, minmax(190px, 1fr))"),
+          gridTemplateColumns: itemGridColumns,
           gridAutoRows: "auto",
           alignItems: "start",
           gap: 10,
@@ -874,7 +898,7 @@ export default function KitchenOrderCard({
                 disabled={!canToggleItems || Boolean(updatingItemKey)}
                 onClick={(event) => handleToggleUnit(event, item, unitIndex)}
                 style={{
-                  minHeight: item.note || getPaidToppings(item).length ? 220 : 122,
+                  minHeight: item.note || getPaidToppings(item).length ? 220 : tabletCompact ? 88 : 122,
                   height: "auto",
                   textAlign: "left",
                   border: itemHighlighted ? "2px solid #8b5cf6" : "1px solid #dbe3ef",

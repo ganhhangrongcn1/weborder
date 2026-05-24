@@ -340,7 +340,8 @@ export default function KitchenDishSummaryPanel({
         position: "sticky",
         top: 8,
         height: "100%",
-        minHeight: 0
+        minHeight: 0,
+        overflow: "hidden"
       }}
     >
       <section
