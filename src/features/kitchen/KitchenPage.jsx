@@ -47,6 +47,8 @@ const SOURCE_FILTER_OPTIONS = [
 ];
 
 const PRINTER_SETTINGS_STORAGE_KEY = "ghr:kitchen-printer-settings:v1";
+const AUTO_PRINT_REQUESTED_BY = "auto-kitchen";
+const AUTO_PRINT_RECENT_GRACE_MS = 2 * 60 * 1000;
 
 function formatUpdatedTime(value = "") {
   if (!value) return "Chưa tải";
@@ -195,6 +197,39 @@ function getOrderPrintKeys(order = {}) {
     order.displayOrderCode,
     order.display_order_code
   ].map(toText).filter(Boolean);
+}
+
+function getOrderAutoPrintKey(order = {}) {
+  return toText(
+    order.stableKey ||
+      order.raw?.stable_key ||
+      order.raw?.nexpos_order_id ||
+      order.raw?.id ||
+      order.id ||
+      order.displayOrderCode ||
+      order.orderCode
+  );
+}
+
+function getOrderAutoPrintTimeValue(order = {}) {
+  const value = toText(
+    order.createdAt ||
+      order.orderTime ||
+      order.updatedAt ||
+      order.raw?.created_at ||
+      order.raw?.order_time
+  );
+  const timeValue = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(timeValue) ? timeValue : 0;
+}
+
+function isAutoPrintableOrder(order = {}) {
+  const kitchenStatus = toText(order.kitchenStatus || order.status).toLowerCase();
+  const orderStatus = toText(order.status).toLowerCase();
+  if (!getOrderAutoPrintKey(order)) return false;
+  if (["done", "completed", "ready", "cancelled", "canceled", "preorder"].includes(kitchenStatus)) return false;
+  if (["done", "completed", "cancelled", "canceled", "preorder"].includes(orderStatus)) return false;
+  return true;
 }
 
 function getOrderPrintState(order = {}, jobsByOrderKey = {}, printingOrderKey = "") {
@@ -449,6 +484,10 @@ export default function KitchenPage() {
   const [printerNotice, setPrinterNotice] = useState("");
   const [printingOrderKey, setPrintingOrderKey] = useState("");
   const [printJobsByOrderKey, setPrintJobsByOrderKey] = useState({});
+  const autoPrintBootstrappedRef = useRef(false);
+  const autoPrintStartedAtRef = useRef(0);
+  const autoPrintedOrderKeysRef = useRef(new Set());
+  const autoPrintingOrderKeysRef = useRef(new Set());
   const processingPrintJobsRef = useRef(new Set());
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 1280 : window.innerWidth,
@@ -628,6 +667,56 @@ export default function KitchenPage() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  useEffect(() => {
+    if (!session || !profile || loading) return;
+
+    const activeOrders = orders.filter(isAutoPrintableOrder);
+    if (!autoPrintBootstrappedRef.current) {
+      autoPrintStartedAtRef.current = Date.now();
+      activeOrders.forEach((order) => {
+        autoPrintedOrderKeysRef.current.add(getOrderAutoPrintKey(order));
+      });
+      autoPrintBootstrappedRef.current = true;
+      return;
+    }
+
+    activeOrders.forEach((order) => {
+      const autoPrintKey = getOrderAutoPrintKey(order);
+      if (!autoPrintKey) return;
+      if (autoPrintedOrderKeysRef.current.has(autoPrintKey)) return;
+      if (autoPrintingOrderKeysRef.current.has(autoPrintKey)) return;
+
+      const orderTimeValue = getOrderAutoPrintTimeValue(order);
+      if (!orderTimeValue || orderTimeValue < autoPrintStartedAtRef.current - AUTO_PRINT_RECENT_GRACE_MS) {
+        autoPrintedOrderKeysRef.current.add(autoPrintKey);
+        return;
+      }
+
+      const printState = getOrderPrintState(order, printJobsByOrderKey);
+      if (printState.status) {
+        autoPrintedOrderKeysRef.current.add(autoPrintKey);
+        return;
+      }
+
+      autoPrintingOrderKeysRef.current.add(autoPrintKey);
+      setPrintingOrderKey(getKitchenOrderKey(order));
+      submitPrintJob(order, {
+        silent: true,
+        requestedBy: `${AUTO_PRINT_REQUESTED_BY}:${profile?.email || profile?.name || "staff"}`
+      }).then((result) => {
+        if (result.ok) {
+          autoPrintedOrderKeysRef.current.add(autoPrintKey);
+          setPrinterNotice(`Tự động gửi lệnh in bill ${order.displayOrderCode || order.orderCode || ""}.`.trim());
+        }
+      }).finally(() => {
+        autoPrintingOrderKeysRef.current.delete(autoPrintKey);
+        setPrintingOrderKey((currentKey) => (
+          currentKey === getKitchenOrderKey(order) ? "" : currentKey
+        ));
+      });
+    });
+  }, [loading, orders, printJobsByOrderKey, profile, session]);
+
   if (authLoading || !session || !profile) {
     return (
       <KitchenLoginScreen
@@ -726,14 +815,14 @@ export default function KitchenPage() {
     };
   }
 
-  async function handlePrintBill(order) {
+  async function submitPrintJob(order, options = {}) {
     const orderKey = getKitchenOrderKey(order);
-    setPrintingOrderKey(orderKey);
+    if (!options.silent) setPrintingOrderKey(orderKey);
     try {
       const result = await createCustomerBillPrintJob(order, {
         branchUuid: profile?.branchUuid || "",
         printerKey: DEFAULT_PRINTER_KEY,
-        requestedBy: profile?.email || profile?.name || "",
+        requestedBy: options.requestedBy || profile?.email || profile?.name || "",
         printerOptions: getPrinterRuntimeOptions()
       });
 
@@ -751,12 +840,25 @@ export default function KitchenPage() {
         setPrintJobsByOrderKey((currentMap) => upsertPrintJobIntoMap(currentMap, job));
       }
 
-      setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in bill tới máy POS." : "Gửi lệnh in thất bại."));
+      if (!options.silent || !result.ok) {
+        setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in bill tới máy POS." : "Gửi lệnh in thất bại."));
+      }
+
+      return result;
     } catch (error) {
-      setPrinterNotice(error?.message || "Gửi lệnh in thất bại.");
+      const message = error?.message || "Gửi lệnh in thất bại.";
+      setPrinterNotice(message);
+      return {
+        ok: false,
+        message
+      };
     } finally {
-      setPrintingOrderKey("");
+      if (!options.silent) setPrintingOrderKey("");
     }
+  }
+
+  async function handlePrintBill(order) {
+    await submitPrintJob(order);
   }
 
   const isMobile = viewport.width <= 900;

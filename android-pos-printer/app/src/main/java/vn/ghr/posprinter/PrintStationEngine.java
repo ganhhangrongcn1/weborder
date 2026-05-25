@@ -12,6 +12,7 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -102,9 +103,12 @@ public class PrintStationEngine {
     private boolean polling = false;
     private boolean realtimeConnecting = false;
     private boolean realtimeJoined = false;
+    private boolean alertSoundPlaying = false;
+    private int alertSoundCount = 0;
     private int realtimeRef = 1;
     private Bitmap fixedQrBitmap;
     private byte[] fixedFooterRasterBytes;
+    private MediaPlayer alertPlayer;
     private WebSocket realtimeSocket;
 
     private final Runnable realtimeHeartbeatRunnable = new Runnable() {
@@ -160,6 +164,7 @@ public class PrintStationEngine {
         running = false;
         handler.removeCallbacks(printPollingRunnable);
         handler.removeCallbacks(realtimeReconnectRunnable);
+        stopNewOrderAlert();
         closeRealtime();
         log("Service print station stopped.");
     }
@@ -241,6 +246,7 @@ public class PrintStationEngine {
             String loyaltyUrl = payload == null ? "" : payload.optString("loyaltyUrl", "");
             if (text.trim().isEmpty()) throw new Exception("Bill content is empty.");
 
+            playNewOrderAlert();
             boolean ok = printReceiptPayload(text, loyaltyUrl);
             if (!ok) throw new Exception("Printer did not accept the bill.");
 
@@ -825,5 +831,64 @@ public class PrintStationEngine {
 
     private void log(String message) {
         Log.i(TAG, message);
+    }
+
+    private void playNewOrderAlert() {
+        handler.post(() -> {
+            if (alertSoundPlaying) return;
+            alertSoundPlaying = true;
+            alertSoundCount = 0;
+            playNextAlertSound();
+        });
+    }
+
+    private void playNextAlertSound() {
+        if (!alertSoundPlaying) return;
+        if (alertSoundCount >= 3) {
+            stopNewOrderAlert();
+            return;
+        }
+
+        try {
+            releaseAlertPlayer();
+            alertPlayer = MediaPlayer.create(context, R.raw.new_order);
+            if (alertPlayer == null) {
+                stopNewOrderAlert();
+                return;
+            }
+
+            alertSoundCount += 1;
+            alertPlayer.setOnCompletionListener(player -> {
+                releaseAlertPlayer();
+                handler.postDelayed(this::playNextAlertSound, 180);
+            });
+            alertPlayer.setOnErrorListener((player, what, extra) -> {
+                stopNewOrderAlert();
+                return true;
+            });
+            alertPlayer.start();
+        } catch (Exception ignored) {
+            stopNewOrderAlert();
+        }
+    }
+
+    private void stopNewOrderAlert() {
+        alertSoundPlaying = false;
+        alertSoundCount = 0;
+        releaseAlertPlayer();
+    }
+
+    private void releaseAlertPlayer() {
+        try {
+            if (alertPlayer != null) {
+                alertPlayer.setOnCompletionListener(null);
+                alertPlayer.setOnErrorListener(null);
+                if (alertPlayer.isPlaying()) alertPlayer.stop();
+                alertPlayer.release();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            alertPlayer = null;
+        }
     }
 }
