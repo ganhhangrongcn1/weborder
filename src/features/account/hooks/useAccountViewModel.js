@@ -73,13 +73,6 @@ export default function useAccountViewModel({
     phone: "",
     password: ""
   });
-  const [resetDraft, setResetDraft] = useState({
-    phone: "",
-    code: "",
-    password: "",
-    confirmPassword: ""
-  });
-  const [resetStep, setResetStep] = useState("verify");
   const [authMode, setAuthMode] = useState("lookup");
   const [lookupPhone, setLookupPhone] = useState("");
   const [lookupOrders, setLookupOrders] = useState([]);
@@ -208,57 +201,15 @@ export default function useAccountViewModel({
     return fallbackUser;
   }
 
-  async function loginOrUpgradeLegacyCustomerAuth(phone, password) {
-    const authResult = await loginPhonePasswordAuth({ phone, password });
-    if (authResult.ok) return authResult;
-
-    const key = getCustomerKey(phone);
-    const remoteUser = await customerRepository.getUserByPhoneAsync(key);
-    const localUser = userStorage.findByPhone(key);
-    const legacyUser = remoteUser || localUser;
-    const hasLinkedAuth = Boolean(String(legacyUser?.authUserId || legacyUser?.auth_user_id || "").trim());
-    const passwordMatchesLegacy = String(legacyUser?.passwordDemo || legacyUser?.password_demo || "") === String(password || "");
-
-    if (!legacyUser || hasLinkedAuth || !passwordMatchesLegacy) {
-      return authResult;
-    }
-
-    const upgradeResult = await registerPhonePasswordAuth({
-      phone: key,
-      password,
-      name: legacyUser.name || ""
-    });
-    if (!upgradeResult.ok) return upgradeResult;
-
-    const authUserId = upgradeResult?.data?.user?.id || upgradeResult?.data?.session?.user?.id || "";
-    const syncResult = await syncCustomerProfileToSupabase({
-      phone: key,
-      name: legacyUser.name || "",
-      email: legacyUser.email || "",
-      authUserId
-    });
-    if (!syncResult.ok) return syncResult;
-
-    userStorage.upsertUser({
-      ...legacyUser,
-      phone: key,
-      authUserId,
-      registered: true
-    });
-
-    return {
-      ...upgradeResult,
-      upgradedLegacyProfile: true
-    };
-  }
-
   function hasMemberAccount(user) {
     if (!user) return false;
     if (isRegisteredUser(user)) return true;
     if (shouldUseSupabaseAuth) {
-      return Boolean(String(user?.email || "").trim() || String(user?.passwordDemo || "").trim());
+      const authUserId = String(user?.authUserId || user?.auth_user_id || "").trim();
+      const email = String(user?.email || "").trim().toLowerCase();
+      return Boolean(authUserId || email.endsWith("@phone.ghr.vn"));
     }
-    return Boolean(String(user?.passwordDemo || "").trim());
+    return false;
   }
 
   function showWrongOrderCodeNotice() {
@@ -279,8 +230,7 @@ export default function useAccountViewModel({
         {
           ...(accountUser || {}),
           name: patch.name ?? accountUser?.name ?? "",
-          avatarUrl: mergedAvatarUrl,
-          ...(patch.passwordDemo ? { passwordDemo: patch.passwordDemo } : {})
+          avatarUrl: mergedAvatarUrl
         },
         { writeRemote: shouldUseSupabaseAuth }
       );
@@ -399,12 +349,15 @@ export default function useAccountViewModel({
 
   async function handlePasswordLogin() {
     let authResult = null;
-    if (!shouldUseSupabaseAuth && (!lookupUser || lookupUser.passwordDemo !== authPassword)) {
+    if (!shouldUseSupabaseAuth) {
       alert("Mật khẩu chưa đúng.");
       return;
     }
     if (shouldUseSupabaseAuth) {
-      authResult = await loginOrUpgradeLegacyCustomerAuth(lookupPhone, authPassword);
+      authResult = await loginPhonePasswordAuth({
+        phone: lookupPhone,
+        password: authPassword
+      });
       if (!authResult.ok) {
         alert(authResult.message || "Đăng nhập Supabase thất bại.");
         return;
@@ -417,10 +370,12 @@ export default function useAccountViewModel({
         await userStorage.hydrateFromRemote?.();
       } catch {
       }
+      const currentUser = userStorage.findByPhone(lookupPhone) || {};
+      const authUserId = authResult?.data?.user?.id || authResult?.data?.session?.user?.id || currentUser.authUserId || "";
       userStorage.upsertUser({
-        ...(userStorage.findByPhone(lookupPhone) || {}),
+        ...currentUser,
         phone: lookupPhone,
-        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || "",
+        authUserId,
         registered: true
       });
     }
@@ -434,7 +389,7 @@ export default function useAccountViewModel({
     customerRepository.saveSessionPointer?.({
       phone: lookupPhone,
       customerId: freshUser?.id || result?.user?.id || lookupPhone,
-      authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || ""
+      authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || freshUser?.authUserId || ""
     });
     setAuthNotice("Đăng nhập thành công.");
     setAuthPhone("");
@@ -450,7 +405,10 @@ export default function useAccountViewModel({
       return;
     }
     if (shouldUseSupabaseAuth) {
-      const authResult = await loginOrUpgradeLegacyCustomerAuth(phone, loginDraft.password);
+      const authResult = await loginPhonePasswordAuth({
+        phone,
+        password: loginDraft.password
+      });
       if (!authResult.ok) {
         alert(authResult.message || "Đăng nhập thất bại.");
         return;
@@ -463,10 +421,12 @@ export default function useAccountViewModel({
         await userStorage.hydrateFromRemote?.();
       } catch {
       }
+      const currentUser = userStorage.findByPhone(phone) || {};
+      const authUserId = authResult?.data?.user?.id || authResult?.data?.session?.user?.id || currentUser.authUserId || "";
       userStorage.upsertUser({
-        ...(userStorage.findByPhone(phone) || {}),
+        ...currentUser,
         phone,
-        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || "",
+        authUserId,
         registered: true
       });
       const result = loginOrRegisterByPhone(phone);
@@ -479,7 +439,7 @@ export default function useAccountViewModel({
       customerRepository.saveSessionPointer?.({
         phone,
         customerId: freshUser?.id || result?.user?.id || phone,
-        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || ""
+        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || freshUser?.authUserId || ""
       });
       setAuthNotice("Đăng nhập thành công.");
       setLoginDraft({ phone: "", password: "" });
@@ -496,7 +456,7 @@ export default function useAccountViewModel({
       );
       return;
     }
-    if (user.passwordDemo !== loginDraft.password) {
+    if (true) {
       alert("Số điện thoại hoặc mật khẩu chưa đúng.");
       return;
     }
@@ -509,57 +469,11 @@ export default function useAccountViewModel({
   }
 
   function handleVerifyResetPassword() {
-    const phone = getCustomerKey(resetDraft.phone);
-    const user = userStorage.findByPhone(phone);
-    if (!phone || phone.length < 9) {
-      alert("Vui lòng nhập số điện thoại hợp lệ.");
-      return;
-    }
-    if (!isRegisteredUser(user)) {
-      alert("Số điện thoại này chưa có tài khoản.");
-      return;
-    }
-    const orders = orderStorage.getByPhone(phone);
-    const latestOrder = [...orders].sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0))[0];
-    const enteredCode = `GHR-${String(resetDraft.code || "").replace(/\D/g, "").slice(0, 4)}`;
-    if (!latestOrder?.orderCode || String(latestOrder.orderCode).toUpperCase() !== enteredCode) {
-      showWrongOrderCodeNotice();
-      return;
-    }
-    setResetStep("password");
-    setAuthNotice("Xác minh thành công. Bạn có thể tạo mật khẩu mới.");
+    alert("Mật khẩu hiện được quản lý bằng Supabase Auth. Vui lòng liên hệ cửa hàng để đặt lại mật khẩu.");
   }
 
   function handleUpdatePasswordFromOrder() {
-    const phone = getCustomerKey(resetDraft.phone);
-    if (resetDraft.password.length < 6) {
-      alert("Mật khẩu mới tối thiểu 6 ký tự.");
-      return;
-    }
-    if (resetDraft.password !== resetDraft.confirmPassword) {
-      alert("Nhập lại mật khẩu mới chưa khớp.");
-      return;
-    }
-    const user = userStorage.findByPhone(phone);
-    if (!isRegisteredUser(user)) {
-      alert("Không tìm thấy tài khoản để cập nhật.");
-      return;
-    }
-    userStorage.upsertUser({
-      ...user,
-      phone,
-      passwordDemo: resetDraft.password,
-      registered: true
-    });
-    setResetDraft({
-      phone: "",
-      code: "",
-      password: "",
-      confirmPassword: ""
-    });
-    setResetStep("verify");
-    setAccountEntryTab("login");
-    setAuthNotice("Đã cập nhật mật khẩu. Bạn đăng nhập lại bằng mật khẩu mới nhé.");
+    alert("Mật khẩu hiện được quản lý bằng Supabase Auth. Vui lòng liên hệ cửa hàng để đặt lại mật khẩu.");
   }
 
   async function handleRegister() {
@@ -606,7 +520,7 @@ export default function useAccountViewModel({
     const result = loginOrRegisterByPhone(
       registerPhone,
       registerDraft.name.trim(),
-      registerDraft.password,
+      "",
       true
     );
     if (!result) return;
@@ -660,10 +574,6 @@ export default function useAccountViewModel({
     setAccountEntryTab,
     loginDraft,
     setLoginDraft,
-    resetDraft,
-    setResetDraft,
-    resetStep,
-    setResetStep,
     authMode,
     setAuthMode,
     lookupPhone,
@@ -694,8 +604,6 @@ export default function useAccountViewModel({
     handlePhoneLookup,
     handlePasswordLogin,
     handleDirectLogin,
-    handleVerifyResetPassword,
-    handleUpdatePasswordFromOrder,
     handleRegister
   };
 }

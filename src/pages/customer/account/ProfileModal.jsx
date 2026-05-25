@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
-import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
+import { CustomerButton } from "../../../components/customer/CustomerUI.jsx";
 import { defaultUserDemo } from "../../../data/defaultData.js";
 import { processUploadImage } from "../../../utils/imageUpload.js";
 
@@ -14,10 +14,8 @@ export default function ProfileModal({
     ...defaultUserDemo,
     ...user
   });
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
+
   const update = (field, value) => setDraft((current) => ({
     ...current,
     [field]: value
@@ -40,28 +38,6 @@ export default function ProfileModal({
   }
 
   function handleSave() {
-    const wantsPasswordChange = currentPassword || newPassword || confirmPassword;
-    if (wantsPasswordChange) {
-      if ((draft.passwordDemo || "") !== currentPassword) {
-        setMessage("Mật khẩu hiện tại không đúng.");
-        return;
-      }
-      if (newPassword.length < 6) {
-        setMessage("Mật khẩu mới tối thiểu 6 ký tự.");
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        setMessage("Nhập lại mật khẩu mới chưa khớp.");
-        return;
-      }
-      onSave({
-        name: draft.name || "",
-        avatarUrl: draft.avatarUrl || "",
-        passwordDemo: newPassword
-      });
-      alert("Đã cập nhật mật khẩu");
-      return;
-    }
     onSave({
       name: draft.name || "",
       avatarUrl: draft.avatarUrl || ""
@@ -96,23 +72,9 @@ export default function ProfileModal({
           <input value={draft.phone || ""} disabled />
         </label>
         <p className="-mt-2 text-xs font-bold text-brown/45">Số điện thoại không thể thay đổi.</p>
-        <CustomerCard padding="sm">
-          <h3 className="text-sm font-black text-brown">Đổi mật khẩu</h3>
-          <div className="mt-3 space-y-3">
-            <label className="address-field">
-              <span>Mật khẩu hiện tại</span>
-              <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
-            </label>
-            <label className="address-field">
-              <span>Mật khẩu mới</span>
-              <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
-            </label>
-            <label className="address-field">
-              <span>Nhập lại mật khẩu mới</span>
-              <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
-            </label>
-          </div>
-        </CustomerCard>
+        <p className="rounded-2xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700">
+          Mật khẩu được quản lý bằng Supabase Auth. Vui lòng liên hệ cửa hàng nếu cần đặt lại mật khẩu.
+        </p>
         {message && <p className="rounded-2xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{message}</p>}
       </div>
     </CustomerBottomSheet>

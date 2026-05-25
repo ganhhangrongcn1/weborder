@@ -112,7 +112,6 @@ export default function Account({
                 >
                   Chưa có tài khoản? Tạo tài khoản
                 </button>
-                <button onClick={() => { vm.setAccountEntryTab("forgot"); vm.setResetDraft((draft) => ({ ...draft, phone: vm.loginDraft.phone })); vm.setResetStep("verify"); }} className="mt-2 w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55">Quên mật khẩu?</button>
               </div>
             ) : vm.accountEntryTab === "register" ? (
               <div className="mt-4">
@@ -130,23 +129,8 @@ export default function Account({
             ) : (
               <div className="mt-4">
                 <h2 className="text-base font-black text-brown">Đặt lại mật khẩu</h2>
-                <p className="mt-1 text-sm text-brown/60">Xác minh bằng mã đơn gần nhất để đặt mật khẩu mới.</p>
-                {vm.resetStep === "verify" ? (
-                  <div className="mt-3 space-y-3">
-                    <input value={vm.resetDraft.phone} onChange={(event) => vm.setResetDraft((draft) => ({ ...draft, phone: event.target.value }))} placeholder="Số điện thoại" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                    <div className="flex overflow-hidden rounded-2xl border border-orange-100 bg-cream">
-                      <span className="grid place-items-center bg-white px-4 text-sm font-black text-orange-600">GHR-</span>
-                      <input value={vm.resetDraft.code} onChange={(event) => vm.setResetDraft((draft) => ({ ...draft, code: event.target.value.replace(/\D/g, "").slice(0, 4) }))} inputMode="numeric" maxLength={4} placeholder="1028" className="min-w-0 flex-1 bg-transparent px-4 py-3 text-sm font-black tracking-[0.25em] outline-none" />
-                    </div>
-                    <button onClick={vm.handleVerifyResetPassword} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Xác minh mã đơn</button>
-                  </div>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    <input type="password" value={vm.resetDraft.password} onChange={(event) => vm.setResetDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu mới" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                    <input type="password" value={vm.resetDraft.confirmPassword} onChange={(event) => vm.setResetDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))} placeholder="Nhập lại mật khẩu mới" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                    <button onClick={vm.handleUpdatePasswordFromOrder} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Cập nhật mật khẩu</button>
-                  </div>
-                )}
+                <p className="mt-1 text-sm text-brown/60">Mật khẩu tài khoản được quản lý bằng Supabase Auth. Vui lòng liên hệ cửa hàng để đặt lại mật khẩu.</p>
+                <button onClick={() => vm.setAccountEntryTab("login")} className="mt-3 w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Quay lại đăng nhập</button>
               </div>
             )}
           </div>
