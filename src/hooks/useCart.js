@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { orderRepository } from "../services/repositories/orderRepository.js";
+import { isFlashSaleActiveNow } from "../services/flashSaleService.js";
 
-export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate, catalogProducts = [] }) {
+export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate, catalogProducts = [], smartPromotions = [] }) {
   const [cart, setCartState] = useState(() => orderRepository.getCartDraft(initialCart));
 
   function getToppingsSignature(toppings = []) {
@@ -52,11 +53,32 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
   const total = Math.max(subtotal - discount + ship, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  function resolvePurchasableProduct(product = {}) {
+    if (!product?.flashPromoId) return product;
+
+    const matchedPromo = smartPromotions.find((promo) => String(promo?.id || "") === String(product.flashPromoId));
+    if (matchedPromo && isFlashSaleActiveNow(matchedPromo)) return product;
+
+    const baseProduct = catalogProducts.find((item) => String(item?.id || "") === String(product.id)) || {};
+    const basePrice = Number(baseProduct.price || product.originalPrice || product.price || 0);
+
+    return {
+      ...product,
+      ...baseProduct,
+      price: basePrice,
+      originalPrice: undefined,
+      salePrice: undefined,
+      discountPercent: undefined,
+      discountValue: undefined,
+      flashPromoId: undefined
+    };
+  }
+
   function addToCart(configOrProduct = selectedProduct, spice = selectedSpice, chosenToppings = selectedToppings, qty = quantity, itemNote = "") {
     const config = configOrProduct?.product
       ? configOrProduct
       : { product: configOrProduct, spice, toppings: chosenToppings, quantity: qty, note: itemNote };
-    const item = makeCartItem(config.product, config.spice, config.toppings, config.quantity, config.note);
+    const item = makeCartItem(resolvePurchasableProduct(config.product), config.spice, config.toppings, config.quantity, config.note);
     if (editingCartId) {
       setCart((current) => {
         const edited = { ...item, cartId: editingCartId };

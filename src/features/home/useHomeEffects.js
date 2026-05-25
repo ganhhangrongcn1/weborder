@@ -1,4 +1,8 @@
 import { useEffect } from "react";
+import {
+  getActiveFlashSalePromotions,
+  getFlashSaleEndDate
+} from "../../services/flashSaleService.js";
 
 const homePopupShownKeys = new Set();
 const homePopupSeenAtByKey = new Map();
@@ -10,7 +14,6 @@ export default function useHomeEffects({
   setActiveBanner,
   bannersLength,
   smartPromotions,
-  parseDateTime,
   setSecondsLeft,
   setHomePopupOpen,
   showHomePopup,
@@ -33,14 +36,8 @@ export default function useHomeEffects({
   useEffect(() => {
     const getActiveFlashEnd = () => {
       const now = new Date();
-      const activeEnds = (smartPromotions || [])
-        .filter((promo) => promo?.type === "flash_sale" && promo?.active !== false)
-        .filter((promo) => {
-          const sold = Number(promo?.condition?.soldCount || 0);
-          const total = Number(promo?.condition?.totalSlots || 0);
-          return total <= 0 || sold < total;
-        })
-        .map((promo) => parseDateTime(promo?.endAt, promo?.condition?.endTime, "23:59"))
+      const activeEnds = getActiveFlashSalePromotions(smartPromotions, now)
+        .map((promo) => getFlashSaleEndDate(promo, now))
         .filter((date) => date && date.getTime() > now.getTime())
         .sort((a, b) => a.getTime() - b.getTime());
       return activeEnds[0] || null;
@@ -58,7 +55,7 @@ export default function useHomeEffects({
     syncCountdown();
     const timer = window.setInterval(syncCountdown, 1000);
     return () => window.clearInterval(timer);
-  }, [smartPromotions, parseDateTime, setSecondsLeft]);
+  }, [smartPromotions, setSecondsLeft]);
 
   useEffect(() => {
     setHomePopupOpen(false);

@@ -1,6 +1,7 @@
 ﻿import { useMemo } from "react";
 import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
+import { getActiveFlashSalePromotions } from "../../services/flashSaleService.js";
 import { DEFAULT_SHIPPING_CONFIG } from "../../services/shippingService.js";
 import { formatMoney } from "../../utils/format.js";
 import { buildHomeCategories } from "../../utils/pureHelpers.js";
@@ -112,7 +113,7 @@ function applyFlashSaleToProduct(product = {}, flashPromos = []) {
 export default function useHomeComputed({
   smartPromotions,
   products,
-  parseDateTime,
+  currentTime,
   homeContent,
   homeText,
   categories,
@@ -125,23 +126,8 @@ export default function useHomeComputed({
   const visibleProducts = products.filter((product) => product.visible !== false);
 
   const activeFlashPromos = useMemo(() => {
-    const now = new Date();
-    return [...(smartPromotions || [])]
-      .filter((promo) => promo?.type === "flash_sale" && promo?.active !== false)
-      .filter((promo) => {
-        const sold = Number(promo?.condition?.soldCount || 0);
-        const total = Number(promo?.condition?.totalSlots || 0);
-        return total <= 0 || sold < total;
-      })
-      .filter((promo) => {
-        const start = parseDateTime(promo?.startAt, promo?.condition?.startTime, "00:00");
-        const end = parseDateTime(promo?.endAt, promo?.condition?.endTime, "23:59");
-        if (start && now.getTime() < start.getTime()) return false;
-        if (end && now.getTime() > end.getTime()) return false;
-        return true;
-      })
-      .sort((a, b) => Number(a?.priority || 99) - Number(b?.priority || 99));
-  }, [smartPromotions, parseDateTime]);
+    return getActiveFlashSalePromotions(smartPromotions, currentTime);
+  }, [smartPromotions, currentTime]);
 
   const homePricedProducts = useMemo(
     () => visibleProducts.map((product) => applyFlashSaleToProduct(product, activeFlashPromos)),

@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
 import Icon from "../../components/Icon.jsx";
 import HomeHero from "../../pages/customer/home/HomeHero.jsx";
@@ -23,9 +23,6 @@ import useHomeComputed from "./useHomeComputed.js";
 import { createHomeActionHandlers } from "./homeActions.js";
 import { createHomeFulfillmentActions } from "./homeFulfillmentActions.js";
 import useHomeEffects from "./useHomeEffects.js";
-import {
-  parseDateTime,
-} from "./homeHelpers.js";
 
 const FALLBACK_HOME_BLOCK_ORDER = [
   "hero",
@@ -119,12 +116,18 @@ export default function Home({
   const [homeCategory, setHomeCategory] = useState("");
   const [showAllHomeProducts, setShowAllHomeProducts] = useState(false);
   const [homePopupOpen, setHomePopupOpen] = useState(false);
+  const [homeClockTick, setHomeClockTick] = useState(() => Date.now());
   const cashbackRef = useRef(null);
   const deliveryAppsRef = useRef(null);
   const fulfillmentRef = useRef(null);
   const flashSaleRef = useRef(null);
   const categorySectionRef = useRef(null);
   const featuredProductsRef = useRef(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setHomeClockTick(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const {
     flashProducts,
@@ -156,7 +159,7 @@ export default function Home({
   } = useHomeComputed({
     smartPromotions,
     products,
-    parseDateTime,
+    currentTime: new Date(homeClockTick),
     homeContent,
     homeText: t,
     categories,
@@ -173,7 +176,6 @@ export default function Home({
     setActiveBanner,
     bannersLength: banners.length,
     smartPromotions,
-    parseDateTime,
     setSecondsLeft,
     setHomePopupOpen,
     showHomePopup,
