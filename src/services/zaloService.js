@@ -1,6 +1,8 @@
 import { zaloConfigRepository } from "./repositories/zaloConfigRepository.js";
 
 export const DEFAULT_ZALO_TEMPLATE = [
+  "\uD83D\uDD0E Xem l\u1EA1i \u0111\u01A1n h\u00E0ng: {{order_link}}",
+  "",
   "\uD83E\uDDE1 G\u00C1NH H\u00C0NG RONG - \u0110\u1EB6T H\u00C0NG TH\u00C0NH C\u00D4NG",
   "\uD83D\uDD16 M\u00E3 \u0111\u01A1n: {{order_code}}",
   "\uD83D\uDD52 Th\u1EDDi gian: {{order_time}}",
@@ -17,7 +19,6 @@ export const DEFAULT_ZALO_TEMPLATE = [
   "\u2705 T\u1ED5ng thanh to\u00E1n: {{total}}",
   "\uD83D\uDCDD Ghi ch\u00FA: {{note}}",
   "",
-  "\uD83D\uDD0E Xem l\u1EA1i \u0111\u01A1n h\u00E0ng: {{order_link}}",
   "C\u1EA3m \u01A1n b\u1EA1n \u0111\u00E3 \u0111\u1EB7t m\u00F3n t\u1EA1i G\u00E1nh H\u00E0ng Rong \uD83E\uDDE1"
 ].join("\n");
 

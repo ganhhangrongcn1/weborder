@@ -23,6 +23,17 @@ function buildOrderLink(orderCode) {
   return `${window.location.origin}${path}`;
 }
 
+function placeOrderLinkFirst(template) {
+  const lines = String(template || "").split("\n");
+  const orderLinkIndex = lines.findIndex((line) => line.includes("{{order_link}}"));
+  const orderLinkLine = orderLinkIndex >= 0 ? lines[orderLinkIndex] : "\uD83D\uDD0E Xem l\u1EA1i \u0111\u01A1n h\u00E0ng: {{order_link}}";
+  const remainingLines = orderLinkIndex >= 0
+    ? lines.filter((_, index) => index !== orderLinkIndex)
+    : lines;
+  const cleanedRemainingLines = remainingLines[0] === "" ? remainingLines.slice(1) : remainingLines;
+  return [orderLinkLine, "", ...cleanedRemainingLines].join("\n");
+}
+
 export default function OrderSuccess({
   navigate,
   order,
@@ -54,9 +65,7 @@ export default function OrderSuccess({
   const orderCode = order?.orderCode || "GHR-1028";
   const orderLink = buildOrderLink(orderCode);
   const zaloTemplate = String(zaloConfig.template || "");
-  const templateWithOrderLink = zaloTemplate.includes("{{order_link}}")
-    ? zaloTemplate
-    : `${zaloTemplate}\nXem lại đơn hàng: {{order_link}}`;
+  const templateWithOrderLink = placeOrderLinkFirst(zaloTemplate);
 
   const orderMessage = renderZaloTemplate(templateWithOrderLink, {
     customer_name: order?.customerName || "Khách",
@@ -71,7 +80,7 @@ export default function OrderSuccess({
     pickup_branch: [order?.pickupBranchName || order?.branchName || "", order?.pickupBranchAddress || order?.branchAddress || ""].filter(Boolean).join(" - "),
     delivery_branch: [order?.deliveryBranchName || "", order?.deliveryBranchAddress || ""].filter(Boolean).join(" - "),
     payment_method: order?.paymentMethod || "COD",
-    map_link: mapLink || "",
+    map_link: isPickup ? "" : mapLink || "",
     distance_km: !isPickup && order?.distanceKm ? `${Number(order.distanceKm).toFixed(1)}km` : "",
     address: isPickup ? order?.branchAddress || order?.branchName || "" : order?.deliveryAddress || "",
     note: order?.note || "",
