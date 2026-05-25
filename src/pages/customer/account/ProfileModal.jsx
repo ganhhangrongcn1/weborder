@@ -1,25 +1,41 @@
 import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
-import { CustomerButton } from "../../../components/customer/CustomerUI.jsx";
+import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { defaultUserDemo } from "../../../data/defaultData.js";
 import { processUploadImage } from "../../../utils/imageUpload.js";
 
 export default function ProfileModal({
   user,
   onSave,
+  onChangePassword,
   onClose
 }) {
   const [draft, setDraft] = useState({
     ...defaultUserDemo,
     ...user
   });
+  const [passwordDraft, setPasswordDraft] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
   const [message, setMessage] = useState("");
+  const [passwordMessage, setPasswordMessage] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const update = (field, value) => setDraft((current) => ({
     ...current,
     [field]: value
   }));
+
+  const updatePassword = (field, value) => {
+    setPasswordMessage("");
+    setPasswordDraft((current) => ({
+      ...current,
+      [field]: value
+    }));
+  };
 
   async function handleAvatar(event) {
     const file = event.target.files?.[0];
@@ -42,6 +58,27 @@ export default function ProfileModal({
       name: draft.name || "",
       avatarUrl: draft.avatarUrl || ""
     });
+  }
+
+  async function handleChangePassword() {
+    if (!onChangePassword) return;
+    setIsChangingPassword(true);
+    setPasswordMessage("");
+    try {
+      const result = await onChangePassword(passwordDraft);
+      if (!result?.ok) {
+        setPasswordMessage(result?.message || "Không thể đổi mật khẩu lúc này.");
+        return;
+      }
+      setPasswordDraft({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: ""
+      });
+      setPasswordMessage("Đã đổi mật khẩu thành công.");
+    } finally {
+      setIsChangingPassword(false);
+    }
   }
 
   return (
@@ -72,9 +109,38 @@ export default function ProfileModal({
           <input value={draft.phone || ""} disabled />
         </label>
         <p className="-mt-2 text-xs font-bold text-brown/45">Số điện thoại không thể thay đổi.</p>
-        <p className="rounded-2xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700">
-          Mật khẩu được quản lý bằng Supabase Auth. Vui lòng liên hệ cửa hàng nếu cần đặt lại mật khẩu.
-        </p>
+
+        <CustomerCard padding="sm">
+          <h3 className="text-sm font-black text-brown">Đổi mật khẩu</h3>
+          <div className="mt-3 space-y-3">
+            <label className="address-field">
+              <span>Mật khẩu hiện tại</span>
+              <input type="password" value={passwordDraft.currentPassword} onChange={(event) => updatePassword("currentPassword", event.target.value)} />
+            </label>
+            <label className="address-field">
+              <span>Mật khẩu mới</span>
+              <input type="password" value={passwordDraft.newPassword} onChange={(event) => updatePassword("newPassword", event.target.value)} />
+            </label>
+            <label className="address-field">
+              <span>Nhập lại mật khẩu mới</span>
+              <input type="password" value={passwordDraft.confirmPassword} onChange={(event) => updatePassword("confirmPassword", event.target.value)} />
+            </label>
+            <button
+              type="button"
+              onClick={handleChangePassword}
+              disabled={isChangingPassword}
+              className="w-full rounded-2xl bg-orange-50 px-4 py-3 text-xs font-black text-orange-700 disabled:opacity-60"
+            >
+              {isChangingPassword ? "Đang đổi mật khẩu..." : "Đổi mật khẩu"}
+            </button>
+            {passwordMessage && (
+              <p className={`rounded-2xl px-3 py-2 text-xs font-bold ${passwordMessage.includes("thành công") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                {passwordMessage}
+              </p>
+            )}
+          </div>
+        </CustomerCard>
+
         {message && <p className="rounded-2xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{message}</p>}
       </div>
     </CustomerBottomSheet>

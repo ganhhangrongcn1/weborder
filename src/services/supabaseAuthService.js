@@ -107,6 +107,35 @@ export async function updatePhonePasswordAuth({ phone, password }) {
   return { ok: false, message: "Không thể xác minh tài khoản Supabase cho số này." };
 }
 
+export async function changeLoggedInCustomerPasswordAuth({ phone, currentPassword, newPassword }) {
+  const client = await getClientReady();
+  if (!client) return { ok: false, message: "Supabase auth chưa sẵn sàng." };
+  const email = toPhoneAuthEmail(phone);
+  if (!email) return { ok: false, message: "Số điện thoại không hợp lệ." };
+  if (String(currentPassword || "").length < 1) return { ok: false, message: "Vui lòng nhập mật khẩu hiện tại." };
+  if (String(newPassword || "").length < 6) return { ok: false, message: "Mật khẩu mới tối thiểu 6 ký tự." };
+
+  try {
+    const { error: signInError } = await client.auth.signInWithPassword({
+      email,
+      password: currentPassword
+    });
+    if (signInError) {
+      return { ok: false, message: "Mật khẩu hiện tại chưa đúng." };
+    }
+
+    const { error: updateError } = await client.auth.updateUser({
+      password: newPassword
+    });
+    if (updateError) {
+      return { ok: false, message: normalizeAuthError(updateError, "Không thể cập nhật mật khẩu.") };
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: normalizeAuthError(error, "Không thể cập nhật mật khẩu.") };
+  }
+}
+
 export async function syncCustomerProfileToSupabase({ phone, name = "", email = "", avatarUrl = "", authUserId = "" }) {
   const client = await getClientReady();
   const normalizedPhone = getCustomerKey(phone);

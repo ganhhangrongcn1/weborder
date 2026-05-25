@@ -5,6 +5,7 @@ import { customerRepository } from "../../../services/repositories/customerRepos
 import { getDataSource } from "../../../services/repositories/dataSource.js";
 import {
   getSupabaseCustomerSessionSnapshot,
+  changeLoggedInCustomerPasswordAuth,
   loginPhonePasswordAuth,
   registerPhonePasswordAuth,
   syncAuthProfileToCustomerRow,
@@ -263,6 +264,28 @@ export default function useAccountViewModel({
     } catch {
       setAuthNotice("Không thể lưu hồ sơ lúc này.");
     }
+  }
+
+  async function handleChangePassword({ currentPassword, newPassword, confirmPassword }) {
+    const activePhone = accountUser?.phone || userStorage.getCurrentPhone?.() || currentPhone || "";
+    if (!shouldUseSupabaseAuth) {
+      return { ok: false, message: "Đổi mật khẩu cần Supabase Auth." };
+    }
+    if (String(newPassword || "").length < 6) {
+      return { ok: false, message: "Mật khẩu mới tối thiểu 6 ký tự." };
+    }
+    if (newPassword !== confirmPassword) {
+      return { ok: false, message: "Nhập lại mật khẩu mới chưa khớp." };
+    }
+    const result = await changeLoggedInCustomerPasswordAuth({
+      phone: activePhone,
+      currentPassword,
+      newPassword
+    });
+    if (result.ok) {
+      setAuthNotice("Đã đổi mật khẩu thành công.");
+    }
+    return result;
   }
 
   function handleSaveAddress(address) {
@@ -597,6 +620,7 @@ export default function useAccountViewModel({
     accountUser,
     displayName,
     handleSaveUser,
+    handleChangePassword,
     handleSaveAddress,
     handleDeleteAddress,
     handleSetDefaultAddress,

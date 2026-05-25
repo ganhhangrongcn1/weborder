@@ -271,7 +271,7 @@ export default function Account({
 
         <button onClick={logoutDemoUser} className="w-full rounded-[24px] bg-red-50 py-4 text-sm font-black text-red-600 shadow-soft">Đăng xuất</button>
       </div>
-      {vm.profileOpen ? <ProfileModal user={vm.accountUser} onClose={() => vm.setProfileOpen(false)} onSave={vm.handleSaveUser} /> : null}
+      {vm.profileOpen ? <ProfileModal user={vm.accountUser} onClose={() => vm.setProfileOpen(false)} onSave={vm.handleSaveUser} onChangePassword={vm.handleChangePassword} /> : null}
       {vm.addressModal ? <AccountAddressModal address={vm.addressModal} onClose={() => vm.setAddressModal(null)} onSave={vm.handleSaveAddress} /> : null}
       <AccountNoticeModal notice={vm.accountNotice} onClose={() => vm.setAccountNotice(null)} />
     </section>
