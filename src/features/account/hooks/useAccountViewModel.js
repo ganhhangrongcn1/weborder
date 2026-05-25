@@ -208,6 +208,50 @@ export default function useAccountViewModel({
     return fallbackUser;
   }
 
+  async function loginOrUpgradeLegacyCustomerAuth(phone, password) {
+    const authResult = await loginPhonePasswordAuth({ phone, password });
+    if (authResult.ok) return authResult;
+
+    const key = getCustomerKey(phone);
+    const remoteUser = await customerRepository.getUserByPhoneAsync(key);
+    const localUser = userStorage.findByPhone(key);
+    const legacyUser = remoteUser || localUser;
+    const hasLinkedAuth = Boolean(String(legacyUser?.authUserId || legacyUser?.auth_user_id || "").trim());
+    const passwordMatchesLegacy = String(legacyUser?.passwordDemo || legacyUser?.password_demo || "") === String(password || "");
+
+    if (!legacyUser || hasLinkedAuth || !passwordMatchesLegacy) {
+      return authResult;
+    }
+
+    const upgradeResult = await registerPhonePasswordAuth({
+      phone: key,
+      password,
+      name: legacyUser.name || ""
+    });
+    if (!upgradeResult.ok) return upgradeResult;
+
+    const authUserId = upgradeResult?.data?.user?.id || upgradeResult?.data?.session?.user?.id || "";
+    const syncResult = await syncCustomerProfileToSupabase({
+      phone: key,
+      name: legacyUser.name || "",
+      email: legacyUser.email || "",
+      authUserId
+    });
+    if (!syncResult.ok) return syncResult;
+
+    userStorage.upsertUser({
+      ...legacyUser,
+      phone: key,
+      authUserId,
+      registered: true
+    });
+
+    return {
+      ...upgradeResult,
+      upgradedLegacyProfile: true
+    };
+  }
+
   function hasMemberAccount(user) {
     if (!user) return false;
     if (isRegisteredUser(user)) return true;
@@ -360,10 +404,7 @@ export default function useAccountViewModel({
       return;
     }
     if (shouldUseSupabaseAuth) {
-      authResult = await loginPhonePasswordAuth({
-        phone: lookupPhone,
-        password: authPassword
-      });
+      authResult = await loginOrUpgradeLegacyCustomerAuth(lookupPhone, authPassword);
       if (!authResult.ok) {
         alert(authResult.message || "Đăng nhập Supabase thất bại.");
         return;
@@ -409,10 +450,7 @@ export default function useAccountViewModel({
       return;
     }
     if (shouldUseSupabaseAuth) {
-      const authResult = await loginPhonePasswordAuth({
-        phone,
-        password: loginDraft.password
-      });
+      const authResult = await loginOrUpgradeLegacyCustomerAuth(phone, loginDraft.password);
       if (!authResult.ok) {
         alert(authResult.message || "Đăng nhập thất bại.");
         return;
