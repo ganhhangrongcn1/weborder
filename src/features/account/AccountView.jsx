@@ -112,6 +112,16 @@ export default function Account({
                 >
                   Chưa có tài khoản? Tạo tài khoản
                 </button>
+                <button
+                  onClick={() => {
+                    vm.setAccountEntryTab("forgot");
+                    vm.setForgotEmail("");
+                    vm.setAuthNotice("");
+                  }}
+                  className="mt-2 w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55"
+                >
+                  Quên mật khẩu?
+                </button>
               </div>
             ) : vm.accountEntryTab === "register" ? (
               <div className="mt-4">
@@ -120,10 +130,34 @@ export default function Account({
                 <div className="mt-3 space-y-3">
                   <input value={vm.authPhone} onChange={(event) => vm.setAuthPhone(event.target.value)} placeholder="Số điện thoại" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                   <input value={vm.registerDraft.name} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, name: event.target.value }))} placeholder="Tên hiển thị" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                  <div>
+                    <input type="email" value={vm.registerDraft.email} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, email: event.target.value }))} placeholder="Email" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                    <p className="mt-1 px-1 text-xs font-bold text-brown/45">Email dùng để lấy lại mật khẩu khi quên.</p>
+                  </div>
                   <input type="password" value={vm.registerDraft.password} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu (ít nhất 6 ký tự)" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                   <input type="password" value={vm.registerDraft.confirmPassword} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))} placeholder="Nhập lại mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                   <button onClick={vm.handleRegister} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Tạo tài khoản</button>
                   <button onClick={() => vm.setAccountEntryTab("login")} className="w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55">Đã có tài khoản? Đăng nhập</button>
+                </div>
+              </div>
+            ) : vm.accountEntryTab === "forgot" ? (
+              <div className="mt-4">
+                <h2 className="text-base font-black text-brown">Quên mật khẩu</h2>
+                <p className="mt-1 text-sm text-brown/60">Nhập email đã đăng ký. Supabase sẽ gửi link đặt lại mật khẩu vào email này.</p>
+                <div className="mt-3 space-y-3">
+                  <input type="email" value={vm.forgotEmail} onChange={(event) => vm.setForgotEmail(event.target.value)} placeholder="Email đã đăng ký" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                  <button onClick={vm.handleForgotPassword} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Gửi link đặt lại mật khẩu</button>
+                  <button onClick={() => vm.setAccountEntryTab("login")} className="w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55">Quay lại đăng nhập</button>
+                </div>
+              </div>
+            ) : vm.accountEntryTab === "resetPassword" ? (
+              <div className="mt-4">
+                <h2 className="text-base font-black text-brown">Đặt mật khẩu mới</h2>
+                <p className="mt-1 text-sm text-brown/60">Nhập mật khẩu mới cho tài khoản của bạn.</p>
+                <div className="mt-3 space-y-3">
+                  <input type="password" value={vm.resetPasswordDraft.password} onChange={(event) => vm.setResetPasswordDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu mới" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                  <input type="password" value={vm.resetPasswordDraft.confirmPassword} onChange={(event) => vm.setResetPasswordDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))} placeholder="Nhập lại mật khẩu mới" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                  <button onClick={vm.handleRecoveryPasswordUpdate} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Cập nhật mật khẩu</button>
                 </div>
               </div>
             ) : (
@@ -168,6 +202,16 @@ export default function Account({
                   <div className="space-y-3">
                     <input type="password" value={vm.authPassword} onChange={(event) => vm.setAuthPassword(event.target.value)} placeholder="Nhập mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                     <button onClick={vm.handlePasswordLogin} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Đăng nhập</button>
+                    <button
+                      onClick={() => {
+                        vm.setAccountEntryTab("forgot");
+                        vm.setForgotEmail("");
+                        vm.setAuthNotice("");
+                      }}
+                      className="w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55"
+                    >
+                      Quên mật khẩu?
+                    </button>
                   </div>
                 </AccountPanel>
               ) : null}
@@ -176,6 +220,10 @@ export default function Account({
                 <AccountPanel title="Tạo tài khoản">
                   <div className="space-y-3">
                     <input value={vm.registerDraft.name} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, name: event.target.value }))} placeholder="Tên hiển thị" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                    <div>
+                      <input type="email" value={vm.registerDraft.email} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, email: event.target.value }))} placeholder="Email" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                      <p className="mt-1 px-1 text-xs font-bold text-brown/45">Email dùng để lấy lại mật khẩu khi quên.</p>
+                    </div>
                     <input type="password" value={vm.registerDraft.password} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu (ít nhất 6 ký tự)" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                     <input type="password" value={vm.registerDraft.confirmPassword} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))} placeholder="Nhập lại mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
                     <button onClick={vm.handleRegister} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Tạo tài khoản</button>

@@ -3,10 +3,53 @@ import { isSupabaseRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
 import { getSupabaseCustomerAuthClient, initSupabaseCustomerAuthClient } from "./supabase/supabaseRuntimeClient.js";
 
 const PROFILE_TABLE = "profiles";
+const PHONE_AUTH_EMAIL_DOMAIN = "@phone.ghr.vn";
+
 function toPhoneAuthEmail(phone) {
   const key = getCustomerKey(phone);
   if (!key) return "";
-  return `${key}@phone.ghr.vn`;
+  return `${key}${PHONE_AUTH_EMAIL_DOMAIN}`;
+}
+
+function normalizeEmail(email = "") {
+  return String(email || "").trim().toLowerCase();
+}
+
+function isValidEmail(email = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
+}
+
+function isPhoneAuthEmail(email = "") {
+  return normalizeEmail(email).endsWith(PHONE_AUTH_EMAIL_DOMAIN);
+}
+
+function getPasswordRecoveryRedirectUrl() {
+  if (typeof window === "undefined" || !window.location?.origin) return undefined;
+  const url = new URL(window.location.href);
+  url.searchParams.set("authFlow", "recovery");
+  return url.toString();
+}
+
+async function resolveAuthEmailForPhone(client, phone, preferredEmail = "") {
+  const normalizedPhone = getCustomerKey(phone);
+  const safePreferredEmail = normalizeEmail(preferredEmail);
+  if (isValidEmail(safePreferredEmail)) return safePreferredEmail;
+  if (!client || !normalizedPhone) return "";
+
+  try {
+    const { data, error } = await client
+      .from(PROFILE_TABLE)
+      .select("email")
+      .eq("phone", normalizedPhone)
+      .maybeSingle();
+    if (!error) {
+      const profileEmail = normalizeEmail(data?.email || "");
+      if (isValidEmail(profileEmail)) return profileEmail;
+    }
+  } catch {
+  }
+
+  return toPhoneAuthEmail(normalizedPhone);
 }
 
 export async function getSupabaseCustomerSessionSnapshot() {
@@ -52,20 +95,22 @@ async function getClientReady() {
   return getClient();
 }
 
-export async function registerPhonePasswordAuth({ phone, password, name = "" }) {
+export async function registerPhonePasswordAuth({ phone, password, name = "", email = "" }) {
   const client = await getClientReady();
   if (!client) return { ok: false, message: "Supabase auth chưa sẵn sàng." };
-  const email = toPhoneAuthEmail(phone);
-  if (!email) return { ok: false, message: "Số điện thoại không hợp lệ." };
+  const normalizedPhone = getCustomerKey(phone);
+  const authEmail = normalizeEmail(email);
+  if (!normalizedPhone) return { ok: false, message: "Số điện thoại không hợp lệ." };
+  if (!isValidEmail(authEmail)) return { ok: false, message: "Vui lòng nhập email hợp lệ để lấy lại mật khẩu khi cần." };
   if (String(password || "").length < 6) return { ok: false, message: "Mật khẩu tối thiểu 6 ký tự." };
 
   try {
     const { data, error } = await client.auth.signUp({
-      email,
+      email: authEmail,
       password,
       options: {
         data: {
-          phone: getCustomerKey(phone),
+          phone: normalizedPhone,
           name: String(name || "").trim()
         }
       }
@@ -77,14 +122,14 @@ export async function registerPhonePasswordAuth({ phone, password, name = "" }) 
   }
 }
 
-export async function loginPhonePasswordAuth({ phone, password }) {
+export async function loginPhonePasswordAuth({ phone, password, email = "" }) {
   const client = await getClientReady();
   if (!client) return { ok: false, message: "Supabase auth chưa sẵn sàng." };
-  const email = toPhoneAuthEmail(phone);
-  if (!email) return { ok: false, message: "Số điện thoại không hợp lệ." };
+  const authEmail = await resolveAuthEmailForPhone(client, phone, email);
+  if (!authEmail) return { ok: false, message: "Số điện thoại không hợp lệ." };
 
   try {
-    const { data, error } = await client.auth.signInWithPassword({ email, password });
+    const { data, error } = await client.auth.signInWithPassword({ email: authEmail, password });
     if (error) return { ok: false, message: normalizeAuthError(error, "Đăng nhập thất bại.") };
     return { ok: true, data };
   } catch (error) {
@@ -92,14 +137,14 @@ export async function loginPhonePasswordAuth({ phone, password }) {
   }
 }
 
-export async function updatePhonePasswordAuth({ phone, password }) {
+export async function updatePhonePasswordAuth({ phone, password, email = "" }) {
   const client = await getClientReady();
   if (!client) return { ok: false, message: "Supabase auth chưa sẵn sàng." };
-  const email = toPhoneAuthEmail(phone);
-  if (!email) return { ok: false, message: "Số điện thoại không hợp lệ." };
+  const authEmail = await resolveAuthEmailForPhone(client, phone, email);
+  if (!authEmail) return { ok: false, message: "Số điện thoại không hợp lệ." };
 
   try {
-    const { data: signInData, error: signInError } = await client.auth.signInWithPassword({ email, password });
+    const { data: signInData, error: signInError } = await client.auth.signInWithPassword({ email: authEmail, password });
     if (!signInError && signInData?.user) return { ok: true };
   } catch {
     // Keep the same compact result shape for callers.
@@ -107,17 +152,17 @@ export async function updatePhonePasswordAuth({ phone, password }) {
   return { ok: false, message: "Không thể xác minh tài khoản Supabase cho số này." };
 }
 
-export async function changeLoggedInCustomerPasswordAuth({ phone, currentPassword, newPassword }) {
+export async function changeLoggedInCustomerPasswordAuth({ phone, currentPassword, newPassword, email = "" }) {
   const client = await getClientReady();
   if (!client) return { ok: false, message: "Supabase auth chưa sẵn sàng." };
-  const email = toPhoneAuthEmail(phone);
-  if (!email) return { ok: false, message: "Số điện thoại không hợp lệ." };
+  const authEmail = await resolveAuthEmailForPhone(client, phone, email);
+  if (!authEmail) return { ok: false, message: "Số điện thoại không hợp lệ." };
   if (String(currentPassword || "").length < 1) return { ok: false, message: "Vui lòng nhập mật khẩu hiện tại." };
   if (String(newPassword || "").length < 6) return { ok: false, message: "Mật khẩu mới tối thiểu 6 ký tự." };
 
   try {
     const { error: signInError } = await client.auth.signInWithPassword({
-      email,
+      email: authEmail,
       password: currentPassword
     });
     if (signInError) {
@@ -136,6 +181,43 @@ export async function changeLoggedInCustomerPasswordAuth({ phone, currentPasswor
   }
 }
 
+export async function requestCustomerPasswordResetEmailAuth({ email }) {
+  const client = await getClientReady();
+  if (!client) return { ok: false, message: "Supabase auth chưa sẵn sàng." };
+  const authEmail = normalizeEmail(email);
+  if (!isValidEmail(authEmail) || isPhoneAuthEmail(authEmail)) {
+    return { ok: false, message: "Vui lòng nhập email thật đã đăng ký." };
+  }
+
+  try {
+    const { error } = await client.auth.resetPasswordForEmail(authEmail, {
+      redirectTo: getPasswordRecoveryRedirectUrl()
+    });
+    if (error) return { ok: false, message: normalizeAuthError(error, "Không thể gửi email đặt lại mật khẩu.") };
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: normalizeAuthError(error, "Không thể gửi email đặt lại mật khẩu.") };
+  }
+}
+
+export async function updateRecoveryPasswordAuth({ password }) {
+  const client = await getClientReady();
+  if (!client) return { ok: false, message: "Supabase auth chưa sẵn sàng." };
+  if (String(password || "").length < 6) return { ok: false, message: "Mật khẩu mới tối thiểu 6 ký tự." };
+
+  try {
+    const { data: sessionData } = await client.auth.getSession();
+    if (!sessionData?.session) {
+      return { ok: false, message: "Link đặt lại mật khẩu đã hết hạn hoặc chưa được xác nhận." };
+    }
+    const { error } = await client.auth.updateUser({ password });
+    if (error) return { ok: false, message: normalizeAuthError(error, "Không thể cập nhật mật khẩu mới.") };
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: normalizeAuthError(error, "Không thể cập nhật mật khẩu mới.") };
+  }
+}
+
 export async function syncCustomerProfileToSupabase({ phone, name = "", email = "", avatarUrl = "", authUserId = "" }) {
   const client = await getClientReady();
   const normalizedPhone = getCustomerKey(phone);
@@ -148,7 +230,7 @@ export async function syncCustomerProfileToSupabase({ phone, name = "", email = 
     const authUser = authData?.user || null;
     const safeName = String(name || "").trim();
     const safeAuthUserId = String(authUserId || authUser?.id || "").trim();
-    const safeEmail = String(email || authUser?.email || toPhoneAuthEmail(normalizedPhone)).trim();
+    const safeEmail = normalizeEmail(email || authUser?.email || "");
     const safeAvatarUrl = String(avatarUrl || "").trim();
     const profileRow = {
       phone: normalizedPhone,

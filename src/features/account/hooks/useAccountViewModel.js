@@ -7,9 +7,11 @@ import {
   getSupabaseCustomerSessionSnapshot,
   changeLoggedInCustomerPasswordAuth,
   loginPhonePasswordAuth,
+  requestCustomerPasswordResetEmailAuth,
   registerPhonePasswordAuth,
   syncAuthProfileToCustomerRow,
-  syncCustomerProfileToSupabase
+  syncCustomerProfileToSupabase,
+  updateRecoveryPasswordAuth
 } from "../../../services/supabaseAuthService.js";
 import { addAddress, updateAddress, deleteAddress, setDefaultAddress } from "../../../services/addressService.js";
 import { orderStorage } from "../../../services/orderService.js";
@@ -23,6 +25,15 @@ const userStorage = createUserStorage({
   getCustomerKey,
   defaultUserDemo
 });
+
+function normalizeEmail(email = "") {
+  return String(email || "").trim().toLowerCase();
+}
+
+function isRealEmail(email = "") {
+  const normalized = normalizeEmail(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) && !normalized.endsWith("@phone.ghr.vn");
+}
 
 function isPlaceholderName(name = "") {
   const normalized = String(name || "").trim().toLowerCase();
@@ -66,6 +77,12 @@ export default function useAccountViewModel({
   const [authPassword, setAuthPassword] = useState("");
   const [registerDraft, setRegisterDraft] = useState({
     name: "",
+    email: "",
+    password: "",
+    confirmPassword: ""
+  });
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetPasswordDraft, setResetPasswordDraft] = useState({
     password: "",
     confirmPassword: ""
   });
@@ -98,6 +115,17 @@ export default function useAccountViewModel({
   const rank = getMemberRank(stats.totalSpent);
   const showCustomerTier = rewardFeatureFlags.enableCustomerTier;
   const displayName = pickCustomerDisplayName(accountUser, authSessionUser);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const search = new URLSearchParams(window.location.search || "");
+    const hash = String(window.location.hash || "");
+    const isRecovery = search.get("authFlow") === "recovery" || hash.includes("type=recovery");
+    if (isRecovery) {
+      setAccountEntryTab("resetPassword");
+      setAuthNotice("Nhập mật khẩu mới để hoàn tất đặt lại mật khẩu.");
+    }
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -280,7 +308,8 @@ export default function useAccountViewModel({
     const result = await changeLoggedInCustomerPasswordAuth({
       phone: activePhone,
       currentPassword,
-      newPassword
+      newPassword,
+      email: accountUser?.email || authSessionUser?.email || ""
     });
     if (result.ok) {
       setAuthNotice("Đã đổi mật khẩu thành công.");
@@ -350,6 +379,7 @@ export default function useAccountViewModel({
       setAuthPassword("");
       setRegisterDraft({
         name: existingUser?.name || "",
+        email: isRealEmail(existingUser?.email) ? normalizeEmail(existingUser.email) : "",
         password: "",
         confirmPassword: ""
       });
@@ -379,7 +409,8 @@ export default function useAccountViewModel({
     if (shouldUseSupabaseAuth) {
       authResult = await loginPhonePasswordAuth({
         phone: lookupPhone,
-        password: authPassword
+        password: authPassword,
+        email: lookupUser?.email || ""
       });
       if (!authResult.ok) {
         alert(authResult.message || "Đăng nhập Supabase thất bại.");
@@ -499,6 +530,46 @@ export default function useAccountViewModel({
     alert("Mật khẩu hiện được quản lý bằng Supabase Auth. Vui lòng liên hệ cửa hàng để đặt lại mật khẩu.");
   }
 
+  async function handleForgotPassword() {
+    const result = await requestCustomerPasswordResetEmailAuth({
+      email: forgotEmail
+    });
+    if (!result.ok) {
+      alert(result.message || "Không thể gửi email đặt lại mật khẩu.");
+      return;
+    }
+    setAuthNotice("Đã gửi link đặt lại mật khẩu. Bạn kiểm tra hộp thư email nhé.");
+  }
+
+  async function handleRecoveryPasswordUpdate() {
+    if (resetPasswordDraft.password.length < 6) {
+      alert("Mật khẩu mới tối thiểu 6 ký tự.");
+      return;
+    }
+    if (resetPasswordDraft.password !== resetPasswordDraft.confirmPassword) {
+      alert("Nhập lại mật khẩu mới chưa khớp.");
+      return;
+    }
+    const result = await updateRecoveryPasswordAuth({
+      password: resetPasswordDraft.password
+    });
+    if (!result.ok) {
+      alert(result.message || "Không thể cập nhật mật khẩu mới.");
+      return;
+    }
+    setResetPasswordDraft({
+      password: "",
+      confirmPassword: ""
+    });
+    setAccountEntryTab("login");
+    setAuthNotice("Đã cập nhật mật khẩu mới. Bạn đăng nhập lại bằng số điện thoại và mật khẩu mới nhé.");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("authFlow");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  }
+
   async function handleRegister() {
     const registerPhone = getCustomerKey(accountEntryTab === "register" ? authPhone : lookupPhone || authPhone);
     if (!registerPhone || registerPhone.length < 9) {
@@ -519,6 +590,10 @@ export default function useAccountViewModel({
       alert("Vui lòng nhập tên khách.");
       return;
     }
+    if (!isRealEmail(registerDraft.email)) {
+      alert("Vui lòng nhập email thật để lấy lại mật khẩu khi cần.");
+      return;
+    }
     if (registerDraft.password.length < 6) {
       alert("Mật khẩu tối thiểu 6 ký tự.");
       return;
@@ -532,7 +607,8 @@ export default function useAccountViewModel({
       const authResult = await registerPhonePasswordAuth({
         phone: registerPhone,
         password: registerDraft.password,
-        name: registerDraft.name.trim()
+        name: registerDraft.name.trim(),
+        email: registerDraft.email
       });
       registerAuthResult = authResult;
       if (!authResult.ok) {
@@ -551,6 +627,7 @@ export default function useAccountViewModel({
       userStorage.upsertUser({
         ...(result.user || {}),
         phone: registerPhone,
+        email: normalizeEmail(registerDraft.email),
         authUserId: registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "",
         registered: true
       });
@@ -564,6 +641,7 @@ export default function useAccountViewModel({
       const syncResult = await syncCustomerProfileToSupabase({
         phone: registerPhone,
         name: registerDraft.name.trim(),
+        email: normalizeEmail(registerDraft.email),
         authUserId: registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || ""
       });
       if (!syncResult.ok) {
@@ -593,6 +671,10 @@ export default function useAccountViewModel({
     setAuthPassword,
     registerDraft,
     setRegisterDraft,
+    forgotEmail,
+    setForgotEmail,
+    resetPasswordDraft,
+    setResetPasswordDraft,
     accountEntryTab,
     setAccountEntryTab,
     loginDraft,
@@ -628,6 +710,8 @@ export default function useAccountViewModel({
     handlePhoneLookup,
     handlePasswordLogin,
     handleDirectLogin,
+    handleForgotPassword,
+    handleRecoveryPasswordUpdate,
     handleRegister
   };
 }
