@@ -127,6 +127,46 @@ function isPartnerAppReceipt(receipt = {}) {
   return APP_SOURCE_KEYS.some((key) => sourceText.includes(key));
 }
 
+function normalizeMonthlyGift(value = {}) {
+  const gift = getObject(value);
+  const threshold = Math.max(1, toNumber(gift.threshold, 3));
+  const monthlyOrderCount = Math.max(0, toNumber(gift.monthlyOrderCount ?? gift.monthly_order_count, 0));
+  const hasGiftData = Boolean(
+    gift.customerKey ||
+      gift.customerPhone ||
+      gift.giftCode ||
+      gift.giftName ||
+      gift.rewardMonth ||
+      monthlyOrderCount > 0
+  );
+
+  if (!hasGiftData) return null;
+
+  return {
+    threshold,
+    monthlyOrderCount,
+    claimed: Boolean(gift.claimed),
+    eligible: Boolean(gift.eligible || monthlyOrderCount >= threshold)
+  };
+}
+
+function getMonthlyGiftText(monthlyGift = null) {
+  if (!monthlyGift) return "";
+  if (monthlyGift.claimed) return "\u0051\u0075\u00E0 \u0074\u0068\u00E1\u006E\u0067\u003A \u0111\u00E3 \u0074\u1EB7\u006E\u0067";
+  if (monthlyGift.eligible) return "\u0051\u0075\u00E0 \u0074\u0068\u00E1\u006E\u0067\u003A \u0111\u1EE7 \u0111\u0069\u1EC1\u0075 \u006B\u0069\u1EC7\u006E";
+
+  const missing = Math.max(0, monthlyGift.threshold - monthlyGift.monthlyOrderCount);
+  return `\u0051\u0075\u00E0 \u0074\u0068\u00E1\u006E\u0067\u003A \u0063\u00F2\u006E ${missing} \u0111\u01A1\u006E`;
+}
+
+function centerText(value = "", width = 42) {
+  const text = toText(value);
+  if (text.length >= width) return text.slice(0, width);
+  const left = Math.floor((width - text.length) / 2);
+  const right = Math.max(0, width - text.length - left);
+  return `${" ".repeat(left)}${text}${" ".repeat(right)}`;
+}
+
 function normalizeReceiptItem(item = {}) {
   const options = getArray(item.options || item.toppings || item.optionGroups)
     .map((option) => {
@@ -193,6 +233,7 @@ function normalizeReceiptOrder(order = {}, config = {}) {
         metadata.promoDiscount
     ),
     totalAmount: toNumber(order.totalAmount ?? order.total_amount ?? metadata.totalAmount),
+    monthlyGift: normalizeMonthlyGift(order.monthlyGift || metadata.monthlyGift || metadata.monthly_gift || rawMetadata.monthlyGift || rawMetadata.monthly_gift),
     items
   };
 }
@@ -217,6 +258,18 @@ function pushOrderMeta(lines, receipt, width) {
   if (receipt.customerAddress) splitText(`Địa chỉ: ${receipt.customerAddress}`, width).forEach((line) => lines.push(line));
   if (receipt.fulfillmentType) lines.push(`Hình thức: ${receipt.fulfillmentType}`);
   if (receipt.paymentMethod) lines.push(`Thanh toán: ${receipt.paymentMethod}`);
+}
+
+function pushMonthlyGiftBox(lines, receipt, width) {
+  const giftText = getMonthlyGiftText(receipt.monthlyGift);
+  if (!giftText) return;
+
+  const innerWidth = Math.max(2, width - 2);
+  const border = `+${buildLine("-", innerWidth)}+`;
+  lines.push(border);
+  lines.push(`|${centerText("\u0051\u0055\u00C0 \u0054\u0048\u00C1\u004E\u0047", innerWidth)}|`);
+  lines.push(`|${centerText(giftText, innerWidth)}|`);
+  lines.push(border);
 }
 
 function pushItemsText(lines, receipt, width, showMoney) {
@@ -272,6 +325,7 @@ function buildReceiptText(order = {}, options = {}) {
   ];
 
   pushOrderMeta(lines, receipt, width);
+  pushMonthlyGiftBox(lines, receipt, width);
   lines.push(buildLine("-", width));
   pushItemsText(lines, receipt, width, showMoney);
 
@@ -313,6 +367,15 @@ function buildReceiptHtml(order = {}, options = {}) {
   const receipt = normalizeReceiptOrder(order, options);
   const showMoney = !isPartnerAppReceipt(receipt);
   const total = getReceiptTotal(receipt);
+  const monthlyGiftText = getMonthlyGiftText(receipt.monthlyGift);
+  const monthlyGiftBox = monthlyGiftText
+    ? `
+      <div class="gift-box">
+        <div class="gift-title">\u0051\u0055\u00C0 \u0054\u0048\u00C1\u004E\u0047</div>
+        <div class="gift-text">${escapeHtml(monthlyGiftText)}</div>
+      </div>
+    `
+    : "";
 
   const itemRows = receipt.items.length
     ? receipt.items.map((item) => {
@@ -400,6 +463,23 @@ function buildReceiptHtml(order = {}, options = {}) {
         font-size: 15px;
         font-weight: 900;
       }
+      .gift-box {
+        margin: 9px 0 8px;
+        border: 2px solid #111111;
+        padding: 7px 5px;
+        text-align: center;
+      }
+      .gift-title {
+        font-size: 14px;
+        font-weight: 1000;
+        line-height: 1.1;
+      }
+      .gift-text {
+        margin-top: 3px;
+        font-size: 19px;
+        font-weight: 1000;
+        line-height: 1.15;
+      }
       .empty {
         padding: 8px 0;
         color: #333333;
@@ -431,6 +511,7 @@ function buildReceiptHtml(order = {}, options = {}) {
       ${receipt.fulfillmentType ? `<div><strong>Hình thức:</strong> ${escapeHtml(receipt.fulfillmentType)}</div>` : ""}
       ${receipt.paymentMethod ? `<div><strong>Thanh toán:</strong> ${escapeHtml(receipt.paymentMethod)}</div>` : ""}
       <div class="line"></div>
+      ${monthlyGiftBox}
       ${itemRows}
       ${showMoney ? `
         <div class="line"></div>
