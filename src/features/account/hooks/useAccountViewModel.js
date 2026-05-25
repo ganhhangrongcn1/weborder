@@ -379,6 +379,7 @@ export default function useAccountViewModel({
       userStorage.upsertUser({
         ...(userStorage.findByPhone(lookupPhone) || {}),
         phone: lookupPhone,
+        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || "",
         registered: true
       });
     }
@@ -427,6 +428,7 @@ export default function useAccountViewModel({
       userStorage.upsertUser({
         ...(userStorage.findByPhone(phone) || {}),
         phone,
+        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || "",
         registered: true
       });
       const result = loginOrRegisterByPhone(phone);
@@ -570,6 +572,14 @@ export default function useAccountViewModel({
       true
     );
     if (!result) return;
+    if (shouldUseSupabaseAuth) {
+      userStorage.upsertUser({
+        ...(result.user || {}),
+        phone: registerPhone,
+        authUserId: registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "",
+        registered: true
+      });
+    }
     customerRepository.saveSessionPointer?.({
       phone: registerPhone,
       customerId: result?.user?.id || registerPhone,
@@ -578,7 +588,8 @@ export default function useAccountViewModel({
     if (shouldUseSupabaseAuth) {
       const syncResult = await syncCustomerProfileToSupabase({
         phone: registerPhone,
-        name: registerDraft.name.trim()
+        name: registerDraft.name.trim(),
+        authUserId: registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || ""
       });
       if (!syncResult.ok) {
         const message = syncResult.message || "Tạo tài khoản local thành công nhưng chưa đồng bộ customer lên Supabase.";
