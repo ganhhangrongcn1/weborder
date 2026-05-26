@@ -150,24 +150,8 @@ function getFreshGiftStatsCache(cacheKey = "", visibleOrderSignatures = []) {
   const unknownVisibleSignatures = (Array.isArray(visibleOrderSignatures) ? visibleOrderSignatures : [])
     .filter((signature) => signature && !cachedSignatures.has(signature));
   if (unknownVisibleSignatures.length) {
-    const nextSignatures = new Set([...cachedSignatures, ...unknownVisibleSignatures]);
-    const currentValue = entry.value || {};
-    const nextValue = {
-      ...currentValue,
-      monthlyOrderCount: toNumber(currentValue.monthlyOrderCount, 0) + unknownVisibleSignatures.length,
-      allTimeStats: currentValue.allTimeStats
-        ? {
-            ...currentValue.allTimeStats,
-            totalOrders: toNumber(currentValue.allTimeStats.totalOrders, 0) + unknownVisibleSignatures.length
-          }
-        : currentValue.allTimeStats
-    };
-    monthlyGiftStatsCache.set(cacheKey, {
-      cachedAt: Date.now(),
-      orderSignatures: nextSignatures,
-      value: nextValue
-    });
-    return nextValue;
+    monthlyGiftStatsCache.delete(cacheKey);
+    return null;
   }
 
   return entry.value;
@@ -340,6 +324,14 @@ function buildStatsForCustomer(customerKey = "", stats = {}) {
     profile: stats.profiles?.get(customerKey) || null,
     allTimeStats: stats.allTimeStatsMap?.get(customerKey) || null
   };
+}
+
+function isValidMonthlyGiftClaim(claim = null, monthlyOrderCount = 0) {
+  if (!claim) return false;
+  return Math.max(
+    toNumber(claim.order_count_at_claim, 0),
+    toNumber(monthlyOrderCount, 0)
+  ) >= MONTHLY_GIFT_THRESHOLD;
 }
 
 function profileNeedsAllTimeFallback(profile = null) {
@@ -515,6 +507,7 @@ function buildMonthlyGiftInfo(order = {}, options = {}) {
   const profile = options.profile || null;
   const allTimeStats = options.allTimeStats || null;
   const monthlyOrderCount = toNumber(options.monthlyOrderCount, 0);
+  const validClaim = isValidMonthlyGiftClaim(claim, monthlyOrderCount) ? claim : null;
   const profileTotalSpent = toNumber(profile?.total_spent, 0);
   const profileTotalOrders = toNumber(profile?.total_orders, 0);
   const dynamicTotalSpent = toNumber(allTimeStats?.totalSpent, 0);
@@ -545,11 +538,11 @@ function buildMonthlyGiftInfo(order = {}, options = {}) {
     totalSpent,
     memberTier,
     eligible: Boolean(identity.key && monthlyOrderCount >= MONTHLY_GIFT_THRESHOLD),
-    claimed: Boolean(claim),
-    claimedAt: claim?.claimed_at || "",
-    claimedOrderCode: claim?.claimed_order_code || "",
-    claimedByName: claim?.claimed_by_name || "",
-    canClaim: Boolean(identity.key && monthlyOrderCount >= MONTHLY_GIFT_THRESHOLD && !claim)
+    claimed: Boolean(validClaim),
+    claimedAt: validClaim?.claimed_at || "",
+    claimedOrderCode: validClaim?.claimed_order_code || "",
+    claimedByName: validClaim?.claimed_by_name || "",
+    canClaim: Boolean(identity.key && monthlyOrderCount >= MONTHLY_GIFT_THRESHOLD && !validClaim)
   };
 }
 
@@ -764,6 +757,29 @@ export async function claimMonthlyCustomerGift(order = {}, options = {}) {
       recordKitchenRequest("read existing gift claim", "monthly_customer_gifts");
 
       clearGiftStatsCacheForCustomer(monthKey, identity.key);
+
+      if (existing && !isValidMonthlyGiftClaim(existing, currentGift.monthlyOrderCount)) {
+        const { data: updated, error: updateError } = await client
+          .from("monthly_customer_gifts")
+          .update(row)
+          .eq("id", existing.id)
+          .select("*")
+          .single();
+        recordKitchenRequest("fix early gift claim", "monthly_customer_gifts", "write");
+
+        if (updateError) {
+          return {
+            ok: false,
+            message: updateError.message || "Không cập nhật được quà khách quen."
+          };
+        }
+
+        return {
+          ok: true,
+          gift: updated,
+          message: "Đã cập nhật lại quà khách quen."
+        };
+      }
 
       return {
         ok: true,

@@ -7,17 +7,33 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function toStatusToken(value = "") {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
 function normalizeStatusFromPartner(order = {}) {
-  const orderStatus = String(order.order_status || "").trim().toLowerCase();
-  const kitchenStatus = String(order.kitchen_status || "").trim().toLowerCase();
+  const rawData = order.raw_data && typeof order.raw_data === "object" ? order.raw_data : {};
+  const statuses = [
+    order.order_status,
+    order.kitchen_status,
+    order.kitchen_work_status,
+    order.nexpos_status,
+    rawData.status,
+    rawData.order_status,
+    rawData.kitchen_status
+  ].map(toStatusToken).filter(Boolean);
 
-  if (["done", "completed", "finish", "finished", "served"].includes(orderStatus)) return "done";
-  if (["cancelled", "canceled", "refunded"].includes(orderStatus)) return "done";
-  if (["delivering", "shipping"].includes(orderStatus)) return "delivering";
-  if (["preparing", "cooking", "doing", "confirmed", "accepted"].includes(orderStatus)) return "confirmed";
-
-  if (["done", "served"].includes(kitchenStatus)) return "done";
-  if (["cooking", "preparing", "doing"].includes(kitchenStatus)) return "confirmed";
+  if (statuses.some((status) => ["done", "completed", "complete", "finish", "finished", "served"].includes(status))) return "done";
+  if (statuses.some((status) => ["cancel", "cancelled", "canceled", "refunded", "huy", "dahuy"].includes(status))) return "done";
+  if (statuses.some((status) => ["preorder", "preordered", "scheduled", "dattruoc"].includes(status))) return "pending_zalo";
+  if (statuses.some((status) => ["delivering", "shipping"].includes(status))) return "delivering";
+  if (statuses.some((status) => ["preparing", "cooking", "doing", "pick", "picking", "inprogress", "confirmed", "accepted", "processing"].includes(status))) return "confirmed";
 
   return "pending_zalo";
 }
@@ -87,11 +103,13 @@ function mapPartnerOrderRow(order = {}, itemsByOrderId = new Map()) {
     realReceived: toNumber(financeData.real_received, 0),
     financeData,
     rawData,
+    nexposOrderId: order.nexpos_order_id || rawData.nexpos_order_id || rawData.id || "",
     pointStatus: order.point_status || "pending",
     branchId: order.branch_id || "",
     branchUuid: order.branch_uuid || "",
     branchName: order.branch_name || order.nexpos_site_name || order.nexpos_hub_name || "",
     createdAt: order.order_time || order.created_at || "",
+    updatedAt: order.updated_at || order.order_time || order.created_at || "",
     items: itemsByOrderId.get(order.id) || []
   };
 }
@@ -115,15 +133,25 @@ function getAdminOrderFeedKey(order = {}) {
   const sourceType = String(order?.sourceType || "").trim().toLowerCase();
   const source = sourceType === "partner" ? "partner" : "website";
   const rawData = order?.rawData && typeof order.rawData === "object" ? order.rawData : {};
-  const key = String(
-    order?.displayOrderCode ||
-      order?.orderCode ||
-      order?.id ||
-      rawData?.display_order_code ||
-      rawData?.order_code ||
-      rawData?.id ||
-      ""
-  ).trim();
+  const key = source === "partner"
+    ? String(
+        order?.id ||
+          order?.nexposOrderId ||
+          rawData?.nexpos_order_id ||
+          rawData?.id ||
+          order?.displayOrderCode ||
+          order?.orderCode ||
+          ""
+      ).trim()
+    : String(
+        order?.displayOrderCode ||
+          order?.orderCode ||
+          order?.id ||
+          rawData?.display_order_code ||
+          rawData?.order_code ||
+          rawData?.id ||
+          ""
+      ).trim();
 
   return key ? `${source}:${key}` : `${source}:unknown-${Math.random()}`;
 }
@@ -163,7 +191,7 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } =
 
   let query = client
     .from("partner_orders")
-    .select("id,order_code,display_order_code,partner_source,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,raw_data,order_time,created_at")
+    .select("id,order_code,display_order_code,partner_source,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,raw_data,order_time,created_at,updated_at")
     .order("order_time", { ascending: false });
 
   if (dateFrom) query = query.gte("order_time", dateFrom);
