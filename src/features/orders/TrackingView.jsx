@@ -374,29 +374,19 @@ export default function Tracking({
 
         {currentPhone ? (
           <div className="space-y-3">
-            <div className="grid grid-cols-[1fr_1.1fr] gap-2">
-              <button
-                type="button"
-                className="rounded-2xl border border-orange-100 bg-white px-3 py-3 text-left shadow-soft"
-              >
-                <span className="flex items-center gap-2 text-xs font-black uppercase text-orange-600">
-                  <Icon name="bag" size={15} />
-                  Quản lý đơn
-                </span>
-                <span className="mt-1 block truncate text-[11px] font-bold text-brown/55">
-                  Chi tiết và điểm thưởng
-                </span>
-              </button>
-              <label className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-white px-3 py-3 shadow-soft">
-                <Icon name="search" size={17} />
+            <label className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-white px-4 py-3 shadow-soft">
+              <Icon name="search" size={16} className="shrink-0 text-orange-600" />
+              <span className="shrink-0 text-sm font-black text-orange-600">Tìm đơn</span>
+              <div className="h-5 w-px bg-orange-100" />
+              <div className="min-w-0 flex-1">
                 <input
                   value={orderSearch}
                   onChange={(event) => setOrderSearch(event.target.value)}
-                  placeholder="Tìm đơn"
-                  className="min-w-0 flex-1 bg-transparent text-sm font-bold text-brown outline-none placeholder:text-brown/40"
+                  placeholder="Mã đơn hoặc chi nhánh"
+                  className="min-w-0 w-full flex-1 bg-transparent text-sm font-bold text-brown outline-none placeholder:text-brown/40"
                 />
-              </label>
-            </div>
+              </div>
+            </label>
 
             <div className="grid grid-cols-3 divide-x divide-orange-100 rounded-2xl border border-orange-100 bg-white px-2 py-3 shadow-soft">
               <div className="px-2">
