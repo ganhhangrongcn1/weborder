@@ -401,29 +401,29 @@ function buildCustomersSnapshotFromSources({
   }, {});
 
   const allPhones = Array.from(
-    new Set([
-      ...Object.keys(grouped || {}),
-      ...Object.keys(registeredUsers || {}),
-      ...Object.keys(customerMeta || {}),
-      ...Object.keys(loyaltyByPhone || {}),
-      ...Object.keys(loyalty?.byPhone || {})
-    ])
-  )
-    .map((phone) => getCustomerKey(phone))
-    .filter(Boolean);
+    new Set(
+      Object.keys(registeredUsers || {})
+        .map((phone) => getCustomerKey(phone))
+        .filter(Boolean)
+    )
+  );
 
   const customers = allPhones
     .map((phone) => {
+      const registeredUser = registeredUsers[phone] || {};
       const customer = grouped[phone] || {
         phone,
-        name: customerMeta?.[phone]?.name || "",
+        name: registeredUser?.name || customerMeta?.[phone]?.name || "",
         lastOrderName: "",
-        totalOrders: 0,
-        totalSpent: 0,
-        lastOrderAt: null,
+        totalOrders: Number(registeredUser?.totalOrders || 0),
+        totalSpent: Number(registeredUser?.totalSpent || 0),
+        lastOrderAt: registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null,
         orders: []
       };
-      const autoPoints = Math.floor((Number(customer.totalSpent || 0) / ratio.currencyPerPoint) * ratio.pointPerUnit);
+      const totalOrders = Math.max(Number(customer.totalOrders || 0), Number(registeredUser?.totalOrders || 0));
+      const totalSpent = Math.max(Number(customer.totalSpent || 0), Number(registeredUser?.totalSpent || 0));
+      const lastOrderAt = customer.lastOrderAt || registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null;
+      const autoPoints = Math.floor((Number(totalSpent || 0) / ratio.currencyPerPoint) * ratio.pointPerUnit);
       const phoneLoyalty = normalizeLoyaltyData({
         ...defaultLoyaltyData,
         ...(loyaltyByPhone[customer.phone] || {})
@@ -441,8 +441,6 @@ function buildCustomersSnapshotFromSources({
         ...(Array.isArray(phoneLoyalty.voucherHistory) ? phoneLoyalty.voucherHistory : [])
       ].map(normalizeCrmVoucher);
       const resolvedVouchers = resolveVoucherUsageFromOrders(unifiedVouchers, customer.orders || []);
-      const lastOrderAt = customer.lastOrderAt;
-      const registeredUser = registeredUsers[customer.phone];
       const registeredCustomerName = registeredUser?.name || "";
       const metaName = String(customerMeta?.[customer.phone]?.name || "").trim();
       const displayName = registeredCustomerName || customer.name || customer.lastOrderName || metaName || "Khách";
@@ -454,6 +452,9 @@ function buildCustomersSnapshotFromSources({
 
       return {
         ...customer,
+        totalOrders,
+        totalSpent,
+        lastOrderAt,
         name: displayName,
         registeredCustomerName,
         orderCustomerName: customer.lastOrderName,
@@ -467,11 +468,12 @@ function buildCustomersSnapshotFromSources({
         otherAdjustPoints,
         currentPoints,
         registeredCustomer: Boolean(
+          registeredUser?.authUserId ||
           registeredUser?.registered ||
           registeredUser?.passwordDemo ||
           registeredUser?.email
         ),
-        tier: getCustomerTier(customer.totalSpent),
+        tier: registeredUser?.memberRank || getCustomerTier(totalSpent),
         daysSinceLastOrder: getDaysSince(lastOrderAt),
         vouchers: resolvedVouchers,
         pointsHistory: phoneLoyalty.pointHistory

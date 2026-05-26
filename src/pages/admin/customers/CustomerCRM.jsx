@@ -270,7 +270,7 @@ export default function CustomerCRM({
       </div>
 
       <div className="crm-stat-grid">
-        <CrmStatCard icon="user" tone="orange" title="Tổng khách hàng" value={summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Từ dữ liệu đơn hàng" />
+        <CrmStatCard icon="user" tone="orange" title="Tổng khách hàng" value={summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Từ hồ sơ khách hàng" />
         <CrmStatCard icon="cart" tone="green" title="Khách quay lại (30 ngày)" value={summary.repeatCustomers30.toLocaleString("vi-VN")} subtitle="Từ 2 đơn trở lên trong 30 ngày" />
         <CrmStatCard icon="star" tone="purple" title="Khách VIP" value={summary.vipCount.toLocaleString("vi-VN")} subtitle="Theo ngưỡng hiện tại" />
         <CrmStatCard icon="heart" tone="blue" title="Cần chăm sóc" value={summary.careCount.toLocaleString("vi-VN")} subtitle="Chưa quay lại từ 30 ngày" />
