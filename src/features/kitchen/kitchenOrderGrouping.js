@@ -160,6 +160,8 @@ export function groupKitchenItemsFromOrders(orders = [], activeOrderKey = "") {
           totalQuantity: 0,
           pendingQuantity: 0,
           doneQuantity: 0,
+          activeOrderPendingQuantity: 0,
+          otherOrdersPendingQuantity: 0,
           options: [],
           recipeOptions,
           notes: [],
@@ -171,9 +173,17 @@ export function groupKitchenItemsFromOrders(orders = [], activeOrderKey = "") {
       }
 
       const group = map.get(key);
+      const orderKey = getKitchenOrderKey(order);
       group.totalQuantity += quantity;
       group.pendingQuantity += pendingQuantity;
       group.doneQuantity += doneQuantity;
+      if (pendingQuantity > 0) {
+        if (activeOrderKey && orderKey === activeOrderKey) {
+          group.activeOrderPendingQuantity += pendingQuantity;
+        } else {
+          group.otherOrdersPendingQuantity += pendingQuantity;
+        }
+      }
       group.options.push(...recipeOptions.map((option) => option.label));
 
       if (pendingQuantity > 0) {
@@ -184,7 +194,7 @@ export function groupKitchenItemsFromOrders(orders = [], activeOrderKey = "") {
         }
 
           group.orders.push({
-            key: getKitchenOrderKey(order),
+            key: orderKey,
             code: getOrderCode(order),
             platform: order.platform || "",
             quantity: pendingQuantity,
@@ -194,7 +204,7 @@ export function groupKitchenItemsFromOrders(orders = [], activeOrderKey = "") {
 
       if (item.note && pendingQuantity > 0) {
         group.notes.push({
-          orderKey: getKitchenOrderKey(order),
+          orderKey,
           orderCode: getOrderCode(order),
           platform: order.platform || "",
           text: item.note,

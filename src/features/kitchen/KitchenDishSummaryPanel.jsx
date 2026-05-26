@@ -168,17 +168,27 @@ function mergeVisibleNotes(notes = []) {
 }
 
 function DishGroupButton({ active, activeOrderKey, group, onClick }) {
+  const hasSelectedOrder = Boolean(activeOrderKey);
   const hasActiveOrder = Boolean(activeOrderKey && group.orders.some((order) => order.key === activeOrderKey));
   const activeNotes = activeOrderKey
     ? group.notes.filter((note) => note.orderKey === activeOrderKey)
     : [];
-  const visibleNotes = mergeVisibleNotes(activeNotes.length ? activeNotes : activeOrderKey ? [] : group.notes.slice(0, 2));
+  const visibleNotes = mergeVisibleNotes(
+    activeNotes.length ? activeNotes : activeOrderKey ? [] : group.notes.slice(0, 2)
+  );
   const optionCounts = group.options.reduce((acc, option) => {
     acc[option] = (acc[option] || 0) + 1;
     return acc;
   }, {});
   const recipeOptions = Array.isArray(group.recipeOptions) ? group.recipeOptions : [];
   const relatedOrders = Array.isArray(group.orders) ? group.orders : [];
+  const selectedOrderQuantity = hasSelectedOrder ? group.activeOrderPendingQuantity : group.totalQuantity;
+  const otherOrdersQuantity = hasSelectedOrder ? group.otherOrdersPendingQuantity : group.pendingQuantity;
+  const helperText = hasSelectedOrder
+    ? hasActiveOrder
+      ? `Đơn đang chọn có ${group.activeOrderPendingQuantity} phần món này.`
+      : "Món này không thuộc đơn đang chọn."
+    : "Hiển thị tổng số phần của món này trong bếp.";
 
   return (
     <button
@@ -245,9 +255,23 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
       ) : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-        <StatBox label="Tổng SL" value={group.totalQuantity} />
-        <StatBox label="Chưa xong" tone="#d97706" value={group.pendingQuantity} />
-        <StatBox label="Đã xong" tone="#047857" value={group.doneQuantity} />
+        <StatBox label={hasSelectedOrder ? "Trong đơn này" : "Tổng SL"} value={selectedOrderQuantity} />
+        <StatBox label={hasSelectedOrder ? "Đơn khác" : "Chưa xong"} tone="#d97706" value={otherOrdersQuantity} />
+        <StatBox
+          label={hasSelectedOrder ? "Tổng cần làm" : "Đã xong"}
+          tone="#047857"
+          value={hasSelectedOrder ? group.pendingQuantity : group.doneQuantity}
+        />
+      </div>
+
+      <div
+        style={{
+          color: hasActiveOrder ? "#4f46e5" : "#64748b",
+          fontSize: 12,
+          fontWeight: hasActiveOrder ? 800 : 600
+        }}
+      >
+        {helperText}
       </div>
 
       {visibleNotes.length ? (
