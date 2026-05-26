@@ -86,7 +86,7 @@ export default function useAccountViewModel({
     password: "",
     confirmPassword: ""
   });
-  const [accountEntryTab, setAccountEntryTab] = useState("lookup");
+  const [accountEntryTab, setAccountEntryTab] = useState("login");
   const [loginDraft, setLoginDraft] = useState({
     phone: "",
     password: ""

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import Icon from "../../components/Icon.jsx";
-import { CustomerButton, CustomerCard, CustomerModalFrame } from "../../components/customer/CustomerUI.jsx";
+import { CustomerButton, CustomerCard, CustomerLoadingState, CustomerModalFrame } from "../../components/customer/CustomerUI.jsx";
 import { loadZaloConfigAsync, renderZaloTemplate, buildZaloLink } from "../../services/zaloService.js";
 import { formatMoney } from "../../utils/format.js";
+
+const SUCCESS_PREPARING_MS = 4000;
 
 function buildOrderItemsText(orderItems) {
   return orderItems.map((item, index) => {
@@ -44,6 +46,7 @@ export default function OrderSuccess({
   const [hasOpenedZalo, setHasOpenedZalo] = useState(false);
   const [zaloConfig, setZaloConfig] = useState({ phone: "", template: "" });
   const [isZaloConfigLoading, setIsZaloConfigLoading] = useState(true);
+  const [isPreparingSuccess, setIsPreparingSuccess] = useState(true);
   const [copyPopup, setCopyPopup] = useState({ open: false, title: "", message: "", tone: "success" });
   const [isLocallyConfirmed, setIsLocallyConfirmed] = useState(false);
 
@@ -90,6 +93,15 @@ export default function OrderSuccess({
   const effectiveZaloPhone = String(zaloConfig.phone || "").replace(/\D/g, "");
   const canOpenZalo = Boolean(effectiveZaloPhone) && !isZaloConfigLoading;
   const zaloUrl = canOpenZalo ? buildZaloLink(effectiveZaloPhone, orderMessage) : "#";
+
+  useEffect(() => {
+    setIsPreparingSuccess(true);
+    const timer = setTimeout(() => {
+      setIsPreparingSuccess(false);
+    }, SUCCESS_PREPARING_MS);
+
+    return () => clearTimeout(timer);
+  }, [order?.id, order?.orderCode]);
 
   useEffect(() => {
     let disposed = false;
@@ -164,6 +176,17 @@ export default function OrderSuccess({
     confirmCurrentOrder();
     setIsLocallyConfirmed(true);
     navigate("tracking", "orders");
+  }
+
+  if (isPreparingSuccess) {
+    return (
+      <section className="order-success-page grid min-h-[calc(100vh-96px)] place-items-center px-4 py-6">
+        <CustomerLoadingState
+          title="Quán đang chờ xác nhận"
+          message="Bạn vui lòng gửi thông tin đơn đã được copy sẵn cho quán để bắt đầu chuẩn bị đơn."
+        />
+      </section>
+    );
   }
 
   return (
