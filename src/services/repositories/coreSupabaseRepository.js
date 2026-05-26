@@ -416,7 +416,6 @@ function toLegacyCustomerRow(row = {}) {
   const updatedAt = row.updated_at || row.updatedAt || new Date().toISOString();
   const legacyRow = {
     phone,
-    name: safeName,
     email: safeEmail,
     avatar_url: safeAvatarUrl,
     password_demo: safePasswordDemo,
@@ -426,6 +425,7 @@ function toLegacyCustomerRow(row = {}) {
     member_rank: String(row.member_rank || row.memberRank || "Member"),
     updated_at: updatedAt
   };
+  if (Object.prototype.hasOwnProperty.call(row, "name")) legacyRow.name = safeName;
   if (safeId) legacyRow.id = safeId;
   if (createdAt) legacyRow.created_at = createdAt;
   return legacyRow;
@@ -592,13 +592,6 @@ async function writeAddressesByPhoneToTable(addressesByPhone = {}) {
   if (!client) return addressesByPhone;
   const phones = Object.keys(addressesByPhone || {}).map((item) => normalizePhone(item)).filter(Boolean);
   if (!phones.length) return addressesByPhone;
-  const addressProfileNameByPhone = new Map();
-  phones.forEach((phone) => {
-    const list = Array.isArray(addressesByPhone[phone]) ? addressesByPhone[phone] : [];
-    const namedAddress = list.find((item) => String(item?.receiverName || item?.name || "").trim());
-    const profileName = String(namedAddress?.receiverName || namedAddress?.name || "").trim();
-    if (profileName) addressProfileNameByPhone.set(phone, profileName);
-  });
 
   const { data: existingCustomers, error: existingCustomersError } = await client
     .from(PROFILE_TABLE)
@@ -609,10 +602,8 @@ async function writeAddressesByPhoneToTable(addressesByPhone = {}) {
   const profileRows = phones
     .map((phone) => {
       const existing = existingCustomerByPhone.get(phone) || null;
-      const fallbackName = addressProfileNameByPhone.get(phone) || "";
-      if (existing?.phone && (String(existing?.name || "").trim() || !fallbackName)) return null;
+      if (existing?.phone) return null;
       const row = { phone, registered: Boolean(existing?.registered) };
-      if (fallbackName) row.name = fallbackName;
       return row;
     })
     .filter(Boolean);
@@ -948,7 +939,7 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
     if (customerRowsRaw.length) {
       const { data: existingCustomers, error: existingCustomersError } = await client
         .from(PROFILE_TABLE)
-        .select("phone,name,registered")
+        .select("phone,registered")
         .in("phone", customerRowsRaw.map((item) => item.phone));
       if (existingCustomersError) throw existingCustomersError;
       const existingCustomerByPhone = new Map(
@@ -960,9 +951,6 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
           phone: item.phone,
           registered: Boolean(existing?.registered)
         };
-        if (!String(existing?.name || "").trim() && String(item.name || "").trim()) {
-          row.name = String(item.name || "").trim();
-        }
         return {
           ...row
         };
@@ -1004,7 +992,7 @@ async function upsertOrderToTable(order = {}) {
   if (customerPhone) {
     const { data: existingCustomer, error: existingCustomerError } = await client
       .from(PROFILE_TABLE)
-      .select("phone,name,registered")
+      .select("phone,registered")
       .eq("phone", customerPhone)
       .maybeSingle();
     if (existingCustomerError) throw existingCustomerError;
@@ -1012,9 +1000,6 @@ async function upsertOrderToTable(order = {}) {
       phone: customerPhone,
       registered: Boolean(existingCustomer?.registered)
     };
-    if (!String(existingCustomer?.name || "").trim() && String(orderRow.customer_name || "").trim()) {
-      customerRow.name = String(orderRow.customer_name || "").trim();
-    }
     const { error: customerUpsertError } = await upsertProfileRows(client, customerRow, { onConflict: "phone" });
     if (customerUpsertError) throw customerUpsertError;
   }
