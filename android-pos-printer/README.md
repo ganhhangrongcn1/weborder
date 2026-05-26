@@ -99,3 +99,94 @@ android-pos-printer/app/build/outputs/apk/debug/app-debug.apk
 - Muốn đổi link Supabase hoặc anon key thì sửa trong `MainActivity.java`.
 - App đã có foreground service giữ trạm in khi chuyển qua app khác như iPOS. Nếu người dùng tắt trạm in hoặc force stop APK thì app sẽ ngừng nhận lệnh in.
 - Nếu realtime bị mạng/POS chặn, có thể bấm `Kiểm tra lệnh in` trong APK để kéo job pending thủ công.
+
+## Xử lý lỗi thường gặp
+
+Khi trạm in không in bill, ưu tiên làm theo đúng thứ tự sau để tránh thao tác thừa.
+
+### 1. Báo lỗi liên quan Supabase hoặc không nhận lệnh in
+
+Ví dụ log:
+
+```txt
+Lỗi lấy lệnh in: Supabase HTTP 400
+refresh_token_not_found
+Invalid Refresh Token
+```
+
+Cách xử lý:
+
+1. Bấm `Kiểm tra lệnh in`
+2. Nếu vẫn chưa in được, bấm `Tắt trạm in`
+3. `Đăng xuất tài khoản chi nhánh`
+4. `Đăng nhập lại`
+5. Bấm `Bật trạm in`
+6. Bấm lại `Kiểm tra lệnh in`
+
+Giải thích ngắn:
+- Đây thường là lỗi phiên đăng nhập với Supabase đã hết hạn hoặc token không còn hợp lệ.
+- Chỉ tắt/bật trạm in đôi khi chưa đủ, cần đăng nhập lại để lấy phiên mới.
+
+### 2. Báo lỗi realtime hoặc lâu lâu không tự nhảy bill
+
+Biểu hiện:
+- Không có bill mới chạy vào ngay
+- Log có chữ `Supabase`, `Realtime`, `reconnecting`
+
+Cách xử lý:
+
+1. Bấm `Kiểm tra lệnh in`
+2. Nếu vẫn chưa có bill, `Tắt trạm in`
+3. Bật lại bằng `Bật trạm in`
+4. Kiểm tra Wi-Fi hoặc mạng LAN của máy POS
+
+Giải thích ngắn:
+- APK có Realtime và có cơ chế đọc job dự phòng.
+- Khi Realtime bị chập chờn, nút `Kiểm tra lệnh in` thường sẽ kéo được bill pending về lại.
+
+### 3. Báo lỗi máy in chưa nhận bill
+
+Ví dụ log:
+
+```txt
+Máy in chưa nhận bill
+Printer did not accept the bill
+```
+
+Cách xử lý:
+
+1. Kiểm tra máy in còn bật không
+2. Nếu in `USB`: kiểm tra dây và quyền USB
+3. Nếu in `LAN/WiFi`: kiểm tra IP máy in và mạng nội bộ
+4. Bấm `In test`
+5. Nếu in test chưa được, lưu lại cài đặt máy in rồi thử lại
+
+Giải thích ngắn:
+- Lỗi này thường là lỗi kết nối giữa APK và máy in, không phải lỗi đơn hàng.
+
+### 4. Có bill nhưng không chắc đã mất hay chưa
+
+Cách xử lý:
+
+1. Không đăng nhập đi đăng nhập lại ngay
+2. Bấm `Kiểm tra lệnh in` trước
+3. Quan sát log xem có dòng `Đã nhận lệnh in ...` hoặc `Printed bill ...` không
+4. Nếu vẫn chưa in được thì mới `Tắt trạm in` rồi bật lại
+
+### 5. Quy trình ngắn cho nhân viên
+
+Khi gặp lỗi, làm đúng 3 bước này trước:
+
+1. `Kiểm tra lệnh in`
+2. `Tắt trạm in` -> `Bật trạm in`
+3. Nếu còn báo lỗi Supabase/token -> `Đăng xuất` -> `Đăng nhập lại`
+
+### 6. Khi nào cần báo kỹ thuật
+
+Nhân viên nên báo kỹ thuật nếu:
+
+- Đã đăng nhập lại nhưng vẫn báo lỗi `Supabase HTTP 400/401`
+- `In test` cũng không in được
+- Máy in USB không xin được quyền
+- Máy in LAN/WiFi đúng IP nhưng vẫn không nhận bill
+- Có nhiều bill pending nhưng kéo mãi không ra

@@ -1339,8 +1339,7 @@ public class MainActivity extends Activity {
         output.write(0x40);
 
         writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
-        String footerText = parts.footerText.trim().isEmpty() ? DEFAULT_RECEIPT_FOOTER_TEXT : parts.footerText;
-        byte[] footerBytes = getFixedFooterRasterBytes(footerText);
+        byte[] footerBytes = getFixedFooterRasterBytes(DEFAULT_RECEIPT_FOOTER_TEXT);
         output.write(footerBytes, 0, footerBytes.length);
 
         output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
@@ -1712,21 +1711,140 @@ public class MainActivity extends Activity {
         return message.length() > 180 ? message.substring(0, 180) : message;
     }
 
+    private static class OperatorGuidance {
+        final String title;
+        final String action;
+
+        OperatorGuidance(String title, String action) {
+            this.title = title == null ? "" : title.trim();
+            this.action = action == null ? "" : action.trim();
+        }
+    }
+
+    private String normalizeLogKey(String value) {
+        return String.valueOf(value == null ? "" : value)
+                .trim()
+                .toLowerCase(Locale.US);
+    }
+
+    private OperatorGuidance resolveOperatorGuidance(String rawMessage) {
+        String normalized = normalizeLogKey(rawMessage);
+
+        if (normalized.contains("refresh_token_not_found")
+                || normalized.contains("invalid refresh token")
+                || normalized.contains("phien dang nhap chua san sang")
+                || normalized.contains("session")
+                || normalized.contains("supabase http 401")) {
+            return new OperatorGuidance(
+                    "Phiên đăng nhập đã hết hạn",
+                    "Đăng xuất rồi đăng nhập lại. Sau đó bật lại trạm in."
+            );
+        }
+
+        if (normalized.contains("khong co quyen")
+                || normalized.contains("không có quyền")
+                || normalized.contains("chua co quyen bep")
+                || normalized.contains("chưa có quyền bếp")
+                || normalized.contains("chua active")
+                || normalized.contains("khong tim thay branch_uuid")
+                || normalized.contains("không tìm thấy branch_uuid")) {
+            return new OperatorGuidance(
+                    "Tài khoản này không có quyền dùng trạm in",
+                    "Liên hệ quản lý để kiểm tra quyền hoặc chi nhánh."
+            );
+        }
+
+        if (normalized.contains("may in")
+                || normalized.contains("máy in")
+                || normalized.contains("printer did not accept")
+                || normalized.contains("khong ket noi duoc may in")
+                || normalized.contains("không kết nối được máy in")
+                || normalized.contains("usb")
+                || normalized.contains("lan/wifi")) {
+            return new OperatorGuidance(
+                    "Máy in chưa sẵn sàng",
+                    "Kiểm tra kết nối máy in rồi bấm In test."
+            );
+        }
+
+        if (normalized.contains("supabase")
+                || normalized.contains("realtime")
+                || normalized.contains("failed to fetch")
+                || normalized.contains("timeout")
+                || normalized.contains("network")
+                || normalized.contains("loi lay lenh in")
+                || normalized.contains("lỗi lấy lệnh in")
+                || normalized.contains("read print jobs failed")
+                || normalized.contains("khong mo duoc realtime")
+                || normalized.contains("không mở được realtime")) {
+            return new OperatorGuidance(
+                    "Không kết nối được hệ thống in",
+                    "Bấm Kiểm tra lệnh in. Nếu chưa được, bật lại trạm in."
+            );
+        }
+
+        if (normalized.contains("dang kiem tra lenh in")
+                || normalized.contains("đang kiểm tra lệnh in")) {
+            return new OperatorGuidance(
+                    "Đang kiểm tra lệnh in",
+                    "Vui lòng chờ trong giây lát."
+            );
+        }
+
+        if (normalized.contains("chua co lenh in moi")
+                || normalized.contains("chưa có lệnh in mới")) {
+            return new OperatorGuidance(
+                    "Chưa có lệnh in mới",
+                    "Trạm in đang hoạt động bình thường."
+            );
+        }
+
+        if (normalized.contains("in xong bill")
+                || normalized.contains("da gui bill")
+                || normalized.contains("đã gửi bill")
+                || normalized.contains("đã nhận lệnh in")) {
+            return new OperatorGuidance(
+                    "Đã xử lý lệnh in",
+                    "Nếu cần, tiếp tục chờ bill mới."
+            );
+        }
+
+        return new OperatorGuidance(
+                String.valueOf(rawMessage == null ? "" : rawMessage).trim(),
+                ""
+        );
+    }
+
+    private String buildOperatorStatusText(String rawMessage) {
+        OperatorGuidance guidance = resolveOperatorGuidance(rawMessage);
+        if (guidance.title.isEmpty()) return "";
+        if (guidance.action.isEmpty()) return guidance.title;
+        return guidance.title + "\n" + guidance.action;
+    }
+
+    private String buildOperatorLogLine(String rawMessage) {
+        OperatorGuidance guidance = resolveOperatorGuidance(rawMessage);
+        if (guidance.title.isEmpty()) return "";
+        if (guidance.action.isEmpty()) return guidance.title;
+        return guidance.title + " - " + guidance.action;
+    }
+
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private void status(String message) {
         runOnUiThread(() -> {
-            if (statusText != null) statusText.setText(message);
+            if (statusText != null) statusText.setText(buildOperatorStatusText(message));
         });
     }
 
     private void log(String message) {
+        Log.i("GHRPrintStation", String.valueOf(message == null ? "" : message));
         runOnUiThread(() -> {
             String time = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
             String old = logText == null ? "" : logText.getText().toString();
-            String next = "[" + time + "] " + message + "\n" + old;
+            String next = "[" + time + "] " + buildOperatorLogLine(message) + "\n" + old;
             if (next.length() > 3000) next = next.substring(0, 3000);
             if (logText != null) logText.setText(next);
             status(message);

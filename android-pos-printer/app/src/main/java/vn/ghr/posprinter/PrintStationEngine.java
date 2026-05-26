@@ -509,8 +509,7 @@ public class PrintStationEngine {
         output.write(0x40);
 
         writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
-        String footerText = parts.footerText.trim().isEmpty() ? DEFAULT_RECEIPT_FOOTER_TEXT : parts.footerText;
-        byte[] footerBytes = getFixedFooterRasterBytes(footerText);
+        byte[] footerBytes = getFixedFooterRasterBytes(DEFAULT_RECEIPT_FOOTER_TEXT);
         output.write(footerBytes, 0, footerBytes.length);
 
         output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
