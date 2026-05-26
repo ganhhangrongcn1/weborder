@@ -388,17 +388,26 @@ export default function Tracking({
               </div>
             </label>
 
-            <div className="grid grid-cols-3 divide-x divide-orange-100 rounded-2xl border border-orange-100 bg-white px-2 py-3 shadow-soft">
+            <div className="grid grid-cols-3 divide-x divide-orange-300 rounded-2xl border border-orange-300 bg-orange-100 px-2 py-3 shadow-soft">
               <div className="px-2">
-                <p className="text-[11px] font-black uppercase text-brown/55">Tổng {orderSummary.totalOrders} đơn</p>
+                <p className="flex items-center gap-1 text-[11px] font-black uppercase text-brown/60">
+                  <Icon name="bag" size={12} className="text-orange-500" />
+                  Tổng {orderSummary.totalOrders} đơn
+                </p>
                 <strong className="mt-1 block text-lg font-black text-orange-600">{formatMoney(orderSummary.totalSpent)}</strong>
               </div>
               <div className="px-2 text-center">
-                <p className="text-[11px] font-black uppercase text-brown/55">Đã nhận</p>
+                <p className="flex items-center justify-center gap-1 text-[11px] font-black uppercase text-brown/60">
+                  <Icon name="star" size={12} className="text-green-600" />
+                  Đã nhận
+                </p>
                 <strong className="mt-1 block text-lg font-black text-green-600">+{orderSummary.claimedPoints.toLocaleString("vi-VN")}</strong>
               </div>
               <div className="px-2 text-right">
-                <p className="text-[11px] font-black uppercase text-brown/55">Chờ nhận</p>
+                <p className="flex items-center justify-end gap-1 text-[11px] font-black uppercase text-brown/60">
+                  <Icon name="clock" size={12} className="text-orange-600" />
+                  Chờ nhận
+                </p>
                 <strong className="mt-1 block text-lg font-black text-orange-600">+{orderSummary.pendingPoints.toLocaleString("vi-VN")}</strong>
               </div>
             </div>
@@ -525,13 +534,15 @@ export default function Tracking({
                         type="button"
                         disabled={isClaiming}
                         onClick={(event) => handleClaimPartnerPoints(event, order)}
-                        className="shrink-0 rounded-full bg-gradient-main px-4 py-2 text-sm font-black text-white shadow-orange disabled:opacity-60"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-main px-4 py-2 text-sm font-black text-white shadow-orange disabled:opacity-60"
                       >
-                        {isClaiming ? "Đang cộng..." : `+${rewardPoints.toLocaleString("vi-VN")}`}
+                        <Icon name="gift" size={14} className="shrink-0" />
+                        {isClaiming ? "Đang nhận..." : `Nhận +${rewardPoints.toLocaleString("vi-VN")}`}
                       </button>
                     ) : (
-                      <span className="shrink-0 rounded-full bg-orange-50 px-4 py-2 text-sm font-black text-orange-600">
-                        +{rewardPoints.toLocaleString("vi-VN")}
+                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-green-50 px-4 py-2 text-sm font-black text-green-700">
+                        <Icon name="check" size={14} className="shrink-0" />
+                        Đã nhận
                       </span>
                     )}
                   </div>
