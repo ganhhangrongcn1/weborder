@@ -6,6 +6,7 @@ import CustomerOptionModal from "../../../components/customer/OptionModal.jsx";
 import CustomerFloatingCartBar from "../../../components/customer/FloatingCartBar.jsx";
 import CustomerToast from "../../../components/customer/Toast.jsx";
 import LoyaltyVoucherPopup from "../../../components/customer/LoyaltyVoucherPopup.jsx";
+import PwaInstallBanner from "../../../components/customer/PwaInstallBanner.jsx";
 import { CustomerLoadingState } from "../../../components/customer/CustomerUI.jsx";
 import HomePage from "../home/HomePage.jsx";
 import MenuPage from "./MenuPage.jsx";
@@ -411,6 +412,7 @@ export default function CustomerShell({
   return (
     <div className="customer-shell min-h-screen bg-app text-brown">
       <main className="mx-auto min-h-screen w-full max-w-[430px] bg-cream pb-24 shadow-preview">
+        {!isQrCounterFlow && <PwaInstallBanner />}
         {isSessionBootstrapping ? (
           <section className="px-4 pt-6">
             <CustomerLoadingState message="Đang đồng bộ tài khoản và lịch sử đơn hàng..." />

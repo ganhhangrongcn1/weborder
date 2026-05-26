@@ -2,6 +2,7 @@
 import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { getActiveFlashSalePromotions } from "../../services/flashSaleService.js";
+import { buildHomeVoucherCards } from "../../services/homeVoucherService.js";
 import { DEFAULT_SHIPPING_CONFIG } from "../../services/shippingService.js";
 import { formatMoney } from "../../utils/format.js";
 import { buildHomeCategories } from "../../utils/pureHelpers.js";
@@ -112,6 +113,10 @@ function applyFlashSaleToProduct(product = {}, flashPromos = []) {
 
 export default function useHomeComputed({
   smartPromotions,
+  coupons = [],
+  demoLoyalty = {},
+  currentPhone = "",
+  isRegisteredCustomer = false,
   products,
   currentTime,
   homeContent,
@@ -190,12 +195,22 @@ export default function useHomeComputed({
   const siteBrandBlock = safeHomeContent.find((block) => block?.id === "siteBrand");
   const deliveryAppsBlock = safeHomeContent.find((block) => block?.id === "deliveryApps");
   const popupCampaignBlock = safeHomeContent.find((block) => block?.id === "popupCampaign");
+  const promoVouchersBlock = safeHomeContent.find((block) => block?.id === "promoVouchers" || block?.id === "promo_vouchers");
   const fulfillmentBlock = safeHomeContent.find((block) => block?.id === "fulfillment");
   const flashSaleBlock = safeHomeContent.find((block) => block?.id === "flashSale" || block?.id === "flash_sale");
   const categoryBlock = safeHomeContent.find((block) => block?.id === "categorySection");
   const featuredBlock = safeHomeContent.find((block) => block?.id === "featuredProducts");
   const showCashback = cashbackBlock?.active !== false;
   const showDeliveryApps = deliveryAppsBlock?.active !== false;
+  const voucherCards = buildHomeVoucherCards({
+    coupons,
+    smartPromotions,
+    loyalty: demoLoyalty,
+    currentPhone,
+    isRegisteredCustomer,
+    now: currentTime
+  });
+  const showPromoVouchers = promoVouchersBlock?.active !== false && voucherCards.length > 0;
   const showFulfillment = fulfillmentBlock?.active !== false;
   const showFlashSale = flashSaleBlock?.active !== false && flashProducts.length > 0;
   const showCategorySection = categoryBlock?.active !== false;
@@ -252,7 +267,10 @@ export default function useHomeComputed({
     siteBrandBlock,
     deliveryAppsBlock,
     popupCampaignBlock,
+    promoVouchersBlock,
+    voucherCards,
     showCashback,
+    showPromoVouchers,
     showDeliveryApps,
     showFulfillment,
     showFlashSale,

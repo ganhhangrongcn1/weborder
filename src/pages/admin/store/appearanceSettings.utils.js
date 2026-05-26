@@ -11,6 +11,7 @@ export const DELIVERY_APP_OPTIONS = [
 export const HOME_BLOCKS = [
   { id: "siteBrand", title: "Thương hiệu / Logo", placement: "Trang chủ / Logo và lời chào" },
   { id: "hero", title: "Banner đầu trang", placement: "Trang chủ / Banner lớn đầu trang" },
+  { id: "promoVouchers", title: "Khuyến mãi cho bạn", placement: "Trang chủ / Mã giảm giá và freeship" },
   { id: "deliveryApps", title: "Banner mua trên app", placement: "Trang chủ / Đặt qua ứng dụng giao hàng" },
   { id: "popupCampaign", title: "Popup trang chủ", placement: "Trang chủ / Popup sau khi tải trang" },
   { id: "fulfillment", title: "Khối giao hàng / tự đến lấy", placement: "Trang chủ / Chọn hình thức nhận hàng" },
@@ -21,6 +22,7 @@ export const HOME_BLOCKS = [
 
 export const HOME_BLOCK_DEFAULTS = [
   { id: "siteBrand", placement: "Trang chủ / Logo và lời chào", title: "Gánh Hàng Rong", logo: "", active: true },
+  { id: "promoVouchers", placement: "Trang chủ / Mã giảm giá và freeship", title: "Khuyến mãi cho bạn", active: true },
   { id: "deliveryApps", placement: "Trang chủ / Đặt qua ứng dụng giao hàng", title: "Đặt qua ứng dụng giao hàng", subtitle: "", active: true, branchApps: [] },
   {
     id: "popupCampaign",
@@ -52,6 +54,7 @@ export const APP_SECTIONS = [
 
 export const HOME_SECTION_TARGETS = [
   { value: "home", label: "Trang chủ" },
+  { value: "promoVouchers", label: "Block khuyến mãi cho bạn" },
   { value: "deliveryApps", label: "Block mua trên app" },
   { value: "fulfillment", label: "Block giao hàng / tự đến lấy" },
   { value: "flashSale", label: "Block Flash Sale" },

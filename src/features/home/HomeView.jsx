@@ -5,6 +5,7 @@ import HomeHero from "../../pages/customer/home/HomeHero.jsx";
 import HomeFlashSale from "../../pages/customer/home/HomeFlashSale.jsx";
 import HomeCategorySection from "../../pages/customer/home/HomeCategorySection.jsx";
 import HomeFeaturedProducts from "../../pages/customer/home/HomeFeaturedProducts.jsx";
+import HomeVoucherCarousel from "../../pages/customer/home/HomeVoucherCarousel.jsx";
 import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { homeText, optionModalText } from "../../data/uiText.js";
@@ -26,6 +27,7 @@ import useHomeEffects from "./useHomeEffects.js";
 
 const FALLBACK_HOME_BLOCK_ORDER = [
   "hero",
+  "promoVouchers",
   "fulfillment",
   "categorySection",
   "featuredProducts",
@@ -45,6 +47,7 @@ function normalizeHomeBlockKey(block) {
 
   if (zone === "home-hero" || id === "hero" || placement.includes("banner lớn đầu trang")) return "hero";
   if (id === "flashSale" || id === "flash_sale") return "flashSale";
+  if (id === "promoVouchers" || id === "promo_vouchers") return "promoVouchers";
   return id;
 }
 
@@ -91,6 +94,8 @@ export default function Home({
   userProfile,
   demoUser,
   demoLoyalty,
+  currentPhone,
+  isRegisteredCustomer,
   setServiceNotice,
   getStoreBlockNotice,
   isBranchOpenNow,
@@ -118,6 +123,7 @@ export default function Home({
   const [homePopupOpen, setHomePopupOpen] = useState(false);
   const [homeClockTick, setHomeClockTick] = useState(() => Date.now());
   const cashbackRef = useRef(null);
+  const promoVouchersRef = useRef(null);
   const deliveryAppsRef = useRef(null);
   const fulfillmentRef = useRef(null);
   const flashSaleRef = useRef(null);
@@ -137,7 +143,9 @@ export default function Home({
     siteBrandBlock,
     deliveryAppsBlock,
     popupCampaignBlock,
+    voucherCards,
     showCashback,
+    showPromoVouchers,
     showDeliveryApps,
     showFulfillment,
     showFlashSale,
@@ -158,6 +166,10 @@ export default function Home({
     selectedDeliveryBranchInfo
   } = useHomeComputed({
     smartPromotions,
+    coupons,
+    demoLoyalty,
+    currentPhone,
+    isRegisteredCustomer,
     products,
     currentTime: new Date(homeClockTick),
     homeContent,
@@ -189,6 +201,7 @@ export default function Home({
     navigate,
     refs: {
       cashbackRef,
+      promoVouchersRef,
       deliveryAppsRef,
       fulfillmentRef,
       flashSaleRef,
@@ -263,6 +276,11 @@ export default function Home({
         deliveryBranches={deliveryBranches}
       />
     ),
+    promoVouchers: () => showPromoVouchers ? (
+      <section ref={promoVouchersRef}>
+        <HomeVoucherCarousel vouchers={voucherCards} />
+      </section>
+    ) : null,
     fulfillment: () => showFulfillment ? (
       <section ref={fulfillmentRef} className="home2026-section">
         <HomeFulfillmentCard

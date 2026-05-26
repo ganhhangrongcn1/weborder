@@ -132,6 +132,9 @@ function resolveStrictCatalogFallback(key, fallback, strictMode) {
 
 function getRouteLazyKeys(pathname = "/") {
   const path = String(pathname || "").toLowerCase();
+  if (path === "/" || path === "/home") {
+    return [CATALOG_CONFIG_KEYS.coupons];
+  }
   if (path.startsWith("/checkout") || path.startsWith("/cart")) {
     return [CATALOG_CONFIG_KEYS.coupons, CATALOG_CONFIG_KEYS.zones];
   }
@@ -411,6 +414,9 @@ export default function useProductList({
     if (currentPage === "checkout") {
       routeKeys.add(CATALOG_CONFIG_KEYS.coupons);
       routeKeys.add(CATALOG_CONFIG_KEYS.zones);
+    }
+    if (currentPage === "home") {
+      routeKeys.add(CATALOG_CONFIG_KEYS.coupons);
     }
     if (!routeKeys.size) return;
     const pendingKeys = Array.from(routeKeys).filter((key) => !lazyLoadedKeys.has(key));
