@@ -206,6 +206,7 @@ export default function useHomeComputed({
     coupons,
     smartPromotions,
     loyalty: demoLoyalty,
+    products: visibleProducts,
     currentPhone,
     isRegisteredCustomer,
     now: currentTime

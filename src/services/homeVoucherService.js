@@ -57,7 +57,7 @@ function normalizeCouponCard(coupon = {}, source = "coupon") {
       formatMinimumOrder(coupon.minOrder),
       maxDiscount > 0 ? `Tối đa ${formatMoney(maxDiscount)}` : ""
     ].filter(Boolean),
-    priority: isLoyalty ? 10 : 30
+    priority: isLoyalty ? 10 : 40
   };
 }
 
@@ -97,6 +97,42 @@ function buildLoyaltyCards(coupons = [], loyalty = {}, now = new Date(), isRegis
   return cards;
 }
 
+function getProductNameById(products = [], productId = "") {
+  const normalizedProductId = String(productId || "").trim();
+  if (!normalizedProductId) return "";
+  const matchedProduct = toArray(products).find((product) => String(product?.id || "").trim() === normalizedProductId);
+  return String(matchedProduct?.name || "").trim();
+}
+
+function buildGiftCards(smartPromotions = [], products = [], now = new Date()) {
+  return toArray(smartPromotions)
+    .filter((promotion) => promotion?.active !== false)
+    .filter((promotion) => promotion?.type === "gift_threshold" || promotion?.reward?.type === "gift")
+    .filter((promotion) => isDateInRange(promotion.startAt, promotion.endAt, now))
+    .map((promotion) => {
+      const minSubtotal = Number(promotion?.condition?.minSubtotal || 0);
+      const giftName =
+        getProductNameById(products, promotion?.reward?.productId) ||
+        String(promotion?.reward?.name || promotion?.reward?.title || promotion?.reward?.value || "").trim() ||
+        "Món tặng";
+
+      return {
+        id: `gift-${promotion.id || giftName}`,
+        type: "gift",
+        badge: "TẶNG MÓN",
+        title: promotion.title || promotion.name || "Đủ mức nhận quà",
+        reward: `Tặng ${giftName}`,
+        code: "TỰ ĐỘNG",
+        icon: "gift",
+        lines: [
+          formatMinimumOrder(minSubtotal),
+          "Áp dụng khi đặt món đủ điều kiện"
+        ],
+        priority: 20
+      };
+    });
+}
+
 function buildFreeshipCards(smartPromotions = [], now = new Date()) {
   return toArray(smartPromotions)
     .filter((promotion) => promotion?.active !== false)
@@ -118,7 +154,7 @@ function buildFreeshipCards(smartPromotions = [], now = new Date()) {
           `Đơn tối thiểu ${formatMoney(minSubtotal)}`,
           maxSupportShipFee > 0 ? `Tối đa ${formatMoney(maxSupportShipFee)}` : "Hỗ trợ phí giao hàng"
         ],
-        priority: 20
+        priority: 30
       };
     });
 }
@@ -135,12 +171,14 @@ export function buildHomeVoucherCards({
   coupons = [],
   smartPromotions = [],
   loyalty = {},
+  products = [],
   currentPhone = "",
   isRegisteredCustomer = false,
   now = new Date()
 } = {}) {
   const cards = [
     ...buildLoyaltyCards(coupons, loyalty, now, isRegisteredCustomer, currentPhone),
+    ...buildGiftCards(smartPromotions, products, now),
     ...buildFreeshipCards(smartPromotions, now),
     ...buildCouponCards(coupons, now)
   ];

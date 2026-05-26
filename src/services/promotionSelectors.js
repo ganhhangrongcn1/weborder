@@ -36,7 +36,12 @@ export function selectCheckoutCoupons(coupons = []) {
 }
 
 export function selectHomeSmartPromotions(smartPromotions = []) {
-  return normalizeSmartPromotions(smartPromotions).filter((promotion) => hasDisplayPlace(promotion, "home") || hasDisplayPlace(promotion, "menu"));
+  return normalizeSmartPromotions(smartPromotions).filter(
+    (promotion) =>
+      promotion?.type === "gift_threshold" ||
+      hasDisplayPlace(promotion, "home") ||
+      hasDisplayPlace(promotion, "menu")
+  );
 }
 
 export function selectCheckoutSmartPromotions(smartPromotions = []) {
