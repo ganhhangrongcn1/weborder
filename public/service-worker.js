@@ -1,4 +1,4 @@
-const CACHE_NAME = "ghr-order-shell-v1";
+const CACHE_NAME = "ghr-order-shell-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/pwa-icon-192.png", "/pwa-icon-512.png"];
 
 self.addEventListener("install", (event) => {

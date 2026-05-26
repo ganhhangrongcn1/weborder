@@ -38,9 +38,97 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      .app-boot-screen {
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: #fff7ec;
+        color: #3d2414;
+        font-family: Inter, system-ui, Arial, sans-serif;
+        text-align: center;
+      }
+
+      .app-boot-screen__content {
+        display: grid;
+        justify-items: center;
+        gap: 14px;
+      }
+
+      .app-boot-screen__logo {
+        width: 112px;
+        height: 112px;
+        border-radius: 28px;
+        box-shadow: 0 18px 40px rgba(255, 106, 0, 0.16);
+      }
+
+      .app-boot-screen__title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
+
+      .app-boot-screen__text {
+        margin: 0;
+        max-width: 260px;
+        color: #7c4a25;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .app-boot-screen__dots {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+      }
+
+      .app-boot-screen__dots span {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #ff6a00;
+        animation: appBootPulse 1s ease-in-out infinite;
+      }
+
+      .app-boot-screen__dots span:nth-child(2) {
+        animation-delay: 0.14s;
+      }
+
+      .app-boot-screen__dots span:nth-child(3) {
+        animation-delay: 0.28s;
+      }
+
+      @keyframes appBootPulse {
+        0%,
+        100% {
+          opacity: 0.35;
+          transform: translateY(0);
+        }
+
+        50% {
+          opacity: 1;
+          transform: translateY(-4px);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="app-boot-screen" aria-label="Đang mở Gánh Hàng Rong">
+        <section class="app-boot-screen__content">
+          <img class="app-boot-screen__logo" src="/pwa-icon-192.png" alt="Gánh Hàng Rong" />
+          <h1 class="app-boot-screen__title">Gánh Hàng Rong</h1>
+          <p class="app-boot-screen__text">Đang chuẩn bị món ngon cho bạn...</p>
+          <div class="app-boot-screen__dots" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </section>
+      </main>
+    </div>
     <script>
       window.process = { env: { NODE_ENV: "production" } };
     </script>
