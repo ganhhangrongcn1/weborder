@@ -7,9 +7,7 @@ import AccountAddressModal from "../../pages/customer/account/AccountAddressModa
 import AppHeader from "../../components/app/Header.jsx";
 import AppEmptyState from "../../components/app/EmptyState.jsx";
 import { formatMoney } from "../../utils/format.js";
-import { getOrderStats } from "../../utils/pureHelpers.js";
 import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../services/partnerOrderService.js";
-import { getCustomerOrderDisplayStatus } from "../../services/customerOrderStatusService.js";
 import useAccountViewModel from "./hooks/useAccountViewModel.js";
 import AccountNoticeModal from "./components/AccountNoticeModal.jsx";
 
@@ -22,11 +20,6 @@ function SourceBadge({ order }) {
   );
 }
 
-function getLookupOrderCode(order = {}) {
-  if (order.sourceType === "partner") return order.displayOrderCode || order.orderCode || "FoodApp";
-  return String(order.orderCode || "GHR-****").replace(/GHR-\d{4}/, "GHR-****");
-}
-
 function getAccountOrderCode(order = {}) {
   if (order.sourceType === "partner") return order.displayOrderCode || order.orderCode || "FoodApp";
   return order.orderCode || "GHR-****";
@@ -34,15 +27,6 @@ function getAccountOrderCode(order = {}) {
 
 function getAccountOrderBranchName(order = {}, branches = []) {
   return getCanonicalOrderBranchName(order, branches);
-}
-
-function getLookupOrderMeta(order = {}, branches = []) {
-  if (order.sourceType === "partner") {
-    const branchName = getCanonicalOrderBranchName(order, branches) || "Chưa rõ chi nhánh";
-    const statusText = getCustomerOrderDisplayStatus(order).label;
-    return `${branchName} · ${statusText}`;
-  }
-  return `${(order.items || []).length} món · Địa chỉ đã được ẩn`;
 }
 
 export default function Account({
@@ -70,28 +54,13 @@ export default function Account({
   });
 
   if (!currentPhone) {
-    const lookupStats = getOrderStats(vm.lookupOrders);
     return (
       <section>
         <AppHeader title="Tài khoản" subtitle="Thông tin, điểm thưởng và địa chỉ" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
         <div className="account-page-content space-y-4 px-4">
           <div className="rounded-[28px] bg-white p-4 shadow-soft">
-            <div className="grid grid-cols-2 rounded-2xl bg-cream p-1">
-              <button onClick={() => vm.setAccountEntryTab("lookup")} className={`rounded-xl px-3 py-2 text-sm font-black ${vm.accountEntryTab === "lookup" ? "bg-white text-orange-600 shadow-sm" : "text-brown/55"}`}>Tra cứu đơn</button>
-              <button onClick={() => vm.setAccountEntryTab("login")} className={`rounded-xl px-3 py-2 text-sm font-black ${vm.accountEntryTab === "login" ? "bg-white text-orange-600 shadow-sm" : "text-brown/55"}`}>Đăng nhập</button>
-            </div>
-
-            {vm.accountEntryTab === "lookup" ? (
-              <div className="mt-4">
-                <h2 className="text-base font-black text-brown">Tra cứu bằng số điện thoại</h2>
-                <p className="mt-1 text-sm text-brown/60">Nhập số điện thoại để xem lịch sử đơn. Điểm, địa chỉ và voucher cần đăng nhập để xem đầy đủ.</p>
-                <div className="mt-3 flex gap-2">
-                  <input value={vm.authPhone} onChange={(event) => vm.setAuthPhone(event.target.value)} placeholder="Nhập số điện thoại" className="min-w-0 flex-1 rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                  <button onClick={vm.handlePhoneLookup} className="rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Tiếp tục</button>
-                </div>
-              </div>
-            ) : vm.accountEntryTab === "login" ? (
-              <div className="mt-4">
+            {vm.accountEntryTab === "login" || vm.accountEntryTab === "lookup" ? (
+              <div>
                 <h2 className="text-base font-black text-brown">Đăng nhập tài khoản</h2>
                 <p className="mt-1 text-sm text-brown/60">Nhập số điện thoại và mật khẩu để xem hồ sơ và dữ liệu khách hàng.</p>
                 <div className="mt-3 space-y-3">
@@ -111,6 +80,12 @@ export default function Account({
                   className="mt-3 w-full rounded-2xl bg-orange-50 px-4 py-3 text-xs font-black text-orange-600"
                 >
                   Chưa có tài khoản? Tạo tài khoản
+                </button>
+                <button
+                  onClick={() => vm.navigateToTab("orders")}
+                  className="mt-2 w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55"
+                >
+                  Tra cứu đơn không cần đăng nhập
                 </button>
                 <button
                   onClick={() => {
@@ -168,70 +143,6 @@ export default function Account({
               </div>
             )}
           </div>
-
-          {vm.accountEntryTab === "lookup" && (
-            <>
-              {vm.authNotice ? <div className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{vm.authNotice}</div> : null}
-              {vm.lookupPhone ? (
-                <AccountPanel title="Lịch sử đơn theo số điện thoại">
-                  <div className="space-y-3">
-                    <div className="rounded-[22px] bg-cream/60 p-3 text-sm font-bold text-brown/65">
-                      {vm.lookupPhone} · {vm.isLookupLoading ? "Đang tra cứu..." : lookupStats.totalOrders ? `${lookupStats.totalOrders} đơn · ${formatMoney(lookupStats.totalSpent)}` : "Chưa có đơn hàng"}
-                    </div>
-                    {vm.lookupOrders.slice(0, 5).map((order) => (
-                      <div key={order.id || order.orderCode} className="rounded-[22px] border border-orange-100 bg-cream/50 p-3 text-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <strong className="break-all">{getLookupOrderCode(order)}</strong>
-                              <SourceBadge order={order} />
-                            </div>
-                            <p className="mt-1 text-brown/55">{new Date(order.createdAt).toLocaleString("vi-VN")}</p>
-                          </div>
-                          <strong className="text-orange-600">{formatMoney(order.totalAmount || order.total || 0)}</strong>
-                        </div>
-                        <p className="mt-2 text-xs text-brown/45">{getLookupOrderMeta(order, branches)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </AccountPanel>
-              ) : null}
-
-              {vm.lookupPhone && vm.authMode === "login" ? (
-                <AccountPanel title="Đăng nhập tài khoản">
-                  <div className="space-y-3">
-                    <input type="password" value={vm.authPassword} onChange={(event) => vm.setAuthPassword(event.target.value)} placeholder="Nhập mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                    <button onClick={vm.handlePasswordLogin} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Đăng nhập</button>
-                    <button
-                      onClick={() => {
-                        vm.setAccountEntryTab("forgot");
-                        vm.setForgotEmail("");
-                        vm.setAuthNotice("");
-                      }}
-                      className="w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55"
-                    >
-                      Quên mật khẩu?
-                    </button>
-                  </div>
-                </AccountPanel>
-              ) : null}
-
-              {vm.lookupPhone && vm.authMode === "register" ? (
-                <AccountPanel title="Tạo tài khoản">
-                  <div className="space-y-3">
-                    <input value={vm.registerDraft.name} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, name: event.target.value }))} placeholder="Tên hiển thị" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                    <div>
-                      <input type="email" value={vm.registerDraft.email} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, email: event.target.value }))} placeholder="Email" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                      <p className="mt-1 px-1 text-xs font-bold text-brown/45">Email dùng để lấy lại mật khẩu khi quên.</p>
-                    </div>
-                    <input type="password" value={vm.registerDraft.password} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu (ít nhất 6 ký tự)" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                    <input type="password" value={vm.registerDraft.confirmPassword} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))} placeholder="Nhập lại mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                    <button onClick={vm.handleRegister} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Tạo tài khoản</button>
-                  </div>
-                </AccountPanel>
-              ) : null}
-            </>
-          )}
         </div>
         <AccountNoticeModal notice={vm.accountNotice} onClose={() => vm.setAccountNotice(null)} />
       </section>

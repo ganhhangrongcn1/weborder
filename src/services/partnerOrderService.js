@@ -271,6 +271,8 @@ export async function getPartnerOrdersByPhone(phone, options = {}) {
   }
 
   const partnerOrders = (data || []).map(mapPartnerOrderRow);
+  if (options?.includeItems === false) return partnerOrders;
+
   const orderIds = partnerOrders.map((order) => order.id).filter(Boolean);
   if (!orderIds.length) return partnerOrders;
 

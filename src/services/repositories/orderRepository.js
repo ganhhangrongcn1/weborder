@@ -208,7 +208,10 @@ export const orderRepository = {
     try {
       const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(
         key,
-        Number.isFinite(limit) && limit > 0 ? { limit: Math.floor(limit) } : undefined
+        {
+          ...(Number.isFinite(limit) && limit > 0 ? { limit: Math.floor(limit) } : {}),
+          includeItems: options?.includeItems !== false
+        }
       );
       if (Array.isArray(remoteOrders)) {
         const all = normalizeOrdersByPhoneMap(await repository.getAsync(STORAGE_KEYS.ordersByPhone, {}));

@@ -25,6 +25,7 @@ const userStorage = createUserStorage({
   getCustomerKey,
   defaultUserDemo
 });
+const POST_LOGIN_REDIRECT_KEY = "ghr_post_login_redirect";
 
 function normalizeEmail(email = "") {
   return String(email || "").trim().toLowerCase();
@@ -59,6 +60,27 @@ function pickCustomerDisplayName(user = {}, authSessionUser = null) {
     authSessionUser?.display_name
   ];
   return candidates.map((value) => String(value || "").trim()).find((value) => !isPlaceholderName(value)) || "Khách hàng";
+}
+
+function readPendingPostLoginRedirect() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function consumePendingPostLoginRedirect() {
+  const pending = readPendingPostLoginRedirect();
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+    } catch {
+    }
+  }
+  return pending;
 }
 
 export default function useAccountViewModel({
@@ -125,6 +147,15 @@ export default function useAccountViewModel({
       setAccountEntryTab("resetPassword");
       setAuthNotice("Nhập mật khẩu mới để hoàn tất đặt lại mật khẩu.");
     }
+  }, []);
+
+  useEffect(() => {
+    const pending = readPendingPostLoginRedirect();
+    const pendingPhone = getCustomerKey(pending?.phone || "");
+    if (!pendingPhone) return;
+    setAccountEntryTab("login");
+    setLoginDraft((draft) => ({ ...draft, phone: pendingPhone }));
+    setAuthPhone(pendingPhone);
   }, []);
 
   useEffect(() => {
@@ -354,6 +385,22 @@ export default function useAccountViewModel({
     navigate(target[0], target[1]);
   }
 
+  function navigateAfterLogin() {
+    const pending = consumePendingPostLoginRedirect();
+    if (pending?.target === "orders") {
+      navigate("tracking", "orders");
+      return;
+    }
+    navigate("home", "home");
+  }
+
+  function navigateAfterRegisterIfNeeded() {
+    const pending = consumePendingPostLoginRedirect();
+    if (pending?.target === "orders") {
+      navigate("tracking", "orders");
+    }
+  }
+
   async function handlePhoneLookup() {
     const phone = getCustomerKey(authPhone);
     if (!phone || phone.length < 9) {
@@ -449,7 +496,7 @@ export default function useAccountViewModel({
     setAuthPhone("");
     setAuthPassword("");
     setAuthMode("lookup");
-    navigate("home", "home");
+    navigateAfterLogin();
   }
 
   async function handleDirectLogin() {
@@ -498,7 +545,7 @@ export default function useAccountViewModel({
       setAuthNotice("Đăng nhập thành công.");
       setLoginDraft({ phone: "", password: "" });
       setAuthPhone("");
-      navigate("home", "home");
+      navigateAfterLogin();
       return;
     }
     const user = userStorage.findByPhone(phone);
@@ -519,7 +566,7 @@ export default function useAccountViewModel({
     setAuthNotice("Đăng nhập thành công.");
     setLoginDraft({ phone: "", password: "" });
     setAuthPhone("");
-    navigate("home", "home");
+    navigateAfterLogin();
   }
 
   function handleVerifyResetPassword() {
@@ -658,6 +705,7 @@ export default function useAccountViewModel({
     setAuthPhone("");
     setAuthPassword("");
     setAuthMode("lookup");
+    navigateAfterRegisterIfNeeded();
   }
 
   return {

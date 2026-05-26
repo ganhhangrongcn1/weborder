@@ -739,6 +739,7 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
   const customerPhone = normalizePhone(phone);
   if (!customerPhone) return [];
   const limit = Number(options?.limit || 0);
+  const includeItems = options?.includeItems !== false;
 
   let ordersQuery = client
     .from("orders")
@@ -755,7 +756,7 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
 
   const orderIds = orders.map((order) => order?.id).filter(Boolean);
   let items = [];
-  if (orderIds.length) {
+  if (includeItems && orderIds.length) {
     const { data: itemRows, error: itemError } = await client
       .from("order_items")
       .select(CUSTOMER_ORDER_ITEM_COLUMNS)
