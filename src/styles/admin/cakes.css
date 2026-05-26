@@ -1,0 +1,355 @@
+.admin-cakes-page {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-cakes-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-cakes-head h1 {
+  margin: 0;
+  color: var(--admin-text, #0f172a);
+  font-size: 28px;
+}
+
+.admin-cakes-head p {
+  margin: 6px 0 0;
+  color: var(--admin-muted, #64748b);
+}
+
+.admin-cakes-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-cakes-actions button,
+.admin-cakes-list-head button,
+.admin-cake-image-box button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--admin-primary, #f97316);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 10px 14px;
+}
+
+.admin-cakes-actions .admin-secondary,
+.admin-cake-image-box button {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.admin-cakes-actions .admin-danger {
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}
+
+.admin-cakes-message {
+  margin: 0;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-weight: 750;
+  padding: 12px;
+}
+
+.admin-cakes-tabs {
+  display: flex;
+  gap: 8px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  padding: 5px;
+}
+
+.admin-cakes-tabs button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  font-weight: 850;
+  padding: 10px 14px;
+}
+
+.admin-cakes-tabs button.is-active {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.admin-cake-empty {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  font-weight: 750;
+  padding: 22px;
+  text-align: center;
+}
+
+.admin-cake-order-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-cake-order-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.admin-cake-order-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-cake-order-main h3 {
+  margin: 4px 0;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.admin-cake-order-main p,
+.admin-cake-order-note p {
+  margin: 0;
+  color: #475569;
+}
+
+.admin-cake-order-main > strong {
+  color: #dc2626;
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.admin-cake-order-code {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 5px 9px;
+}
+
+.admin-cake-order-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-cake-order-grid > div {
+  display: grid;
+  gap: 4px;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.admin-cake-order-grid span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-cake-order-grid strong,
+.admin-cake-order-grid select {
+  color: #0f172a;
+  font-weight: 850;
+}
+
+.admin-cake-order-grid select {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  padding: 7px;
+}
+
+.admin-cake-order-note {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-cakes-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.admin-cakes-list {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 8px;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+}
+
+.admin-cakes-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px;
+}
+
+.admin-cakes-list > button {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  padding: 8px;
+  text-align: left;
+}
+
+.admin-cakes-list > button.is-active {
+  border-color: var(--admin-primary, #f97316);
+  background: #fff7ed;
+}
+
+.admin-cakes-list img {
+  grid-row: span 2;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.admin-cakes-list span {
+  overflow: hidden;
+  color: #0f172a;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-cakes-list strong {
+  color: #dc2626;
+}
+
+.admin-cakes-editor {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-cake-wide {
+  grid-column: 1 / -1;
+}
+
+.admin-cake-product-grid {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.admin-cake-featured-selects {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-cake-featured-selects label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-cake-featured-selects select {
+  min-height: 42px;
+}
+
+.admin-cake-image-box {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.admin-cake-image-box img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid #e2e8f0;
+}
+
+.admin-cake-image-box input[type="file"] {
+  display: none;
+}
+
+.admin-cake-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-cake-fields label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-cake-toggle {
+  grid-column: 1 / -1;
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 980px) {
+  .admin-cakes-layout,
+  .admin-cake-product-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-cakes-list {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-cakes-head {
+    flex-direction: column;
+  }
+
+  .admin-cake-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-cake-featured-selects {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-cake-order-main {
+    flex-direction: column;
+  }
+
+  .admin-cake-order-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -4,6 +4,7 @@ import AdminCustomersPage from "./AdminCustomersPage.jsx";
 import AdminMenuPage from "./AdminMenuPage.jsx";
 import AdminStorePage from "./AdminStorePage.jsx";
 import AdminPromoPage from "./AdminPromoPage.jsx";
+import AdminCakesPage from "./AdminCakesPage.jsx";
 
 export default function AdminPageContent({ section, ...props }) {
   if (section === "dashboard") {
@@ -16,6 +17,10 @@ export default function AdminPageContent({ section, ...props }) {
 
   if (section === "customers") {
     return <AdminCustomersPage {...props} />;
+  }
+
+  if (section === "cakes") {
+    return <AdminCakesPage {...props} />;
   }
 
   if (section === "menu") {

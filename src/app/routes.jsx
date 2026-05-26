@@ -3,6 +3,7 @@ import AppAdminRoutes from "../features/app/AppAdminRoutes.jsx";
 import AppCustomerRoutes from "../features/app/AppCustomerRoutes.jsx";
 import KitchenPage from "../features/kitchen/KitchenPage.jsx";
 import DownloadPage from "../pages/DownloadPage.jsx";
+import BanhKemBanhTrangPage from "../pages/BanhKemBanhTrangPage.jsx";
 
 export default function AppRoutes({ adminAppProps, customerRouteProps }) {
   return (
@@ -26,6 +27,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
 
       <Route path="/kitchen" element={<KitchenPage />} />
       <Route path="/download" element={<DownloadPage />} />
+      <Route path="/banhkembanhtrang" element={<BanhKemBanhTrangPage branches={adminAppProps?.branches || []} />} />
 
       <Route path="/admin" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/menu" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
@@ -38,6 +40,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/admin/settings/shipping" element={<Navigate to="/admin/settings" replace />} />
       <Route path="/admin/ui" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/promotions" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/cakes" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
 
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>

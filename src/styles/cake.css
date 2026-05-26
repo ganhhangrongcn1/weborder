@@ -1,0 +1,490 @@
+.cake-page {
+  min-height: 100vh;
+  background: #fff8e5;
+  color: #211711;
+  font-family: system-ui, Arial, sans-serif;
+}
+
+.cake-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 520px);
+  gap: 28px;
+  align-items: center;
+  padding: 34px clamp(16px, 5vw, 72px) 26px;
+  background: #ffd51f;
+}
+
+.cake-hero__content {
+  max-width: 720px;
+}
+
+.cake-eyebrow {
+  margin: 0 0 8px;
+  color: #8a3b12;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.cake-hero h1 {
+  margin: 0;
+  font-size: clamp(36px, 7vw, 72px);
+  line-height: 0.95;
+  font-weight: 950;
+}
+
+.cake-hero p {
+  max-width: 620px;
+  margin: 18px 0 0;
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.cake-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.cake-hero__actions a,
+.cake-primary-btn {
+  border: 0;
+  border-radius: 8px;
+  background: #211711;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 850;
+  padding: 13px 18px;
+  text-decoration: none;
+}
+
+.cake-hero__actions span {
+  color: #5d3b18;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.cake-hero__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cake-hero__featured {
+  display: grid;
+  gap: 10px;
+}
+
+.cake-hero__featured-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cake-hero__featured-head p {
+  margin: 0;
+  color: #211711;
+  font-size: 22px;
+  font-weight: 950;
+}
+
+.cake-hero__featured-head span {
+  border-radius: 999px;
+  background: #211711;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 850;
+  padding: 6px 10px;
+}
+
+.cake-hero__grid button,
+.cake-card__image {
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  background: transparent;
+}
+
+.cake-hero__grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 12px 26px rgba(80, 43, 0, 0.2);
+}
+
+.cake-list-section {
+  padding: 28px clamp(16px, 5vw, 72px) 56px;
+}
+
+.cake-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.cake-section-head h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.cake-section-head > p {
+  margin: 0;
+  color: #79552e;
+  font-weight: 750;
+}
+
+.cake-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cake-card {
+  overflow: hidden;
+  border: 1px solid #f2d38b;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(77, 42, 0, 0.08);
+}
+
+.cake-card__image {
+  display: block;
+  position: relative;
+  width: 100%;
+}
+
+.cake-card__image img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.cake-card__badge,
+.cake-card__price {
+  position: absolute;
+  z-index: 1;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(35, 19, 8, 0.16);
+  font-weight: 950;
+}
+
+.cake-card__badge {
+  top: 7px;
+  left: 7px;
+  max-width: calc(100% - 14px);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.94);
+  color: #6d3d0d;
+  font-size: 10px;
+  line-height: 1;
+  padding: 6px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cake-card__price {
+  right: 7px;
+  bottom: 7px;
+  background: #e21b1b;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  padding: 7px 8px;
+}
+
+.cake-card__body {
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+}
+
+.cake-card__body p {
+  overflow: hidden;
+  margin: 0;
+  color: #8a6540;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cake-card__body h3 {
+  display: -webkit-box;
+  min-height: 36px;
+  overflow: hidden;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.cake-detail__content > strong,
+.cake-order-form__head strong {
+  color: #e21b1b;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.cake-card__body button {
+  border: 1px solid #f0c35c;
+  border-radius: 8px;
+  background: #fff7d7;
+  color: #7a3c0d;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  margin-top: 2px;
+  padding: 8px;
+  text-align: center;
+}
+
+.cake-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.cake-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(19, 12, 7, 0.58);
+}
+
+.cake-detail,
+.cake-order-form {
+  position: relative;
+  z-index: 1;
+  width: min(980px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
+}
+
+.cake-detail {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1fr);
+}
+
+.cake-modal__close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: #211711;
+  color: #fff;
+  cursor: pointer;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.cake-detail__image {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  object-fit: cover;
+}
+
+.cake-detail__content {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 24px;
+}
+
+.cake-detail__content h2,
+.cake-order-form__head h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.cake-detail__content p {
+  margin: 0;
+  color: #5d4634;
+  line-height: 1.55;
+}
+
+.cake-detail__meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cake-detail__meta span,
+.cake-form-message {
+  border-radius: 8px;
+  background: #fff4c2;
+  color: #6d4519;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 9px 10px;
+}
+
+.cake-pickup-branches {
+  display: grid;
+  gap: 8px;
+}
+
+.cake-pickup-title {
+  margin: 0;
+  color: #5b432f;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.cake-detail__cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cake-detail__cols h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.cake-detail__cols ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #4b3527;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.cake-order-form {
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+  padding: 18px;
+}
+
+.cake-order-form__head {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.cake-order-form__head img {
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.cake-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cake-form-grid label,
+.cake-note-field {
+  display: grid;
+  gap: 6px;
+  color: #5b432f;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cake-form-grid input,
+.cake-note-field textarea {
+  width: 100%;
+  border: 1px solid #ead0a4;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #211711;
+  font: inherit;
+  padding: 12px;
+}
+
+.cake-segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #f7ead2;
+}
+
+.cake-segmented button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #694a2d;
+  cursor: pointer;
+  font-weight: 850;
+  padding: 11px;
+}
+
+.cake-segmented button.is-active {
+  background: #211711;
+  color: #fff;
+}
+
+.cake-primary-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+@media (max-width: 820px) {
+  .cake-hero,
+  .cake-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .cake-detail__image {
+    min-height: 0;
+    max-height: 58vh;
+  }
+}
+
+@media (min-width: 900px) {
+  .cake-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .cake-card__body {
+    padding: 10px;
+  }
+
+  .cake-card__body h3 {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 560px) {
+  .cake-section-head {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .cake-form-grid,
+  .cake-detail__cols {
+    grid-template-columns: 1fr;
+  }
+
+  .cake-hero h1 {
+    font-size: 42px;
+  }
+}

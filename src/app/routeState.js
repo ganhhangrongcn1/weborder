@@ -147,6 +147,12 @@ export function adminPathToState(pathname = "/admin") {
       activeSubSection: "campaign"
     };
   }
+  if (path === "/admin/cakes") {
+    return {
+      section: "cakes",
+      activeAdminNav: "cakes-main"
+    };
+  }
 
   return {
     section: "dashboard",
@@ -166,6 +172,7 @@ export function adminNavToPath(item) {
   if (item.id === "store-downloads") return "/admin/settings/downloads";
   if (item.id === "store-ui") return "/admin/ui";
   if (item.id === "promo-campaign") return "/admin/promotions";
+  if (item.id === "cakes-main") return "/admin/cakes";
 
   return "/admin";
 }
