@@ -1,10 +1,47 @@
 import { initSupabaseRuntimeClient, getSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
-import { normalizePartnerSource, resolveOrderSourceKey } from "./partnerOrderService.js";
+import {
+  getPartnerOrderIdentityKey,
+  normalizePartnerSource,
+  resolveOrderSourceKey
+} from "./partnerOrderService.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function flattenPartnerItemOptions(value) {
+  const result = [];
+
+  function walk(item) {
+    if (!item) return;
+    if (typeof item === "string") {
+      const label = item.trim();
+      if (label) result.push(label);
+      return;
+    }
+    if (Array.isArray(item)) {
+      item.forEach(walk);
+      return;
+    }
+    if (typeof item === "object") {
+      const label = String(
+        item.name ||
+          item.label ||
+          item.option_item ||
+          item.optionName ||
+          item.value ||
+          item.title ||
+          ""
+      ).trim();
+      if (label) result.push(label);
+      [item.items, item.options, item.toppings, item.selectedOptions, item.values].forEach(walk);
+    }
+  }
+
+  walk(value);
+  return Array.from(new Set(result));
 }
 
 function toStatusToken(value = "") {
@@ -29,9 +66,9 @@ function normalizeStatusFromPartner(order = {}) {
     rawData.kitchen_status
   ].map(toStatusToken).filter(Boolean);
 
-  if (statuses.some((status) => ["done", "completed", "complete", "finish", "finished", "served"].includes(status))) return "done";
-  if (statuses.some((status) => ["cancel", "cancelled", "canceled", "refunded", "huy", "dahuy"].includes(status))) return "done";
-  if (statuses.some((status) => ["preorder", "preordered", "scheduled", "dattruoc"].includes(status))) return "pending_zalo";
+  if (statuses.some((status) => ["cancel", "cancelled", "canceled", "refunded", "huy", "dahuy"].includes(status))) return "cancelled";
+  if (statuses.some((status) => ["preorder", "preordered", "scheduled", "dattruoc"].includes(status))) return "preorder";
+  if (statuses.some((status) => ["done", "completed", "complete", "finish", "finished", "served", "hoantat"].includes(status))) return "done";
   if (statuses.some((status) => ["delivering", "shipping"].includes(status))) return "delivering";
   if (statuses.some((status) => ["preparing", "cooking", "doing", "pick", "picking", "inprogress", "confirmed", "accepted", "processing"].includes(status))) return "confirmed";
 
@@ -42,22 +79,28 @@ function mapPartnerItemRow(item = {}) {
   const quantity = toNumber(item.quantity, 1);
   const unitPrice = toNumber(item.unit_price, 0);
   const lineTotal = toNumber(item.line_total, unitPrice * quantity);
-  const options = Array.isArray(item.options) ? item.options.flat(Infinity).filter(Boolean) : [];
+  const options = flattenPartnerItemOptions(item.options);
+  const sourceItemId = String(item.id || "");
+  const productId = String(item.web_product_id || item.partner_item_id || item.item_key || sourceItemId);
+  const kitchenItemStatus = String(item.kitchen_item_status || item.item_status || "pending");
   return {
-    id: item.id || item.item_key || "",
+    id: productId || sourceItemId,
+    sourceItemId,
+    orderId: String(item.partner_order_id || ""),
+    productId,
+    product_id: productId,
     name: item.partner_item_name || item.web_product_name || "Món",
     quantity,
     price: unitPrice,
     unitTotal: unitPrice,
     lineTotal,
-    toppings: options
-      .map((option) => ({
-        name: option?.name || option?.option_item || "",
-        price: toNumber(option?.price, 0),
-        quantity: toNumber(option?.quantity, 1)
-      }))
-      .filter((option) => option.name),
-    note: item.note || ""
+    toppings: options.map((name) => ({ name, price: 0, quantity: 1 })),
+    optionGroups: [],
+    options,
+    note: item.note || "",
+    kitchenItemStatus,
+    status: kitchenItemStatus,
+    metadata: {}
   };
 }
 
@@ -77,15 +120,21 @@ function mapPartnerOrderRow(order = {}, itemsByOrderId = new Map()) {
     id: order.id || orderCode,
     sourceType: "partner",
     source,
+    partnerSource: source,
     orderSource: source,
     channel: source,
+    platform: source,
     orderCode,
     displayOrderCode,
     customerName: order.customer_name || "",
     customerPhone: order.customer_phone || order.customer_phone_key || "",
     customerPhoneKey: order.customer_phone_key || "",
     status: normalizeStatusFromPartner(order),
+    orderStatus: order.order_status || "",
     nexposStatus: order.nexpos_status || rawData.status || "",
+    kitchenStatus: order.kitchen_work_status || order.kitchen_status || "",
+    kitchenWorkStatus: order.kitchen_work_status || "",
+    kitchenDoneAt: order.kitchen_done_at || "",
     fulfillmentType: "delivery",
     paymentMethod: "foodapp",
     subtotal,
@@ -133,25 +182,19 @@ function getAdminOrderFeedKey(order = {}) {
   const sourceType = String(order?.sourceType || "").trim().toLowerCase();
   const source = sourceType === "partner" ? "partner" : "website";
   const rawData = order?.rawData && typeof order.rawData === "object" ? order.rawData : {};
-  const key = source === "partner"
-    ? String(
-        order?.id ||
-          order?.nexposOrderId ||
-          rawData?.nexpos_order_id ||
-          rawData?.id ||
-          order?.displayOrderCode ||
-          order?.orderCode ||
-          ""
-      ).trim()
-    : String(
-        order?.displayOrderCode ||
-          order?.orderCode ||
-          order?.id ||
-          rawData?.display_order_code ||
-          rawData?.order_code ||
-          rawData?.id ||
-          ""
-      ).trim();
+  if (source === "partner") {
+    return getPartnerOrderIdentityKey(order) || `${source}:unknown-${Math.random()}`;
+  }
+
+  const key = String(
+    order?.displayOrderCode ||
+      order?.orderCode ||
+      order?.id ||
+      rawData?.display_order_code ||
+      rawData?.order_code ||
+      rawData?.id ||
+      ""
+  ).trim();
 
   return key ? `${source}:${key}` : `${source}:unknown-${Math.random()}`;
 }
@@ -191,7 +234,7 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } =
 
   let query = client
     .from("partner_orders")
-    .select("id,order_code,display_order_code,partner_source,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,raw_data,order_time,created_at,updated_at")
+    .select("id,order_code,display_order_code,partner_source,nexpos_order_id,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,raw_data,order_time,created_at,updated_at")
     .order("order_time", { ascending: false });
 
   if (dateFrom) query = query.gte("order_time", dateFrom);
@@ -209,7 +252,7 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } =
   if (orderIds.length) {
     const { data: itemRows, error: itemError } = await client
       .from("partner_order_items")
-      .select("id,item_key,partner_order_id,partner_item_name,web_product_name,quantity,unit_price,line_total,options,note,item_status")
+      .select("id,item_key,partner_order_id,partner_item_id,web_product_id,partner_item_name,web_product_name,quantity,unit_price,line_total,options,note,item_status,kitchen_item_status")
       .in("partner_order_id", orderIds);
     recordAdminRequest("read partner order items", "partner_order_items");
 

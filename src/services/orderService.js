@@ -3,6 +3,8 @@ import { orderRepository } from "./repositories/orderRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
 import { applyOrderLoyalty, applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfig, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 
+const DONE_ORDER_STATUSES = new Set(["done", "completed", "hoan tat"]);
+
 function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
   const branchId = String(
     branchInfo?.id ||
@@ -31,6 +33,63 @@ function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
 
 function getOrderPhoneForLoyalty(order = {}) {
   return order.phone || order.customerPhone || order.customerPhoneKey || order.rawCustomerPhone || "";
+}
+
+function normalizeOrderStatus(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function didOrderBecomeDone(previousOrder = null, nextOrder = null) {
+  const prevStatus = normalizeOrderStatus(previousOrder?.status);
+  const nextStatus = normalizeOrderStatus(nextOrder?.status);
+  return !DONE_ORDER_STATUSES.has(prevStatus) && DONE_ORDER_STATUSES.has(nextStatus);
+}
+
+function getOrderPointsBaseAmount(order = {}) {
+  return Number(
+    order.pointsBaseAmount ??
+      Math.max(
+        Number(order.subtotal ?? order.totalAmount ?? order.total ?? 0) -
+          Number(order.promoDiscount || 0),
+        0
+      )
+  );
+}
+
+function buildOrderLoyaltyPayload(order = {}) {
+  return {
+    phone: getOrderPhoneForLoyalty(order),
+    orderId: order.orderCode || order.id,
+    amount: getOrderPointsBaseAmount(order),
+    createdAt: order.createdAt || new Date().toISOString(),
+    promoSource: order.promoSource || "",
+    promoVoucherId: order.promoVoucherId || "",
+    promoCode: order.promoCode || "",
+    pointsDiscount: Number(order.pointsDiscount || 0),
+    orderStatus: order.status || ""
+  };
+}
+
+function patchOrderInPhoneMap(allByPhone = {}, orderId, patch) {
+  let updatedOrder = null;
+  let previousOrder = null;
+  const targetId = String(orderId || "");
+  const nextByPhone = Object.fromEntries(
+    Object.entries(allByPhone || {}).map(([phone, orders]) => {
+      const nextOrders = (orders || []).map((order) => {
+        const id = order.id || order.orderCode;
+        if (String(id) !== targetId) return order;
+        previousOrder = order;
+        updatedOrder = {
+          ...order,
+          ...(typeof patch === "function" ? patch(order) : patch)
+        };
+        return updatedOrder;
+      });
+      return [phone, nextOrders];
+    })
+  );
+  return { nextByPhone, updatedOrder, previousOrder };
 }
 
 export const orderStorage = {
@@ -66,70 +125,16 @@ export const orderStorage = {
   },
   updateOrder(orderId, patch) {
     const allByPhone = this.getAllByPhone();
-    let updatedOrder = null;
-    let previousOrder = null;
-    const nextByPhone = Object.fromEntries(
-      Object.entries(allByPhone).map(([phone, orders]) => {
-        const nextOrders = (orders || []).map((order) => {
-          const id = order.id || order.orderCode;
-          if (String(id) !== String(orderId)) return order;
-          previousOrder = order;
-          updatedOrder = {
-            ...order,
-            ...(typeof patch === "function" ? patch(order) : patch)
-          };
-          return updatedOrder;
-        });
-        return [phone, nextOrders];
-      })
-    );
+    const { nextByPhone, updatedOrder, previousOrder } = patchOrderInPhoneMap(allByPhone, orderId, patch);
     this.saveAll(nextByPhone);
-    if (updatedOrder) {
-      const prevStatus = String(previousOrder?.status || "").toLowerCase();
-      const nextStatus = String(updatedOrder?.status || "").toLowerCase();
-      const becameDone = !["done", "completed", "hoàn tất"].includes(prevStatus) && ["done", "completed", "hoàn tất"].includes(nextStatus);
-      if (becameDone) {
-        applyOrderLoyalty({
-          phone: getOrderPhoneForLoyalty(updatedOrder),
-          orderId: updatedOrder.orderCode || updatedOrder.id,
-          amount: Number(
-            updatedOrder.pointsBaseAmount ??
-              Math.max(
-                Number(updatedOrder.subtotal ?? updatedOrder.totalAmount ?? updatedOrder.total ?? 0) -
-                  Number(updatedOrder.promoDiscount || 0),
-                0
-              )
-          ),
-          createdAt: updatedOrder.createdAt || new Date().toISOString(),
-          promoSource: updatedOrder.promoSource || "",
-          promoVoucherId: updatedOrder.promoVoucherId || "",
-          promoCode: updatedOrder.promoCode || "",
-          pointsDiscount: Number(updatedOrder.pointsDiscount || 0),
-          orderStatus: updatedOrder.status || ""
-        });
-      }
+    if (updatedOrder && didOrderBecomeDone(previousOrder, updatedOrder)) {
+      applyOrderLoyalty(buildOrderLoyaltyPayload(updatedOrder));
     }
     return updatedOrder;
   },
   async updateOrderAsync(orderId, patch) {
     const allByPhone = await this.getAllByPhoneAsync();
-    let updatedOrder = null;
-    let previousOrder = null;
-    const nextByPhone = Object.fromEntries(
-      Object.entries(allByPhone).map(([phone, orders]) => {
-        const nextOrders = (orders || []).map((order) => {
-          const id = order.id || order.orderCode;
-          if (String(id) !== String(orderId)) return order;
-          previousOrder = order;
-          updatedOrder = {
-            ...order,
-            ...(typeof patch === "function" ? patch(order) : patch)
-          };
-          return updatedOrder;
-        });
-        return [phone, nextOrders];
-      })
-    );
+    const { nextByPhone, updatedOrder, previousOrder } = patchOrderInPhoneMap(allByPhone, orderId, patch);
     if (!updatedOrder) return null;
 
     // Update runtime state first for instant UI feedback, then persist remotely.
@@ -143,33 +148,145 @@ export const orderStorage = {
       );
     }
 
-    const prevStatus = String(previousOrder?.status || "").toLowerCase();
-    const nextStatus = String(updatedOrder?.status || "").toLowerCase();
-    const becameDone = !["done", "completed", "hoàn tất"].includes(prevStatus) && ["done", "completed", "hoàn tất"].includes(nextStatus);
-    if (becameDone) {
-      await applyOrderLoyaltyAsync({
-        phone: getOrderPhoneForLoyalty(updatedOrder),
-        orderId: updatedOrder.orderCode || updatedOrder.id,
-        amount: Number(
-          updatedOrder.pointsBaseAmount ??
-            Math.max(
-              Number(updatedOrder.subtotal ?? updatedOrder.totalAmount ?? updatedOrder.total ?? 0) -
-                Number(updatedOrder.promoDiscount || 0),
-              0
-            )
-        ),
-        createdAt: updatedOrder.createdAt || new Date().toISOString(),
-        promoSource: updatedOrder.promoSource || "",
-        promoVoucherId: updatedOrder.promoVoucherId || "",
-        promoCode: updatedOrder.promoCode || "",
-        pointsDiscount: Number(updatedOrder.pointsDiscount || 0),
-        orderStatus: updatedOrder.status || ""
-      });
+    if (didOrderBecomeDone(previousOrder, updatedOrder)) {
+      await applyOrderLoyaltyAsync(buildOrderLoyaltyPayload(updatedOrder));
     }
 
     return updatedOrder;
   }
 };
+
+function isCurrentOrderPhone(currentPhone, orderPhone) {
+  return getCustomerKey(currentPhone) === getCustomerKey(orderPhone);
+}
+
+function saveCreatedOrderCustomerMarker({ order, currentPhone, saveDemoUser }) {
+  if (!currentPhone || !isCurrentOrderPhone(currentPhone, order.phone) || !saveDemoUser) return;
+  saveDemoUser({
+    phone: order.phone,
+    registered: true
+  });
+}
+
+function syncCreatedOrderList({ order, currentPhone, setDemoOrdersState }) {
+  if (!isCurrentOrderPhone(currentPhone, order.phone)) return;
+  setDemoOrdersState(orderStorage.getByPhone(order.phone));
+}
+
+async function syncCreatedOrderListAsync({ order, currentPhone, setDemoOrdersState }) {
+  if (!isCurrentOrderPhone(currentPhone, order.phone)) return;
+  const latestOrders = await orderStorage.getByPhoneAsync(order.phone, { limit: 5 });
+  setDemoOrdersState(latestOrders);
+}
+
+function applyCreatedOrderLoyalty({
+  order,
+  pointsAmount,
+  createdAt,
+  promoSource,
+  promoVoucherId,
+  promoCode,
+  pointsDiscount,
+  currentPhone,
+  setDemoLoyaltyState
+}) {
+  const nextPhoneLoyalty = applyOrderLoyalty({
+    phone: order.phone,
+    orderId: order.orderCode || order.id,
+    amount: pointsAmount,
+    createdAt,
+    promoSource,
+    promoVoucherId,
+    promoCode,
+    pointsDiscount: Number(pointsDiscount || 0),
+    orderStatus: order.status
+  });
+  if (!currentPhone || isCurrentOrderPhone(currentPhone, order.phone)) {
+    setDemoLoyaltyState(nextPhoneLoyalty);
+  }
+  return nextPhoneLoyalty;
+}
+
+function saveCreatedOrderAddress({
+  order,
+  deliveryInfo,
+  fulfillmentType,
+  currentPhone,
+  addressStorage,
+  updateAddress,
+  addAddress,
+  setDefaultAddress,
+  setDemoAddressesState
+}) {
+  if (fulfillmentType === "pickup" || !deliveryInfo?.address) return;
+  const phoneAddresses = addressStorage.getAll(order.phone);
+  const existingAddress = phoneAddresses.find(
+    (address) => address.address.trim().toLowerCase() === deliveryInfo.address.trim().toLowerCase()
+  );
+  const baseAddresses = existingAddress
+    ? updateAddress(phoneAddresses, existingAddress.id, {
+        label: "Giao gan nhat",
+        receiverName: deliveryInfo.name,
+        phone: order.phone,
+        lat: deliveryInfo.lat,
+        lng: deliveryInfo.lng,
+        distanceKm: deliveryInfo.distanceKm,
+        deliveryFee: deliveryInfo.deliveryFee
+      })
+    : addAddress(phoneAddresses, {
+        label: "Giao gan nhat",
+        receiverName: deliveryInfo.name,
+        phone: order.phone,
+        address: deliveryInfo.address,
+        lat: deliveryInfo.lat,
+        lng: deliveryInfo.lng,
+        distanceKm: deliveryInfo.distanceKm,
+        deliveryFee: deliveryInfo.deliveryFee,
+        isDefault: true
+      });
+  const defaultId = existingAddress?.id || baseAddresses[0].id;
+  const defaulted = setDefaultAddress(baseAddresses, defaultId);
+  const savedAddresses = addressStorage.saveAll(
+    [defaulted.find((address) => address.id === defaultId), ...defaulted.filter((address) => address.id !== defaultId)].filter(Boolean),
+    order.phone
+  );
+  if (isCurrentOrderPhone(currentPhone, order.phone)) setDemoAddressesState(savedAddresses);
+}
+
+function updateCreatedOrderProfile({
+  savedOrder,
+  totalAmount,
+  deliveryInfo,
+  fulfillmentType,
+  nextPhoneLoyalty,
+  setUserProfile,
+  getMemberRank
+}) {
+  setUserProfile((profile) => {
+    const nextTotalSpent = profile.totalSpent + totalAmount;
+    const nextAddresses = fulfillmentType === "pickup" || !deliveryInfo?.address
+      ? profile.addresses
+      : [{ id: Date.now(), title: "Giao gan nhat", detail: deliveryInfo.address, active: true }, ...profile.addresses.map((address) => ({ ...address, active: false }))].slice(0, 4);
+    return {
+      ...profile,
+      name: profile.name,
+      phone: deliveryInfo?.phone || profile.phone,
+      points: Number(nextPhoneLoyalty?.totalPoints || profile.points || 0),
+      totalOrders: profile.totalOrders + 1,
+      totalSpent: nextTotalSpent,
+      memberRank: getMemberRank(nextTotalSpent),
+      addresses: nextAddresses,
+      orderHistory: [savedOrder, ...profile.orderHistory],
+      pointHistory: Array.isArray(nextPhoneLoyalty?.pointHistory) ? nextPhoneLoyalty.pointHistory : profile.pointHistory
+    };
+  });
+}
+
+function finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, setCart }) {
+  setCurrentOrder(savedOrder);
+  setOrderStatus("pending_zalo");
+  setCart([]);
+}
 
 export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee = 0, originalShippingFee = shippingFee, shippingSupportDiscount = 0, promoDiscount = 0, promoCode = "", promoSource = "", promoVoucherId = "", pointsDiscount = 0, distanceKm = null, lat = null, lng = null, deliveryInfo, fulfillmentType, branchInfo = null, pickupTimeText = "", paymentMethod, orderSource = "online", userProfile, currentPhone, setDemoOrdersState, setDemoLoyaltyState, addressStorage, updateAddress, addAddress, setDefaultAddress, setDemoAddressesState, setUserProfile, getMemberRank, setCurrentOrder, setOrderStatus, setCart, saveDemoUser }) {
   if (!cart.length) return null;
@@ -234,58 +351,40 @@ export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee =
     pointsEarned
   };
   const savedOrder = orderStorage.addOrder(order);
-  if (currentPhone && getCustomerKey(currentPhone) === order.phone && saveDemoUser) {
-    saveDemoUser({
-      phone: order.phone,
-      registered: true
-    });
-  }
-  if (getCustomerKey(currentPhone) === order.phone) setDemoOrdersState(orderStorage.getByPhone(order.phone));
-  const nextPhoneLoyalty = applyOrderLoyalty({
-    phone: order.phone,
-    orderId: orderCode,
-    amount: pointsAmount,
+  saveCreatedOrderCustomerMarker({ order, currentPhone, saveDemoUser });
+  syncCreatedOrderList({ order, currentPhone, setDemoOrdersState });
+  const nextPhoneLoyalty = applyCreatedOrderLoyalty({
+    order,
+    pointsAmount,
     createdAt,
     promoSource,
     promoVoucherId,
     promoCode,
-    pointsDiscount: Number(pointsDiscount || 0),
-    orderStatus: order.status
+    pointsDiscount,
+    currentPhone,
+    setDemoLoyaltyState
   });
-  if (!currentPhone || getCustomerKey(currentPhone) === order.phone) setDemoLoyaltyState(nextPhoneLoyalty);
-  if (fulfillmentType !== "pickup" && deliveryInfo?.address) {
-    const phoneAddresses = addressStorage.getAll(order.phone);
-    const existingAddress = phoneAddresses.find((address) => address.address.trim().toLowerCase() === deliveryInfo.address.trim().toLowerCase());
-    const baseAddresses = existingAddress
-      ? updateAddress(phoneAddresses, existingAddress.id, { label: "Giao gan nhat", receiverName: deliveryInfo.name, phone: order.phone, lat: deliveryInfo.lat, lng: deliveryInfo.lng, distanceKm: deliveryInfo.distanceKm, deliveryFee: deliveryInfo.deliveryFee })
-      : addAddress(phoneAddresses, { label: "Giao gan nhat", receiverName: deliveryInfo.name, phone: order.phone, address: deliveryInfo.address, lat: deliveryInfo.lat, lng: deliveryInfo.lng, distanceKm: deliveryInfo.distanceKm, deliveryFee: deliveryInfo.deliveryFee, isDefault: true });
-    const defaultId = existingAddress?.id || baseAddresses[0].id;
-    const defaulted = setDefaultAddress(baseAddresses, defaultId);
-    const savedAddresses = addressStorage.saveAll([defaulted.find((address) => address.id === defaultId), ...defaulted.filter((address) => address.id !== defaultId)].filter(Boolean), order.phone);
-    if (getCustomerKey(currentPhone) === order.phone) setDemoAddressesState(savedAddresses);
-  }
-
-  setUserProfile((profile) => {
-    const nextTotalSpent = profile.totalSpent + totalAmount;
-    const nextAddresses = fulfillmentType === "pickup" || !deliveryInfo?.address
-      ? profile.addresses
-      : [{ id: Date.now(), title: "Giao gan nhat", detail: deliveryInfo.address, active: true }, ...profile.addresses.map((address) => ({ ...address, active: false }))].slice(0, 4);
-    return {
-      ...profile,
-      name: profile.name,
-      phone: deliveryInfo?.phone || profile.phone,
-      points: Number(nextPhoneLoyalty?.totalPoints || profile.points || 0),
-      totalOrders: profile.totalOrders + 1,
-      totalSpent: nextTotalSpent,
-      memberRank: getMemberRank(nextTotalSpent),
-      addresses: nextAddresses,
-      orderHistory: [savedOrder, ...profile.orderHistory],
-      pointHistory: Array.isArray(nextPhoneLoyalty?.pointHistory) ? nextPhoneLoyalty.pointHistory : profile.pointHistory
-    };
+  saveCreatedOrderAddress({
+    order,
+    deliveryInfo,
+    fulfillmentType,
+    currentPhone,
+    addressStorage,
+    updateAddress,
+    addAddress,
+    setDefaultAddress,
+    setDemoAddressesState
   });
-  setCurrentOrder(savedOrder);
-  setOrderStatus("pending_zalo");
-  setCart([]);
+  updateCreatedOrderProfile({
+    savedOrder,
+    totalAmount,
+    deliveryInfo,
+    fulfillmentType,
+    nextPhoneLoyalty,
+    setUserProfile,
+    getMemberRank
+  });
+  finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, setCart });
   return order;
 }
 
@@ -393,60 +492,40 @@ export async function createOrderAsync(params) {
   };
 
   const savedOrder = await orderStorage.addOrderAsync(order);
-  if (currentPhone && getCustomerKey(currentPhone) === order.phone && saveDemoUser) {
-    saveDemoUser({ phone: order.phone, registered: true });
-  }
-  if (getCustomerKey(currentPhone) === order.phone) {
-    const latestOrders = await orderStorage.getByPhoneAsync(order.phone, { limit: 5 });
-    setDemoOrdersState(latestOrders);
-  }
-
-  const nextPhoneLoyalty = applyOrderLoyalty({
-    phone: order.phone,
-    orderId: orderCode,
-    amount: pointsAmount,
+  saveCreatedOrderCustomerMarker({ order, currentPhone, saveDemoUser });
+  await syncCreatedOrderListAsync({ order, currentPhone, setDemoOrdersState });
+  const nextPhoneLoyalty = applyCreatedOrderLoyalty({
+    order,
+    pointsAmount,
     createdAt,
     promoSource,
     promoVoucherId,
     promoCode,
-    pointsDiscount: Number(pointsDiscount || 0),
-    orderStatus: order.status
+    pointsDiscount,
+    currentPhone,
+    setDemoLoyaltyState
   });
-  if (!currentPhone || getCustomerKey(currentPhone) === order.phone) setDemoLoyaltyState(nextPhoneLoyalty);
-
-  if (fulfillmentType !== "pickup" && deliveryInfo?.address) {
-    const phoneAddresses = addressStorage.getAll(order.phone);
-    const existingAddress = phoneAddresses.find((address) => address.address.trim().toLowerCase() === deliveryInfo.address.trim().toLowerCase());
-    const baseAddresses = existingAddress
-      ? updateAddress(phoneAddresses, existingAddress.id, { label: "Giao gan nhat", receiverName: deliveryInfo.name, phone: order.phone, lat: deliveryInfo.lat, lng: deliveryInfo.lng, distanceKm: deliveryInfo.distanceKm, deliveryFee: deliveryInfo.deliveryFee })
-      : addAddress(phoneAddresses, { label: "Giao gan nhat", receiverName: deliveryInfo.name, phone: order.phone, address: deliveryInfo.address, lat: deliveryInfo.lat, lng: deliveryInfo.lng, distanceKm: deliveryInfo.distanceKm, deliveryFee: deliveryInfo.deliveryFee, isDefault: true });
-    const defaultId = existingAddress?.id || baseAddresses[0].id;
-    const defaulted = setDefaultAddress(baseAddresses, defaultId);
-    const savedAddresses = addressStorage.saveAll([defaulted.find((address) => address.id === defaultId), ...defaulted.filter((address) => address.id !== defaultId)].filter(Boolean), order.phone);
-    if (getCustomerKey(currentPhone) === order.phone) setDemoAddressesState(savedAddresses);
-  }
-
-  setUserProfile((profile) => {
-    const nextTotalSpent = profile.totalSpent + totalAmount;
-    const nextAddresses = fulfillmentType === "pickup" || !deliveryInfo?.address
-      ? profile.addresses
-      : [{ id: Date.now(), title: "Giao gan nhat", detail: deliveryInfo.address, active: true }, ...profile.addresses.map((address) => ({ ...address, active: false }))].slice(0, 4);
-    return {
-      ...profile,
-      name: profile.name,
-      phone: deliveryInfo?.phone || profile.phone,
-      points: Number(nextPhoneLoyalty?.totalPoints || profile.points || 0),
-      totalOrders: profile.totalOrders + 1,
-      totalSpent: nextTotalSpent,
-      memberRank: getMemberRank(nextTotalSpent),
-      addresses: nextAddresses,
-      orderHistory: [savedOrder, ...profile.orderHistory],
-      pointHistory: Array.isArray(nextPhoneLoyalty?.pointHistory) ? nextPhoneLoyalty.pointHistory : profile.pointHistory
-    };
+  saveCreatedOrderAddress({
+    order,
+    deliveryInfo,
+    fulfillmentType,
+    currentPhone,
+    addressStorage,
+    updateAddress,
+    addAddress,
+    setDefaultAddress,
+    setDemoAddressesState
   });
-  setCurrentOrder(savedOrder);
-  setOrderStatus("pending_zalo");
-  setCart([]);
+  updateCreatedOrderProfile({
+    savedOrder,
+    totalAmount,
+    deliveryInfo,
+    fulfillmentType,
+    nextPhoneLoyalty,
+    setUserProfile,
+    getMemberRank
+  });
+  finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, setCart });
   return order;
 }
 
@@ -516,3 +595,4 @@ export function reorder(order, catalogProducts = []) {
     };
   });
 }
+

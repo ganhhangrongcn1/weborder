@@ -1,9 +1,17 @@
-import {
+﻿import {
   getSupabaseKitchenAuthClient,
   getSupabaseRuntimeClient,
   initSupabaseKitchenAuthClient,
   initSupabaseRuntimeClient
 } from "./supabase/supabaseRuntimeClient.js";
+import {
+  buildOrderCountingPhoneVariants,
+  buildCustomerLifetimeStatsMap,
+  buildCustomerOrderCountMap,
+  isExcludedOrderForCounting,
+  toOrderCountingNumber
+} from "./customerOrderCountingService.js";
+import { getMonthlyCustomerGiftStatsByPhonesRpc } from "./customerOrderCountingRpcService.js";
 import { getCustomerTier } from "./crmService.js";
 import { getCustomerKey } from "./storageService.js";
 import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
@@ -12,7 +20,6 @@ const MONTHLY_GIFT_CODE = "MONTHLY_3_ORDERS";
 const MONTHLY_GIFT_NAME = "Quà khách quen tháng";
 const MONTHLY_GIFT_THRESHOLD = 3;
 const DEFAULT_GIFT_ENRICHMENT_LIMIT = 30;
-const CANCELLED_STATUS_KEYS = new Set(["cancelled", "canceled", "cancel", "refunded"]);
 const GIFT_ENRICHMENT_CLOSED_STATUS_KEYS = new Set([
   "done",
   "completed",
@@ -36,8 +43,7 @@ function toText(value = "") {
 }
 
 function toNumber(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  return toOrderCountingNumber(value, fallback);
 }
 
 function getObject(value) {
@@ -58,9 +64,6 @@ function normalizeTextKey(value = "") {
     .replace(/^-+|-+$/g, "");
 }
 
-function isCancelledOrder(...statuses) {
-  return statuses.some((status) => CANCELLED_STATUS_KEYS.has(normalizeStatus(status)));
-}
 
 function isGiftEnrichmentCandidate(order = {}) {
   const raw = getObject(order.raw);
@@ -222,71 +225,42 @@ export function resolveKitchenCustomerIdentity(order = {}) {
     };
   }
 
-  const name = toText(order.customerName || raw.customer_name || metadata.customerName);
-  const nameKey = normalizeTextKey(name);
-
-  if (nameKey && !["khach", "khach-le", "guest"].includes(nameKey)) {
-    return {
-      key: `name-${nameKey}`,
-      type: "name",
-      phone: "",
-      name
-    };
-  }
-
   return {
     key: "",
     type: "",
     phone: "",
-    name
+    name: ""
   };
 }
 
 function countMonthlyOrders(rows = [], keySet = new Set()) {
-  const counts = new Map();
-
-  rows.forEach((order) => {
-    const identity = resolveKitchenCustomerIdentity(order);
-    if (!identity.key || !keySet.has(identity.key)) return;
-    counts.set(identity.key, (counts.get(identity.key) || 0) + 1);
+  return buildCustomerOrderCountMap(rows, {
+    resolveIdentity: resolveKitchenCustomerIdentity,
+    keySet
   });
-
-  return counts;
 }
 
 function mergeCountStats(base = new Map(), rows = []) {
-  rows.forEach((row) => {
-    const identity = resolveKitchenCustomerIdentity(row);
-    if (!identity.key) return;
+  const nextStats = buildCustomerLifetimeStatsMap(rows, {
+    resolveIdentity: resolveKitchenCustomerIdentity,
+    getAmount: (row) => Math.max(0, toNumber(row.totalAmount, 0))
+  });
 
-    const current = base.get(identity.key) || { totalOrders: 0, totalSpent: 0 };
-    current.totalOrders += 1;
-    current.totalSpent += Math.max(0, toNumber(row.totalAmount, 0));
-    base.set(identity.key, current);
+  nextStats.forEach((value, key) => {
+    const current = base.get(key) || { totalOrders: 0, totalSpent: 0 };
+    base.set(key, {
+      totalOrders: toNumber(current.totalOrders, 0) + toNumber(value.totalOrders, 0),
+      totalSpent: toNumber(current.totalSpent, 0) + toNumber(value.totalSpent, 0)
+    });
   });
 
   return base;
 }
 
 function buildPhoneQueryVariants(phoneKeys = []) {
-  const variants = new Set();
-
-  (Array.isArray(phoneKeys) ? phoneKeys : []).forEach((phoneKey) => {
-    const normalized = getCustomerKey(phoneKey);
-    if (!normalized) return;
-
-    variants.add(normalized);
-
-    const localDigits = normalized.slice(1); // 9 digits after leading 0
-    if (localDigits) {
-      variants.add(localDigits);
-      variants.add(`84${localDigits}`);
-      variants.add(`+84${localDigits}`);
-      variants.add(`0084${localDigits}`);
-    }
-  });
-
-  return [...variants];
+  return buildOrderCountingPhoneVariants(
+    (Array.isArray(phoneKeys) ? phoneKeys : []).map((phoneKey) => getCustomerKey(phoneKey)).filter(Boolean)
+  );
 }
 
 function groupVisibleOrderSignaturesByCustomer(orders = []) {
@@ -321,7 +295,6 @@ function buildStatsForCustomer(customerKey = "", stats = {}) {
   return {
     monthlyOrderCount: stats.monthlyCounts?.get(customerKey) || 0,
     claim: stats.giftClaims?.get(customerKey) || null,
-    profile: stats.profiles?.get(customerKey) || null,
     allTimeStats: stats.allTimeStatsMap?.get(customerKey) || null
   };
 }
@@ -332,11 +305,6 @@ function isValidMonthlyGiftClaim(claim = null, monthlyOrderCount = 0) {
     toNumber(claim.order_count_at_claim, 0),
     toNumber(monthlyOrderCount, 0)
   ) >= MONTHLY_GIFT_THRESHOLD;
-}
-
-function profileNeedsAllTimeFallback(profile = null) {
-  if (!profile) return true;
-  return toNumber(profile.total_orders, 0) <= 0;
 }
 
 async function readMonthlyWebsiteOrders(client, range) {
@@ -350,7 +318,7 @@ async function readMonthlyWebsiteOrders(client, range) {
   if (error) throw error;
 
   return (data || [])
-    .filter((row) => !isCancelledOrder(row.status))
+    .filter((row) => !isExcludedOrderForCounting(row.status))
     .map((row) => ({
       id: row.id,
       orderCode: row.order_code,
@@ -385,7 +353,7 @@ async function readAllTimeWebsiteOrdersByPhones(client, phoneKeys = []) {
   });
 
   return [...rowMap.values()]
-    .filter((row) => !isCancelledOrder(row.status))
+    .filter((row) => !isExcludedOrderForCounting(row.status))
     .map((row) => ({
       id: row.id,
       orderCode: row.order_code,
@@ -409,7 +377,7 @@ async function readMonthlyPartnerOrders(client, range) {
   if (error) throw error;
 
   return (data || [])
-    .filter((row) => !isCancelledOrder(row.order_status, row.nexpos_status, getObject(row.raw_data).status))
+    .filter((row) => !isExcludedOrderForCounting(row.order_status, row.nexpos_status, getObject(row.raw_data).status))
     .map((row) => ({
       id: row.id,
       orderCode: row.order_code,
@@ -450,7 +418,7 @@ async function readAllTimePartnerOrdersByPhones(client, phoneKeys = []) {
   });
 
   return [...rowMap.values()]
-    .filter((row) => !isCancelledOrder(row.order_status, row.nexpos_status, getObject(row.raw_data).status))
+    .filter((row) => !isExcludedOrderForCounting(row.order_status, row.nexpos_status, getObject(row.raw_data).status))
     .map((row) => ({
       id: row.id,
       orderCode: row.order_code,
@@ -482,47 +450,17 @@ async function readGiftClaims(client, customerKeys = [], monthKey = "") {
   }, new Map());
 }
 
-async function readCustomerProfiles(client, phoneKeys = []) {
-  if (!phoneKeys.length) return new Map();
-  const phoneVariants = buildPhoneQueryVariants(phoneKeys);
-  if (!phoneVariants.length) return new Map();
-
-  const { data, error } = await client
-    .from("profiles")
-    .select("phone,total_orders,total_spent,member_rank")
-    .in("phone", phoneVariants);
-  recordKitchenRequest("gift profiles", "profiles");
-
-  if (error) throw error;
-
-  return (data || []).reduce((map, row) => {
-    map.set(getCustomerKey(row.phone), row);
-    return map;
-  }, new Map());
-}
-
 function buildMonthlyGiftInfo(order = {}, options = {}) {
   const identity = resolveKitchenCustomerIdentity(order);
   const claim = options.claim || null;
-  const profile = options.profile || null;
   const allTimeStats = options.allTimeStats || null;
   const monthlyOrderCount = toNumber(options.monthlyOrderCount, 0);
   const validClaim = isValidMonthlyGiftClaim(claim, monthlyOrderCount) ? claim : null;
-  const profileTotalSpent = toNumber(profile?.total_spent, 0);
-  const profileTotalOrders = toNumber(profile?.total_orders, 0);
   const dynamicTotalSpent = toNumber(allTimeStats?.totalSpent, 0);
   const dynamicTotalOrders = toNumber(allTimeStats?.totalOrders, 0);
-  const profileMemberRank = toText(profile?.member_rank);
-  const hasProfileLifetimeStats = Boolean(
-    profile && (profileTotalOrders > 0 || profileTotalSpent > 0 || (profileMemberRank && profileMemberRank !== "Member"))
-  );
-  const totalSpent = hasProfileLifetimeStats ? profileTotalSpent : dynamicTotalSpent;
-  const totalOrderCount = hasProfileLifetimeStats
-    ? Math.max(profileTotalOrders, monthlyOrderCount)
-    : Math.max(dynamicTotalOrders, monthlyOrderCount);
-  const memberTier = profileMemberRank && profileMemberRank !== "Member"
-    ? profileMemberRank
-    : getCustomerTier(totalSpent);
+  const totalSpent = dynamicTotalSpent;
+  const totalOrderCount = Math.max(dynamicTotalOrders, monthlyOrderCount);
+  const memberTier = getCustomerTier(totalSpent);
 
   return {
     customerKey: identity.key,
@@ -602,7 +540,6 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
                 monthKey,
                 monthlyOrderCount: Math.max(toNumber(cachedStats.monthlyOrderCount, 0), fallbackMonthlyCount),
                 claim: cachedStats.claim || null,
-                profile: cachedStats.profile || null,
                 allTimeStats: cachedStats.allTimeStats || null
               })
             };
@@ -614,23 +551,75 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
       missingCustomerKeys.push(...customerKeys);
     }
 
+    const missingCustomerSet = new Set(missingCustomerKeys);
+    const missingPhoneKeys = phoneKeys.filter((phone) => missingCustomerSet.has(phone));
+    const rpcStatsByCustomer = await getMonthlyCustomerGiftStatsByPhonesRpc({
+      monthKey,
+      phoneKeys: missingPhoneKeys
+    });
+
+    if (rpcStatsByCustomer?.size) {
+      missingPhoneKeys.forEach((phoneKey) => {
+        const rpcStats = rpcStatsByCustomer.get(phoneKey);
+        if (!rpcStats) return;
+
+        const cacheKey = buildGiftStatsCacheKey(monthKey, phoneKey);
+        const fallbackMonthlyCount = visibleCountsByCustomer.get(phoneKey) || 0;
+        const normalizedStats = {
+          ...rpcStats,
+          monthlyOrderCount: Math.max(toNumber(rpcStats.monthlyOrderCount, 0), fallbackMonthlyCount)
+        };
+
+        cachedStatsByCustomer.set(phoneKey, normalizedStats);
+        setGiftStatsCache(cacheKey, normalizedStats, visibleSignaturesByCustomer.get(phoneKey) || []);
+        missingCustomerSet.delete(phoneKey);
+      });
+    }
+
+    const remainingCustomerKeys = [...missingCustomerSet];
+
+    if (!remainingCustomerKeys.length) {
+      return {
+        orders: list.map((order) => {
+          const identity = resolveKitchenCustomerIdentity(order);
+          if (!enrichmentCustomerKeySet.has(identity.key)) {
+            return {
+              ...order,
+              monthlyGift: buildMonthlyGiftInfo(order, { monthKey })
+            };
+          }
+
+          const customerStats = cachedStatsByCustomer.get(identity.key) || {};
+          const fallbackMonthlyCount = visibleCountsByCustomer.get(identity.key) || 0;
+          return {
+            ...order,
+            monthlyGift: buildMonthlyGiftInfo(order, {
+              monthKey,
+              monthlyOrderCount: Math.max(toNumber(customerStats.monthlyOrderCount, 0), fallbackMonthlyCount),
+              claim: customerStats.claim || null,
+              allTimeStats: customerStats.allTimeStats || null
+            })
+          };
+        }),
+        error: ""
+      };
+    }
+
     const client = await getReadClient();
     if (!client) throw new Error("Supabase chưa sẵn sàng.");
 
-    const missingCustomerSet = new Set(missingCustomerKeys);
-    const missingPhoneKeys = phoneKeys.filter((phone) => missingCustomerSet.has(phone));
-    const [websiteOrders, partnerOrders, giftClaims, profiles] = await Promise.all([
+    const remainingCustomerSet = new Set(remainingCustomerKeys);
+    const remainingPhoneKeys = phoneKeys.filter((phone) => remainingCustomerSet.has(phone));
+    const [websiteOrders, partnerOrders, giftClaims] = await Promise.all([
       readMonthlyWebsiteOrders(client, range),
       readMonthlyPartnerOrders(client, range),
-      readGiftClaims(client, missingCustomerKeys, monthKey),
-      readCustomerProfiles(client, missingPhoneKeys)
+      readGiftClaims(client, remainingCustomerKeys, monthKey)
     ]);
-    const dynamicPhoneKeys = missingPhoneKeys.filter((phone) => profileNeedsAllTimeFallback(profiles.get(phone)));
     const [allTimeWebsiteOrders, allTimePartnerOrders] = await Promise.all([
-      readAllTimeWebsiteOrdersByPhones(client, dynamicPhoneKeys),
-      readAllTimePartnerOrdersByPhones(client, dynamicPhoneKeys)
+      readAllTimeWebsiteOrdersByPhones(client, remainingPhoneKeys),
+      readAllTimePartnerOrdersByPhones(client, remainingPhoneKeys)
     ]);
-    const monthlyCounts = countMonthlyOrders([...websiteOrders, ...partnerOrders], missingCustomerSet);
+    const monthlyCounts = countMonthlyOrders([...websiteOrders, ...partnerOrders], remainingCustomerSet);
     const allTimeStatsMap = mergeCountStats(
       mergeCountStats(new Map(), allTimeWebsiteOrders),
       allTimePartnerOrders
@@ -638,11 +627,10 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
     const stats = {
       monthlyCounts,
       giftClaims,
-      profiles,
       allTimeStatsMap
     };
 
-    missingCustomerKeys.forEach((customerKey) => {
+    remainingCustomerKeys.forEach((customerKey) => {
       const cacheKey = buildGiftStatsCacheKey(monthKey, customerKey);
       const customerStats = buildStatsForCustomer(customerKey, stats);
       const fallbackMonthlyCount = visibleCountsByCustomer.get(customerKey) || 0;
@@ -672,7 +660,6 @@ export async function enrichKitchenOrdersWithMonthlyGifts(orders = [], options =
             monthKey,
             monthlyOrderCount: Math.max(toNumber(customerStats.monthlyOrderCount, 0), fallbackMonthlyCount),
             claim: customerStats.claim || null,
-            profile: customerStats.profile || null,
             allTimeStats: customerStats.allTimeStats || null
           })
         };
@@ -805,3 +792,4 @@ export async function claimMonthlyCustomerGift(order = {}, options = {}) {
 }
 
 export { MONTHLY_GIFT_CODE, MONTHLY_GIFT_NAME, MONTHLY_GIFT_THRESHOLD, getMonthKey };
+

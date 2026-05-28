@@ -247,6 +247,22 @@ export default function Tracking({
         phone: currentPhone
       });
 
+      if (result.alreadyClaimed) {
+        updateClaimedPartnerOrder(order.id);
+        setSummaryRefreshKey((key) => key + 1);
+        setSelectedOrder((selected) => (
+          String(selected?.id || "") === String(order.id)
+            ? { ...selected, pointStatus: "claimed" }
+            : selected
+        ));
+        setServiceNotice?.({
+          title: "Đơn đã được cộng điểm",
+          description: result.message || "Điểm của đơn này đã được ghi nhận trước đó.",
+          badge: "Tích điểm"
+        });
+        return;
+      }
+
       if (!result.ok) {
         setServiceNotice?.({
           title: "Chưa cộng được điểm",

@@ -1,9 +1,15 @@
-import { getCustomerKey } from "./storageService.js";
+﻿import { getCustomerKey } from "./storageService.js";
 import { readPartnerOrdersForAdmin } from "./adminOrderFeedService.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { customerRepository } from "./repositories/customerRepository.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
+import {
+  EMPTY_ORDER_COUNT_SUMMARY,
+  appendOrderCountSummary,
+  isExcludedOrderForCounting,
+  toOrderCountingNumber
+} from "./customerOrderCountingService.js";
 import {
   calculateOrderPoints,
   defaultLoyaltyData,
@@ -12,7 +18,6 @@ import {
   reconcileLoyaltyFromOrders,
   resolveVoucherUsageFromOrders
 } from "./loyaltyService.js";
-
 export const CRM_CUSTOMERS_KEY = "ghr_customers";
 export const CRM_LOYALTY_KEY = "ghr_loyalty";
 
@@ -132,9 +137,24 @@ export function saveLoyaltyConfig(next) {
   return loyaltyRepository.saveCrmConfig(normalized);
 }
 
+
 function sumNumericPoints(entries = []) {
   return entries.reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
 }
+
+function shouldExcludeCrmOrder(order = {}) {
+  return isExcludedOrderForCounting(
+    order?.status,
+    order?.orderStatus,
+    order?.order_status,
+    order?.nexposStatus,
+    order?.nexpos_status,
+    order?.raw?.status,
+    order?.raw?.order_status,
+    order?.raw?.nexpos_status
+  );
+}
+
 
 async function loadCrmSupportSnapshot({ force = false } = {}) {
   const now = Date.now();
@@ -378,18 +398,23 @@ function buildCustomersSnapshotFromSources({
   const grouped = orders.reduce((acc, order) => {
     const phone = getCustomerKey(order.customerPhone || order.phone || "");
     if (!phone) return acc;
+    if (shouldExcludeCrmOrder(order)) return acc;
     const orderName = order.orderCustomerName || order.customerName || customerMeta[phone]?.name || "Khách";
     const current = acc[phone] || {
       phone,
       name: orderName,
       lastOrderName: orderName,
-      totalOrders: 0,
-      totalSpent: 0,
+      ...EMPTY_ORDER_COUNT_SUMMARY,
       lastOrderAt: null,
       orders: []
     };
-    current.totalOrders += 1;
-    current.totalSpent += Number(order.totalAmount || order.total || 0);
+    const nextSummary = appendOrderCountSummary(
+      current,
+      toOrderCountingNumber(order.totalAmount ?? order.total, 0),
+      1
+    );
+    current.totalOrders = nextSummary.totalOrders;
+    current.totalSpent = nextSummary.totalSpent;
     current.orders.push(order);
     if (!current.lastOrderAt || new Date(order.createdAt || 0) > new Date(current.lastOrderAt || 0)) {
       current.lastOrderAt = order.createdAt || null;
@@ -402,7 +427,10 @@ function buildCustomersSnapshotFromSources({
 
   const allPhones = Array.from(
     new Set(
-      Object.keys(registeredUsers || {})
+      [
+        ...Object.keys(grouped || {}),
+        ...Object.keys(registeredUsers || {})
+      ]
         .map((phone) => getCustomerKey(phone))
         .filter(Boolean)
     )
@@ -415,24 +443,23 @@ function buildCustomersSnapshotFromSources({
         phone,
         name: registeredUser?.name || customerMeta?.[phone]?.name || "",
         lastOrderName: "",
-        totalOrders: Number(registeredUser?.totalOrders || 0),
-        totalSpent: Number(registeredUser?.totalSpent || 0),
+        ...EMPTY_ORDER_COUNT_SUMMARY,
         lastOrderAt: registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null,
         orders: []
       };
-      const totalOrders = Math.max(Number(customer.totalOrders || 0), Number(registeredUser?.totalOrders || 0));
-      const totalSpent = Math.max(Number(customer.totalSpent || 0), Number(registeredUser?.totalSpent || 0));
+      const totalOrders = toOrderCountingNumber(customer.totalOrders, 0);
+      const totalSpent = toOrderCountingNumber(customer.totalSpent, 0);
       const lastOrderAt = customer.lastOrderAt || registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null;
       const autoPoints = Math.floor((Number(totalSpent || 0) / ratio.currencyPerPoint) * ratio.pointPerUnit);
       const phoneLoyalty = normalizeLoyaltyData({
         ...defaultLoyaltyData,
         ...(loyaltyByPhone[customer.phone] || {})
       });
-      const orderEarnedPoints = sumPointsByType(phoneLoyalty.pointHistory, (type) => type === "ORDER_EARN");
+      const orderEarnedPoints = sumPointsByTypes(phoneLoyalty.pointHistory, ["ORDER_EARN", "PARTNER_ORDER_EARN"]);
       const checkinAndRewardPoints = sumPointsByTypes(phoneLoyalty.pointHistory, ["CHECKIN", "MILESTONE"]);
       const spentPointsRaw = sumPointsByType(phoneLoyalty.pointHistory, (type) => type === "ORDER_SPEND");
       const spentPoints = Math.abs(Math.min(0, Number(spentPointsRaw || 0)));
-      const otherAdjustPoints = sumPointsByType(phoneLoyalty.pointHistory, (type) => !["ORDER_EARN", "CHECKIN", "MILESTONE", "ORDER_SPEND"].includes(type));
+      const otherAdjustPoints = sumPointsByType(phoneLoyalty.pointHistory, (type) => !["ORDER_EARN", "PARTNER_ORDER_EARN", "CHECKIN", "MILESTONE", "ORDER_SPEND"].includes(type));
       const totalFromHistory = (phoneLoyalty.pointHistory || []).reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
       const hasPointHistory = (phoneLoyalty.pointHistory || []).length > 0;
       const currentPoints = Math.max(0, Number(hasPointHistory ? totalFromHistory : (phoneLoyalty.totalPoints || 0)));
@@ -473,7 +500,7 @@ function buildCustomersSnapshotFromSources({
           registeredUser?.passwordDemo ||
           registeredUser?.email
         ),
-        tier: registeredUser?.memberRank || getCustomerTier(totalSpent),
+        tier: getCustomerTier(totalSpent),
         daysSinceLastOrder: getDaysSince(lastOrderAt),
         vouchers: resolvedVouchers,
         pointsHistory: phoneLoyalty.pointHistory
@@ -614,3 +641,5 @@ export async function cancelCustomerVoucher(phone, voucherRef) {
   await loyaltyRepository.saveByPhoneAsync(key, next, defaultLoyaltyData);
   return next;
 }
+
+

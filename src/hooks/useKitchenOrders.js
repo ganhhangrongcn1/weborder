@@ -3,7 +3,8 @@ import {
   getKitchenOrders,
   getNextKitchenOrderAction,
   markKitchenOrderDone,
-  subscribeKitchenOrderChanges
+  subscribeKitchenOrderChanges,
+  updateKitchenOrderItemStatus
 } from "../services/kitchenOrderService.js";
 import {
   claimMonthlyCustomerGift,
@@ -349,6 +350,7 @@ function mergeOrdersBySource(currentOrders = [], refreshedOrders = [], sourceTyp
 }
 
 function getRealtimeBranchCandidates(row = {}, table = "") {
+  const rawData = row.raw_data && typeof row.raw_data === "object" ? row.raw_data : {};
   if (table === "orders") {
     return [
       row.branch_uuid,
@@ -369,7 +371,18 @@ function getRealtimeBranchCandidates(row = {}, table = "") {
       row.branch_id,
       row.branch_name,
       row.nexpos_site_name,
-      row.nexpos_hub_name
+      row.nexpos_hub_name,
+      rawData.branch_uuid,
+      rawData.branch_id,
+      rawData.branch_code,
+      rawData.nexpos_site_id,
+      rawData.nexpos_hub_id,
+      rawData.branch_name,
+      rawData.nexpos_site_name,
+      rawData.nexpos_hub_name,
+      rawData.store_name,
+      rawData.site_name,
+      rawData.hub_name
     ];
   }
 
@@ -480,23 +493,32 @@ function patchItemStatus(targetOrder = {}, targetItem = {}, nextStatus = "pendin
   return (order = {}) => {
     if (!isSameKitchenOrder(order, targetOrder)) return order;
 
-    return {
-      ...order,
-      items: (order.items || []).map((item) => {
-        if (getKitchenItemKey(item) !== targetItemKey) return item;
+    const nextItems = (order.items || []).map((item) => {
+      if (getKitchenItemKey(item) !== targetItemKey) return item;
 
-        return {
-          ...item,
-          status: nextStatus,
-          displayStatus: getKitchenItemDisplayStatus(nextStatus),
-          doneAt: nextStatus === "done" ? now : "",
-          raw: {
-            ...(item.raw || {}),
-            kitchen_item_status: nextStatus,
-            kitchen_done_at: nextStatus === "done" ? now : null
-          }
-        };
-      })
+      return {
+        ...item,
+        status: nextStatus,
+        kitchenItemStatus: nextStatus,
+        displayStatus: getKitchenItemDisplayStatus(nextStatus),
+        doneAt: nextStatus === "done" ? now : "",
+        raw: {
+          ...(item.raw || {}),
+          kitchen_item_status: nextStatus,
+          kitchen_done_at: nextStatus === "done" ? now : null
+        }
+      };
+    });
+    const nextOrder = {
+      ...order,
+      items: nextItems
+    };
+    const orderIsDone = ["done", "completed"].includes(normalizeText(order.status));
+    const nextKitchenStatus = orderIsDone ? order.kitchenStatus : "cooking";
+    return {
+      ...nextOrder,
+      kitchenStatus: nextKitchenStatus,
+      displayStatus: getBranchDisplayStatus(order.status, nextKitchenStatus, order.fulfillmentType)
     };
   };
 }
@@ -533,7 +555,7 @@ export default function useKitchenOrders(options = null) {
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
   const [requestAudit, setRequestAudit] = useState(() => getKitchenRequestAuditSnapshot());
   const [updatingOrderId, setUpdatingOrderId] = useState("");
-  const [updatingItemKey] = useState("");
+  const [updatingItemKey, setUpdatingItemKey] = useState("");
   const [claimingGiftOrderId, setClaimingGiftOrderId] = useState("");
   const loadingOrdersRef = useRef(false);
   const realtimeReloadTimerRef = useRef(null);
@@ -783,15 +805,33 @@ export default function useKitchenOrders(options = null) {
     }
   }, [orders, updatingOrderId]);
 
-  const toggleItemDone = useCallback((order, item) => {
+  const toggleItemDone = useCallback(async (order, item) => {
     const orderId = String(order?.id || "").trim();
     const itemId = getKitchenItemKey(item);
     if (!orderId || !itemId || updatingItemKey) return;
 
-    const nextStatus = item.status === "done" ? "pending" : "done";
+    const currentItemStatus = normalizeText(item.kitchenItemStatus || item.status);
+    const nextStatus = currentItemStatus === "done" ? "pending" : "done";
+    const previousOrders = orders;
     setError("");
+    setUpdatingItemKey(`${orderId}:${itemId}`);
     setOrders((currentOrders) => currentOrders.map(patchItemStatus(order, item, nextStatus)));
-  }, [updatingItemKey]);
+
+    try {
+      const result = await updateKitchenOrderItemStatus(order, item, nextStatus);
+      if (!result.ok) {
+        setOrders(previousOrders);
+        setError(result.message || "Khong cap nhat duoc trang thai mon.");
+        return;
+      }
+      setRequestAudit(getKitchenRequestAuditSnapshot());
+    } catch (err) {
+      setOrders(previousOrders);
+      setError(err?.message || "Khong cap nhat duoc trang thai mon.");
+    } finally {
+      setUpdatingItemKey("");
+    }
+  }, [orders, updatingItemKey]);
 
   const claimGift = useCallback(async (order) => {
     const orderId = String(order?.id || "").trim();

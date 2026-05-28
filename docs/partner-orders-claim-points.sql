@@ -97,6 +97,7 @@ declare
   v_points integer;
   v_total_points integer;
   v_ledger_id text;
+  v_existing_points integer;
 begin
   v_phone := public.normalize_vietnam_phone(p_customer_phone);
 
@@ -139,8 +140,30 @@ begin
     return;
   end if;
 
-  if v_order.order_status in ('cancelled', 'refunded') then
+  if lower(coalesce(v_order.order_status, '')) in ('cancelled', 'canceled', 'cancel', 'refunded', 'preorder', 'pre_order', 'preordered', 'scheduled') then
     return query select false, 'Đơn đã hủy hoặc hoàn tiền nên không thể cộng điểm.', v_order.id, v_order.order_code, 0, 0;
+    return;
+  end if;
+
+  select coalesce(points, 0)::integer
+  into v_existing_points
+  from public.loyalty_ledger
+  where partner_order_id = v_order.id
+    and entry_type = 'PARTNER_ORDER_EARN'
+  limit 1;
+
+  if found then
+    update public.partner_orders
+    set point_status = 'claimed'
+    where id = v_order.id
+      and coalesce(point_status, '') <> 'claimed';
+
+    select coalesce(total_points, 0)::integer
+    into v_total_points
+    from public.loyalty_accounts
+    where customer_phone = v_phone;
+
+    return query select false, 'Đơn này đã được cộng điểm trước đó.', v_order.id, v_order.order_code, 0, coalesce(v_total_points, 0);
     return;
   end if;
 

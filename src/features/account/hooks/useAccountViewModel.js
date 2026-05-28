@@ -78,6 +78,44 @@ function consumePendingPostLoginRedirect() {
   return pending;
 }
 
+async function refreshCustomerUserFromRemote(phone) {
+  const key = getCustomerKey(phone);
+  if (!key) return null;
+  try {
+    await userStorage.hydrateFromRemote?.();
+  } catch {
+  }
+  return userStorage.findByPhone(key) || null;
+}
+
+async function syncRegisteredCustomerProfile({
+  phone,
+  name = "",
+  email = "",
+  avatarUrl = "",
+  authUserId = ""
+}) {
+  const key = getCustomerKey(phone);
+  if (!key) {
+    return { ok: false, message: "Khong xac dinh duoc so dien thoai de dong bo profile.", user: null };
+  }
+
+  const syncResult = await syncCustomerProfileToSupabase({
+    phone: key,
+    name,
+    email,
+    avatarUrl,
+    authUserId
+  });
+
+  const refreshedUser = await refreshCustomerUserFromRemote(key);
+  return {
+    ok: Boolean(syncResult?.ok),
+    message: String(syncResult?.message || "").trim(),
+    user: refreshedUser
+  };
+}
+
 export default function useAccountViewModel({
   navigate,
   demoUser,
@@ -277,9 +315,9 @@ export default function useAccountViewModel({
 
   async function handleSaveUser(patch) {
     try {
-      customerRepository.suppressRemoteWrite?.(4000);
       const activePhone = accountUser?.phone || userStorage.getCurrentPhone?.() || "";
       const mergedAvatarUrl = patch.avatarUrl ?? accountUser?.avatarUrl ?? "";
+      const shouldSyncViaAuth = shouldUseSupabaseAuth;
       const saved = await customerRepository.upsertCustomerByPhone(
         activePhone,
         {
@@ -287,15 +325,16 @@ export default function useAccountViewModel({
           name: patch.name ?? accountUser?.name ?? "",
           avatarUrl: mergedAvatarUrl
         },
-        { writeRemote: shouldUseSupabaseAuth }
+        { writeRemote: !shouldSyncViaAuth }
       );
       if (!saved) {
         setAuthNotice("Không xác định được số điện thoại để lưu hồ sơ.");
         return;
       }
 
-      if (shouldUseSupabaseAuth) {
-        const syncResult = await syncCustomerProfileToSupabase({
+      let refreshed = saved;
+      if (shouldSyncViaAuth) {
+        const syncResult = await syncRegisteredCustomerProfile({
           phone: activePhone,
           name: saved.name || "",
           email: saved.email || "",
@@ -304,13 +343,11 @@ export default function useAccountViewModel({
         if (!syncResult.ok && import.meta?.env?.DEV) {
           console.warn("[account] syncCustomerProfileToSupabase failed", syncResult.message);
         }
-        try {
-          await userStorage.hydrateFromRemote?.();
-        } catch {
-        }
+        refreshed = syncResult.user || saved;
+      } else {
+        refreshed = (await refreshCustomerUserFromRemote(activePhone)) || saved;
       }
 
-      const refreshed = userStorage.findByPhone(activePhone) || saved;
       setRemoteUser(refreshed);
       setDemoUser(refreshed);
       setAuthNotice("Đã lưu hồ sơ.");
@@ -462,18 +499,10 @@ export default function useAccountViewModel({
       if (!authSyncResult.ok && import.meta?.env?.DEV) {
         console.warn("[account] lookup syncAuthProfileToCustomerRow failed", authSyncResult.message);
       }
-      try {
-        await userStorage.hydrateFromRemote?.();
-      } catch {
+      const syncedUser = await refreshCustomerUserFromRemote(lookupPhone);
+      if (syncedUser) {
+        setLookupUser(syncedUser);
       }
-      const currentUser = userStorage.findByPhone(lookupPhone) || {};
-      const authUserId = authResult?.data?.user?.id || authResult?.data?.session?.user?.id || currentUser.authUserId || "";
-      userStorage.upsertUser({
-        ...currentUser,
-        phone: lookupPhone,
-        authUserId,
-        registered: true
-      });
     }
     const result = loginOrRegisterByPhone(lookupPhone);
     if (!result) return;
@@ -513,18 +542,6 @@ export default function useAccountViewModel({
       if (!authSyncResult.ok && import.meta?.env?.DEV) {
         console.warn("[account] syncAuthProfileToCustomerRow failed", authSyncResult.message);
       }
-      try {
-        await userStorage.hydrateFromRemote?.();
-      } catch {
-      }
-      const currentUser = userStorage.findByPhone(phone) || {};
-      const authUserId = authResult?.data?.user?.id || authResult?.data?.session?.user?.id || currentUser.authUserId || "";
-      userStorage.upsertUser({
-        ...currentUser,
-        phone,
-        authUserId,
-        registered: true
-      });
       const result = loginOrRegisterByPhone(phone);
       if (!result) return;
       const freshUser = await resolveFreshUserAfterLogin(phone, result?.user || null);
@@ -665,22 +682,13 @@ export default function useAccountViewModel({
       true
     );
     if (!result) return;
-    if (shouldUseSupabaseAuth) {
-      userStorage.upsertUser({
-        ...(result.user || {}),
-        phone: registerPhone,
-        email: normalizeEmail(registerDraft.email),
-        authUserId: registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "",
-        registered: true
-      });
-    }
     customerRepository.saveSessionPointer?.({
       phone: registerPhone,
       customerId: result?.user?.id || registerPhone,
       authUserId: shouldUseSupabaseAuth ? (registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "") : ""
     });
     if (shouldUseSupabaseAuth) {
-      const syncResult = await syncCustomerProfileToSupabase({
+      const syncResult = await syncRegisteredCustomerProfile({
         phone: registerPhone,
         name: registerDraft.name.trim(),
         email: normalizeEmail(registerDraft.email),
@@ -694,6 +702,11 @@ export default function useAccountViewModel({
         }
       } else if (import.meta?.env?.DEV) {
         console.info("[account] register sync customer ok", registerPhone);
+      }
+      const refreshedUser = syncResult.user || (await refreshCustomerUserFromRemote(registerPhone)) || result.user || null;
+      if (refreshedUser) {
+        setDemoUser(refreshedUser);
+        setRemoteUser(refreshedUser);
       }
     }
     setAuthNotice("Đăng ký thành công. Dữ liệu cũ theo số điện thoại đã được liên kết.");

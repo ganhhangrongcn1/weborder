@@ -322,6 +322,8 @@ export default function useCustomerSession({
   useEffect(() => {
     if (!enabled) return undefined;
     if (!currentPhone) return undefined;
+    let refreshTimer = null;
+
     const refreshCustomerData = () => {
       const key = getCustomerKey(currentPhone);
       const latestUser = userStorage.findByPhone(key);
@@ -343,10 +345,27 @@ export default function useCustomerSession({
       setDemoAddressesState(addressStorage.getAll(key));
     };
 
-    window.addEventListener("ghr:orders-changed", refreshCustomerData);
+    const scheduleRefreshCustomerData = (event) => {
+      const key = getCustomerKey(currentPhone);
+      const changedPhones = Array.isArray(event?.detail?.changedPhones)
+        ? event.detail.changedPhones.map((phone) => getCustomerKey(phone)).filter(Boolean)
+        : [];
+      if (changedPhones.length && !changedPhones.includes(key)) return;
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        refreshCustomerData();
+      }, 120);
+    };
+
+    window.addEventListener("ghr:orders-changed", scheduleRefreshCustomerData);
 
     return () => {
-      window.removeEventListener("ghr:orders-changed", refreshCustomerData);
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      window.removeEventListener("ghr:orders-changed", scheduleRefreshCustomerData);
     };
   }, [addressStorage, currentPhone, defaultLoyaltyData, enabled, getCustomerKey, loyaltyByPhoneStorage, orderStorage, userStorage, reconcileLoyaltyFromOrders]);
 

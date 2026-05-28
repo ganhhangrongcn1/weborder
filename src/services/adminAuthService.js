@@ -20,11 +20,18 @@ function normalizeEmail(value = "") {
 
 function normalizeProfile(profile = null) {
   if (!profile || typeof profile !== "object") return null;
+  const metadata = profile.metadata && typeof profile.metadata === "object" ? profile.metadata : {};
   return {
     ...profile,
     email: normalizeEmail(profile.email),
     role: String(profile.role || "").trim().toLowerCase(),
-    status: String(profile.status || "").trim().toLowerCase()
+    status: String(profile.status || "").trim().toLowerCase(),
+    metadata,
+    branchName: String(profile.branch_name || profile.branchName || metadata.branch_name || metadata.branchName || "").trim(),
+    branchAlias: String(profile.branch_alias || profile.branchAlias || metadata.branch_alias || metadata.branchAlias || "").trim(),
+    branchUuid: String(profile.branch_uuid || profile.branchUuid || metadata.branch_uuid || metadata.branchUuid || "").trim(),
+    isGlobalAdmin: String(profile.role || "").trim().toLowerCase() === "admin" &&
+      !String(profile.branch_uuid || profile.branchUuid || metadata.branch_uuid || metadata.branchUuid || "").trim()
   };
 }
 
@@ -100,7 +107,7 @@ async function readPrivilegedProfile(client, session) {
   const { data, error } = await withTimeout(() =>
     client
       .from(PROFILE_TABLE)
-      .select("id, auth_user_id, phone, name, email, role, status, registered")
+      .select("id, auth_user_id, phone, name, email, role, status, registered, branch_uuid, metadata")
       .eq("auth_user_id", authUserId)
       .maybeSingle()
   );

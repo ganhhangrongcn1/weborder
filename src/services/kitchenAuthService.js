@@ -21,9 +21,9 @@ function normalizeProfile(profile = null) {
     role: String(profile.role || "").trim().toLowerCase(),
     status: String(profile.status || "").trim().toLowerCase(),
     metadata,
-    branchName: String(metadata.branch_name || metadata.branchName || "").trim(),
-    branchAlias: String(metadata.branch_alias || metadata.branchAlias || "").trim(),
-    branchUuid: String(metadata.branch_uuid || metadata.branchUuid || "").trim()
+    branchName: String(profile.branch_name || profile.branchName || metadata.branch_name || metadata.branchName || "").trim(),
+    branchAlias: String(profile.branch_alias || profile.branchAlias || metadata.branch_alias || metadata.branchAlias || "").trim(),
+    branchUuid: String(profile.branch_uuid || profile.branchUuid || metadata.branch_uuid || metadata.branchUuid || "").trim()
   };
 }
 
@@ -94,7 +94,7 @@ async function readKitchenProfile(client, session) {
     const { data, error } = await withTimeout(() =>
       client
         .from(PROFILE_TABLE)
-        .select("id, auth_user_id, phone, name, email, role, status, registered, metadata")
+        .select("id, auth_user_id, phone, name, email, role, status, registered, branch_uuid, metadata")
         .eq("auth_user_id", authUserId)
         .maybeSingle()
     );
@@ -106,7 +106,7 @@ async function readKitchenProfile(client, session) {
   const { data, error } = await withTimeout(() =>
     client
       .from(PROFILE_TABLE)
-      .select("id, auth_user_id, phone, name, email, role, status, registered, metadata")
+      .select("id, auth_user_id, phone, name, email, role, status, registered, branch_uuid, metadata")
       .ilike("email", email)
       .maybeSingle()
   );

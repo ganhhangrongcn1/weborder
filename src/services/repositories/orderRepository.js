@@ -24,13 +24,142 @@ function isLegacySeededDemoCart(cart = []) {
   return hasLegacyNames && totalQty === 3 && totalLine === 168000;
 }
 
-function notifyOrdersChanged() {
+function notifyOrdersChanged(detail = {}) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent("ghr:orders-changed"));
+  const changedPhones = Array.from(
+    new Set(
+      (Array.isArray(detail.changedPhones) ? detail.changedPhones : [])
+        .map((phone) => getCustomerKey(phone))
+        .filter(Boolean)
+    )
+  );
+  window.dispatchEvent(new CustomEvent("ghr:orders-changed", {
+    detail: {
+      ...detail,
+      changedPhones,
+      emittedAt: Date.now()
+    }
+  }));
 }
 
 function sortByCreatedAtDesc(items = []) {
   return [...items].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+}
+
+function toFiniteNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeOrderItemForRead(item = {}, index = 0) {
+  const quantity = Math.max(1, toFiniteNumber(item.quantity, 1));
+  const unitTotal = toFiniteNumber(item.unitTotal ?? item.price ?? item.unitPrice, 0);
+  const lineTotal = toFiniteNumber(item.lineTotal, unitTotal * quantity);
+  const sourceItemId = String(item.sourceItemId || item.source_item_id || item.rowId || "");
+  const id = String(item.id || item.productId || item.product_id || sourceItemId || `item-${index}`);
+  const productId = String(item.productId || item.product_id || id);
+  const toppings = Array.isArray(item.toppings) ? item.toppings : [];
+  const optionGroups = Array.isArray(item.optionGroups) ? item.optionGroups : [];
+  const options = Array.from(
+    new Set(
+      [
+        ...(Array.isArray(item.options) ? item.options : []),
+        ...toppings.map((option) => option?.label || option?.name || option?.value || ""),
+        ...optionGroups.flatMap((group) => {
+          if (Array.isArray(group?.options)) return group.options;
+          if (Array.isArray(group?.items)) return group.items;
+          return Array.isArray(group) ? group : [group];
+        }).map((option) => option?.label || option?.name || option?.value || option?.title || "")
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const kitchenItemStatus = String(item.kitchenItemStatus || item.kitchen_item_status || item.status || "pending");
+
+  return {
+    ...item,
+    id,
+    sourceItemId,
+    orderId: String(item.orderId || item.order_id || ""),
+    productId,
+    product_id: productId,
+    name: String(item.name || item.productName || item.product_name || ""),
+    quantity,
+    price: toFiniteNumber(item.price ?? unitTotal, unitTotal),
+    unitTotal,
+    lineTotal,
+    spice: item.spice || "",
+    note: item.note || "",
+    toppings,
+    optionGroups,
+    options,
+    kitchenItemStatus,
+    status: kitchenItemStatus,
+    metadata: item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+      ? item.metadata
+      : {}
+  };
+}
+
+function normalizeOrderForRead(order = {}, phoneFallback = "") {
+  const id = String(order.id || order.orderCode || "");
+  const orderCode = String(order.orderCode || id);
+  const phoneKey = getCustomerKey(order.phone || order.customerPhoneKey || order.customerPhone || phoneFallback);
+  const createdAt = order.createdAt || order.created_at || order.orderTime || "";
+  const items = Array.isArray(order.items) ? order.items.map(normalizeOrderItemForRead) : [];
+  const subtotal = toFiniteNumber(
+    order.subtotal,
+    items.reduce((sum, item) => sum + toFiniteNumber(item.lineTotal, 0), 0)
+  );
+  const totalAmount = toFiniteNumber(order.totalAmount ?? order.total, subtotal);
+  const source = String(order.source || order.orderSource || order.channel || order.platform || "weborder");
+
+  return {
+    ...order,
+    id: id || orderCode,
+    orderCode: orderCode || id,
+    sourceType: order.sourceType || "weborder",
+    source,
+    channel: order.channel || source,
+    platform: order.platform || source,
+    orderSource: order.orderSource || source,
+    partnerSource: order.partnerSource || "weborder",
+    phone: phoneKey || order.phone || "",
+    customerPhoneKey: phoneKey || order.customerPhoneKey || "",
+    rawCustomerPhone: order.rawCustomerPhone || order.customerPhone || order.phone || phoneFallback || "",
+    customerPhone: order.customerPhone || phoneKey || "",
+    customerName: order.customerName || order.orderCustomerName || "",
+    orderCustomerName: order.orderCustomerName || order.customerName || "",
+    status: order.status || order.orderStatus || "pending_zalo",
+    orderStatus: order.orderStatus || order.status || "pending_zalo",
+    fulfillmentType: order.fulfillmentType || "delivery",
+    paymentMethod: order.paymentMethod || "cash",
+    createdAt,
+    orderTime: order.orderTime || createdAt,
+    items,
+    subtotal,
+    totalAmount,
+    total: toFiniteNumber(order.total ?? order.totalAmount, totalAmount),
+    shippingFee: toFiniteNumber(order.shippingFee ?? order.deliveryFee, 0),
+    deliveryFee: toFiniteNumber(order.deliveryFee ?? order.shippingFee, 0),
+    originalShippingFee: toFiniteNumber(order.originalShippingFee ?? order.shippingFee ?? order.deliveryFee, 0),
+    shippingSupportDiscount: toFiniteNumber(order.shippingSupportDiscount, 0),
+    promoDiscount: toFiniteNumber(order.promoDiscount, 0),
+    pointsDiscount: toFiniteNumber(order.pointsDiscount, 0),
+    pointsEarned: toFiniteNumber(order.pointsEarned, 0)
+  };
+}
+
+function normalizeOrdersByPhoneForRead(ordersByPhone = {}) {
+  return Object.entries(ordersByPhone || {}).reduce((acc, [phone, orders]) => {
+    const phoneKey = getCustomerKey(phone) || String(phone || "").trim();
+    if (!phoneKey) return acc;
+    acc[phoneKey] = sortByCreatedAtDesc(
+      (Array.isArray(orders) ? orders : []).map((order) => normalizeOrderForRead(order, phoneKey))
+    );
+    return acc;
+  }, {});
 }
 
 function canWriteOrdersToSupabase() {
@@ -46,7 +175,7 @@ async function persistOrderLocalAsync(nextOrder, phoneKey) {
   const normalizedNext = normalizeOrdersByPhoneMap(next);
   await repository.setAsync(STORAGE_KEYS.ordersByPhone, normalizedNext);
   ordersRemoteCache = { value: normalizedNext, cachedAt: Date.now() };
-  notifyOrdersChanged();
+  notifyOrdersChanged({ source: "persist-order-local", changedPhones: [phoneKey] });
 }
 
 export const orderRepository = {
@@ -73,7 +202,8 @@ export const orderRepository = {
     return nextStatus;
   },
   getCurrentOrder(fallback = null) {
-    return repository.get(STORAGE_KEYS.currentOrder, fallback);
+    const current = repository.get(STORAGE_KEYS.currentOrder, fallback);
+    return current ? normalizeOrderForRead(current) : current;
   },
   saveCurrentOrder(nextOrder) {
     return repository.set(STORAGE_KEYS.currentOrder, nextOrder || null);
@@ -91,26 +221,26 @@ export const orderRepository = {
   getAllByPhone() {
     const allowLocalFallback = shouldAllowLocalFallbackForDomain("orders");
     if (!allowLocalFallback) {
-      return normalizeOrdersByPhoneMap(ordersRemoteCache.value || {});
+      return normalizeOrdersByPhoneForRead(normalizeOrdersByPhoneMap(ordersRemoteCache.value || {}));
     }
     const raw = repository.get(STORAGE_KEYS.ordersByPhone, {});
     const normalized = normalizeOrdersByPhoneMap(raw);
     if (JSON.stringify(raw || {}) !== JSON.stringify(normalized || {})) {
       repository.set(STORAGE_KEYS.ordersByPhone, normalized);
     }
-    return normalized;
+    return normalizeOrdersByPhoneForRead(normalized);
   },
   saveAllByPhone(next, options = {}) {
     const normalized = normalizeOrdersByPhoneMap(next || {});
     const saved = repository.set(STORAGE_KEYS.ordersByPhone, normalized);
     ordersRemoteCache = { value: normalized, cachedAt: Date.now() };
-    notifyOrdersChanged();
+    notifyOrdersChanged({ source: "save-all-by-phone", changedPhones: Object.keys(normalized) });
     if (!options?.skipRemote && canWriteOrdersToSupabase()) {
       coreSupabaseRepository.writeOrdersByPhoneToTable(normalized).catch((error) => {
         console.warn("[orderRepository] write orders tables failed", error);
       });
     }
-    return saved;
+    return normalizeOrdersByPhoneForRead(saved);
   },
   getByPhone(phone) {
     const key = getCustomerKey(phone);
@@ -147,7 +277,7 @@ export const orderRepository = {
     const hasDateFilter = Boolean(dateFrom || dateTo);
     const now = Date.now();
     if (!hasDateFilter && ordersRemoteCache.value && now - ordersRemoteCache.cachedAt < REMOTE_CACHE_TTL_MS) {
-      return ordersRemoteCache.value;
+      return normalizeOrdersByPhoneForRead(normalizeOrdersByPhoneMap(ordersRemoteCache.value || {}));
     }
     if (!hasDateFilter && ordersReadInFlight) {
       return ordersReadInFlight;
@@ -165,7 +295,7 @@ export const orderRepository = {
           repository.set(STORAGE_KEYS.ordersByPhone, remoteOnly);
           ordersRemoteCache = { value: remoteOnly, cachedAt: Date.now() };
         }
-        return remoteOnly;
+        return normalizeOrdersByPhoneForRead(remoteOnly);
       }
     } catch (error) {
       console.warn("[orderRepository] read orders tables failed", error);
@@ -174,7 +304,7 @@ export const orderRepository = {
       if (!hasDateFilter) {
         ordersRemoteCache = { value: normalizedFallback, cachedAt: Date.now() };
       }
-      return normalizedFallback;
+      return normalizeOrdersByPhoneForRead(normalizedFallback);
     })();
     if (!hasDateFilter) {
       ordersReadInFlight = readTask;
@@ -191,7 +321,7 @@ export const orderRepository = {
     const normalized = normalizeOrdersByPhoneMap(next || {});
     const saved = await repository.setAsync(STORAGE_KEYS.ordersByPhone, normalized);
     ordersRemoteCache = { value: normalized, cachedAt: Date.now() };
-    notifyOrdersChanged();
+    notifyOrdersChanged({ source: "save-all-by-phone-async", changedPhones: Object.keys(normalized) });
     if (!options?.skipRemote && canWriteOrdersToSupabase()) {
       try {
         await coreSupabaseRepository.writeOrdersByPhoneToTable(normalized);
@@ -199,7 +329,7 @@ export const orderRepository = {
         console.warn("[orderRepository] write orders tables failed", error);
       }
     }
-    return saved;
+    return normalizeOrdersByPhoneForRead(saved);
   },
   async getByPhoneAsync(phone, options = {}) {
     const key = getCustomerKey(phone);
@@ -218,7 +348,8 @@ export const orderRepository = {
         const nextAll = normalizeOrdersByPhoneMap({ ...all, [key]: remoteOrders });
         await repository.setAsync(STORAGE_KEYS.ordersByPhone, nextAll);
         ordersRemoteCache = { value: nextAll, cachedAt: Date.now() };
-        return Array.isArray(nextAll[key]) ? nextAll[key] : [];
+        const readable = normalizeOrdersByPhoneForRead(nextAll);
+        return Array.isArray(readable[key]) ? readable[key] : [];
       }
     } catch (error) {
       console.warn("[orderRepository] read orders by phone failed", error);
@@ -292,13 +423,14 @@ export const orderRepository = {
           ...all,
           [key]: Array.isArray(remoteOrders) ? remoteOrders : []
         });
+        const readable = normalizeOrdersByPhoneForRead(merged);
         repository.set(STORAGE_KEYS.ordersByPhone, merged);
         ordersRemoteCache = { value: merged, cachedAt: Date.now() };
-        if (Array.isArray(remoteOrders) && remoteOrders.length) {
-          this.saveCurrentOrder(remoteOrders[0]);
+        if (Array.isArray(readable[key]) && readable[key].length) {
+          this.saveCurrentOrder(readable[key][0]);
         }
-        notifyOrdersChanged();
-        if (typeof onSynced === "function") onSynced(remoteOrders || []);
+        notifyOrdersChanged({ source: "customer-realtime", changedPhones: [key] });
+        if (typeof onSynced === "function") onSynced(readable[key] || []);
       } catch (error) {
         console.warn("[orderRepository] subscribe realtime sync failed", error);
       }

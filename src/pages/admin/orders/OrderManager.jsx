@@ -3,6 +3,10 @@ import { formatMoney } from "../../../utils/format.js";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
 import { resolveOrderSourceKey } from "../../../services/partnerOrderService.js";
+import {
+  branchOptionMatchesOrder,
+  buildBranchFilterOptions
+} from "../../../services/branchIdentityService.js";
 import { calculateOrderPoints, getLoyaltyRuleConfig } from "../../../services/loyaltyService.js";
 import {
   toAdminStatus,
@@ -87,70 +91,12 @@ function getRegisteredCustomer(order, registeredCustomersByPhone) {
   return phone ? registeredCustomersByPhone?.[phone] || null : null;
 }
 
-function normalizeBranchKey(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/ganh\s*hang\s*rong/g, "")
-    .replace(/[^a-z0-9]+/g, "")
-    .trim();
-}
-
-function getOrderBranchCandidates(order) {
-  return [
-    order.deliveryBranchUuid,
-    order.pickupBranchUuid,
-    order.branchUuid,
-    order.deliveryBranchId,
-    order.pickupBranchId,
-    order.branchId,
-    order.deliveryBranchName,
-    order.pickupBranchName,
-    order.branchName
-  ].flatMap((value) => {
-    const raw = String(value || "").trim();
-    const normalized = normalizeBranchKey(raw);
-    return [raw, normalized].filter(Boolean);
-  });
-}
-
-function getBranchFilterValue(branch, index) {
-  return String(branch?.branch_uuid || branch?.branchUuid || branch?.id || branch?.name || `branch-${index}`);
-}
-
 function buildBranchOptions(branches = []) {
-  return (branches || [])
-    .map((branch, index) => {
-      const label = String(branch?.name || "").trim();
-      if (!label) return null;
-      return {
-        value: getBranchFilterValue(branch, index),
-        label,
-        aliases: [
-          getBranchFilterValue(branch, index),
-          branch?.branch_uuid,
-          branch?.branchUuid,
-          branch?.branch_code,
-          branch?.branchCode,
-          branch?.id,
-          branch?.slug,
-          branch?.name,
-          branch?.address
-        ].flatMap((value) => {
-          const raw = String(value || "").trim();
-          const normalized = normalizeBranchKey(raw);
-          return [raw, normalized].filter(Boolean);
-        })
-      };
-    })
-    .filter(Boolean);
+  return buildBranchFilterOptions(branches);
 }
 
 function matchOrderBranch(order, branchOption) {
-  if (!branchOption) return true;
-  const candidates = getOrderBranchCandidates(order);
-  return branchOption.aliases.some((alias) => candidates.includes(alias));
+  return branchOptionMatchesOrder(order, branchOption);
 }
 
 function getDisplayStatus(order) {

@@ -14,6 +14,7 @@ import { STORAGE_KEYS } from "../../../services/repositories/storageKeys.js";
 
 const SNAPSHOT_CACHE_TTL_MS = 60000;
 const ADMIN_REALTIME_NOTICE_DELAY_MS = 2000;
+const ADMIN_ORDER_REFRESH_DEBOUNCE_MS = 250;
 const ordersSnapshotCache = new Map();
 const ordersSnapshotInFlight = new Map();
 
@@ -272,6 +273,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
   useEffect(() => {
     let disposed = false;
+    let refreshTimer = null;
 
     const refreshCrmOnly = async () => {
       try {
@@ -324,11 +326,19 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       setAdminRequestAudit(getAdminRequestAuditSnapshot());
     };
 
-    const handleStorageChange = (event) => {
-      if (event.key === STORAGE_KEYS.ordersByPhone) refreshAll();
+    const scheduleRefreshAll = () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        refreshAll();
+      }, ADMIN_ORDER_REFRESH_DEBOUNCE_MS);
     };
 
-    window.addEventListener("ghr:orders-changed", refreshAll);
+    const handleStorageChange = (event) => {
+      if (event.key === STORAGE_KEYS.ordersByPhone) scheduleRefreshAll();
+    };
+
+    window.addEventListener("ghr:orders-changed", scheduleRefreshAll);
     window.addEventListener("storage", handleStorageChange);
     if (section !== "orders") {
       refreshCrmOnly();
@@ -336,7 +346,11 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
     return () => {
       disposed = true;
-      window.removeEventListener("ghr:orders-changed", refreshAll);
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      window.removeEventListener("ghr:orders-changed", scheduleRefreshAll);
       window.removeEventListener("storage", handleStorageChange);
     };
   }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo]);

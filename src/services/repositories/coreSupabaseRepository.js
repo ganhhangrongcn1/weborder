@@ -2,11 +2,13 @@ import { getRuntimeSupabaseClient, getRepositoryRuntimeInfo } from "./repository
 import { getCustomerKey } from "../storageService.js";
 import { initSupabaseRuntimeClient } from "../supabase/supabaseRuntimeClient.js";
 import { isSupabaseConfigSyncEnabled } from "../supabase/runtimeFlags.js";
+import { buildBranchLookupMap, normalizeBranchKey } from "../branchIdentityService.js";
 
 let ordersWriteQueue = Promise.resolve();
 let branchLookupCache = { value: null, cachedAt: 0 };
 const BRANCH_LOOKUP_TTL_MS = 60 * 1000;
 const unsupportedOrderColumns = new Set();
+const unsupportedOrderItemColumns = new Set();
 const PROFILE_TABLE = "profiles";
 const LEGACY_CUSTOMER_TABLE = "customers";
 const DEFAULT_PROFILE_ROLE = "customer";
@@ -51,6 +53,7 @@ const CUSTOMER_ORDER_COLUMNS = [
   "metadata"
 ].join(",");
 const CUSTOMER_ORDER_ITEM_COLUMNS = [
+  "id",
   "order_id",
   "product_id",
   "product_name",
@@ -61,6 +64,7 @@ const CUSTOMER_ORDER_ITEM_COLUMNS = [
   "note",
   "toppings",
   "option_groups",
+  "kitchen_item_status",
   "metadata"
 ].join(",");
 
@@ -92,8 +96,55 @@ function toNullableUuid(value) {
   return isUuidLike(raw) ? raw : null;
 }
 
+function toFiniteNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeKitchenItemStatus(value = "") {
+  return String(value || "").trim().toLowerCase() === "done" ? "done" : "pending";
+}
+
+function normalizeOrderItemOption(option = {}) {
+  if (typeof option === "string") {
+    return {
+      id: "",
+      name: option.trim(),
+      price: 0,
+      quantity: 1
+    };
+  }
+  if (!option || typeof option !== "object" || Array.isArray(option)) {
+    return null;
+  }
+  const name = String(option.name || option.label || option.value || option.title || option.optionName || "").trim();
+  if (!name) return null;
+  return {
+    id: String(option.id || option.optionId || option.option_id || ""),
+    name,
+    price: toFiniteNumber(option.price, 0),
+    quantity: Math.max(1, toFiniteNumber(option.quantity, 1))
+  };
+}
+
+function normalizeOrderItemToppings(item = {}) {
+  return (Array.isArray(item.toppings) ? item.toppings : [])
+    .map((topping) => {
+      const option = normalizeOrderItemOption(topping);
+      if (!option) return null;
+      return {
+        ...topping,
+        ...option,
+        groupId: String(topping?.groupId || topping?.group_id || ""),
+        groupName: String(topping?.groupName || topping?.group_name || topping?.group || ""),
+        type: String(topping?.type || "")
+      };
+    })
+    .filter(Boolean);
+}
+
 function getSelectedOptionGroupRows(item = {}) {
-  const toppings = Array.isArray(item.toppings) ? item.toppings : [];
+  const toppings = normalizeOrderItemToppings(item);
   const selectedByGroup = toppings.reduce((map, topping) => {
     const groupId = String(topping?.groupId || topping?.group_id || "").trim();
     const groupName = String(topping?.groupName || topping?.group_name || topping?.group || "").trim();
@@ -115,16 +166,100 @@ function getSelectedOptionGroupRows(item = {}) {
     return map;
   }, new Map());
 
-  return [...selectedByGroup.values()];
+  const groupedFromToppings = [...selectedByGroup.values()];
+  if (groupedFromToppings.length) return groupedFromToppings;
+
+  return (Array.isArray(item.optionGroups) ? item.optionGroups : [])
+    .map((group) => {
+      if (!group || typeof group !== "object" || Array.isArray(group)) return null;
+      const rawOptions = Array.isArray(group.selectedOptions)
+        ? group.selectedOptions
+        : Array.isArray(group.selected)
+          ? group.selected
+          : [];
+      const options = rawOptions.map(normalizeOrderItemOption).filter(Boolean);
+      if (!options.length) return null;
+      return {
+        id: String(group.id || group.groupId || ""),
+        name: String(group.name || group.groupName || ""),
+        type: String(group.type || ""),
+        options
+      };
+    })
+    .filter(Boolean);
 }
 
-function normalizeBranchText(value = "") {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "")
-    .trim();
+function getOrderItemOptionLabels(item = {}) {
+  const labels = [];
+
+  function pushLabel(value = "") {
+    const label = String(value || "").trim();
+    if (label && !labels.includes(label)) labels.push(label);
+  }
+
+  normalizeOrderItemToppings(item).forEach((topping) => {
+    const prefix = topping.groupName ? `${topping.groupName}: ` : "";
+    pushLabel(`${prefix}${topping.name}`);
+  });
+  getSelectedOptionGroupRows(item).forEach((group) => {
+    (group.options || []).forEach((option) => {
+      const prefix = group.name ? `${group.name}: ` : "";
+      pushLabel(`${prefix}${option.name}`);
+    });
+  });
+  if (item.spice) pushLabel(item.spice);
+  return labels;
+}
+
+function getOrderItemProductId(item = {}, index = 0) {
+  return String(
+    item.productId ||
+      item.product_id ||
+      item.product?.id ||
+      item.id ||
+      item.cartId ||
+      `item-${index}`
+  );
+}
+
+function buildOrderItemMetadata(item = {}, index = 0) {
+  const productId = getOrderItemProductId(item, index);
+  return {
+    ...item,
+    id: String(item.id || productId),
+    productId,
+    product_id: productId,
+    cartId: String(item.cartId || item.id || productId),
+    options: getOrderItemOptionLabels(item),
+    toppings: normalizeOrderItemToppings(item),
+    optionGroups: getSelectedOptionGroupRows(item),
+    kitchenItemStatus: normalizeKitchenItemStatus(item.kitchenItemStatus || item.kitchen_item_status || item.status),
+    ghrOrderIndex: Number(item.ghrOrderIndex ?? index)
+  };
+}
+
+function buildOrderItemRow(item = {}, orderId = "", index = 0) {
+  const productId = getOrderItemProductId(item, index);
+  const quantity = Math.max(1, toFiniteNumber(item.quantity, 1));
+  const unitPrice = toFiniteNumber(item.unitTotal ?? item.unitPrice ?? item.price, 0);
+  const lineTotal = toFiniteNumber(item.lineTotal, quantity * unitPrice);
+  const sourceItemId = toNullableUuid(item.sourceItemId || item.source_item_id || item.rowId);
+  const row = {
+    order_id: orderId,
+    product_id: productId,
+    product_name: String(item.name || item.productName || item.product_name || ""),
+    quantity,
+    unit_price: unitPrice,
+    line_total: lineTotal,
+    spice: String(item.spice || ""),
+    note: String(item.note || ""),
+    toppings: normalizeOrderItemToppings(item),
+    option_groups: getSelectedOptionGroupRows(item),
+    kitchen_item_status: normalizeKitchenItemStatus(item.kitchenItemStatus || item.kitchen_item_status || item.status),
+    metadata: buildOrderItemMetadata(item, index)
+  };
+  if (sourceItemId) row.id = sourceItemId;
+  return row;
 }
 
 async function readBranchLookupMap() {
@@ -170,29 +305,7 @@ async function readBranchLookupMap() {
   }
   if (!resolved && lastError) throw lastError;
 
-  const map = new Map();
-  (data || []).forEach((row) => {
-    const dataObj = row?.data && typeof row.data === "object" ? row.data : {};
-    const branchUuid = String(row?.branch_uuid || dataObj?.branch_uuid || dataObj?.branchUuid || dataObj?.uuid || "").trim();
-    if (!branchUuid) return;
-    const keys = [
-      row?.id,
-      row?.slug,
-      row?.name,
-      row?.branch_code,
-      dataObj?.id,
-      dataObj?.slug,
-      dataObj?.name,
-      dataObj?.branch_code
-    ];
-    keys.forEach((key) => {
-      const raw = String(key || "").trim();
-      if (!raw) return;
-      map.set(raw, branchUuid);
-      const normalized = normalizeBranchText(raw);
-      if (normalized) map.set(normalized, branchUuid);
-    });
-  });
+  const map = buildBranchLookupMap(data);
 
   branchLookupCache = { value: map, cachedAt: now };
   return map;
@@ -216,7 +329,7 @@ async function enrichOrderBranchUuids(order = {}) {
       const raw = String(candidate || "").trim();
       if (!raw) continue;
       if (branchLookup.has(raw)) return branchLookup.get(raw);
-      const normalized = normalizeBranchText(raw);
+      const normalized = normalizeBranchKey(raw);
       if (normalized && branchLookup.has(normalized)) return branchLookup.get(normalized);
     }
     return "";
@@ -248,6 +361,12 @@ function readOrderItemMetadata(item = {}) {
 
 function mapOrderItemRowToCartItem(item = {}) {
   const metadata = readOrderItemMetadata(item);
+  const quantity = Number(item.quantity || metadata.quantity || 1);
+  const unitTotal = Number(item.unit_price || metadata.unitTotal || metadata.price || 0);
+  const lineTotal = Number(item.line_total || metadata.lineTotal || quantity * unitTotal);
+  const sourceItemId = String(item.id || metadata.sourceItemId || "");
+  const productId = String(item.product_id || metadata.productId || metadata.product_id || metadata.id || "");
+  const kitchenItemStatus = String(item.kitchen_item_status || metadata.kitchenItemStatus || metadata.status || "pending");
   const metadataImage = String(
     metadata.image ||
       metadata.thumbnail ||
@@ -261,25 +380,38 @@ function mapOrderItemRowToCartItem(item = {}) {
       metadata.img ||
       ""
   );
+  const toppings = Array.isArray(item.toppings) ? item.toppings : Array.isArray(metadata.toppings) ? metadata.toppings : [];
+  const optionGroups = Array.isArray(item.option_groups) ? item.option_groups : Array.isArray(metadata.optionGroups) ? metadata.optionGroups : [];
+  const options = [
+    ...toppings.map((option) => String(option?.label || option?.name || option?.value || "").trim()),
+    ...optionGroups.flatMap((group) => {
+      if (Array.isArray(group?.options)) return group.options;
+      if (Array.isArray(group?.items)) return group.items;
+      return Array.isArray(group) ? group : [group];
+    }).map((option) => String(option?.label || option?.name || option?.value || option?.title || "").trim()),
+    String(item.spice || metadata.spice || "").trim()
+  ].filter(Boolean);
   return {
     ...metadata,
-    id: String(item.product_id || metadata.id || ""),
-    productId: String(item.product_id || metadata.productId || ""),
-    product_id: String(item.product_id || metadata.product_id || ""),
+    id: productId || sourceItemId,
+    sourceItemId,
+    orderId: String(item.order_id || metadata.orderId || ""),
+    productId,
+    product_id: productId,
     name: item.product_name || metadata.name || "",
-    quantity: Number(item.quantity || metadata.quantity || 1),
-    price: Number(item.unit_price || metadata.price || 0),
-    unitTotal: Number(item.unit_price || metadata.unitTotal || metadata.price || 0),
-    lineTotal: Number(
-      item.line_total ||
-        metadata.lineTotal ||
-        Number(item.quantity || metadata.quantity || 1) * Number(item.unit_price || metadata.unitTotal || metadata.price || 0)
-    ),
+    quantity,
+    price: Number(metadata.price ?? unitTotal),
+    unitTotal,
+    lineTotal,
     spice: item.spice || metadata.spice || "",
     note: item.note || metadata.note || "",
     image: metadataImage,
-    toppings: Array.isArray(item.toppings) ? item.toppings : Array.isArray(metadata.toppings) ? metadata.toppings : [],
-    optionGroups: Array.isArray(item.option_groups) ? item.option_groups : Array.isArray(metadata.optionGroups) ? metadata.optionGroups : []
+    toppings,
+    optionGroups,
+    options: Array.from(new Set(options)),
+    kitchenItemStatus,
+    status: kitchenItemStatus,
+    metadata
   };
 }
 
@@ -452,6 +584,41 @@ function fromCustomerRow(row = {}) {
   };
 }
 
+function buildCustomerStubProfileRow(phone, profile = {}, existingProfile = null) {
+  const customerPhone = normalizePhone(phone || profile?.phone);
+  if (!customerPhone) return null;
+  const safeName = String(
+    profile?.name ||
+      profile?.customerName ||
+      profile?.customer_name ||
+      ""
+  ).trim();
+  const existingRegistered = Boolean(existingProfile?.registered);
+  const existingName = String(existingProfile?.name || "").trim();
+  const metadata = {
+    ...(existingProfile?.metadata && typeof existingProfile.metadata === "object" ? existingProfile.metadata : {}),
+    ...(profile?.metadata && typeof profile.metadata === "object" ? profile.metadata : {}),
+    source:
+      profile?.metadata?.source ||
+      profile?.source ||
+      existingProfile?.metadata?.source ||
+      "app",
+    customer_stub: true
+  };
+
+  const row = {
+    phone: customerPhone,
+    role: DEFAULT_PROFILE_ROLE,
+    status: DEFAULT_PROFILE_STATUS,
+    registered: existingRegistered,
+    metadata
+  };
+
+  const nextName = existingName || safeName;
+  if (nextName) row.name = nextName;
+  return row;
+}
+
 async function selectProfileRows(client, columns = "*") {
   return client.from(PROFILE_TABLE).select(columns).eq("role", DEFAULT_PROFILE_ROLE);
 }
@@ -483,15 +650,41 @@ async function upsertProfileRows(client, rows, options = {}) {
 async function ensureProfileExistsByPhone(client, phone, profile = {}) {
   const key = normalizePhone(phone);
   if (!key) return null;
-  const safeName = String(profile?.name || profile?.customerName || "").trim();
-  const row = {
-    phone: key,
-    registered: Boolean(profile?.registered)
-  };
-  if (safeName) row.name = safeName;
+  const { data: existingProfile, error: existingProfileError } = await client
+    .from(PROFILE_TABLE)
+    .select("phone,name,registered,metadata")
+    .eq("phone", key)
+    .maybeSingle();
+  if (existingProfileError) throw existingProfileError;
+  const row = buildCustomerStubProfileRow(key, profile, existingProfile || null);
+  if (!row) return null;
   const { error } = await upsertProfileRows(client, row, { onConflict: "phone" });
   if (error) throw error;
   return row;
+}
+
+async function ensureProfilesExistByPhones(client, phones = [], profileByPhone = {}) {
+  const normalizedPhones = Array.from(new Set((Array.isArray(phones) ? phones : []).map((phone) => normalizePhone(phone)).filter(Boolean)));
+  if (!normalizedPhones.length) return [];
+
+  const { data: existingCustomers, error: existingCustomersError } = await client
+    .from(PROFILE_TABLE)
+    .select("phone,name,registered,metadata")
+    .in("phone", normalizedPhones);
+  if (existingCustomersError) throw existingCustomersError;
+
+  const existingCustomerByPhone = new Map((existingCustomers || []).map((item) => [normalizePhone(item.phone), item]));
+  const rows = normalizedPhones
+    .filter((phone) => !existingCustomerByPhone.has(phone))
+    .map((phone) => buildCustomerStubProfileRow(phone, profileByPhone?.[phone] || {}, null))
+    .filter(Boolean);
+
+  if (rows.length) {
+    const { error: customerInsertError } = await upsertProfileRows(client, rows);
+    if (customerInsertError) throw customerInsertError;
+  }
+
+  return rows;
 }
 
 async function readProfilesMapFromTable() {
@@ -593,24 +786,7 @@ async function writeAddressesByPhoneToTable(addressesByPhone = {}) {
   const phones = Object.keys(addressesByPhone || {}).map((item) => normalizePhone(item)).filter(Boolean);
   if (!phones.length) return addressesByPhone;
 
-  const { data: existingCustomers, error: existingCustomersError } = await client
-    .from(PROFILE_TABLE)
-    .select("phone,name")
-    .in("phone", phones);
-  if (existingCustomersError) throw existingCustomersError;
-  const existingCustomerByPhone = new Map((existingCustomers || []).map((item) => [normalizePhone(item.phone), item]));
-  const profileRows = phones
-    .map((phone) => {
-      const existing = existingCustomerByPhone.get(phone) || null;
-      if (existing?.phone) return null;
-      const row = { phone, registered: Boolean(existing?.registered) };
-      return row;
-    })
-    .filter(Boolean);
-  if (profileRows.length) {
-    const { error: customerInsertError } = await upsertProfileRows(client, profileRows);
-    if (customerInsertError) throw customerInsertError;
-  }
+  await ensureProfilesExistByPhones(client, phones);
 
   const { error: deleteError } = await client.from("customer_addresses").delete().in("customer_phone", phones);
   if (deleteError) throw deleteError;
@@ -853,22 +1029,7 @@ function toOrderRows(order = {}) {
     delivery_address: String(order.deliveryAddress || ""),
     metadata: order
   };
-  const itemRows = (order.items || []).map((item, index) => ({
-    order_id: id,
-    product_id: String(item.id || ""),
-    product_name: String(item.name || ""),
-    quantity: Number(item.quantity || 1),
-    unit_price: Number(item.unitTotal ?? item.price ?? 0),
-    line_total: Number(item.lineTotal ?? (Number(item.quantity || 1) * Number(item.unitTotal ?? item.price ?? 0))),
-    spice: String(item.spice || ""),
-    note: String(item.note || ""),
-    toppings: Array.isArray(item.toppings) ? item.toppings : [],
-    option_groups: getSelectedOptionGroupRows(item),
-    metadata: {
-      ...item,
-      ghrOrderIndex: Number(item.ghrOrderIndex ?? index)
-    }
-  }));
+  const itemRows = (order.items || []).map((item, index) => buildOrderItemRow(item, id, index));
   return { orderRow, itemRows };
 }
 
@@ -914,6 +1075,32 @@ async function upsertOrderRowWithSchemaFallback(client, orderRow) {
   throw new Error("orders_upsert_failed_after_schema_fallback");
 }
 
+async function insertOrderItemRowsWithSchemaFallback(client, itemRows = []) {
+  if (!itemRows.length) return;
+  const removedColumns = new Set();
+  let attempts = 0;
+
+  while (attempts < 5) {
+    attempts += 1;
+    const payload = itemRows.map((row) => {
+      const nextRow = { ...(row || {}) };
+      unsupportedOrderItemColumns.forEach((column) => {
+        if (column in nextRow) delete nextRow[column];
+      });
+      return nextRow;
+    });
+    const { error } = await client.from("order_items").insert(payload);
+    if (!error) return;
+    if (!shouldRetryWithTrimmedColumns(error)) throw error;
+    const missingColumn = extractMissingColumnName(error);
+    if (!missingColumn || removedColumns.has(missingColumn)) throw error;
+    removedColumns.add(missingColumn);
+    unsupportedOrderItemColumns.add(missingColumn);
+  }
+
+  throw new Error("order_items_insert_failed_after_schema_fallback");
+}
+
 async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
   const runWrite = async () => {
     if (!isSupabaseReady()) return ordersByPhone;
@@ -937,26 +1124,14 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
       ).values()
     );
     if (customerRowsRaw.length) {
-      const { data: existingCustomers, error: existingCustomersError } = await client
-        .from(PROFILE_TABLE)
-        .select("phone,registered")
-        .in("phone", customerRowsRaw.map((item) => item.phone));
-      if (existingCustomersError) throw existingCustomersError;
-      const existingCustomerByPhone = new Map(
-        (existingCustomers || []).map((item) => [normalizePhone(item.phone), item])
+      await ensureProfilesExistByPhones(
+        client,
+        customerRowsRaw.map((item) => item.phone),
+        customerRowsRaw.reduce((map, item) => {
+          map[normalizePhone(item.phone)] = item;
+          return map;
+        }, {})
       );
-      const customerRows = customerRowsRaw.map((item) => {
-        const existing = existingCustomerByPhone.get(normalizePhone(item.phone)) || null;
-        const row = {
-          phone: item.phone,
-          registered: Boolean(existing?.registered)
-        };
-        return {
-          ...row
-        };
-      });
-      const { error: customerUpsertError } = await upsertProfileRows(client, customerRows, { onConflict: "phone" });
-      if (customerUpsertError) throw customerUpsertError;
     }
 
     for (const row of orderRows) {
@@ -969,8 +1144,7 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
       if (deleteItemsError) throw deleteItemsError;
     }
     if (itemRows.length) {
-      const { error: itemInsertError } = await client.from("order_items").insert(itemRows);
-      if (itemInsertError) throw itemInsertError;
+      await insertOrderItemRowsWithSchemaFallback(client, itemRows);
     }
     return ordersByPhone;
   };
@@ -990,18 +1164,10 @@ async function upsertOrderToTable(order = {}) {
 
   const customerPhone = normalizePhone(orderRow.customer_phone);
   if (customerPhone) {
-    const { data: existingCustomer, error: existingCustomerError } = await client
-      .from(PROFILE_TABLE)
-      .select("phone,registered")
-      .eq("phone", customerPhone)
-      .maybeSingle();
-    if (existingCustomerError) throw existingCustomerError;
-    const customerRow = {
-      phone: customerPhone,
-      registered: Boolean(existingCustomer?.registered)
-    };
-    const { error: customerUpsertError } = await upsertProfileRows(client, customerRow, { onConflict: "phone" });
-    if (customerUpsertError) throw customerUpsertError;
+    await ensureProfileExistsByPhone(client, customerPhone, {
+      customerName: orderRow.customer_name,
+      source: "orders"
+    });
   }
 
   await upsertOrderRowWithSchemaFallback(client, orderRow);
@@ -1009,8 +1175,7 @@ async function upsertOrderToTable(order = {}) {
   const { error: deleteItemsError } = await client.from("order_items").delete().eq("order_id", orderRow.id);
   if (deleteItemsError) throw deleteItemsError;
   if (itemRows.length) {
-    const { error: itemInsertError } = await client.from("order_items").insert(itemRows);
-    if (itemInsertError) throw itemInsertError;
+    await insertOrderItemRowsWithSchemaFallback(client, itemRows);
   }
   return order;
 }
@@ -1233,13 +1398,18 @@ async function writeLoyaltyByPhoneToTable(loyaltyByPhone = {}) {
     .in("phone", phones.map((phone) => normalizePhone(phone)));
   if (existingCustomersError) throw existingCustomersError;
   const existingPhones = new Set((existingCustomers || []).map((item) => normalizePhone(item.phone)));
-  const missingCustomerRows = phones
+  const missingCustomerPhones = phones
     .map((phone) => normalizePhone(phone))
-    .filter((phone) => phone && !existingPhones.has(phone))
-    .map((phone) => ({ phone, registered: false }));
-  if (missingCustomerRows.length) {
-    const { error: customerInsertError } = await upsertProfileRows(client, missingCustomerRows);
-    if (customerInsertError) throw customerInsertError;
+    .filter((phone) => phone && !existingPhones.has(phone));
+  if (missingCustomerPhones.length) {
+    await ensureProfilesExistByPhones(
+      client,
+      missingCustomerPhones,
+      missingCustomerPhones.reduce((map, phone) => {
+        map[phone] = { phone, source: "loyalty" };
+        return map;
+      }, {})
+    );
   }
 
   const accountRows = phones.map((phone) => {
@@ -1337,8 +1507,7 @@ async function upsertLoyaltyAccountByPhone(phone, loyalty = {}) {
     .maybeSingle();
   if (existingCustomerError) throw existingCustomerError;
   if (!existingCustomer?.phone) {
-    const { error: customerInsertError } = await upsertProfileRows(client, { phone: key, registered: false });
-    if (customerInsertError) throw customerInsertError;
+    await ensureProfileExistsByPhone(client, key, { source: "loyalty" });
   }
 
   const pointHistory = Array.isArray(loyalty.pointHistory) ? loyalty.pointHistory : [];

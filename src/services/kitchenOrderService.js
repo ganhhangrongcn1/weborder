@@ -63,6 +63,7 @@ const WEBSITE_ITEM_COLUMNS = [
   "line_total",
   "note",
   "toppings",
+  "option_groups",
   "spice",
   "kitchen_item_status",
   "metadata"
@@ -78,9 +79,14 @@ const PARTNER_ORDER_COLUMNS = [
   "customer_name",
   "customer_phone",
   "customer_phone_key",
+  "subtotal",
+  "discount_amount",
+  "shipping_fee",
   "total_amount",
+  "points_base_amount",
   "order_status",
   "kitchen_status",
+  "point_status",
   "order_time",
   "created_at",
   "updated_at",
@@ -103,6 +109,8 @@ const PARTNER_ITEM_COLUMNS = [
   "web_product_name",
   "partner_item_name",
   "quantity",
+  "unit_price",
+  "line_total",
   "note",
   "options",
   "kitchen_item_status"
@@ -133,12 +141,6 @@ function applyWebsiteBranchFilter(query, branchUuid = "") {
   return query.or(`branch_uuid.eq.${uuid},pickup_branch_uuid.eq.${uuid},delivery_branch_uuid.eq.${uuid}`);
 }
 
-function applyPartnerBranchFilter(query, branchUuid = "") {
-  const uuid = toText(branchUuid);
-  if (!uuid) return query;
-  return query.eq("branch_uuid", uuid);
-}
-
 function applyWebsiteDoneFilter(query) {
   return query.or("status.in.(done,completed,complete),kitchen_status.in.(done,completed,complete)");
 }
@@ -163,6 +165,10 @@ function normalizeSearchText(value = "") {
 
 function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function hasBranchScope({ branchUuid = "", branchId = "", branchName = "", branchAlias = "" } = {}) {
+  return Boolean(toText(branchUuid) || toText(branchId) || toText(branchName) || toText(branchAlias));
 }
 
 function getArray(value) {
@@ -423,6 +429,7 @@ function matchesBranch(order = {}, { branchUuid = "", branchId = "", branchName 
   const alias = normalizeSearchText(branchAlias);
   if (!uuid && !id && !name && !alias) return true;
 
+  const rawData = getObject(order.rawData || order.raw_data || order.raw);
   const candidates = [
     order.branchUuid,
     order.pickupBranchUuid,
@@ -430,9 +437,20 @@ function matchesBranch(order = {}, { branchUuid = "", branchId = "", branchName 
     order.branchId,
     order.pickupBranchId,
     order.deliveryBranchId,
+    rawData.branch_uuid,
+    rawData.branch_id,
+    rawData.branch_code,
+    rawData.nexpos_site_id,
+    rawData.nexpos_hub_id,
     order.branchName,
     order.pickupBranchName,
-    order.deliveryBranchName
+    order.deliveryBranchName,
+    rawData.branch_name,
+    rawData.nexpos_site_name,
+    rawData.nexpos_hub_name,
+    rawData.store_name,
+    rawData.site_name,
+    rawData.hub_name
   ].map((value) => toText(value)).filter(Boolean);
 
   const rawCandidates = candidates.map((value) => value.toLowerCase());
@@ -550,7 +568,9 @@ function flattenSelectedOptionLabels(value) {
 function buildWebsiteOptionLabels(row = {}, metadata = {}) {
   const selectedOptions = [
     ...flattenSelectedOptionLabels(row.toppings),
-    ...flattenSelectedOptionLabels(metadata.toppings)
+    ...flattenSelectedOptionLabels(metadata.toppings),
+    ...flattenSelectedOptionLabels(row.option_groups),
+    ...flattenSelectedOptionLabels(metadata.optionGroups)
   ];
   const seen = new Set();
   const options = [];
@@ -572,6 +592,8 @@ function mapWebsiteKitchenItem(row = {}) {
   const quantity = toNumber(row.quantity ?? metadata.quantity, 1) || 1;
   const status = normalizeKitchenStatus(row.kitchen_item_status, metadata.kitchenStatus);
   const options = buildWebsiteOptionLabels(row, metadata);
+  const toppings = Array.isArray(row.toppings) ? row.toppings : Array.isArray(metadata.toppings) ? metadata.toppings : [];
+  const optionGroups = Array.isArray(row.option_groups) ? row.option_groups : Array.isArray(metadata.optionGroups) ? metadata.optionGroups : [];
 
   return {
     id: toText(row.id || row.product_id || metadata.id || metadata.cartId),
@@ -585,9 +607,13 @@ function mapWebsiteKitchenItem(row = {}) {
     total: toNumber(row.line_total ?? metadata.lineTotal, 0),
     lineTotal: toNumber(row.line_total ?? metadata.lineTotal, 0),
     note: toText(row.note || metadata.note),
+    toppings,
+    optionGroups,
     options: [...new Set(options)],
+    kitchenItemStatus: status,
     status,
     displayStatus: getDisplayStatus(status),
+    metadata,
     raw: row
   };
 }
@@ -596,6 +622,8 @@ function mapPartnerKitchenItem(row = {}) {
   const quantity = toNumber(row.quantity, 1) || 1;
   const options = flattenOptionLabels(row.options);
   const status = normalizeKitchenStatus(row.kitchen_item_status);
+  const unitTotal = toNumber(row.unit_price, 0);
+  const lineTotal = toNumber(row.line_total, unitTotal * quantity);
 
   return {
     id: toText(row.id || row.item_key),
@@ -604,10 +632,17 @@ function mapPartnerKitchenItem(row = {}) {
     productId: toText(row.web_product_id || row.partner_item_id || row.item_key),
     name: toText(row.web_product_name || row.partner_item_name) || "Không tên món",
     quantity,
+    price: unitTotal,
+    unitTotal,
+    lineTotal,
     note: toText(row.note),
+    toppings: [],
+    optionGroups: [],
     options,
+    kitchenItemStatus: status,
     status,
     displayStatus: getDisplayStatus(status),
+    metadata: {},
     raw: row
   };
 }
@@ -727,8 +762,8 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     id,
     stableKey: buildKitchenStableKey(
       KITCHEN_SOURCE.partner,
-      row.nexpos_order_id,
-      rawData.nexpos_order_id,
+      source && row.nexpos_order_id ? `${source}:${row.nexpos_order_id}` : "",
+      source && rawData.nexpos_order_id ? `${source}:${rawData.nexpos_order_id}` : "",
       rawData.order_id,
       displayOrderCode,
       orderCode,
@@ -738,7 +773,11 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     displayOrderCode,
     sourceType: KITCHEN_SOURCE.partner,
     source,
+    partnerSource: source,
+    orderSource: source,
+    channel: source,
     platform: getPlatformLabel(source),
+    nexposOrderId: toText(row.nexpos_order_id || rawData.nexpos_order_id || rawData.id),
     branchId: toText(row.branch_id),
     branchUuid: toText(row.branch_uuid),
     branchName: toText(row.branch_name || row.nexpos_site_name || row.nexpos_hub_name),
@@ -750,17 +789,29 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     deliveryBranchName: toText(row.branch_name || row.nexpos_site_name || row.nexpos_hub_name),
     customerName: toText(row.customer_name),
     customerPhone: toText(row.customer_phone || row.customer_phone_key),
+    customerPhoneKey: toText(row.customer_phone_key),
     status: toText(row.order_status || row.nexpos_status || "pending"),
+    orderStatus: toText(row.order_status || ""),
     nexposStatus,
     nexposState,
     kitchenStatus,
+    kitchenWorkStatus: toText(row.kitchen_work_status),
+    kitchenDoneAt: toText(row.kitchen_done_at),
+    pointStatus: toText(row.point_status || "pending"),
     displayStatus: getDisplayStatus(kitchenStatus),
     fulfillmentType: "delivery",
     paymentMethod: "foodapp",
+    subtotal: toNumber(row.subtotal, 0),
+    shippingFee: toNumber(row.shipping_fee, 0),
+    discountAmount: toNumber(row.discount_amount, 0),
+    pointsBaseAmount: toNumber(row.points_base_amount, row.total_amount),
     totalAmount: toNumber(row.total_amount, 0),
+    total: toNumber(row.total_amount, 0),
     createdAt: toText(row.order_time || row.created_at),
+    orderTime: toText(row.order_time || row.created_at),
     updatedAt: toText(row.updated_at),
     items,
+    rawData,
     raw: row
   };
 }
@@ -897,13 +948,12 @@ export async function getPartnerKitchenOrders(options = {}) {
 
   const dateFrom = toText(options.dateFrom);
   const dateTo = toText(options.dateTo);
-  const shouldLimitDone = canUseDoneQueryLimit(options);
+  const shouldLimitDone = canUseDoneQueryLimit(options) && !hasBranchScope(options);
   const doneLimit = toPositiveInteger(options.doneLimit);
   let query = client.from("partner_orders").select(PARTNER_ORDER_COLUMNS).order("order_time", { ascending: false });
 
   if (dateFrom) query = query.gte("order_time", dateFrom);
   if (dateTo) query = query.lt("order_time", dateTo);
-  query = applyPartnerBranchFilter(query, options.branchUuid);
   if (shouldLimitDone) {
     query = applyPartnerDoneFilter(query).limit(doneLimit);
   }
@@ -1127,6 +1177,16 @@ export async function subscribeKitchenOrderChanges(onChange) {
       "postgres_changes",
       { event: "*", schema: "public", table: "partner_orders" },
       (payload) => onChange({ table: "partner_orders", payload })
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "order_items" },
+      (payload) => onChange({ table: "order_items", payload })
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "partner_order_items" },
+      (payload) => onChange({ table: "partner_order_items", payload })
     )
     .subscribe();
 
