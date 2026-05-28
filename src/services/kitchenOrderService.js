@@ -276,6 +276,41 @@ function deriveKitchenStatusFromNexpos(kitchenStatus = "pending", nexposState = 
   return normalizedKitchenStatus;
 }
 
+function resolvePartnerKitchenStatus(row = {}, nexposState = "") {
+  const workStatus = normalizeKitchenStatus(row.kitchen_work_status);
+  const legacyKitchenStatus = normalizeKitchenStatus(row.kitchen_status);
+
+  if (["done", "cancelled", "preorder"].includes(workStatus)) {
+    return workStatus;
+  }
+
+  if (["cooking", "confirmed"].includes(workStatus)) {
+    return workStatus;
+  }
+
+  if (workStatus === "ready") {
+    return "cooking";
+  }
+
+  if (["done", "cancelled", "preorder"].includes(legacyKitchenStatus)) {
+    return legacyKitchenStatus;
+  }
+
+  if (["cooking", "confirmed", "ready"].includes(legacyKitchenStatus)) {
+    return "cooking";
+  }
+
+  if (["done", "cancelled", "preorder"].includes(nexposState)) {
+    return nexposState;
+  }
+
+  if (nexposState === "active") {
+    return "cooking";
+  }
+
+  return "pending";
+}
+
 function getDisplayStatus(kitchenStatus = "") {
   const status = normalizeKitchenStatus(kitchenStatus);
   if (status === "cancelled") return "Đã hủy";
@@ -358,7 +393,7 @@ export function getNextKitchenOrderAction(order = {}) {
   if (isClosed) return null;
 
   if (order.sourceType === KITCHEN_SOURCE.partner) {
-    if (["done", "ready"].includes(kitchenStatus)) return null;
+    if (kitchenStatus === "done") return null;
     return {
       type: "partner_done",
       label: "Xác nhận xong đơn",
@@ -753,10 +788,7 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     rawData.order_status,
     row.order_status
   );
-  const kitchenStatus = deriveKitchenStatusFromNexpos(
-    normalizeKitchenStatus(row.kitchen_work_status, row.kitchen_status),
-    nexposState
-  );
+  const kitchenStatus = resolvePartnerKitchenStatus(row, nexposState);
 
   return {
     id,

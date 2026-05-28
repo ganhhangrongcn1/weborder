@@ -1,3 +1,4 @@
+﻿// Fix BOM
 package vn.ghr.posprinter;
 
 import android.app.Activity;
@@ -98,13 +99,16 @@ public class MainActivity extends Activity {
     private static final String PRINT_JOB_SELECT = "id,order_code,payload,retry_count";
     private static final String SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
     private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
-    private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
+    private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/orders";
     private static final String DEFAULT_RECEIPT_FOOTER_TEXT =
             "------------------------------------------\n" +
-            "@@CENTER:QuÃ©t QR Ä‘á»ƒ tÃ­ch Ä‘iá»ƒm\n" +
+            "@@CENTER:Quét QR tích điểm ngay\n" +
             "@@QR\n" +
+            "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon\n" +
+            "@@CENTER:đều được tích điểm tại Gánh Hàng Rong\n" +
+            "@@CENTER:Quét để xem đơn và dùng điểm\n" +
             "@@CENTER:Hotline: 0933 799 061\n" +
-            "@@CENTER:Cáº£m Æ¡n quÃ½ khÃ¡ch!";
+            "@@CENTER:Cảm ơn quý khách!";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posprinter.USB_PERMISSION";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
     private static final int BIG_TEXT_SIZE = 84;
@@ -192,7 +196,7 @@ public class MainActivity extends Activity {
             boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
             if (granted && device != null) {
                 saveSelectedDevice(device);
-                status("Đã cấp quyền máy in USB.");
+                status("ÄÃ£ cáº¥p quyá»n mÃ¡y in USB.");
                 updatePrinterStatus();
                 if (!pendingPrintText.isEmpty()) {
                     String text = pendingPrintText;
@@ -202,7 +206,7 @@ public class MainActivity extends Activity {
                     printReceiptPayload(text, qrUrl);
                 }
             } else {
-                status("Chưa cấp quyền máy in USB.");
+                status("ChÆ°a cáº¥p quyá»n mÃ¡y in USB.");
                 updatePrinterStatus();
             }
         }
@@ -232,7 +236,7 @@ public class MainActivity extends Activity {
         updateModeUi();
         updatePrinterStatus();
         updateStationUi();
-        log("Mở GHR Print Station.");
+        log("Má»Ÿ GHR Print Station.");
 
         if (prefs.getBoolean(KEY_STATION_ENABLED, false)) {
             startStation();
@@ -284,14 +288,14 @@ public class MainActivity extends Activity {
         brand.setPadding(dp(12), 0, 0, 0);
 
         TextView title = new TextView(this);
-        title.setText("Gánh Hàng Rong");
+        title.setText("GÃ¡nh HÃ ng Rong");
         title.setTextColor(Color.rgb(15, 23, 42));
         title.setTextSize(20);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         brand.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Trạm in bill khách · Xprinter 80mm");
+        subtitle.setText("Tráº¡m in bill khÃ¡ch Â· Xprinter 80mm");
         subtitle.setTextColor(Color.rgb(71, 85, 105));
         subtitle.setTextSize(13);
         subtitle.setTypeface(Typeface.DEFAULT_BOLD);
@@ -300,10 +304,10 @@ public class MainActivity extends Activity {
         header.addView(brand, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
-        stationText = makeInfoText("Trạm in đang tắt", Color.rgb(185, 28, 28));
+        stationText = makeInfoText("Tráº¡m in Ä‘ang táº¯t", Color.rgb(185, 28, 28));
         root.addView(stationText, fullWidthParams());
 
-        statusText = makeInfoText("Sẵn sàng.", Color.rgb(71, 85, 105));
+        statusText = makeInfoText("Sáºµn sÃ ng.", Color.rgb(71, 85, 105));
         root.addView(statusText, fullWidthParams());
 
         printerText = makeInfoText("", Color.rgb(15, 118, 110));
@@ -311,7 +315,7 @@ public class MainActivity extends Activity {
 
         root.addView(buildAuthSection());
 
-        root.addView(makeSectionTitle("Kết nối máy in"));
+        root.addView(makeSectionTitle("Káº¿t ná»‘i mÃ¡y in"));
         LinearLayout modeRow = new LinearLayout(this);
         modeRow.setOrientation(LinearLayout.HORIZONTAL);
         modeRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -335,17 +339,17 @@ public class MainActivity extends Activity {
 
         usbPanel = new LinearLayout(this);
         usbPanel.setOrientation(LinearLayout.VERTICAL);
-        Button chooseUsbButton = makeButton("Chọn máy in USB", false);
+        Button chooseUsbButton = makeButton("Chá»n mÃ¡y in USB", false);
         chooseUsbButton.setOnClickListener(view -> showUsbDevicePicker());
         usbPanel.addView(chooseUsbButton, fullWidthParams());
         root.addView(usbPanel);
 
         lanPanel = new LinearLayout(this);
         lanPanel.setOrientation(LinearLayout.VERTICAL);
-        lanHostInput = makeInput("IP máy in, ví dụ 192.168.1.88");
+        lanHostInput = makeInput("IP mÃ¡y in, vÃ­ dá»¥ 192.168.1.88");
         lanHostInput.setInputType(InputType.TYPE_CLASS_PHONE);
         lanPanel.addView(lanHostInput, fullWidthParams());
-        lanPortInput = makeInput("Port máy in");
+        lanPortInput = makeInput("Port mÃ¡y in");
         lanPortInput.setInputType(InputType.TYPE_CLASS_NUMBER);
         lanPanel.addView(lanPortInput, fullWidthParams());
         root.addView(lanPanel);
@@ -353,11 +357,11 @@ public class MainActivity extends Activity {
         LinearLayout actionRow = new LinearLayout(this);
         actionRow.setOrientation(LinearLayout.VERTICAL);
 
-        Button saveButton = makeButton("Lưu cài đặt", false);
+        Button saveButton = makeButton("LÆ°u cÃ i Ä‘áº·t", false);
         saveButton.setOnClickListener(view -> saveSettingsFromInputs());
         actionRow.addView(saveButton, tallButtonParams());
 
-        stationButton = makeButton("Bật trạm in", true);
+        stationButton = makeButton("Báº­t tráº¡m in", true);
         stationButton.setOnClickListener(view -> {
             if (stationRunning) {
                 stopStation();
@@ -372,7 +376,7 @@ public class MainActivity extends Activity {
         LinearLayout printRow = new LinearLayout(this);
         printRow.setOrientation(LinearLayout.VERTICAL);
 
-        Button checkButton = makeButton("Kiểm tra lệnh in", false);
+        Button checkButton = makeButton("Kiá»ƒm tra lá»‡nh in", false);
         checkButton.setOnClickListener(view -> {
             saveSettingsFromInputs();
             pollOnceAsync();
@@ -387,7 +391,7 @@ public class MainActivity extends Activity {
         printRow.addView(testButton, tallButtonParams());
         root.addView(printRow, fullWidthParams());
 
-        root.addView(makeSectionTitle("Nhật ký"));
+        root.addView(makeSectionTitle("Nháº­t kÃ½"));
         logText = new TextView(this);
         logText.setTextColor(Color.rgb(51, 65, 85));
         logText.setTextSize(13);
@@ -404,29 +408,29 @@ public class MainActivity extends Activity {
 
         loginPanel = new LinearLayout(this);
         loginPanel.setOrientation(LinearLayout.VERTICAL);
-        loginPanel.addView(makeSectionTitle("Tài khoản chi nhánh"));
+        loginPanel.addView(makeSectionTitle("TÃ i khoáº£n chi nhÃ¡nh"));
 
-        emailInput = makeInput("Email tài khoản bếp/chi nhánh");
+        emailInput = makeInput("Email tÃ i khoáº£n báº¿p/chi nhÃ¡nh");
         emailInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         loginPanel.addView(emailInput, fullWidthParams());
 
-        passwordInput = makeInput("Mật khẩu");
+        passwordInput = makeInput("Máº­t kháº©u");
         passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         loginPanel.addView(passwordInput, fullWidthParams());
 
-        Button loginButton = makeButton("Đăng nhập chi nhánh", true);
+        Button loginButton = makeButton("ÄÄƒng nháº­p chi nhÃ¡nh", true);
         loginButton.setOnClickListener(view -> loginAsync());
         loginPanel.addView(loginButton, tallButtonParams());
         wrapper.addView(loginPanel);
 
         loggedInPanel = new LinearLayout(this);
         loggedInPanel.setOrientation(LinearLayout.VERTICAL);
-        loggedInPanel.addView(makeSectionTitle("Tài khoản đang dùng"));
+        loggedInPanel.addView(makeSectionTitle("TÃ i khoáº£n Ä‘ang dÃ¹ng"));
 
         accountSummaryText = makeInfoText("", Color.rgb(15, 118, 110));
         loggedInPanel.addView(accountSummaryText, fullWidthParams());
 
-        Button logoutButton = makeButton("Đăng xuất", false);
+        Button logoutButton = makeButton("ÄÄƒng xuáº¥t", false);
         logoutButton.setOnClickListener(view -> logout());
         loggedInPanel.addView(logoutButton, tallButtonParams());
         wrapper.addView(loggedInPanel);
@@ -450,7 +454,7 @@ public class MainActivity extends Activity {
                 .putInt(KEY_LAN_PORT, parsePort(lanPortInput.getText().toString()))
                 .apply();
         updatePrinterStatus();
-        log("Đã lưu cài đặt.");
+        log("ÄÃ£ lÆ°u cÃ i Ä‘áº·t.");
     }
 
     private void loginAsync() {
@@ -458,11 +462,11 @@ public class MainActivity extends Activity {
         String email = emailInput.getText().toString().trim();
         String password = passwordInput.getText().toString();
         if (email.isEmpty() || password.isEmpty()) {
-            status("Vui lòng nhập email và mật khẩu.");
+            status("Vui lÃ²ng nháº­p email vÃ  máº­t kháº©u.");
             return;
         }
 
-        log("Đang đăng nhập tài khoản chi nhánh...");
+        log("Äang Ä‘Äƒng nháº­p tÃ i khoáº£n chi nhÃ¡nh...");
         new Thread(() -> {
             try {
                 JSONObject auth = signInWithPassword(email, password);
@@ -474,16 +478,16 @@ public class MainActivity extends Activity {
                 JSONObject authUserMetadata = user == null ? null : user.optJSONObject("user_metadata");
 
                 if (accessToken.isEmpty() || authUserId.isEmpty()) {
-                    throw new Exception("Supabase chưa trả session hợp lệ.");
+                    throw new Exception("Supabase chÆ°a tráº£ session há»£p lá»‡.");
                 }
 
                 JSONObject profile = readProfile(accessToken, authUserId, authEmail);
                 applyProfileSession(accessToken, refreshToken, authUserId, authEmail, profile, authUserMetadata);
                 runOnUiThread(() -> passwordInput.setText(""));
-                log("Đăng nhập thành công: " + getBranchLabel() + ".");
+                log("ÄÄƒng nháº­p thÃ nh cÃ´ng: " + getBranchLabel() + ".");
             } catch (Exception error) {
                 clearAuthSession(false);
-                log("Đăng nhập thất bại: " + normalizeAuthError(error));
+                log("ÄÄƒng nháº­p tháº¥t báº¡i: " + normalizeAuthError(error));
             }
         }).start();
     }
@@ -498,7 +502,7 @@ public class MainActivity extends Activity {
 
     private JSONObject refreshAccessToken() throws Exception {
         String refreshToken = prefs.getString(KEY_REFRESH_TOKEN, "").trim();
-        if (refreshToken.isEmpty()) throw new Exception("Chưa có refresh token.");
+        if (refreshToken.isEmpty()) throw new Exception("ChÆ°a cÃ³ refresh token.");
 
         JSONObject body = new JSONObject();
         body.put("refresh_token", refreshToken);
@@ -506,7 +510,7 @@ public class MainActivity extends Activity {
         JSONObject auth = new JSONObject(httpRequest("POST", url, body.toString(), false, ""));
         String accessToken = auth.optString("access_token", "");
         String nextRefreshToken = auth.optString("refresh_token", refreshToken);
-        if (accessToken.isEmpty()) throw new Exception("Không làm mới được phiên đăng nhập.");
+        if (accessToken.isEmpty()) throw new Exception("KhÃ´ng lÃ m má»›i Ä‘Æ°á»£c phiÃªn Ä‘Äƒng nháº­p.");
 
         prefs.edit()
                 .putString(KEY_ACCESS_TOKEN, accessToken)
@@ -531,17 +535,17 @@ public class MainActivity extends Activity {
         JSONArray byEmail = new JSONArray(httpRequest("GET", urlByEmail, null, false, accessToken));
         if (byEmail.length() > 0) return byEmail.getJSONObject(0);
 
-        throw new Exception("Tài khoản này chưa có hồ sơ trong bảng profiles.");
+        throw new Exception("TÃ i khoáº£n nÃ y chÆ°a cÃ³ há»“ sÆ¡ trong báº£ng profiles.");
     }
 
     private void applyProfileSession(String accessToken, String refreshToken, String authUserId, String authEmail, JSONObject profile, JSONObject authUserMetadata) throws Exception {
         String role = profile.optString("role", "").trim().toLowerCase(Locale.US);
         String status = profile.optString("status", "").trim().toLowerCase(Locale.US);
         if (!"active".equals(status)) {
-            throw new Exception("Tài khoản chi nhánh chưa active.");
+            throw new Exception("TÃ i khoáº£n chi nhÃ¡nh chÆ°a active.");
         }
         if (!("admin".equals(role) || "staff".equals(role) || "kitchen".equals(role))) {
-            throw new Exception("Tài khoản này chưa có quyền bếp.");
+            throw new Exception("TÃ i khoáº£n nÃ y chÆ°a cÃ³ quyá»n báº¿p.");
         }
 
         JSONObject metadata = profile.optJSONObject("metadata");
@@ -550,7 +554,7 @@ public class MainActivity extends Activity {
         JSONObject branchInfo = resolveBranchInfo(accessToken, profile, metadata, authUserMetadata);
         String branchUuid = branchInfo.optString("branchUuid", "");
         if (branchUuid.isEmpty()) {
-            throw new Exception("Không tìm thấy branch_uuid cho tài khoản này.");
+            throw new Exception("KhÃ´ng tÃ¬m tháº¥y branch_uuid cho tÃ i khoáº£n nÃ y.");
         }
         String branchName = branchInfo.optString("branchName", "");
         String branchAlias = branchInfo.optString("branchAlias", "");
@@ -620,7 +624,7 @@ public class MainActivity extends Activity {
             if (!branchUuid.isEmpty()) return buildBranchInfo(branchUuid, branchName, branchAlias);
         }
 
-        throw new Exception("Profile chưa có branch_uuid. Vui lòng gán chi nhánh cho tài khoản này trong Admin/Supabase.");
+        throw new Exception("Profile chÆ°a cÃ³ branch_uuid. Vui lÃ²ng gÃ¡n chi nhÃ¡nh cho tÃ i khoáº£n nÃ y trong Admin/Supabase.");
     }
 
     private JSONObject buildBranchInfo(String branchUuid, String branchName, String branchAlias) throws Exception {
@@ -695,7 +699,7 @@ public class MainActivity extends Activity {
     private void logout() {
         stopStation();
         clearAuthSession(true);
-        log("Đã đăng xuất tài khoản chi nhánh.");
+        log("ÄÃ£ Ä‘Äƒng xuáº¥t tÃ i khoáº£n chi nhÃ¡nh.");
     }
 
     private void clearAuthSession(boolean clearEmail) {
@@ -722,11 +726,11 @@ public class MainActivity extends Activity {
     private void startStation() {
         String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
         if (branchUuid.isEmpty()) {
-            status("Bạn cần đăng nhập tài khoản chi nhánh trước.");
+            status("Báº¡n cáº§n Ä‘Äƒng nháº­p tÃ i khoáº£n chi nhÃ¡nh trÆ°á»›c.");
             return;
         }
         if (prefs.getString(KEY_ACCESS_TOKEN, "").trim().isEmpty()) {
-            status("Phiên đăng nhập chưa sẵn sàng. Vui lòng đăng nhập lại.");
+            status("PhiÃªn Ä‘Äƒng nháº­p chÆ°a sáºµn sÃ ng. Vui lÃ²ng Ä‘Äƒng nháº­p láº¡i.");
             return;
         }
 
@@ -736,7 +740,7 @@ public class MainActivity extends Activity {
         updateStationUi();
         pollOnceAsync();
         schedulePrintPolling();
-        log("Đã bật trạm in cho chi nhánh " + getBranchLabel() + ".");
+        log("ÄÃ£ báº­t tráº¡m in cho chi nhÃ¡nh " + getBranchLabel() + ".");
     }
 
     private void stopStation() {
@@ -747,7 +751,7 @@ public class MainActivity extends Activity {
         closeRealtime();
         stopKeepAliveService();
         updateStationUi();
-        log("Đã tắt trạm in.");
+        log("ÄÃ£ táº¯t tráº¡m in.");
     }
 
     private void startKeepAliveService() {
@@ -780,18 +784,18 @@ public class MainActivity extends Activity {
         if (accountSummaryText != null && loggedIn) {
             String email = prefs.getString(KEY_AUTH_EMAIL, "").trim();
             String branch = getBranchLabel();
-            accountSummaryText.setText((email.isEmpty() ? "Đã đăng nhập" : email) + "\nChi nhánh: " + branch);
+            accountSummaryText.setText((email.isEmpty() ? "ÄÃ£ Ä‘Äƒng nháº­p" : email) + "\nChi nhÃ¡nh: " + branch);
         }
 
         if (stationRunning) {
-            stationText.setText("Trạm in đang bật · " + getBranchLabel());
+            stationText.setText("Tráº¡m in Ä‘ang báº­t Â· " + getBranchLabel());
             stationText.setTextColor(Color.rgb(15, 118, 110));
-            stationButton.setText("Tắt trạm in");
+            stationButton.setText("Táº¯t tráº¡m in");
             stationButton.setBackground(makeRoundRect(Color.rgb(239, 68, 68), 8, 1, Color.rgb(185, 28, 28)));
         } else {
-            stationText.setText(loggedIn ? "Đã đăng nhập · " + getBranchLabel() : "Chưa đăng nhập chi nhánh");
+            stationText.setText(loggedIn ? "ÄÃ£ Ä‘Äƒng nháº­p Â· " + getBranchLabel() : "ChÆ°a Ä‘Äƒng nháº­p chi nhÃ¡nh");
             stationText.setTextColor(loggedIn ? Color.rgb(15, 118, 110) : Color.rgb(185, 28, 28));
-            stationButton.setText("Bật trạm in");
+            stationButton.setText("Báº­t tráº¡m in");
             stationButton.setBackground(makeRoundRect(Color.rgb(20, 184, 166), 8, 1, Color.rgb(15, 118, 110)));
         }
     }
@@ -803,7 +807,7 @@ public class MainActivity extends Activity {
             try {
                 processPendingJobs();
             } catch (Exception error) {
-                log("Lỗi lấy lệnh in: " + shortError(error));
+                log("Lá»—i láº¥y lá»‡nh in: " + shortError(error));
             } finally {
                 polling = false;
             }
@@ -820,11 +824,11 @@ public class MainActivity extends Activity {
     private void processPendingJobs() throws Exception {
         String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
         if (branchUuid.isEmpty()) {
-            status("Chưa nhập branch_uuid.");
+            status("ChÆ°a nháº­p branch_uuid.");
             return;
         }
 
-        status("Đang kiểm tra lệnh in...");
+        status("Äang kiá»ƒm tra lá»‡nh in...");
         String url = SUPABASE_URL + "/rest/v1/print_jobs"
                 + "?select=" + PRINT_JOB_SELECT
                 + "&status=eq.pending"
@@ -836,7 +840,7 @@ public class MainActivity extends Activity {
 
         JSONArray jobs = new JSONArray(httpRequest("GET", url, null, false));
         if (jobs.length() == 0) {
-            status("Chưa có lệnh in mới.");
+            status("ChÆ°a cÃ³ lá»‡nh in má»›i.");
             return;
         }
 
@@ -869,7 +873,7 @@ public class MainActivity extends Activity {
         if (result.length() == 0) return null;
 
         String code = result.getJSONObject(0).optString("order_code", "");
-        log("Đã nhận lệnh in " + (code.isEmpty() ? jobId : code) + ".");
+        log("ÄÃ£ nháº­n lá»‡nh in " + (code.isEmpty() ? jobId : code) + ".");
         return result.getJSONObject(0);
     }
 
@@ -883,18 +887,18 @@ public class MainActivity extends Activity {
             String text = payload == null ? "" : payload.optString("text", "");
             String loyaltyUrl = payload == null ? "" : payload.optString("loyaltyUrl", "");
             if (text.trim().isEmpty()) {
-                throw new Exception("Bill chưa có nội dung để in.");
+                throw new Exception("Bill chÆ°a cÃ³ ná»™i dung Ä‘á»ƒ in.");
             }
 
             playNewOrderAlert();
             boolean ok = printReceiptPayload(text, loyaltyUrl);
-            if (!ok) throw new Exception("Máy in chưa nhận bill.");
+            if (!ok) throw new Exception("MÃ¡y in chÆ°a nháº­n bill.");
 
             markJobPrinted(jobId);
             log("In xong bill " + (orderCode.isEmpty() ? jobId : orderCode) + ".");
         } catch (Exception error) {
             markJobFailed(jobId, retryCount + 1, shortError(error));
-            log("In lỗi " + (orderCode.isEmpty() ? jobId : orderCode) + ": " + shortError(error));
+            log("In lá»—i " + (orderCode.isEmpty() ? jobId : orderCode) + ": " + shortError(error));
         }
     }
 
@@ -1019,7 +1023,7 @@ public class MainActivity extends Activity {
 
             sendRealtimeEvent("realtime:public:print_jobs", "phx_join", payload);
         } catch (Exception error) {
-            log("Không đăng ký realtime được: " + shortError(error));
+            log("KhÃ´ng Ä‘Äƒng kÃ½ realtime Ä‘Æ°á»£c: " + shortError(error));
         }
     }
 
@@ -1048,11 +1052,11 @@ public class MainActivity extends Activity {
             String event = message.optString("event", "");
             if ("phx_reply".equals(event) && !realtimeJoined) {
                 realtimeJoined = true;
-                log("Realtime đã sẵn sàng, có bill mới sẽ in ngay.");
+                log("Realtime Ä‘Ã£ sáºµn sÃ ng, cÃ³ bill má»›i sáº½ in ngay.");
                 return;
             }
             if ("postgres_changes".equals(event)) {
-                log("Có lệnh in mới từ realtime.");
+                log("CÃ³ lá»‡nh in má»›i tá»« realtime.");
                 pollOnceAsync();
             }
         } catch (Exception ignored) {
@@ -1118,7 +1122,7 @@ public class MainActivity extends Activity {
     private void showUsbDevicePicker() {
         HashMap<String, UsbDevice> devices = usbManager.getDeviceList();
         if (devices.isEmpty()) {
-            toast("Chưa thấy máy in USB. Kiểm tra dây USB/OTG.");
+            toast("ChÆ°a tháº¥y mÃ¡y in USB. Kiá»ƒm tra dÃ¢y USB/OTG.");
             updatePrinterStatus();
             return;
         }
@@ -1131,7 +1135,7 @@ public class MainActivity extends Activity {
         }
 
         new AlertDialog.Builder(this)
-                .setTitle("Chọn máy in USB")
+                .setTitle("Chá»n mÃ¡y in USB")
                 .setItems(labels, (dialog, which) -> requestPrinterPermission(deviceList.get(which)))
                 .show();
     }
@@ -1139,7 +1143,7 @@ public class MainActivity extends Activity {
     private void requestPrinterPermission(UsbDevice device) {
         if (usbManager.hasPermission(device)) {
             saveSelectedDevice(device);
-            status("Đã chọn máy in USB.");
+            status("ÄÃ£ chá»n mÃ¡y in USB.");
             updatePrinterStatus();
             return;
         }
@@ -1179,44 +1183,44 @@ public class MainActivity extends Activity {
         if (PRINTER_MODE_LAN.equals(getPrinterMode())) {
             String host = prefs.getString(KEY_LAN_HOST, "").trim();
             if (host.isEmpty()) {
-                printerText.setText("Máy in LAN/WiFi: chưa nhập IP");
+                printerText.setText("MÃ¡y in LAN/WiFi: chÆ°a nháº­p IP");
                 printerText.setTextColor(Color.rgb(194, 65, 12));
                 return;
             }
 
-            printerText.setText("Máy in LAN/WiFi: " + host + ":" + getLanPort());
+            printerText.setText("MÃ¡y in LAN/WiFi: " + host + ":" + getLanPort());
             printerText.setTextColor(Color.rgb(15, 118, 110));
             return;
         }
 
         UsbDevice device = getSelectedDevice();
         if (device == null) {
-            printerText.setText("Máy in USB: chưa kết nối");
+            printerText.setText("MÃ¡y in USB: chÆ°a káº¿t ná»‘i");
             printerText.setTextColor(Color.rgb(185, 28, 28));
             return;
         }
 
         boolean hasPermission = usbManager.hasPermission(device);
-        printerText.setText(hasPermission ? "Máy in USB: sẵn sàng" : "Máy in USB: cần cấp quyền");
+        printerText.setText(hasPermission ? "MÃ¡y in USB: sáºµn sÃ ng" : "MÃ¡y in USB: cáº§n cáº¥p quyá»n");
         printerText.setTextColor(hasPermission ? Color.rgb(15, 118, 110) : Color.rgb(194, 65, 12));
     }
 
     private void printTestBill() {
         String time = new SimpleDateFormat("HH:mm dd/MM/yyyy", new Locale("vi", "VN")).format(new Date());
         printReceiptPayload(
-                "@@CENTER:GÁNH HÀNG RONG\n" +
-                "@@CENTER:MÃ ĐƠN\n" +
+                "@@CENTER:GÃNH HÃ€NG RONG\n" +
+                "@@CENTER:MÃƒ ÄÆ N\n" +
                 "@@BIG:TEST-XPRINTER\n" +
                 "------------------------------------------\n" +
-                "Nguồn: Bếp\n" +
-                "Giờ: " + time + "\n" +
+                "Nguá»“n: Báº¿p\n" +
+                "Giá»: " + time + "\n" +
                 "------------------------------------------\n" +
-                "1 x Dòng test tiếng Việt có dấu\n" +
+                "1 x DÃ²ng test tiáº¿ng Viá»‡t cÃ³ dáº¥u\n" +
                 "------------------------------------------\n" +
-                "@@CENTER:Quét QR để tích điểm\n" +
+                "@@CENTER:QuÃ©t QR Ä‘á»ƒ tÃ­ch Ä‘iá»ƒm\n" +
                 "@@QR\n" +
                 "@@CENTER:Hotline: 0933 799 061\n" +
-                "@@CENTER:Cảm ơn quý khách!",
+                "@@CENTER:Cáº£m Æ¡n quÃ½ khÃ¡ch!",
                 "https://ganhhangrong.vn/loyalty?source=receipt"
         );
     }
@@ -1236,13 +1240,13 @@ public class MainActivity extends Activity {
         String host = prefs.getString(KEY_LAN_HOST, "").trim();
         int port = getLanPort();
         if (host.isEmpty()) {
-            status("Chưa nhập IP máy in LAN/WiFi.");
+            status("ChÆ°a nháº­p IP mÃ¡y in LAN/WiFi.");
             updatePrinterStatus();
             return false;
         }
 
         try (Socket socket = new Socket()) {
-            status("Đang kết nối máy in LAN/WiFi...");
+            status("Äang káº¿t ná»‘i mÃ¡y in LAN/WiFi...");
             socket.connect(new InetSocketAddress(host, port), 5000);
             socket.setSoTimeout(5000);
 
@@ -1250,11 +1254,11 @@ public class MainActivity extends Activity {
             outputStream.write(buildEscPosRaster(text, qrUrl));
             outputStream.flush();
 
-            status("Đã gửi bill tới Xprinter LAN/WiFi.");
+            status("ÄÃ£ gá»­i bill tá»›i Xprinter LAN/WiFi.");
             updatePrinterStatus();
             return true;
         } catch (Exception error) {
-            status("Không kết nối được máy in LAN/WiFi.");
+            status("KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c mÃ¡y in LAN/WiFi.");
             updatePrinterStatus();
             return false;
         }
@@ -1263,7 +1267,7 @@ public class MainActivity extends Activity {
     private boolean printReceiptTextViaUsb(String text, String qrUrl) {
         UsbDevice device = getSelectedDevice();
         if (device == null) {
-            status("Chưa thấy máy in USB.");
+            status("ChÆ°a tháº¥y mÃ¡y in USB.");
             updatePrinterStatus();
             return false;
         }
@@ -1271,7 +1275,7 @@ public class MainActivity extends Activity {
         if (!usbManager.hasPermission(device)) {
             pendingPrintText = text;
             pendingPrintQrUrl = qrUrl;
-            status("Đang xin quyền USB.");
+            status("Äang xin quyá»n USB.");
             usbManager.requestPermission(device, permissionIntent);
             updatePrinterStatus();
             return false;
@@ -1293,19 +1297,19 @@ public class MainActivity extends Activity {
         }
 
         if (usbInterface == null || outEndpoint == null) {
-            status("Không tìm thấy cổng in USB.");
+            status("KhÃ´ng tÃ¬m tháº¥y cá»•ng in USB.");
             return false;
         }
 
         UsbDeviceConnection connection = usbManager.openDevice(device);
         if (connection == null) {
-            status("Không mở được kết nối máy in.");
+            status("KhÃ´ng má»Ÿ Ä‘Æ°á»£c káº¿t ná»‘i mÃ¡y in.");
             return false;
         }
 
         try {
             if (!connection.claimInterface(usbInterface, true)) {
-                status("Không nhận được quyền cổng USB.");
+                status("KhÃ´ng nháº­n Ä‘Æ°á»£c quyá»n cá»•ng USB.");
                 return false;
             }
 
@@ -1315,13 +1319,13 @@ public class MainActivity extends Activity {
                 int chunkSize = Math.min(4096, data.length - offset);
                 int sent = connection.bulkTransfer(outEndpoint, data, offset, chunkSize, 5000);
                 if (sent <= 0) {
-                    status("Máy in không nhận dữ liệu.");
+                    status("MÃ¡y in khÃ´ng nháº­n dá»¯ liá»‡u.");
                     return false;
                 }
                 offset += sent;
             }
 
-            status("Đã gửi bill tới Xprinter USB.");
+            status("ÄÃ£ gá»­i bill tá»›i Xprinter USB.");
             updatePrinterStatus();
             return true;
         } finally {
@@ -1427,7 +1431,6 @@ public class MainActivity extends Activity {
         paint.setColor(Color.BLACK);
         paint.setTextSize(24);
         paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
-
         int padding = 16;
         Bitmap qrBitmap = getFixedQrBitmap(dp(150));
         List<String> lines = expandReceiptLines(text, paint, width - padding * 2);
@@ -1681,11 +1684,11 @@ public class MainActivity extends Activity {
     private String normalizeAuthError(Exception error) {
         String raw = String.valueOf(error == null ? "" : error.getMessage()).trim();
         String lower = raw.toLowerCase(Locale.US);
-        if (lower.contains("invalid login credentials")) return "Email hoặc mật khẩu chưa đúng.";
-        if (lower.contains("email not confirmed")) return "Email này chưa được xác nhận trong Supabase Auth.";
-        if (lower.contains("timeout")) return "Kết nối Supabase đang chậm. Bạn thử lại sau vài giây.";
-        if (lower.contains("network") || lower.contains("failed to connect")) return "Không kết nối được Supabase. Kiểm tra mạng POS.";
-        return raw.isEmpty() ? "Đăng nhập thất bại." : raw;
+        if (lower.contains("invalid login credentials")) return "Email hoáº·c máº­t kháº©u chÆ°a Ä‘Ãºng.";
+        if (lower.contains("email not confirmed")) return "Email nÃ y chÆ°a Ä‘Æ°á»£c xÃ¡c nháº­n trong Supabase Auth.";
+        if (lower.contains("timeout")) return "Káº¿t ná»‘i Supabase Ä‘ang cháº­m. Báº¡n thá»­ láº¡i sau vÃ i giÃ¢y.";
+        if (lower.contains("network") || lower.contains("failed to connect")) return "KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c Supabase. Kiá»ƒm tra máº¡ng POS.";
+        return raw.isEmpty() ? "ÄÄƒng nháº­p tháº¥t báº¡i." : raw;
     }
 
     private void ensureDeviceId() {
@@ -1708,7 +1711,7 @@ public class MainActivity extends Activity {
 
     private String shortError(Exception error) {
         String message = error.getMessage();
-        if (message == null || message.trim().isEmpty()) return "Không rõ lỗi";
+        if (message == null || message.trim().isEmpty()) return "KhÃ´ng rÃµ lá»—i";
         return message.length() > 180 ? message.substring(0, 180) : message;
     }
 
@@ -1732,81 +1735,81 @@ public class MainActivity extends Activity {
         String normalized = normalizeLogKey(rawMessage);
 
         if (normalized.contains("refresh_token_not_found")
-                || normalized.contains("invalid refresh token")
-                || normalized.contains("phien dang nhap chua san sang")
-                || normalized.contains("session")
-                || normalized.contains("supabase http 401")) {
+| normalized.contains("invalid refresh token")
+| normalized.contains("phien dang nhap chua san sang")
+| normalized.contains("session")
+| normalized.contains("supabase http 401")) {
             return new OperatorGuidance(
-                    "Phiên đăng nhập đã hết hạn",
-                    "Đăng xuất rồi đăng nhập lại. Sau đó bật lại trạm in."
+                    "PhiÃªn Ä‘Äƒng nháº­p Ä‘Ã£ háº¿t háº¡n",
+                    "ÄÄƒng xuáº¥t rá»“i Ä‘Äƒng nháº­p láº¡i. Sau Ä‘Ã³ báº­t láº¡i tráº¡m in."
             );
         }
 
         if (normalized.contains("khong co quyen")
-                || normalized.contains("không có quyền")
-                || normalized.contains("chua co quyen bep")
-                || normalized.contains("chưa có quyền bếp")
-                || normalized.contains("chua active")
-                || normalized.contains("khong tim thay branch_uuid")
-                || normalized.contains("không tìm thấy branch_uuid")) {
+| normalized.contains("khÃ´ng cÃ³ quyá»n")
+| normalized.contains("chua co quyen bep")
+| normalized.contains("chÆ°a cÃ³ quyá»n báº¿p")
+| normalized.contains("chua active")
+| normalized.contains("khong tim thay branch_uuid")
+| normalized.contains("khÃ´ng tÃ¬m tháº¥y branch_uuid")) {
             return new OperatorGuidance(
-                    "Tài khoản này không có quyền dùng trạm in",
-                    "Liên hệ quản lý để kiểm tra quyền hoặc chi nhánh."
+                    "TÃ i khoáº£n nÃ y khÃ´ng cÃ³ quyá»n dÃ¹ng tráº¡m in",
+                    "LiÃªn há»‡ quáº£n lÃ½ Ä‘á»ƒ kiá»ƒm tra quyá»n hoáº·c chi nhÃ¡nh."
             );
         }
 
         if (normalized.contains("may in")
-                || normalized.contains("máy in")
-                || normalized.contains("printer did not accept")
-                || normalized.contains("khong ket noi duoc may in")
-                || normalized.contains("không kết nối được máy in")
-                || normalized.contains("usb")
-                || normalized.contains("lan/wifi")) {
+| normalized.contains("mÃ¡y in")
+| normalized.contains("printer did not accept")
+| normalized.contains("khong ket noi duoc may in")
+| normalized.contains("khÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c mÃ¡y in")
+| normalized.contains("usb")
+| normalized.contains("lan/wifi")) {
             return new OperatorGuidance(
-                    "Máy in chưa sẵn sàng",
-                    "Kiểm tra kết nối máy in rồi bấm In test."
+                    "MÃ¡y in chÆ°a sáºµn sÃ ng",
+                    "Kiá»ƒm tra káº¿t ná»‘i mÃ¡y in rá»“i báº¥m In test."
             );
         }
 
         if (normalized.contains("supabase")
-                || normalized.contains("realtime")
-                || normalized.contains("failed to fetch")
-                || normalized.contains("timeout")
-                || normalized.contains("network")
-                || normalized.contains("loi lay lenh in")
-                || normalized.contains("lỗi lấy lệnh in")
-                || normalized.contains("read print jobs failed")
-                || normalized.contains("khong mo duoc realtime")
-                || normalized.contains("không mở được realtime")) {
+| normalized.contains("realtime")
+| normalized.contains("failed to fetch")
+| normalized.contains("timeout")
+| normalized.contains("network")
+| normalized.contains("loi lay lenh in")
+| normalized.contains("lá»—i láº¥y lá»‡nh in")
+| normalized.contains("read print jobs failed")
+| normalized.contains("khong mo duoc realtime")
+| normalized.contains("khÃ´ng má»Ÿ Ä‘Æ°á»£c realtime")) {
             return new OperatorGuidance(
-                    "Không kết nối được hệ thống in",
-                    "Bấm Kiểm tra lệnh in. Nếu chưa được, bật lại trạm in."
+                    "KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c há»‡ thá»‘ng in",
+                    "Báº¥m Kiá»ƒm tra lá»‡nh in. Náº¿u chÆ°a Ä‘Æ°á»£c, báº­t láº¡i tráº¡m in."
             );
         }
 
         if (normalized.contains("dang kiem tra lenh in")
-                || normalized.contains("đang kiểm tra lệnh in")) {
+| normalized.contains("Ä‘ang kiá»ƒm tra lá»‡nh in")) {
             return new OperatorGuidance(
-                    "Đang kiểm tra lệnh in",
-                    "Vui lòng chờ trong giây lát."
+                    "Äang kiá»ƒm tra lá»‡nh in",
+                    "Vui lÃ²ng chá» trong giÃ¢y lÃ¡t."
             );
         }
 
         if (normalized.contains("chua co lenh in moi")
-                || normalized.contains("chưa có lệnh in mới")) {
+| normalized.contains("chÆ°a cÃ³ lá»‡nh in má»›i")) {
             return new OperatorGuidance(
-                    "Chưa có lệnh in mới",
-                    "Trạm in đang hoạt động bình thường."
+                    "ChÆ°a cÃ³ lá»‡nh in má»›i",
+                    "Tráº¡m in Ä‘ang hoáº¡t Ä‘á»™ng bÃ¬nh thÆ°á»ng."
             );
         }
 
         if (normalized.contains("in xong bill")
-                || normalized.contains("da gui bill")
-                || normalized.contains("đã gửi bill")
-                || normalized.contains("đã nhận lệnh in")) {
+| normalized.contains("da gui bill")
+| normalized.contains("Ä‘Ã£ gá»­i bill")
+| normalized.contains("Ä‘Ã£ nháº­n lá»‡nh in")) {
             return new OperatorGuidance(
-                    "Đã xử lý lệnh in",
-                    "Nếu cần, tiếp tục chờ bill mới."
+                    "ÄÃ£ xá»­ lÃ½ lá»‡nh in",
+                    "Náº¿u cáº§n, tiáº¿p tá»¥c chá» bill má»›i."
             );
         }
 
