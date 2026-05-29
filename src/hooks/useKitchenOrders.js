@@ -21,6 +21,7 @@ import {
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
 const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
+const KITCHEN_BACKGROUND_REFRESH_MS = 30000;
 const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
 const DONE_ORDER_PAGE_SIZE = 20;
@@ -691,6 +692,16 @@ export default function useKitchenOrders(options = null) {
 
     return () => window.clearInterval(timer);
   }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") return undefined;
+    const timer = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      loadOrders({ silent: true });
+    }, KITCHEN_BACKGROUND_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
+  }, [enabled, loadOrders]);
 
   useEffect(() => {
     if (!enabled) return undefined;

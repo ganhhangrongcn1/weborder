@@ -90,6 +90,43 @@ export function buildCustomerBillPrintPayload(order = {}, printerOptions = {}) {
   return buildPrintJobPayload(order, printerOptions);
 }
 
+async function findExistingCustomerBillPrintJob(client, row = {}) {
+  const comparableKeys = [
+    { column: "order_id", value: row.order_id },
+    { column: "order_code", value: row.order_code }
+  ].filter((item, index, list) => (
+    item.value && list.findIndex((candidate) => candidate.value === item.value) === index
+  ));
+
+  for (const key of comparableKeys) {
+    let query = client
+      .from("print_jobs")
+      .select(PRINT_JOB_STATUS_COLUMNS)
+      .eq("job_type", row.job_type || "customer_bill")
+      .eq("printer_key", row.printer_key || DEFAULT_PRINTER_KEY)
+      .eq(key.column, key.value)
+      .in("status", [
+        PRINT_JOB_STATUS.pending,
+        PRINT_JOB_STATUS.printing,
+        PRINT_JOB_STATUS.printed
+      ])
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (row.branch_uuid) query = query.eq("branch_uuid", row.branch_uuid);
+
+    const { data, error } = await query;
+    if (error) {
+      console.warn("[printJobService] check existing print job failed", error);
+      continue;
+    }
+
+    if (Array.isArray(data) && data[0]) return data[0];
+  }
+
+  return null;
+}
+
 export async function createCustomerBillPrintJob(order = {}, options = {}) {
   const client = await getClient();
   if (!client) {
@@ -114,6 +151,15 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
     created_at: now,
     updated_at: now
   };
+
+  const existingJob = await findExistingCustomerBillPrintJob(client, row);
+  if (existingJob) {
+    return {
+      ok: true,
+      job: existingJob,
+      message: "Bill đã có lệnh in, không tạo trùng."
+    };
+  }
 
   const { data, error } = await client
     .from("print_jobs")
