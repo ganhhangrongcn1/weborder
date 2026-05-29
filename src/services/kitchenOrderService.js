@@ -280,12 +280,12 @@ function resolvePartnerKitchenStatus(row = {}, nexposState = "") {
   const workStatus = normalizeKitchenStatus(row.kitchen_work_status);
   const legacyKitchenStatus = normalizeKitchenStatus(row.kitchen_status);
 
-  if (nexposState === "cancelled") {
-    return "cancelled";
-  }
-
   if (["done", "cancelled", "preorder"].includes(workStatus)) {
     return workStatus;
+  }
+
+  if (nexposState === "cancelled") {
+    return workStatus || "pending";
   }
 
   if (["cooking", "confirmed"].includes(workStatus)) {
@@ -304,7 +304,7 @@ function resolvePartnerKitchenStatus(row = {}, nexposState = "") {
     return "cooking";
   }
 
-  if (["done", "cancelled", "preorder"].includes(nexposState)) {
+  if (["done", "preorder"].includes(nexposState)) {
     return nexposState;
   }
 
@@ -390,8 +390,20 @@ export function getNextKitchenOrderAction(order = {}) {
   const kitchenStatus = normalizeKitchenStatus(order.kitchenStatus);
   const fulfillmentType = normalizeOrderStatus(order.fulfillmentType);
   const nexposState = normalizeNexposOrderState(order.nexposState, order.nexposStatus, order.raw?.nexpos_status, order.raw?.status);
+  const isPartnerCancelledByNexpos = order.sourceType === KITCHEN_SOURCE.partner && nexposState === "cancelled";
+
+  if (isPartnerCancelledByNexpos && kitchenStatus !== "cancelled") {
+    return {
+      type: "partner_cancelled",
+      label: "Xác nhận đơn hủy",
+      nextStatus: status || "cancelled",
+      nextKitchenStatus: "cancelled",
+      requiresReady: false
+    };
+  }
+
   const isClosed = ["cancelled", "preorder"].includes(kitchenStatus) ||
-    nexposState === "cancelled" ||
+    (nexposState === "cancelled" && order.sourceType !== KITCHEN_SOURCE.partner) ||
     ["cancelled", "canceled", "cancel"].includes(status) ||
     isOrderSettlementDone(status) ||
     isLegacyWebsiteKitchenDone(order);
@@ -1065,10 +1077,11 @@ export async function markKitchenOrderDone(order = {}) {
   }
 
   if (order.sourceType === KITCHEN_SOURCE.partner) {
+    const nextKitchenStatus = action.nextKitchenStatus || "done";
     const { error } = await client
       .from("partner_orders")
       .update({
-        kitchen_work_status: "done",
+        kitchen_work_status: nextKitchenStatus,
         kitchen_done_at: updatedAt,
         updated_at: updatedAt
       })
@@ -1084,7 +1097,9 @@ export async function markKitchenOrderDone(order = {}) {
 
     return {
       ok: true,
-      message: "Đã xác nhận xong đơn đối tác."
+      message: action.type === "partner_cancelled"
+        ? "Đã xác nhận đơn hủy từ NexPOS."
+        : "Đã xác nhận xong đơn đối tác."
     };
   }
 

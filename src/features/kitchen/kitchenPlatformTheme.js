@@ -90,8 +90,12 @@ export function getKitchenPlatformTone(platform = "") {
 
 export function getKitchenOrderTheme(order = {}) {
   const status = String(order.kitchenStatus || "").toLowerCase();
+  const nexposStatus = String(order.nexposState || order.nexposStatus || order.raw?.nexpos_status || order.raw?.status || "")
+    .trim()
+    .toLowerCase();
+  const isCancelled = status === "cancelled" || ["cancel", "canceled", "cancelled", "huy", "da huy", "dahuy"].includes(nexposStatus);
 
-  if (status === "cancelled") {
+  if (isCancelled) {
     return {
       background: "linear-gradient(135deg, #fee2e2 0%, #fff1f2 100%)",
       border: "#ef4444",

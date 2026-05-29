@@ -71,31 +71,32 @@ function normalizeText(value = "") {
   return String(value || "").trim().toLowerCase();
 }
 
-function isCancelledRuntimeOrder(order = {}) {
+function isAcknowledgedCancelledOrder(order = {}) {
   return [
     order.kitchenStatus,
-    order.nexposState,
-    order.nexposStatus,
-    order.status,
-    order.raw?.nexpos_status,
-    order.raw?.status
-  ].some((value) => ["cancel", "canceled", "cancelled", "huy", "da huy", "dahuy"].includes(normalizeText(value)));
+    order.kitchenWorkStatus,
+    order.raw?.kitchen_work_status,
+    order.raw?.kitchen_status
+  ].some((value) => normalizeText(value) === "cancelled");
 }
 
 function orderMatchesStatus(order = {}, statusFilter = "active") {
   const status = normalizeText(order.kitchenStatus || order.status);
   const orderStatus = normalizeText(order.status);
-  const isCancelled = isCancelledRuntimeOrder(order);
+  const isAcknowledgedCancelled = isAcknowledgedCancelledOrder(order);
   const isWebsite = order.sourceType === "website";
   const isWebsiteHandoff = ["ready_for_pickup", "ready_for_delivery", "delivering"].includes(orderStatus);
   const isLegacyWebsiteDone = isWebsite && ["done", "completed"].includes(status) && !isWebsiteHandoff;
 
   if (statusFilter === "all") return true;
   if (statusFilter === "done") return ["done", "completed"].includes(orderStatus) || isLegacyWebsiteDone || (order.sourceType === "partner" && ["done", "completed"].includes(status));
-  if (statusFilter === "cancelled") return status === "cancelled" || isCancelled;
+  if (statusFilter === "cancelled") return isAcknowledgedCancelled;
   if (isLegacyWebsiteDone) return false;
-  if (isCancelled) return false;
-  return !["done", "completed", "cancelled", "preorder"].includes(orderStatus) && !(order.sourceType === "partner" && ["done", "completed", "cancelled", "preorder"].includes(status));
+  if (isAcknowledgedCancelled) return false;
+  const closedOrderStatuses = order.sourceType === "partner"
+    ? ["done", "completed", "preorder"]
+    : ["done", "completed", "cancelled", "preorder"];
+  return !closedOrderStatuses.includes(orderStatus) && !(order.sourceType === "partner" && ["done", "completed", "cancelled", "preorder"].includes(status));
 }
 
 function normalizeSourceKey(value = "") {

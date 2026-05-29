@@ -147,6 +147,14 @@ function getStatusTone(status = "") {
 }
 
 function getActionButtonTone(actionType = "", fallbackColor = "#111827") {
+  if (actionType === "partner_cancelled") {
+    return {
+      background: "#dc2626",
+      border: "#dc2626",
+      shadow: "rgba(220, 38, 38, 0.28)"
+    };
+  }
+
   if (actionType === "handoff_shipper") {
     return {
       background: "#2563eb",
@@ -252,6 +260,15 @@ function isExternallyCancelled(order = {}) {
     const status = String(value || "").trim().toLowerCase();
     return ["cancel", "canceled", "cancelled", "huy", "da huy", "dahuy"].includes(status);
   });
+}
+
+function isCancellationAcknowledged(order = {}) {
+  return [
+    order.kitchenStatus,
+    order.kitchenWorkStatus,
+    order.raw?.kitchen_work_status,
+    order.raw?.kitchen_status
+  ].some((value) => String(value || "").trim().toLowerCase() === "cancelled");
 }
 
 function getMemberTierTone(memberTier = "") {
@@ -638,6 +655,7 @@ export default function KitchenOrderCard({
   const [unitProgress, setUnitProgress] = useState(() => readProgress(UNIT_PROGRESS_STORAGE_KEY));
   const [toppingProgress, setToppingProgress] = useState(() => readProgress(TOPPING_PROGRESS_STORAGE_KEY));
   const isCancelled = isExternallyCancelled(order);
+  const isCancelledAcknowledged = isCancellationAcknowledged(order);
   const isPreorder = order.kitchenStatus === "preorder";
   const nextOrderAction = getNextKitchenOrderAction(order);
   const canMarkDone = Boolean(nextOrderAction);
@@ -696,6 +714,8 @@ export default function KitchenOrderCard({
     : isPreorder
       ? "Đơn đặt trước"
       : "Đơn đã xong";
+  const statusBadgeTone = isCancelled ? getStatusTone("cancelled") : getStatusTone(order.kitchenStatus);
+  const statusBadgeText = isCancelled ? "Đã hủy từ NexPOS" : order.displayStatus;
 
   const isNarrowLayout = compact || tabletCompact;
   const itemGridColumns = compact
@@ -892,8 +912,8 @@ export default function KitchenOrderCard({
             <Badge tone={{ background: platformTone.background, border: platformTone.border, color: platformTone.color }} icon="shop">
               {order.platform || "Nguồn khác"}
             </Badge>
-            <Badge tone={getStatusTone(order.kitchenStatus)} icon={isKitchenOrderDone(order) ? "badge" : "spark"}>
-              {order.displayStatus}
+            <Badge tone={statusBadgeTone} icon={isCancelled || isKitchenOrderDone(order) ? "badge" : "spark"}>
+              {statusBadgeText}
             </Badge>
           </div>
           <strong
@@ -941,10 +961,10 @@ export default function KitchenOrderCard({
 
         <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: 6, justifyItems: compact ? "start" : "end", minWidth: 0 }}>
           <strong style={{ color: "#334155", fontSize: isNarrowLayout ? 18 : 21, fontWeight: 780 }}>
-            {doneItems}/{totalItems}
+            {isCancelled ? "Đã hủy" : `${doneItems}/${totalItems}`}
           </strong>
-          <ProgressBoxes doneItems={doneItems} totalItems={totalItems} accent={theme.border} />
-          {totalToppings ? (
+          {isCancelled ? null : <ProgressBoxes doneItems={doneItems} totalItems={totalItems} accent={theme.border} />}
+          {!isCancelled && totalToppings ? (
             <>
               <span style={{ color: "#92400e", fontSize: 11, fontWeight: 760 }}>
                 Topping {doneToppings}/{totalToppings}
@@ -953,7 +973,11 @@ export default function KitchenOrderCard({
             </>
           ) : null}
           <span style={{ color: "#475569", fontSize: 12, fontWeight: 680 }}>
-            {canMarkDone ? order.displayStatus : closedOrderLabel}
+            {isCancelled
+              ? isCancelledAcknowledged
+                ? "Đã xác nhận hủy"
+                : "Chờ bếp xác nhận hủy"
+              : canMarkDone ? order.displayStatus : closedOrderLabel}
           </span>
           <MonthlyGiftCard
             claiming={claimingGift}
@@ -978,7 +1002,9 @@ export default function KitchenOrderCard({
           }}
         >
           {isCancelled
-            ? "Đơn này đã bị hủy từ NexPOS, bếp không cần làm tiếp."
+            ? isCancelledAcknowledged
+              ? "Đơn này đã được bếp xác nhận hủy."
+              : "Đơn này đã bị hủy từ NexPOS. Bếp không làm tiếp, kiểm lại món đã chuẩn bị rồi bấm Xác nhận đơn hủy."
             : "Đơn đặt trước, chỉ hiện khi NexPOS chuyển sang đang làm."}
         </div>
       ) : null}
