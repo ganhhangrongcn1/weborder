@@ -280,6 +280,10 @@ function resolvePartnerKitchenStatus(row = {}, nexposState = "") {
   const workStatus = normalizeKitchenStatus(row.kitchen_work_status);
   const legacyKitchenStatus = normalizeKitchenStatus(row.kitchen_status);
 
+  if (nexposState === "cancelled") {
+    return "cancelled";
+  }
+
   if (["done", "cancelled", "preorder"].includes(workStatus)) {
     return workStatus;
   }
@@ -385,7 +389,9 @@ export function getNextKitchenOrderAction(order = {}) {
   const status = normalizeOrderStatus(order.status);
   const kitchenStatus = normalizeKitchenStatus(order.kitchenStatus);
   const fulfillmentType = normalizeOrderStatus(order.fulfillmentType);
+  const nexposState = normalizeNexposOrderState(order.nexposState, order.nexposStatus, order.raw?.nexpos_status, order.raw?.status);
   const isClosed = ["cancelled", "preorder"].includes(kitchenStatus) ||
+    nexposState === "cancelled" ||
     ["cancelled", "canceled", "cancel"].includes(status) ||
     isOrderSettlementDone(status) ||
     isLegacyWebsiteKitchenDone(order);

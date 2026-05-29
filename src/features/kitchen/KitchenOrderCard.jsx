@@ -238,6 +238,22 @@ function getPrintButtonConfig(printBillState = {}, printingBill = false) {
   };
 }
 
+function isExternallyCancelled(order = {}) {
+  const values = [
+    order.kitchenStatus,
+    order.nexposState,
+    order.nexposStatus,
+    order.status,
+    order.raw?.nexpos_status,
+    order.raw?.status
+  ];
+
+  return values.some((value) => {
+    const status = String(value || "").trim().toLowerCase();
+    return ["cancel", "canceled", "cancelled", "huy", "da huy", "dahuy"].includes(status);
+  });
+}
+
 function getMemberTierTone(memberTier = "") {
   const value = String(memberTier || "").toLowerCase();
 
@@ -621,7 +637,7 @@ export default function KitchenOrderCard({
   const items = Array.isArray(order.items) ? order.items : [];
   const [unitProgress, setUnitProgress] = useState(() => readProgress(UNIT_PROGRESS_STORAGE_KEY));
   const [toppingProgress, setToppingProgress] = useState(() => readProgress(TOPPING_PROGRESS_STORAGE_KEY));
-  const isCancelled = order.kitchenStatus === "cancelled";
+  const isCancelled = isExternallyCancelled(order);
   const isPreorder = order.kitchenStatus === "preorder";
   const nextOrderAction = getNextKitchenOrderAction(order);
   const canMarkDone = Boolean(nextOrderAction);
@@ -661,7 +677,16 @@ export default function KitchenOrderCard({
   const orderReadyToConfirm = allItemsChecked && allToppingsChecked;
   const actionButtonTone = getActionButtonTone(nextOrderAction?.type, theme.button);
   const isActionButtonEnabled = canMarkDone && (!nextOrderAction?.requiresReady || orderReadyToConfirm);
-  const printButtonConfig = getPrintButtonConfig(printBillState, printingBill);
+  const printButtonConfig = isCancelled || isPreorder
+    ? {
+        label: isCancelled ? "Không in đơn hủy" : "Chưa in đơn đặt trước",
+        disabled: true,
+        background: isCancelled ? "#fee2e2" : "#ffedd5",
+        border: isCancelled ? "#fca5a5" : "#fdba74",
+        color: isCancelled ? "#991b1b" : "#9a3412",
+        opacity: 0.9
+      }
+    : getPrintButtonConfig(printBillState, printingBill);
   const monthlyGift = order.monthlyGift || null;
   const monthlyOrderCount = Number(monthlyGift?.monthlyOrderCount || 0);
   const totalOrderCount = Number(monthlyGift?.totalOrderCount || monthlyOrderCount || 0);
@@ -932,7 +957,7 @@ export default function KitchenOrderCard({
           </span>
           <MonthlyGiftCard
             claiming={claimingGift}
-            gift={monthlyGift}
+            gift={isCancelled || isPreorder ? null : monthlyGift}
             onClaim={() => onClaimGift?.(order)}
           />
         </div>
@@ -1149,16 +1174,17 @@ export default function KitchenOrderCard({
         </button>
         <button
           type="button"
+          disabled={isCancelled || isPreorder}
           onClick={handleResetProgress}
           style={{
             border: "1px solid #dbe3ef",
-            background: "#ffffff",
-            color: "#111827",
+            background: isCancelled || isPreorder ? "#f1f5f9" : "#ffffff",
+            color: isCancelled || isPreorder ? "#94a3b8" : "#111827",
             borderRadius: 10,
             padding: "12px 14px",
             fontSize: 13,
             fontWeight: 900,
-            cursor: "default"
+            cursor: isCancelled || isPreorder ? "not-allowed" : "default"
           }}
         >
           Reset
