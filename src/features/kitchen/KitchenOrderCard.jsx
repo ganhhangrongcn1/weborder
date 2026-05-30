@@ -438,6 +438,17 @@ function InfoLine({ children, color = "#475569", icon, strong = false, wrap = fa
   );
 }
 
+function formatDeliveryTime(value = "") {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function OptionChip({ children, optionLabel = "" }) {
   const parsedOption = optionLabel ? parseKitchenOptionLabel(optionLabel) : null;
 
@@ -654,6 +665,7 @@ export default function KitchenOrderCard({
   const items = Array.isArray(order.items) ? order.items : [];
   const [unitProgress, setUnitProgress] = useState(() => readProgress(UNIT_PROGRESS_STORAGE_KEY));
   const [toppingProgress, setToppingProgress] = useState(() => readProgress(TOPPING_PROGRESS_STORAGE_KEY));
+  const [driverDetailsOpen, setDriverDetailsOpen] = useState(false);
   const isCancelled = isExternallyCancelled(order);
   const isCancelledAcknowledged = isCancellationAcknowledged(order);
   const isPreorder = order.kitchenStatus === "preorder";
@@ -709,6 +721,10 @@ export default function KitchenOrderCard({
   const monthlyOrderCount = Number(monthlyGift?.monthlyOrderCount || 0);
   const totalOrderCount = Number(monthlyGift?.totalOrderCount || monthlyOrderCount || 0);
   const monthlyGiftBadgeText = getMonthlyGiftBadgeText(monthlyGift, monthlyOrderCount);
+  const driverName = String(order.driverName || order.rawData?.driver_name || order.raw?.raw_data?.driver_name || "").trim();
+  const driverPhone = String(order.driverPhone || order.rawData?.driver_phone || order.raw?.raw_data?.driver_phone || "").trim();
+  const deliveryTime = formatDeliveryTime(order.deliveryTime || order.rawData?.delivery_time || order.raw?.raw_data?.delivery_time);
+  const hasDriverDetails = Boolean(driverName || driverPhone || deliveryTime);
   const closedOrderLabel = isCancelled
     ? "Đơn đã hủy"
     : isPreorder
@@ -943,6 +959,54 @@ export default function KitchenOrderCard({
             {order.customerName || "Khách"}
             {order.customerPhone ? ` - ${order.customerPhone}` : ""}
           </InfoLine>
+          {hasDriverDetails ? (
+            <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDriverDetailsOpen((current) => !current);
+                }}
+                style={{
+                  border: "1px solid #bae6fd",
+                  background: "#f0f9ff",
+                  color: "#0369a1",
+                  borderRadius: 999,
+                  padding: "4px 9px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontSize: 11,
+                  fontWeight: 850,
+                  cursor: "pointer"
+                }}
+              >
+                <KitchenIcon name="phone" size={11} />
+                Tài xế
+                <span aria-hidden="true">{driverDetailsOpen ? "▲" : "▼"}</span>
+              </button>
+              {driverDetailsOpen ? (
+                <div
+                  style={{
+                    border: "1px solid #bae6fd",
+                    background: "#f0f9ff",
+                    color: "#0c4a6e",
+                    borderRadius: 10,
+                    padding: "8px 10px",
+                    display: "grid",
+                    gap: 3,
+                    fontSize: 12,
+                    fontWeight: 720,
+                    lineHeight: 1.3
+                  }}
+                >
+                  {driverName ? <span><strong>Tài xế:</strong> {driverName}</span> : null}
+                  {driverPhone ? <span><strong>SĐT:</strong> {driverPhone}</span> : null}
+                  {deliveryTime ? <span><strong>Giao dự kiến:</strong> {deliveryTime}</span> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div style={{ display: "flex", gap: isNarrowLayout ? 5 : 7, flexWrap: "wrap" }}>
             <Badge tone={getMemberTierTone(monthlyGift?.memberTier || "Đồng")} icon="trophy">
               {monthlyGift?.memberTier || "Đồng"} · {totalOrderCount} đơn
