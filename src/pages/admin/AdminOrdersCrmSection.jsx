@@ -4,6 +4,7 @@ import { buildCustomersFromOrderListAsync, getCustomerTier } from "../../service
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../services/adminOrderFeedService.js";
 import { recordAdminRequest } from "../../services/adminRequestAuditService.js";
 import { customerRepository } from "../../services/repositories/customerRepository.js";
+import { buildVietnamDateRange } from "../../utils/adminDateRange.js";
 
 function mapAdminStatusToOrderStatus(nextStatus) {
   if (nextStatus === "new") return "pending_zalo";
@@ -11,31 +12,6 @@ function mapAdminStatusToOrderStatus(nextStatus) {
   if (nextStatus === "delivering") return "delivering";
   if (nextStatus === "done") return "done";
   return "pending_zalo";
-}
-
-function buildDateRangeFromInputs(dateFromValue = "", dateToValue = "") {
-  const fromText = String(dateFromValue || "").trim();
-  const toText = String(dateToValue || "").trim();
-  if (!fromText && !toText) return {};
-  const fromDate = fromText ? new Date(`${fromText}T00:00:00`) : null;
-  const toDate = toText ? new Date(`${toText}T00:00:00`) : null;
-  if (fromDate && Number.isNaN(fromDate.getTime())) return {};
-  if (toDate && Number.isNaN(toDate.getTime())) return {};
-  let start = fromDate;
-  let end = toDate;
-  if (start && end && start.getTime() > end.getTime()) {
-    const temp = start;
-    start = end;
-    end = temp;
-  }
-  const range = {};
-  if (start) range.dateFrom = start.toISOString();
-  if (end) {
-    const nextEnd = new Date(end);
-    nextEnd.setDate(nextEnd.getDate() + 1);
-    range.dateTo = nextEnd.toISOString();
-  }
-  return range;
 }
 
 export default function AdminOrdersCrmSection({
@@ -71,8 +47,8 @@ export default function AdminOrdersCrmSection({
   setCustomersDatePreset
 }) {
   const activeDateRange = section === "customers"
-    ? buildDateRangeFromInputs(customersDateFrom, customersDateTo)
-    : buildDateRangeFromInputs(ordersDateFrom, ordersDateTo);
+    ? buildVietnamDateRange(customersDateFrom, customersDateTo)
+    : buildVietnamDateRange(ordersDateFrom, ordersDateTo);
 
   const refreshCrm = async ({ forceSupportRefresh = false } = {}) => {
     const [ordersResult, partnerOrdersResult] = await Promise.allSettled([

@@ -61,6 +61,8 @@ export default function AdminApp({
     setEditingProduct,
     ordersSnapshot,
     chartOrdersSnapshot,
+    dashboardSummary,
+    businessAnalytics,
     setOrdersSnapshot,
     zaloConfig,
     setZaloConfig,
@@ -112,7 +114,7 @@ export default function AdminApp({
     activeCampaignTab,
     setActiveCampaignTab,
     supabaseConfigSyncEnabled
-  } = useAdminAppState(orderStorage, routeState);
+  } = useAdminAppState(orderStorage, routeState, { branches });
 
   const {
     activeProducts,
@@ -403,6 +405,9 @@ export default function AdminApp({
           setCustomerAdminTab={setCustomerAdminTab}
           ordersSnapshot={ordersSnapshot}
           chartOrdersSnapshot={chartOrdersSnapshot}
+          dashboardSummary={dashboardSummary}
+          businessAnalytics={businessAnalytics}
+          selectedBranchFilter={selectedBranchFilter}
           setOrdersSnapshot={setOrdersSnapshot}
           onOrderUpdated={handleOrderUpdated}
           crmSnapshot={crmSnapshot}

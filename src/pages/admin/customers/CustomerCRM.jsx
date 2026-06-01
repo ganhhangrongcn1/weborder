@@ -40,7 +40,10 @@ function isVipCustomer(customer) {
 }
 
 function needsCare(customer) {
-  return Number(customer.daysSinceLastOrder || 0) >= 30;
+  const daysSinceLastOrder = Number(customer.daysSinceLastOrder);
+  return Number(customer.totalOrders || 0) > 0 &&
+    Number.isFinite(daysSinceLastOrder) &&
+    daysSinceLastOrder >= 30;
 }
 
 function getTierTone(tier) {
@@ -83,6 +86,38 @@ function getVoucherSortWeight(voucher) {
 function formatCustomerPoints(customer) {
   const points = Number(customer?.currentPoints || 0);
   return points > 0 ? points.toLocaleString("vi-VN") : "";
+}
+
+function getChannelLabel(channel = "") {
+  const normalized = String(channel || "").toLowerCase();
+  if (normalized === "grabfood") return "Grab";
+  if (normalized === "shopeefood") return "ShopeeFood";
+  if (normalized === "xanhngon") return "Xanh Ngon";
+  if (normalized === "qr_counter") return "QR";
+  if (normalized === "website") return "Web";
+  return channel || "Chưa xác định";
+}
+
+function getVoucherSegmentLabel(segment = "") {
+  const labels = {
+    winback_30: "Quay lại sau 30 ngày",
+    winback_15: "Nhắc quay lại sau 15 ngày",
+    winback_7: "Gợi ý mua lại sau 7 ngày",
+    vip_thank_you: "Tri ân khách VIP",
+    repeat_reward: "Thưởng khách quay lại",
+    first_order_offer: "Khách chưa từng đặt đơn",
+    excluded_order_only: "Chỉ có đơn hủy / đặt trước"
+  };
+  return labels[segment] || segment;
+}
+
+function isVisibleBranchOption(branch = "") {
+  const normalized = String(branch || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+  return normalized && normalized !== "chuaxacdinh" && normalized !== "chinhanhtest" && normalized !== "test";
 }
 
 function CrmStatCard({ icon, title, value, subtitle, tone }) {
@@ -129,9 +164,12 @@ export default function CustomerCRM({
   const [keyword, setKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");
   const [sortBy, setSortBy] = useState("latest");
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [channelFilter, setChannelFilter] = useState("all");
   const [showAllOrdersByPhone, setShowAllOrdersByPhone] = useState({});
   const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
   const [loyaltyDetailByPhone, setLoyaltyDetailByPhone] = useState({});
+  const crmAnalytics = crmSnapshot.crmAnalytics?.source === "rpc" ? crmSnapshot.crmAnalytics : null;
 
   const filteredCustomers = useMemo(() => {
     const q = keyword.trim().toLowerCase();
@@ -148,7 +186,9 @@ export default function CustomerCRM({
         (customerFilter === "inactive7" && Number(customer.daysSinceLastOrder || 0) >= 7) ||
         (customerFilter === "inactive15" && Number(customer.daysSinceLastOrder || 0) >= 15) ||
         (customerFilter === "inactive30" && Number(customer.daysSinceLastOrder || 0) >= 30);
-      return matchKeyword && matchFilter;
+      const matchBranch = branchFilter === "all" || customer.lastBranch === branchFilter;
+      const matchChannel = channelFilter === "all" || customer.lastChannel === channelFilter;
+      return matchKeyword && matchFilter && matchBranch && matchChannel;
     });
     next.sort((a, b) => {
       if (sortBy === "spent") return Number(b.totalSpent || 0) - Number(a.totalSpent || 0);
@@ -156,24 +196,34 @@ export default function CustomerCRM({
       return new Date(b.lastOrderAt || 0).getTime() - new Date(a.lastOrderAt || 0).getTime();
     });
     return next;
-  }, [crmSnapshot.customers, keyword, customerFilter, sortBy]);
+  }, [crmSnapshot.customers, keyword, customerFilter, branchFilter, channelFilter, sortBy]);
 
   const visibleCustomers = useMemo(() => filteredCustomers.slice(0, 5), [filteredCustomers]);
 
   const summary = useMemo(() => {
     const customers = crmSnapshot.customers || [];
+    const rawSupabaseProfileCount = crmSnapshot.supabaseProfileCount;
+    const supabaseProfileCount = Number(rawSupabaseProfileCount);
     const repeatCustomers30 = customers.filter((customer) => {
       const totalOrders = Number(customer.totalOrders || 0);
       const daysSinceLastOrder = Number(customer.daysSinceLastOrder || 9999);
       return totalOrders >= 2 && daysSinceLastOrder <= 30;
     }).length;
+    const rpcSummary = crmAnalytics?.summary;
     return {
-      totalCustomers: customers.length,
-      repeatCustomers30,
-      vipCount: customers.filter(isVipCustomer).length,
-      careCount: customers.filter(needsCare).length
+      totalCustomers: rawSupabaseProfileCount !== null &&
+        rawSupabaseProfileCount !== undefined &&
+        Number.isFinite(supabaseProfileCount)
+        ? supabaseProfileCount
+        : null,
+      repeatCustomers30: rpcSummary?.repeatCustomers30Days ?? repeatCustomers30,
+      repeatRate30: rpcSummary ? Math.round(rpcSummary.repeatRate30Days * 100) : 0,
+      newCustomers7: rpcSummary?.newCustomers7Days ?? 0,
+      newCustomers30: rpcSummary?.newCustomers30Days ?? 0,
+      vipCount: rpcSummary?.vipCustomers ?? customers.filter(isVipCustomer).length,
+      careCount: rpcSummary?.inactive30Days ?? customers.filter(needsCare).length
     };
-  }, [crmSnapshot.customers]);
+  }, [crmSnapshot.customers, crmSnapshot.supabaseProfileCount, crmAnalytics]);
 
   const selectedCustomer = useMemo(
     () => (crmSnapshot.customers || []).find((customer) => customer.phone === selectedCustomerPhone) || null,
@@ -252,6 +302,8 @@ export default function CustomerCRM({
   const resetFilters = () => {
     setKeyword("");
     setCustomerFilter("all");
+    setBranchFilter("all");
+    setChannelFilter("all");
     setSortBy("latest");
   };
 
@@ -270,11 +322,51 @@ export default function CustomerCRM({
       </div>
 
       <div className="crm-stat-grid">
-        <CrmStatCard icon="user" tone="orange" title="Tổng khách hàng" value={summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Từ hồ sơ khách hàng" />
+        <CrmStatCard icon="user" tone="orange" title="Tổng khách hàng" value={summary.totalCustomers === null ? "--" : summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Tổng hồ sơ lifetime từ Supabase" />
         <CrmStatCard icon="cart" tone="green" title="Khách quay lại (30 ngày)" value={summary.repeatCustomers30.toLocaleString("vi-VN")} subtitle="Từ 2 đơn trở lên trong 30 ngày" />
         <CrmStatCard icon="star" tone="purple" title="Khách VIP" value={summary.vipCount.toLocaleString("vi-VN")} subtitle="Theo ngưỡng hiện tại" />
         <CrmStatCard icon="heart" tone="blue" title="Cần chăm sóc" value={summary.careCount.toLocaleString("vi-VN")} subtitle="Chưa quay lại từ 30 ngày" />
+        <CrmStatCard icon="star" tone="amber" title="Tỷ lệ quay lại" value={`${summary.repeatRate30}%`} subtitle="Khách có từ 2 đơn trong 30 ngày" />
+        <CrmStatCard icon="user" tone="green" title="Khách mới 7 / 30 ngày" value={`${summary.newCustomers7} / ${summary.newCustomers30}`} subtitle="Theo đơn mua đầu tiên" />
       </div>
+
+      {crmAnalytics ? (
+        <div className="crm-insight-grid">
+          <section className="crm-insight-card">
+            <h3>Gợi ý nhóm voucher</h3>
+            <p>Chỉ là gợi ý phân nhóm, hệ thống chưa tự gửi voucher.</p>
+            <div className="crm-insight-list">
+              {crmAnalytics.voucherSegments.map((item) => (
+                <span key={item.segment}><b>{getVoucherSegmentLabel(item.segment)}</b><em>{item.customerCount.toLocaleString("vi-VN")} khách</em></span>
+              ))}
+            </div>
+          </section>
+          <section className="crm-insight-card">
+            <h3>Tiêu chí VIP</h3>
+            <p>{crmAnalytics.vipCriteria.rule}</p>
+            <div className="crm-insight-list">
+              <span><b>Chi tiêu tối thiểu</b><em>{formatMoney(crmAnalytics.vipCriteria.minTotalSpent)}</em></span>
+              <span><b>Hoặc số đơn tối thiểu</b><em>{crmAnalytics.vipCriteria.minTotalOrders} đơn</em></span>
+            </div>
+          </section>
+          <section className="crm-insight-card">
+            <h3>Top khách theo chi tiêu</h3>
+            <div className="crm-insight-list">
+              {crmAnalytics.topBySpent.slice(0, 5).map((item) => (
+                <span key={item.phone}><b>{item.name} · {item.phone}</b><em>{formatMoney(item.totalSpent)}</em></span>
+              ))}
+            </div>
+          </section>
+          <section className="crm-insight-card">
+            <h3>Top khách theo số đơn</h3>
+            <div className="crm-insight-list">
+              {crmAnalytics.topByOrders.slice(0, 5).map((item) => (
+                <span key={item.phone}><b>{item.name} · {item.phone}</b><em>{item.totalOrders} đơn</em></span>
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       <div className="crm-workspace">
         <div className="crm-list-panel">
@@ -287,6 +379,14 @@ export default function CustomerCRM({
               <option value="latest">Mua gần nhất</option>
               <option value="spent">Chi tiêu cao nhất</option>
               <option value="orders">Nhiều đơn nhất</option>
+            </select>
+            <select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)}>
+              <option value="all">Tất cả chi nhánh</option>
+              {(crmAnalytics?.filterOptions.branches || []).filter(isVisibleBranchOption).map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+            </select>
+            <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}>
+              <option value="all">Tất cả kênh mua</option>
+              {(crmAnalytics?.filterOptions.channels || []).map((channel) => <option key={channel} value={channel}>{getChannelLabel(channel)}</option>)}
             </select>
             <div className="crm-filter-tabs">
               <button type="button" className={customerFilter === "all" ? "active" : ""} onClick={() => setCustomerFilter("all")}>Tất cả</button>

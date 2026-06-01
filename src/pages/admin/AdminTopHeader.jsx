@@ -1,4 +1,5 @@
 import Icon from "../../components/Icon.jsx";
+import { buildBranchFilterOptions } from "../../services/branchIdentityService.js";
 
 export default function AdminTopHeader({
   adminGlobalSearch,
@@ -10,6 +11,8 @@ export default function AdminTopHeader({
   adminEmail = "",
   onLogout = null
 }) {
+  const branchOptions = buildBranchFilterOptions(branches);
+
   return (
     <header className="admin-top-header">
       <div className="admin-top-header-left">
@@ -31,8 +34,8 @@ export default function AdminTopHeader({
           onChange={(event) => setSelectedBranchFilter(event.target.value)}
         >
           <option value="all">{"Tất cả chi nhánh"}</option>
-          {branches.map((branch) => (
-            <option key={branch.id} value={branch.id}>{branch.name}</option>
+          {branchOptions.map((branch) => (
+            <option key={branch.value} value={branch.value}>{branch.label}</option>
           ))}
         </select>
 

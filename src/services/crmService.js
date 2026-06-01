@@ -10,6 +10,9 @@ import {
   isExcludedOrderForCounting,
   toOrderCountingNumber
 } from "./customerOrderCountingService.js";
+import { getMonthlyCustomerGiftStatsByPhonesRpc } from "./customerOrderCountingRpcService.js";
+import { getAdminCrmAnalyticsRpc } from "./adminCrmAnalyticsService.js";
+import { hasDateRange } from "../utils/adminDateRange.js";
 import {
   calculateOrderPoints,
   defaultLoyaltyData,
@@ -63,6 +66,10 @@ function addDaysToDateKey(dateKey, days) {
   const date = new Date(`${String(dateKey).slice(0, 10)}T00:00:00`);
   date.setDate(date.getDate() + days);
   return getDateKey(date);
+}
+
+function getUtcMonthKey(date = new Date()) {
+  return date.toISOString().slice(0, 7);
 }
 
 function normalizeCrmVoucher(voucher) {
@@ -168,23 +175,27 @@ async function loadCrmSupportSnapshot({ force = false } = {}) {
       loyaltyResult,
       customerMetaResult,
       registeredUsersResult,
-      loyaltyByPhoneResult
+      loyaltyByPhoneResult,
+      profileCountResult
     ] = await Promise.allSettled([
       loyaltyRepository.getCrmConfigAsync(defaultLoyaltyConfig),
       customerRepository.getCustomersMetaAsync(),
       customerRepository.getUsersAsync(),
-      coreSupabaseRepository.readLoyaltyAccountsSummaryFromTable()
+      coreSupabaseRepository.readLoyaltyAccountsSummaryFromTable(),
+      coreSupabaseRepository.readCustomerProfileCountFromTable()
     ]);
     recordAdminRequest("crm loyalty config", "app_configs");
     recordAdminRequest("crm customer meta", "app_configs");
     recordAdminRequest("crm registered profiles", "profiles");
     recordAdminRequest("crm loyalty summary", "loyalty_accounts");
+    recordAdminRequest("crm profile count", "profiles");
 
     const snapshot = {
       loyalty: loyaltyResult.status === "fulfilled" ? loyaltyResult.value : defaultLoyaltyConfig,
       customerMeta: customerMetaResult.status === "fulfilled" ? customerMetaResult.value : {},
       registeredUsers: registeredUsersResult.status === "fulfilled" ? registeredUsersResult.value : {},
-      loyaltyByPhone: loyaltyByPhoneResult.status === "fulfilled" ? (loyaltyByPhoneResult.value || {}) : {}
+      loyaltyByPhone: loyaltyByPhoneResult.status === "fulfilled" ? (loyaltyByPhoneResult.value || {}) : {},
+      supabaseProfileCount: profileCountResult.status === "fulfilled" ? profileCountResult.value : null
     };
 
     if (loyaltyResult.status === "rejected") {
@@ -198,6 +209,9 @@ async function loadCrmSupportSnapshot({ force = false } = {}) {
     }
     if (loyaltyByPhoneResult.status === "rejected") {
       console.error("[crmService] load loyalty-by-phone failed", loyaltyByPhoneResult.reason);
+    }
+    if (profileCountResult.status === "rejected") {
+      console.error("[crmService] load profile count failed", profileCountResult.reason);
     }
 
     crmSupportCache = {
@@ -356,15 +370,42 @@ export async function buildCustomersFromOrderListAsync(orders = [], orderStorage
     loyalty,
     customerMeta,
     registeredUsers,
-    loyaltyByPhone
+    loyaltyByPhone,
+    supabaseProfileCount
   } = await loadCrmSupportSnapshot({ force: options?.forceSupportRefresh === true });
+
+  const transactionPhoneKeys = Array.from(
+    new Set(
+      [
+        ...uniquePhones,
+        ...Object.keys(registeredUsers || {})
+      ]
+        .map((phone) => getCustomerKey(phone))
+        .filter(Boolean)
+    )
+  );
+  const transactionStatsByPhone = await getMonthlyCustomerGiftStatsByPhonesRpc({
+    monthKey: getUtcMonthKey(),
+    phoneKeys: transactionPhoneKeys
+  });
+  const crmAnalytics = await getAdminCrmAnalyticsRpc();
+  if (transactionStatsByPhone instanceof Map) {
+    recordAdminRequest("crm transaction summary rpc", "rpc:get_monthly_customer_gift_stats_by_phones");
+  }
+  if (crmAnalytics?.source === "rpc") {
+    recordAdminRequest("crm practical analytics rpc", "rpc:get_admin_crm_analytics");
+  }
 
   return buildCustomersSnapshotFromSources({
     orders: safeOrders,
     loyalty,
     customerMeta,
     registeredUsers,
-    loyaltyByPhone
+    loyaltyByPhone,
+    transactionStatsByPhone,
+    crmAnalytics,
+    auditEnabled: !hasDateRange(options?.dateRange),
+    supabaseProfileCount
   });
 }
 
@@ -383,7 +424,11 @@ function buildCustomersSnapshotFromSources({
   loyalty = defaultLoyaltyConfig,
   customerMeta = {},
   registeredUsers = {},
-  loyaltyByPhone = {}
+  loyaltyByPhone = {},
+  transactionStatsByPhone = null,
+  crmAnalytics = null,
+  auditEnabled = false,
+  supabaseProfileCount = null
 }) {
   const normalizedLoyaltyConfig = {
     ...defaultLoyaltyConfig,
@@ -439,6 +484,9 @@ function buildCustomersSnapshotFromSources({
   const customers = allPhones
     .map((phone) => {
       const registeredUser = registeredUsers[phone] || {};
+      const crmAnalyticsCustomer = crmAnalytics?.customersByPhone instanceof Map
+        ? crmAnalytics.customersByPhone.get(phone)
+        : null;
       const customer = grouped[phone] || {
         phone,
         name: registeredUser?.name || customerMeta?.[phone]?.name || "",
@@ -447,9 +495,30 @@ function buildCustomersSnapshotFromSources({
         lastOrderAt: registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null,
         orders: []
       };
-      const totalOrders = toOrderCountingNumber(customer.totalOrders, 0);
-      const totalSpent = toOrderCountingNumber(customer.totalSpent, 0);
-      const lastOrderAt = customer.lastOrderAt || registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null;
+      const rpcStats = transactionStatsByPhone instanceof Map
+        ? transactionStatsByPhone.get(phone)?.allTimeStats
+        : null;
+      const transactionSummarySource = rpcStats ? "rpc" : "client-fallback";
+      const clientTotalOrders = toOrderCountingNumber(customer.totalOrders, 0);
+      const clientTotalSpent = toOrderCountingNumber(customer.totalSpent, 0);
+      const totalOrders = toOrderCountingNumber(rpcStats?.totalOrders ?? clientTotalOrders, 0);
+      const totalSpent = toOrderCountingNumber(rpcStats?.totalSpent ?? clientTotalSpent, 0);
+      const rpcTotalOrders = rpcStats ? toOrderCountingNumber(rpcStats.totalOrders, 0) : null;
+      const rpcTotalSpent = rpcStats ? toOrderCountingNumber(rpcStats.totalSpent, 0) : null;
+      const transactionAudit = {
+        compared: Boolean(auditEnabled && rpcStats),
+        clientTotalOrders,
+        clientTotalSpent,
+        rpcTotalOrders,
+        rpcTotalSpent,
+        orderDifference: rpcStats ? rpcTotalOrders - clientTotalOrders : null,
+        spentDifference: rpcStats ? rpcTotalSpent - clientTotalSpent : null
+      };
+      transactionAudit.mismatch = Boolean(
+        transactionAudit.compared &&
+        (transactionAudit.orderDifference !== 0 || transactionAudit.spentDifference !== 0)
+      );
+      const lastOrderAt = crmAnalyticsCustomer?.lastOrderAt || customer.lastOrderAt || registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null;
       const autoPoints = Math.floor((Number(totalSpent || 0) / ratio.currencyPerPoint) * ratio.pointPerUnit);
       const phoneLoyalty = normalizeLoyaltyData({
         ...defaultLoyaltyData,
@@ -479,8 +548,11 @@ function buildCustomersSnapshotFromSources({
 
       return {
         ...customer,
+        ...(crmAnalyticsCustomer || {}),
         totalOrders,
         totalSpent,
+        transactionSummarySource,
+        transactionAudit,
         lastOrderAt,
         name: displayName,
         registeredCustomerName,
@@ -508,7 +580,30 @@ function buildCustomersSnapshotFromSources({
     })
     .sort((a, b) => new Date(b.lastOrderAt || 0) - new Date(a.lastOrderAt || 0));
 
-  return { customers, loyaltyConfig: normalizedLoyaltyConfig };
+  const rpcCustomerCount = customers.filter((customer) => customer.transactionSummarySource === "rpc").length;
+  const comparedCustomers = customers.filter((customer) => customer.transactionAudit?.compared);
+  const mismatchedCustomers = comparedCustomers.filter((customer) => customer.transactionAudit?.mismatch);
+  return {
+    customers,
+    crmAnalytics,
+    loyaltyConfig: normalizedLoyaltyConfig,
+    supabaseProfileCount,
+    transactionSummary: {
+      source: rpcCustomerCount === customers.length && customers.length > 0
+        ? "rpc"
+        : rpcCustomerCount > 0
+          ? "mixed"
+          : "client-fallback",
+      rpcCustomerCount,
+      fallbackCustomerCount: customers.length - rpcCustomerCount
+    },
+    transactionAudit: {
+      enabled: auditEnabled,
+      comparedCustomerCount: comparedCustomers.length,
+      mismatchCustomerCount: mismatchedCustomers.length,
+      matchedCustomerCount: comparedCustomers.length - mismatchedCustomers.length
+    }
+  };
 }
 
 export function adjustCustomerPoints(phone, deltaPoints) {

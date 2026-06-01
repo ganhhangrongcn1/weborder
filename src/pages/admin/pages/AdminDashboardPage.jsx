@@ -25,7 +25,11 @@ export default function AdminDashboardPage({
   flatAdminNav,
   filteredRecentOrders,
   ordersSnapshot,
-  chartOrdersSnapshot
+  chartOrdersSnapshot,
+  dashboardSummary,
+  businessAnalytics,
+  selectedBranchFilter,
+  branches
 }) {
   return (
     <AdminDashboardSection
@@ -54,6 +58,10 @@ export default function AdminDashboardPage({
       filteredRecentOrders={filteredRecentOrders}
       ordersSnapshot={ordersSnapshot}
       chartOrdersSnapshot={chartOrdersSnapshot}
+      dashboardSummary={dashboardSummary}
+      businessAnalytics={businessAnalytics}
+      selectedBranchFilter={selectedBranchFilter}
+      branches={branches}
     />
   );
 }

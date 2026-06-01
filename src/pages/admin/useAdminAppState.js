@@ -5,7 +5,8 @@ import useAdminStoreConfigState from "./state/useAdminStoreConfigState.js";
 import useAdminUiState from "./state/useAdminUiState.js";
 import { useEffect } from "react";
 
-export default function useAdminAppState(orderStorage, routeState = null) {
+export default function useAdminAppState(orderStorage, routeState = null, options = {}) {
+  const { branches = [] } = options || {};
   const navigationState = useAdminNavigationState();
   const storeConfigState = useAdminStoreConfigState();
   const uiState = useAdminUiState();
@@ -17,7 +18,9 @@ export default function useAdminAppState(orderStorage, routeState = null) {
     ordersDateTo: uiState.ordersDateTo,
     customersDateFrom: uiState.customersDateFrom,
     customersDateTo: uiState.customersDateTo,
-    dashboardChartPreset: uiState.dashboardChartPreset
+    dashboardChartPreset: uiState.dashboardChartPreset,
+    selectedBranchFilter: uiState.selectedBranchFilter,
+    branches
   });
   const supabaseConfigSyncEnabled = isSupabaseConfigSyncEnabled();
 

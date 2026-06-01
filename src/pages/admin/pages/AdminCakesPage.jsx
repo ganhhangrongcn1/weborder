@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { processUploadImage } from "../../../utils/imageUpload.js";
 import { uploadImageToMenuBucket } from "../../../services/supabase/storageService.js";
 import {
@@ -29,6 +29,21 @@ function textToList(value) {
     .filter(Boolean);
 }
 
+function updateDecorationOption(options, index, patch) {
+  const next = Array.isArray(options) ? [...options] : [];
+  while (next.length < 3) {
+    const optionNumber = next.length + 1;
+    next.push({
+      id: `pk-${optionNumber}`,
+      name: `Mẫu phụ kiện ${optionNumber}`,
+      price: 20000,
+      image: ""
+    });
+  }
+  next[index] = { ...next[index], ...patch };
+  return next;
+}
+
 function createEmptyCake() {
   return normalizeCakeProduct({
     id: `cake-${Date.now()}`,
@@ -41,6 +56,7 @@ function createEmptyCake() {
     ingredients: [],
     accessories: [],
     addOns: [],
+    useSharedAddons: true,
     active: true
   });
 }
@@ -94,6 +110,10 @@ export default function AdminCakesPage() {
     () => products.find((product) => product.id === selectedId) || products[0] || null,
     [products, selectedId]
   );
+  const addonCatalog = settings.addonCatalog || {};
+  const chibiAddon = addonCatalog.chibi || {};
+  const decorationAddon = addonCatalog.decoration || {};
+  const decorationOptions = Array.isArray(decorationAddon.options) ? decorationAddon.options : [];
 
   const updateProduct = (patch) => {
     if (!selectedProduct) return;
@@ -307,6 +327,189 @@ export default function AdminCakesPage() {
 
           <section className="admin-panel admin-cake-settings">
             <div className="admin-panel-head">
+              <h2>Phụ kiện dùng chung (trừ mẫu đã tắt)</h2>
+            </div>
+            <div className="admin-mini-grid">
+              <div className="admin-mini-card">
+                <span>Hình chibi</span>
+                <label className="admin-cake-toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(chibiAddon.enabled)}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        normalizeCakeSettings({
+                          ...current,
+                          addonCatalog: {
+                            ...(current.addonCatalog || {}),
+                            chibi: { ...(current.addonCatalog?.chibi || {}), enabled: event.target.checked }
+                          }
+                        })
+                      )
+                    }
+                  />
+                  <span>Bật phụ kiện chibi</span>
+                </label>
+                <input
+                  className="admin-input"
+                  placeholder="Tên hiển thị"
+                  value={chibiAddon.name || ""}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      normalizeCakeSettings({
+                        ...current,
+                        addonCatalog: {
+                          ...(current.addonCatalog || {}),
+                          chibi: { ...(current.addonCatalog?.chibi || {}), name: event.target.value }
+                        }
+                      })
+                    )
+                  }
+                />
+                <input
+                  className="admin-input"
+                  type="number"
+                  placeholder="Giá chibi"
+                  value={Number(chibiAddon.price || 0)}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      normalizeCakeSettings({
+                        ...current,
+                        addonCatalog: {
+                          ...(current.addonCatalog || {}),
+                          chibi: { ...(current.addonCatalog?.chibi || {}), price: Number(event.target.value || 0) }
+                        }
+                      })
+                    )
+                  }
+                />
+                <input
+                  className="admin-input"
+                  placeholder="Link ảnh mẫu chibi"
+                  value={chibiAddon.image || ""}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      normalizeCakeSettings({
+                        ...current,
+                        addonCatalog: {
+                          ...(current.addonCatalog || {}),
+                          chibi: { ...(current.addonCatalog?.chibi || {}), image: event.target.value }
+                        }
+                      })
+                    )
+                  }
+                />
+              </div>
+
+              <div className="admin-mini-card">
+                <span>Phụ kiện theo set</span>
+                <label className="admin-cake-toggle">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(decorationAddon.enabled)}
+                    onChange={(event) =>
+                      setSettings((current) =>
+                        normalizeCakeSettings({
+                          ...current,
+                          addonCatalog: {
+                            ...(current.addonCatalog || {}),
+                            decoration: { ...(current.addonCatalog?.decoration || {}), enabled: event.target.checked }
+                          }
+                        })
+                      )
+                    }
+                  />
+                  <span>Bật phụ kiện theo set</span>
+                </label>
+                <input
+                  className="admin-input"
+                  placeholder="Tên hiển thị"
+                  value={decorationAddon.name || ""}
+                  onChange={(event) =>
+                    setSettings((current) =>
+                      normalizeCakeSettings({
+                        ...current,
+                        addonCatalog: {
+                          ...(current.addonCatalog || {}),
+                          decoration: { ...(current.addonCatalog?.decoration || {}), name: event.target.value }
+                        }
+                      })
+                    )
+                  }
+                />
+              </div>
+
+              {[0, 1, 2].map((index) => {
+                const option = decorationOptions[index] || {};
+                return (
+                  <div key={`decoration-option-${index}`} className="admin-mini-card">
+                    <span>Set phụ kiện {index + 1}</span>
+                    <input
+                      className="admin-input"
+                      placeholder="Tên set"
+                      value={option.name || ""}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          normalizeCakeSettings({
+                            ...current,
+                            addonCatalog: {
+                              ...(current.addonCatalog || {}),
+                              decoration: {
+                                ...(current.addonCatalog?.decoration || {}),
+                                options: updateDecorationOption(current.addonCatalog?.decoration?.options, index, { name: event.target.value })
+                              }
+                            }
+                          })
+                        )
+                      }
+                    />
+                    <input
+                      className="admin-input"
+                      type="number"
+                      placeholder="Giá set"
+                      value={Number(option.price || 0)}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          normalizeCakeSettings({
+                            ...current,
+                            addonCatalog: {
+                              ...(current.addonCatalog || {}),
+                              decoration: {
+                                ...(current.addonCatalog?.decoration || {}),
+                                options: updateDecorationOption(current.addonCatalog?.decoration?.options, index, { price: Number(event.target.value || 0) })
+                              }
+                            }
+                          })
+                        )
+                      }
+                    />
+                    <input
+                      className="admin-input"
+                      placeholder="Link ảnh set"
+                      value={option.image || ""}
+                      onChange={(event) =>
+                        setSettings((current) =>
+                          normalizeCakeSettings({
+                            ...current,
+                            addonCatalog: {
+                              ...(current.addonCatalog || {}),
+                              decoration: {
+                                ...(current.addonCatalog?.decoration || {}),
+                                options: updateDecorationOption(current.addonCatalog?.decoration?.options, index, { image: event.target.value })
+                              }
+                            }
+                          })
+                        )
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="admin-panel admin-cake-settings">
+            <div className="admin-panel-head">
               <h2>Phí ship riêng cho bánh</h2>
             </div>
             <div className="admin-mini-grid">
@@ -428,8 +631,21 @@ export default function AdminCakesPage() {
                     <textarea className="admin-input" rows="7" value={listToText(selectedProduct.ingredients)} onChange={(event) => updateProduct({ ingredients: textToList(event.target.value) })} />
                   </label>
                   <label>
-                    <span>Phụ kiện, mỗi dòng 1 ý</span>
+                    <span>Phụ kiện đi kèm mặc định, mỗi dòng 1 ý</span>
                     <textarea className="admin-input" rows="7" value={listToText(selectedProduct.accessories)} onChange={(event) => updateProduct({ accessories: textToList(event.target.value) })} />
+                  </label>
+                  <label className="admin-cake-toggle">
+                    <input
+                      type="checkbox"
+                      disabled={selectedProduct.id === "set-trai-tim-2-tang"}
+                      checked={selectedProduct.id === "set-trai-tim-2-tang" ? false : selectedProduct.useSharedAddons !== false}
+                      onChange={(event) => updateProduct({ useSharedAddons: event.target.checked })}
+                    />
+                    <span>
+                      {selectedProduct.id === "set-trai-tim-2-tang"
+                        ? "Mẫu này đã bao gồm set phụ kiện nên không áp dụng phụ kiện dùng chung"
+                        : "Áp dụng phụ kiện dùng chung (chibi + phụ kiện theo set) cho mẫu bánh này"}
+                    </span>
                   </label>
                   <label className="admin-cake-toggle">
                     <input type="checkbox" checked={selectedProduct.active !== false} onChange={(event) => updateProduct({ active: event.target.checked })} />

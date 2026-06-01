@@ -90,7 +90,7 @@ test_order as (
     89000,
     89000,
     'preparing',
-    'cooking',
+    'pending',
     'pending',
     'pending',
     now(),
@@ -238,7 +238,7 @@ where order_code = 'TEST-KITCHEN-001';
 -- set
 --   nexpos_status = 'DOING',
 --   order_status = 'preparing',
---   kitchen_status = 'cooking',
+--   kitchen_status = 'pending',
 --   kitchen_work_status = 'pending',
 --   kitchen_done_at = null,
 --   raw_data = jsonb_set(coalesce(raw_data, '{}'::jsonb), '{status}', '"DOING"', true),
@@ -259,6 +259,8 @@ where order_code = 'TEST-KITCHEN-001';
 -- update public.partner_orders
 -- set
 --   nexpos_status = 'PRE_ORDER',
+--   order_status = 'new',
+--   kitchen_status = 'preorder',
 --   kitchen_work_status = 'pending',
 --   kitchen_done_at = null,
 --   raw_data = jsonb_set(coalesce(raw_data, '{}'::jsonb), '{status}', '"PRE_ORDER"', true),

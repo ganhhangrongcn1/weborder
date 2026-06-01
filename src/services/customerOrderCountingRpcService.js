@@ -3,6 +3,7 @@ import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/
 
 const RPC_MISSING_CODES = new Set(["42883", "PGRST202"]);
 const RPC_UNAVAILABLE_TTL_MS = 5 * 60 * 1000;
+const MONTHLY_GIFT_STATS_BATCH_SIZE = 200;
 const unavailableRpcCache = new Map();
 
 function toText(value = "") {
@@ -84,6 +85,14 @@ function mapMonthlyGiftStatsRow(row = {}) {
   };
 }
 
+function chunkRows(rows = [], size = MONTHLY_GIFT_STATS_BATCH_SIZE) {
+  const chunks = [];
+  for (let index = 0; index < rows.length; index += size) {
+    chunks.push(rows.slice(index, index + size));
+  }
+  return chunks;
+}
+
 export async function getCustomerOrderCountSummaryRpc(phone = "") {
   const phoneKey = getCustomerKey(phone);
   const rpcName = "get_customer_order_count_summary";
@@ -132,24 +141,26 @@ export async function getMonthlyCustomerGiftStatsByPhonesRpc({
   if (!client) return null;
 
   try {
-    const { data, error } = await client.rpc(rpcName, {
-      p_reward_month: toText(monthKey),
-      p_customer_phones: normalizedPhones
-    });
-
-    if (error) {
-      markRpcTemporarilyUnavailable(rpcName, error);
-      return null;
-    }
-
-    const rows = Array.isArray(data) ? data : [];
     const statsMap = new Map();
 
-    rows.forEach((row) => {
-      const customerKey = getCustomerKey(row?.customer_key || row?.customer_phone || "");
-      if (!customerKey) return;
-      statsMap.set(customerKey, mapMonthlyGiftStatsRow(row));
-    });
+    for (const phoneBatch of chunkRows(normalizedPhones)) {
+      const { data, error } = await client.rpc(rpcName, {
+        p_reward_month: toText(monthKey),
+        p_customer_phones: phoneBatch
+      });
+
+      if (error) {
+        markRpcTemporarilyUnavailable(rpcName, error);
+        return null;
+      }
+
+      const rows = Array.isArray(data) ? data : [];
+      rows.forEach((row) => {
+        const customerKey = getCustomerKey(row?.customer_key || row?.customer_phone || "");
+        if (!customerKey) return;
+        statsMap.set(customerKey, mapMonthlyGiftStatsRow(row));
+      });
+    }
 
     return statsMap;
   } catch (error) {

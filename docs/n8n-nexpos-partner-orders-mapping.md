@@ -24,8 +24,9 @@
 | `shipping_fee` | `finance_data.shipping_fee` or `shipment_fee` | Usually `0` in current samples. |
 | `total_amount` | `total` | Customer order menu total before platform settlement. |
 | `points_base_amount` | `finance_data.sell_price` | Recommended for loyalty after item/platform menu discount. Fallback `total`. |
-| `order_status` | `status` | See status mapping below. |
-| `kitchen_status` | `status` | See status mapping below. |
+| `order_status` | `status` | Business status bucket used by app/admin/customer. See mapping below. |
+| `kitchen_status` | `status` | Compatibility field only. Must follow current DB contract, not invent new kitchen meanings. |
+| `kitchen_work_status` | internal app flow | Internal kitchen execution state. Default `pending`, kitchen marks `done` later. |
 | `point_status` | static | Use `pending` for new/upserted orders unless already claimed. |
 | `order_time` | `order_time` | ISO time. |
 | `raw_data` | whole order object | Store full JSON for debugging. |
@@ -89,19 +90,47 @@ other/empty  -> other
 ## Status mapping
 
 ```txt
-DOING  -> order_status = preparing, kitchen_status = cooking
-PRE_ORDER -> order_status = preorder, kitchen_status = preorder
-FINISH -> order_status = completed, kitchen_status = served
-CANCEL/CANCELLED -> order_status = cancelled, kitchen_status = cancelled
+DOING / PROCESSING / PREPARING
+  -> nexpos_status = raw incoming value
+  -> order_status = preparing
+  -> kitchen_status = pending
+  -> kitchen_work_status = pending
+
+PICK / READY / READY_TO_PICKUP / READY_TO_SHIP
+  -> nexpos_status = raw incoming value
+  -> order_status = ready
+  -> kitchen_status = pending
+  -> kitchen_work_status = pending
+
+PRE_ORDER / PREORDER / SCHEDULED
+  -> nexpos_status = raw incoming value
+  -> order_status = new
+  -> kitchen_status = preorder
+  -> kitchen_work_status = pending
+
+FINISH / FINISHED / COMPLETED / DONE / SERVED
+  -> nexpos_status = raw incoming value
+  -> order_status = completed
+  -> kitchen_status = served
+  -> kitchen_work_status = done only when kitchen actually marks done
+
+CANCEL / CANCELLED / CANCELED / REFUND / REFUNDED
+  -> nexpos_status = raw incoming value
+  -> order_status = cancelled or refunded
+  -> kitchen_status = cancelled
+  -> kitchen_work_status = pending unless kitchen had already finished work
 ```
 
-For kitchen screens, if you want finished historical orders not to appear as active kitchen work, only show:
+Recommended long-term contract:
 
 ```txt
-kitchen_status in ('pending', 'cooking', 'ready')
+nexpos_status     = source-of-truth raw platform status
+order_status      = source-of-truth business bucket used by app
+kitchen_status    = compatibility field for current DB / legacy reads
+kitchen_work_status = source-of-truth for internal kitchen progress
 ```
 
-Current kitchen screen also reads `partner_orders.nexpos_status` and `raw_data.status` directly:
+Current kitchen screen should prioritize `kitchen_work_status`, then use `order_status` + `nexpos_status` as fallback:
 
 ```txt
 FINISH/COMPLETED/DONE -> show in Đã xong

@@ -1,4 +1,4 @@
-import { adminConfigRepository } from "./repositories/adminConfigRepository.js";
+﻿import { adminConfigRepository } from "./repositories/adminConfigRepository.js";
 import { getSupabaseClient } from "./supabase/supabaseClient.js";
 
 export const CAKE_PRODUCTS_CONFIG_KEY = "ghr_cake_products";
@@ -25,7 +25,33 @@ export const DEFAULT_CAKE_SETTINGS = {
     "set-banh-trang-cuon-bo-18cm",
     "set-cuon-bo-mix-ps-muoi-tac-18cm",
     "set-banh-trang-cuon-tron-mix-topping-18cm"
-  ]
+  ],
+  addonCatalog: {
+    chibi: {
+      enabled: true,
+      name: "Hình chibi cá nhân hóa",
+      price: 20000,
+      image: "/cake-addons/chibi.jpg",
+      description: "Hình chibi làm theo yêu cầu riêng."
+    },
+    decoration: {
+      enabled: true,
+      name: "Phụ kiện trang trí theo yêu cầu",
+      price: 20000,
+      description: "Có 3 mẫu phụ kiện đi kèm để khách chọn.",
+      referenceImages: [
+        "/cake-addons/phu-kien-thuc-te-1.jpg",
+        "/cake-addons/phu-kien-thuc-te-2.jpg",
+        "/cake-addons/phu-kien-thuc-te-3.jpg",
+        "/cake-addons/phu-kien-thuc-te-4.jpg"
+      ],
+      options: [
+        { id: "pk-1", name: "Mẫu phụ kiện 1", price: 20000, image: "/cake-addons/phu-kien-mau-1.jpg" },
+        { id: "pk-2", name: "Mẫu phụ kiện 2", price: 20000, image: "/cake-addons/phu-kien-mau-2.jpg" },
+        { id: "pk-3", name: "Mẫu phụ kiện 3", price: 20000, image: "/cake-addons/phu-kien-mau-3.jpg" }
+      ]
+    }
+  }
 };
 
 export const DEFAULT_CAKE_PRODUCTS = [
@@ -174,6 +200,7 @@ export const DEFAULT_CAKE_PRODUCTS = [
     description: "Mẫu trái tim 2 tầng lớn, kèm phụ kiện trang trí tiệc.",
     ingredients: ["Bánh tráng cuốn bơ", "Bánh tráng phơi sương muối tắc", "Tóp mỡ rim mắm tỏi", "Trứng cút", "Kèm sốt sate bơ, me bơ"],
     accessories: ["Dụng cụ ăn uống", "Nến Led", "Sticker tên theo yêu cầu", "Que cắm Happy Birthday", "Set phụ kiện vương miện, trái tim, bướm, bông cúc"],
+    useSharedAddons: false,
     active: true
   },
   {
@@ -214,6 +241,7 @@ export function normalizeCakeProduct(product = {}) {
       name: String(item?.name || "").trim(),
       price: Number(item?.price || 0)
     })).filter((item) => item.name) : [],
+    useSharedAddons: product.useSharedAddons !== false,
     active: product.active !== false
   };
 }
@@ -223,6 +251,31 @@ export function normalizeCakeSettings(settings = {}) {
     ...DEFAULT_CAKE_SHIPPING_CONFIG,
     ...(settings.shippingConfig || {})
   };
+  const sourceAddons = settings.addonCatalog || {};
+  const defaultAddons = DEFAULT_CAKE_SETTINGS.addonCatalog;
+  const chibi = {
+    ...defaultAddons.chibi,
+    ...(sourceAddons.chibi || {})
+  };
+  const decoration = {
+    ...defaultAddons.decoration,
+    ...(sourceAddons.decoration || {})
+  };
+  const decorationOptionsSource = Array.isArray(sourceAddons.decoration?.options)
+    ? sourceAddons.decoration.options
+    : defaultAddons.decoration.options;
+  const decorationOptions = decorationOptionsSource
+    .map((item, index) => ({
+      id: String(item?.id || `pk-${index + 1}`),
+      name: String(item?.name || `Mẫu phụ kiện ${index + 1}`).trim(),
+      price: Number(item?.price ?? decoration.price ?? 0),
+      image: String(item?.image || "").trim()
+    }))
+    .filter((item) => item.name);
+  const referenceImages = Array.isArray(sourceAddons.decoration?.referenceImages)
+    ? sourceAddons.decoration.referenceImages
+    : defaultAddons.decoration.referenceImages;
+
   return {
     ...DEFAULT_CAKE_SETTINGS,
     ...settings,
@@ -242,6 +295,25 @@ export function normalizeCakeSettings(settings = {}) {
       maxRadiusKm: Number(shippingConfig.maxRadiusKm || DEFAULT_CAKE_SHIPPING_CONFIG.maxRadiusKm),
       customerNote: String(shippingConfig.customerNote || "").trim(),
       sourceBranchId: String(shippingConfig.sourceBranchId || "").trim()
+    },
+    addonCatalog: {
+      chibi: {
+        enabled: Boolean(chibi.enabled ?? true),
+        name: String(chibi.name || defaultAddons.chibi.name).trim(),
+        price: Number(chibi.price ?? defaultAddons.chibi.price ?? 0),
+        image: String(chibi.image || "").trim(),
+        description: String(chibi.description || "").trim()
+      },
+      decoration: {
+        enabled: Boolean(decoration.enabled ?? true),
+        name: String(decoration.name || defaultAddons.decoration.name).trim(),
+        price: Number(decoration.price ?? defaultAddons.decoration.price ?? 0),
+        description: String(decoration.description || "").trim(),
+        referenceImages: (Array.isArray(referenceImages) ? referenceImages : [])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+        options: decorationOptions
+      }
     }
   };
 }
@@ -384,14 +456,26 @@ export async function updateCakeOrderStatus(orderId, status) {
   return { ok: true, order: mapCakeOrderRow(data), error: "" };
 }
 
-export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, orderCode }) {
+export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, orderCode, selectedAddOns = {}, addOnTotal = 0, finalTotal = 0 }) {
   const fulfillmentLabel = form.fulfillmentType === "delivery" ? "Giao hàng" : "Khách ghé lấy";
+  const addOnLines = [];
+  if (selectedAddOns?.chibi?.selected) {
+    addOnLines.push(`- ${selectedAddOns.chibi.name} (+${Number(selectedAddOns.chibi.price || 0).toLocaleString("vi-VN")}đ)`);
+  }
+  if (selectedAddOns?.decoration?.selected) {
+    const optionLabel = selectedAddOns?.decoration?.optionName ? ` (${selectedAddOns.decoration.optionName})` : "";
+    addOnLines.push(`- ${selectedAddOns.decoration.name}${optionLabel} (+${Number(selectedAddOns.decoration.price || 0).toLocaleString("vi-VN")}đ)`);
+  }
   const lines = [
-    "Em muốn đặt bánh sinh nhật bánh tráng:",
+    "Em gửi thông tin đặt bánh sinh nhật bánh tráng:",
     `Mã đơn: ${orderCode || "Chưa có"}`,
     `Mẫu bánh: ${product?.name || ""}`,
-    `Giá bánh: ${Number(product?.price || 0).toLocaleString("vi-VN")}đ`,
     `Khẩu phần: ${product?.serving || ""}`,
+    `Giá bánh: ${Number(product?.price || 0).toLocaleString("vi-VN")}đ`,
+    addOnLines.length ? "Phụ kiện theo yêu cầu:" : "",
+    ...addOnLines,
+    addOnLines.length ? `Phụ phí thêm: ${Number(addOnTotal || 0).toLocaleString("vi-VN")}đ` : "",
+    `Tạm tính đơn bánh: ${Number(finalTotal || Number(product?.price || 0)).toLocaleString("vi-VN")}đ`,
     "",
     `Tên khách: ${form.customerName || ""}`,
     `SĐT: ${form.customerPhone || ""}`,
@@ -402,7 +486,9 @@ export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, 
     form.fulfillmentType === "delivery" ? `Địa chỉ giao: ${addressInfo?.addressText || form.deliveryAddress || ""}` : "",
     form.fulfillmentType === "delivery" && addressInfo?.distanceKm ? `Khoảng cách: ${Number(addressInfo.distanceKm).toFixed(1)}km` : "",
     form.fulfillmentType === "delivery" ? `Phí ship bánh: ${shippingFee === null || shippingFee === undefined ? "Shop xác nhận sau" : `${Number(shippingFee).toLocaleString("vi-VN")}đ`}` : "",
-    `Ghi chú: ${form.note || ""}`
+    selectedAddOns?.chibi?.selected ? "Lưu ý: Nhờ shop liên hệ xin ảnh khách để làm chibi trước khi in." : "",
+    form.addOnNote ? `Ghi chú phụ kiện: ${form.addOnNote}` : "",
+    `Ghi chú thêm: ${form.note || ""}`
   ];
   return lines.filter((line) => String(line || "").trim()).join("\n");
 }

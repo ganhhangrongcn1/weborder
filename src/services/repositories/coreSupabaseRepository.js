@@ -619,7 +619,7 @@ function buildCustomerStubProfileRow(phone, profile = {}, existingProfile = null
   return row;
 }
 
-async function selectProfileRows(client, columns = "*") {
+function selectProfileRows(client, columns = "*") {
   return client.from(PROFILE_TABLE).select(columns).eq("role", DEFAULT_PROFILE_ROLE);
 }
 
@@ -691,15 +691,33 @@ async function readProfilesMapFromTable() {
   if (!isSupabaseReady()) return null;
   const client = await getSupabaseClientAsync();
   if (!client) return null;
-  const { data, error } = await selectProfileRows(client, "*");
-  if (error) throw error;
-  if (!Array.isArray(data)) return {};
-  return data.reduce((acc, row) => {
+  const rows = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await selectProfileRows(client, "*").range(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows.reduce((acc, row) => {
     const user = fromCustomerRow(row);
     if (!user.phone) return acc;
     acc[user.phone] = user;
     return acc;
   }, {});
+}
+
+async function readCustomerProfileCountFromTable() {
+  if (!isSupabaseReady()) return null;
+  const client = await getSupabaseClientAsync();
+  if (!client) return null;
+  const { count, error } = await client
+    .from(PROFILE_TABLE)
+    .select("id", { count: "exact", head: true })
+    .eq("role", DEFAULT_PROFILE_ROLE);
+  if (error) throw error;
+  return Number.isFinite(Number(count)) ? Number(count) : null;
 }
 
 async function writeProfilesMapToTable(usersMap = {}) {
@@ -1657,6 +1675,7 @@ const subscribeCustomersRealtime = subscribeProfilesRealtime;
 
 export const coreSupabaseRepository = {
   readProfilesMapFromTable,
+  readCustomerProfileCountFromTable,
   readCustomersMapFromTable,
   writeProfilesMapToTable,
   writeCustomersMapToTable,

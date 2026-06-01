@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import { buildCustomersFromOrderListAsync } from "../../../services/crmService.js";
+import { getAdminDashboardSummaryRpc } from "../../../services/adminDashboardService.js";
+import { getAdminBusinessAnalyticsRpc } from "../../../services/adminBusinessAnalyticsService.js";
+import {
+  branchOptionMatchesOrder,
+  buildBranchFilterOptions
+} from "../../../services/branchIdentityService.js";
 import {
   buildAdminOrderFeed,
   readPartnerOrdersForAdmin,
@@ -11,6 +17,11 @@ import {
   resetAdminRequestAudit
 } from "../../../services/adminRequestAuditService.js";
 import { STORAGE_KEYS } from "../../../services/repositories/storageKeys.js";
+import {
+  addDaysToVietnamDateInput,
+  buildVietnamDateRange,
+  toVietnamDateInputValue
+} from "../../../utils/adminDateRange.js";
 
 const SNAPSHOT_CACHE_TTL_MS = 60000;
 const ADMIN_REALTIME_NOTICE_DELAY_MS = 2000;
@@ -18,55 +29,13 @@ const ADMIN_ORDER_REFRESH_DEBOUNCE_MS = 250;
 const ordersSnapshotCache = new Map();
 const ordersSnapshotInFlight = new Map();
 
-function buildDateRangeFromInputs(dateFromValue = "", dateToValue = "") {
-  const fromText = String(dateFromValue || "").trim();
-  const toText = String(dateToValue || "").trim();
-  if (!fromText && !toText) return {};
-
-  const fromDate = fromText ? new Date(`${fromText}T00:00:00`) : null;
-  const toDate = toText ? new Date(`${toText}T00:00:00`) : null;
-
-  if (fromDate && Number.isNaN(fromDate.getTime())) return {};
-  if (toDate && Number.isNaN(toDate.getTime())) return {};
-
-  let start = fromDate;
-  let end = toDate;
-  if (start && end && start.getTime() > end.getTime()) {
-    const temp = start;
-    start = end;
-    end = temp;
-  }
-
-  const range = {};
-  if (start) {
-    range.dateFrom = start.toISOString();
-  }
-  if (end) {
-    const nextEnd = new Date(end);
-    nextEnd.setDate(nextEnd.getDate() + 1);
-    range.dateTo = nextEnd.toISOString();
-  }
-  return range;
-}
-
-function toDateInputText(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function buildChartRangeFromPreset(preset = "7d") {
-  const now = new Date();
-  const end = toDateInputText(now);
+  const end = toVietnamDateInputValue();
   if (preset === "month") {
-    const first = new Date(now.getFullYear(), now.getMonth(), 1);
-    return buildDateRangeFromInputs(toDateInputText(first), end);
+    return buildVietnamDateRange(`${end.slice(0, 7)}-01`, end);
   }
   const days = preset === "30d" ? 30 : 7;
-  const start = new Date(now);
-  start.setDate(now.getDate() - (days - 1));
-  return buildDateRangeFromInputs(toDateInputText(start), end);
+  return buildVietnamDateRange(addDaysToVietnamDateInput(end, -(days - 1)), end);
 }
 
 async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartnerOrders = false } = {}) {
@@ -123,6 +92,16 @@ function clearOrdersSnapshotCache() {
   ordersSnapshotInFlight.clear();
 }
 
+function getSelectedBranchOption(branches = [], selectedBranchFilter = "all") {
+  if (!selectedBranchFilter || selectedBranchFilter === "all") return null;
+  return buildBranchFilterOptions(branches).find((branch) => branch.value === selectedBranchFilter) || null;
+}
+
+function filterOrdersByBranch(orders = [], branchOption = null) {
+  if (!branchOption) return Array.isArray(orders) ? orders : [];
+  return (Array.isArray(orders) ? orders : []).filter((order) => branchOptionMatchesOrder(order, branchOption));
+}
+
 function getWebOrdersOnly(orders = []) {
   return (Array.isArray(orders) ? orders : []).filter((order) => order?.sourceType !== "partner");
 }
@@ -157,19 +136,25 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     ordersDateTo = "",
     customersDateFrom = "",
     customersDateTo = "",
-    dashboardChartPreset = "7d"
+    dashboardChartPreset = "7d",
+    selectedBranchFilter = "all",
+    branches = []
   } = options || {};
   const [ordersSnapshot, setOrdersSnapshot] = useState([]);
   const [chartOrdersSnapshot, setChartOrdersSnapshot] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(null);
+  const [businessAnalytics, setBusinessAnalytics] = useState(null);
   const [crmSnapshot, setCrmSnapshot] = useState({ customers: [], loyaltyConfig: {} });
   const [adminRequestAudit, setAdminRequestAudit] = useState(() => getAdminRequestAuditSnapshot());
   const [adminOrdersRealtimePending, setAdminOrdersRealtimePending] = useState(false);
   const [adminOrdersRealtimeCount, setAdminOrdersRealtimeCount] = useState(0);
   const [customerAdminTab, setCustomerAdminTab] = useState("crm");
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState("");
+  const selectedBranchOption = getSelectedBranchOption(branches, selectedBranchFilter);
+  const selectedBranchName = selectedBranchOption?.label || "";
 
   const loadActiveOrdersSnapshot = async ({ force = false } = {}) => {
-    const dateRange = buildDateRangeFromInputs(ordersDateFrom, ordersDateTo);
+    const dateRange = buildVietnamDateRange(ordersDateFrom, ordersDateTo);
     if (force) clearOrdersSnapshotCache();
     const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
       includePartnerOrders: true
@@ -183,19 +168,80 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
   useEffect(() => {
     let disposed = false;
+
+    const refreshDashboardSummary = async () => {
+      if (section !== "dashboard") return;
+      try {
+        const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
+        const nextSummary = await getAdminDashboardSummaryRpc({
+          ...dateRange,
+          branchFilter: selectedBranchName
+        });
+        if (disposed) return;
+        setDashboardSummary(nextSummary);
+        if (nextSummary) {
+          recordAdminRequest("read admin dashboard summary rpc", "rpc:get_admin_dashboard_summary");
+          setAdminRequestAudit(getAdminRequestAuditSnapshot());
+        }
+      } catch (error) {
+        if (disposed) return;
+        console.error("[admin][dashboard-summary] failed to load rpc", error);
+        setDashboardSummary(null);
+      }
+    };
+
+    refreshDashboardSummary();
+    return () => {
+      disposed = true;
+    };
+  }, [section, dashboardDateFrom, dashboardDateTo, ordersSnapshot, selectedBranchName]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const refreshBusinessAnalytics = async () => {
+      if (section !== "dashboard") return;
+      try {
+        const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
+        const nextAnalytics = await getAdminBusinessAnalyticsRpc({
+          ...dateRange,
+          branchFilter: selectedBranchName
+        });
+        if (disposed) return;
+        setBusinessAnalytics(nextAnalytics);
+        if (nextAnalytics) {
+          recordAdminRequest("read admin business analytics rpc", "rpc:get_admin_business_analytics");
+          setAdminRequestAudit(getAdminRequestAuditSnapshot());
+        }
+      } catch (error) {
+        if (disposed) return;
+        console.error("[admin][business-analytics] failed to load rpc", error);
+        setBusinessAnalytics(null);
+      }
+    };
+
+    refreshBusinessAnalytics();
+    return () => {
+      disposed = true;
+    };
+  }, [section, dashboardDateFrom, dashboardDateTo, ordersSnapshot, selectedBranchName]);
+
+  useEffect(() => {
+    let disposed = false;
     const activeDateFrom = section === "orders" ? ordersDateFrom : section === "customers" ? customersDateFrom : dashboardDateFrom;
     const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
 
     const refreshOrdersOnly = async () => {
       if (section === "customers") return;
 
-      const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
+      const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
       try {
         const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
           includePartnerOrders: section === "dashboard" || section === "orders"
         });
         if (disposed) return;
-        setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
+        const safeOrders = Array.isArray(nextOrders) ? nextOrders : [];
+        setOrdersSnapshot(section === "dashboard" ? filterOrdersByBranch(safeOrders, selectedBranchOption) : safeOrders);
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
@@ -208,7 +254,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo]);
+  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches]);
 
   useEffect(() => {
     if (section !== "orders") {
@@ -224,7 +270,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     async function startRealtime() {
       unsubscribe = await subscribeAdminOrderChanges((change) => {
         if (!alive) return;
-        const dateRange = buildDateRangeFromInputs(ordersDateFrom, ordersDateTo);
+        const dateRange = buildVietnamDateRange(ordersDateFrom, ordersDateTo);
         if (!realtimeEventMatchesDateRange(change, dateRange)) return;
         if (noticeTimer) window.clearTimeout(noticeTimer);
         noticeTimer = window.setTimeout(() => {
@@ -257,7 +303,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
           includePartnerOrders: true
         });
         if (disposed) return;
-        setChartOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
+        setChartOrdersSnapshot(filterOrdersByBranch(nextOrders, selectedBranchOption));
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
@@ -269,7 +315,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [orderStorage, dashboardChartPreset]);
+  }, [orderStorage, dashboardChartPreset, selectedBranchFilter, branches]);
 
   useEffect(() => {
     let disposed = false;
@@ -279,11 +325,12 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       try {
         const activeDateFrom = section === "customers" ? customersDateFrom : dashboardDateFrom;
         const activeDateTo = section === "customers" ? customersDateTo : dashboardDateTo;
-        const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
+        const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
         const crmOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
           includePartnerOrders: true
         });
-        const nextCrm = await buildCustomersFromOrderListAsync(crmOrders, orderStorage, { dateRange });
+        const scopedOrders = section === "dashboard" ? filterOrdersByBranch(crmOrders, selectedBranchOption) : crmOrders;
+        const nextCrm = await buildCustomersFromOrderListAsync(scopedOrders, orderStorage, { dateRange });
         if (disposed) return;
         setCrmSnapshot(nextCrm);
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
@@ -296,7 +343,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     const refreshAll = async () => {
       const activeDateFrom = section === "orders" ? ordersDateFrom : section === "customers" ? customersDateFrom : dashboardDateFrom;
       const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
-      const dateRange = buildDateRangeFromInputs(activeDateFrom, activeDateTo);
+      const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
       clearOrdersSnapshotCache();
       const ordersResult = await loadOrdersSnapshot(orderStorage, dateRange, {
         includePartnerOrders: true
@@ -305,14 +352,15 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         .catch((reason) => ({ status: "rejected", reason }));
       if (disposed) return;
       const combinedOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
+      const scopedCombinedOrders = section === "dashboard" ? filterOrdersByBranch(combinedOrders, selectedBranchOption) : combinedOrders;
       const shouldRefreshCrm = section !== "orders";
       const crmResult = shouldRefreshCrm && ordersResult.status === "fulfilled"
-        ? await buildCustomersFromOrderListAsync(combinedOrders, orderStorage, { dateRange })
+        ? await buildCustomersFromOrderListAsync(scopedCombinedOrders, orderStorage, { dateRange })
             .then((value) => ({ status: "fulfilled", value }))
             .catch((reason) => ({ status: "rejected", reason }))
         : { status: "skipped", value: null };
       if (disposed) return;
-      const nextOrders = section === "dashboard" || section === "orders" ? combinedOrders : getWebOrdersOnly(combinedOrders);
+      const nextOrders = section === "dashboard" || section === "orders" ? scopedCombinedOrders : getWebOrdersOnly(combinedOrders);
       if (ordersResult.status === "rejected") {
         console.error("[admin][orders] failed to load snapshot", ordersResult.reason);
       }
@@ -353,7 +401,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       window.removeEventListener("ghr:orders-changed", scheduleRefreshAll);
       window.removeEventListener("storage", handleStorageChange);
     };
-  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo]);
+  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches]);
 
   useEffect(() => {
     const syncAudit = () => {
@@ -380,6 +428,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     setOrdersSnapshot,
     chartOrdersSnapshot,
     setChartOrdersSnapshot,
+    dashboardSummary,
+    businessAnalytics,
     crmSnapshot,
     setCrmSnapshot,
     adminRequestAudit,

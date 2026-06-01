@@ -8,6 +8,7 @@ import {
   buildBranchFilterOptions
 } from "../../../services/branchIdentityService.js";
 import { calculateOrderPoints, getLoyaltyRuleConfig } from "../../../services/loyaltyService.js";
+import { buildVietnamDateRange } from "../../../utils/adminDateRange.js";
 import {
   toAdminStatus,
   formatOrderTime,
@@ -619,15 +620,7 @@ export default function OrderManager({
       };
     }
     async function loadPartnerFeed() {
-      const dateRange = {};
-      if (ordersDateFrom) {
-        dateRange.dateFrom = new Date(`${ordersDateFrom}T00:00:00`).toISOString();
-      }
-      if (ordersDateTo) {
-        const endDate = new Date(`${ordersDateTo}T00:00:00`);
-        endDate.setDate(endDate.getDate() + 1);
-        dateRange.dateTo = endDate.toISOString();
-      }
+      const dateRange = buildVietnamDateRange(ordersDateFrom, ordersDateTo);
       const nextPartnerOrders = await readPartnerOrdersForAdmin(dateRange);
       if (!disposed) {
         setPartnerOrders(Array.isArray(nextPartnerOrders) ? nextPartnerOrders : []);

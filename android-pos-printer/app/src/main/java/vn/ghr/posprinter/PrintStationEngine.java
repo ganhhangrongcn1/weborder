@@ -73,13 +73,16 @@ public class PrintStationEngine {
     private static final String PRINT_JOB_SELECT = "id,order_code,payload,retry_count";
     private static final String SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
     private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
-    private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
+    private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/orders";
     private static final String DEFAULT_RECEIPT_FOOTER_TEXT =
             "------------------------------------------\n" +
-            "@@CENTER:QuÃ©t QR Ä‘á»ƒ tÃ­ch Ä‘iá»ƒm\n" +
+            "@@CENTER:Quét QR tích điểm ngay\n" +
             "@@QR\n" +
+            "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon\n" +
+            "@@CENTER:đều được tích điểm tại Gánh Hàng Rong\n" +
+            "@@CENTER:Quét để xem đơn và dùng điểm\n" +
             "@@CENTER:Hotline: 0933 799 061\n" +
-            "@@CENTER:Cáº£m Æ¡n quÃ½ khÃ¡ch!";
+            "@@CENTER:Cảm ơn quý khách!";
     private static final int DEFAULT_LAN_PORT = 9100;
     private static final int REALTIME_HEARTBEAT_MS = 25000;
     private static final int REALTIME_RECONNECT_MS = 8000;
@@ -596,7 +599,7 @@ public class PrintStationEngine {
         paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
 
         int padding = 16;
-        Bitmap qrBitmap = getFixedQrBitmap(dp(150));
+        Bitmap qrBitmap = getFixedQrBitmap(dp(176));
         List<String> lines = expandReceiptLines(text, paint, width - padding * 2);
         int height = Math.max(160, padding * 2 + estimateReceiptHeight(lines, qrBitmap));
 

@@ -6,6 +6,10 @@ android {
     namespace "vn.ghr.posprinter"
     compileSdk 35
 
+    compileOptions {
+        encoding = "UTF-8"
+    }
+
     defaultConfig {
         applicationId "vn.ghr.posprinter"
         minSdk 23

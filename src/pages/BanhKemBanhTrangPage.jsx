@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import Icon from "../components/Icon.jsx";
 import GoongAddressPicker from "../components/GoongAddressPicker.jsx";
 import { resolvePickupBranches } from "../features/checkout/checkoutDomain.js";
@@ -17,7 +17,16 @@ const EMPTY_FORM = {
   fulfillmentType: "pickup",
   pickupBranchId: "",
   deliveryAddress: "",
-  note: ""
+  note: "",
+  addOnNote: "",
+  chibiSelected: false,
+  decorationSelected: false,
+  decorationOptionId: ""
+};
+const EMPTY_PREVIEW_SELECTION = {
+  chibiSelected: false,
+  decorationOptionId: "",
+  addOnNote: ""
 };
 
 function buildZaloLink(phone) {
@@ -40,12 +49,27 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   const [addressInfo, setAddressInfo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [addonInfoPopup, setAddonInfoPopup] = useState("");
+  const [previewSelection, setPreviewSelection] = useState(EMPTY_PREVIEW_SELECTION);
 
   const featuredProducts = useMemo(() => {
     const ids = Array.isArray(settings.featuredProductIds) ? settings.featuredProductIds : [];
     const selected = ids.map((id) => products.find((product) => product.id === id)).filter(Boolean);
     return (selected.length ? selected : products).slice(0, 4);
   }, [products, settings.featuredProductIds]);
+
+  const addonCatalog = useMemo(() => settings.addonCatalog || {}, [settings.addonCatalog]);
+  const chibiAddon = addonCatalog.chibi || {};
+  const decorationAddon = addonCatalog.decoration || {};
+  const decorationOptions = Array.isArray(decorationAddon.options) ? decorationAddon.options : [];
+  const decorationReferenceImages = Array.isArray(decorationAddon.referenceImages) ? decorationAddon.referenceImages : [];
+  const selectedProductUseSharedAddons = selectedProduct
+    ? selectedProduct.id !== "set-trai-tim-2-tang" && selectedProduct.useSharedAddons !== false
+    : true;
+  const orderingProductUseSharedAddons = orderingProduct
+    ? orderingProduct.id !== "set-trai-tim-2-tang" && orderingProduct.useSharedAddons !== false
+    : true;
+
   const shippingConfig = settings.shippingConfig;
   const pickupBranches = useMemo(() => resolvePickupBranches(branches), [branches]);
   const selectedPickupBranch = useMemo(() => {
@@ -55,6 +79,16 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     return pickupBranches[0] || null;
   }, [form.pickupBranchId, pickupBranches]);
 
+  const addOnTotal = useMemo(() => {
+    if (!orderingProductUseSharedAddons) return 0;
+    const chibiPrice = form.chibiSelected ? Number(chibiAddon.price || 0) : 0;
+    const selectedDecorationOption = decorationOptions.find((item) => item.id === form.decorationOptionId);
+    const decorationPrice = form.decorationSelected ? Number(selectedDecorationOption?.price ?? decorationAddon.price ?? 0) : 0;
+    return chibiPrice + decorationPrice;
+  }, [orderingProductUseSharedAddons, chibiAddon.price, decorationAddon.price, decorationOptions, form.chibiSelected, form.decorationOptionId, form.decorationSelected]);
+
+  const finalCakePrice = Number(orderingProduct?.price || 0) + addOnTotal;
+
   const updateForm = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
@@ -63,8 +97,12 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     setOrderingProduct(product);
     setSelectedProduct(null);
     setForm((current) => ({
-      ...current,
-      pickupBranchId: current.pickupBranchId || pickupBranches[0]?.id || ""
+      ...EMPTY_FORM,
+      pickupBranchId: current.pickupBranchId || pickupBranches[0]?.id || "",
+      chibiSelected: product.useSharedAddons !== false ? previewSelection.chibiSelected : false,
+      decorationSelected: product.useSharedAddons !== false ? Boolean(previewSelection.decorationOptionId) : false,
+      decorationOptionId: product.useSharedAddons !== false ? previewSelection.decorationOptionId : "",
+      addOnNote: previewSelection.addOnNote
     }));
     setMessage("");
   };
@@ -76,11 +114,36 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     setMessage("");
   };
 
+  const openProductDetail = (product) => {
+    setSelectedProduct(product);
+    setPreviewSelection({
+      chibiSelected: false,
+      decorationOptionId: "",
+      addOnNote: ""
+    });
+  };
+
   const submitOrder = async (event) => {
     event.preventDefault();
     if (!orderingProduct || submitting) return;
     setSubmitting(true);
     setMessage("");
+
+    const selectedDecorationOption = decorationOptions.find((item) => item.id === form.decorationOptionId);
+    const selectedAddOns = {
+      chibi: {
+        selected: orderingProductUseSharedAddons ? Boolean(form.chibiSelected) : false,
+        name: chibiAddon.name || "Hình chibi cá nhân hóa",
+        price: Number(chibiAddon.price || 0)
+      },
+      decoration: {
+        selected: orderingProductUseSharedAddons ? Boolean(form.decorationSelected) : false,
+        name: decorationAddon.name || "Phụ kiện trang trí theo yêu cầu",
+        optionId: selectedDecorationOption?.id || "",
+        optionName: selectedDecorationOption?.name || "",
+        price: Number(selectedDecorationOption?.price ?? decorationAddon.price ?? 0)
+      }
+    };
 
     const deliveryAddress = addressInfo?.addressText || form.deliveryAddress || "";
     const shippingFee = form.fulfillmentType === "delivery" ? addressInfo?.deliveryFee ?? null : 0;
@@ -102,7 +165,11 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       metadata: {
         product: orderingProduct,
         addressInfo,
-        pickupBranch: selectedPickupBranch
+        pickupBranch: selectedPickupBranch,
+        selectedAddOns,
+        addOnTotal,
+        finalCakePrice,
+        addOnNote: form.addOnNote || ""
       }
     });
 
@@ -111,11 +178,15 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       form: {
         ...form,
         pickupBranchName: selectedPickupBranch?.name || settings.pickupAddress,
-        pickupBranchAddress: selectedPickupBranch?.address || ""
+        pickupBranchAddress: selectedPickupBranch?.address || "",
+        addOnNote: form.addOnNote || ""
       },
       addressInfo,
       shippingFee,
-      orderCode: saved.orderCode
+      orderCode: saved.orderCode,
+      selectedAddOns,
+      addOnTotal,
+      finalTotal: finalCakePrice
     });
 
     try {
@@ -168,7 +239,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
         <div className="cake-grid">
           {products.map((product) => (
             <article key={product.id} className="cake-card">
-              <button type="button" className="cake-card__image" onClick={() => setSelectedProduct(product)}>
+              <button type="button" className="cake-card__image" onClick={() => openProductDetail(product)}>
                 <img src={product.image} alt={product.name} />
                 <span className="cake-card__badge">{product.serving}</span>
                 <strong className="cake-card__price">{formatMoney(product.price)}</strong>
@@ -176,7 +247,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               <div className="cake-card__body">
                 <h3>{product.name}</h3>
                 <p>{product.size}</p>
-                <button type="button" onClick={() => setSelectedProduct(product)}>Xem chi tiết</button>
+                <button type="button" onClick={() => openProductDetail(product)}>Xem chi tiết</button>
               </div>
             </article>
           ))}
@@ -188,28 +259,110 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           <div className="cake-modal__backdrop" onClick={() => setSelectedProduct(null)} />
           <div className="cake-detail">
             <button className="cake-modal__close" type="button" onClick={() => setSelectedProduct(null)}>×</button>
-            <img className="cake-detail__image" src={selectedProduct.image} alt={selectedProduct.name} />
+            <div className="cake-detail__image-wrap">
+              <img className="cake-detail__image" src={selectedProduct.image} alt={selectedProduct.name} />
+            </div>
             <div className="cake-detail__content">
-              <p className="cake-eyebrow">{selectedProduct.serving}</p>
+              <p className="cake-eyebrow"><Icon name="user" size={13} /> {selectedProduct.serving}</p>
               <h2>{selectedProduct.name}</h2>
               <strong>{formatMoney(selectedProduct.price)}</strong>
               <p>{selectedProduct.description}</p>
+
               <div className="cake-detail__meta">
                 <span>{selectedProduct.size}</span>
-                {selectedProduct.addOns?.map((item) => (
-                  <span key={item.name}>{item.name}: +{formatMoney(item.price)}</span>
-                ))}
               </div>
-              <div className="cake-detail__cols">
-                <div>
-                  <h3>Thành phần</h3>
-                  <ul>{selectedProduct.ingredients.map((item) => <li key={item}>{item}</li>)}</ul>
-                </div>
-                <div>
-                  <h3>Phụ kiện</h3>
-                  <ul>{selectedProduct.accessories.map((item) => <li key={item}>{item}</li>)}</ul>
-                </div>
+
+              <div className="cake-accessory-stack">
+                <h3>Thành phần bánh</h3>
+                <ul>{selectedProduct.ingredients.map((item) => <li key={item}>{item}</li>)}</ul>
               </div>
+
+              <div className="cake-accessory-stack">
+                <h3>Phụ kiện đi kèm mặc định</h3>
+                <ul className="cake-sticker-list">
+                  {(Array.isArray(selectedProduct.accessories) ? selectedProduct.accessories : []).map((item) => (
+                    <li key={item}>
+                      <Icon name="gift" size={12} />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {selectedProductUseSharedAddons ? (
+              <div className="cake-optional-addon cake-native-addon">
+                <h4>Phụ kiện theo yêu cầu</h4>
+                <ul>
+                  {chibiAddon.enabled ? (
+                    <li>
+                      <span className="cake-addon-title"><Icon name="star" size={14} />{chibiAddon.name || "Hình chibi cá nhân hóa"}</span>
+                      <span className="cake-addon-actions">
+                        <strong>+{formatMoney(Number(chibiAddon.price || 0))}</strong>
+                        <button
+                          type="button"
+                          className={previewSelection.chibiSelected ? "is-active" : ""}
+                          onClick={() => setPreviewSelection((current) => ({ ...current, chibiSelected: !current.chibiSelected }))}
+                        >
+                          {previewSelection.chibiSelected ? "Đã chọn" : "+ Thêm"}
+                        </button>
+                        <button type="button" onClick={() => setAddonInfoPopup("chibi")}>Xem chi tiết</button>
+                      </span>
+                    </li>
+                  ) : null}
+                  {decorationAddon.enabled ? (
+                    <li>
+                      <span className="cake-addon-title"><Icon name="gift" size={14} />{decorationAddon.name || "Phụ kiện trang trí theo yêu cầu"}</span>
+                      <span className="cake-addon-actions">
+                        <strong>+{formatMoney(Number(decorationAddon.price || 0))}</strong>
+                        <button
+                          type="button"
+                          className={previewSelection.decorationOptionId ? "is-active" : ""}
+                          onClick={() =>
+                            setPreviewSelection((current) => ({
+                              ...current,
+                              decorationOptionId: current.decorationOptionId ? "" : (decorationOptions[0]?.id || "")
+                            }))
+                          }
+                        >
+                          {previewSelection.decorationOptionId ? "Đã chọn" : "+ Thêm"}
+                        </button>
+                        <button type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</button>
+                      </span>
+                    </li>
+                  ) : null}
+                </ul>
+                {previewSelection.decorationOptionId ? (
+                  <div className="cake-addon-option-grid">
+                    {decorationOptions.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={previewSelection.decorationOptionId === item.id ? "is-active" : ""}
+                        onClick={() => setPreviewSelection((current) => ({ ...current, decorationOptionId: item.id }))}
+                      >
+                        <img src={item.image} alt={item.name} />
+                        <strong>{item.name}</strong>
+                        <span>+{formatMoney(Number(item.price || 0))}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <label className="cake-addon-note-inline">
+                  <span>Ghi chú phụ kiện (nếu có)</span>
+                  <input
+                    value={previewSelection.addOnNote}
+                    onChange={(event) => setPreviewSelection((current) => ({ ...current, addOnNote: event.target.value }))}
+                    placeholder="VD: chọn mẫu 2, thêm nơ vàng..."
+                  />
+                </label>
+              </div>
+              ) : (
+                <div className="cake-optional-addon cake-native-addon">
+                  <h4>Phụ kiện theo yêu cầu</h4>
+                  <p>Mẫu này đã bao gồm set phụ kiện, không áp dụng chọn thêm.</p>
+                </div>
+              )}
+
               <button className="cake-primary-btn" type="button" onClick={() => openOrderForm(selectedProduct)}>Đặt mẫu này</button>
             </div>
           </div>
@@ -226,9 +379,72 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               <div>
                 <p className="cake-eyebrow">Đặt bánh</p>
                 <h2>{orderingProduct.name}</h2>
-                <strong>{formatMoney(orderingProduct.price)}</strong>
+                <strong>{formatMoney(finalCakePrice)}</strong>
               </div>
             </div>
+
+            {orderingProductUseSharedAddons ? (
+            <div className="cake-addon-order-box">
+              <h3>Phụ kiện theo yêu cầu</h3>
+              {chibiAddon.enabled ? (
+                <label className="cake-addon-check">
+                  <input
+                    type="checkbox"
+                    checked={form.chibiSelected}
+                    onChange={(event) => updateForm("chibiSelected", event.target.checked)}
+                  />
+                  <span>{chibiAddon.name} (+{formatMoney(Number(chibiAddon.price || 0))})</span>
+                  <button type="button" onClick={() => setAddonInfoPopup("chibi")}>Chi tiết</button>
+                </label>
+              ) : null}
+
+              {decorationAddon.enabled ? (
+                <>
+                  <label className="cake-addon-check">
+                    <input
+                      type="checkbox"
+                      checked={form.decorationSelected}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        updateForm("decorationSelected", checked);
+                        if (checked && !form.decorationOptionId && decorationOptions[0]) {
+                          updateForm("decorationOptionId", decorationOptions[0].id);
+                        }
+                      }}
+                    />
+                    <span>{decorationAddon.name} (+{formatMoney(Number(decorationAddon.price || 0))})</span>
+                    <button type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</button>
+                  </label>
+
+                  {form.decorationSelected ? (
+                    <div className="cake-addon-option-grid">
+                      {decorationOptions.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className={form.decorationOptionId === item.id ? "is-active" : ""}
+                          onClick={() => updateForm("decorationOptionId", item.id)}
+                        >
+                          <img src={item.image} alt={item.name} />
+                          <strong>{item.name}</strong>
+                          <span>+{formatMoney(Number(item.price || 0))}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              <label>
+                <span>Ghi chú phụ kiện theo yêu cầu (nếu có)</span>
+                <input
+                  value={form.addOnNote}
+                  onChange={(event) => updateForm("addOnNote", event.target.value)}
+                  placeholder="VD: Chọn mẫu 2, đổi màu nơ vàng..."
+                />
+              </label>
+            </div>
+            ) : null}
 
             <div className="cake-form-grid">
               <label>
@@ -290,7 +506,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
             <label className="cake-note-field">
               <span>Ghi chú thêm</span>
-              <textarea rows="3" value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Ít cay, thêm chibi, màu nơ..." />
+              <textarea rows="3" value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Ví dụ: ít cay, gọi trước khi giao..." />
             </label>
 
             {message ? <p className="cake-form-message">{message}</p> : null}
@@ -301,6 +517,55 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           </form>
         </div>
       )}
+
+      {addonInfoPopup ? (
+        <div className="cake-modal" role="dialog" aria-modal="true">
+          <div className="cake-modal__backdrop" onClick={() => setAddonInfoPopup("")} />
+          <div className="cake-addon-popup">
+            <button className="cake-modal__close" type="button" onClick={() => setAddonInfoPopup("")}>×</button>
+
+            {addonInfoPopup === "chibi" ? (
+              <div className="cake-addon-popup__body">
+                <h3>{chibiAddon.name || "Hình chibi cá nhân hóa"}</h3>
+                <p>
+                  Chibi bên em làm theo ảnh thật người anh/chị muốn tặng. Bên em sẽ vẽ lại theo phong cách hoạt hình, gửi anh/chị duyệt trước.
+                  Khi anh/chị đồng ý, quán mới in, cắt và gắn lên bánh. Phụ phí dịch vụ chibi: {formatMoney(Number(chibiAddon.price || 0))}/mẫu.
+                  Anh/chị tham khảo hình mẫu bên dưới giúp em nhé.
+                </p>
+                {chibiAddon.image ? <img src={chibiAddon.image} alt={chibiAddon.name || "Hình chibi"} /> : null}
+              </div>
+            ) : null}
+
+            {addonInfoPopup === "decoration" ? (
+              <div className="cake-addon-popup__body">
+                <h3>{decorationAddon.name || "Phụ kiện trang trí theo yêu cầu"}</h3>
+                <p>Có 3 mẫu phụ kiện đi kèm. Quán gửi thêm hình thực tế để anh/chị tham khảo trước khi chọn.</p>
+                <div className="cake-addon-popup__gallery">
+                  {decorationOptions.map((item) => (
+                    <figure key={item.id}>
+                      <img src={item.image} alt={item.name} />
+                      <figcaption>{item.name} - +{formatMoney(Number(item.price || 0))}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+                {decorationReferenceImages.length ? (
+                  <>
+                    <h4>Hình thực tế phụ kiện</h4>
+                    <div className="cake-addon-popup__gallery">
+                      {decorationReferenceImages.map((image, index) => (
+                        <figure key={`ref-${index + 1}`}>
+                          <img src={image} alt={`Phụ kiện thực tế ${index + 1}`} />
+                          <figcaption>Mẫu thực tế {index + 1}</figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

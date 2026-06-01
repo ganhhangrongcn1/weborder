@@ -1,7 +1,13 @@
 ﻿import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.jsx";
 import { resolveOrderSourceKey } from "../../../services/partnerOrderService.js";
+import {
+  branchOptionMatchesOrder,
+  buildBranchFilterOptions
+} from "../../../services/branchIdentityService.js";
 import { getSettlement } from "../orders/orderManager.utils.js";
+import { addDaysToVietnamDateInput, toVietnamDateInputValue } from "../../../utils/adminDateRange.js";
+import AdminBusinessAnalyticsSection from "./AdminBusinessAnalyticsSection.jsx";
 import {
   AdminBadge,
   AdminInput,
@@ -33,6 +39,16 @@ function getOrderBranch(order) {
   return [order.deliveryBranchName, order.pickupBranchName, order.branchName, order.branch_name, order.nexposSiteName, order.nexposHubName]
     .map((value) => String(value || "").trim())
     .find(Boolean) || "--";
+}
+
+function getOrderCustomerKey(order = {}) {
+  return String(
+    order.customerPhoneKey ||
+    order.customerPhone ||
+    order.phone ||
+    order.orderCustomerPhone ||
+    ""
+  ).trim();
 }
 
 function getOrderChannel(order) {
@@ -86,6 +102,32 @@ function buildChannels(orders = []) {
   return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 }
 
+function getChannelLabel(channel = "") {
+  const normalized = String(channel || "").toLowerCase();
+  if (normalized === "grabfood") return "Grab";
+  if (normalized === "shopeefood") return "ShopeeFood";
+  if (normalized === "xanhngon") return "Xanh Ngon";
+  if (normalized === "qr_counter") return "QR";
+  if (normalized === "website") return "Web";
+  return channel || "Khác";
+}
+
+function buildRpcChannels(channels = []) {
+  return channels.map((channel) => ({
+    name: getChannelLabel(channel.channel),
+    count: Number(channel.totalOrders || 0),
+    revenue: Number(channel.netRevenue || 0)
+  }));
+}
+
+function formatComparison(currentValue = 0, previousValue = 0) {
+  const current = Number(currentValue || 0);
+  const previous = Number(previousValue || 0);
+  if (!previous) return current ? "+100%" : "0%";
+  const percent = Math.round(((current - previous) / previous) * 100);
+  return `${percent > 0 ? "+" : ""}${percent}%`;
+}
+
 function getChannelColor(name = "") {
   const normalized = String(name || "").toLowerCase();
   if (normalized.includes("grab")) return "#16a34a";
@@ -112,15 +154,8 @@ function buildDonutSegments(channels = [], total = 0) {
   });
 }
 
-function getDateKey(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function formatChartDate(date) {
-  return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+  return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
 }
 
 function buildRevenueSeries(orders = []) {
@@ -128,7 +163,7 @@ function buildRevenueSeries(orders = []) {
   orders.forEach((order) => {
     const createdAt = new Date(order.createdAt);
     if (Number.isNaN(createdAt.getTime())) return;
-    const key = getDateKey(createdAt);
+    const key = toVietnamDateInputValue(createdAt);
     if (!dayMap.has(key)) {
       dayMap.set(key, { key, label: formatChartDate(createdAt), value: 0, date: new Date(createdAt) });
     }
@@ -213,62 +248,114 @@ export default function AdminDashboardSection({
   ordersSnapshot = [],
   chartOrdersSnapshot = [],
   dashboardChartPreset,
-  setDashboardChartPreset
+  setDashboardChartPreset,
+  dashboardSummary,
+  businessAnalytics,
+  selectedBranchFilter = "all",
+  branches = []
 }) {
-  const topProducts = buildTopProducts(ordersSnapshot);
+  const branchOptions = buildBranchFilterOptions(branches);
+  const selectedBranchOption = branchOptions.find((branch) => {
+    if (branch.value === selectedBranchFilter) return true;
+    const rawBranch = (branches || []).find((item) => String(
+      item?.branch_uuid ||
+      item?.branchUuid ||
+      item?.uuid ||
+      item?.id ||
+      ""
+    ) === String(selectedBranchFilter));
+    return rawBranch ? branch.label === rawBranch.name : false;
+  }) || null;
+  const branchScopedOrders = selectedBranchOption
+    ? ordersSnapshot.filter((order) => branchOptionMatchesOrder(order, selectedBranchOption))
+    : ordersSnapshot;
+  const branchScopedChartOrders = selectedBranchOption
+    ? chartOrdersSnapshot.filter((order) => branchOptionMatchesOrder(order, selectedBranchOption))
+    : chartOrdersSnapshot;
+  const branchScopedRecentOrders = selectedBranchOption
+    ? filteredRecentOrders.filter((order) => branchOptionMatchesOrder(order, selectedBranchOption))
+    : filteredRecentOrders;
+  const branchScopedCustomers = new Set(branchScopedOrders.map((order) => getOrderCustomerKey(order)).filter(Boolean)).size;
+  const branchScopedOrdersTotal = branchScopedOrders.length;
+  const branchScopedOrdersNew = branchScopedOrders.filter((order) => {
+    const status = String(order.status || "").toLowerCase();
+    return status === "pending_zalo" || status === "pending" || status === "new";
+  }).length;
+  const branchScopedPreparingOrders = branchScopedOrders.filter((order) => {
+    const status = String(order.status || "").toLowerCase();
+    return status === "confirmed" || status === "preparing";
+  }).length;
+  const branchScopedDeliveringOrders = branchScopedOrders.filter((order) => {
+    const status = String(order.status || "").toLowerCase();
+    return status === "delivering" || status === "shipping";
+  }).length;
+  const branchScopedCompletedOrders = branchScopedOrders.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
+  const branchScopedCancelledOrders = branchScopedOrders.filter((order) => ["cancel", "cancelled", "canceled", "huy"].includes(String(order.status || "").toLowerCase())).length;
+  const branchScopedRevenue = branchScopedOrders.reduce((sum, order) => sum + getDashboardOrderRevenue(order), 0);
+  const rpcMetrics = dashboardSummary?.source === "rpc" && !selectedBranchOption ? dashboardSummary.current : null;
+  const displayedOrdersTotal = rpcMetrics?.totalOrders ?? (selectedBranchOption ? branchScopedOrdersTotal : ordersTotal);
+  const displayedOrdersNew = rpcMetrics?.pendingOrders ?? (selectedBranchOption ? branchScopedOrdersNew : ordersNew);
+  const displayedRevenue = rpcMetrics?.netRevenue ?? (selectedBranchOption ? branchScopedRevenue : todayRevenue);
+  const displayedCustomers = selectedBranchOption
+    ? branchScopedCustomers
+    : dashboardSummary?.source === "rpc"
+      ? dashboardSummary.totalCustomers
+      : totalCustomers;
+  const topProducts = buildTopProducts(branchScopedOrders);
   const topProductMax = Math.max(...topProducts.map((item) => item.quantity), 1);
-  const channels = buildChannels(ordersSnapshot);
+  const channels = dashboardSummary?.source === "rpc" && !selectedBranchOption
+    ? buildRpcChannels(dashboardSummary.channels)
+    : buildChannels(branchScopedOrders);
   const channelTotal = channels.reduce((sum, channel) => sum + channel.count, 0);
   const channelSegments = buildDonutSegments(channels, channelTotal);
-  const averageOrder = ordersTotal ? Math.round(todayRevenue / ordersTotal) : 0;
-  const completionCount = ordersSnapshot.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
-  const completionRate = ordersTotal ? Math.round((completionCount / ordersTotal) * 100) : 0;
+  const averageOrder = rpcMetrics?.averageOrderValue ?? (displayedOrdersTotal ? Math.round(displayedRevenue / displayedOrdersTotal) : 0);
+  const completionCount = rpcMetrics?.completedOrders ?? branchScopedCompletedOrders;
+  const completionRate = displayedOrdersTotal ? Math.round((completionCount / displayedOrdersTotal) * 100) : 0;
+  const pendingOrders = rpcMetrics?.pendingOrders ?? displayedOrdersNew;
+  const preparingOrders = rpcMetrics?.preparingOrders ?? (selectedBranchOption ? branchScopedPreparingOrders : ordersDoing);
+  const deliveringOrders = rpcMetrics?.deliveringOrders ?? branchScopedDeliveringOrders;
+  const cancelledOrders = rpcMetrics?.cancelledOrders ?? branchScopedCancelledOrders;
+  const cancelRate = rpcMetrics
+    ? Math.round(Number(rpcMetrics?.cancelRate || 0) * 100)
+    : displayedOrdersTotal
+      ? Math.round((cancelledOrders / displayedOrdersTotal) * 100)
+      : 0;
 
-  const chartOrdersTotal = chartOrdersSnapshot.length;
-  const chartRevenueTotal = chartOrdersSnapshot.reduce((sum, order) => sum + getDashboardOrderRevenue(order), 0);
+  const chartOrdersTotal = branchScopedChartOrders.length;
+  const chartRevenueTotal = branchScopedChartOrders.reduce((sum, order) => sum + getDashboardOrderRevenue(order), 0);
   const chartAverageOrder = chartOrdersTotal ? Math.round(chartRevenueTotal / chartOrdersTotal) : 0;
-  const chartCompletionCount = chartOrdersSnapshot.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
-  const chartOrdersNew = chartOrdersSnapshot.filter((order) => String(order.status || "").toLowerCase() === "pending_zalo").length;
-  const chartOrdersDoing = chartOrdersSnapshot.filter((order) => {
+  const chartCompletionCount = branchScopedChartOrders.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
+  const chartOrdersNew = branchScopedChartOrders.filter((order) => {
+    const status = String(order.status || "").toLowerCase();
+    return status === "pending_zalo" || status === "pending" || status === "new";
+  }).length;
+  const chartOrdersDoing = branchScopedChartOrders.filter((order) => {
     const status = String(order.status || "").toLowerCase();
     return status === "confirmed" || status === "delivering";
   }).length;
-  const revenueSeries = buildRevenueSeries(chartOrdersSnapshot);
+  const revenueSeries = buildRevenueSeries(branchScopedChartOrders);
   const revenueChart = buildRevenueChart(revenueSeries);
-  const todayText = new Date().toISOString().slice(0, 10);
+  const todayText = toVietnamDateInputValue();
 
   const applyPreset = (preset) => {
-    const now = new Date();
-    const toDateText = (date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    };
     if (preset === "today") {
-      const today = toDateText(now);
-      setDashboardDateFrom(today);
-      setDashboardDateTo(today);
+      setDashboardDateFrom(todayText);
+      setDashboardDateTo(todayText);
     }
     if (preset === "yesterday") {
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      const text = toDateText(yesterday);
+      const text = addDaysToVietnamDateInput(todayText, -1);
       setDashboardDateFrom(text);
       setDashboardDateTo(text);
     }
     if (preset === "week") {
-      const day = now.getDay();
+      const day = new Date(`${todayText}T12:00:00+07:00`).getUTCDay();
       const diff = day === 0 ? 6 : day - 1;
-      const monday = new Date(now);
-      monday.setDate(now.getDate() - diff);
-      setDashboardDateFrom(toDateText(monday));
-      setDashboardDateTo(toDateText(now));
+      setDashboardDateFrom(addDaysToVietnamDateInput(todayText, -diff));
+      setDashboardDateTo(todayText);
     }
     if (preset === "month") {
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      setDashboardDateFrom(toDateText(firstDay));
-      setDashboardDateTo(toDateText(now));
+      setDashboardDateFrom(`${todayText.slice(0, 7)}-01`);
+      setDashboardDateTo(todayText);
     }
     setDashboardDatePreset(preset);
   };
@@ -278,6 +365,10 @@ export default function AdminDashboardSection({
       <section className="admin-dashboard-hero">
         <div>
           <AdminBadge tone="warning">Chi nhánh mở: {openBranches}/{totalBranches}</AdminBadge>
+          <AdminBadge tone={dashboardSummary?.source === "rpc" && !selectedBranchOption ? "success" : "warning"}>
+            {dashboardSummary?.source === "rpc" && !selectedBranchOption ? "Nguồn KPI: Supabase RPC" : "Nguồn KPI: feed theo chi nhánh"}
+          </AdminBadge>
+          {selectedBranchOption ? <AdminBadge tone="brand">Đang xem: {selectedBranchOption.label}</AdminBadge> : null}
           <h2>Chào mừng quay trở lại!</h2>
           <p>Tổng quan hoạt động kinh doanh và vận hành đơn hàng hôm nay.</p>
         </div>
@@ -328,16 +419,23 @@ export default function AdminDashboardSection({
       </div>
 
       <div className="admin-dashboard-stat-grid">
-        <AdminStatCard title="Doanh thu thực nhận" value={formatMoney(todayRevenue)} subtitle="Đã loại phí ship" icon={<Icon name="tag" size={22} />} tone="green" />
-        <AdminStatCard title="Tổng đơn" value={ordersTotal} subtitle={`${ordersNew} đơn mới`} icon={<Icon name="bag" size={22} />} tone="brand" />
-        <AdminStatCard title="Khách hàng" value={totalCustomers} subtitle="Từ CRM hiện có" icon={<Icon name="user" size={22} />} tone="blue" />
+        <AdminStatCard title="Doanh thu thực nhận" value={formatMoney(displayedRevenue)} subtitle="Web: trừ ship · FoodApp: ưu tiên số đối soát" icon={<Icon name="tag" size={22} />} tone="green" />
+        <AdminStatCard title="Tổng đơn" value={displayedOrdersTotal} subtitle={`${displayedOrdersNew} đơn mới`} icon={<Icon name="bag" size={22} />} tone="brand" />
+        <AdminStatCard title="Khách hàng" value={displayedCustomers ?? "--"} subtitle={selectedBranchOption ? "Khách có đơn trong chi nhánh đã chọn" : "Tổng hồ sơ lifetime từ Supabase"} icon={<Icon name="user" size={22} />} tone="blue" />
         <AdminStatCard title="Đơn trung bình" value={formatMoney(averageOrder)} subtitle={`${completionRate}% hoàn tất`} icon={<Icon name="star" size={22} />} tone="amber" />
+      </div>
+
+      <div className="admin-dashboard-stat-grid">
+        <AdminStatCard title="Đơn mới chờ xử lý" value={pendingOrders} subtitle="Cần xác nhận sớm" icon={<Icon name="star" size={22} />} tone="amber" />
+        <AdminStatCard title="Đang làm" value={preparingOrders} subtitle="Bếp đang xử lý" icon={<Icon name="bag" size={22} />} tone="brand" />
+        <AdminStatCard title="Đang giao" value={deliveringOrders} subtitle="Đang trên đường giao khách" icon={<Icon name="user" size={22} />} tone="blue" />
+        <AdminStatCard title="Đơn hủy" value={cancelledOrders} subtitle={`${cancelRate}% tổng đơn`} icon={<Icon name="tag" size={22} />} tone="red" />
       </div>
 
       <div className="admin-dashboard-main-grid">
         <AdminPanel
           title="Doanh thu thực nhận"
-          description="Tổng tiền món đã thu, không tính phí ship."
+          description="Web: tổng thanh toán trừ phí ship. FoodApp: ưu tiên số thực nhận từ dữ liệu đối soát; nếu thiếu sẽ dùng số doanh thu gần nhất có sẵn."
           className="admin-dashboard-revenue-card"
           action={
             <AdminSelect
@@ -381,6 +479,14 @@ export default function AdminDashboardSection({
             <span><b>{chartOrdersNew}</b> đơn mới</span>
             <span><b>{chartOrdersDoing}</b> đang xử lý</span>
             <span><b>{chartCompletionCount}</b> hoàn tất</span>
+            {dashboardSummary?.source === "rpc" && !selectedBranchOption ? (
+              <>
+                <span><b>{formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.previous.netRevenue)}</b> so với kỳ trước</span>
+                <span><b>{formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.week.netRevenue)}</b> so với cùng kỳ tuần trước</span>
+                <span><b>{formatComparison(dashboardSummary.current.totalOrders, dashboardSummary.previous.totalOrders)}</b> số đơn so với kỳ trước</span>
+                <span><b>{formatComparison(dashboardSummary.current.totalOrders, dashboardSummary.week.totalOrders)}</b> số đơn so với cùng kỳ tuần trước</span>
+              </>
+            ) : null}
           </div>
         </AdminPanel>
 
@@ -416,7 +522,7 @@ export default function AdminDashboardSection({
                   <div key={channel.name} className="admin-dashboard-channel-legend-row">
                     <i style={{ backgroundColor: channel.color }} />
                     <strong>{channel.name}</strong>
-                    <span>{channel.count} đơn · {percent}%</span>
+                    <span>{channel.count} đơn · {percent}%{channel.revenue !== undefined ? ` · ${formatMoney(channel.revenue)}` : ""}</span>
                   </div>
                 );
               })}
@@ -447,16 +553,16 @@ export default function AdminDashboardSection({
         <AdminPanel
           title="Đơn hàng gần đây"
           description="Danh sách compact theo bộ lọc tìm kiếm hiện tại."
-          action={<AdminBadge tone="neutral">{filteredRecentOrders.length} đơn</AdminBadge>}
+          action={<AdminBadge tone="neutral">{branchScopedRecentOrders.length} đơn</AdminBadge>}
           className="admin-dashboard-recent-card"
         >
-          {filteredRecentOrders.length ? (
+          {branchScopedRecentOrders.length ? (
             <AdminTable className="admin-dashboard-table">
               <AdminTableHead>
                 <span>Mã đơn</span><span>Nguồn</span><span>Khách</span><span>Giờ</span><span>Chi nhánh</span><span>Doanh thu thực nhận</span><span>Trạng thái</span>
               </AdminTableHead>
               <AdminTableBody>
-                {filteredRecentOrders.map((order) => {
+                {branchScopedRecentOrders.map((order) => {
                   const status = getOrderStatusMeta(order.status);
                   const source = getOrderSourceMeta(order);
                   const netRevenue = getDashboardOrderRevenue(order) || Number(getSettlement(order)?.netRevenue || 0);
@@ -479,6 +585,8 @@ export default function AdminDashboardSection({
           )}
         </AdminPanel>
       </div>
+
+      <AdminBusinessAnalyticsSection analytics={businessAnalytics} />
     </div>
   );
 }
