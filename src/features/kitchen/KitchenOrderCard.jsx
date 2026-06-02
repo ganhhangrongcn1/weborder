@@ -80,6 +80,17 @@ function formatTime(value = "") {
   });
 }
 
+function formatKitchenMoney(value = 0) {
+  const amount = Number(value || 0);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0
+  }).format(safeAmount);
+}
+
 function formatWaitingMinutes(order = {}) {
   const timeValue = getKitchenOrderTimeValue(order);
   if (!timeValue || !Number.isFinite(timeValue)) return "Chưa có giờ";
@@ -271,6 +282,30 @@ function isCancellationAcknowledged(order = {}) {
   ].some((value) => String(value || "").trim().toLowerCase() === "cancelled");
 }
 
+function normalizeKitchenSourceToken(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function getKitchenCollectAmount(order = {}) {
+  const sourceType = normalizeKitchenSourceToken(order.sourceType || order.source_type);
+  if (sourceType !== "website") return 0;
+
+  const source = normalizeKitchenSourceToken(order.source || order.orderSource || order.channel);
+  const fulfillmentType = normalizeKitchenSourceToken(order.fulfillmentType || order.raw?.fulfillment_type);
+  const shouldCollect = ["website", "weborder", "online", "pickup", "qr_counter"].includes(source) || fulfillmentType === "pickup";
+
+  if (!shouldCollect) return 0;
+
+  const totalAmount = Number(order.totalAmount ?? order.total ?? order.raw?.total_amount ?? 0);
+  const shippingFee = Number(order.shippingFee ?? order.raw?.shipping_fee ?? 0);
+  const amount = totalAmount - shippingFee;
+
+  return Number.isFinite(amount) ? Math.max(amount, 0) : 0;
+}
+
 function getMemberTierTone(memberTier = "") {
   const value = String(memberTier || "").toLowerCase();
 
@@ -354,6 +389,13 @@ function KitchenIcon({ name, size = 14 }) {
         <path d="M9 2.5h6" />
         <path d="M12 7v5l3 1.8" />
         <circle cx="12" cy="13" r="7.5" />
+      </>
+    ),
+    cash: (
+      <>
+        <path d="M4 7h16v10H4V7Z" />
+        <path d="M7 10.5h.01M17 13.5h.01" />
+        <circle cx="12" cy="12" r="2.25" />
       </>
     ),
     trophy: (
@@ -732,6 +774,8 @@ export default function KitchenOrderCard({
       : "Đơn đã xong";
   const statusBadgeTone = isCancelled ? getStatusTone("cancelled") : getStatusTone(order.kitchenStatus);
   const statusBadgeText = isCancelled ? "Đã hủy từ NexPOS" : order.displayStatus;
+  const collectAmount = getKitchenCollectAmount(order);
+  const shouldShowCollectBadge = active && collectAmount > 0;
 
   const isNarrowLayout = compact || tabletCompact;
   const itemGridColumns = compact
@@ -931,6 +975,11 @@ export default function KitchenOrderCard({
             <Badge tone={statusBadgeTone} icon={isCancelled || isKitchenOrderDone(order) ? "badge" : "spark"}>
               {statusBadgeText}
             </Badge>
+            {shouldShowCollectBadge ? (
+              <Badge tone={{ background: "#fefce8", border: "#fde047", color: "#a16207" }} icon="cash">
+                Cần thu {formatKitchenMoney(collectAmount)}
+              </Badge>
+            ) : null}
           </div>
           <strong
             style={{
