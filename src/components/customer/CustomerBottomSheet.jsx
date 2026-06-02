@@ -1,19 +1,40 @@
 import { useEffect } from "react";
 
-let openSheetCount = 0;
+const SHEET_LOCK_CLASS = "customer-sheet-open";
+const SHEET_LOCK_COUNT_ATTR = "data-customer-sheet-lock-count";
+
+function getOpenSheetCount() {
+  return Number(document.documentElement.getAttribute(SHEET_LOCK_COUNT_ATTR) || 0);
+}
+
+function setOpenSheetCount(nextCount) {
+  document.documentElement.setAttribute(SHEET_LOCK_COUNT_ATTR, String(Math.max(0, nextCount)));
+}
+
+function applyScrollLock() {
+  document.documentElement.classList.add(SHEET_LOCK_CLASS);
+  document.body.classList.add(SHEET_LOCK_CLASS);
+}
+
+function clearScrollLock() {
+  document.documentElement.classList.remove(SHEET_LOCK_CLASS);
+  document.body.classList.remove(SHEET_LOCK_CLASS);
+  document.documentElement.removeAttribute(SHEET_LOCK_COUNT_ATTR);
+}
 
 function lockBodyScroll() {
-  openSheetCount += 1;
-  if (openSheetCount !== 1) return;
-  document.documentElement.classList.add("customer-sheet-open");
-  document.body.classList.add("customer-sheet-open");
+  const nextCount = getOpenSheetCount() + 1;
+  setOpenSheetCount(nextCount);
+  applyScrollLock();
 }
 
 function unlockBodyScroll() {
-  openSheetCount = Math.max(0, openSheetCount - 1);
-  if (openSheetCount !== 0) return;
-  document.documentElement.classList.remove("customer-sheet-open");
-  document.body.classList.remove("customer-sheet-open");
+  const nextCount = Math.max(0, getOpenSheetCount() - 1);
+  if (nextCount > 0) {
+    setOpenSheetCount(nextCount);
+    return;
+  }
+  clearScrollLock();
 }
 
 export default function CustomerBottomSheet({

@@ -21,6 +21,7 @@
   width: 100%;
   min-height: 100dvh;
   overflow-x: hidden;
+  overflow-y: visible;
   background: #f6f3ee;
   color: var(--customer-text);
   font-family: system-ui, Arial, sans-serif;
@@ -39,6 +40,7 @@ main.shadow-preview {
   margin-right: auto;
   margin-left: auto;
   overflow-x: hidden;
+  overflow-y: visible;
   padding-bottom: calc(96px + var(--customer-bottom-safe));
   background: var(--customer-bg);
   box-shadow: 0 0 42px rgba(58, 31, 20, 0.08);
