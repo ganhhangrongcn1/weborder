@@ -1,5 +1,5 @@
 ﻿import { getCustomerKey } from "./storageService.js";
-import { readPartnerOrdersForAdmin } from "./adminOrderFeedService.js";
+import { readCustomerPartnerOrdersForAdmin, readPartnerOrdersForAdmin } from "./adminOrderFeedService.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { customerRepository } from "./repositories/customerRepository.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
@@ -40,6 +40,24 @@ const defaultLoyaltyConfig = {
 const CRM_SUPPORT_CACHE_TTL_MS = 60000;
 let crmSupportCache = { value: null, cachedAt: 0 };
 let crmSupportInFlight = null;
+
+function getOrderTimeValue(order = {}) {
+  const value = order?.createdAt || order?.orderTime || order?.order_time || order?.created_at || "";
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function dedupeOrdersByIdentity(orders = []) {
+  return [...(Array.isArray(orders) ? orders : []).reduce((map, order) => {
+    const key = String(order?.id || order?.orderCode || order?.displayOrderCode || "").trim();
+    if (!key) return map;
+    const current = map.get(key);
+    if (!current || getOrderTimeValue(order) >= getOrderTimeValue(current)) {
+      map.set(key, order);
+    }
+    return map;
+  }, new Map()).values()];
+}
 
 function getPhoneRecord(allByPhone, phone) {
   const key = getCustomerKey(phone);
@@ -417,6 +435,27 @@ export async function getCustomerLoyaltyDetailAsync(phone, { limit = 50, offset 
   } catch {
     return { rows: [], total: 0 };
   }
+}
+
+export async function getCustomerRecentOrdersAsync(phone, { limit = 100 } = {}) {
+  const key = getCustomerKey(phone);
+  if (!key) return [];
+
+  const safeLimit = Math.max(3, Math.min(100, Number(limit || 100)));
+  const [webResult, partnerResult] = await Promise.allSettled([
+    coreSupabaseRepository.readOrdersForPhoneFromTable(key),
+    readCustomerPartnerOrdersForAdmin(key, { limit: safeLimit })
+  ]);
+  const webOrders = webResult.status === "fulfilled" && Array.isArray(webResult.value)
+    ? webResult.value
+    : [];
+  const partnerOrders = partnerResult.status === "fulfilled" && Array.isArray(partnerResult.value)
+    ? partnerResult.value
+    : [];
+
+  return dedupeOrdersByIdentity([...webOrders, ...partnerOrders])
+    .sort((a, b) => getOrderTimeValue(b) - getOrderTimeValue(a))
+    .slice(0, safeLimit);
 }
 
 function buildCustomersSnapshotFromSources({

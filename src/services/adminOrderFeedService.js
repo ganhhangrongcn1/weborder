@@ -5,6 +5,7 @@ import {
   resolveOrderSourceKey
 } from "./partnerOrderService.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
+import { buildOrderCountingPhoneVariants } from "./customerOrderCountingService.js";
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -163,6 +164,40 @@ function mapPartnerOrderRow(order = {}, itemsByOrderId = new Map()) {
   };
 }
 
+function dedupeRowsById(rows = []) {
+  return [...(Array.isArray(rows) ? rows : []).reduce((map, row) => {
+    const key = String(row?.id || row?.order_code || "").trim();
+    if (key && !map.has(key)) map.set(key, row);
+    return map;
+  }, new Map()).values()];
+}
+
+async function readPartnerOrderItemsByOrderIds(client, orderIds = []) {
+  const safeOrderIds = (Array.isArray(orderIds) ? orderIds : []).filter(Boolean);
+  let itemsByOrderId = new Map();
+  if (!safeOrderIds.length) return itemsByOrderId;
+
+  const { data: itemRows, error: itemError } = await client
+    .from("partner_order_items")
+    .select("id,item_key,partner_order_id,partner_item_id,web_product_id,partner_item_name,web_product_name,quantity,unit_price,line_total,options,note,item_status,kitchen_item_status")
+    .in("partner_order_id", safeOrderIds);
+  recordAdminRequest("read partner order items", "partner_order_items");
+
+  if (itemError) {
+    console.warn("[adminOrderFeedService] read partner_order_items failed", itemError);
+    return itemsByOrderId;
+  }
+
+  itemsByOrderId = (itemRows || []).reduce((map, row) => {
+    const list = map.get(row.partner_order_id) || [];
+    list.push(mapPartnerItemRow(row));
+    map.set(row.partner_order_id, list);
+    return map;
+  }, new Map());
+
+  return itemsByOrderId;
+}
+
 function normalizeWebOrder(order = {}) {
   const source = resolveOrderSourceKey(order);
   const orderCode = String(order.orderCode || order.id || "").trim();
@@ -248,27 +283,46 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } =
   }
 
   const orderIds = (orderRows || []).map((row) => row.id).filter(Boolean);
-  let itemsByOrderId = new Map();
-  if (orderIds.length) {
-    const { data: itemRows, error: itemError } = await client
-      .from("partner_order_items")
-      .select("id,item_key,partner_order_id,partner_item_id,web_product_id,partner_item_name,web_product_name,quantity,unit_price,line_total,options,note,item_status,kitchen_item_status")
-      .in("partner_order_id", orderIds);
-    recordAdminRequest("read partner order items", "partner_order_items");
-
-    if (itemError) {
-      console.warn("[adminOrderFeedService] read partner_order_items failed", itemError);
-    } else {
-      itemsByOrderId = (itemRows || []).reduce((map, row) => {
-        const list = map.get(row.partner_order_id) || [];
-        list.push(mapPartnerItemRow(row));
-        map.set(row.partner_order_id, list);
-        return map;
-      }, new Map());
-    }
-  }
+  const itemsByOrderId = await readPartnerOrderItemsByOrderIds(client, orderIds);
 
   return (orderRows || []).map((order) => mapPartnerOrderRow(order, itemsByOrderId));
+}
+
+export async function readCustomerPartnerOrdersForAdmin(phone = "", { limit = 100 } = {}) {
+  const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
+  if (!client) return [];
+
+  const phoneVariants = buildOrderCountingPhoneVariants([phone]);
+  if (!phoneVariants.length) return [];
+
+  const safeLimit = Math.max(3, Math.min(100, Number(limit || 100)));
+  const columns = "id,order_code,display_order_code,partner_source,nexpos_order_id,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,raw_data,order_time,created_at,updated_at";
+  const rows = [];
+
+  for (const column of ["customer_phone_key", "customer_phone"]) {
+    const { data, error } = await client
+      .from("partner_orders")
+      .select(columns)
+      .in(column, phoneVariants)
+      .order("order_time", { ascending: false })
+      .limit(safeLimit);
+    recordAdminRequest("read customer partner orders", "partner_orders");
+
+    if (error) {
+      console.warn("[adminOrderFeedService] read customer partner orders failed", error);
+      continue;
+    }
+
+    rows.push(...(Array.isArray(data) ? data : []));
+  }
+
+  const orderRows = dedupeRowsById(rows)
+    .sort((a, b) => new Date(b.order_time || b.created_at || 0) - new Date(a.order_time || a.created_at || 0))
+    .slice(0, safeLimit);
+  const orderIds = orderRows.map((row) => row.id).filter(Boolean);
+  const itemsByOrderId = await readPartnerOrderItemsByOrderIds(client, orderIds);
+
+  return orderRows.map((order) => mapPartnerOrderRow(order, itemsByOrderId));
 }
 
 export async function subscribeAdminOrderChanges(onChange) {

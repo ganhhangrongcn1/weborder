@@ -1,9 +1,13 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import { getCustomerKey } from "../../../services/storageService.js";
-import { getCustomerLoyaltyDetailAsync } from "../../../services/crmService.js";
+import { getCustomerLoyaltyDetailAsync, getCustomerRecentOrdersAsync } from "../../../services/crmService.js";
 import { getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 import { formatMoney } from "../../../utils/format.js";
+
+const INITIAL_DETAIL_ORDER_LIMIT = 3;
+const DETAIL_ORDER_PAGE_SIZE = 10;
+const DETAIL_ORDER_FETCH_LIMIT = 100;
 
 function formatDateTime(value) {
   if (!value) return "--";
@@ -166,7 +170,8 @@ export default function CustomerCRM({
   const [sortBy, setSortBy] = useState("latest");
   const [branchFilter, setBranchFilter] = useState("all");
   const [channelFilter, setChannelFilter] = useState("all");
-  const [showAllOrdersByPhone, setShowAllOrdersByPhone] = useState({});
+  const [detailOrdersByPhone, setDetailOrdersByPhone] = useState({});
+  const [detailOrderLimitByPhone, setDetailOrderLimitByPhone] = useState({});
   const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
   const [loyaltyDetailByPhone, setLoyaltyDetailByPhone] = useState({});
   const crmAnalytics = crmSnapshot.crmAnalytics?.source === "rpc" ? crmSnapshot.crmAnalytics : null;
@@ -236,21 +241,43 @@ export default function CustomerCRM({
       .sort((a, b) => String(a.code || "").localeCompare(String(b.code || "")));
   }, [coupons]);
 
-  const selectedOrders = useMemo(() => {
-    const orders = Array.isArray(selectedCustomer?.orders) ? selectedCustomer.orders : [];
-    return [...orders].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-  }, [selectedCustomer]);
+  const selectedCustomerPhoneKey = selectedCustomer?.phone ? getCustomerKey(selectedCustomer.phone) : "";
 
+  const selectedOrders = useMemo(() => {
+    const lifetimeOrders = selectedCustomerPhoneKey ? detailOrdersByPhone[selectedCustomerPhoneKey] : null;
+    const orders = Array.isArray(lifetimeOrders) && lifetimeOrders.length
+      ? lifetimeOrders
+      : Array.isArray(selectedCustomer?.orders)
+        ? selectedCustomer.orders
+        : [];
+    return [...orders].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [detailOrdersByPhone, selectedCustomer, selectedCustomerPhoneKey]);
+
+  const selectedDetailOrderLimit = selectedCustomerPhoneKey
+    ? detailOrderLimitByPhone[selectedCustomerPhoneKey] || INITIAL_DETAIL_ORDER_LIMIT
+    : INITIAL_DETAIL_ORDER_LIMIT;
   const visibleDetailOrders = selectedCustomer
-    ? (showAllOrdersByPhone[selectedCustomer.phone] ? selectedOrders : selectedOrders.slice(0, 4))
+    ? selectedOrders.slice(0, selectedDetailOrderLimit)
     : [];
 
   useEffect(() => {
     let disposed = false;
-    const phone = selectedCustomer?.phone ? getCustomerKey(selectedCustomer.phone) : "";
+    const phone = selectedCustomerPhoneKey;
     if (!phone) return () => {
       disposed = true;
     };
+    setDetailOrderLimitByPhone((current) => ({
+      ...current,
+      [phone]: current[phone] || INITIAL_DETAIL_ORDER_LIMIT
+    }));
+    (async () => {
+      const rows = await getCustomerRecentOrdersAsync(phone, { limit: DETAIL_ORDER_FETCH_LIMIT });
+      if (disposed) return;
+      setDetailOrdersByPhone((current) => ({
+        ...current,
+        [phone]: rows
+      }));
+    })();
     (async () => {
       const result = await getCustomerLoyaltyDetailAsync(phone, { limit: 100, offset: 0 });
       if (disposed) return;
@@ -284,10 +311,10 @@ export default function CustomerCRM({
     return () => {
       disposed = true;
     };
-  }, [selectedCustomer?.phone]);
+  }, [selectedCustomerPhoneKey]);
 
-  const selectedLoyaltyDetail = selectedCustomer?.phone
-    ? loyaltyDetailByPhone[getCustomerKey(selectedCustomer.phone)] || null
+  const selectedLoyaltyDetail = selectedCustomerPhoneKey
+    ? loyaltyDetailByPhone[selectedCustomerPhoneKey] || null
     : null;
 
   const sortedSelectedVouchers = useMemo(() => {
@@ -513,13 +540,22 @@ export default function CustomerCRM({
                     ))}
                     {selectedOrders.length === 0 && <p>Chưa có đơn hàng.</p>}
                   </div>
-                  {selectedOrders.length > 4 && (
+                  {selectedOrders.length > visibleDetailOrders.length && (
                     <button
                       type="button"
                       className="crm-link-btn"
-                      onClick={() => setShowAllOrdersByPhone((current) => ({ ...current, [selectedCustomer.phone]: !current[selectedCustomer.phone] }))}
+                      onClick={() => setDetailOrderLimitByPhone((current) => {
+                        const currentLimit = current[selectedCustomerPhoneKey] || INITIAL_DETAIL_ORDER_LIMIT;
+                        const nextLimit = currentLimit < DETAIL_ORDER_PAGE_SIZE
+                          ? DETAIL_ORDER_PAGE_SIZE
+                          : currentLimit + DETAIL_ORDER_PAGE_SIZE;
+                        return {
+                          ...current,
+                          [selectedCustomerPhoneKey]: nextLimit
+                        };
+                      })}
                     >
-                      {showAllOrdersByPhone[selectedCustomer.phone] ? "Thu gọn đơn hàng" : `Xem thêm ${selectedOrders.length - 4} đơn`}
+                      {`Xem thêm ${Math.min(DETAIL_ORDER_PAGE_SIZE, selectedOrders.length - visibleDetailOrders.length)} đơn`}
                     </button>
                   )}
                 </section>
