@@ -191,6 +191,7 @@ function getActionButtonTone(actionType = "", fallbackColor = "#111827") {
 
 function getPrintButtonConfig(printBillState = {}, printingBill = false) {
   const status = String(printBillState?.status || "").toLowerCase();
+  const errorMessage = String(printBillState?.error_message || printBillState?.errorMessage || "").toLowerCase();
 
   if (printingBill || status === "submitting") {
     return {
@@ -237,8 +238,9 @@ function getPrintButtonConfig(printBillState = {}, printingBill = false) {
   }
 
   if (status === "failed") {
+    const isAutoExpired = errorMessage.includes("quá 5 phút") || errorMessage.includes("qua 5 phut");
     return {
-      label: "In lỗi - In lại",
+      label: isAutoExpired ? "Quá 5 phút - In lại" : "In lỗi - In lại",
       disabled: false,
       background: "#fff7ed",
       border: "#f97316",

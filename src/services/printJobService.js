@@ -14,6 +14,8 @@ const PRINT_JOB_STATUS = {
 };
 
 const DEFAULT_PRINTER_KEY = "cashier-80mm";
+const AUTO_PRINT_WINDOW_MINUTES = 5;
+const AUTO_PRINT_EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
 const PRINT_JOB_STATUS_COLUMNS = [
   "id",
   "branch_uuid",
@@ -86,6 +88,20 @@ export function getPrintDeviceId() {
   }
 }
 
+function getAutoPrintCutoffIso() {
+  return new Date(Date.now() - AUTO_PRINT_WINDOW_MINUTES * 60 * 1000).toISOString();
+}
+
+function isPrintJobFresh(job = {}) {
+  const value = toText(job.created_at || job.requested_at);
+  if (!value) return true;
+
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return true;
+
+  return timestamp >= Date.now() - AUTO_PRINT_WINDOW_MINUTES * 60 * 1000;
+}
+
 export function buildCustomerBillPrintPayload(order = {}, printerOptions = {}) {
   return buildPrintJobPayload(order, printerOptions);
 }
@@ -107,8 +123,7 @@ async function findExistingCustomerBillPrintJob(client, row = {}) {
       .eq(key.column, key.value)
       .in("status", [
         PRINT_JOB_STATUS.pending,
-        PRINT_JOB_STATUS.printing,
-        PRINT_JOB_STATUS.printed
+        PRINT_JOB_STATUS.printing
       ])
       .order("created_at", { ascending: false })
       .limit(1);
@@ -157,7 +172,7 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
     return {
       ok: true,
       job: existingJob,
-      message: "Bill đã có lệnh in, không tạo trùng."
+      message: "Bill đang có lệnh in, không tạo trùng."
     };
   }
 
@@ -208,16 +223,19 @@ export async function readPendingPrintJobs(options = {}) {
   const client = await getClient();
   if (!client) return [];
 
+  const branchUuid = toText(options.branchUuid);
+  await markExpiredPendingPrintJobs({ branchUuid, printerKey: options.printerKey });
+
   let query = client
     .from("print_jobs")
     .select(PRINT_JOB_COLUMNS)
     .eq("status", PRINT_JOB_STATUS.pending)
     .eq("job_type", "customer_bill")
     .eq("printer_key", toText(options.printerKey || DEFAULT_PRINTER_KEY))
+    .gte("created_at", getAutoPrintCutoffIso())
     .order("created_at", { ascending: true })
     .limit(20);
 
-  const branchUuid = toText(options.branchUuid);
   if (branchUuid) query = query.eq("branch_uuid", branchUuid);
 
   const { data, error } = await query;
@@ -233,6 +251,11 @@ export async function claimPrintJob(job = {}, options = {}) {
   const client = await getClient();
   if (!client || !job?.id) return null;
 
+  if (!isPrintJobFresh(job)) {
+    await markPrintJobAutoExpired(job);
+    return null;
+  }
+
   const now = new Date().toISOString();
   const { data, error } = await client
     .from("print_jobs")
@@ -244,6 +267,7 @@ export async function claimPrintJob(job = {}, options = {}) {
     })
     .eq("id", job.id)
     .eq("status", PRINT_JOB_STATUS.pending)
+    .gte("created_at", getAutoPrintCutoffIso())
     .select(PRINT_JOB_COLUMNS)
     .maybeSingle();
 
@@ -294,6 +318,50 @@ export async function markPrintJobFailed(job = {}, message = "") {
   if (error) console.warn("[printJobService] mark failed failed", error);
 }
 
+export async function markPrintJobAutoExpired(job = {}) {
+  const client = await getClient();
+  if (!client || !job?.id) return;
+
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from("print_jobs")
+    .update({
+      status: PRINT_JOB_STATUS.failed,
+      failed_at: now,
+      error_message: AUTO_PRINT_EXPIRED_MESSAGE,
+      updated_at: now
+    })
+    .eq("id", job.id)
+    .eq("status", PRINT_JOB_STATUS.pending);
+
+  if (error) console.warn("[printJobService] mark auto-expired failed", error);
+}
+
+export async function markExpiredPendingPrintJobs(options = {}) {
+  const client = await getClient();
+  if (!client) return;
+
+  const now = new Date().toISOString();
+  let query = client
+    .from("print_jobs")
+    .update({
+      status: PRINT_JOB_STATUS.failed,
+      failed_at: now,
+      error_message: AUTO_PRINT_EXPIRED_MESSAGE,
+      updated_at: now
+    })
+    .eq("status", PRINT_JOB_STATUS.pending)
+    .eq("job_type", "customer_bill")
+    .eq("printer_key", toText(options.printerKey || DEFAULT_PRINTER_KEY))
+    .lt("created_at", getAutoPrintCutoffIso());
+
+  const branchUuid = toText(options.branchUuid);
+  if (branchUuid) query = query.eq("branch_uuid", branchUuid);
+
+  const { error } = await query;
+  if (error) console.warn("[printJobService] mark expired pending jobs failed", error);
+}
+
 export async function subscribePrintJobs(options = {}) {
   const client = await getClient();
   if (!client || typeof options.onPendingJob !== "function") return () => {};
@@ -311,6 +379,10 @@ export async function subscribePrintJobs(options = {}) {
         if (toText(job.job_type || "customer_bill") !== "customer_bill") return;
         if (printerKey && toText(job.printer_key || DEFAULT_PRINTER_KEY) !== printerKey) return;
         if (branchUuid && toText(job.branch_uuid) !== branchUuid) return;
+        if (!isPrintJobFresh(job)) {
+          markPrintJobAutoExpired(job);
+          return;
+        }
         options.onPendingJob(job);
       }
     )

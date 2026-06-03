@@ -120,6 +120,8 @@ public class MainActivity extends Activity {
     private static final int REALTIME_LOG_THROTTLE_MS = 120000;
     private static final int PRINT_POLL_INTERVAL_MS = 30000;
     private static final int MAX_JOBS_PER_POLL = 3;
+    private static final long AUTO_PRINT_WINDOW_MS = TimeUnit.MINUTES.toMillis(5);
+    private static final String AUTO_PRINT_EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final OkHttpClient realtimeClient = new OkHttpClient.Builder()
@@ -829,12 +831,15 @@ public class MainActivity extends Activity {
         }
 
         status("Đang kiểm tra lệnh in...");
+        expireOldPendingJobs(branchUuid);
+        String cutoffIso = autoPrintCutoffIso();
         String url = SUPABASE_URL + "/rest/v1/print_jobs"
                 + "?select=" + PRINT_JOB_SELECT
                 + "&status=eq.pending"
                 + "&job_type=eq." + enc(JOB_TYPE)
                 + "&printer_key=eq." + enc(PRINTER_KEY)
                 + "&branch_uuid=eq." + enc(branchUuid)
+                + "&created_at=gte." + enc(cutoffIso)
                 + "&order=created_at.asc"
                 + "&limit=" + MAX_JOBS_PER_POLL;
 
@@ -868,6 +873,7 @@ public class MainActivity extends Activity {
                 + "&job_type=eq." + enc(JOB_TYPE)
                 + "&printer_key=eq." + enc(PRINTER_KEY)
                 + "&status=eq.pending"
+                + "&created_at=gte." + enc(autoPrintCutoffIso())
                 + "&select=" + PRINT_JOB_SELECT;
         JSONArray result = new JSONArray(httpRequest("PATCH", url, body.toString(), true));
         if (result.length() == 0) return null;
@@ -922,6 +928,26 @@ public class MainActivity extends Activity {
             body.put("updated_at", nowIso());
             httpRequest("PATCH", SUPABASE_URL + "/rest/v1/print_jobs?id=eq." + enc(jobId), body.toString(), false);
         } catch (Exception ignored) {
+        }
+    }
+
+    private void expireOldPendingJobs(String branchUuid) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("status", "failed");
+            body.put("failed_at", nowIso());
+            body.put("error_message", AUTO_PRINT_EXPIRED_MESSAGE);
+            body.put("updated_at", nowIso());
+
+            String url = SUPABASE_URL + "/rest/v1/print_jobs"
+                    + "?status=eq.pending"
+                    + "&job_type=eq." + enc(JOB_TYPE)
+                    + "&printer_key=eq." + enc(PRINTER_KEY)
+                    + "&branch_uuid=eq." + enc(branchUuid)
+                    + "&created_at=lt." + enc(autoPrintCutoffIso());
+            httpRequest("PATCH", url, body.toString(), false);
+        } catch (Exception error) {
+            log("Dọn lệnh in cũ lỗi: " + shortError(error));
         }
     }
 
@@ -1703,6 +1729,11 @@ public class MainActivity extends Activity {
 
     private String nowIso() {
         return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US).format(new Date());
+    }
+
+    private String autoPrintCutoffIso() {
+        return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US)
+                .format(new Date(System.currentTimeMillis() - AUTO_PRINT_WINDOW_MS));
     }
 
     private String enc(String value) throws Exception {

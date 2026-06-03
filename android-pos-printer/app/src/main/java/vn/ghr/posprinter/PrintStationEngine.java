@@ -88,6 +88,8 @@ public class PrintStationEngine {
     private static final int REALTIME_RECONNECT_MS = 8000;
     private static final int PRINT_POLL_INTERVAL_MS = 30000;
     private static final int MAX_JOBS_PER_POLL = 3;
+    private static final long AUTO_PRINT_WINDOW_MS = TimeUnit.MINUTES.toMillis(5);
+    private static final String AUTO_PRINT_EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
     private static final int RECEIPT_WIDTH_DOTS_80MM = 576;
     private static final int BIG_TEXT_SIZE = 84;
     private static final int BIG_TEXT_MIN_SIZE = 42;
@@ -197,12 +199,15 @@ public class PrintStationEngine {
         String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
         if (branchUuid.isEmpty()) return;
 
+        expireOldPendingJobs(branchUuid);
+        String cutoffIso = autoPrintCutoffIso();
         String url = SUPABASE_URL + "/rest/v1/print_jobs"
                 + "?select=" + PRINT_JOB_SELECT
                 + "&status=eq.pending"
                 + "&job_type=eq." + enc(JOB_TYPE)
                 + "&printer_key=eq." + enc(PRINTER_KEY)
                 + "&branch_uuid=eq." + enc(branchUuid)
+                + "&created_at=gte." + enc(cutoffIso)
                 + "&order=created_at.asc"
                 + "&limit=" + MAX_JOBS_PER_POLL;
 
@@ -229,6 +234,7 @@ public class PrintStationEngine {
                 + "&job_type=eq." + enc(JOB_TYPE)
                 + "&printer_key=eq." + enc(PRINTER_KEY)
                 + "&status=eq.pending"
+                + "&created_at=gte." + enc(autoPrintCutoffIso())
                 + "&select=" + PRINT_JOB_SELECT;
         JSONArray result = new JSONArray(httpRequest("PATCH", url, body.toString(), true));
         if (result.length() == 0) return null;
@@ -281,6 +287,26 @@ public class PrintStationEngine {
             body.put("updated_at", nowIso());
             httpRequest("PATCH", SUPABASE_URL + "/rest/v1/print_jobs?id=eq." + enc(jobId), body.toString(), false);
         } catch (Exception ignored) {
+        }
+    }
+
+    private void expireOldPendingJobs(String branchUuid) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("status", "failed");
+            body.put("failed_at", nowIso());
+            body.put("error_message", AUTO_PRINT_EXPIRED_MESSAGE);
+            body.put("updated_at", nowIso());
+
+            String url = SUPABASE_URL + "/rest/v1/print_jobs"
+                    + "?status=eq.pending"
+                    + "&job_type=eq." + enc(JOB_TYPE)
+                    + "&printer_key=eq." + enc(PRINTER_KEY)
+                    + "&branch_uuid=eq." + enc(branchUuid)
+                    + "&created_at=lt." + enc(autoPrintCutoffIso());
+            httpRequest("PATCH", url, body.toString(), false);
+        } catch (Exception error) {
+            log("Expire old print jobs failed: " + shortError(error));
         }
     }
 
@@ -815,6 +841,11 @@ public class PrintStationEngine {
 
     private String nowIso() {
         return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US).format(new Date());
+    }
+
+    private String autoPrintCutoffIso() {
+        return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.US)
+                .format(new Date(System.currentTimeMillis() - AUTO_PRINT_WINDOW_MS));
     }
 
     private String enc(String value) throws Exception {
