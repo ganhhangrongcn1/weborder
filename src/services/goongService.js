@@ -51,12 +51,13 @@ function normalizeGoongVehicle(value) {
   return "bike";
 }
 
-export async function goongAutocomplete(keyword) {
+export async function goongAutocomplete(keyword, origin = BRANCH_LOCATION) {
   try {
     if (!hasGoongApiKey() || !keyword || keyword.trim().length < 3) return [];
+    const searchOrigin = origin?.lat && origin?.lng ? origin : BRANCH_LOCATION;
     const response = await fetch(buildEndpointUrl(getEndpoint("autocompleteEndpoint", "/Place/AutoComplete"), {
       input: keyword,
-      location: `${BRANCH_LOCATION.lat},${BRANCH_LOCATION.lng}`
+      location: `${searchOrigin.lat},${searchOrigin.lng}`
     }));
     if (!response.ok) {
       console.warn("Goong autocomplete failed", response.status, await response.text());

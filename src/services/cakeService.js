@@ -1,5 +1,7 @@
 ﻿import { adminConfigRepository } from "./repositories/adminConfigRepository.js";
+import { isSupabaseEnabled } from "./repositories/dataSource.js";
 import { getSupabaseClient } from "./supabase/supabaseClient.js";
+import { getSupabaseAdminAuthClient } from "./supabase/supabaseRuntimeClient.js";
 
 export const CAKE_PRODUCTS_CONFIG_KEY = "ghr_cake_products";
 export const CAKE_SETTINGS_CONFIG_KEY = "ghr_cake_settings";
@@ -15,9 +17,25 @@ export const DEFAULT_CAKE_SHIPPING_CONFIG = {
   sourceBranchId: ""
 };
 
+export const CAKE_ADDON_MODES = {
+  paid: "paid",
+  includedSet: "included_set",
+  chibiOnly: "chibi_only",
+  none: "none"
+};
+
+export const DEFAULT_CAKE_FULFILLMENT_CONFIG = {
+  pickupEnabled: true,
+  pickupBranchIds: [],
+  deliveryEnabled: true,
+  deliverySourceBranchId: "",
+  minPickupLeadMinutes: 120
+};
+
 export const DEFAULT_CAKE_SETTINGS = {
   zaloPhone: "0788422424",
   shippingConfig: DEFAULT_CAKE_SHIPPING_CONFIG,
+  cakeFulfillment: DEFAULT_CAKE_FULFILLMENT_CONFIG,
   orderNotice: "Đặt trước tối thiểu 2 - 4 tiếng để shop chuẩn bị bánh đẹp nhất.",
   pickupAddress: "Gánh Hàng Rong",
   featuredProductIds: [
@@ -200,6 +218,7 @@ export const DEFAULT_CAKE_PRODUCTS = [
     description: "Mẫu trái tim 2 tầng lớn, kèm phụ kiện trang trí tiệc.",
     ingredients: ["Bánh tráng cuốn bơ", "Bánh tráng phơi sương muối tắc", "Tóp mỡ rim mắm tỏi", "Trứng cút", "Kèm sốt sate bơ, me bơ"],
     accessories: ["Dụng cụ ăn uống", "Nến Led", "Sticker tên theo yêu cầu", "Que cắm Happy Birthday", "Set phụ kiện vương miện, trái tim, bướm, bông cúc"],
+    addonMode: CAKE_ADDON_MODES.includedSet,
     useSharedAddons: false,
     active: true
   },
@@ -225,8 +244,18 @@ function normalizeStringList(value) {
     .filter(Boolean);
 }
 
+function normalizeCakeAddonMode(product = {}) {
+  const mode = String(product.addonMode || "").trim();
+  if (Object.values(CAKE_ADDON_MODES).includes(mode)) return mode;
+  if (product.useSharedAddons === false) {
+    return product.id === "set-trai-tim-2-tang" ? CAKE_ADDON_MODES.includedSet : CAKE_ADDON_MODES.none;
+  }
+  return CAKE_ADDON_MODES.paid;
+}
+
 export function normalizeCakeProduct(product = {}) {
   const id = String(product.id || `cake-${Date.now()}`).trim();
+  const addonMode = normalizeCakeAddonMode({ ...product, id });
   return {
     id,
     name: String(product.name || "Mẫu bánh mới").trim(),
@@ -241,7 +270,8 @@ export function normalizeCakeProduct(product = {}) {
       name: String(item?.name || "").trim(),
       price: Number(item?.price || 0)
     })).filter((item) => item.name) : [],
-    useSharedAddons: product.useSharedAddons !== false,
+    addonMode,
+    useSharedAddons: addonMode !== CAKE_ADDON_MODES.none,
     active: product.active !== false
   };
 }
@@ -250,6 +280,10 @@ export function normalizeCakeSettings(settings = {}) {
   const shippingConfig = {
     ...DEFAULT_CAKE_SHIPPING_CONFIG,
     ...(settings.shippingConfig || {})
+  };
+  const cakeFulfillmentSource = {
+    ...DEFAULT_CAKE_FULFILLMENT_CONFIG,
+    ...(settings.cakeFulfillment || {})
   };
   const sourceAddons = settings.addonCatalog || {};
   const defaultAddons = DEFAULT_CAKE_SETTINGS.addonCatalog;
@@ -296,6 +330,15 @@ export function normalizeCakeSettings(settings = {}) {
       customerNote: String(shippingConfig.customerNote || "").trim(),
       sourceBranchId: String(shippingConfig.sourceBranchId || "").trim()
     },
+    cakeFulfillment: {
+      pickupEnabled: cakeFulfillmentSource.pickupEnabled !== false,
+      pickupBranchIds: Array.isArray(cakeFulfillmentSource.pickupBranchIds)
+        ? cakeFulfillmentSource.pickupBranchIds.map((item) => String(item || "").trim()).filter(Boolean)
+        : [],
+      deliveryEnabled: cakeFulfillmentSource.deliveryEnabled !== false,
+      deliverySourceBranchId: String(cakeFulfillmentSource.deliverySourceBranchId || shippingConfig.sourceBranchId || "").trim(),
+      minPickupLeadMinutes: Math.max(0, Number(cakeFulfillmentSource.minPickupLeadMinutes || DEFAULT_CAKE_FULFILLMENT_CONFIG.minPickupLeadMinutes))
+    },
     addonCatalog: {
       chibi: {
         enabled: Boolean(chibi.enabled ?? true),
@@ -323,7 +366,40 @@ export function loadCakeProducts() {
   return (Array.isArray(saved) && saved.length ? saved : DEFAULT_CAKE_PRODUCTS).map(normalizeCakeProduct);
 }
 
+async function loadCakeConfigFromSupabase(key) {
+  if (!isSupabaseEnabled()) return undefined;
+  const client = getSupabaseClient();
+  if (!client) return undefined;
+
+  const { data, error } = await client
+    .from("app_configs")
+    .select("value")
+    .eq("id", key)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Không đọc được cấu hình bánh từ Supabase (${key}): ${error.message}`);
+  }
+
+  if (!data) {
+    throw new Error(`Thiếu cấu hình bánh trên Supabase: ${key}.`);
+  }
+
+  return data.value;
+}
+
 export async function loadCakeProductsAsync() {
+  const supabaseValue = await loadCakeConfigFromSupabase(CAKE_PRODUCTS_CONFIG_KEY);
+  if (supabaseValue !== undefined) {
+    if (!Array.isArray(supabaseValue)) {
+      throw new Error("Danh sách bánh trên Supabase không đúng định dạng.");
+    }
+    if (!supabaseValue.length) {
+      throw new Error("Danh sách bánh trên Supabase đang rỗng.");
+    }
+    return supabaseValue.map(normalizeCakeProduct);
+  }
+
   const saved = await adminConfigRepository.getAsync(CAKE_PRODUCTS_CONFIG_KEY, DEFAULT_CAKE_PRODUCTS);
   return (Array.isArray(saved) && saved.length ? saved : DEFAULT_CAKE_PRODUCTS).map(normalizeCakeProduct);
 }
@@ -340,6 +416,14 @@ export function loadCakeSettings() {
 }
 
 export async function loadCakeSettingsAsync() {
+  const supabaseValue = await loadCakeConfigFromSupabase(CAKE_SETTINGS_CONFIG_KEY);
+  if (supabaseValue !== undefined) {
+    if (!supabaseValue || typeof supabaseValue !== "object" || Array.isArray(supabaseValue)) {
+      throw new Error("Cấu hình bánh trên Supabase không đúng định dạng.");
+    }
+    return normalizeCakeSettings(supabaseValue);
+  }
+
   const saved = await adminConfigRepository.getAsync(CAKE_SETTINGS_CONFIG_KEY, DEFAULT_CAKE_SETTINGS);
   return normalizeCakeSettings(saved);
 }
@@ -379,16 +463,14 @@ export async function createCakeOrder(order) {
 
   const { data, error } = await client
     .from("cake_orders")
-    .insert(payload)
-    .select("id,order_code")
-    .single();
+    .insert(payload);
 
   if (error) {
     console.warn("[cakeService] create cake order failed", error);
     return { ok: false, orderCode, error: error.message };
   }
 
-  return { ok: true, orderCode: data?.order_code || orderCode, id: data?.id || "" };
+  return { ok: true, orderCode, id: data?.id || "" };
 }
 
 function mapCakeOrderRow(row = {}) {
@@ -417,7 +499,7 @@ function mapCakeOrderRow(row = {}) {
 }
 
 export async function listCakeOrders({ limit = 80 } = {}) {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdminAuthClient() || getSupabaseClient();
   if (!client) return { ok: false, orders: [], error: "missing_supabase_client" };
 
   const { data, error } = await client
@@ -435,7 +517,7 @@ export async function listCakeOrders({ limit = 80 } = {}) {
 }
 
 export async function updateCakeOrderStatus(orderId, status) {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdminAuthClient() || getSupabaseClient();
   if (!client) return { ok: false, error: "missing_supabase_client" };
 
   const { data, error } = await client
@@ -456,39 +538,79 @@ export async function updateCakeOrderStatus(orderId, status) {
   return { ok: true, order: mapCakeOrderRow(data), error: "" };
 }
 
+function formatCakePickupDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(date);
+}
+
 export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, orderCode, selectedAddOns = {}, addOnTotal = 0, finalTotal = 0 }) {
   const fulfillmentLabel = form.fulfillmentType === "delivery" ? "Giao hàng" : "Khách ghé lấy";
+  const cakeTotal = Number(finalTotal || Number(product?.price || 0));
+  const hasConfirmedShippingFee = form.fulfillmentType === "delivery" && shippingFee !== null && shippingFee !== undefined;
+  const confirmedShippingFee = hasConfirmedShippingFee ? Number(shippingFee || 0) : 0;
   const addOnLines = [];
   if (selectedAddOns?.chibi?.selected) {
     addOnLines.push(`- ${selectedAddOns.chibi.name} (+${Number(selectedAddOns.chibi.price || 0).toLocaleString("vi-VN")}đ)`);
   }
   if (selectedAddOns?.decoration?.selected) {
     const optionLabel = selectedAddOns?.decoration?.optionName ? ` (${selectedAddOns.decoration.optionName})` : "";
-    addOnLines.push(`- ${selectedAddOns.decoration.name}${optionLabel} (+${Number(selectedAddOns.decoration.price || 0).toLocaleString("vi-VN")}đ)`);
+    const decorationPrice = Number(selectedAddOns.decoration.price || 0);
+    const decorationPriceText = decorationPrice > 0 ? `+${decorationPrice.toLocaleString("vi-VN")}đ` : "Đã bao gồm";
+    addOnLines.push(`- ${selectedAddOns.decoration.name}${optionLabel} (${decorationPriceText})`);
   }
+  const priceLines = [
+    "💰 Chi phí tạm tính",
+    `- Bánh + phụ kiện: ${cakeTotal.toLocaleString("vi-VN")}đ`,
+    form.fulfillmentType === "delivery"
+      ? `- Phí giao bánh: ${hasConfirmedShippingFee ? `${confirmedShippingFee.toLocaleString("vi-VN")}đ` : "Shop xác nhận sau"}`
+      : "",
+    hasConfirmedShippingFee ? `- Tổng tạm tính: ${(cakeTotal + confirmedShippingFee).toLocaleString("vi-VN")}đ` : ""
+  ];
+  const receivingLines = [
+    "🚚 Hình thức nhận",
+    `- ${fulfillmentLabel}`,
+    form.fulfillmentType === "pickup" ? `- Chi nhánh: ${[form.pickupBranchName, form.pickupBranchAddress].filter(Boolean).join(" - ")}` : "",
+    form.fulfillmentType === "delivery" ? `- Địa chỉ giao: ${addressInfo?.addressText || form.deliveryAddress || ""}` : "",
+    form.fulfillmentType === "delivery" && addressInfo?.distanceKm ? `- Khoảng cách: ${Number(addressInfo.distanceKm).toFixed(1)}km` : ""
+  ];
+  const noteLines = [
+    "📝 Ghi chú cho shop",
+    selectedAddOns?.chibi?.selected ? "- Vui lòng liên hệ khách để xin ảnh làm chibi trước khi in." : "",
+    form.addOnNote ? `- Ghi chú phụ kiện: ${form.addOnNote}` : "",
+    form.note ? `- Ghi chú thêm: ${form.note}` : ""
+  ];
   const lines = [
-    "Em gửi thông tin đặt bánh sinh nhật bánh tráng:",
-    `Mã đơn: ${orderCode || "Chưa có"}`,
-    `Mẫu bánh: ${product?.name || ""}`,
-    `Khẩu phần: ${product?.serving || ""}`,
-    `Giá bánh: ${Number(product?.price || 0).toLocaleString("vi-VN")}đ`,
-    addOnLines.length ? "Phụ kiện theo yêu cầu:" : "",
-    ...addOnLines,
-    addOnLines.length ? `Phụ phí thêm: ${Number(addOnTotal || 0).toLocaleString("vi-VN")}đ` : "",
-    `Tạm tính đơn bánh: ${Number(finalTotal || Number(product?.price || 0)).toLocaleString("vi-VN")}đ`,
+    "🎂 ĐƠN BÁNH SINH NHẬT BÁNH TRÁNG",
     "",
-    `Tên khách: ${form.customerName || ""}`,
-    `SĐT: ${form.customerPhone || ""}`,
-    `Ngày giờ lấy: ${form.pickupTime || ""}`,
-    `Tên muốn ghi trên bánh: ${form.cakeMessage || ""}`,
-    `Hình thức nhận: ${fulfillmentLabel}`,
-    form.fulfillmentType === "pickup" ? `Chi nhánh ghé lấy: ${[form.pickupBranchName, form.pickupBranchAddress].filter(Boolean).join(" - ")}` : "",
-    form.fulfillmentType === "delivery" ? `Địa chỉ giao: ${addressInfo?.addressText || form.deliveryAddress || ""}` : "",
-    form.fulfillmentType === "delivery" && addressInfo?.distanceKm ? `Khoảng cách: ${Number(addressInfo.distanceKm).toFixed(1)}km` : "",
-    form.fulfillmentType === "delivery" ? `Phí ship bánh: ${shippingFee === null || shippingFee === undefined ? "Shop xác nhận sau" : `${Number(shippingFee).toLocaleString("vi-VN")}đ`}` : "",
-    selectedAddOns?.chibi?.selected ? "Lưu ý: Nhờ shop liên hệ xin ảnh khách để làm chibi trước khi in." : "",
-    form.addOnNote ? `Ghi chú phụ kiện: ${form.addOnNote}` : "",
-    `Ghi chú thêm: ${form.note || ""}`
+    `🧾 Mã đơn: ${orderCode || "Chưa có"}`,
+    `🍰 Mẫu bánh: ${product?.name || ""}`,
+    product?.serving ? `👥 Khẩu phần: ${product.serving}` : "",
+    "",
+    ...priceLines,
+    "",
+    addOnLines.length ? "🎁 Phụ kiện theo yêu cầu" : "",
+    ...addOnLines,
+    "",
+    "👤 Thông tin khách",
+    `- Tên khách: ${form.customerName || ""}`,
+    `- SĐT: ${form.customerPhone || ""}`,
+    "",
+    "⏰ Thời gian nhận bánh",
+    `- ${formatCakePickupDateTime(form.pickupTime)}`,
+    form.cakeMessage ? `- Chữ trên bánh: ${form.cakeMessage}` : "",
+    "",
+    ...receivingLines,
+    "",
+    ...noteLines
   ];
   return lines.filter((line) => String(line || "").trim()).join("\n");
 }

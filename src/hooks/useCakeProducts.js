@@ -1,18 +1,26 @@
 import { useEffect, useState } from "react";
 import {
+  DEFAULT_CAKE_SETTINGS,
   loadCakeProducts,
   loadCakeProductsAsync,
   loadCakeSettings,
-  loadCakeSettingsAsync
+  loadCakeSettingsAsync,
+  normalizeCakeSettings
 } from "../services/cakeService.js";
+import { isSupabaseEnabled } from "../services/repositories/dataSource.js";
 
 export default function useCakeProducts() {
-  const [products, setProducts] = useState(() => loadCakeProducts());
-  const [settings, setSettings] = useState(() => loadCakeSettings());
+  const useSupabaseFirst = isSupabaseEnabled();
+  const [products, setProducts] = useState(() => (useSupabaseFirst ? [] : loadCakeProducts()));
+  const [settings, setSettings] = useState(() => (useSupabaseFirst ? normalizeCakeSettings(DEFAULT_CAKE_SETTINGS) : loadCakeSettings()));
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setError("");
+
     Promise.all([loadCakeProductsAsync(), loadCakeSettingsAsync()])
       .then(([nextProducts, nextSettings]) => {
         if (!alive) return;
@@ -21,6 +29,12 @@ export default function useCakeProducts() {
       })
       .catch((error) => {
         console.warn("[useCakeProducts] load failed", error);
+        if (!alive) return;
+        setError(error?.message || "Không tải được dữ liệu bánh từ Supabase.");
+        if (!useSupabaseFirst) {
+          setProducts(loadCakeProducts());
+          setSettings(loadCakeSettings());
+        }
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -35,6 +49,8 @@ export default function useCakeProducts() {
     products: products.filter((product) => product.active !== false),
     allProducts: products,
     settings,
-    loading
+    loading,
+    error,
+    source: useSupabaseFirst ? "supabase" : "local"
   };
 }

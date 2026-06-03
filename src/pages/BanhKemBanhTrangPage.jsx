@@ -1,10 +1,9 @@
 ﻿import { useMemo, useState } from "react";
 import Icon from "../components/Icon.jsx";
 import GoongAddressPicker from "../components/GoongAddressPicker.jsx";
-import { resolvePickupBranches } from "../features/checkout/checkoutDomain.js";
+import { resolveDeliveryContext, resolvePickupBranches } from "../features/checkout/checkoutDomain.js";
 import useCakeProducts from "../hooks/useCakeProducts.js";
-import { buildCakeZaloMessage, createCakeOrder } from "../services/cakeService.js";
-import { BRANCH_LOCATION } from "../services/goongService.js";
+import { CAKE_ADDON_MODES, buildCakeZaloMessage, createCakeOrder } from "../services/cakeService.js";
 import { formatMoney } from "../utils/format.js";
 import "../styles/customer-checkout.css";
 import "../styles/cake.css";
@@ -23,11 +22,11 @@ const EMPTY_FORM = {
   decorationSelected: false,
   decorationOptionId: ""
 };
-const EMPTY_PREVIEW_SELECTION = {
-  chibiSelected: false,
-  decorationOptionId: "",
-  addOnNote: ""
-};
+
+const PICKUP_TIME_WARNING =
+  "Vì là món quà để tặng người thân yêu, quán cần ít nhất 120 phút để chuẩn bị bánh đẹp và chỉn chu.";
+const CAKE_PICKUP_OPEN_MINUTES = 10 * 60;
+const CAKE_PICKUP_CLOSE_MINUTES = 22 * 60;
 
 function buildZaloLink(phone) {
   return `https://zalo.me/${String(phone || "").replace(/\D/g, "")}`;
@@ -41,8 +40,88 @@ async function copyText(text) {
   return false;
 }
 
+function formatDateTimeLocal(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate())
+  ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function getMinPickupDateTimeValue(minutes = 120) {
+  const minDate = roundUpDateToStep(new Date(Date.now() + Math.max(0, Number(minutes || 0)) * 60000));
+  const minMinutes = minDate.getHours() * 60 + minDate.getMinutes();
+
+  if (minMinutes < CAKE_PICKUP_OPEN_MINUTES) {
+    minDate.setHours(10, 0, 0, 0);
+  }
+
+  if (minMinutes > CAKE_PICKUP_CLOSE_MINUTES) {
+    minDate.setDate(minDate.getDate() + 1);
+    minDate.setHours(10, 0, 0, 0);
+  }
+
+  return formatDateTimeLocal(minDate);
+}
+
+function isPickupTimeTooSoon(value, minutes = 120) {
+  if (!value) return false;
+  const selectedTime = new Date(value).getTime();
+  if (Number.isNaN(selectedTime)) return false;
+  return selectedTime < Date.now() + Math.max(0, Number(minutes || 0)) * 60000;
+}
+
+function roundUpDateToStep(date, stepMinutes = 15) {
+  const next = new Date(date);
+  const stepMs = Math.max(1, Number(stepMinutes || 15)) * 60000;
+  const roundedTime = Math.ceil(next.getTime() / stepMs) * stepMs;
+  next.setTime(roundedTime);
+  next.setSeconds(0, 0);
+  return next;
+}
+
+function formatDateValue(value) {
+  if (!value) return "";
+  return String(value).slice(0, 10);
+}
+
+function formatTimeValue(value) {
+  if (!value) return "";
+  return String(value).slice(11, 16);
+}
+
+function combineDateAndTime(dateValue, timeValue) {
+  if (!dateValue || !timeValue) return "";
+  return `${dateValue}T${timeValue}`;
+}
+
+function buildPickupTimeOptions({ selectedDate, minDateTimeValue, stepMinutes = 15 }) {
+  const minDate = formatDateValue(minDateTimeValue);
+  const minTime = formatTimeValue(minDateTimeValue);
+  const options = [];
+  const step = Math.max(1, Number(stepMinutes || 15));
+
+  for (let totalMinutes = CAKE_PICKUP_OPEN_MINUTES; totalMinutes <= CAKE_PICKUP_CLOSE_MINUTES; totalMinutes += step) {
+    const hour = Math.floor(totalMinutes / 60);
+    const minute = totalMinutes % 60;
+    const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    if (selectedDate === minDate && value < minTime) continue;
+    options.push({
+      value,
+      label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+    });
+  }
+
+  return options;
+}
+
+function getCakeAddonMode(product) {
+  return product?.addonMode || (product?.useSharedAddons === false ? CAKE_ADDON_MODES.none : CAKE_ADDON_MODES.paid);
+}
+
 export default function BanhKemBanhTrangPage({ branches = [] }) {
-  const { products, settings, loading } = useCakeProducts();
+  const { products, settings, loading, error } = useCakeProducts();
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [orderingProduct, setOrderingProduct] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -50,7 +129,8 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [addonInfoPopup, setAddonInfoPopup] = useState("");
-  const [previewSelection, setPreviewSelection] = useState(EMPTY_PREVIEW_SELECTION);
+  const [pickupTimeWarningOpen, setPickupTimeWarningOpen] = useState(false);
+  const [successOrder, setSuccessOrder] = useState(null);
 
   const featuredProducts = useMemo(() => {
     const ids = Array.isArray(settings.featuredProductIds) ? settings.featuredProductIds : [];
@@ -63,15 +143,46 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   const decorationAddon = addonCatalog.decoration || {};
   const decorationOptions = Array.isArray(decorationAddon.options) ? decorationAddon.options : [];
   const decorationReferenceImages = Array.isArray(decorationAddon.referenceImages) ? decorationAddon.referenceImages : [];
-  const selectedProductUseSharedAddons = selectedProduct
-    ? selectedProduct.id !== "set-trai-tim-2-tang" && selectedProduct.useSharedAddons !== false
-    : true;
-  const orderingProductUseSharedAddons = orderingProduct
-    ? orderingProduct.id !== "set-trai-tim-2-tang" && orderingProduct.useSharedAddons !== false
-    : true;
+  const orderingAddonMode = getCakeAddonMode(orderingProduct);
+  const canSelectChibi = Boolean(chibiAddon.enabled) && [CAKE_ADDON_MODES.paid, CAKE_ADDON_MODES.includedSet, CAKE_ADDON_MODES.chibiOnly].includes(orderingAddonMode);
+  const canSelectDecoration = Boolean(decorationAddon.enabled) && [CAKE_ADDON_MODES.paid, CAKE_ADDON_MODES.includedSet].includes(orderingAddonMode);
+  const decorationIncluded = orderingAddonMode === CAKE_ADDON_MODES.includedSet;
 
-  const shippingConfig = settings.shippingConfig;
-  const pickupBranches = useMemo(() => resolvePickupBranches(branches), [branches]);
+  const cakeFulfillment = settings.cakeFulfillment || {};
+  const cakeDeliverySourceBranchId = String(cakeFulfillment.deliverySourceBranchId || settings.shippingConfig?.sourceBranchId || "").trim();
+  const minPickupLeadMinutes = Number(cakeFulfillment.minPickupLeadMinutes || 120);
+  const minPickupTimeValue = useMemo(() => getMinPickupDateTimeValue(minPickupLeadMinutes), [minPickupLeadMinutes]);
+  const selectedPickupDateValue = formatDateValue(form.pickupTime) || formatDateValue(minPickupTimeValue);
+  const selectedPickupTimeValue = formatTimeValue(form.pickupTime) || formatTimeValue(minPickupTimeValue);
+  const pickupTimeOptions = useMemo(
+    () => buildPickupTimeOptions({
+      selectedDate: selectedPickupDateValue,
+      minDateTimeValue: minPickupTimeValue,
+      stepMinutes: 15
+    }),
+    [minPickupTimeValue, selectedPickupDateValue]
+  );
+  const shippingConfig = useMemo(() => ({
+    ...(settings.shippingConfig || {}),
+    sourceBranchId: cakeDeliverySourceBranchId
+  }), [cakeDeliverySourceBranchId, settings.shippingConfig]);
+  const allPickupBranches = useMemo(() => resolvePickupBranches(branches), [branches]);
+  const pickupBranches = useMemo(() => {
+    if (cakeFulfillment.pickupEnabled === false) return [];
+    const allowedIds = Array.isArray(cakeFulfillment.pickupBranchIds) ? cakeFulfillment.pickupBranchIds : [];
+    if (!allowedIds.length) return allPickupBranches;
+    return allPickupBranches.filter((branch) => allowedIds.includes(branch.id));
+  }, [allPickupBranches, cakeFulfillment.pickupBranchIds, cakeFulfillment.pickupEnabled]);
+  const deliveryContext = useMemo(() => resolveDeliveryContext({
+    branches,
+    selectedDeliveryBranchId: cakeDeliverySourceBranchId,
+    shippingConfig,
+    allowDisabledSourceBranch: true
+  }), [branches, cakeDeliverySourceBranchId, shippingConfig]);
+  const deliveryOrigin = deliveryContext.deliveryOriginReady ? deliveryContext.deliveryOrigin : null;
+  const pickupEnabled = pickupBranches.length > 0;
+  const deliveryEnabled = cakeFulfillment.deliveryEnabled !== false;
+  const defaultFulfillmentType = pickupEnabled ? "pickup" : (deliveryEnabled ? "delivery" : "pickup");
   const selectedPickupBranch = useMemo(() => {
     if (form.pickupBranchId) {
       return pickupBranches.find((branch) => branch.id === form.pickupBranchId) || pickupBranches[0] || null;
@@ -80,12 +191,11 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   }, [form.pickupBranchId, pickupBranches]);
 
   const addOnTotal = useMemo(() => {
-    if (!orderingProductUseSharedAddons) return 0;
-    const chibiPrice = form.chibiSelected ? Number(chibiAddon.price || 0) : 0;
+    const chibiPrice = canSelectChibi && form.chibiSelected ? Number(chibiAddon.price || 0) : 0;
     const selectedDecorationOption = decorationOptions.find((item) => item.id === form.decorationOptionId);
-    const decorationPrice = form.decorationSelected ? Number(selectedDecorationOption?.price ?? decorationAddon.price ?? 0) : 0;
+    const decorationPrice = canSelectDecoration && !decorationIncluded && form.decorationSelected ? Number(selectedDecorationOption?.price ?? decorationAddon.price ?? 0) : 0;
     return chibiPrice + decorationPrice;
-  }, [orderingProductUseSharedAddons, chibiAddon.price, decorationAddon.price, decorationOptions, form.chibiSelected, form.decorationOptionId, form.decorationSelected]);
+  }, [canSelectChibi, canSelectDecoration, chibiAddon.price, decorationAddon.price, decorationIncluded, decorationOptions, form.chibiSelected, form.decorationOptionId, form.decorationSelected]);
 
   const finalCakePrice = Number(orderingProduct?.price || 0) + addOnTotal;
 
@@ -93,18 +203,40 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const updatePickupDate = (value) => {
+    const nextDate = value || formatDateValue(minPickupTimeValue);
+    const options = buildPickupTimeOptions({
+      selectedDate: nextDate,
+      minDateTimeValue: minPickupTimeValue,
+      stepMinutes: 15
+    });
+    const nextTime = options.some((item) => item.value === selectedPickupTimeValue)
+      ? selectedPickupTimeValue
+      : options[0]?.value || formatTimeValue(minPickupTimeValue);
+    updateForm("pickupTime", combineDateAndTime(nextDate, nextTime));
+  };
+
+  const updatePickupClock = (value) => {
+    updateForm("pickupTime", combineDateAndTime(selectedPickupDateValue, value || pickupTimeOptions[0]?.value || selectedPickupTimeValue));
+  };
+
   const openOrderForm = (product) => {
+    const productAddonMode = getCakeAddonMode(product);
+    const productCanSelectDecoration = Boolean(decorationAddon.enabled) && [CAKE_ADDON_MODES.paid, CAKE_ADDON_MODES.includedSet].includes(productAddonMode);
+    const productDecorationIncluded = productAddonMode === CAKE_ADDON_MODES.includedSet;
+    const initialDecorationOptionId = productCanSelectDecoration ? decorationOptions[0]?.id || "" : "";
     setOrderingProduct(product);
     setSelectedProduct(null);
     setForm((current) => ({
       ...EMPTY_FORM,
       pickupBranchId: current.pickupBranchId || pickupBranches[0]?.id || "",
-      chibiSelected: product.useSharedAddons !== false ? previewSelection.chibiSelected : false,
-      decorationSelected: product.useSharedAddons !== false ? Boolean(previewSelection.decorationOptionId) : false,
-      decorationOptionId: product.useSharedAddons !== false ? previewSelection.decorationOptionId : "",
-      addOnNote: previewSelection.addOnNote
+      pickupTime: minPickupTimeValue,
+      fulfillmentType: defaultFulfillmentType,
+      decorationSelected: productDecorationIncluded,
+      decorationOptionId: initialDecorationOptionId
     }));
     setMessage("");
+    setSuccessOrder(null);
   };
 
   const closeOrderForm = () => {
@@ -116,32 +248,31 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
   const openProductDetail = (product) => {
     setSelectedProduct(product);
-    setPreviewSelection({
-      chibiSelected: false,
-      decorationOptionId: "",
-      addOnNote: ""
-    });
   };
 
   const submitOrder = async (event) => {
     event.preventDefault();
     if (!orderingProduct || submitting) return;
+    if (isPickupTimeTooSoon(form.pickupTime, minPickupLeadMinutes)) {
+      setPickupTimeWarningOpen(true);
+      return;
+    }
     setSubmitting(true);
     setMessage("");
 
     const selectedDecorationOption = decorationOptions.find((item) => item.id === form.decorationOptionId);
     const selectedAddOns = {
       chibi: {
-        selected: orderingProductUseSharedAddons ? Boolean(form.chibiSelected) : false,
+        selected: canSelectChibi ? Boolean(form.chibiSelected) : false,
         name: chibiAddon.name || "Hình chibi cá nhân hóa",
         price: Number(chibiAddon.price || 0)
       },
       decoration: {
-        selected: orderingProductUseSharedAddons ? Boolean(form.decorationSelected) : false,
+        selected: canSelectDecoration ? Boolean(decorationIncluded || form.decorationSelected) : false,
         name: decorationAddon.name || "Phụ kiện trang trí theo yêu cầu",
         optionId: selectedDecorationOption?.id || "",
         optionName: selectedDecorationOption?.name || "",
-        price: Number(selectedDecorationOption?.price ?? decorationAddon.price ?? 0)
+        price: decorationIncluded ? 0 : Number(selectedDecorationOption?.price ?? decorationAddon.price ?? 0)
       }
     };
 
@@ -191,12 +322,20 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
     try {
       await copyText(zaloMessage);
-      setMessage(saved.ok ? "Đã lưu đơn và copy nội dung. Zalo sẽ mở ở tab mới." : "Đã copy nội dung Zalo. Supabase chưa lưu được, shop vẫn nhận thông tin qua Zalo.");
+      setMessage("");
     } catch (_error) {
-      setMessage("Không copy tự động được, bạn có thể copy nội dung ở ô bên dưới.");
+      setMessage("");
     }
 
     setSubmitting(false);
+    setSuccessOrder({
+      orderCode: saved.orderCode,
+      savedOk: saved.ok,
+      productName: orderingProduct.name
+    });
+    setOrderingProduct(null);
+    setForm(EMPTY_FORM);
+    setAddressInfo(null);
     window.open(buildZaloLink(settings.zaloPhone), "_blank", "noopener,noreferrer");
   };
 
@@ -236,22 +375,27 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           <p>{loading ? "Đang tải dữ liệu..." : `${products.length} mẫu đang bán`}</p>
         </div>
 
-        <div className="cake-grid">
-          {products.map((product) => (
-            <article key={product.id} className="cake-card">
-              <button type="button" className="cake-card__image" onClick={() => openProductDetail(product)}>
-                <img src={product.image} alt={product.name} />
-                <span className="cake-card__badge">{product.serving}</span>
-                <strong className="cake-card__price">{formatMoney(product.price)}</strong>
-              </button>
-              <div className="cake-card__body">
-                <h3>{product.name}</h3>
-                <p>{product.size}</p>
-                <button type="button" onClick={() => openProductDetail(product)}>Xem chi tiết</button>
-              </div>
-            </article>
-          ))}
-        </div>
+        {error ? <p className="cake-empty-state">{error}</p> : null}
+        {!loading && !error && !products.length ? <p className="cake-empty-state">Hiện chưa có mẫu bánh nào đang hiển thị.</p> : null}
+
+        {products.length ? (
+          <div className="cake-grid">
+            {products.map((product) => (
+              <article key={product.id} className="cake-card">
+                <button type="button" className="cake-card__image" onClick={() => openProductDetail(product)}>
+                  <img src={product.image} alt={product.name} />
+                  <span className="cake-card__badge">{product.serving}</span>
+                  <strong className="cake-card__price">{formatMoney(product.price)}</strong>
+                </button>
+                <div className="cake-card__body">
+                  <h3>{product.name}</h3>
+                  <p>{product.size}</p>
+                  <button type="button" onClick={() => openProductDetail(product)}>Xem chi tiết</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {selectedProduct && (
@@ -289,80 +433,6 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                 </ul>
               </div>
 
-              {selectedProductUseSharedAddons ? (
-              <div className="cake-optional-addon cake-native-addon">
-                <h4>Phụ kiện theo yêu cầu</h4>
-                <ul>
-                  {chibiAddon.enabled ? (
-                    <li>
-                      <span className="cake-addon-title"><Icon name="star" size={14} />{chibiAddon.name || "Hình chibi cá nhân hóa"}</span>
-                      <span className="cake-addon-actions">
-                        <strong>+{formatMoney(Number(chibiAddon.price || 0))}</strong>
-                        <button
-                          type="button"
-                          className={previewSelection.chibiSelected ? "is-active" : ""}
-                          onClick={() => setPreviewSelection((current) => ({ ...current, chibiSelected: !current.chibiSelected }))}
-                        >
-                          {previewSelection.chibiSelected ? "Đã chọn" : "+ Thêm"}
-                        </button>
-                        <button type="button" onClick={() => setAddonInfoPopup("chibi")}>Xem chi tiết</button>
-                      </span>
-                    </li>
-                  ) : null}
-                  {decorationAddon.enabled ? (
-                    <li>
-                      <span className="cake-addon-title"><Icon name="gift" size={14} />{decorationAddon.name || "Phụ kiện trang trí theo yêu cầu"}</span>
-                      <span className="cake-addon-actions">
-                        <strong>+{formatMoney(Number(decorationAddon.price || 0))}</strong>
-                        <button
-                          type="button"
-                          className={previewSelection.decorationOptionId ? "is-active" : ""}
-                          onClick={() =>
-                            setPreviewSelection((current) => ({
-                              ...current,
-                              decorationOptionId: current.decorationOptionId ? "" : (decorationOptions[0]?.id || "")
-                            }))
-                          }
-                        >
-                          {previewSelection.decorationOptionId ? "Đã chọn" : "+ Thêm"}
-                        </button>
-                        <button type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</button>
-                      </span>
-                    </li>
-                  ) : null}
-                </ul>
-                {previewSelection.decorationOptionId ? (
-                  <div className="cake-addon-option-grid">
-                    {decorationOptions.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={previewSelection.decorationOptionId === item.id ? "is-active" : ""}
-                        onClick={() => setPreviewSelection((current) => ({ ...current, decorationOptionId: item.id }))}
-                      >
-                        <img src={item.image} alt={item.name} />
-                        <strong>{item.name}</strong>
-                        <span>+{formatMoney(Number(item.price || 0))}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <label className="cake-addon-note-inline">
-                  <span>Ghi chú phụ kiện (nếu có)</span>
-                  <input
-                    value={previewSelection.addOnNote}
-                    onChange={(event) => setPreviewSelection((current) => ({ ...current, addOnNote: event.target.value }))}
-                    placeholder="VD: chọn mẫu 2, thêm nơ vàng..."
-                  />
-                </label>
-              </div>
-              ) : (
-                <div className="cake-optional-addon cake-native-addon">
-                  <h4>Phụ kiện theo yêu cầu</h4>
-                  <p>Mẫu này đã bao gồm set phụ kiện, không áp dụng chọn thêm.</p>
-                </div>
-              )}
-
               <button className="cake-primary-btn" type="button" onClick={() => openOrderForm(selectedProduct)}>Đặt mẫu này</button>
             </div>
           </div>
@@ -383,10 +453,10 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               </div>
             </div>
 
-            {orderingProductUseSharedAddons ? (
+            {canSelectChibi || canSelectDecoration ? (
             <div className="cake-addon-order-box">
               <h3>Phụ kiện theo yêu cầu</h3>
-              {chibiAddon.enabled ? (
+              {canSelectChibi ? (
                 <label className="cake-addon-check">
                   <input
                     type="checkbox"
@@ -398,25 +468,32 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                 </label>
               ) : null}
 
-              {decorationAddon.enabled ? (
+              {canSelectDecoration ? (
                 <>
-                  <label className="cake-addon-check">
-                    <input
-                      type="checkbox"
-                      checked={form.decorationSelected}
-                      onChange={(event) => {
-                        const checked = event.target.checked;
-                        updateForm("decorationSelected", checked);
-                        if (checked && !form.decorationOptionId && decorationOptions[0]) {
-                          updateForm("decorationOptionId", decorationOptions[0].id);
-                        }
-                      }}
-                    />
-                    <span>{decorationAddon.name} (+{formatMoney(Number(decorationAddon.price || 0))})</span>
-                    <button type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</button>
-                  </label>
+                  {decorationIncluded ? (
+                    <div className="cake-addon-check cake-addon-check--included">
+                      <span>{decorationAddon.name} (Đã bao gồm)</span>
+                      <button type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</button>
+                    </div>
+                  ) : (
+                    <label className="cake-addon-check">
+                      <input
+                        type="checkbox"
+                        checked={form.decorationSelected}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          updateForm("decorationSelected", checked);
+                          if (checked && !form.decorationOptionId && decorationOptions[0]) {
+                            updateForm("decorationOptionId", decorationOptions[0].id);
+                          }
+                        }}
+                      />
+                      <span>{decorationAddon.name} (+{formatMoney(Number(decorationAddon.price || 0))})</span>
+                      <button type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</button>
+                    </label>
+                  )}
 
-                  {form.decorationSelected ? (
+                  {(decorationIncluded || form.decorationSelected) ? (
                     <div className="cake-addon-option-grid">
                       {decorationOptions.map((item) => (
                         <button
@@ -427,7 +504,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                         >
                           <img src={item.image} alt={item.name} />
                           <strong>{item.name}</strong>
-                          <span>+{formatMoney(Number(item.price || 0))}</span>
+                          <span>{decorationIncluded ? "Đã bao gồm" : `+${formatMoney(Number(item.price || 0))}`}</span>
                         </button>
                       ))}
                     </div>
@@ -437,7 +514,8 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
               <label>
                 <span>Ghi chú phụ kiện theo yêu cầu (nếu có)</span>
-                <input
+                <textarea
+                  rows="2"
                   value={form.addOnNote}
                   onChange={(event) => updateForm("addOnNote", event.target.value)}
                   placeholder="VD: Chọn mẫu 2, đổi màu nơ vàng..."
@@ -455,10 +533,36 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                 <span>Số điện thoại</span>
                 <input value={form.customerPhone} onChange={(event) => updateForm("customerPhone", event.target.value)} required placeholder="09xxxxxxxx" />
               </label>
-              <label>
-                <span>Ngày giờ muốn lấy</span>
-                <input type="datetime-local" value={form.pickupTime} onChange={(event) => updateForm("pickupTime", event.target.value)} required />
-              </label>
+              <div className="cake-time-picker">
+                <div>
+                  <span>Ngày giờ muốn lấy</span>
+                  <small>
+                    Vì là món quà tặng người thân yêu, quán cần ít nhất 120 phút để chuẩn bị bánh đẹp và chỉn chu.
+                  </small>
+                </div>
+                <label>
+                  <span>Ngày lấy</span>
+                  <input
+                    type="date"
+                    min={formatDateValue(minPickupTimeValue)}
+                    value={selectedPickupDateValue}
+                    onChange={(event) => updatePickupDate(event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Giờ lấy</span>
+                  <select
+                    value={pickupTimeOptions.some((item) => item.value === selectedPickupTimeValue) ? selectedPickupTimeValue : pickupTimeOptions[0]?.value || ""}
+                    onChange={(event) => updatePickupClock(event.target.value)}
+                    required
+                  >
+                    {pickupTimeOptions.map((item) => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <label>
                 <span>Tên muốn ghi trên bánh</span>
                 <input value={form.cakeMessage} onChange={(event) => updateForm("cakeMessage", event.target.value)} placeholder="VD: Chúc mừng sinh nhật An" />
@@ -466,18 +570,25 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             </div>
 
             <div className="cake-segmented">
-              <button type="button" className={form.fulfillmentType === "pickup" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "pickup")}>Ghé lấy</button>
-              <button type="button" className={form.fulfillmentType === "delivery" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "delivery")}>Giao hàng</button>
+              {pickupEnabled ? (
+                <button type="button" className={form.fulfillmentType === "pickup" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "pickup")}>Ghé lấy</button>
+              ) : null}
+              {deliveryEnabled ? (
+                <button type="button" className={form.fulfillmentType === "delivery" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "delivery")}>Giao hàng</button>
+              ) : null}
             </div>
 
-            {form.fulfillmentType === "delivery" ? (
+            {form.fulfillmentType === "delivery" && deliveryEnabled ? (
               <GoongAddressPicker
                 value={addressInfo || { addressText: form.deliveryAddress }}
                 onChange={(value) => {
                   setAddressInfo(value);
                   updateForm("deliveryAddress", value.addressText || "");
                 }}
-                origin={BRANCH_LOCATION}
+                origin={deliveryOrigin}
+                originLabel={deliveryContext.deliverySourceBranch?.name || ""}
+                originAddress={deliveryContext.deliverySourceBranch?.address || ""}
+                requireOrigin
                 shippingConfig={shippingConfig}
               />
             ) : (
@@ -509,14 +620,61 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               <textarea rows="3" value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Ví dụ: ít cay, gọi trước khi giao..." />
             </label>
 
-            {message ? <p className="cake-form-message">{message}</p> : null}
-
             <button className="cake-primary-btn" type="submit" disabled={submitting}>
-              {submitting ? "Đang gửi..." : "Gửi qua Zalo chăm sóc khách hàng"}
+              {submitting ? "Đang gửi..." : "Gửi đơn qua Zalo"}
             </button>
+            <p className="cake-zalo-copy-note">
+              Nội dung đơn đã được copy sẵn. Bạn chỉ cần dán vào Zalo để gửi cho quán.
+            </p>
           </form>
         </div>
       )}
+
+      {successOrder ? (
+        <div className="cake-modal" role="dialog" aria-modal="true">
+          <div className="cake-modal__backdrop" onClick={() => setSuccessOrder(null)} />
+          <div className="cake-success-popup">
+            <button className="cake-modal__close" type="button" onClick={() => setSuccessOrder(null)}>×</button>
+            <div className="cake-success-popup__icon">✓</div>
+            <p className="cake-eyebrow">Đã gửi thông tin</p>
+            <h3>Quán đã nhận yêu cầu đặt bánh sinh nhật</h3>
+            <p>
+              Cảm ơn bạn đã chọn bánh sinh nhật bánh tráng của Gánh Hàng Rong.
+              Bộ phận CSKH của quán sẽ liên hệ lại để xác nhận mẫu bánh, giờ nhận và các ghi chú trang trí.
+            </p>
+            <p>
+              Bạn giúp quán giữ điện thoại bên mình nha. Nếu có hình chibi hoặc yêu cầu phụ kiện,
+              CSKH sẽ hướng dẫn gửi thêm thông tin qua Zalo.
+            </p>
+            <div className="cake-success-popup__code">
+              <span>Mã tham chiếu</span>
+              <strong>{successOrder.orderCode || "Đang tạo"}</strong>
+            </div>
+            {!successOrder.savedOk ? (
+              <p className="cake-success-popup__note">
+                Thông tin đã được gửi qua Zalo. Nếu cần, CSKH sẽ nhập lại đơn giúp bạn khi xác nhận.
+              </p>
+            ) : null}
+            <button className="cake-primary-btn" type="button" onClick={() => setSuccessOrder(null)}>
+              Tiếp tục xem mẫu bánh
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {pickupTimeWarningOpen ? (
+        <div className="cake-modal" role="dialog" aria-modal="true">
+          <div className="cake-modal__backdrop" onClick={() => setPickupTimeWarningOpen(false)} />
+          <div className="cake-addon-popup">
+            <button className="cake-modal__close" type="button" onClick={() => setPickupTimeWarningOpen(false)}>×</button>
+            <div className="cake-addon-popup__body">
+              <h3>Chọn lại giờ lấy bánh</h3>
+              <p>{PICKUP_TIME_WARNING}</p>
+              <button className="cake-primary-btn" type="button" onClick={() => setPickupTimeWarningOpen(false)}>Chọn lại giờ lấy</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {addonInfoPopup ? (
         <div className="cake-modal" role="dialog" aria-modal="true">

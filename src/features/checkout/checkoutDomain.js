@@ -4,6 +4,42 @@ import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { getDefaultAddress, estimateDistanceKm } from "./checkoutHelpers.js";
 import { calculateBaseShippingFeeByConfig } from "../../services/shippingService.js";
 
+function parseBranchLocation(branch) {
+  if (!branch) return null;
+  const lat = Number(branch.lat);
+  const lng = Number(branch.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+
+  const rawLocation = String(branch.location || branch.mapLocation || "").trim();
+  if (!rawLocation.includes(",")) return null;
+  const [locationLat, locationLng] = rawLocation.split(",").map(Number);
+  return Number.isFinite(locationLat) && Number.isFinite(locationLng)
+    ? { lat: locationLat, lng: locationLng }
+    : null;
+}
+
+function normalizeBranchMatchKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function branchMatchesId(branch, value) {
+  const target = normalizeBranchMatchKey(value);
+  if (!branch || !target) return false;
+  return [
+    branch.id,
+    branch.dbId,
+    branch.branch_code,
+    branch.branchCode,
+    branch.legacy_id,
+    branch.slug,
+    branch.name
+  ].some((item) => normalizeBranchMatchKey(item) === target);
+}
+
 export function getSavedAddressesForPhone(demoAddresses = [], currentPhone = "") {
   if (!currentPhone) return [];
   const phoneKey = getCustomerKey(currentPhone);
@@ -36,24 +72,27 @@ export function createInitialDeliveryInfo({
 export function resolveDeliveryContext({
   branches = [],
   selectedDeliveryBranchId,
-  shippingConfig
+  shippingConfig,
+  allowDisabledSourceBranch = false
 }) {
   const deliveryEligibleBranches = branches.filter((branch) => branch?.shipEnabled !== false);
+  const sourceBranches = allowDisabledSourceBranch ? branches.filter(Boolean) : deliveryEligibleBranches;
+  const configuredSourceBranchId = String(selectedDeliveryBranchId || shippingConfig.sourceBranchId || "").trim();
   const deliverySourceBranch =
-    deliveryEligibleBranches.find((branch) => branch.id === selectedDeliveryBranchId) ||
-    deliveryEligibleBranches.find((branch) => branch.id === shippingConfig.sourceBranchId) ||
-    deliveryEligibleBranches[0] ||
-    branches[0] ||
+    sourceBranches.find((branch) => branchMatchesId(branch, selectedDeliveryBranchId)) ||
+    sourceBranches.find((branch) => branchMatchesId(branch, shippingConfig.sourceBranchId)) ||
+    (configuredSourceBranchId ? null : deliveryEligibleBranches[0] || branches[0]) ||
     null;
 
-  const deliveryOrigin = deliverySourceBranch?.lat && deliverySourceBranch?.lng
-    ? { lat: Number(deliverySourceBranch.lat), lng: Number(deliverySourceBranch.lng) }
-    : storeOrigin;
+  const branchOrigin = parseBranchLocation(deliverySourceBranch);
+  const deliveryOrigin = branchOrigin || storeOrigin;
 
   return {
     deliveryEligibleBranches,
     deliverySourceBranch,
-    deliveryOrigin
+    deliveryOrigin,
+    deliveryOriginReady: Boolean(branchOrigin),
+    deliveryOriginSource: branchOrigin ? "branch" : "fallback"
   };
 }
 

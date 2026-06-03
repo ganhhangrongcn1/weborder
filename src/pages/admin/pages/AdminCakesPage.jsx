@@ -2,6 +2,7 @@
 import { processUploadImage } from "../../../utils/imageUpload.js";
 import { uploadImageToMenuBucket } from "../../../services/supabase/storageService.js";
 import {
+  CAKE_ADDON_MODES,
   DEFAULT_CAKE_PRODUCTS,
   DEFAULT_CAKE_SETTINGS,
   loadCakeProducts,
@@ -15,6 +16,7 @@ import {
   saveCakeSettingsAsync,
   updateCakeOrderStatus
 } from "../../../services/cakeService.js";
+import { isSupabaseEnabled } from "../../../services/repositories/dataSource.js";
 import { formatMoney } from "../../../utils/format.js";
 import "../../../styles/admin/cakes.css";
 
@@ -56,16 +58,28 @@ function createEmptyCake() {
     ingredients: [],
     accessories: [],
     addOns: [],
+    addonMode: CAKE_ADDON_MODES.paid,
     useSharedAddons: true,
     active: true
   });
 }
 
-export default function AdminCakesPage() {
-  const [products, setProducts] = useState(() => loadCakeProducts());
-  const [settings, setSettings] = useState(() => loadCakeSettings());
+function isCakeBranch304(branch) {
+  const text = String(`${branch?.name || ""} ${branch?.address || ""} ${branch?.slug || ""} ${branch?.branch_code || ""}`)
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return text.includes("30/4") || text.includes("30 thang 4") || text.includes("duong 30");
+}
+
+export default function AdminCakesPage({ branches = [] }) {
+  const useSupabaseFirst = isSupabaseEnabled();
+  const [products, setProducts] = useState(() => (useSupabaseFirst ? [] : loadCakeProducts()));
+  const [settings, setSettings] = useState(() => (useSupabaseFirst ? normalizeCakeSettings(DEFAULT_CAKE_SETTINGS) : loadCakeSettings()));
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [configLoading, setConfigLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("orders");
   const [selectedId, setSelectedId] = useState(products[0]?.id || "");
   const [saving, setSaving] = useState(false);
@@ -75,6 +89,7 @@ export default function AdminCakesPage() {
 
   useEffect(() => {
     let alive = true;
+    setConfigLoading(true);
     Promise.all([loadCakeProductsAsync(), loadCakeSettingsAsync()])
       .then(([nextProducts, nextSettings]) => {
         if (!alive) return;
@@ -84,6 +99,17 @@ export default function AdminCakesPage() {
       })
       .catch((error) => {
         console.warn("[AdminCakesPage] load failed", error);
+        if (!alive) return;
+        setMessage("Chưa tải được cấu hình bánh từ Supabase. Kiểm tra app_configs trước khi chỉnh.");
+        if (!useSupabaseFirst) {
+          const fallbackProducts = loadCakeProducts();
+          setProducts(fallbackProducts);
+          setSettings(loadCakeSettings());
+          setSelectedId(fallbackProducts[0]?.id || "");
+        }
+      })
+      .finally(() => {
+        if (alive) setConfigLoading(false);
       });
 
     return () => {
@@ -114,6 +140,17 @@ export default function AdminCakesPage() {
   const chibiAddon = addonCatalog.chibi || {};
   const decorationAddon = addonCatalog.decoration || {};
   const decorationOptions = Array.isArray(decorationAddon.options) ? decorationAddon.options : [];
+  const cakeFulfillment = settings.cakeFulfillment || {};
+  const branchOptions = useMemo(
+    () => (Array.isArray(branches) ? branches : []).filter(isCakeBranch304),
+    [branches]
+  );
+  const cakeBranch304 = branchOptions[0] || null;
+  const cakeBranch304Id = String(cakeBranch304?.id || cakeBranch304?.dbId || "").trim();
+  const savedDeliverySourceBranchId = String(cakeFulfillment.deliverySourceBranchId || settings.shippingConfig?.sourceBranchId || "").trim();
+  const selectedDeliverySourceBranchId = branchOptions.some((branch) => String(branch.id || branch.dbId || "") === savedDeliverySourceBranchId)
+    ? savedDeliverySourceBranchId
+    : cakeBranch304Id;
 
   const updateProduct = (patch) => {
     if (!selectedProduct) return;
@@ -156,8 +193,23 @@ export default function AdminCakesPage() {
     setSaving(true);
     setMessage("");
     try {
+      if (!cakeBranch304Id) {
+        setMessage("Chưa tìm thấy chi nhánh Đường 30/4 trong Supabase branches.");
+        return;
+      }
+      const settingsToSave = normalizeCakeSettings({
+        ...settings,
+        shippingConfig: {
+          ...(settings.shippingConfig || {}),
+          sourceBranchId: cakeBranch304Id
+        },
+        cakeFulfillment: {
+          ...(settings.cakeFulfillment || {}),
+          deliverySourceBranchId: cakeBranch304Id
+        }
+      });
       const nextProducts = await saveCakeProductsAsync(products);
-      const nextSettings = await saveCakeSettingsAsync(settings);
+      const nextSettings = await saveCakeSettingsAsync(settingsToSave);
       setProducts(nextProducts);
       setSettings(nextSettings);
       setMessage("Đã lưu cấu hình bánh lên Supabase.");
@@ -203,6 +255,32 @@ export default function AdminCakesPage() {
     });
   };
 
+  const updateCakeFulfillment = (patch) => {
+    setSettings((current) => {
+      const nextFulfillment = {
+        ...(current.cakeFulfillment || {}),
+        ...patch
+      };
+      const nextShippingConfig = patch.deliverySourceBranchId !== undefined
+        ? { ...(current.shippingConfig || {}), sourceBranchId: patch.deliverySourceBranchId }
+        : current.shippingConfig;
+      return normalizeCakeSettings({
+        ...current,
+        shippingConfig: nextShippingConfig,
+        cakeFulfillment: nextFulfillment
+      });
+    });
+  };
+
+  const togglePickupBranch = (branchId, checked) => {
+    const savedIds = Array.isArray(cakeFulfillment.pickupBranchIds) ? cakeFulfillment.pickupBranchIds : [];
+    const currentIds = savedIds.length ? savedIds : branchOptions.map((branch) => branch.id);
+    const nextIds = checked
+      ? Array.from(new Set([...currentIds, branchId]))
+      : currentIds.filter((id) => id !== branchId);
+    updateCakeFulfillment({ pickupBranchIds: nextIds });
+  };
+
   const changeOrderStatus = async (orderId, status) => {
     const result = await updateCakeOrderStatus(orderId, status);
     if (!result.ok) {
@@ -220,11 +298,12 @@ export default function AdminCakesPage() {
           <p>Quản lý mẫu bánh, nội dung popup, Zalo nhận đơn và phí ship riêng cho bánh.</p>
         </div>
         <div className="admin-cakes-actions">
-          <button type="button" className="admin-secondary" onClick={restoreDefaults}>Khôi phục mẫu gốc</button>
-          <button type="button" onClick={saveAll} disabled={saving}>{saving ? "Đang lưu..." : "Lưu cấu hình"}</button>
+          <button type="button" className="admin-secondary" onClick={restoreDefaults} disabled={useSupabaseFirst && configLoading}>Khôi phục mẫu gốc</button>
+          <button type="button" onClick={saveAll} disabled={saving || configLoading}>{saving ? "Đang lưu..." : "Lưu cấu hình"}</button>
         </div>
       </div>
 
+      {configLoading ? <p className="admin-cakes-message">Đang tải cấu hình bánh từ Supabase...</p> : null}
       {message ? <p className="admin-cakes-message">{message}</p> : null}
 
       <div className="admin-cakes-tabs">
@@ -327,7 +406,85 @@ export default function AdminCakesPage() {
 
           <section className="admin-panel admin-cake-settings">
             <div className="admin-panel-head">
-              <h2>Phụ kiện dùng chung (trừ mẫu đã tắt)</h2>
+              <div>
+                <h2>Cách nhận bánh</h2>
+                <p>Bật/tắt hình thức nhận bánh và chọn chi nhánh áp dụng riêng cho bánh sinh nhật.</p>
+              </div>
+            </div>
+            <div className="admin-mini-grid">
+              <div className="admin-mini-card">
+                <span>Khách ghé lấy tại quán</span>
+                <label className="admin-cake-toggle">
+                  <input
+                    type="checkbox"
+                    checked={cakeFulfillment.pickupEnabled !== false}
+                    onChange={(event) => updateCakeFulfillment({ pickupEnabled: event.target.checked })}
+                  />
+                  <span>Bật lựa chọn ghé lấy</span>
+                </label>
+                {branchOptions.length ? (
+                  <div className="admin-cake-option-stack">
+                    {branchOptions.map((branch) => {
+                      const checked = !cakeFulfillment.pickupBranchIds?.length || cakeFulfillment.pickupBranchIds.includes(branch.id);
+                      return (
+                        <label key={branch.id} className="admin-cake-toggle">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => togglePickupBranch(branch.id, event.target.checked)}
+                          />
+                          <span>{branch.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p>Chưa có danh sách chi nhánh, trang khách sẽ dùng địa chỉ ghé lấy mặc định.</p>
+                )}
+              </div>
+
+              <div className="admin-mini-card">
+                <span>Giao bánh</span>
+                <label className="admin-cake-toggle">
+                  <input
+                    type="checkbox"
+                    checked={cakeFulfillment.deliveryEnabled !== false}
+                    onChange={(event) => updateCakeFulfillment({ deliveryEnabled: event.target.checked })}
+                  />
+                  <span>Bật lựa chọn giao bánh</span>
+                </label>
+                <label>
+                  <span>Chi nhánh tính phí giao bánh</span>
+                  <select
+                    className="admin-input"
+                    value={selectedDeliverySourceBranchId}
+                    onChange={(event) => updateCakeFulfillment({ deliverySourceBranchId: event.target.value })}
+                    disabled={!branchOptions.length}
+                  >
+                    {!branchOptions.length ? <option value="">Chưa có chi nhánh Đường 30/4 trên Supabase</option> : null}
+                    {branchOptions.map((branch) => (
+                      <option key={branch.id || branch.dbId} value={branch.id || branch.dbId}>{branch.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="admin-mini-card">
+                <span>Thời gian chuẩn bị tối thiểu (phút)</span>
+                <input
+                  className="admin-input"
+                  type="number"
+                  min="0"
+                  value={Number(cakeFulfillment.minPickupLeadMinutes || 120)}
+                  onChange={(event) => updateCakeFulfillment({ minPickupLeadMinutes: Number(event.target.value || 0) })}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="admin-panel admin-cake-settings">
+            <div className="admin-panel-head">
+              <h2>Thư viện phụ kiện</h2>
             </div>
             <div className="admin-mini-grid">
               <div className="admin-mini-card">
@@ -634,18 +791,18 @@ export default function AdminCakesPage() {
                     <span>Phụ kiện đi kèm mặc định, mỗi dòng 1 ý</span>
                     <textarea className="admin-input" rows="7" value={listToText(selectedProduct.accessories)} onChange={(event) => updateProduct({ accessories: textToList(event.target.value) })} />
                   </label>
-                  <label className="admin-cake-toggle">
-                    <input
-                      type="checkbox"
-                      disabled={selectedProduct.id === "set-trai-tim-2-tang"}
-                      checked={selectedProduct.id === "set-trai-tim-2-tang" ? false : selectedProduct.useSharedAddons !== false}
-                      onChange={(event) => updateProduct({ useSharedAddons: event.target.checked })}
-                    />
-                    <span>
-                      {selectedProduct.id === "set-trai-tim-2-tang"
-                        ? "Mẫu này đã bao gồm set phụ kiện nên không áp dụng phụ kiện dùng chung"
-                        : "Áp dụng phụ kiện dùng chung (chibi + phụ kiện theo set) cho mẫu bánh này"}
-                    </span>
+                  <label className="admin-cake-wide">
+                    <span>Cách áp dụng phụ kiện</span>
+                    <select
+                      className="admin-input"
+                      value={selectedProduct.addonMode || CAKE_ADDON_MODES.paid}
+                      onChange={(event) => updateProduct({ addonMode: event.target.value })}
+                    >
+                      <option value={CAKE_ADDON_MODES.paid}>Tính phí phụ kiện như bình thường</option>
+                      <option value={CAKE_ADDON_MODES.includedSet}>Bộ phụ kiện đã bao gồm trong giá bánh</option>
+                      <option value={CAKE_ADDON_MODES.chibiOnly}>Chỉ cho thêm chibi</option>
+                      <option value={CAKE_ADDON_MODES.none}>Không áp dụng phụ kiện</option>
+                    </select>
                   </label>
                   <label className="admin-cake-toggle">
                     <input type="checkbox" checked={selectedProduct.active !== false} onChange={(event) => updateProduct({ active: event.target.checked })} />

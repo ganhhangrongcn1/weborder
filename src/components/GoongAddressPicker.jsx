@@ -63,8 +63,18 @@ function normalizeChange(data, shippingConfig) {
   };
 }
 
-export default function GoongAddressPicker({ value, onChange, origin, shippingConfig }) {
-  const deliveryOrigin = origin?.lat && origin?.lng ? origin : BRANCH_LOCATION;
+export default function GoongAddressPicker({
+  value,
+  onChange,
+  origin,
+  originLabel = "",
+  originAddress = "",
+  requireOrigin = false,
+  showOriginSummary = false,
+  shippingConfig
+}) {
+  const hasDeliveryOrigin = Boolean(origin?.lat && origin?.lng);
+  const deliveryOrigin = hasDeliveryOrigin ? origin : BRANCH_LOCATION;
   const defaultCenter = [deliveryOrigin.lng, deliveryOrigin.lat];
 
   const [keyword, setKeyword] = useState(value?.addressText || value?.address || "");
@@ -82,7 +92,9 @@ export default function GoongAddressPicker({ value, onChange, origin, shippingCo
   const [isCalculating, setIsCalculating] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [statusText, setStatusText] = useState(
-    hasGoongApiKey() ? "Nhập địa chỉ để tìm gợi ý giao hàng" : "Chưa cấu hình Goong API key, bạn vẫn có thể nhập tay"
+    requireOrigin && !hasDeliveryOrigin
+      ? "Chi nhánh tính phí ship chưa có tọa độ. Shop sẽ xác nhận phí sau."
+      : hasGoongApiKey() ? "Nhập địa chỉ để tìm gợi ý giao hàng" : "Chưa cấu hình Goong API key, bạn vẫn có thể nhập tay"
   );
   const [isTyping, setIsTyping] = useState(false);
   const mapNode = useRef(null);
@@ -95,6 +107,11 @@ export default function GoongAddressPicker({ value, onChange, origin, shippingCo
     const timer = setTimeout(async () => {
       const query = keyword.trim();
       setIsTyping(false);
+      if (requireOrigin && !hasDeliveryOrigin) {
+        setSuggestions([]);
+        setStatusText("Chi nhánh tính phí ship chưa có tọa độ. Shop sẽ xác nhận phí sau.");
+        return;
+      }
       if (query.length < 6 || !query.includes(" ")) {
         setSuggestions([]);
         setStatusText(hasGoongApiKey() ? "Nhập tên đường đầy đủ hơn để tìm gợi ý" : "Chưa cấu hình Goong API key, bạn vẫn có thể nhập tay");
@@ -108,14 +125,14 @@ export default function GoongAddressPicker({ value, onChange, origin, shippingCo
       const searchId = searchIdRef.current + 1;
       searchIdRef.current = searchId;
       setIsSearching(true);
-      const results = await goongAutocomplete(query);
+      const results = await goongAutocomplete(query, deliveryOrigin);
       if (searchId !== searchIdRef.current) return;
       setSuggestions(results.slice(0, 4));
       setStatusText(results.length ? `Có ${results.length} gợi ý, chọn để tính phí ship` : "Goong chưa trả gợi ý, kiểm tra key hoặc nhập cụ thể hơn");
       setIsSearching(false);
     }, 800);
     return () => clearTimeout(timer);
-  }, [keyword]);
+  }, [hasDeliveryOrigin, keyword, requireOrigin]);
 
   useEffect(() => {
     if (!showMap) return;
@@ -151,6 +168,11 @@ export default function GoongAddressPicker({ value, onChange, origin, shippingCo
   }
 
   async function updateDistance(addressText, lat, lng, placeId = "") {
+    if (requireOrigin && !hasDeliveryOrigin) {
+      await emitChange({ addressText, placeId, lat, lng, distanceKm: null, durationText: "" });
+      setStatusText("Chi nhánh tính phí ship chưa có tọa độ. Shop sẽ xác nhận phí sau.");
+      return;
+    }
     setIsCalculating(true);
     const distance = await goongDistanceMatrix(deliveryOrigin, { lat, lng });
     const fallbackDistance = estimateDistanceFromCoordinate(lat, lng, deliveryOrigin) || estimateDistanceFromText(addressText);
@@ -207,12 +229,19 @@ export default function GoongAddressPicker({ value, onChange, origin, shippingCo
   function handleManualChange(nextValue) {
     setKeyword(nextValue);
     setIsTyping(true);
-    const fallbackDistance = estimateDistanceFromText(nextValue);
+    const fallbackDistance = requireOrigin && !hasDeliveryOrigin ? null : estimateDistanceFromText(nextValue);
     emitChange({ ...selected, addressText: nextValue, distanceKm: fallbackDistance, durationText: fallbackDistance ? "Ước tính" : "" });
   }
 
   return (
     <div className="space-y-2">
+      {showOriginSummary ? (
+        <div className="rounded-2xl bg-white px-3 py-2 text-xs font-bold text-brown/65 shadow-sm">
+          <span className="block text-brown/45">Tính phí từ</span>
+          <strong className="block text-brown">{originLabel || BRANCH_LOCATION.name || "Chi nhánh đang chọn"}</strong>
+          {originAddress ? <span className="mt-1 block leading-snug">{originAddress}</span> : null}
+        </div>
+      ) : null}
       <div className="relative z-20">
         <label className="address-field">
           <span>Địa chỉ giao hàng</span>
