@@ -24,6 +24,52 @@ function getOrderStatusLabel(status) {
   return "Chờ xác nhận";
 }
 
+function getOrderIdentityValues(order = {}) {
+  return [
+    order.id,
+    order.orderCode,
+    order.displayOrderCode,
+    order.nexposOrderId
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+function hasOrderEarnLedger(order = {}, pointRows = []) {
+  const orderKeys = new Set(getOrderIdentityValues(order));
+  if (!orderKeys.size) return false;
+  return (pointRows || []).some((entry) => {
+    const type = String(entry?.type || "").toUpperCase();
+    if (!["ORDER_EARN", "PARTNER_ORDER_EARN"].includes(type)) return false;
+    return getOrderIdentityValues({
+      id: entry.orderId,
+      orderCode: entry.partnerOrderCode,
+      displayOrderCode: entry.displayOrderCode,
+      nexposOrderId: entry.partnerOrderId
+    }).some((key) => orderKeys.has(key));
+  });
+}
+
+function getOrderPointStatus(order = {}, pointRows = []) {
+  const rawStatus = String(order.pointStatus || order.point_status || "").trim().toLowerCase();
+  if (rawStatus === "claimed") return { key: "claimed", label: "Đã tích điểm" };
+  if (["rejected", "expired", "cancelled", "canceled"].includes(rawStatus)) return { key: "blocked", label: "Không tích điểm" };
+  if (rawStatus === "pending") return { key: "pending", label: "Chưa tích điểm" };
+  if (Number(order.pointsEarned || 0) > 0 || hasOrderEarnLedger(order, pointRows)) return { key: "claimed", label: "Đã tích điểm" };
+  if (order.sourceType === "partner" || order.partnerSource) return { key: "pending", label: "Chưa tích điểm" };
+  return { key: "unknown", label: "Chưa rõ" };
+}
+
+function getOrderPointSummary(orders = [], pointRows = []) {
+  return orders.reduce((summary, order) => {
+    const status = getOrderPointStatus(order, pointRows).key;
+    if (status === "claimed") return { ...summary, claimed: summary.claimed + 1 };
+    if (status === "pending") return { ...summary, pending: summary.pending + 1 };
+    if (status === "blocked") return { ...summary, blocked: summary.blocked + 1 };
+    return { ...summary, unknown: summary.unknown + 1 };
+  }, { claimed: 0, pending: 0, blocked: 0, unknown: 0 });
+}
+
 function OrderSourceBadge({ order }) {
   const badge = getOrderSourceBadge(order);
   return <em className={`crm-soft-badge ${badge.className || ""}`}>{badge.label}</em>;
@@ -283,7 +329,7 @@ export default function CustomerCRM({
       if (disposed) return;
       const rows = Array.isArray(result?.rows) ? result.rows : [];
       const orderEarn = rows
-        .filter((item) => String(item?.type || "").toUpperCase() === "ORDER_EARN")
+        .filter((item) => ["ORDER_EARN", "PARTNER_ORDER_EARN"].includes(String(item?.type || "").toUpperCase()))
         .reduce((sum, item) => sum + Number(item?.points || 0), 0);
       const checkin = rows
         .filter((item) => ["CHECKIN", "MILESTONE"].includes(String(item?.type || "").toUpperCase()))
@@ -316,6 +362,11 @@ export default function CustomerCRM({
   const selectedLoyaltyDetail = selectedCustomerPhoneKey
     ? loyaltyDetailByPhone[selectedCustomerPhoneKey] || null
     : null;
+  const selectedPointRows = selectedLoyaltyDetail?.rows || selectedCustomer?.pointsHistory || [];
+  const selectedPointSummary = useMemo(
+    () => getOrderPointSummary(selectedOrders, selectedPointRows),
+    [selectedOrders, selectedPointRows]
+  );
 
   const sortedSelectedVouchers = useMemo(() => {
     const vouchers = Array.isArray(selectedCustomer?.vouchers) ? selectedCustomer.vouchers : [];
@@ -517,6 +568,16 @@ export default function CustomerCRM({
                     <span>Đã dùng điểm: -{Number((selectedLoyaltyDetail?.spend ?? selectedCustomer.spentPoints) || 0).toLocaleString("vi-VN")}</span>
                     <span>Điều chỉnh khác: {Number((selectedLoyaltyDetail?.other ?? selectedCustomer.otherAdjustPoints) || 0).toLocaleString("vi-VN")}</span>
                   </div>
+                  <div className="crm-point-status-grid">
+                    <span className="crm-point-status crm-point-status--claimed">Đã tích điểm: {selectedPointSummary.claimed.toLocaleString("vi-VN")} đơn</span>
+                    <span className="crm-point-status crm-point-status--pending">Chưa tích điểm: {selectedPointSummary.pending.toLocaleString("vi-VN")} đơn</span>
+                    {selectedPointSummary.blocked > 0 ? (
+                      <span className="crm-point-status crm-point-status--blocked">Không tích điểm: {selectedPointSummary.blocked.toLocaleString("vi-VN")} đơn</span>
+                    ) : null}
+                    {selectedPointSummary.unknown > 0 ? (
+                      <span className="crm-point-status crm-point-status--unknown">Chưa rõ: {selectedPointSummary.unknown.toLocaleString("vi-VN")} đơn</span>
+                    ) : null}
+                  </div>
                 </section>
 
                 <section className="crm-detail-card">
@@ -535,6 +596,14 @@ export default function CustomerCRM({
                         <div>
                           <strong>{formatMoney(Number(order.totalAmount || order.total || 0))}</strong>
                           <em>{getOrderStatusLabel(order.status)}</em>
+                          {(() => {
+                            const pointStatus = getOrderPointStatus(order, selectedPointRows);
+                            return (
+                              <em className={`crm-point-order-badge crm-point-order-badge--${pointStatus.key}`}>
+                                {pointStatus.label}
+                              </em>
+                            );
+                          })()}
                         </div>
                       </article>
                     ))}

@@ -520,6 +520,58 @@
   padding: 9px 10px;
 }
 
+.crm-point-status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crm-point-status,
+.crm-point-order-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.crm-point-status {
+  padding: 7px 10px;
+}
+
+.crm-point-order-badge {
+  margin-top: 6px;
+  padding: 6px 9px;
+}
+
+.crm-point-status--claimed,
+.crm-point-order-badge--claimed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.crm-point-status--pending,
+.crm-point-order-badge--pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.crm-point-status--blocked,
+.crm-point-order-badge--blocked {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.crm-point-status--unknown,
+.crm-point-order-badge--unknown {
+  background: #e2e8f0;
+  color: #475569;
+}
+
 .crm-mini-list {
   display: grid;
   gap: 8px;
