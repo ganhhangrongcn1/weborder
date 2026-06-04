@@ -4,6 +4,7 @@ import GoongAddressPicker from "../components/GoongAddressPicker.jsx";
 import { resolveDeliveryContext, resolvePickupBranches } from "../features/checkout/checkoutDomain.js";
 import useCakeProducts from "../hooks/useCakeProducts.js";
 import { CAKE_ADDON_MODES, buildCakeZaloMessage, createCakeOrder } from "../services/cakeService.js";
+import { buildZaloLink } from "../services/zaloService.js";
 import { formatMoney } from "../utils/format.js";
 import "../styles/customer-checkout.css";
 import "../styles/cake.css";
@@ -28,16 +29,17 @@ const PICKUP_TIME_WARNING =
 const CAKE_PICKUP_OPEN_MINUTES = 10 * 60;
 const CAKE_PICKUP_CLOSE_MINUTES = 22 * 60;
 
-function buildZaloLink(phone) {
-  return `https://zalo.me/${String(phone || "").replace(/\D/g, "")}`;
-}
-
 async function copyText(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
     return true;
   }
   return false;
+}
+
+function buildZaloAppLink(phone) {
+  const cleanPhone = String(phone || "").replace(/\D/g, "");
+  return cleanPhone ? `zalo://conversation?phone=${cleanPhone}` : "";
 }
 
 function formatDateTimeLocal(date) {
@@ -250,6 +252,38 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     setSelectedProduct(product);
   };
 
+  const copySuccessZaloMessage = () => {
+    if (!successOrder?.zaloMessage) return;
+    copyText(successOrder.zaloMessage).catch(() => {});
+  };
+
+  const openSuccessZalo = () => {
+    if (!successOrder?.zaloWebLink) return;
+    copySuccessZaloMessage();
+
+    if (!successOrder.zaloAppLink) {
+      window.location.href = successOrder.zaloWebLink;
+      return;
+    }
+
+    let fallbackTimer = null;
+    const clearFallback = () => {
+      if (fallbackTimer) window.clearTimeout(fallbackTimer);
+      window.removeEventListener("pagehide", clearFallback);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) clearFallback();
+    };
+
+    window.addEventListener("pagehide", clearFallback, { once: true });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    fallbackTimer = window.setTimeout(() => {
+      window.location.href = successOrder.zaloWebLink;
+    }, 900);
+    window.location.href = successOrder.zaloAppLink;
+  };
+
   const submitOrder = async (event) => {
     event.preventDefault();
     if (!orderingProduct || submitting) return;
@@ -331,12 +365,14 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     setSuccessOrder({
       orderCode: saved.orderCode,
       savedOk: saved.ok,
-      productName: orderingProduct.name
+      productName: orderingProduct.name,
+      zaloMessage,
+      zaloAppLink: buildZaloAppLink(settings.zaloPhone),
+      zaloWebLink: buildZaloLink(settings.zaloPhone, zaloMessage)
     });
     setOrderingProduct(null);
     setForm(EMPTY_FORM);
     setAddressInfo(null);
-    window.open(buildZaloLink(settings.zaloPhone), "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -621,10 +657,10 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             </label>
 
             <button className="cake-primary-btn" type="submit" disabled={submitting}>
-              {submitting ? "Đang gửi..." : "Gửi đơn qua Zalo"}
+              {submitting ? "Đang xác nhận..." : "Xác nhận đơn"}
             </button>
             <p className="cake-zalo-copy-note">
-              Nội dung đơn đã được copy sẵn. Bạn chỉ cần dán vào Zalo để gửi cho quán.
+              Sau bước này, app sẽ copy nội dung đơn và hiện nút mở Zalo để bạn gửi cho quán.
             </p>
           </form>
         </div>
@@ -635,16 +671,15 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           <div className="cake-modal__backdrop" onClick={() => setSuccessOrder(null)} />
           <div className="cake-success-popup">
             <button className="cake-modal__close" type="button" onClick={() => setSuccessOrder(null)}>×</button>
-            <div className="cake-success-popup__icon">✓</div>
-            <p className="cake-eyebrow">Đã gửi thông tin</p>
-            <h3>Quán đã nhận yêu cầu đặt bánh sinh nhật</h3>
+            <div className="cake-success-popup__icon">!</div>
+            <p className="cake-eyebrow">Còn 1 bước cuối</p>
+            <h3>Gửi đơn qua Zalo để quán xác nhận</h3>
             <p>
-              Cảm ơn bạn đã chọn bánh sinh nhật bánh tráng của Gánh Hàng Rong.
-              Bộ phận CSKH của quán sẽ liên hệ lại để xác nhận mẫu bánh, giờ nhận và các ghi chú trang trí.
+              Nội dung đơn đã được chuẩn bị và copy sẵn. Bạn cần bấm nút bên dưới để mở Zalo,
+              dán nội dung và gửi cho quán.
             </p>
             <p>
-              Bạn giúp quán giữ điện thoại bên mình nha. Nếu có hình chibi hoặc yêu cầu phụ kiện,
-              CSKH sẽ hướng dẫn gửi thêm thông tin qua Zalo.
+              Đơn chỉ được CSKH xác nhận sau khi quán nhận được tin nhắn Zalo của bạn.
             </p>
             <div className="cake-success-popup__code">
               <span>Mã tham chiếu</span>
@@ -652,12 +687,21 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             </div>
             {!successOrder.savedOk ? (
               <p className="cake-success-popup__note">
-                Thông tin đã được gửi qua Zalo. Nếu cần, CSKH sẽ nhập lại đơn giúp bạn khi xác nhận.
+                Nếu đơn chưa lưu vào hệ thống, CSKH vẫn có thể nhập lại đơn từ nội dung bạn gửi qua Zalo.
               </p>
             ) : null}
-            <button className="cake-primary-btn" type="button" onClick={() => setSuccessOrder(null)}>
-              Tiếp tục xem mẫu bánh
-            </button>
+            <div className="cake-success-popup__actions">
+              <button
+                className="cake-primary-btn"
+                type="button"
+                onClick={openSuccessZalo}
+              >
+                Mở Zalo để gửi đơn ngay
+              </button>
+              <button className="cake-secondary-btn" type="button" onClick={() => setSuccessOrder(null)}>
+                Tiếp tục xem mẫu bánh
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

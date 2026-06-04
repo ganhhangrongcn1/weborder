@@ -799,6 +799,21 @@
   font-weight: 800;
 }
 
+.cake-success-popup__actions {
+  display: grid;
+  gap: 9px;
+}
+
+.cake-secondary-btn {
+  border: 1px solid #ead0a4;
+  border-radius: 8px;
+  background: #fff;
+  color: #5d3b18;
+  cursor: pointer;
+  font-weight: 850;
+  padding: 12px 16px;
+}
+
 .cake-order-form {
   display: grid;
   gap: 14px;
