@@ -24,6 +24,17 @@
   box-shadow: var(--customer-shadow-orange);
 }
 
+.fulfillment-tabs button.is-unavailable {
+  cursor: not-allowed;
+  opacity: 0.46;
+  filter: grayscale(0.2);
+}
+
+.fulfillment-tabs button.is-unavailable:not(.active) {
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
 .fulfillment-tabs button:disabled {
   cursor: not-allowed;
   opacity: 0.45;

@@ -8,6 +8,8 @@ export default function CheckoutFulfillmentSection({
   fulfillmentType,
   setFulfillmentType,
   forcePickupOnly = false,
+  deliveryAvailable = true,
+  onUnavailableDelivery,
   hidePickupSchedule = false,
   lockPickupBranch = false,
   setIsAddressModalOpen,
@@ -28,10 +30,29 @@ export default function CheckoutFulfillmentSection({
   pickupClock,
   setPickupClock
 }) {
+  const deliveryLocked = forcePickupOnly || !deliveryAvailable;
+
+  const handleSelectDelivery = () => {
+    if (!deliveryAvailable && !forcePickupOnly) {
+      onUnavailableDelivery?.();
+      return;
+    }
+
+    if (forcePickupOnly) return;
+    setFulfillmentType("delivery");
+  };
+
   return (
     <>
       <div className="fulfillment-tabs">
-        <button onClick={() => setFulfillmentType("delivery")} disabled={forcePickupOnly} className={fulfillmentType === "delivery" ? "active" : ""}>Giao tận nơi</button>
+        <button
+          type="button"
+          onClick={handleSelectDelivery}
+          aria-disabled={deliveryLocked}
+          className={`${fulfillmentType === "delivery" ? "active" : ""} ${deliveryLocked ? "is-unavailable" : ""}`}
+        >
+          Giao tận nơi
+        </button>
         <button onClick={() => setFulfillmentType("pickup")} className={fulfillmentType === "pickup" ? "active" : ""}>Đến lấy</button>
       </div>
 

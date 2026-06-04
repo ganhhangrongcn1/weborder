@@ -111,6 +111,7 @@ export default function Checkout({
   });
 
   const pickupBranches = useMemo(() => resolvePickupBranches(branches), [branches]);
+  const deliveryAvailable = deliveryEligibleBranches.length > 0;
   const checkoutLoyalty = currentPhone ? (demoLoyalty || {}) : (demoLoyalty || {});
   const [loyaltyRule, setLoyaltyRule] = useState(() => getCheckoutLoyaltyRule());
 
@@ -231,6 +232,11 @@ export default function Checkout({
     if (pickupMode !== "soon") setPickupMode("soon");
   }, [isQrCounterOrder, fulfillmentType, selectedBranch, qrLockedPickupBranchId, pickupMode]);
 
+  useEffect(() => {
+    if (isQrCounterOrder || deliveryAvailable || fulfillmentType !== "delivery") return;
+    setFulfillmentType("pickup");
+  }, [deliveryAvailable, fulfillmentType, isQrCounterOrder]);
+
   useCheckoutPickupBranchState({
     pickupBranches,
     selectedBranch,
@@ -280,6 +286,15 @@ export default function Checkout({
 
     try {
       if (fulfillmentType === "delivery") {
+        if (!deliveryAvailable) {
+          setCheckoutNotice({
+            icon: "warning",
+            title: "Tạm ngưng giao hàng",
+            message: "Hiện quán chưa bật tính năng giao hàng. Bạn vui lòng chọn Đến lấy để tiếp tục đặt món."
+          });
+          return;
+        }
+
         const hasAddress = String(deliveryInfo?.address || "").trim().length > 0;
         if (!hasAddress || !deliverySourceBranch) {
           setCheckoutNotice({
@@ -348,6 +363,12 @@ export default function Checkout({
           fulfillmentType={fulfillmentType}
           setFulfillmentType={setFulfillmentType}
           forcePickupOnly={isQrCounterOrder}
+          deliveryAvailable={deliveryAvailable}
+          onUnavailableDelivery={() => setCheckoutNotice({
+            icon: "warning",
+            title: "Tạm ngưng giao hàng",
+            message: "Hiện quán chưa bật tính năng giao hàng. Bạn vui lòng chọn Đến lấy để tiếp tục đặt món."
+          })}
           hidePickupSchedule={isQrCounterOrder}
           lockPickupBranch={isQrCounterOrder}
           setIsAddressModalOpen={setIsAddressModalOpen}
