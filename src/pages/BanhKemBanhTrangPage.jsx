@@ -37,11 +37,6 @@ async function copyText(text) {
   return false;
 }
 
-function buildZaloAppLink(phone) {
-  const cleanPhone = String(phone || "").replace(/\D/g, "");
-  return cleanPhone ? `zalo://conversation?phone=${cleanPhone}` : "";
-}
-
 function formatDateTimeLocal(date) {
   const pad = (value) => String(value).padStart(2, "0");
   return [
@@ -257,33 +252,6 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     copyText(successOrder.zaloMessage).catch(() => {});
   };
 
-  const openSuccessZalo = () => {
-    if (!successOrder?.zaloWebLink) return;
-    copySuccessZaloMessage();
-
-    if (!successOrder.zaloAppLink) {
-      window.location.href = successOrder.zaloWebLink;
-      return;
-    }
-
-    let fallbackTimer = null;
-    const clearFallback = () => {
-      if (fallbackTimer) window.clearTimeout(fallbackTimer);
-      window.removeEventListener("pagehide", clearFallback);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-    const handleVisibilityChange = () => {
-      if (document.hidden) clearFallback();
-    };
-
-    window.addEventListener("pagehide", clearFallback, { once: true });
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    fallbackTimer = window.setTimeout(() => {
-      window.location.href = successOrder.zaloWebLink;
-    }, 900);
-    window.location.href = successOrder.zaloAppLink;
-  };
-
   const submitOrder = async (event) => {
     event.preventDefault();
     if (!orderingProduct || submitting) return;
@@ -367,7 +335,6 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       savedOk: saved.ok,
       productName: orderingProduct.name,
       zaloMessage,
-      zaloAppLink: buildZaloAppLink(settings.zaloPhone),
       zaloWebLink: buildZaloLink(settings.zaloPhone, zaloMessage)
     });
     setOrderingProduct(null);
@@ -691,13 +658,15 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               </p>
             ) : null}
             <div className="cake-success-popup__actions">
-              <button
+              <a
                 className="cake-primary-btn"
-                type="button"
-                onClick={openSuccessZalo}
+                href={successOrder.zaloWebLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={copySuccessZaloMessage}
               >
                 Mở Zalo để gửi đơn ngay
-              </button>
+              </a>
               <button className="cake-secondary-btn" type="button" onClick={() => setSuccessOrder(null)}>
                 Tiếp tục xem mẫu bánh
               </button>
