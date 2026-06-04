@@ -29,6 +29,7 @@ const PICKUP_TIME_WARNING =
   "Vì là món quà để tặng người thân yêu, quán cần ít nhất 120 phút để chuẩn bị bánh đẹp và chỉn chu.";
 const CAKE_PICKUP_OPEN_MINUTES = 10 * 60;
 const CAKE_PICKUP_CLOSE_MINUTES = 22 * 60;
+const ZALO_COMPLETION_DELAY_MS = 4000;
 
 async function copyText(text) {
   if (navigator.clipboard?.writeText) {
@@ -251,6 +252,10 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   const copySuccessZaloMessage = () => {
     if (!successOrder?.zaloMessage) return;
     copyText(successOrder.zaloMessage).catch(() => {});
+    setSuccessOrder((current) => current ? { ...current, hasOpenedZalo: true, isCompletingZalo: true } : current);
+    window.setTimeout(() => {
+      setSuccessOrder((current) => current ? { ...current, isCompletingZalo: false, zaloSent: true } : current);
+    }, ZALO_COMPLETION_DELAY_MS);
   };
 
   const submitOrder = async (event) => {
@@ -655,16 +660,28 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           <div className="cake-modal__backdrop" onClick={() => setSuccessOrder(null)} />
           <div className="cake-success-popup">
             <button className="cake-modal__close" type="button" onClick={() => setSuccessOrder(null)}>×</button>
-            <div className="cake-success-popup__icon">!</div>
-            <p className="cake-eyebrow">Còn 1 bước cuối</p>
-            <h3>Gửi đơn qua Zalo để quán xác nhận</h3>
-            <p>
-              Nội dung đơn đã được chuẩn bị và copy sẵn. Bạn cần bấm nút bên dưới để mở Zalo,
-              dán nội dung và gửi cho quán.
-            </p>
-            <p>
-              Đơn chỉ được CSKH xác nhận sau khi quán nhận được tin nhắn Zalo của bạn.
-            </p>
+            <div className="cake-success-popup__icon">{successOrder.zaloSent ? "✓" : successOrder.isCompletingZalo ? "..." : "!"}</div>
+            <p className="cake-eyebrow">{successOrder.zaloSent ? "Đã hoàn tất" : successOrder.isCompletingZalo ? "Đang gửi Zalo" : "Còn 1 bước cuối"}</p>
+            <h3>{successOrder.zaloSent ? "Cảm ơn bạn, quán sẽ xác nhận đơn sớm" : successOrder.isCompletingZalo ? "Đang mở Zalo để gửi đơn..." : "Gửi đơn qua Zalo để quán xác nhận"}</h3>
+            {successOrder.zaloSent ? (
+              <p>
+                CSKH sẽ kiểm tra tin nhắn Zalo, xác nhận mẫu bánh, giờ nhận và các ghi chú trang trí với bạn.
+              </p>
+            ) : successOrder.isCompletingZalo ? (
+              <p>
+                App đang chuyển bạn sang Zalo. Nội dung đơn đã được copy sẵn, bạn chỉ cần dán vào khung chat và gửi cho quán.
+              </p>
+            ) : (
+              <>
+                <p>
+                  Nội dung đơn đã được chuẩn bị và copy sẵn. Bạn cần bấm nút bên dưới để mở Zalo,
+                  dán nội dung và gửi cho quán.
+                </p>
+                <p>
+                  Đơn chỉ được CSKH xác nhận sau khi quán nhận được tin nhắn Zalo của bạn.
+                </p>
+              </>
+            )}
             <div className="cake-success-popup__code">
               <span>Mã tham chiếu</span>
               <strong>{successOrder.orderCode || "Đang tạo"}</strong>
@@ -675,18 +692,30 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               </p>
             ) : null}
             <div className="cake-success-popup__actions">
-              <a
-                className="cake-primary-btn"
-                href={successOrder.zaloWebLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={copySuccessZaloMessage}
-              >
-                Mở Zalo để gửi đơn ngay
-              </a>
-              <button className="cake-secondary-btn" type="button" onClick={() => setSuccessOrder(null)}>
-                Tiếp tục xem mẫu bánh
-              </button>
+              {successOrder.zaloSent ? (
+                <button className="cake-primary-btn" type="button" onClick={() => setSuccessOrder(null)}>
+                  Tiếp tục xem mẫu bánh
+                </button>
+              ) : successOrder.isCompletingZalo ? (
+                <button className="cake-primary-btn" type="button" disabled>
+                  Đang gửi Zalo...
+                </button>
+              ) : (
+                <>
+                  <a
+                    className="cake-primary-btn"
+                    href={successOrder.zaloWebLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={copySuccessZaloMessage}
+                  >
+                    Mở Zalo để gửi đơn ngay
+                  </a>
+                  <button className="cake-secondary-btn" type="button" onClick={() => setSuccessOrder(null)}>
+                    Tiếp tục xem mẫu bánh
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
