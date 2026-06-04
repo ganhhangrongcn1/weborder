@@ -4,6 +4,7 @@ import GoongAddressPicker from "../components/GoongAddressPicker.jsx";
 import { resolveDeliveryContext, resolvePickupBranches } from "../features/checkout/checkoutDomain.js";
 import useCakeProducts from "../hooks/useCakeProducts.js";
 import { CAKE_ADDON_MODES, buildCakeZaloMessage, createCakeOrder } from "../services/cakeService.js";
+import { notifyCakeOrderWebhook } from "../services/cakeOrderWebhookService.js";
 import { buildZaloLink } from "../services/zaloService.js";
 import { formatMoney } from "../utils/format.js";
 import "../styles/customer-checkout.css";
@@ -328,6 +329,22 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     } catch (_error) {
       setMessage("");
     }
+
+    notifyCakeOrderWebhook({
+      saved,
+      product: orderingProduct,
+      form,
+      addressInfo,
+      selectedPickupBranch,
+      selectedAddOns,
+      addOnTotal,
+      finalCakePrice,
+      shippingFee,
+      deliveryAddress,
+      zaloMessage
+    }).catch((error) => {
+      console.warn("[cake] n8n webhook failed", error);
+    });
 
     setSubmitting(false);
     setSuccessOrder({
