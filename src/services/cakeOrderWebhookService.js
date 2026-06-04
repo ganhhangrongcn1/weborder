@@ -1,4 +1,4 @@
-const CAKE_ORDER_WEBHOOK_URL = "https://n8nhosting-13007771.phoai.vn/webhook-test/cake-order";
+const CAKE_ORDER_WEBHOOK_URL = "https://n8nhosting-13007771.phoai.vn/webhook/cake-order";
 
 function toNumber(value, fallback = 0) {
   const number = Number(value);
@@ -44,6 +44,8 @@ export async function notifyCakeOrderWebhook({
   const payload = {
     event: "cake_order_created",
     source: "banh_kem_banh_trang",
+    status: "pending_zalo",
+    statusText: "Chờ khách gửi Zalo",
     orderCode: saved?.orderCode || "",
     orderId: saved?.id || "",
     savedOk: Boolean(saved?.ok),
