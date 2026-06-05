@@ -32,6 +32,8 @@ export const DEFAULT_CAKE_FULFILLMENT_CONFIG = {
   minPickupLeadMinutes: 120
 };
 
+const CAKE_VIETNAM_TIMEZONE_OFFSET = "+07:00";
+
 export const DEFAULT_CAKE_SETTINGS = {
   zaloPhone: "0788422424",
   shippingConfig: DEFAULT_CAKE_SHIPPING_CONFIG,
@@ -437,6 +439,9 @@ export async function saveCakeSettingsAsync(settings) {
 export async function createCakeOrder(order) {
   const client = getSupabaseClient();
   const orderCode = `BK${Date.now().toString().slice(-8)}`;
+  const metadata = order.metadata && typeof order.metadata === "object" && !Array.isArray(order.metadata)
+    ? order.metadata
+    : {};
   const payload = {
     order_code: orderCode,
     cake_id: order.cakeId,
@@ -444,7 +449,7 @@ export async function createCakeOrder(order) {
     cake_price: Number(order.cakePrice || 0),
     customer_name: order.customerName,
     customer_phone: order.customerPhone,
-    pickup_time: order.pickupTime || null,
+    pickup_time: normalizeCakePickupTimeForStorage(order.pickupTime),
     cake_message: order.cakeMessage || "",
     fulfillment_type: order.fulfillmentType || "pickup",
     delivery_address: order.deliveryAddress || "",
@@ -454,7 +459,10 @@ export async function createCakeOrder(order) {
     shipping_fee: order.shippingFee ?? null,
     note: order.note || "",
     status: "new",
-    metadata: order.metadata || {}
+    metadata: {
+      ...metadata,
+      pickupTimeLocal: order.pickupTime || ""
+    }
   };
 
   if (!client) {
@@ -471,6 +479,19 @@ export async function createCakeOrder(order) {
   }
 
   return { ok: true, orderCode, id: data?.id || "" };
+}
+
+function normalizeCakePickupTimeForStorage(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(text)) {
+    const withSeconds = text.length === 16 ? `${text}:00` : text;
+    return `${withSeconds}${CAKE_VIETNAM_TIMEZONE_OFFSET}`;
+  }
+
+  return text;
 }
 
 function mapCakeOrderRow(row = {}) {

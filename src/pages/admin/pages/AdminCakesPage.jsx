@@ -73,6 +73,22 @@ function isCakeBranch304(branch) {
   return text.includes("30/4") || text.includes("30 thang 4") || text.includes("duong 30");
 }
 
+function formatCakeOrderPickupTime(order) {
+  const localValue = String(order?.pickupTimeLocal || order?.metadata?.pickupTimeLocal || "").trim();
+  if (localValue) {
+    const match = localValue.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (match) {
+      const [, year, month, day, hour, minute] = match;
+      return `${hour}:${minute}:00 ${Number(day)}/${Number(month)}/${year}`;
+    }
+  }
+
+  if (!order?.pickupTime) return "Chưa rõ";
+  const date = new Date(order.pickupTime);
+  if (Number.isNaN(date.getTime())) return String(order.pickupTime);
+  return date.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+}
+
 export default function AdminCakesPage({ branches = [] }) {
   const useSupabaseFirst = isSupabaseEnabled();
   const [products, setProducts] = useState(() => (useSupabaseFirst ? [] : loadCakeProducts()));
@@ -347,7 +363,7 @@ export default function AdminCakesPage({ branches = [] }) {
                   <div className="admin-cake-order-grid">
                     <div>
                       <span>Ngày giờ lấy</span>
-                      <strong>{order.pickupTime ? new Date(order.pickupTime).toLocaleString("vi-VN") : "Chưa rõ"}</strong>
+                      <strong>{formatCakeOrderPickupTime(order)}</strong>
                     </div>
                     <div>
                       <span>Hình thức</span>
