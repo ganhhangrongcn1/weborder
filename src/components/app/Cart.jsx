@@ -1,11 +1,8 @@
-﻿export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableItem, CheckoutCard, addonCategory, formatMoney, Icon }) {
-  const isSpiceOption = (item, topping) => {
-    const spiceText = String(item.spice || "").trim();
-    const groupName = String(topping.groupName || "").trim();
-    const toppingName = String(topping.name || "").trim();
+import { isToppingAlreadyShownInSpice } from "../../utils/orderItemDisplay.js";
 
-    if (!spiceText || !groupName || !toppingName) return false;
-    return spiceText === `${groupName}: ${toppingName}`;
+export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableItem, CheckoutCard, addonCategory, formatMoney, Icon }) {
+  const isSpiceOption = (item, topping) => {
+    return isToppingAlreadyShownInSpice(item, topping);
   };
 
   const getToppingRows = (item) => {

@@ -28,6 +28,7 @@ const WEBSITE_ORDER_COLUMNS = [
   "customer_phone",
   "customer_name",
   "fulfillment_type",
+  "pickup_time_text",
   "payment_method",
   "status",
   "subtotal",
@@ -619,11 +620,18 @@ function flattenSelectedOptionLabels(value) {
 }
 
 function buildWebsiteOptionLabels(row = {}, metadata = {}) {
+  const nestedMetadata = getObject(metadata.metadata);
   const selectedOptions = [
     ...flattenSelectedOptionLabels(row.toppings),
     ...flattenSelectedOptionLabels(metadata.toppings),
+    ...flattenSelectedOptionLabels(nestedMetadata.toppings),
     ...flattenSelectedOptionLabels(row.option_groups),
-    ...flattenSelectedOptionLabels(metadata.optionGroups)
+    ...flattenSelectedOptionLabels(metadata.optionGroups),
+    ...flattenSelectedOptionLabels(nestedMetadata.optionGroups),
+    ...flattenSelectedOptionLabels(metadata.selectedOptions),
+    ...flattenSelectedOptionLabels(nestedMetadata.selectedOptions),
+    ...flattenSelectedOptionLabels(metadata.options),
+    ...flattenSelectedOptionLabels(nestedMetadata.options)
   ];
   const seen = new Set();
   const options = [];
@@ -631,7 +639,7 @@ function buildWebsiteOptionLabels(row = {}, metadata = {}) {
   selectedOptions.forEach((label) => pushUniqueOption(options, seen, label));
 
   const selectedGroups = new Set(options.map(getOptionGroupKey).filter(Boolean));
-  const spiceLabel = toText(row.spice || metadata.spice);
+  const spiceLabel = toText(row.spice || metadata.spice || nestedMetadata.spice);
   const spiceGroup = getOptionGroupKey(spiceLabel);
   if (spiceLabel && (!spiceGroup || !selectedGroups.has(spiceGroup))) {
     pushUniqueOption(options, seen, spiceLabel);
@@ -642,11 +650,24 @@ function buildWebsiteOptionLabels(row = {}, metadata = {}) {
 
 function mapWebsiteKitchenItem(row = {}) {
   const metadata = getObject(row.metadata);
+  const nestedMetadata = getObject(metadata.metadata);
   const quantity = toNumber(row.quantity ?? metadata.quantity, 1) || 1;
   const status = normalizeKitchenStatus(row.kitchen_item_status, metadata.kitchenStatus);
   const options = buildWebsiteOptionLabels(row, metadata);
-  const toppings = Array.isArray(row.toppings) ? row.toppings : Array.isArray(metadata.toppings) ? metadata.toppings : [];
-  const optionGroups = Array.isArray(row.option_groups) ? row.option_groups : Array.isArray(metadata.optionGroups) ? metadata.optionGroups : [];
+  const toppings = Array.isArray(row.toppings)
+    ? row.toppings
+    : Array.isArray(metadata.toppings)
+      ? metadata.toppings
+      : Array.isArray(nestedMetadata.toppings)
+        ? nestedMetadata.toppings
+        : [];
+  const optionGroups = Array.isArray(row.option_groups)
+    ? row.option_groups
+    : Array.isArray(metadata.optionGroups)
+      ? metadata.optionGroups
+      : Array.isArray(nestedMetadata.optionGroups)
+        ? nestedMetadata.optionGroups
+        : [];
 
   return {
     id: toText(row.id || row.product_id || metadata.id || metadata.cartId),
@@ -659,7 +680,7 @@ function mapWebsiteKitchenItem(row = {}) {
     unitTotal: toNumber(row.unit_price ?? metadata.unitTotal ?? metadata.price, 0),
     total: toNumber(row.line_total ?? metadata.lineTotal, 0),
     lineTotal: toNumber(row.line_total ?? metadata.lineTotal, 0),
-    note: toText(row.note || metadata.note),
+    note: toText(row.note || metadata.note || nestedMetadata.note),
     toppings,
     optionGroups,
     options: [...new Set(options)],
@@ -731,6 +752,7 @@ function mapPartnerRawDishesToKitchenItems(row = {}) {
 
 function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
   const metadata = getObject(row.metadata);
+  const nestedMetadata = getObject(metadata.metadata);
   const source = resolveOrderSourceKey({
     ...metadata,
     source: row.source || metadata.source,
@@ -756,7 +778,14 @@ function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     id,
     stableKey: buildKitchenStableKey(KITCHEN_SOURCE.website, id, orderCode),
     orderCode,
-    displayOrderCode: toText(metadata.displayOrderCode || orderCode),
+    displayOrderCode: toText(
+      row.display_order_code ||
+      metadata.displayOrderCode ||
+      metadata.display_order_code ||
+      nestedMetadata.displayOrderCode ||
+      nestedMetadata.display_order_code ||
+      orderCode
+    ),
     sourceType: KITCHEN_SOURCE.website,
     source,
     platform: getPlatformLabel(source),
@@ -769,8 +798,16 @@ function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     deliveryBranchId: toText(row.delivery_branch_id || metadata.deliveryBranchId),
     deliveryBranchUuid: toText(row.delivery_branch_uuid || metadata.deliveryBranchUuid),
     deliveryBranchName: toText(row.delivery_branch_name || metadata.deliveryBranchName),
-    customerName: toText(row.customer_name || metadata.customerName),
-    customerPhone: toText(row.customer_phone || metadata.customerPhone || metadata.phone),
+    customerName: toText(row.customer_name || metadata.customerName || nestedMetadata.customerName),
+    customerPhone: toText(row.customer_phone || metadata.customerPhone || metadata.phone || nestedMetadata.customerPhone || nestedMetadata.phone),
+    pagerNumber: toText(
+      row.pager_number ||
+      metadata.pagerNumber ||
+      metadata.pager_number ||
+      nestedMetadata.pagerNumber ||
+      nestedMetadata.pager_number
+    ),
+    pagerStatus: toText(metadata.pagerStatus || metadata.pager_status || nestedMetadata.pagerStatus || nestedMetadata.pager_status),
     status,
     nexposStatus,
     nexposState,
@@ -778,6 +815,7 @@ function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     displayStatus: getWebsiteBranchDisplayStatus(status, kitchenStatus, toText(row.fulfillment_type || metadata.fulfillmentType)),
     fulfillmentType: toText(row.fulfillment_type || metadata.fulfillmentType),
     paymentMethod: toText(row.payment_method || metadata.paymentMethod),
+    pickupTimeText: toText(row.pickup_time_text || metadata.pickupTimeText || metadata.pickup_time_text || nestedMetadata.pickupTimeText || nestedMetadata.pickup_time_text),
     subtotal: toNumber(row.subtotal ?? metadata.subtotal, 0),
     shippingFee: toNumber(row.shipping_fee ?? metadata.shippingFee, 0),
     promoCode: toText(row.promo_code || metadata.promoCode || metadata.couponCode),

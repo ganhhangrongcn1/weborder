@@ -1,4 +1,5 @@
-﻿import { formatMoney } from "../../../utils/format.js";
+import { formatMoney } from "../../../utils/format.js";
+import { getOrderItemOptionLabels } from "../../../utils/orderItemDisplay.js";
 
 export default function AdminOrderDetailModal({ order, onClose }) {
   const items = order.items || [];
@@ -36,24 +37,24 @@ export default function AdminOrderDetailModal({ order, onClose }) {
             <div className="admin-option-head">
               <h3>Món trong đơn</h3>
             </div>
-            {items.map((item, index) => (
-              <div key={`${item.id || item.name}-${index}`} className="admin-option-group">
-                <div className="admin-option-group-row">
-                  <strong>{item.name}</strong>
-                  <span>x{item.quantity || 1}</span>
-                  <span>{formatMoney(Number(item.lineTotal || 0))}</span>
-                </div>
-                {(item.toppings || []).length > 0 && (
-                  <div className="admin-option-item-row">
-                    <small>
-                      {(item.toppings || [])
-                        .map((topping) => `${topping.name}${topping.quantity ? ` x${topping.quantity}` : ""}`)
-                        .join(", ")}
-                    </small>
+            {items.map((item, index) => {
+              const optionLabels = getOrderItemOptionLabels(item, { includeQuantity: true });
+
+              return (
+                <div key={`${item.id || item.name}-${index}`} className="admin-option-group">
+                  <div className="admin-option-group-row">
+                    <strong>{item.name}</strong>
+                    <span>x{item.quantity || 1}</span>
+                    <span>{formatMoney(Number(item.lineTotal || 0))}</span>
                   </div>
-                )}
-              </div>
-            ))}
+                  {optionLabels.length > 0 && (
+                    <div className="admin-option-item-row">
+                      <small>{optionLabels.join(", ")}</small>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <div className="admin-option-group">
               <div className="admin-option-group-row">
                 <strong>Tạm tính món</strong>

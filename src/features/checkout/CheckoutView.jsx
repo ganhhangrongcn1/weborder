@@ -11,7 +11,14 @@ import { deliveryFee, freeshipMinSubtotal } from "../../constants/storeConfig.js
 import { checkoutFallbackCoupons } from "../../data/storeDefaults.js";
 import { optionModalText } from "../../data/uiText.js";
 import { formatMoney } from "../../utils/format.js";
-import { getNearestPickupClock, getTodayInputDate } from "../../utils/dateTimeDefaults.js";
+import {
+  getBranchOpenClose,
+  getClockMinutes,
+  getTodayInputDate,
+  isPickupClockInBranchHours,
+  normalizePickupClock,
+  normalizePickupDate
+} from "../../utils/dateTimeDefaults.js";
 import { buildCheckoutPromoCodes, buildShippingZonesFromConfig, calculateCheckoutPricing } from "./checkoutPricing.js";
 import { resolvePickupBranches } from "./checkoutDomain.js";
 import useCheckoutActions from "./useCheckoutActions.js";
@@ -72,8 +79,8 @@ export default function Checkout({
   const [selectedBranch, setSelectedBranch] = useState(checkoutPreset?.selectedBranch || "");
   const [isChangingBranch, setIsChangingBranch] = useState(false);
   const [pickupMode, setPickupMode] = useState(isQrCounterOrder ? "soon" : (checkoutPreset?.pickupMode || "soon"));
-  const [pickupDate, setPickupDate] = useState(checkoutPreset?.pickupDate || getTodayInputDate());
-  const [pickupClock, setPickupClock] = useState(checkoutPreset?.pickupClock || getNearestPickupClock());
+  const [pickupDate, setPickupDate] = useState(() => normalizePickupDate(checkoutPreset?.pickupDate));
+  const [pickupClock, setPickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
   const [usePoints, setUsePoints] = useState(false);
   const [selectedPromo, setSelectedPromo] = useState(null);
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
@@ -285,6 +292,39 @@ export default function Checkout({
     setIsPlacingOrder(true);
 
     try {
+      if (fulfillmentType === "pickup" && pickupMode === "schedule" && !isQrCounterOrder) {
+        const today = getTodayInputDate();
+        if (pickupDate !== today) {
+          setCheckoutNotice({
+            icon: "warning",
+            title: "Chỉ nhận đơn trong ngày",
+            message: "Quán chỉ nhận đơn hẹn lấy trong ngày hôm nay. Bạn vui lòng chọn lại ngày lấy hôm nay và giờ trong khung giờ bán."
+          });
+          return;
+        }
+
+        if (!isPickupClockInBranchHours(pickupClock, selectedBranchInfo)) {
+          const { open, close } = getBranchOpenClose(selectedBranchInfo);
+          setCheckoutNotice({
+            icon: "warning",
+            title: "Giờ lấy ngoài khung phục vụ",
+            message: `Chi nhánh này nhận đơn đến lấy từ ${open} đến ${close}. Bạn vui lòng chọn giờ lấy trong khung giờ bán hôm nay.`
+          });
+          return;
+        }
+
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        if (getClockMinutes(pickupClock) <= currentMinutes) {
+          setCheckoutNotice({
+            icon: "warning",
+            title: "Giờ lấy đã qua",
+            message: "Bạn vui lòng chọn giờ lấy muộn hơn thời gian hiện tại để quán có thời gian chuẩn bị món."
+          });
+          return;
+        }
+      }
+
       if (fulfillmentType === "delivery") {
         if (!deliveryAvailable) {
           setCheckoutNotice({

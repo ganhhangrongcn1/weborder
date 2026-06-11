@@ -1,4 +1,5 @@
 import { getKitchenRecipeOptions } from "./kitchenOptionDisplay.js";
+import { parsePickupTimeText } from "../../utils/dateTimeDefaults.js";
 
 function toText(value = "") {
   return String(value || "").trim();
@@ -57,7 +58,61 @@ export function isKitchenOrderDone(order = {}) {
   return order.sourceType === "partner" && ["done", "cancelled"].includes(kitchenStatus);
 }
 
+function getScheduledPickupSortInfo(order = {}, now = Date.now()) {
+  const isWebsitePickup =
+    toText(order.sourceType).toLowerCase() === "website" &&
+    toText(order.fulfillmentType).toLowerCase() === "pickup";
+  if (!isWebsitePickup) {
+    return {
+      scheduled: false,
+      priority: 1,
+      timeValue: getKitchenOrderTimeValue(order) || Number.POSITIVE_INFINITY
+    };
+  }
+
+  const pickup = parsePickupTimeText(
+    order.pickupTimeText ||
+      order.raw?.pickup_time_text ||
+      order.raw?.metadata?.pickupTimeText ||
+      order.raw?.metadata?.pickup_time_text
+  );
+  if (!pickup.scheduled) {
+    return {
+      scheduled: false,
+      priority: 1,
+      timeValue: getKitchenOrderTimeValue(order) || Number.POSITIVE_INFINITY
+    };
+  }
+
+  const pickupTimeValue = pickup.dateTime.getTime();
+  const minutesUntilPickup = Math.ceil((pickupTimeValue - now) / 60000);
+
+  if (minutesUntilPickup <= 0) {
+    return {
+      scheduled: true,
+      priority: 0,
+      timeValue: pickupTimeValue
+    };
+  }
+
+  if (minutesUntilPickup <= 25) {
+    return {
+      scheduled: true,
+      priority: 2,
+      timeValue: pickupTimeValue
+    };
+  }
+
+  return {
+    scheduled: true,
+    priority: 3,
+    timeValue: pickupTimeValue
+  };
+}
+
 export function sortKitchenOrdersForBoard(orders = []) {
+  const now = Date.now();
+
   return [...orders].sort((first, second) => {
     const firstDoing = !isKitchenOrderDone(first);
     const secondDoing = !isKitchenOrderDone(second);
@@ -65,8 +120,12 @@ export function sortKitchenOrdersForBoard(orders = []) {
     if (firstDoing !== secondDoing) return firstDoing ? -1 : 1;
 
     if (firstDoing && secondDoing) {
-      const firstTime = getKitchenOrderTimeValue(first) || Number.POSITIVE_INFINITY;
-      const secondTime = getKitchenOrderTimeValue(second) || Number.POSITIVE_INFINITY;
+      const firstSort = getScheduledPickupSortInfo(first, now);
+      const secondSort = getScheduledPickupSortInfo(second, now);
+      if (firstSort.priority !== secondSort.priority) return firstSort.priority - secondSort.priority;
+
+      const firstTime = firstSort.timeValue;
+      const secondTime = secondSort.timeValue;
       if (firstTime !== secondTime) return firstTime - secondTime;
     }
 

@@ -3,15 +3,14 @@ import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard, CustomerLoadingState, CustomerModalFrame } from "../../components/customer/CustomerUI.jsx";
 import { loadZaloConfigAsync, renderZaloTemplate, buildZaloLink } from "../../services/zaloService.js";
 import { formatMoney } from "../../utils/format.js";
+import { getOrderItemOptionLabels } from "../../utils/orderItemDisplay.js";
+import { getTodayInputDate, parsePickupTimeText } from "../../utils/dateTimeDefaults.js";
 
 const SUCCESS_PREPARING_MS = 4000;
 
 function buildOrderItemsText(orderItems) {
   return orderItems.map((item, index) => {
-    const options = [
-      item.spice,
-      ...(item.toppings || []).map((topping) => topping.name + (topping.quantity ? ` x${topping.quantity}` : ""))
-    ].filter(Boolean).join(", ");
+    const options = getOrderItemOptionLabels(item, { includeQuantity: true, includeNote: false }).join(", ");
 
     return `${index + 1}. ${item.name} x${item.quantity}${options ? ` (${options})` : ""} - ${formatMoney(item.lineTotal || 0)}`;
   }).join("\n");
@@ -34,6 +33,12 @@ function placeOrderLinkFirst(template) {
     : lines;
   const cleanedRemainingLines = remainingLines[0] === "" ? remainingLines.slice(1) : remainingLines;
   return [orderLinkLine, "", ...cleanedRemainingLines].join("\n");
+}
+
+function formatPickupTimeForZalo(value = "") {
+  const pickup = parsePickupTimeText(value);
+  if (!pickup.scheduled) return String(value || "").trim();
+  return pickup.date === getTodayInputDate() ? `${pickup.clock} hôm nay` : `${pickup.clock} - ${pickup.date}`;
 }
 
 export default function OrderSuccess({
@@ -79,6 +84,7 @@ export default function OrderSuccess({
     shipping_fee: isPickup ? "Không tính phí giao hàng" : formatMoney(shippingFeeValue),
     order_code: orderCode,
     order_time: order?.createdAt ? new Date(order.createdAt).toLocaleString("vi-VN") : new Date().toLocaleString("vi-VN"),
+    pickup_time: isPickup ? formatPickupTimeForZalo(order?.pickupTimeText) : "",
     fulfillment_type: isPickup ? "Đến lấy" : "Giao tận nơi",
     pickup_branch: [order?.pickupBranchName || order?.branchName || "", order?.pickupBranchAddress || order?.branchAddress || ""].filter(Boolean).join(" - "),
     delivery_branch: [order?.deliveryBranchName || "", order?.deliveryBranchAddress || ""].filter(Boolean).join(" - "),

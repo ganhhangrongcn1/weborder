@@ -10,7 +10,7 @@ import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { homeText, optionModalText } from "../../data/uiText.js";
 import { closeOnlyOnBackdrop } from "../../utils/uiEvents.js";
-import { getNearestPickupClock, getTodayInputDate } from "../../utils/dateTimeDefaults.js";
+import { normalizePickupClock, normalizePickupDate } from "../../utils/dateTimeDefaults.js";
 import {
   buildHomeCategories,
   formatCountdown,
@@ -116,8 +116,8 @@ export default function Home({
   const [pickupBranch, setPickupBranch] = useState(checkoutPreset?.selectedBranch || "phu-hoa");
   const [selectedDeliveryBranch, setSelectedDeliveryBranch] = useState(checkoutPreset?.selectedDeliveryBranch || "");
   const [pickupMode, setPickupMode] = useState(checkoutPreset?.pickupMode || "soon");
-  const [pickupDate, setPickupDate] = useState(checkoutPreset?.pickupDate || getTodayInputDate());
-  const [pickupClock, setPickupClock] = useState(checkoutPreset?.pickupClock || getNearestPickupClock());
+  const [pickupDate, setPickupDate] = useState(() => normalizePickupDate(checkoutPreset?.pickupDate));
+  const [pickupClock, setPickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
   const [homeCategory, setHomeCategory] = useState("");
   const [showAllHomeProducts, setShowAllHomeProducts] = useState(false);
   const [homePopupOpen, setHomePopupOpen] = useState(false);

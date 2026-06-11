@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { formatMoney } from "../../../utils/format.js";
+import { getOrderItemOptionLabels } from "../../../utils/orderItemDisplay.js";
 import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 
 export default function OrderStatusSheet({
@@ -140,7 +141,7 @@ export default function OrderStatusSheet({
 
         <div className="order-detail-list">
           {orderItems.map((item, index) => {
-            const options = [item.spice, ...(item.toppings || []).map((topping) => topping.name), item.note ? `Ghi chú: ${item.note}` : ""].filter(Boolean);
+            const options = getOrderItemOptionLabels(item);
             const lineTotal = item.lineTotal || (item.unitTotal || item.price || 0) * (item.quantity || 1);
             return (
               <div key={item.cartId || `${order.orderCode}-${item.id || "item"}-${item.name || "name"}-${index}`} className="order-detail-item">

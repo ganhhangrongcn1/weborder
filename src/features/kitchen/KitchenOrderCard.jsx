@@ -7,6 +7,11 @@ import {
 } from "./kitchenOrderGrouping.js";
 import { getNextKitchenOrderAction } from "../../services/kitchenOrderService.js";
 import { getKitchenOrderTheme, getKitchenPlatformTone } from "./kitchenPlatformTheme.js";
+import {
+  formatPickupCountdown,
+  getScheduledPickupTone,
+  parsePickupTimeText
+} from "../../utils/dateTimeDefaults.js";
 
 const UNIT_PROGRESS_STORAGE_KEY = "ghr:kitchen-unit-progress:v1";
 const TOPPING_PROGRESS_STORAGE_KEY = "ghr:kitchen-topping-progress:v1";
@@ -493,6 +498,17 @@ function formatDeliveryTime(value = "") {
   });
 }
 
+function getKitchenShortOrderCode(order = {}) {
+  const display = String(order.displayOrderCode || "").trim();
+  if (display) return display;
+
+  const fullCode = String(order.orderCode || order.id || "").trim();
+  const digits = fullCode.replace(/\D/g, "");
+  if (digits.length >= 4) return digits.slice(-4);
+  if (fullCode.length >= 4) return fullCode.slice(-4);
+  return fullCode || "----";
+}
+
 function OptionChip({ children, optionLabel = "" }) {
   const parsedOption = optionLabel ? parseKitchenOptionLabel(optionLabel) : null;
 
@@ -710,6 +726,7 @@ export default function KitchenOrderCard({
   const [unitProgress, setUnitProgress] = useState(() => readProgress(UNIT_PROGRESS_STORAGE_KEY));
   const [toppingProgress, setToppingProgress] = useState(() => readProgress(TOPPING_PROGRESS_STORAGE_KEY));
   const [driverDetailsOpen, setDriverDetailsOpen] = useState(false);
+  const [pickupCountdownTick, setPickupCountdownTick] = useState(() => Date.now());
   const isCancelled = isExternallyCancelled(order);
   const isCancelledAcknowledged = isCancellationAcknowledged(order);
   const isPreorder = order.kitchenStatus === "preorder";
@@ -777,7 +794,31 @@ export default function KitchenOrderCard({
   const statusBadgeTone = isCancelled ? getStatusTone("cancelled") : getStatusTone(order.kitchenStatus);
   const statusBadgeText = isCancelled ? "Đã hủy từ NexPOS" : order.displayStatus;
   const collectAmount = getKitchenCollectAmount(order);
-  const shouldShowCollectBadge = active && collectAmount > 0;
+  const shouldShowCollectBadge = collectAmount > 0;
+  const pickupSchedule = parsePickupTimeText(
+    order.pickupTimeText ||
+      order.raw?.pickup_time_text ||
+      order.raw?.metadata?.pickupTimeText ||
+      order.raw?.metadata?.pickup_time_text
+  );
+  const isScheduledPickupOrder = String(order.fulfillmentType || "").toLowerCase() === "pickup" && pickupSchedule.scheduled;
+  const scheduledPickupTone = getScheduledPickupTone(pickupSchedule.text, new Date(pickupCountdownTick));
+  const scheduledPickupCountdown = formatPickupCountdown(pickupSchedule.text, new Date(pickupCountdownTick));
+  const scheduledPickupTheme = scheduledPickupTone === "due"
+    ? { background: "#fef2f2", border: "#fca5a5", color: "#b91c1c", card: "#fff7f7" }
+    : scheduledPickupTone === "soon"
+      ? { background: "#fff7ed", border: "#fdba74", color: "#c2410c", card: "#fffaf4" }
+      : { background: "#fefce8", border: "#fde047", color: "#a16207", card: "#fffef2" };
+  const pagerNumber = String(
+    order.pagerNumber ||
+    order.raw?.pager_number ||
+    order.raw?.metadata?.pagerNumber ||
+    order.raw?.metadata?.pager_number ||
+    order.raw?.metadata?.metadata?.pagerNumber ||
+    order.raw?.metadata?.metadata?.pager_number ||
+    ""
+  ).trim();
+  const shortOrderCode = getKitchenShortOrderCode(order);
 
   const isNarrowLayout = compact || tabletCompact;
   const itemGridColumns = compact
@@ -809,6 +850,14 @@ export default function KitchenOrderCard({
       return changed ? nextProgress : currentProgress;
     });
   }, [items, order.id, order.sourceType]);
+
+  useEffect(() => {
+    if (!isScheduledPickupOrder) return undefined;
+    const timer = window.setInterval(() => {
+      setPickupCountdownTick(Date.now());
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [isScheduledPickupOrder]);
 
   function handleToggleUnit(event, item, unitIndex) {
     event.stopPropagation();
@@ -909,7 +958,11 @@ export default function KitchenOrderCard({
           : isHighlighted
             ? "2px solid #8b5cf6"
             : `2px solid ${theme.border}`,
-        background: isHighlighted ? "#f5f3ff" : theme.background,
+        background: isHighlighted
+          ? "#f5f3ff"
+          : isScheduledPickupOrder && !isCancelled && !isKitchenOrderDone(order)
+            ? scheduledPickupTheme.card
+            : theme.background,
         borderRadius: 16,
         padding: 12,
         display: "grid",
@@ -962,7 +1015,7 @@ export default function KitchenOrderCard({
                 whiteSpace: "nowrap"
               }}
             >
-              {order.orderCode || order.id || "Chưa có mã đơn"}
+              #{shortOrderCode}
             </h3>
           </div>
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
@@ -974,12 +1027,22 @@ export default function KitchenOrderCard({
             <Badge tone={{ background: platformTone.background, border: platformTone.border, color: platformTone.color }} icon="shop">
               {order.platform || "Nguồn khác"}
             </Badge>
+            {pagerNumber ? (
+              <Badge tone={{ background: "#ecfdf5", border: "#86efac", color: "#166534" }} icon="badge">
+                Thẻ rung {pagerNumber}
+              </Badge>
+            ) : null}
             <Badge tone={statusBadgeTone} icon={isCancelled || isKitchenOrderDone(order) ? "badge" : "spark"}>
               {statusBadgeText}
             </Badge>
             {shouldShowCollectBadge ? (
               <Badge tone={{ background: "#fefce8", border: "#fde047", color: "#a16207" }} icon="cash">
                 Cần thu {formatKitchenMoney(collectAmount)}
+              </Badge>
+            ) : null}
+            {isScheduledPickupOrder ? (
+              <Badge tone={scheduledPickupTheme} icon="timer">
+                Hẹn lấy {pickupSchedule.clock}
               </Badge>
             ) : null}
           </div>
@@ -997,8 +1060,8 @@ export default function KitchenOrderCard({
               whiteSpace: "nowrap"
             }}
           >
-            <KitchenIcon name="shop" size={15} />
-            {order.displayOrderCode || order.orderCode || order.id}
+            <KitchenIcon name="badge" size={15} />
+            {pagerNumber ? `Thẻ rung ${pagerNumber}` : (order.displayOrderCode || order.orderCode || order.id)}
           </strong>
           <InfoLine icon="clock" color={theme.text}>
             {formatTime(order.createdAt)}
@@ -1072,6 +1135,29 @@ export default function KitchenOrderCard({
           <InfoLine icon="timer" color={isKitchenOrderDone(order) ? "#334155" : "#059669"} strong>
             {formatOrderTiming(order)}
           </InfoLine>
+          {isScheduledPickupOrder ? (
+            <div
+              style={{
+                border: `1px solid ${scheduledPickupTheme.border}`,
+                background: scheduledPickupTheme.background,
+                color: scheduledPickupTheme.color,
+                borderRadius: 10,
+                padding: "8px 10px",
+                display: "grid",
+                gap: 2,
+                width: "fit-content",
+                maxWidth: "100%",
+                fontSize: 12,
+                fontWeight: 850,
+                lineHeight: 1.2
+              }}
+            >
+              <strong style={{ fontSize: 13, fontWeight: 950 }}>
+                Khách lấy lúc {pickupSchedule.clock}
+              </strong>
+              <span>{scheduledPickupCountdown}</span>
+            </div>
+          ) : null}
         </div>
 
         <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: 6, justifyItems: compact ? "start" : "end", minWidth: 0 }}>
@@ -1143,9 +1229,12 @@ export default function KitchenOrderCard({
             const unitKey = `${itemKey}-${unitIndex}`;
             const itemDone = item.status === "done" || Boolean(unitProgress[unitKey]);
             const itemUpdating = updatingItemKey === itemKey;
-            const paidToppings = getPaidToppings(item);
+            const normalizedRecipeOptions = getKitchenRecipeOptions(item.options);
+            const paidToppings = normalizedRecipeOptions.filter((option) => option.group === "Ngon Hơn Khi Ăn Cùng" && option.value);
             const paidToppingKeys = buildPaidToppingOptionKeys(paidToppings);
-            const displayOptions = (item.options || []).filter((option) => !isPaidToppingDisplayOption(option, paidToppingKeys));
+            const displayOptions = normalizedRecipeOptions
+              .map((option) => option.label)
+              .filter((option) => !isPaidToppingDisplayOption(option, paidToppingKeys));
 
             return (
               <button

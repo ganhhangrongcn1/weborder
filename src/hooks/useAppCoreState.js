@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { orderRepository } from "../services/repositories/orderRepository.js";
 import { customerRepository } from "../services/repositories/customerRepository.js";
 import { STORAGE_KEYS } from "../services/repositories/storageKeys.js";
+import { getNearestPickupClock, getTodayInputDate } from "../utils/dateTimeDefaults.js";
 
 function isOpenOrderStatus(status) {
   const normalized = String(status || "").toLowerCase();
@@ -50,8 +51,8 @@ export default function useAppCoreState({ normalizeUserProfile, defaultUserProfi
     fulfillmentType: "delivery",
     selectedBranch: "phu-hoa",
     pickupMode: "soon",
-    pickupDate: "2026-05-02",
-    pickupClock: "12:30"
+    pickupDate: getTodayInputDate(),
+    pickupClock: getNearestPickupClock()
   });
 
   function setUserProfile(value) {

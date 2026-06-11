@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "../../../utils/format.js";
+import { getOrderItemOptionLabels } from "../../../utils/orderItemDisplay.js";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
 import { resolveOrderSourceKey } from "../../../services/partnerOrderService.js";
@@ -504,7 +505,7 @@ function OrderDetailPanel({
           <div className="admin-order-item-list">
             {items.map((item, index) => {
               const lineTotal = Number(item.lineTotal || (item.unitTotal || item.price || 0) * (item.quantity || 1));
-              const options = [item.spice, ...(item.toppings || []).map((topping) => `${topping.name}${topping.quantity ? ` x${topping.quantity}` : ""}`), item.note ? `Ghi chú: ${item.note}` : ""].filter(Boolean);
+              const options = getOrderItemOptionLabels(item, { includeQuantity: true });
               return (
                 <div key={`${item.id || item.name}-${index}`} className="admin-order-detail-item">
                   <div>
