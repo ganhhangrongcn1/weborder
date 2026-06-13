@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { getKitchenRecipeOptions, parseKitchenOptionLabel } from "./kitchenOptionDisplay.js";
+import {
+  getKitchenRecipeOptions,
+  isKitchenPaidToppingGroup,
+  isKitchenPaidToppingOption,
+  isKitchenRecipeOnlyGroup,
+  isKitchenRecipeOnlyOption,
+  normalizeKitchenOptionText,
+  parseKitchenOptionLabel
+} from "./kitchenOptionDisplay.js";
 import {
   getKitchenOrderDoneTimeValue,
   getKitchenOrderTimeValue,
@@ -37,18 +45,71 @@ function getItemQuantity(item = {}) {
   return Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
 }
 
-function getPaidToppings(item = {}) {
-  return getKitchenRecipeOptions(item.options).filter((option) => option.group === "Ngon Hơn Khi Ăn Cùng" && option.value);
+function isRecipeOnlyKitchenOption(option = {}) {
+  return (
+    isKitchenRecipeOnlyOption(option.group) ||
+    isKitchenRecipeOnlyOption(option.value) ||
+    isKitchenRecipeOnlyOption(option.label)
+  );
 }
 
-function normalizeKitchenOptionText(value = "") {
-  return String(value || "")
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/Ä‘/g, "d")
-    .replace(/\s+/g, " ");
+function getRecipeOnlyDisplayLabel(option = {}) {
+  const value = String(option.value || "").trim();
+  const label = String(option.label || "").trim();
+  const parsed = parseKitchenOptionLabel(label);
+
+  if (isKitchenRecipeOnlyGroup(option.group) && value) return label || `${option.group}: ${value}`;
+  if (isKitchenRecipeOnlyOption(label)) return parsed.group && parsed.value ? `${parsed.group}: ${parsed.value}` : label;
+  if (isKitchenRecipeOnlyOption(value)) return value;
+  return "";
+}
+
+function isRecipeOnlyGroupHeader(label = "") {
+  return isKitchenRecipeOnlyGroup(label);
+}
+
+function compactKitchenDisplayOptions(options = []) {
+  const uniqueOptions = (Array.isArray(options) ? options : [])
+    .filter(Boolean)
+    .filter((option, index, list) => list.indexOf(option) === index);
+
+  return uniqueOptions.filter((option) => {
+    if (!isRecipeOnlyGroupHeader(option)) return true;
+
+    const headerKey = normalizeKitchenOptionText(option);
+    return !uniqueOptions.some((candidate) => {
+      const candidateKey = normalizeKitchenOptionText(candidate);
+      return candidateKey !== headerKey && candidateKey.startsWith(`${headerKey} `);
+    });
+  });
+}
+
+function getPaidToppings(item = {}) {
+  const fromOptions = getKitchenRecipeOptions(item.options)
+    .filter(isKitchenPaidToppingOption);
+
+  const fromToppings = (Array.isArray(item.toppings) ? item.toppings : [])
+    .map((topping) => {
+      const group = String(topping?.groupName || topping?.group || topping?.group_name || "").trim();
+      const value = String(topping?.name || topping?.label || topping?.value || "").trim();
+      const label = group ? `${group}: ${value}` : value;
+      if (!isKitchenPaidToppingGroup(group) || !value || isRecipeOnlyKitchenOption({ group, value, label })) return null;
+
+      return {
+        group: group || "Ngon Hơn Khi Ăn Cùng",
+        value,
+        label
+      };
+    })
+    .filter(Boolean);
+
+  const seen = new Set();
+  return [...fromOptions, ...fromToppings].filter((option) => {
+    const key = normalizeKitchenOptionText(`${option.group}:${option.value}`);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function buildPaidToppingOptionKeys(paidToppings = []) {
@@ -66,7 +127,7 @@ function buildPaidToppingOptionKeys(paidToppings = []) {
 
 function isPaidToppingDisplayOption(option = "", paidToppingKeys = new Set()) {
   const parsed = parseKitchenOptionLabel(option);
-  if (normalizeKitchenOptionText(parsed.group) === "ngon hon khi an cung") return true;
+  if (isKitchenPaidToppingGroup(parsed.group)) return true;
   return paidToppingKeys.has(normalizeKitchenOptionText(option));
 }
 
@@ -196,7 +257,14 @@ function getActionButtonTone(actionType = "", fallbackColor = "#111827") {
 
 function getPrintButtonConfig(printBillState = {}, printingBill = false) {
   const status = String(printBillState?.status || "").toLowerCase();
-  const errorMessage = String(printBillState?.error_message || printBillState?.errorMessage || "").toLowerCase();
+  const rawErrorMessage = String(
+    printBillState?.error_message ||
+      printBillState?.errorMessage ||
+      printBillState?.job?.error_message ||
+      printBillState?.job?.errorMessage ||
+      ""
+  ).trim();
+  const errorMessage = rawErrorMessage.toLowerCase();
 
   if (printingBill || status === "submitting") {
     return {
@@ -247,6 +315,7 @@ function getPrintButtonConfig(printBillState = {}, printingBill = false) {
     return {
       label: isAutoExpired ? "Quá 5 phút - In lại" : "In lỗi - In lại",
       disabled: false,
+      title: rawErrorMessage || "Lệnh in bị lỗi. Bấm để gửi lại lệnh in.",
       background: "#fff7ed",
       border: "#f97316",
       color: "#c2410c",
@@ -311,6 +380,29 @@ function getKitchenCollectAmount(order = {}) {
   const amount = totalAmount - shippingFee;
 
   return Number.isFinite(amount) ? Math.max(amount, 0) : 0;
+}
+
+function isKitchenOrderPaid(order = {}) {
+  const metadata = order.raw?.metadata && typeof order.raw.metadata === "object" ? order.raw.metadata : {};
+  const nestedMetadata = metadata.metadata && typeof metadata.metadata === "object" ? metadata.metadata : {};
+  const paymentStatus = String(
+    order.paymentStatus ||
+      metadata.paymentStatus ||
+      metadata.payment_status ||
+      nestedMetadata.paymentStatus ||
+      nestedMetadata.payment_status ||
+      ""
+  ).trim().toLowerCase();
+  const paidAt = String(
+    order.paidAt ||
+      metadata.paidAt ||
+      metadata.paid_at ||
+      nestedMetadata.paidAt ||
+      nestedMetadata.paid_at ||
+      ""
+  ).trim();
+
+  return paymentStatus === "paid" || Boolean(paidAt);
 }
 
 function getMemberTierTone(memberTier = "") {
@@ -794,7 +886,8 @@ export default function KitchenOrderCard({
   const statusBadgeTone = isCancelled ? getStatusTone("cancelled") : getStatusTone(order.kitchenStatus);
   const statusBadgeText = isCancelled ? "Đã hủy từ NexPOS" : order.displayStatus;
   const collectAmount = getKitchenCollectAmount(order);
-  const shouldShowCollectBadge = collectAmount > 0;
+  const isPaid = isKitchenOrderPaid(order);
+  const shouldShowCollectBadge = collectAmount > 0 && !isPaid;
   const pickupSchedule = parsePickupTimeText(
     order.pickupTimeText ||
       order.raw?.pickup_time_text ||
@@ -1035,6 +1128,11 @@ export default function KitchenOrderCard({
             <Badge tone={statusBadgeTone} icon={isCancelled || isKitchenOrderDone(order) ? "badge" : "spark"}>
               {statusBadgeText}
             </Badge>
+            {isPaid ? (
+              <Badge tone={{ background: "#dcfce7", border: "#86efac", color: "#166534" }} icon="cash">
+                Đã thanh toán
+              </Badge>
+            ) : null}
             {shouldShowCollectBadge ? (
               <Badge tone={{ background: "#fefce8", border: "#fde047", color: "#a16207" }} icon="cash">
                 Cần thu {formatKitchenMoney(collectAmount)}
@@ -1229,12 +1327,15 @@ export default function KitchenOrderCard({
             const unitKey = `${itemKey}-${unitIndex}`;
             const itemDone = item.status === "done" || Boolean(unitProgress[unitKey]);
             const itemUpdating = updatingItemKey === itemKey;
+            const paidToppings = getPaidToppings(item);
             const normalizedRecipeOptions = getKitchenRecipeOptions(item.options);
-            const paidToppings = normalizedRecipeOptions.filter((option) => option.group === "Ngon Hơn Khi Ăn Cùng" && option.value);
             const paidToppingKeys = buildPaidToppingOptionKeys(paidToppings);
-            const displayOptions = normalizedRecipeOptions
-              .map((option) => option.label)
-              .filter((option) => !isPaidToppingDisplayOption(option, paidToppingKeys));
+            const displayOptions = compactKitchenDisplayOptions(normalizedRecipeOptions
+              .flatMap((option) => {
+                const recipeOnlyLabel = getRecipeOnlyDisplayLabel(option);
+                if (recipeOnlyLabel) return [recipeOnlyLabel];
+                return isPaidToppingDisplayOption(option.label, paidToppingKeys) ? [] : [option.label];
+              }));
 
             return (
               <button
@@ -1243,7 +1344,7 @@ export default function KitchenOrderCard({
                 disabled={!canToggleItems || Boolean(updatingItemKey)}
                 onClick={(event) => handleToggleUnit(event, item, unitIndex)}
                 style={{
-                  minHeight: item.note || getPaidToppings(item).length ? 220 : tabletCompact ? 88 : 122,
+                  minHeight: item.note || paidToppings.length ? 220 : tabletCompact ? 88 : 122,
                   height: "auto",
                   textAlign: "left",
                   border: itemHighlighted ? "2px solid #8b5cf6" : "1px solid #dbe3ef",
@@ -1383,6 +1484,7 @@ export default function KitchenOrderCard({
         </button>
         <button
           type="button"
+          title={printButtonConfig.title || ""}
           disabled={printButtonConfig.disabled}
           onClick={(event) => {
             event.stopPropagation();
