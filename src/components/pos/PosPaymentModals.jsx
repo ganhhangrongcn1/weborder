@@ -1,0 +1,157 @@
+import { buildPosPaymentReference, buildPosQrImageUrl, calculateCashChange, getPosQrPaymentConfig, normalizeCashReceived } from "../../services/posPaymentService.js";
+import { createPosOrderIdentity } from "../../services/posService.js";
+import { PosIcon } from "./PosPrimitives.jsx";
+import { formatMoney } from "./posHelpers.js";
+
+const CASH_SUGGESTIONS = [50000, 100000, 200000, 500000];
+
+export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClose, onConfirm }) {
+  const normalized = normalizeCashReceived(cashReceived);
+  const change = calculateCashChange(amount, normalized);
+
+  return (
+    <div className="pos-modal-layer" role="presentation">
+      <button type="button" className="pos-modal-backdrop" aria-label="Đóng thanh toán tiền mặt" onClick={onClose} />
+      <section className="pos-cash-payment-modal" role="dialog" aria-modal="true">
+        <header>
+          <div>
+            <span>Tiền mặt</span>
+            <strong>Xác nhận thanh toán</strong>
+          </div>
+          <button type="button" onClick={onClose}>Đóng</button>
+        </header>
+        <div className="pos-cash-summary">
+          <div>
+            <span>Cần thu</span>
+            <strong>{formatMoney(amount)}</strong>
+          </div>
+          <div>
+            <span>Tiền thối</span>
+            <strong>{formatMoney(change)}</strong>
+          </div>
+        </div>
+        <div className="pos-cash-suggestions">
+          {CASH_SUGGESTIONS.map((value) => (
+            <button key={value} type="button" onClick={() => setCashReceived(String(value))}>
+              {formatMoney(value)}
+            </button>
+          ))}
+        </div>
+        <label>
+          <span>Tiền khách đưa</span>
+          <input
+            value={cashReceived}
+            onChange={(event) => setCashReceived(event.target.value)}
+            inputMode="numeric"
+            placeholder="Nhập số tiền"
+            autoFocus
+          />
+        </label>
+        <button type="button" className="pos-modal-primary" disabled={normalized < amount} onClick={onConfirm}>
+          Xác nhận đã thanh toán
+        </button>
+      </section>
+    </div>
+  );
+}
+
+export function QrPaymentModal({ branch, amount, draftOrder, processing, onClose, onConfirmPaid }) {
+  const identity = draftOrder || createPosOrderIdentity(new Date());
+  const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
+  const config = getPosQrPaymentConfig(branch);
+  const transferContent = buildPosPaymentReference(identity, branch);
+
+  const handlePrintQr = () => {
+    if (!qrUrl) return;
+    const printWindow = window.open("", "_blank", "width=360,height=520");
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>In QR ${transferContent}</title>
+          <style>
+            body{font-family:system-ui,Arial,sans-serif;margin:0;padding:14px;text-align:center;color:#111827}
+            img{width:260px;max-width:100%;display:block;margin:8px auto}
+            strong{display:block;font-size:20px;margin-top:8px}
+            span{display:block;font-size:14px;margin-top:4px}
+          </style>
+        </head>
+        <body>
+          <img src="${qrUrl}" alt="QR thanh toán" />
+          <strong>${formatMoney(amount)}</strong>
+          <span>${transferContent}</span>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  return (
+    <div className="pos-modal-layer" role="presentation">
+      <button type="button" className="pos-modal-backdrop" aria-label="Đóng QR thanh toán" onClick={onClose} />
+      <section className="pos-qr-payment-modal" role="dialog" aria-modal="true">
+        <header>
+          <div>
+            <span>Chuyển khoản QR</span>
+            <strong>Quét mã để thanh toán</strong>
+          </div>
+          <div className="pos-qr-payment-header-actions">
+            {config.ready ? <button type="button" onClick={handlePrintQr}>In QR</button> : null}
+            <button type="button" onClick={onClose}>Đóng</button>
+          </div>
+        </header>
+        {config.ready ? (
+          <div className="pos-qr-payment-scroll">
+            <div className="pos-qr-payment-preview">
+              <img src={qrUrl} alt="QR thanh toán POS" />
+            </div>
+            <div className="pos-qr-payment-summary">
+              <div>
+                <span>Số tiền</span>
+                <strong>{formatMoney(amount)}</strong>
+              </div>
+              <div>
+                <span>Nội dung</span>
+                <strong>{transferContent}</strong>
+              </div>
+            </div>
+            {draftOrder ? (
+              <div className="pos-qr-draft-status">
+                <span>Đơn chờ thanh toán</span>
+                <strong>{draftOrder.displayOrderCode || draftOrder.orderCode}</strong>
+                <small>SePay sẽ tự xác nhận khi tiền vào tài khoản. Chỉ xác nhận tay khi cần dự phòng.</small>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="pos-create-message is-error">
+            Chi nhánh này chưa cấu hình thông tin ngân hàng để tạo QR thanh toán.
+          </div>
+        )}
+        {config.ready ? (
+          <div className="pos-qr-payment-actions">
+            <button type="button" className="pos-modal-primary" disabled={processing || !draftOrder} onClick={onConfirmPaid}>
+              {processing ? "Đang xử lý..." : "Xác nhận tay"}
+            </button>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+export function PaymentMethodButton({ active, iconName, label, disabled, onClick }) {
+  return (
+    <button type="button" className={`pos-payment-method-button ${active ? "is-active" : ""}`} disabled={disabled} onClick={onClick}>
+      <span>
+        <PosIcon name={iconName} />
+      </span>
+      <strong>{label}</strong>
+    </button>
+  );
+}
+
