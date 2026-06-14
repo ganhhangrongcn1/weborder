@@ -234,6 +234,40 @@ export async function readPosPaymentSession(sessionId = "") {
   return result.session;
 }
 
+export async function subscribePosPaymentSession(sessionId = "", onChange) {
+  const safeSessionId = toText(sessionId);
+  if (!safeSessionId || typeof onChange !== "function") return () => {};
+
+  const client = await getClient();
+  if (!client) return () => {};
+
+  const channel = client
+    .channel(`pos-payment-session-${safeSessionId}-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "pos_payment_sessions",
+        filter: `id=eq.${safeSessionId}`
+      },
+      (payload) => {
+        const nextRow = payload?.new;
+        if (!nextRow?.id) return;
+        onChange(normalizeSessionRow(nextRow), payload);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    try {
+      client.removeChannel(channel);
+    } catch {
+      // noop
+    }
+  };
+}
+
 export function cancelPosPaymentSession(sessionId = "", reason = "") {
   return invokeSessionAction({
     action: "cancel",

@@ -17,7 +17,8 @@ import {
   confirmPosPaymentSessionManually,
   createPosPaymentSession,
   markPosPaymentSessionConverted,
-  readPosPaymentSession
+  readPosPaymentSession,
+  subscribePosPaymentSession
 } from "../services/posPaymentSessionService.js";
 import { clearPosSession, getBranchValue, readPosSession } from "../services/posSessionService.js";
 import {
@@ -735,41 +736,60 @@ export default function PosPage({ products = [], categories = [], branches = [],
     let active = true;
     let finalizing = false;
     let pollTimer = null;
+    let unsubscribeRealtime = () => {};
+
+    const handlePaymentSession = async (session) => {
+      if (!active || finalizing) return;
+      if (!session) return;
+
+      setQrDraftOrder(session);
+      const status = toText(session.status).toLowerCase();
+      const expiresAt = new Date(session.expiresAt || "").getTime();
+      if (
+        status === "pending_payment" &&
+        Number.isFinite(expiresAt) &&
+        expiresAt <= Date.now()
+      ) {
+        await cancelPosPaymentSession(session.id, "Phiên QR hết hạn sau 15 phút");
+        if (!active) return;
+        setQrDraftOrder(null);
+        setQrPreviewIdentity(null);
+        setQrPaymentOpen(false);
+        setQrDraftError("");
+        setCreateError("Mã QR đã hết hạn. Bấm QR chuyển khoản để tạo mã mới.");
+        return;
+      }
+      if (["paid", "converting", "converted"].includes(status)) {
+        finalizing = true;
+        const completed = await finalizePaidQrSession(session);
+        if (!completed) finalizing = false;
+      }
+    };
 
     const checkPaymentSession = async () => {
-      if (!active || finalizing) return;
+      if (!active || finalizing || document.visibilityState !== "visible") return;
       try {
         const session = await readPosPaymentSession(qrDraftOrder.id);
-        if (!active || !session) return;
-        setQrDraftOrder(session);
-        const status = toText(session.status).toLowerCase();
-        const expiresAt = new Date(session.expiresAt || "").getTime();
-        if (
-          status === "pending_payment" &&
-          Number.isFinite(expiresAt) &&
-          expiresAt <= Date.now()
-        ) {
-          await cancelPosPaymentSession(session.id, "Phiên QR hết hạn sau 15 phút");
-          if (!active) return;
-          setQrDraftOrder(null);
-          setQrPreviewIdentity(null);
-          setQrPaymentOpen(false);
-          setQrDraftError("");
-          setCreateError("Mã QR đã hết hạn. Bấm QR chuyển khoản để tạo mã mới.");
-          return;
-        }
-        if (["paid", "converting", "converted"].includes(status)) {
-          finalizing = true;
-          const completed = await finalizePaidQrSession(session);
-          if (!completed) finalizing = false;
-        }
+        await handlePaymentSession(session);
       } catch (error) {
         console.warn("[pos] Không kiểm tra được phiên thanh toán QR.", error);
       }
     };
 
+    subscribePosPaymentSession(qrDraftOrder.id, (session) => {
+      handlePaymentSession(session).catch((error) => {
+        console.warn("[pos] Không xử lý được cập nhật Realtime của phiên QR.", error);
+      });
+    }).then((unsubscribe) => {
+      if (!active) {
+        if (typeof unsubscribe === "function") unsubscribe();
+        return;
+      }
+      unsubscribeRealtime = typeof unsubscribe === "function" ? unsubscribe : () => {};
+    });
+
     checkPaymentSession();
-    pollTimer = window.setInterval(checkPaymentSession, 2000);
+    pollTimer = window.setInterval(checkPaymentSession, 12000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") checkPaymentSession();
@@ -780,6 +800,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       active = false;
       if (pollTimer) window.clearInterval(pollTimer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribeRealtime();
     };
   }, [qrDraftOrder?.id, qrDraftOrder?.isPaymentSession]);
 

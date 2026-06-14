@@ -57,3 +57,11 @@ select
 from public.pos_payment_sessions
 group by status
 order by status;
+
+select
+  schemaname,
+  tablename
+from pg_publication_tables
+where pubname = 'supabase_realtime'
+  and schemaname = 'public'
+  and tablename = 'pos_payment_sessions';
