@@ -99,44 +99,70 @@ export function ProductCard({ product, disabled, onAdd, formatMoney }) {
   );
 }
 
-export function PosPagerInlinePicker({ value, busyPagers = [], onSelect }) {
-  const normalizePager = (pager = "") => {
-    const text = String(pager || "").trim();
-    const digits = text.replace(/\D/g, "");
-    if (digits && digits.length <= 2) return digits.padStart(2, "0");
-    return text;
-  };
-  const activePager = normalizePager(value);
-  const busySet = new Set((Array.isArray(busyPagers) ? busyPagers : []).map(normalizePager).filter(Boolean));
+function normalizePagerValue(pager = "") {
+  const text = String(pager || "").trim();
+  const digits = text.replace(/\D/g, "");
+  if (digits && digits.length <= 2) return digits.padStart(2, "0");
+  return text;
+}
+
+export function PosPagerInlinePicker({ value, busyPagers = [], onOpen }) {
+  const activePager = normalizePagerValue(value);
+  const busySet = new Set((Array.isArray(busyPagers) ? busyPagers : []).map(normalizePagerValue).filter(Boolean));
+  const isBusy = activePager && busySet.has(activePager);
 
   return (
-    <section className="pos-pager-inline">
-      <div className="pos-pager-inline-head">
-        <div>
-          <span>Số thẻ rung</span>
-          <strong>{value || "Chưa chọn"}</strong>
+    <button
+      type="button"
+      className={`pos-pager-compact ${activePager && !isBusy ? "is-selected" : "needs-selection"}`}
+      onClick={onOpen}
+    >
+      <div>
+        <span>Thẻ rung</span>
+        <strong>{activePager ? `Thẻ ${activePager}` : "Chưa chọn"}</strong>
+      </div>
+      <em>{isBusy ? "Chọn thẻ khác" : activePager ? "Đổi" : "Chọn thẻ"}</em>
+    </button>
+  );
+}
+
+export function PosPagerModal({ open, value, busyPagers = [], onClose, onSelect }) {
+  if (!open) return null;
+
+  const activePager = normalizePagerValue(value);
+  const busySet = new Set((Array.isArray(busyPagers) ? busyPagers : []).map(normalizePagerValue).filter(Boolean));
+
+  return (
+    <div className="pos-modal-layer" role="presentation">
+      <button type="button" className="pos-modal-backdrop" aria-label="Đóng chọn thẻ rung" onClick={onClose} />
+      <section className="pos-pager-modal" role="dialog" aria-modal="true" aria-labelledby="pos-pager-modal-title">
+        <header>
+          <div>
+            <span>POS</span>
+            <strong id="pos-pager-modal-title">Chọn thẻ rung</strong>
+          </div>
+          <button type="button" onClick={onClose}>Đóng</button>
+        </header>
+        <div className="pos-pager-modal-grid">
+          {buildPagerOptions().map((pager) => {
+            const normalizedPager = normalizePagerValue(pager);
+            const isBusy = busySet.has(normalizedPager);
+            return (
+              <button
+                key={pager}
+                type="button"
+                className={`${activePager === normalizedPager ? "is-active" : ""} ${isBusy ? "is-disabled" : ""}`.trim()}
+                disabled={isBusy}
+                title={isBusy ? `Thẻ ${pager} đang có đơn chưa hoàn tất` : `Chọn thẻ ${pager}`}
+                onClick={() => onSelect(normalizedPager)}
+              >
+                {pager}
+              </button>
+            );
+          })}
         </div>
-        <em>{value ? "Bấm để đổi" : "Bắt buộc chọn"}</em>
-      </div>
-      <div className="pos-pager-inline-grid">
-        {buildPagerOptions().map((pager) => {
-          const normalizedPager = normalizePager(pager);
-          const isBusy = busySet.has(normalizedPager);
-          const disabled = isBusy;
-          return (
-            <button
-              key={pager}
-              type="button"
-              className={`${activePager === normalizedPager ? "is-active" : ""} ${disabled ? "is-disabled" : ""}`.trim()}
-              disabled={disabled}
-              title={isBusy ? `Thẻ ${pager} đang có đơn chưa hoàn tất` : `Chọn thẻ ${pager}`}
-              onClick={() => onSelect(normalizedPager)}
-            >
-              {pager}
-            </button>
-          );
-        })}
-      </div>
-    </section>
+        <small className="pos-pager-modal-note">Thẻ đang có đơn sẽ được khóa.</small>
+      </section>
+    </div>
   );
 }

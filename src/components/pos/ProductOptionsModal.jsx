@@ -58,7 +58,7 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
         <header>
           <div>
             <span>Tùy chọn món</span>
-            <strong>{product.name}</strong>
+            <strong className="pos-product-modal-title">{product.name}</strong>
           </div>
           <button type="button" onClick={onClose}>Đóng</button>
         </header>
@@ -70,6 +70,7 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
                 <strong>{group.name}</strong>
                 <span>{group.required ? "Bắt buộc" : "Không bắt buộc"}</span>
               </div>
+              {group.required ? <small className="pos-option-group-note">Chọn 1 mục trước khi thêm món</small> : null}
               <div className="pos-option-grid">
                 {(group.options || []).map((option) => (
                   <button

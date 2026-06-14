@@ -167,9 +167,9 @@ function CustomerPointsOverview({ customerLookup }) {
     <section className="pos-customer-card">
       <div className="pos-customer-head">
         <div>
-          <span>Lịch sử mua</span>
+          <span>Tổng hợp theo SĐT</span>
           <strong>{customer?.registeredCustomer ? "Thành viên" : "Khách vãng lai"}</strong>
-          <small>Gộp Website/POS và foodapp theo SĐT</small>
+          <small>Gộp theo SĐT</small>
         </div>
         <div>
           <span>Tổng đơn</span>
@@ -339,11 +339,11 @@ export default function PosCartPanel({
       <div className="pos-order-fields">
         <label>
           <span>Tên khách</span>
-          <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Không bắt buộc" disabled={draftLocked} />
+          <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Tên khách" disabled={draftLocked} />
         </label>
         <label>
           <span>SĐT</span>
-          <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="Không bắt buộc" inputMode="tel" disabled={draftLocked} />
+          <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="Số điện thoại" inputMode="tel" disabled={draftLocked} />
         </label>
         <div className="pos-order-field-actions">
           <button type="button" className="pos-inline-action-button" disabled={draftLocked || !canOpenCustomer || customerLookup.loading} onClick={() => setCustomerBenefitOpen(true)}>
@@ -384,11 +384,11 @@ export default function PosCartPanel({
               <div className="pos-order-fields">
                 <label>
                   <span>Tên khách</span>
-                  <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Không bắt buộc" disabled={draftLocked} />
+                  <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Tên khách" disabled={draftLocked} />
                 </label>
                 <label>
                   <span>Số điện thoại</span>
-                  <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="Không bắt buộc" inputMode="tel" disabled={draftLocked} />
+                  <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="Số điện thoại" inputMode="tel" disabled={draftLocked} />
                 </label>
               </div>
               <CustomerPointsOverview customerLookup={customerLookup} />
@@ -427,7 +427,7 @@ export default function PosCartPanel({
         </div>
       ) : null}
 
-      <div className="pos-cart-list">
+      <div className={`pos-cart-list ${cart.length ? "" : "is-empty"}`.trim()}>
         {cart.length ? cart.map((item) => (
           <CompactCartItem key={item.cartId} item={item} onQuantityChange={onQuantityChange} onRemove={onRemove} />
         )) : (
@@ -439,65 +439,70 @@ export default function PosCartPanel({
         )}
       </div>
 
-      <div className="pos-cart-footer">
-        {hasBenefitCompact ? (
-          <button type="button" className="pos-benefit-compact-trigger" onClick={() => setVoucherOpen(true)}>
-            <span>Ưu đãi & tư vấn</span>
-            <strong>{benefitCopy.title}</strong>
-            <small>{benefitCopy.subtitle}</small>
-            <em>Mở</em>
+      {cart.length ? (
+        <div className="pos-cart-footer">
+          {hasBenefitCompact ? (
+            <button type="button" className="pos-benefit-compact-trigger" onClick={() => setVoucherOpen(true)}>
+              <span>Ưu đãi & tư vấn</span>
+              <strong>{benefitCopy.title}</strong>
+              <small>{benefitCopy.subtitle}</small>
+              <em>Mở</em>
+            </button>
+          ) : null}
+
+          <div className="pos-total-box">
+            <div>
+              <span>Số món</span>
+              <strong>{totals.quantity}</strong>
+            </div>
+            <div>
+              <span>Tạm tính</span>
+              <strong>{formatMoney(totals.subtotal)}</strong>
+            </div>
+            {totals.voucherDiscount > 0 ? (
+              <div>
+                <span>Voucher</span>
+                <strong>-{formatMoney(totals.voucherDiscount)}</strong>
+              </div>
+            ) : null}
+            {totals.pointsDiscount > 0 ? (
+              <div>
+                <span>Điểm loyalty</span>
+                <strong>-{formatMoney(totals.pointsDiscount)}</strong>
+              </div>
+            ) : null}
+            <div className="pos-grand-total">
+              <span>Tổng cộng</span>
+              <strong>{formatMoney(totals.total)}</strong>
+            </div>
+          </div>
+
+          <section className="pos-payment-box pos-payment-box--footer">
+            <div className="pos-payment-methods pos-payment-methods--footer">
+              <PaymentMethodButton active={paymentMethod === "cash"} iconName="cash" label="Tiền mặt" disabled={draftLocked || qrDraftLoading} onClick={onOpenCashPayment} />
+              <PaymentMethodButton active={paymentMethod === "bank_qr"} iconName="qr" label={qrDraftLoading ? "Đang tạo QR" : "QR chuyển khoản"} disabled={qrDraftLoading} onClick={onOpenQrPayment} />
+            </div>
+            {paymentConfirmed ? (
+              <div className="pos-payment-status">
+                <span>Đã xác nhận thanh toán</span>
+                <strong>{paymentLabel} · {paymentConfirmed.reference}</strong>
+              </div>
+            ) : isQrWaiting ? (
+              <div className="pos-payment-status">
+                <span>Đơn đang chờ chuyển khoản</span>
+                <strong>{qrDraftOrder.orderCode || qrDraftOrder.displayOrderCode || qrDraftOrder.id}</strong>
+                <button type="button" className="pos-payment-status-action" onClick={onClear}>
+                  Hủy để sửa bill
+                </button>
+              </div>
+            ) : null}
+          </section>
+          {createError ? <div className="pos-create-message is-error">{createError}</div> : null}
+          <button type="button" className="pos-checkout-button" disabled={!canCreateOrder} onClick={onCreateOrder}>
+            {creatingOrder ? "Đang tạo đơn..." : "Tạo đơn"}
           </button>
-        ) : null}
-
-        <div className="pos-total-box">
-          <div>
-            <span>Số món</span>
-            <strong>{totals.quantity}</strong>
-          </div>
-          <div>
-            <span>Tạm tính</span>
-            <strong>{formatMoney(totals.subtotal)}</strong>
-          </div>
-          {totals.voucherDiscount > 0 ? (
-            <div>
-              <span>Voucher</span>
-              <strong>-{formatMoney(totals.voucherDiscount)}</strong>
-            </div>
-          ) : null}
-          {totals.pointsDiscount > 0 ? (
-            <div>
-              <span>Điểm loyalty</span>
-              <strong>-{formatMoney(totals.pointsDiscount)}</strong>
-            </div>
-          ) : null}
-          <div className="pos-grand-total">
-            <span>Tổng cộng</span>
-            <strong>{formatMoney(totals.total)}</strong>
-          </div>
         </div>
-
-        <section className="pos-payment-box pos-payment-box--footer">
-          <div className="pos-payment-methods pos-payment-methods--footer">
-            <PaymentMethodButton active={paymentMethod === "cash"} iconName="cash" label="Tiền mặt" disabled={draftLocked || qrDraftLoading} onClick={onOpenCashPayment} />
-            <PaymentMethodButton active={paymentMethod === "bank_qr"} iconName="qr" label={qrDraftLoading ? "Đang tạo QR" : "QR chuyển khoản"} disabled={qrDraftLoading} onClick={onOpenQrPayment} />
-          </div>
-          {paymentConfirmed ? (
-            <div className="pos-payment-status">
-              <span>Đã xác nhận thanh toán</span>
-              <strong>{paymentLabel} · {paymentConfirmed.reference}</strong>
-            </div>
-          ) : isQrWaiting ? (
-            <div className="pos-payment-status">
-              <span>Đơn đang chờ chuyển khoản</span>
-              <strong>{qrDraftOrder.displayOrderCode || qrDraftOrder.orderCode}</strong>
-            </div>
-          ) : null}
-        </section>
-        {createError ? <div className="pos-create-message is-error">{createError}</div> : null}
-        <button type="button" className="pos-checkout-button" disabled={!canCreateOrder} onClick={onCreateOrder}>
-          {creatingOrder ? "Đang tạo đơn..." : "Tạo đơn"}
-        </button>
-      </div>
+      ) : null}
     </aside>
   );
 }

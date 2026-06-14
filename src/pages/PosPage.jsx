@@ -3,7 +3,7 @@ import PosCartPanel from "../components/pos/PosCartPanel.jsx";
 import PosLoginScreen from "../components/pos/PosLoginScreen.jsx";
 import { CashPaymentModal, QrPaymentModal } from "../components/pos/PosPaymentModals.jsx";
 import ProductOptionsModal from "../components/pos/ProductOptionsModal.jsx";
-import { CategoryButton, PosPagerInlinePicker, PosSessionBrand, ProductCard, UtilityActionButton } from "../components/pos/PosPrimitives.jsx";
+import { CategoryButton, PosPagerInlinePicker, PosPagerModal, PosSessionBrand, ProductCard, UtilityActionButton } from "../components/pos/PosPrimitives.jsx";
 import PosRecentOrdersPanel from "../components/pos/PosRecentOrdersPanel.jsx";
 import PosSettingsPanel from "../components/pos/PosSettingsPanel.jsx";
 import { formatMoney, getBranchLabel, getBranchUuid } from "../components/pos/posHelpers.js";
@@ -96,7 +96,14 @@ function buildPointRoundSuggestions(loyaltyBenefit = {}) {
     });
   }
 
-  return suggestions.slice(0, 4);
+  suggestions.sort((a, b) => a.points - b.points);
+  if (suggestions.length > 2) {
+    const first = suggestions[0];
+    const last = suggestions[suggestions.length - 1];
+    return first.points === last.points ? [first] : [first, last];
+  }
+
+  return suggestions;
 }
 
 function buildPosLoyaltyBenefit({ subtotal = 0, customer = null, coupons = [], selectedVoucherId = "", pointsInput = "" }) {
@@ -200,6 +207,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [posSession, setPosSession] = useState(() => readPosSession());
   const [activeWorkspace, setActiveWorkspace] = useState("orders");
   const [pagerNumber, setPagerNumber] = useState("");
+  const [pagerPickerOpen, setPagerPickerOpen] = useState(false);
+  const [pendingPagerProduct, setPendingPagerProduct] = useState(null);
   const [busyPagers, setBusyPagers] = useState([]);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -254,10 +263,12 @@ export default function PosPage({ products = [], categories = [], branches = [],
     busyPagers.map(normalizePagerNumber).includes(normalizePagerNumber(pagerNumber)) &&
     !qrDraftOrder;
   const draftLocked = Boolean(qrDraftOrder && !paymentConfirmed);
-  const isMenuLocked = !hasSelectedPager || selectedPagerIsBusy || draftLocked;
+  const isMenuLocked = draftLocked;
 
   const resetComposer = () => {
     setPagerNumber("");
+    setPagerPickerOpen(false);
+    setPendingPagerProduct(null);
     setCustomerName("");
     setCustomerPhone("");
     setCashReceived("");
@@ -413,25 +424,37 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setPaymentConfirmed(null);
   }, [paymentConfirmed, posTotals.total]);
 
-  const handleAddProduct = (product) => {
-    if (!hasSelectedPager) {
-      setCreateError("Nhân viên cần chọn thẻ rung trước khi thêm món.");
-      return;
-    }
-    if (selectedPagerIsBusy) {
-      setCreateError(`Thẻ rung ${pagerNumber} đang có đơn chưa hoàn thành. Vui lòng chọn thẻ khác.`);
-      return;
-    }
-    if (draftLocked) {
-      setCreateError("Đơn QR đang chờ thanh toán. Vui lòng chờ xác nhận hoặc hủy bill trước.");
-      return;
-    }
+  const continueAddProduct = (product) => {
+    if (!product) return;
     setCreateError("");
     if (Array.isArray(product.optionGroups) && product.optionGroups.length) {
       setConfiguringProduct(product);
       return;
     }
     addProduct(product);
+  };
+
+  const handleAddProduct = (product) => {
+    if (draftLocked) {
+      setCreateError("Đơn QR đang chờ thanh toán. Vui lòng chờ xác nhận hoặc hủy bill trước.");
+      return;
+    }
+    if (!hasSelectedPager || selectedPagerIsBusy) {
+      setPendingPagerProduct(product);
+      setPagerPickerOpen(true);
+      setCreateError("");
+      return;
+    }
+    continueAddProduct(product);
+  };
+
+  const handleSelectPager = (nextPager) => {
+    const pendingProduct = pendingPagerProduct;
+    setPagerNumber(nextPager);
+    setPagerPickerOpen(false);
+    setPendingPagerProduct(null);
+    setCreateError("");
+    if (pendingProduct) continueAddProduct(pendingProduct);
   };
 
   const handleSubmitProductOptions = (product, config) => {
@@ -454,7 +477,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       return;
     }
 
-    const confirmed = window.confirm(`Hủy đơn chờ thanh toán ${qrDraftOrder.displayOrderCode || qrDraftOrder.orderCode || qrDraftOrder.id}?`);
+    const confirmed = window.confirm(`Hủy đơn chờ thanh toán ${qrDraftOrder.orderCode || qrDraftOrder.id || qrDraftOrder.displayOrderCode}?`);
     if (!confirmed) return;
 
     const result = await cancelPosOrderAsync(qrDraftOrder, {
@@ -718,16 +741,17 @@ export default function PosPage({ products = [], categories = [], branches = [],
                   <CategoryButton key={category} label={category} active={activeCategory === category} onClick={() => setActiveCategory(category)} />
                 ))}
               </nav>
+              <div className="pos-pager-toolbar">
+                <PosPagerInlinePicker
+                  value={pagerNumber}
+                  busyPagers={busyPagers}
+                  onOpen={() => {
+                    setPendingPagerProduct(null);
+                    setPagerPickerOpen(true);
+                  }}
+                />
+              </div>
               <div className={`pos-product-grid ${isMenuLocked ? "is-locked" : ""}`}>
-                {!hasSelectedPager ? (
-                  <div className="pos-grid-lock-notice">
-                    <strong>Nhân viên cần chọn thẻ rung trước khi thêm món</strong>
-                  </div>
-                ) : selectedPagerIsBusy ? (
-                  <div className="pos-grid-lock-notice">
-                    <strong>Thẻ rung {pagerNumber} đang có đơn chưa hoàn thành. Vui lòng chọn thẻ khác.</strong>
-                  </div>
-                ) : null}
                 {visibleProducts.length ? visibleProducts.map((product) => (
                   <ProductCard key={product.id} product={product} disabled={isMenuLocked} onAdd={handleAddProduct} formatMoney={formatMoney} />
                 )) : (
@@ -735,9 +759,6 @@ export default function PosPage({ products = [], categories = [], branches = [],
                     <strong>Không tìm thấy món phù hợp</strong>
                   </div>
                 )}
-              </div>
-              <div className="pos-menu-footer">
-                <PosPagerInlinePicker value={pagerNumber} busyPagers={busyPagers} onSelect={setPagerNumber} />
               </div>
             </section>
           ) : null}
@@ -811,6 +832,17 @@ export default function PosPage({ products = [], categories = [], branches = [],
       {configuringProduct ? (
         <ProductOptionsModal product={configuringProduct} onClose={() => setConfiguringProduct(null)} onSubmit={handleSubmitProductOptions} />
       ) : null}
+
+      <PosPagerModal
+        open={pagerPickerOpen}
+        value={pagerNumber}
+        busyPagers={busyPagers}
+        onClose={() => {
+          setPagerPickerOpen(false);
+          setPendingPagerProduct(null);
+        }}
+        onSelect={handleSelectPager}
+      />
 
       {cashPaymentOpen ? (
         <CashPaymentModal amount={posTotals.total} cashReceived={cashReceived} setCashReceived={setCashReceived} onClose={() => setCashPaymentOpen(false)} onConfirm={handleConfirmCash} />
