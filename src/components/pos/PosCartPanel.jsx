@@ -334,10 +334,17 @@ export default function PosCartPanel({
     (loyaltyBenefit?.normalVouchers || []).length ||
     selectedVoucher?.source === "checkout"
   );
-
   return (
     <aside className="pos-cart-panel">
       <div className="pos-order-fields">
+        <label>
+          <span>Tên khách</span>
+          <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Không bắt buộc" disabled={draftLocked} />
+        </label>
+        <label>
+          <span>SĐT</span>
+          <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="Không bắt buộc" inputMode="tel" disabled={draftLocked} />
+        </label>
         <div className="pos-order-field-actions">
           <button type="button" className="pos-inline-action-button" disabled={draftLocked || !canOpenCustomer || customerLookup.loading} onClick={() => setCustomerBenefitOpen(true)}>
             {actionLabel}
@@ -357,14 +364,6 @@ export default function PosCartPanel({
             <PosIcon name="trash" />
           </button>
         </div>
-        <label>
-          <span>Tên khách</span>
-          <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Không bắt buộc" disabled={draftLocked} />
-        </label>
-        <label>
-          <span>SĐT</span>
-          <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="Không bắt buộc" inputMode="tel" disabled={draftLocked} />
-        </label>
         <div className={`pos-order-field-status ${statusTone}`}>
           <span>{statusText}</span>
         </div>

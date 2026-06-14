@@ -8,16 +8,22 @@ const CASH_SUGGESTIONS = [50000, 100000, 200000, 500000];
 export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClose, onConfirm }) {
   const normalized = normalizeCashReceived(cashReceived);
   const change = calculateCashChange(amount, normalized);
+  const missing = Math.max(0, amount - normalized);
   const paidEnough = normalized >= amount;
+  const formattedCashReceived = normalized > 0 ? normalized.toLocaleString("vi-VN") : "";
+
+  const handleCashReceivedChange = (event) => {
+    setCashReceived(event.target.value.replace(/[^\d]/g, ""));
+  };
 
   return (
     <div className="pos-modal-layer" role="presentation">
       <button type="button" className="pos-modal-backdrop" aria-label="Đóng thanh toán tiền mặt" onClick={onClose} />
-      <section className="pos-cash-payment-modal" role="dialog" aria-modal="true">
+      <section className="pos-cash-payment-modal" role="dialog" aria-modal="true" aria-labelledby="pos-cash-payment-title">
         <header>
           <div>
             <span>Tiền mặt</span>
-            <strong>Xác nhận thanh toán</strong>
+            <strong id="pos-cash-payment-title">Xác nhận thanh toán</strong>
           </div>
           <button type="button" onClick={onClose}>Đóng</button>
         </header>
@@ -26,14 +32,15 @@ export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClos
             <span>Cần thu</span>
             <strong>{formatMoney(amount)}</strong>
           </div>
-          <div>
-            <span>Tiền thối</span>
-            <strong>{formatMoney(change)}</strong>
-          </div>
         </div>
         <div className="pos-cash-suggestions pos-cash-quick-grid">
           {CASH_SUGGESTIONS.map((value) => (
-            <button key={value} type="button" onClick={() => setCashReceived(String(value))}>
+            <button
+              key={value}
+              type="button"
+              className={normalized === value ? "is-selected" : ""}
+              onClick={() => setCashReceived(String(value))}
+            >
               {formatMoney(value)}
             </button>
           ))}
@@ -41,16 +48,22 @@ export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClos
         <label className="pos-payment-cash-input">
           <span>Tiền khách đưa</span>
           <input
-            value={cashReceived}
-            onChange={(event) => setCashReceived(event.target.value)}
+            value={formattedCashReceived}
+            onChange={handleCashReceivedChange}
             inputMode="numeric"
             placeholder="Nhập số tiền"
             autoFocus
           />
         </label>
-        <div className="pos-cash-payment-note">
-          <span>{paidEnough ? "Đủ thanh toán" : "Chưa đủ tiền khách đưa"}</span>
-          <strong>{formatMoney(normalized)}</strong>
+        <div className={`pos-cash-payment-note ${paidEnough ? "is-paid" : "is-missing"}`}>
+          <div>
+            <span>Khách đưa</span>
+            <strong>{formatMoney(normalized)}</strong>
+          </div>
+          <div>
+            <span>{paidEnough ? "Tiền thối" : "Còn thiếu"}</span>
+            <strong>{formatMoney(paidEnough ? change : missing)}</strong>
+          </div>
         </div>
         <button type="button" className="pos-modal-primary" disabled={!paidEnough} onClick={onConfirm}>
           Xác nhận đã thanh toán
@@ -102,7 +115,7 @@ export function QrPaymentModal({ branch, amount, draftOrder, previewIdentity, pr
         <header>
           <div>
             <span>Chuyển khoản QR</span>
-            <strong>Quét mã để thanh toán</strong>
+            <strong>Quét mã thanh toán</strong>
           </div>
           <div className="pos-qr-payment-header-actions">
             {config.ready ? <button type="button" onClick={handlePrintQr}>In QR</button> : null}
@@ -126,16 +139,14 @@ export function QrPaymentModal({ branch, amount, draftOrder, previewIdentity, pr
             </div>
             {draftOrder ? (
               <div className="pos-qr-draft-status">
-                <span>Đơn chờ thanh toán</span>
+                <span>Đang chờ thanh toán</span>
                 <strong>{draftOrder.displayOrderCode || draftOrder.orderCode}</strong>
-                <small>SePay sẽ tự xác nhận khi tiền vào tài khoản. Chỉ xác nhận tay khi cần dự phòng.</small>
               </div>
             ) : null}
             {loading ? (
               <div className="pos-qr-draft-status">
                 <span>Đang tạo đơn QR</span>
                 <strong>{transferContent}</strong>
-                <small>QR đã sẵn sàng để khách quét. Hệ thống đang lưu đơn chờ thanh toán.</small>
               </div>
             ) : null}
             {errorMessage ? (
