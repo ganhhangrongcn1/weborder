@@ -5,6 +5,25 @@ import {
   updatePosCartItemQuantity
 } from "../services/posService.js";
 
+function areGiftListsEqual(currentCart = [], nextGiftItems = []) {
+  const current = currentCart
+    .filter((item) => item?.metadata?.autoAddedGift || item?.metadata?.giftPromotionId)
+    .map((item) => ({
+      id: String(item.productId || item.id || ""),
+      promoId: String(item?.metadata?.giftPromotionId || ""),
+      qty: Number(item.quantity || 0)
+    }))
+    .sort((a, b) => `${a.promoId}-${a.id}`.localeCompare(`${b.promoId}-${b.id}`));
+  const next = nextGiftItems
+    .map((item) => ({
+      id: String(item.productId || item.id || ""),
+      promoId: String(item?.metadata?.giftPromotionId || ""),
+      qty: Number(item.quantity || 0)
+    }))
+    .sort((a, b) => `${a.promoId}-${a.id}`.localeCompare(`${b.promoId}-${b.id}`));
+  return JSON.stringify(current) === JSON.stringify(next);
+}
+
 export default function usePosCart() {
   const [cart, setCart] = useState([]);
   const [orderNote, setOrderNote] = useState("");
@@ -50,6 +69,19 @@ export default function usePosCart() {
     setCart((currentCart) => currentCart.filter((item) => item.cartId !== cartId));
   };
 
+  const syncGiftItems = (nextGiftItems = []) => {
+    setCart((currentCart) => {
+      const withoutGifts = currentCart.filter((item) => !(item?.metadata?.autoAddedGift || item?.metadata?.giftPromotionId));
+      if (!nextGiftItems.length) {
+        return withoutGifts.length === currentCart.length ? currentCart : withoutGifts;
+      }
+      if (areGiftListsEqual(currentCart, nextGiftItems)) {
+        return currentCart;
+      }
+      return [...nextGiftItems, ...withoutGifts];
+    });
+  };
+
   const clearCart = () => {
     setCart([]);
     setOrderNote("");
@@ -64,6 +96,7 @@ export default function usePosCart() {
     updateItem,
     updateQuantity,
     removeItem,
+    syncGiftItems,
     clearCart
   };
 }

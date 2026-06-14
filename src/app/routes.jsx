@@ -29,7 +29,19 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
 
       <Route path="/kitchen" element={<KitchenPage />} />
       <Route path="/download" element={<DownloadPage />} />
-      <Route path="/pos" element={<PosPage products={adminAppProps?.products || []} categories={adminAppProps?.adminCategories || []} branches={adminAppProps?.branches || []} coupons={adminAppProps?.coupons || []} toppings={adminAppProps?.toppings || []} />} />
+      <Route
+        path="/pos"
+        element={
+          <PosPage
+            products={adminAppProps?.products || []}
+            categories={adminAppProps?.adminCategories || []}
+            branches={adminAppProps?.branches || []}
+            coupons={adminAppProps?.coupons || []}
+            smartPromotions={adminAppProps?.smartPromotions || []}
+            toppings={adminAppProps?.toppings || []}
+          />
+        }
+      />
       <Route path="/qrcode" element={<QrCodeToolPage />} />
       <Route path="/banhkembanhtrang" element={<BanhKemBanhTrangPage branches={adminAppProps?.branches || []} />} />
 

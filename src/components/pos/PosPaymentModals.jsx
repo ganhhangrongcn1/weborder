@@ -8,6 +8,7 @@ const CASH_SUGGESTIONS = [50000, 100000, 200000, 500000];
 export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClose, onConfirm }) {
   const normalized = normalizeCashReceived(cashReceived);
   const change = calculateCashChange(amount, normalized);
+  const paidEnough = normalized >= amount;
 
   return (
     <div className="pos-modal-layer" role="presentation">
@@ -30,14 +31,14 @@ export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClos
             <strong>{formatMoney(change)}</strong>
           </div>
         </div>
-        <div className="pos-cash-suggestions">
+        <div className="pos-cash-suggestions pos-cash-quick-grid">
           {CASH_SUGGESTIONS.map((value) => (
             <button key={value} type="button" onClick={() => setCashReceived(String(value))}>
               {formatMoney(value)}
             </button>
           ))}
         </div>
-        <label>
+        <label className="pos-payment-cash-input">
           <span>Tiền khách đưa</span>
           <input
             value={cashReceived}
@@ -47,7 +48,11 @@ export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClos
             autoFocus
           />
         </label>
-        <button type="button" className="pos-modal-primary" disabled={normalized < amount} onClick={onConfirm}>
+        <div className="pos-cash-payment-note">
+          <span>{paidEnough ? "Đủ thanh toán" : "Chưa đủ tiền khách đưa"}</span>
+          <strong>{formatMoney(normalized)}</strong>
+        </div>
+        <button type="button" className="pos-modal-primary" disabled={!paidEnough} onClick={onConfirm}>
           Xác nhận đã thanh toán
         </button>
       </section>
@@ -55,8 +60,8 @@ export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClos
   );
 }
 
-export function QrPaymentModal({ branch, amount, draftOrder, processing, onClose, onConfirmPaid }) {
-  const identity = draftOrder || createPosOrderIdentity(new Date());
+export function QrPaymentModal({ branch, amount, draftOrder, previewIdentity, processing, loading, errorMessage, onClose, onConfirmPaid }) {
+  const identity = draftOrder || previewIdentity || createPosOrderIdentity(new Date());
   const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
   const config = getPosQrPaymentConfig(branch);
   const transferContent = buildPosPaymentReference(identity, branch);
@@ -126,6 +131,18 @@ export function QrPaymentModal({ branch, amount, draftOrder, processing, onClose
                 <small>SePay sẽ tự xác nhận khi tiền vào tài khoản. Chỉ xác nhận tay khi cần dự phòng.</small>
               </div>
             ) : null}
+            {loading ? (
+              <div className="pos-qr-draft-status">
+                <span>Đang tạo đơn QR</span>
+                <strong>{transferContent}</strong>
+                <small>QR đã sẵn sàng để khách quét. Hệ thống đang lưu đơn chờ thanh toán.</small>
+              </div>
+            ) : null}
+            {errorMessage ? (
+              <div className="pos-create-message is-error">
+                {errorMessage}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="pos-create-message is-error">
@@ -134,7 +151,7 @@ export function QrPaymentModal({ branch, amount, draftOrder, processing, onClose
         )}
         {config.ready ? (
           <div className="pos-qr-payment-actions">
-            <button type="button" className="pos-modal-primary" disabled={processing || !draftOrder} onClick={onConfirmPaid}>
+            <button type="button" className="pos-modal-primary" disabled={processing || loading || !draftOrder} onClick={onConfirmPaid}>
               {processing ? "Đang xử lý..." : "Xác nhận tay"}
             </button>
           </div>
@@ -154,4 +171,3 @@ export function PaymentMethodButton({ active, iconName, label, disabled, onClick
     </button>
   );
 }
-

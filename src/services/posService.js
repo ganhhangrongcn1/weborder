@@ -122,7 +122,7 @@ function buildOptionSummary(spice = "", toppings = [], selectedOptions = []) {
 
 export function createPosCartItem(product = {}, config = {}) {
   const quantity = Math.max(1, Math.floor(toNumber(config.quantity, 1)));
-  const unitPrice = getProductPrice(product);
+  const unitPrice = config.unitPrice != null ? toNumber(config.unitPrice, 0) : getProductPrice(product);
   const toppings = Array.isArray(config.toppings) ? config.toppings : [];
   const selectedOptions = Array.isArray(config.selectedOptions) ? config.selectedOptions : [];
   const toppingTotal = toppings.reduce((sum, topping) => sum + toNumber(topping.price, 0) * Math.max(1, Math.floor(toNumber(topping.quantity, 1))), 0);
@@ -130,7 +130,9 @@ export function createPosCartItem(product = {}, config = {}) {
   const unitTotal = unitPrice + toppingTotal + optionTotal;
   const note = toText(config.note);
   const spice = toText(config.spice);
-  const options = buildOptionSummary(spice, toppings, selectedOptions);
+  const options = Array.isArray(config.options) && config.options.length
+    ? config.options.filter(Boolean).map(toText).filter(Boolean)
+    : buildOptionSummary(spice, toppings, selectedOptions);
 
   return {
     cartId: `${product.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -147,7 +149,8 @@ export function createPosCartItem(product = {}, config = {}) {
     toppings,
     selectedOptions,
     options,
-    note
+    note,
+    metadata: config.metadata && typeof config.metadata === "object" ? config.metadata : {}
   };
 }
 
@@ -868,4 +871,3 @@ export async function markPosQrOrderPaidAsync(
 }
 
 export { ALL_CATEGORY, WALK_IN_PHONE };
-
