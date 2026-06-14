@@ -33,6 +33,23 @@ function normalizePosOrderRow(row = {}) {
   };
 }
 
+export async function readPosDraftOrder(orderId = "") {
+  const safeOrderId = toText(orderId);
+  if (!safeOrderId) return null;
+
+  const client = getSupabaseRuntimeClient() || await initSupabaseRuntimeClient();
+  if (!client) return null;
+
+  const { data, error } = await client
+    .from("orders")
+    .select("id,order_code,status,kitchen_status,payment_method,branch_uuid,metadata,updated_at")
+    .eq("id", safeOrderId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? normalizePosOrderRow(data) : null;
+}
+
 export async function subscribePosDraftOrderRealtime(orderId = "", onChange) {
   const safeOrderId = toText(orderId);
   if (!safeOrderId || typeof onChange !== "function") return () => {};

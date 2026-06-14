@@ -10,7 +10,7 @@ import { formatMoney, getBranchLabel, getBranchUuid } from "../components/pos/po
 import usePosCart from "../hooks/usePosCart.js";
 import usePosCatalog from "../hooks/usePosCatalog.js";
 import usePosCustomerLookup from "../hooks/usePosCustomerLookup.js";
-import { startPosAutoPrint, subscribePosDraftOrderRealtime } from "../services/posAutomationService.js";
+import { readPosDraftOrder, startPosAutoPrint, subscribePosDraftOrderRealtime } from "../services/posAutomationService.js";
 import { buildPosPaymentReference, calculateCashChange, normalizeCashReceived } from "../services/posPaymentService.js";
 import { clearPosSession, getBranchValue, readPosSession } from "../services/posSessionService.js";
 import {
@@ -358,16 +358,31 @@ export default function PosPage({ products = [], categories = [], branches = [],
     if (!qrDraftOrder?.id || paymentConfirmed) return undefined;
 
     let active = true;
+    let completed = false;
     let cleanup = () => {};
+    let pollTimer = null;
 
-    subscribePosDraftOrderRealtime(qrDraftOrder.id, async (updatedOrder) => {
-      if (!active) return;
+    const completePaidOrder = async (updatedOrder) => {
+      if (!active || completed) return;
       if (toText(updatedOrder.paymentStatus).toLowerCase() !== "paid") return;
 
+      completed = true;
       resetComposer();
       await loadBusyPagers();
       await loadRecentOrders();
-    }).then((unsubscribe) => {
+    };
+
+    const checkDraftOrder = async () => {
+      if (!active || completed) return;
+      try {
+        const updatedOrder = await readPosDraftOrder(qrDraftOrder.id);
+        if (updatedOrder) await completePaidOrder(updatedOrder);
+      } catch (error) {
+        console.warn("[pos] Không kiểm tra được trạng thái đơn QR.", error);
+      }
+    };
+
+    subscribePosDraftOrderRealtime(qrDraftOrder.id, completePaidOrder).then((unsubscribe) => {
       if (!active) {
         if (typeof unsubscribe === "function") unsubscribe();
         return;
@@ -375,8 +390,18 @@ export default function PosPage({ products = [], categories = [], branches = [],
       cleanup = typeof unsubscribe === "function" ? unsubscribe : () => {};
     });
 
+    checkDraftOrder();
+    pollTimer = window.setInterval(checkDraftOrder, 2500);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkDraftOrder();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       active = false;
+      if (pollTimer) window.clearInterval(pollTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       cleanup();
     };
   }, [paymentConfirmed, qrDraftOrder?.id]);

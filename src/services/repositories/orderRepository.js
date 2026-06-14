@@ -166,6 +166,17 @@ function canWriteOrdersToSupabase() {
   return shouldWriteDomainToSupabase("orders");
 }
 
+function resolveOrderStorageKey(order = {}) {
+  const phoneKey = getCustomerKey(order.phone || order.customerPhone);
+  if (phoneKey) return phoneKey;
+
+  const customerPhoneKey = String(order.customerPhoneKey || "").trim();
+  if (customerPhoneKey.startsWith("walkin:")) return customerPhoneKey;
+
+  const orderId = String(order.id || order.orderCode || "").trim();
+  return orderId ? `walkin:${orderId}` : "";
+}
+
 async function persistOrderLocalAsync(nextOrder, phoneKey) {
   await repository.setAsync(STORAGE_KEYS.lastCreatedOrderId, String(nextOrder.id || nextOrder.orderCode || "").trim());
   await repository.setAsync(STORAGE_KEYS.currentOrder, nextOrder || null);
@@ -254,9 +265,11 @@ export const orderRepository = {
   },
   upsertOrder(order) {
     const nextOrder = { id: order.id || order.orderCode || `order_${Date.now()}`, ...order };
-    const key = getCustomerKey(nextOrder.phone || nextOrder.customerPhone);
+    const key = resolveOrderStorageKey(nextOrder);
     if (!key) return nextOrder;
-    nextOrder.phone = key;
+    const normalizedPhone = getCustomerKey(nextOrder.phone || nextOrder.customerPhone);
+    nextOrder.phone = normalizedPhone;
+    nextOrder.customerPhone = normalizedPhone;
     nextOrder.customerPhoneKey = key;
     nextOrder.rawCustomerPhone = nextOrder.rawCustomerPhone || nextOrder.customerPhone || nextOrder.phone;
     this.saveLastCreatedOrderId(nextOrder.id || nextOrder.orderCode || "");
@@ -364,9 +377,11 @@ export const orderRepository = {
   },
   async upsertOrderAsync(order) {
     const nextOrder = { id: order.id || order.orderCode || `order_${Date.now()}`, ...order };
-    const key = getCustomerKey(nextOrder.phone || nextOrder.customerPhone);
+    const key = resolveOrderStorageKey(nextOrder);
     if (!key) return nextOrder;
-    nextOrder.phone = key;
+    const normalizedPhone = getCustomerKey(nextOrder.phone || nextOrder.customerPhone);
+    nextOrder.phone = normalizedPhone;
+    nextOrder.customerPhone = normalizedPhone;
     nextOrder.customerPhoneKey = key;
     nextOrder.rawCustomerPhone = nextOrder.rawCustomerPhone || nextOrder.customerPhone || nextOrder.phone;
     await persistOrderLocalAsync(nextOrder, key);
