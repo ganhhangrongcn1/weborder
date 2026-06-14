@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import PosCartPanel from "../components/pos/PosCartPanel.jsx";
 import PosLoginScreen from "../components/pos/PosLoginScreen.jsx";
-import { CashPaymentModal, QrPaymentModal } from "../components/pos/PosPaymentModals.jsx";
+import { CashPaymentModal, PosConfirmModal, QrPaymentModal } from "../components/pos/PosPaymentModals.jsx";
 import ProductOptionsModal from "../components/pos/ProductOptionsModal.jsx";
 import { CategoryButton, PosPagerInlinePicker, PosPagerModal, PosSessionBrand, ProductCard, UtilityActionButton } from "../components/pos/PosPrimitives.jsx";
 import PosRecentOrdersPanel from "../components/pos/PosRecentOrdersPanel.jsx";
@@ -10,8 +10,15 @@ import { formatMoney, getBranchLabel, getBranchUuid } from "../components/pos/po
 import usePosCart from "../hooks/usePosCart.js";
 import usePosCatalog from "../hooks/usePosCatalog.js";
 import usePosCustomerLookup from "../hooks/usePosCustomerLookup.js";
-import { readPosDraftOrder, startPosAutoPrint, subscribePosDraftOrderRealtime } from "../services/posAutomationService.js";
+import { startPosAutoPrint } from "../services/posAutomationService.js";
 import { buildPosPaymentReference, calculateCashChange, normalizeCashReceived } from "../services/posPaymentService.js";
+import {
+  cancelPosPaymentSession,
+  confirmPosPaymentSessionManually,
+  createPosPaymentSession,
+  markPosPaymentSessionConverted,
+  readPosPaymentSession
+} from "../services/posPaymentSessionService.js";
 import { clearPosSession, getBranchValue, readPosSession } from "../services/posSessionService.js";
 import {
   cancelPosOrderAsync,
@@ -19,8 +26,7 @@ import {
   createPosOrderIdentity,
   createPosTakeawayOrder,
   getBusyPosPagerNumbersAsync,
-  getPosRecentOrdersAsync,
-  markPosQrOrderPaidAsync
+  getPosRecentOrdersAsync
 } from "../services/posService.js";
 import "../styles/pos.css";
 
@@ -217,6 +223,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [configuringProduct, setConfiguringProduct] = useState(null);
   const [cashPaymentOpen, setCashPaymentOpen] = useState(false);
   const [qrPaymentOpen, setQrPaymentOpen] = useState(false);
+  const [cancelQrConfirmOpen, setCancelQrConfirmOpen] = useState(false);
+  const [cancellingQr, setCancellingQr] = useState(false);
   const [cashReceived, setCashReceived] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [paymentConfirmed, setPaymentConfirmed] = useState(null);
@@ -262,8 +270,14 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const selectedPagerIsBusy = hasSelectedPager &&
     busyPagers.map(normalizePagerNumber).includes(normalizePagerNumber(pagerNumber)) &&
     !qrDraftOrder;
-  const draftLocked = Boolean(qrDraftOrder && !paymentConfirmed);
-  const isMenuLocked = draftLocked;
+  const qrSessionStatus = toText(qrDraftOrder?.status).toLowerCase();
+  const isQrDraftPending = Boolean(
+    qrDraftOrder &&
+    !paymentConfirmed &&
+    (!qrDraftOrder.isPaymentSession || ["draft", "pending_payment"].includes(qrSessionStatus))
+  );
+  const draftLocked = Boolean(paymentConfirmed || isQrDraftPending);
+  const isMenuLocked = Boolean(paymentConfirmed);
 
   const resetComposer = () => {
     setPagerNumber("");
@@ -282,6 +296,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setPointsInput("");
     setCashPaymentOpen(false);
     setQrPaymentOpen(false);
+    setCancelQrConfirmOpen(false);
+    setCancellingQr(false);
     clearCart();
   };
 
@@ -310,6 +326,38 @@ export default function PosPage({ products = [], categories = [], branches = [],
     } finally {
       setRecentOrdersLoading(false);
     }
+  };
+
+  const cancelPendingQrDraft = async ({ silent = false, reason = "Nhân viên đổi bill trước khi thanh toán" } = {}) => {
+    if (!isQrDraftPending || !qrDraftOrder) return true;
+
+    const result = qrDraftOrder.isPaymentSession
+      ? await cancelPosPaymentSession(qrDraftOrder.id, reason)
+      : await cancelPosOrderAsync(qrDraftOrder, {
+        cashierName: posSession?.cashierName || "Thu ngân",
+        reason
+      });
+
+    if (!result.ok) {
+      setCreateError(
+        result.message ||
+        (silent
+          ? "Phiên thanh toán đã thay đổi, không thể sửa bill."
+          : "Không hủy được đơn chờ thanh toán.")
+      );
+      return false;
+    }
+
+    setQrDraftOrder(null);
+    setQrPreviewIdentity(null);
+    setQrDraftLoading(false);
+    setQrDraftError("");
+    setQrPaymentOpen(false);
+
+    if (!silent) {
+      setCreateError("");
+    }
+    return true;
   };
 
   useEffect(() => {
@@ -366,58 +414,6 @@ export default function PosPage({ products = [], categories = [], branches = [],
   }, [posSession, selectedBranchUuid]);
 
   useEffect(() => {
-    if (!qrDraftOrder?.id || paymentConfirmed) return undefined;
-
-    let active = true;
-    let completed = false;
-    let cleanup = () => {};
-    let pollTimer = null;
-
-    const completePaidOrder = async (updatedOrder) => {
-      if (!active || completed) return;
-      if (toText(updatedOrder.paymentStatus).toLowerCase() !== "paid") return;
-
-      completed = true;
-      resetComposer();
-      await loadBusyPagers();
-      await loadRecentOrders();
-    };
-
-    const checkDraftOrder = async () => {
-      if (!active || completed) return;
-      try {
-        const updatedOrder = await readPosDraftOrder(qrDraftOrder.id);
-        if (updatedOrder) await completePaidOrder(updatedOrder);
-      } catch (error) {
-        console.warn("[pos] Không kiểm tra được trạng thái đơn QR.", error);
-      }
-    };
-
-    subscribePosDraftOrderRealtime(qrDraftOrder.id, completePaidOrder).then((unsubscribe) => {
-      if (!active) {
-        if (typeof unsubscribe === "function") unsubscribe();
-        return;
-      }
-      cleanup = typeof unsubscribe === "function" ? unsubscribe : () => {};
-    });
-
-    checkDraftOrder();
-    pollTimer = window.setInterval(checkDraftOrder, 2500);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") checkDraftOrder();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      active = false;
-      if (pollTimer) window.clearInterval(pollTimer);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      cleanup();
-    };
-  }, [paymentConfirmed, qrDraftOrder?.id]);
-
-  useEffect(() => {
     if (!paymentConfirmed) return;
     if (paymentConfirmed.method !== "cash") return;
     if (paymentConfirmed.amount === posTotals.total) return;
@@ -434,10 +430,13 @@ export default function PosPage({ products = [], categories = [], branches = [],
     addProduct(product);
   };
 
-  const handleAddProduct = (product) => {
-    if (draftLocked) {
-      setCreateError("Đơn QR đang chờ thanh toán. Vui lòng chờ xác nhận hoặc hủy bill trước.");
-      return;
+  const handleAddProduct = async (product) => {
+    if (isQrDraftPending) {
+      const cancelled = await cancelPendingQrDraft({
+        silent: true,
+        reason: "Nhân viên thêm món làm thay đổi bill trước khi thanh toán"
+      });
+      if (!cancelled) return;
     }
     if (!hasSelectedPager || selectedPagerIsBusy) {
       setPendingPagerProduct(product);
@@ -462,7 +461,14 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setConfiguringProduct(null);
   };
 
-  const handleChangeQuantity = (cartId, quantity) => {
+  const handleChangeQuantity = async (cartId, quantity) => {
+    if (isQrDraftPending) {
+      const cancelled = await cancelPendingQrDraft({
+        silent: true,
+        reason: "Nhân viên sửa số lượng làm thay đổi bill trước khi thanh toán"
+      });
+      if (!cancelled) return;
+    }
     if (quantity <= 0) {
       removeItem(cartId);
       return;
@@ -470,35 +476,49 @@ export default function PosPage({ products = [], categories = [], branches = [],
     updateQuantity(cartId, quantity);
   };
 
-  const handleClearCart = async () => {
-    if (!qrDraftOrder) {
+  const handleClearCart = () => {
+    if (!isQrDraftPending) {
       resetComposer();
       setCreateError("");
       return;
     }
 
-    const confirmed = window.confirm(`Hủy đơn chờ thanh toán ${qrDraftOrder.orderCode || qrDraftOrder.id || qrDraftOrder.displayOrderCode}?`);
-    if (!confirmed) return;
-
-    const result = await cancelPosOrderAsync(qrDraftOrder, {
-      cashierName: posSession?.cashierName || "Thu ngân",
-      reason: "Hủy đơn QR chờ thanh toán tại POS"
-    });
-
-    if (!result.ok) {
-      setCreateError(result.message || "Không hủy được đơn chờ thanh toán.");
-      return;
-    }
-
-    resetComposer();
-    await loadBusyPagers();
-    await loadRecentOrders();
+    setCancelQrConfirmOpen(true);
   };
 
-  const handleOpenCashPayment = () => {
+  const handleConfirmCancelQr = async () => {
+    if (cancellingQr) return;
+    setCancellingQr(true);
+
+    try {
+      const cancelled = await cancelPendingQrDraft({
+        silent: false,
+        reason: "Hủy đơn QR chờ thanh toán tại POS"
+      });
+      if (!cancelled) {
+        setCancelQrConfirmOpen(false);
+        return;
+      }
+
+      resetComposer();
+      await loadBusyPagers();
+      await loadRecentOrders();
+    } finally {
+      setCancellingQr(false);
+    }
+  };
+
+  const handleOpenCashPayment = async () => {
     if (!cart.length) {
       setCreateError("Chưa có món trong bill.");
       return;
+    }
+    if (isQrDraftPending) {
+      const cancelled = await cancelPendingQrDraft({
+        silent: true,
+        reason: "Đổi sang tiền mặt trước khi thanh toán"
+      });
+      if (!cancelled) return;
     }
     if (!hasSelectedPager) {
       setCreateError("Vui lòng chọn thẻ rung trước khi thanh toán.");
@@ -547,29 +567,31 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
     const orderIdentity = identity || createPosOrderIdentity(new Date());
     const selectedVoucher = loyaltyBenefit.selectedVoucher;
-    const result = await createPosTakeawayOrder({
-      cart,
-      totals: posTotals,
-      pagerNumber,
+    const paymentReference = buildPosPaymentReference(orderIdentity, selectedBranch);
+    const result = await createPosPaymentSession({
+      requestKey: `pos:${selectedBranchUuid}:${orderIdentity.orderCode}`,
+      paymentReference,
+      provider: "sepay",
+      source: "pos",
+      branchUuid: selectedBranchUuid,
+      branchName: branchLabel,
+      cashierName: posSession?.cashierName || "Thu ngân",
       customerName: customerName || customerLookup.result?.customerName || "",
       customerPhone,
-      branch: selectedBranch,
-      cashierName: posSession?.cashierName || "Thu ngân",
-      customerLookup: customerLookup.result,
-      promoDiscount: loyaltyBenefit.voucherDiscount,
-      promoCode: toText(selectedVoucher?.code).toUpperCase(),
-      promoSource: toText(selectedVoucher?.source),
-      promoVoucherId: toText(selectedVoucher?.id),
-      pointsDiscount: loyaltyBenefit.pointsSpent,
-      pointsDiscountAmount: loyaltyBenefit.pointsDiscount,
-      pointRedeemRule: loyaltyBenefit.loyaltyRule,
-      paymentMethod: "bank_qr",
-      paymentStatus: "pending",
-      paymentAmount: posTotals.total,
-      paymentReference: buildPosPaymentReference(orderIdentity, selectedBranch),
-      orderIdentity,
-      status: "pending_payment",
-      kitchenStatus: "pending"
+      pagerNumber,
+      amountExpected: posTotals.total,
+      cart,
+      checkout: {
+        orderIdentity,
+        totals: posTotals,
+        promoDiscount: loyaltyBenefit.voucherDiscount,
+        promoCode: toText(selectedVoucher?.code).toUpperCase(),
+        promoSource: toText(selectedVoucher?.source),
+        promoVoucherId: toText(selectedVoucher?.id),
+        pointsSpent: loyaltyBenefit.pointsSpent,
+        pointsDiscountAmount: loyaltyBenefit.pointsDiscount,
+        pointRedeemRule: loyaltyBenefit.loyaltyRule
+      }
     });
 
     if (!result.ok) {
@@ -577,14 +599,17 @@ export default function PosPage({ products = [], categories = [], branches = [],
       return result;
     }
 
-    setQrDraftOrder(result.order);
-    await loadBusyPagers();
+    setQrDraftOrder(result.session);
     return result;
   };
 
   const handleOpenQrPayment = async () => {
     if (posTotals.total <= 0) {
       setCreateError("Bill hiện chưa có số tiền để tạo QR thanh toán.");
+      return;
+    }
+    if (isQrDraftPending) {
+      setQrPaymentOpen(true);
       return;
     }
     if (!hasSelectedPager) {
@@ -616,12 +641,9 @@ export default function PosPage({ products = [], categories = [], branches = [],
     if (!qrDraftOrder) return;
 
     setCreatingOrder(true);
-    const result = await markPosQrOrderPaidAsync(qrDraftOrder, {
-      cashierName: posSession?.cashierName || "Thu ngân",
-      paymentReference: buildPosPaymentReference(qrDraftOrder, selectedBranch),
-      paymentAmount: posTotals.total,
-      paidAt: new Date().toISOString()
-    });
+    const result = qrDraftOrder.isPaymentSession
+      ? await confirmPosPaymentSessionManually(qrDraftOrder.id)
+      : { ok: false, message: "Bill QR cũ không còn hỗ trợ xác nhận tay." };
     setCreatingOrder(false);
 
     if (!result.ok) {
@@ -629,10 +651,137 @@ export default function PosPage({ products = [], categories = [], branches = [],
       return;
     }
 
+    setQrDraftOrder(result.session);
+  };
+
+  const finalizePaidQrSession = async (session) => {
+    if (!session?.isPaymentSession) return false;
+    const status = toText(session.status).toLowerCase();
+    if (!["paid", "converting", "converted"].includes(status)) return false;
+    if (status === "converted" && session.orderId) {
+      resetComposer();
+      await loadBusyPagers();
+      await loadRecentOrders();
+      return true;
+    }
+
+    const checkout = session.checkoutSnapshot || {};
+    const sessionTotals = checkout.totals || posTotals;
+    const orderIdentity = session.orderIdentity || checkout.orderIdentity || qrPreviewIdentity;
+    setPaymentConfirmed({
+      method: "bank_qr",
+      reference: session.paymentReference,
+      paidAt: session.paidAt || new Date().toISOString(),
+      amount: session.amountPaid || session.amountExpected
+    });
+    setCreatingOrder(true);
+    setCreateError("");
+
+    const result = await createPosTakeawayOrder({
+      cart: session.cartSnapshot?.length ? session.cartSnapshot : cart,
+      totals: sessionTotals,
+      pagerNumber: session.pagerNumber || pagerNumber,
+      customerName: session.customerName || customerName || customerLookup.result?.customerName || "",
+      customerPhone: session.customerPhone || customerPhone,
+      branch: selectedBranch,
+      cashierName: session.cashierName || posSession?.cashierName || "Thu ngân",
+      customerLookup: customerLookup.result,
+      promoDiscount: checkout.promoDiscount || 0,
+      promoCode: toText(checkout.promoCode).toUpperCase(),
+      promoSource: toText(checkout.promoSource),
+      promoVoucherId: toText(checkout.promoVoucherId),
+      pointsDiscount: checkout.pointsSpent || 0,
+      pointsDiscountAmount: checkout.pointsDiscountAmount || 0,
+      pointRedeemRule: checkout.pointRedeemRule || loyaltyBenefit.loyaltyRule,
+      paymentMethod: "bank_qr",
+      paymentStatus: "paid",
+      paymentAmount: session.amountPaid || session.amountExpected,
+      paymentReference: session.paymentReference,
+      paidAt: session.paidAt || new Date().toISOString(),
+      paymentMeta: {
+        provider: session.provider || "sepay",
+        paymentSessionId: session.id
+      },
+      orderIdentity,
+      status: "pending_zalo",
+      kitchenStatus: "pending"
+    });
+
+    if (!result.ok) {
+      setCreatingOrder(false);
+      setCreateError(result.message || "Đã nhận tiền nhưng chưa tạo được đơn. POS sẽ tự thử lại.");
+      return false;
+    }
+
+    const conversion = await markPosPaymentSessionConverted(
+      session.id,
+      result.order?.id || result.order?.orderCode
+    );
+    setCreatingOrder(false);
+    if (!conversion.ok) {
+      setCreateError(conversion.message || "Đơn đã tạo nhưng chưa chốt được phiên thanh toán.");
+      return false;
+    }
+
     resetComposer();
     await loadBusyPagers();
     await loadRecentOrders();
+    return true;
   };
+
+  useEffect(() => {
+    if (!qrDraftOrder?.id || !qrDraftOrder.isPaymentSession) return undefined;
+
+    let active = true;
+    let finalizing = false;
+    let pollTimer = null;
+
+    const checkPaymentSession = async () => {
+      if (!active || finalizing) return;
+      try {
+        const session = await readPosPaymentSession(qrDraftOrder.id);
+        if (!active || !session) return;
+        setQrDraftOrder(session);
+        const status = toText(session.status).toLowerCase();
+        const expiresAt = new Date(session.expiresAt || "").getTime();
+        if (
+          status === "pending_payment" &&
+          Number.isFinite(expiresAt) &&
+          expiresAt <= Date.now()
+        ) {
+          await cancelPosPaymentSession(session.id, "Phiên QR hết hạn sau 15 phút");
+          if (!active) return;
+          setQrDraftOrder(null);
+          setQrPreviewIdentity(null);
+          setQrPaymentOpen(false);
+          setQrDraftError("");
+          setCreateError("Mã QR đã hết hạn. Bấm QR chuyển khoản để tạo mã mới.");
+          return;
+        }
+        if (["paid", "converting", "converted"].includes(status)) {
+          finalizing = true;
+          const completed = await finalizePaidQrSession(session);
+          if (!completed) finalizing = false;
+        }
+      } catch (error) {
+        console.warn("[pos] Không kiểm tra được phiên thanh toán QR.", error);
+      }
+    };
+
+    checkPaymentSession();
+    pollTimer = window.setInterval(checkPaymentSession, 2000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") checkPaymentSession();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      active = false;
+      if (pollTimer) window.clearInterval(pollTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [qrDraftOrder?.id, qrDraftOrder?.isPaymentSession]);
 
   const handleCreateOrder = async () => {
     if (creatingOrder || (paymentMethod === "bank_qr" && !paymentConfirmed)) {
@@ -821,7 +970,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
               onOpenCashPayment={handleOpenCashPayment}
               onOpenQrPayment={handleOpenQrPayment}
               onQuantityChange={handleChangeQuantity}
-              onRemove={removeItem}
+              onRemove={(cartId) => handleChangeQuantity(cartId, 0)}
               onClear={handleClearCart}
               onCreateOrder={handleCreateOrder}
             />
@@ -857,10 +1006,23 @@ export default function PosPage({ products = [], categories = [], branches = [],
           processing={creatingOrder}
           loading={qrDraftLoading}
           errorMessage={qrDraftError}
+          canConfirmManually={toText(posSession?.role).toLowerCase() === "admin"}
           onClose={() => setQrPaymentOpen(false)}
+          onCancelPending={() => setCancelQrConfirmOpen(true)}
           onConfirmPaid={handleConfirmQrPaid}
         />
       ) : null}
+
+      <PosConfirmModal
+        open={cancelQrConfirmOpen}
+        title="Hủy QR đang chờ?"
+        message={`Mã ${qrDraftOrder?.paymentReference || qrDraftOrder?.orderCode || qrDraftOrder?.displayOrderCode || ""}. Chỉ hủy khi khách chưa chuyển khoản.`}
+        confirmLabel="Hủy QR"
+        cancelLabel="Giữ bill"
+        processing={cancellingQr}
+        onClose={() => setCancelQrConfirmOpen(false)}
+        onConfirm={handleConfirmCancelQr}
+      />
     </main>
   );
 }

@@ -479,7 +479,7 @@ export default function PosCartPanel({
 
           <section className="pos-payment-box pos-payment-box--footer">
             <div className="pos-payment-methods pos-payment-methods--footer">
-              <PaymentMethodButton active={paymentMethod === "cash"} iconName="cash" label="Tiền mặt" disabled={draftLocked || qrDraftLoading} onClick={onOpenCashPayment} />
+              <PaymentMethodButton active={paymentMethod === "cash"} iconName="cash" label="Tiền mặt" disabled={Boolean(paymentConfirmed) || qrDraftLoading} onClick={onOpenCashPayment} />
               <PaymentMethodButton active={paymentMethod === "bank_qr"} iconName="qr" label={qrDraftLoading ? "Đang tạo QR" : "QR chuyển khoản"} disabled={qrDraftLoading} onClick={onOpenQrPayment} />
             </div>
             {paymentConfirmed ? (

@@ -73,7 +73,19 @@ export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClos
   );
 }
 
-export function QrPaymentModal({ branch, amount, draftOrder, previewIdentity, processing, loading, errorMessage, onClose, onConfirmPaid }) {
+export function QrPaymentModal({
+  branch,
+  amount,
+  draftOrder,
+  previewIdentity,
+  processing,
+  loading,
+  errorMessage,
+  canConfirmManually = false,
+  onClose,
+  onCancelPending,
+  onConfirmPaid
+}) {
   const identity = draftOrder || previewIdentity || createPosOrderIdentity(new Date());
   const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
   const config = getPosQrPaymentConfig(branch);
@@ -145,7 +157,7 @@ export function QrPaymentModal({ branch, amount, draftOrder, previewIdentity, pr
             ) : null}
             {loading ? (
               <div className="pos-qr-draft-status">
-                <span>Đang tạo đơn QR</span>
+                <span>Đang tạo phiên thanh toán</span>
                 <strong>{transferContent}</strong>
               </div>
             ) : null}
@@ -160,13 +172,75 @@ export function QrPaymentModal({ branch, amount, draftOrder, previewIdentity, pr
             Chi nhánh này chưa cấu hình thông tin ngân hàng để tạo QR thanh toán.
           </div>
         )}
-        {config.ready ? (
+        {config.ready && draftOrder && (onCancelPending || canConfirmManually) ? (
           <div className="pos-qr-payment-actions">
-            <button type="button" className="pos-modal-primary" disabled={processing || loading || !draftOrder} onClick={onConfirmPaid}>
-              {processing ? "Đang xử lý..." : "Xác nhận tay"}
-            </button>
+            {onCancelPending ? (
+              <button
+                type="button"
+                className="pos-qr-cancel-button"
+                disabled={processing || loading}
+                onClick={onCancelPending}
+              >
+                Hủy QR
+              </button>
+            ) : null}
+            {canConfirmManually ? (
+              <button type="button" className="pos-modal-primary" disabled={processing || loading} onClick={onConfirmPaid}>
+                {processing ? "Đang xử lý..." : "Xác nhận tay"}
+              </button>
+            ) : null}
           </div>
         ) : null}
+      </section>
+    </div>
+  );
+}
+
+export function PosConfirmModal({
+  open,
+  title,
+  message,
+  confirmLabel = "Xác nhận",
+  cancelLabel = "Đóng",
+  processing = false,
+  onClose,
+  onConfirm
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="pos-modal-layer pos-confirm-layer" role="presentation">
+      <button
+        type="button"
+        className="pos-modal-backdrop"
+        aria-label={cancelLabel}
+        disabled={processing}
+        onClick={onClose}
+      />
+      <section
+        className="pos-confirm-modal"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="pos-confirm-modal-title"
+        aria-describedby="pos-confirm-modal-message"
+      >
+        <div className="pos-confirm-content">
+          <span className="pos-confirm-icon">
+            <PosIcon name="trash" />
+          </span>
+          <div>
+            <strong id="pos-confirm-modal-title">{title}</strong>
+            <p id="pos-confirm-modal-message">{message}</p>
+          </div>
+        </div>
+        <div className="pos-confirm-actions">
+          <button type="button" className="pos-confirm-secondary" disabled={processing} onClick={onClose}>
+            {cancelLabel}
+          </button>
+          <button type="button" className="pos-confirm-danger" disabled={processing} onClick={onConfirm}>
+            {processing ? "Đang hủy..." : confirmLabel}
+          </button>
+        </div>
       </section>
     </div>
   );
