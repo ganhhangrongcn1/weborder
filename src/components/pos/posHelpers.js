@@ -13,6 +13,12 @@ export function formatMoney(value = 0) {
   return `${Math.max(0, Math.round(toNumber(value))).toLocaleString("vi-VN")}đ`;
 }
 
+export function buildVoucherSelectionKey(voucher = {}) {
+  const source = toText(voucher.source || voucher.voucherSource || voucher.voucher_type || "checkout");
+  const id = toText(voucher.id || voucher.code || voucher.title || voucher.name);
+  return source && id ? `${source}:${id}` : id;
+}
+
 export function getBranchName(branch = {}) {
   return toText(branch.name || branch.branchName || branch.branch_name) || "Chi nhánh";
 }
@@ -48,4 +54,3 @@ export function getOrderStatusLabel(status = "") {
   if (normalized === "pending_payment") return "Chờ thanh toán";
   return "Đang xử lý";
 }
-

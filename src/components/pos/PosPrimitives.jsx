@@ -129,6 +129,7 @@ export function UtilityActionButton({ label, iconName = "", onClick, tone = "def
 const POS_WORKSPACES = [
   { id: "orders", label: "Bán hàng", iconName: "sale" },
   { id: "history", label: "Lịch sử", iconName: "history" },
+  { id: "shift", label: "Tổng quan ca", iconName: "cash" },
   { id: "settings", label: "Thiết lập", iconName: "settings" }
 ];
 

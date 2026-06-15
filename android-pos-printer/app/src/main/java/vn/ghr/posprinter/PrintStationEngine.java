@@ -70,10 +70,12 @@ public class PrintStationEngine {
     private static final String PRINTER_MODE_LAN = "lan";
     private static final String PRINTER_KEY = "cashier-80mm";
     private static final String JOB_TYPE = "customer_bill";
-    private static final String PRINT_JOB_SELECT = "id,order_code,payload,retry_count";
+    private static final String PRINT_JOB_SELECT = "id,order_code,source_type,payload,retry_count";
     private static final String SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
     private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
     private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/orders";
+    private static final String SOURCE_TYPE_POS_PAYMENT_QR = "pos_payment_qr";
+    private static final String SOURCE_TYPE_POS_SHIFT_CLOSE = "pos_shift_close";
     private static final String DEFAULT_RECEIPT_FOOTER_TEXT =
             "------------------------------------------\n" +
             "@@CENTER:Quét QR tích điểm ngay\n" +
@@ -253,10 +255,11 @@ public class PrintStationEngine {
             JSONObject payload = job.optJSONObject("payload");
             String text = payload == null ? "" : payload.optString("text", "");
             String loyaltyUrl = payload == null ? "" : payload.optString("loyaltyUrl", "");
+            String sourceType = job.optString("source_type", "");
             if (text.trim().isEmpty()) throw new Exception("Bill content is empty.");
 
             playNewOrderAlert();
-            boolean ok = printReceiptPayload(text, loyaltyUrl);
+            boolean ok = printReceiptPayload(text, loyaltyUrl, sourceType);
             if (!ok) throw new Exception("Printer did not accept the bill.");
 
             markJobPrinted(jobId);
@@ -447,14 +450,14 @@ public class PrintStationEngine {
         }
     }
 
-    private boolean printReceiptPayload(String text, String qrUrl) {
+    private boolean printReceiptPayload(String text, String qrUrl, String sourceType) {
         if (PRINTER_MODE_LAN.equals(getPrinterMode())) {
-            return printReceiptTextViaLan(text, qrUrl);
+            return printReceiptTextViaLan(text, qrUrl, sourceType);
         }
-        return printReceiptTextViaUsb(text, qrUrl);
+        return printReceiptTextViaUsb(text, qrUrl, sourceType);
     }
 
-    private boolean printReceiptTextViaLan(String text, String qrUrl) {
+    private boolean printReceiptTextViaLan(String text, String qrUrl, String sourceType) {
         String host = prefs.getString(KEY_LAN_HOST, "").trim();
         int port = getLanPort();
         if (host.isEmpty()) return false;
@@ -464,7 +467,7 @@ public class PrintStationEngine {
             socket.setSoTimeout(5000);
 
             OutputStream outputStream = socket.getOutputStream();
-            outputStream.write(buildEscPosRaster(text, qrUrl));
+            outputStream.write(buildEscPosRaster(text, qrUrl, sourceType));
             outputStream.flush();
             return true;
         } catch (Exception error) {
@@ -472,7 +475,7 @@ public class PrintStationEngine {
         }
     }
 
-    private boolean printReceiptTextViaUsb(String text, String qrUrl) {
+    private boolean printReceiptTextViaUsb(String text, String qrUrl, String sourceType) {
         if (usbManager == null) return false;
         UsbDevice device = getSelectedDevice();
         if (device == null || !usbManager.hasPermission(device)) return false;
@@ -500,7 +503,7 @@ public class PrintStationEngine {
         try {
             if (!connection.claimInterface(usbInterface, true)) return false;
 
-            byte[] data = buildEscPosRaster(text, qrUrl);
+            byte[] data = buildEscPosRaster(text, qrUrl, sourceType);
             int offset = 0;
             while (offset < data.length) {
                 int chunkSize = Math.min(4096, data.length - offset);
@@ -531,15 +534,17 @@ public class PrintStationEngine {
         return new ArrayList<>(devices.values()).get(0);
     }
 
-    private byte[] buildEscPosRaster(String text, String qrUrl) {
+    private byte[] buildEscPosRaster(String text, String qrUrl, String sourceType) {
         ReceiptRasterParts parts = splitReceiptFooter(text);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         output.write(0x1B);
         output.write(0x40);
 
         writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
-        byte[] footerBytes = getFixedFooterRasterBytes(DEFAULT_RECEIPT_FOOTER_TEXT);
-        output.write(footerBytes, 0, footerBytes.length);
+        if (!shouldSkipFixedFooter(sourceType)) {
+            byte[] footerBytes = getFixedFooterRasterBytes(DEFAULT_RECEIPT_FOOTER_TEXT);
+            output.write(footerBytes, 0, footerBytes.length);
+        }
 
         output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
         output.write(0x1D);
@@ -547,6 +552,11 @@ public class PrintStationEngine {
         output.write(0x42);
         output.write(0x00);
         return output.toByteArray();
+    }
+
+    private boolean shouldSkipFixedFooter(String sourceType) {
+        String value = String.valueOf(sourceType == null ? "" : sourceType).trim();
+        return SOURCE_TYPE_POS_PAYMENT_QR.equals(value) || SOURCE_TYPE_POS_SHIFT_CLOSE.equals(value);
     }
 
     private void writeRasterBitmap(ByteArrayOutputStream output, Bitmap bitmap) {
@@ -625,7 +635,7 @@ public class PrintStationEngine {
         paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
 
         int padding = 16;
-        Bitmap qrBitmap = getFixedQrBitmap(dp(176));
+        Bitmap qrBitmap = createQrBitmap(qrUrl, dp(176));
         List<String> lines = expandReceiptLines(text, paint, width - padding * 2);
         int height = Math.max(160, padding * 2 + estimateReceiptHeight(lines, qrBitmap));
 
@@ -706,13 +716,6 @@ public class PrintStationEngine {
             result.addAll(wrapLines(line, paint, maxWidth));
         }
         return result;
-    }
-
-    private synchronized Bitmap getFixedQrBitmap(int size) {
-        if (fixedQrBitmap == null) {
-            fixedQrBitmap = createQrBitmap(LOYALTY_QR_URL, size);
-        }
-        return fixedQrBitmap;
     }
 
     private Bitmap createQrBitmap(String qrUrl, int size) {

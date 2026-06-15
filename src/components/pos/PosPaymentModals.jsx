@@ -1,4 +1,4 @@
-import {
+﻿import {
   buildPosPaymentReference,
   buildPosQrImageUrl,
   calculateCashChange,
@@ -10,52 +10,6 @@ import { PosIcon } from "./PosPrimitives.jsx";
 import { formatMoney } from "./posHelpers.js";
 
 const CASH_SUGGESTIONS = [50000, 100000, 200000, 500000];
-
-function openBrowserQrPrint({ qrUrl, amount, transferContent }) {
-  if (!qrUrl) {
-    return {
-      ok: false,
-      message: "Chưa tạo được mã QR để in."
-    };
-  }
-
-  const printWindow = window.open("", "_blank", "width=360,height=520");
-  if (!printWindow) {
-    return {
-      ok: false,
-      message: "Trình duyệt đang chặn cửa sổ in QR."
-    };
-  }
-
-  printWindow.document.write(`
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>In QR ${transferContent}</title>
-        <style>
-          body{font-family:system-ui,Arial,sans-serif;margin:0;padding:14px;text-align:center;color:#111827}
-          img{width:260px;max-width:100%;display:block;margin:8px auto}
-          strong{display:block;font-size:20px;margin-top:8px}
-          span{display:block;font-size:14px;margin-top:4px}
-        </style>
-      </head>
-      <body>
-        <img src="${qrUrl}" alt="QR thanh toán" />
-        <strong>${formatMoney(amount)}</strong>
-        <span>${transferContent}</span>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
-
-  return {
-    ok: true,
-    message: "Đã mở hộp thoại in QR."
-  };
-}
 
 export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClose, onConfirm }) {
   const normalized = normalizeCashReceived(cashReceived);
@@ -149,20 +103,18 @@ export function QrPaymentModal({
 
   const handlePrintQr = async () => {
     if (typeof onPrintQr === "function") {
-      const result = await onPrintQr({
+      return await onPrintQr({
         qrUrl,
         amount,
         transferContent,
         identity
       });
-
-      if (result?.fallbackToBrowser) {
-        openBrowserQrPrint({ qrUrl, amount, transferContent });
-      }
-      return;
     }
 
-    openBrowserQrPrint({ qrUrl, amount, transferContent });
+    return {
+      ok: false,
+      message: "Chức năng in QR chưa được kết nối."
+    };
   };
 
   return (

@@ -11,6 +11,12 @@ const STATUS_FILTERS = [
   { id: "cancelled", label: "Đã hủy" }
 ];
 
+const RANGE_FILTERS = [
+  { id: "shift", label: "Ca này" },
+  { id: "today", label: "Hôm nay" },
+  { id: "all", label: "Tất cả ngày" }
+];
+
 function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -45,7 +51,7 @@ function getOrderHistoryStatusLabel(order = {}) {
 function getPaymentLabel(order = {}) {
   const metadata = getObject(order.metadata);
   const method = toText(order.paymentMethod || metadata.paymentMethod).toLowerCase();
-  if (method === "bank_qr") return "QR chuyển khoản";
+  if (method === "bank_qr") return "Chuyển khoản";
   if (method === "cash") return "Tiền mặt";
   return "Chưa xác định";
 }
@@ -91,7 +97,52 @@ function getItemOptions(item = {}) {
   ].map(toText).filter(Boolean)));
 }
 
-function OrderDetailModal({ order, cancellingOrderId, onClose, onCancelOrder }) {
+function formatDiscount(value = 0) {
+  const amount = Number(value || 0);
+  if (!amount) return "0đ";
+  return `-${formatMoney(Math.abs(amount))}`;
+}
+
+function getLoyaltyUsageSummary(order = {}) {
+  const metadata = getObject(order.metadata);
+  const pointsDiscountAmount = Number(
+    order.pointsDiscountAmount ||
+    order.pointsDiscount ||
+    metadata.pointsDiscountAmount ||
+    metadata.pointsDiscount ||
+    0
+  );
+  const promoSource = toText(order.promoSource || metadata.promoSource).toLowerCase();
+  const promoVoucherId = toText(order.promoVoucherId || metadata.promoVoucherId);
+  const promoCode = toText(order.promoCode || metadata.promoCode);
+  const labels = [];
+
+  if (pointsDiscountAmount > 0) {
+    labels.push(`Dùng ${formatMoney(pointsDiscountAmount)} điểm`);
+  }
+
+  if (promoSource === "loyalty" && (promoVoucherId || promoCode)) {
+    labels.push("Voucher loyalty");
+  }
+
+  return labels;
+}
+
+function getRangeMatched(value, rangeFilter, activeShiftId) {
+  if (rangeFilter === "all") return true;
+  if (rangeFilter === "today") return isToday(value);
+  if (rangeFilter === "shift") return Boolean(activeShiftId);
+  return true;
+}
+
+function OrderDetailModal({
+  order,
+  cancellingOrderId,
+  reprintingOrderId,
+  onClose,
+  onCancelOrder,
+  onReprintOrder
+}) {
   if (!order) return null;
 
   const orderId = toText(order.id || order.orderCode);
@@ -99,6 +150,18 @@ function OrderDetailModal({ order, cancellingOrderId, onClose, onCancelOrder }) 
   const items = Array.isArray(order.items) ? order.items : [];
   const allowCancel = canCancelPosOrder(order);
   const cashierName = toText(metadata.cashierName || metadata.shift?.cashierName);
+  const orderNote = toText(order.note || order.orderNote || metadata.orderNote || metadata.note);
+  const promoDiscount = Number(order.promoDiscount || metadata.promoDiscount || 0);
+  const pointsDiscountAmount = Number(
+    order.pointsDiscountAmount ||
+    order.pointsDiscount ||
+    metadata.pointsDiscountAmount ||
+    metadata.pointsDiscount ||
+    0
+  );
+  const paymentReference = toText(order.paymentReference || metadata.paymentReference || metadata.payment_reference);
+  const paidAt = toText(order.paidAt || metadata.paidAt || metadata.paid_at);
+  const loyaltyLabels = getLoyaltyUsageSummary(order);
 
   return (
     <div className="pos-modal-layer" role="presentation">
@@ -127,6 +190,23 @@ function OrderDetailModal({ order, cancellingOrderId, onClose, onCancelOrder }) 
           {cashierName ? <small>Thu ngân: {cashierName}</small> : null}
         </div>
 
+        <div className="pos-order-detail-finance">
+          <div><span>Tạm tính</span><strong>{formatMoney(order.subtotal || 0)}</strong></div>
+          <div><span>Voucher</span><strong>{formatDiscount(promoDiscount)}</strong></div>
+          <div><span>Dùng điểm</span><strong>{formatDiscount(pointsDiscountAmount)}</strong></div>
+          <div><span>Nội dung CK</span><strong>{paymentReference || "--"}</strong></div>
+          <div><span>Đã thu lúc</span><strong>{paidAt ? formatOrderTime(paidAt) : "--"}</strong></div>
+          <div><span>Ghi chú đơn</span><strong>{orderNote || "--"}</strong></div>
+        </div>
+
+        {loyaltyLabels.length ? (
+          <div className="pos-order-detail-tags">
+            {loyaltyLabels.map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+        ) : null}
+
         <div className="pos-recent-order-item-list">
           {items.map((item, index) => {
             const options = getItemOptions(item);
@@ -147,16 +227,27 @@ function OrderDetailModal({ order, cancellingOrderId, onClose, onCancelOrder }) 
           })}
         </div>
 
-        {allowCancel ? (
+        <div className="pos-order-detail-actions">
           <button
             type="button"
-            className="pos-order-detail-cancel"
-            disabled={cancellingOrderId === orderId}
-            onClick={() => onCancelOrder(order)}
+            className="pos-order-detail-reprint"
+            disabled={reprintingOrderId === orderId}
+            onClick={() => onReprintOrder?.(order)}
           >
-            {cancellingOrderId === orderId ? "Đang hủy..." : "Hủy đơn"}
+            {reprintingOrderId === orderId ? "Đang gửi in..." : "In lại bill"}
           </button>
-        ) : null}
+
+          {allowCancel ? (
+            <button
+              type="button"
+              className="pos-order-detail-cancel"
+              disabled={cancellingOrderId === orderId}
+              onClick={() => onCancelOrder(order)}
+            >
+              {cancellingOrderId === orderId ? "Đang hủy..." : "Hủy đơn"}
+            </button>
+          ) : null}
+        </div>
       </section>
     </div>
   );
@@ -169,39 +260,49 @@ export default function PosRecentOrdersPanel({
   paymentSessionsLoading = false,
   error,
   paymentSessionsError = "",
+  actionMessage = "",
+  actionMessageType = "",
   cancellingOrderId,
+  reprintingOrderId = "",
   activePaymentSessionId = "",
+  activeShiftId = "",
   cancellingPaymentSessionId = "",
   onRefresh,
   onCancelOrder,
+  onReprintOrder,
   onOpenPaymentSession,
   onCancelPaymentSession
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState("today");
+  const [rangeFilter, setRangeFilter] = useState("shift");
   const [selectedOrderId, setSelectedOrderId] = useState("");
 
   const filteredOrders = useMemo(() => (Array.isArray(orders) ? orders : []).filter((order) => {
-    if (dateFilter === "today" && !isToday(order.createdAt)) return false;
+    if (rangeFilter === "today" && !isToday(order.createdAt)) return false;
+    if (rangeFilter === "shift" && activeShiftId && toText(order.posShiftId) !== toText(activeShiftId)) return false;
     return statusFilter === "all" || getOrderStatusGroup(order) === statusFilter;
-  }), [dateFilter, orders, statusFilter]);
+  }), [activeShiftId, orders, rangeFilter, statusFilter]);
+
   const filteredPaymentSessions = useMemo(
     () => (Array.isArray(paymentSessions) ? paymentSessions : []).filter((session) => {
-      if (dateFilter === "today" && !isToday(session.createdAt)) return false;
+      if (rangeFilter === "today" && !isToday(session.createdAt)) return false;
+      if (rangeFilter === "shift" && activeShiftId && toText(session.posShiftId) !== toText(activeShiftId)) return false;
       const status = toText(session.status).toLowerCase();
       const group = ["draft", "pending_payment"].includes(status)
         ? "pending_payment"
         : "processing";
       return statusFilter === "all" || statusFilter === group;
     }),
-    [dateFilter, paymentSessions, statusFilter]
+    [activeShiftId, paymentSessions, rangeFilter, statusFilter]
   );
+
   const pendingPaymentCount = useMemo(
     () => (Array.isArray(paymentSessions) ? paymentSessions : []).filter((session) => (
       ["draft", "pending_payment"].includes(toText(session.status).toLowerCase())
     )).length,
     [paymentSessions]
   );
+
   const selectedOrder = useMemo(
     () => (Array.isArray(orders) ? orders : []).find((order) => toText(order.id || order.orderCode) === selectedOrderId) || null,
     [orders, selectedOrderId]
@@ -225,9 +326,10 @@ export default function PosRecentOrdersPanel({
           ))}
         </div>
         <div className="pos-order-history-actions">
-          <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} aria-label="Lọc ngày">
-            <option value="today">Hôm nay</option>
-            <option value="all">Tất cả ngày</option>
+          <select value={rangeFilter} onChange={(event) => setRangeFilter(event.target.value)} aria-label="Lọc phạm vi">
+            {RANGE_FILTERS.map((filter) => (
+              <option key={filter.id} value={filter.id}>{filter.label}</option>
+            ))}
           </select>
           <button type="button" onClick={onRefresh} disabled={loading || paymentSessionsLoading}>
             {loading || paymentSessionsLoading ? "Đang tải..." : "Tải lại"}
@@ -235,6 +337,7 @@ export default function PosRecentOrdersPanel({
         </div>
       </div>
 
+      {actionMessage ? <div className={`pos-create-message ${actionMessageType === "success" ? "is-success" : "is-error"}`}>{actionMessage}</div> : null}
       {error ? <div className="pos-create-message is-error">{error}</div> : null}
       {paymentSessionsError ? <div className="pos-create-message is-error">{paymentSessionsError}</div> : null}
 
@@ -255,6 +358,7 @@ export default function PosRecentOrdersPanel({
           const items = Array.isArray(order.items) ? order.items : [];
           const firstItem = items[0];
           const statusGroup = getOrderStatusGroup(order);
+          const loyaltyLabels = getLoyaltyUsageSummary(order);
           return (
             <button key={orderId} type="button" className="pos-recent-order-card" onClick={() => setSelectedOrderId(orderId)}>
               <div className="pos-recent-order-title-row">
@@ -279,12 +383,19 @@ export default function PosRecentOrdersPanel({
                   {items.length > 1 ? <span>+{items.length - 1} món khác</span> : null}
                 </div>
               ) : null}
+              {loyaltyLabels.length ? (
+                <div className="pos-recent-order-tags">
+                  {loyaltyLabels.map((label) => (
+                    <span key={`${orderId}-${label}`}>{label}</span>
+                  ))}
+                </div>
+              ) : null}
             </button>
           );
         }) : filteredPaymentSessions.length ? null : (
           <div className="pos-cart-empty">
             <strong>Không có đơn phù hợp.</strong>
-            <span>Thử đổi trạng thái hoặc phạm vi ngày.</span>
+            <span>Thử đổi trạng thái hoặc phạm vi lọc.</span>
           </div>
         )}
       </div>
@@ -292,8 +403,10 @@ export default function PosRecentOrdersPanel({
       <OrderDetailModal
         order={selectedOrder}
         cancellingOrderId={cancellingOrderId}
+        reprintingOrderId={reprintingOrderId}
         onClose={() => setSelectedOrderId("")}
         onCancelOrder={onCancelOrder}
+        onReprintOrder={onReprintOrder}
       />
     </div>
   );

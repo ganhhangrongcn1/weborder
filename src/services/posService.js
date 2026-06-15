@@ -1,6 +1,7 @@
 import { orderStorage } from "./orderService.js";
 import { getCustomerKey } from "./storageService.js";
 import { applyOrderLoyaltyAsync } from "./loyaltyService.js";
+import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import { getRuntimeSupabaseClient } from "./repositories/repositoryRuntime.js";
 
 const ALL_CATEGORY = "Tất cả";
@@ -446,6 +447,7 @@ function mapPosHistoryOrder(row = {}, itemMap = new Map()) {
     id: toText(row.id || orderCode),
     orderCode,
     displayOrderCode: toText(metadata.displayOrderCode || metadata.display_order_code || orderCode),
+    posShiftId: toText(metadata.posShiftId || metadata.pos_shift_id || metadata.shiftId || metadata.shift?.id),
     pagerNumber: normalizePagerNumber(metadata.pagerNumber || metadata.pager_number),
     phone: customerPhone,
     customerPhone,
@@ -703,12 +705,12 @@ export async function cancelPosOrderAsync(order = {}, { cashierName = "", reason
   const metadata = getObject(order.metadata);
   const usesLoyaltyDiscount = Number(order.pointsDiscount || metadata.pointsDiscount || 0) > 0;
   const usesLoyaltyVoucher = toText(order.promoSource || metadata.promoSource).toLowerCase() === "loyalty";
-  if (usesLoyaltyDiscount || usesLoyaltyVoucher) {
-    return {
-      ok: false,
-      message: "Đơn đã dùng điểm hoặc voucher loyalty, tạm chưa hủy trực tiếp trên POS để tránh lệch quyền lợi khách."
-    };
-  }
+  const normalizedPhone = getCustomerKey(
+    order.customerPhone ||
+    order.customerPhoneKey ||
+    order.phone ||
+    order.rawCustomerPhone
+  );
 
   const cancelledAt = new Date().toISOString();
   const updated = await orderStorage.updateOrderAsync(orderId, (current) => {
@@ -732,6 +734,67 @@ export async function cancelPosOrderAsync(order = {}, { cashierName = "", reason
 
   if (!updated) {
     return { ok: false, message: "Không tìm thấy đơn để hủy." };
+  }
+
+  if ((usesLoyaltyDiscount || usesLoyaltyVoucher) && normalizedPhone) {
+    try {
+      if (usesLoyaltyDiscount) {
+        const refundPoints = Math.max(
+          0,
+          Math.floor(Number(order.pointsDiscount || metadata.pointsDiscount || metadata.pointsSpent || 0))
+        );
+        if (refundPoints > 0) {
+          await loyaltyRepository.appendEventByPhoneAsync(
+            normalizedPhone,
+            {
+              entryType: "ORDER_SPEND",
+              points: refundPoints,
+              orderId: `${orderId}-cancel-loyalty`,
+              amount: Number(order.totalAmount || order.total || 0),
+              title: `Hoan diem don ${orderId}`,
+              note: "Hoan diem khi huy don POS",
+              createdAt: cancelledAt,
+              metadata: {
+                source: "pos_cancel_refund",
+                orderId,
+                orderCode: toText(order.orderCode || order.displayOrderCode || orderId),
+                cancelledAt,
+                cancelledBy: toText(cashierName) || "POS"
+              }
+            },
+            { totalPoints: 0, voucherHistory: [], pointHistory: [] }
+          );
+        }
+      }
+
+      if (usesLoyaltyVoucher) {
+        const currentLoyalty = await loyaltyRepository.getByPhoneAsync(normalizedPhone, { voucherHistory: [], pointHistory: [] });
+        const voucherId = toText(order.promoVoucherId || metadata.promoVoucherId);
+        const voucherCode = toText(order.promoCode || metadata.promoCode).toUpperCase();
+        const nextVoucherHistory = (Array.isArray(currentLoyalty.voucherHistory) ? currentLoyalty.voucherHistory : []).map((voucher) => {
+          const sameId = voucherId && toText(voucher.id) === voucherId;
+          const sameCode = voucherCode && toText(voucher.code).toUpperCase() === voucherCode;
+          if (!sameId && !sameCode) return voucher;
+          return {
+            ...voucher,
+            used: false,
+            usedAt: "",
+            orderCode: ""
+          };
+        });
+        await loyaltyRepository.saveByPhoneAsync(normalizedPhone, {
+          ...currentLoyalty,
+          phone: normalizedPhone,
+          voucherHistory: nextVoucherHistory
+        }, currentLoyalty);
+      }
+    } catch (error) {
+      console.warn("[posService] cancel loyalty rollback failed", error);
+      return {
+        ok: false,
+        message: "Đã hủy đơn nhưng chưa hoàn lại được loyalty. Vui lòng kiểm tra lại điểm/voucher của khách."
+      };
+    }
   }
 
   return {

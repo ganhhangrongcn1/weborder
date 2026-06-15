@@ -1,12 +1,35 @@
 import { useState } from "react";
 import { PosIcon } from "./PosPrimitives.jsx";
 import { PaymentMethodButton } from "./PosPaymentModals.jsx";
-import { formatMoney, toNumber } from "./posHelpers.js";
+import { buildVoucherSelectionKey, formatMoney, toNumber } from "./posHelpers.js";
 
 function getVoucherId(voucher = {}) {
-  const source = String(voucher.source || voucher.voucherSource || "").trim();
-  const id = String(voucher.id || voucher.code || voucher.title || voucher.name || "").trim();
-  return source ? `${source}:${id}` : id;
+  return buildVoucherSelectionKey(voucher);
+}
+
+function SelectedBenefitSummary({
+  title,
+  value,
+  description,
+  onClear,
+  disabled
+}) {
+  if (!value) return null;
+
+  return (
+    <div className="pos-selected-benefit">
+      <div>
+        <span>{title}</span>
+        <strong>{value}</strong>
+        {description ? <small>{description}</small> : null}
+      </div>
+      {onClear ? (
+        <button type="button" disabled={disabled} onClick={onClear}>
+          Bỏ chọn
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function CompactCartItem({ item, onQuantityChange, onRemove }) {
@@ -93,6 +116,9 @@ function LoyaltyBenefitBox({
 }) {
   const customer = customerLookup.result;
   const availablePoints = toNumber(loyaltyBenefit?.availablePoints, 0);
+  const selectedLoyaltyVoucher = loyaltyBenefit?.selectedVoucher?.source === "loyalty"
+    ? loyaltyBenefit.selectedVoucher
+    : null;
   if (!customer && !availablePoints && !(loyaltyBenefit?.loyaltyVouchers || []).length) return null;
 
   return (
@@ -108,6 +134,14 @@ function LoyaltyBenefitBox({
           <strong>{formatMoney((loyaltyBenefit?.voucherDiscount || 0) + (loyaltyBenefit?.pointsDiscount || 0))}</strong>
         </div>
       </div>
+
+      <SelectedBenefitSummary
+        title="Voucher loyalty đang chọn"
+        value={selectedLoyaltyVoucher?.title || selectedLoyaltyVoucher?.code || ""}
+        description={selectedLoyaltyVoucher ? `Giảm ${formatMoney(loyaltyBenefit?.voucherDiscount || 0)}` : ""}
+        disabled={disabled}
+        onClear={selectedLoyaltyVoucher ? () => setSelectedVoucherId("") : null}
+      />
 
       <VoucherButtonList
         title="Voucher loyalty"
@@ -130,6 +164,13 @@ function LoyaltyBenefitBox({
               disabled={disabled}
             />
           </label>
+          <SelectedBenefitSummary
+            title="Điểm đang áp dụng"
+            value={toNumber(loyaltyBenefit?.pointsSpent, 0) > 0 ? `${toNumber(loyaltyBenefit?.pointsSpent, 0).toLocaleString("vi-VN")} điểm` : ""}
+            description={toNumber(loyaltyBenefit?.pointsDiscount, 0) > 0 ? `Giảm ${formatMoney(loyaltyBenefit?.pointsDiscount || 0)}` : ""}
+            disabled={disabled}
+            onClear={toNumber(loyaltyBenefit?.pointsSpent, 0) > 0 ? () => setPointsInput("") : null}
+          />
           <div className="pos-point-suggestions">
             {(loyaltyBenefit?.pointSuggestions || []).map((suggestion) => (
               <button
@@ -240,6 +281,9 @@ function NormalVoucherModal({
   promotionHints
 }) {
   if (!open) return null;
+  const selectedNormalVoucher = loyaltyBenefit?.selectedVoucher?.source === "checkout"
+    ? loyaltyBenefit.selectedVoucher
+    : null;
 
   return (
     <div className="pos-modal-layer" role="presentation">
@@ -253,6 +297,13 @@ function NormalVoucherModal({
           <button type="button" onClick={onClose}>Đóng</button>
         </header>
         <GiftPromotionHints promotionHints={promotionHints} />
+        <SelectedBenefitSummary
+          title="Voucher thường đang chọn"
+          value={selectedNormalVoucher?.title || selectedNormalVoucher?.code || ""}
+          description={selectedNormalVoucher ? `Giảm ${formatMoney(loyaltyBenefit?.voucherDiscount || 0)}` : ""}
+          disabled={disabled}
+          onClear={selectedNormalVoucher ? () => setSelectedVoucherId("") : null}
+        />
         <VoucherButtonList
           title="Voucher thường"
           vouchers={loyaltyBenefit?.normalVouchers || []}

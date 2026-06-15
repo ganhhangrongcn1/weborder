@@ -10,6 +10,12 @@ android {
         encoding = "UTF-8"
     }
 
+    sourceSets {
+        main {
+            assets.srcDirs = []
+        }
+    }
+
     defaultConfig {
         applicationId "vn.ghr.posprinter"
         minSdk 23

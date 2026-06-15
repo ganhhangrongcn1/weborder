@@ -9,14 +9,15 @@ import PosShiftCloseModal from "../components/pos/PosShiftCloseModal.jsx";
 import PosShiftOpenPanel from "../components/pos/PosShiftOpenPanel.jsx";
 import PosShiftOverviewPanel from "../components/pos/PosShiftOverviewPanel.jsx";
 import PosSettingsPanel from "../components/pos/PosSettingsPanel.jsx";
-import { formatMoney, getBranchLabel, getBranchUuid } from "../components/pos/posHelpers.js";
+import { buildVoucherSelectionKey, formatMoney, getBranchLabel, getBranchUuid } from "../components/pos/posHelpers.js";
 import usePosCart from "../hooks/usePosCart.js";
 import usePosCatalog from "../hooks/usePosCatalog.js";
 import usePosCustomerLookup from "../hooks/usePosCustomerLookup.js";
-import { createPosQrPrintJob, createPosShiftClosePrintJob } from "../services/printJobService.js";
+import { lookupPosCustomerByPhone } from "../services/posCustomerService.js";
+import { createCustomerBillPrintJob, createPosQrPrintJob, createPosShiftClosePrintJob } from "../services/printJobService.js";
 import { startPosAutoPrint } from "../services/posAutomationService.js";
 import { buildPosPaymentReference, calculateCashChange, normalizeCashReceived } from "../services/posPaymentService.js";
-import { hasAndroidPrinterBridge } from "../services/printerService.js";
+import { hasAndroidPrinterBridge, printCustomerBill } from "../services/printerService.js";
 import {
   cancelPosPaymentSession,
   confirmPosPaymentSessionManually,
@@ -126,6 +127,44 @@ function buildPointRoundSuggestions(loyaltyBenefit = {}) {
   return suggestions;
 }
 
+function buildPointRoundSuggestionsV2(loyaltyBenefit = {}) {
+  const baseTotal = Math.max(0, Math.floor(toNumber(loyaltyBenefit.subtotal, 0) - toNumber(loyaltyBenefit.voucherDiscount, 0)));
+  const availablePoints = Math.max(0, Math.floor(toNumber(loyaltyBenefit.availablePoints, 0)));
+  const redeemPointUnit = Math.max(1, Math.floor(toNumber(loyaltyBenefit.redeemPointUnit, 1)));
+  const redeemValue = Math.max(1, Math.floor(toNumber(loyaltyBenefit.redeemValue, 1)));
+  const maxUnits = Math.floor(availablePoints / redeemPointUnit);
+  const maxDiscount = Math.min(baseTotal, maxUnits * redeemValue);
+  const suggestions = [];
+  const seen = new Set();
+
+  [1000, 5000, 10000, 20000, 50000].forEach((roundTo) => {
+    if (baseTotal <= roundTo) return;
+    const roundedTotal = Math.floor(baseTotal / roundTo) * roundTo;
+    const remainder = baseTotal - roundedTotal;
+    if (!remainder || remainder > maxDiscount) return;
+
+    const unitCount = Math.ceil(remainder / redeemValue);
+    const points = unitCount * redeemPointUnit;
+    if (!points || points > availablePoints || seen.has(points)) return;
+
+    seen.add(points);
+    suggestions.push({
+      label: `Chẵn ${formatMoney(Math.max(0, roundedTotal))}`,
+      points
+    });
+  });
+
+  if (availablePoints > 0 && !seen.has(availablePoints)) {
+    suggestions.push({
+      label: "Dùng tối đa",
+      points: availablePoints
+    });
+  }
+
+  suggestions.sort((a, b) => a.points - b.points);
+  return suggestions.slice(0, 4);
+}
+
 function buildPosLoyaltyBenefit({ subtotal = 0, customer = null, coupons = [], selectedVoucherId = "", pointsInput = "" }) {
   const loyalty = customer?.loyalty || {};
   const loyaltyRule = customer?.loyaltyRule || {};
@@ -163,10 +202,7 @@ function buildPosLoyaltyBenefit({ subtotal = 0, customer = null, coupons = [], s
     }));
 
   const combinedVouchers = [...loyaltyVouchers, ...normalVouchers];
-  const selectedVoucher = combinedVouchers.find((voucher) => {
-    const id = voucher.source ? `${voucher.source}:${toText(voucher.id || voucher.code || voucher.title)}` : toText(voucher.id);
-    return id === selectedVoucherId;
-  }) || null;
+  const selectedVoucher = combinedVouchers.find((voucher) => buildVoucherSelectionKey(voucher) === selectedVoucherId) || null;
   const voucherDiscount = selectedVoucher ? calculateVoucherDiscount(selectedVoucher, subtotal) : 0;
 
   const maxPointUnits = Math.floor(availablePoints / redeemPointUnit);
@@ -185,10 +221,11 @@ function buildPosLoyaltyBenefit({ subtotal = 0, customer = null, coupons = [], s
     normalVouchers,
     loyaltyVouchers,
     selectedVoucher,
+    selectedVoucherKey: selectedVoucher ? buildVoucherSelectionKey(selectedVoucher) : "",
     voucherDiscount,
     pointsSpent,
     pointsDiscount,
-    pointSuggestions: buildPointRoundSuggestions({
+    pointSuggestions: buildPointRoundSuggestionsV2({
       subtotal,
       voucherDiscount,
       availablePoints,
@@ -254,7 +291,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [recentOrders, setRecentOrders] = useState([]);
   const [recentOrdersLoading, setRecentOrdersLoading] = useState(false);
   const [recentOrdersError, setRecentOrdersError] = useState("");
+  const [recentOrdersActionMessage, setRecentOrdersActionMessage] = useState("");
+  const [recentOrdersActionType, setRecentOrdersActionType] = useState("");
   const [cancellingOrderId, setCancellingOrderId] = useState("");
+  const [reprintingOrderId, setReprintingOrderId] = useState("");
   const [pendingPaymentSessions, setPendingPaymentSessions] = useState([]);
   const [pendingPaymentsLoading, setPendingPaymentsLoading] = useState(false);
   const [pendingPaymentsError, setPendingPaymentsError] = useState("");
@@ -332,6 +372,58 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const draftLocked = Boolean(paymentConfirmed || isQrDraftPending);
   const isMenuLocked = Boolean(paymentConfirmed || !hasOpenShift);
 
+  const validateLiveLoyaltySelection = async ({
+    phone = customerPhone,
+    pointsSpent = loyaltyBenefit.pointsSpent,
+    selectedVoucher = loyaltyBenefit.selectedVoucher
+  } = {}) => {
+    const normalizedPhone = toText(phone);
+    const usesLoyaltyPoints = toNumber(pointsSpent, 0) > 0;
+    const usesLoyaltyVoucher = toText(selectedVoucher?.source).toLowerCase() === "loyalty";
+
+    if (!normalizedPhone || (!usesLoyaltyPoints && !usesLoyaltyVoucher)) {
+      return { ok: true, customer: customerLookup.result };
+    }
+
+    const latestCustomer = await lookupPosCustomerByPhone(normalizedPhone);
+    if (!latestCustomer?.ok) {
+      return {
+        ok: false,
+        message: latestCustomer?.message || "Không đọc được điểm loyalty mới nhất của khách."
+      };
+    }
+
+    const latestPoints = Math.max(0, Math.floor(toNumber(latestCustomer?.loyalty?.totalPoints, 0)));
+    if (usesLoyaltyPoints && toNumber(pointsSpent, 0) > latestPoints) {
+      return {
+        ok: false,
+        customer: latestCustomer,
+        message: `Điểm loyalty vừa thay đổi. Khách hiện còn ${latestPoints.toLocaleString("vi-VN")} điểm.`
+      };
+    }
+
+    if (usesLoyaltyVoucher) {
+      const selectedVoucherId = toText(selectedVoucher?.id);
+      const selectedVoucherCode = toText(selectedVoucher?.code).toUpperCase();
+      const matchedVoucher = (latestCustomer.availableVouchers || []).some((voucher) => {
+        const voucherId = toText(voucher?.id);
+        const voucherCode = toText(voucher?.code).toUpperCase();
+        return (selectedVoucherId && voucherId === selectedVoucherId)
+          || (selectedVoucherCode && voucherCode === selectedVoucherCode);
+      });
+
+      if (!matchedVoucher) {
+        return {
+          ok: false,
+          customer: latestCustomer,
+          message: "Voucher loyalty vừa thay đổi hoặc đã được dùng ở nơi khác. Vui lòng chọn lại."
+        };
+      }
+    }
+
+    return { ok: true, customer: latestCustomer };
+  };
+
   const resetComposer = ({ preserveRememberedSession = false } = {}) => {
     if (!preserveRememberedSession) {
       forgetPosPaymentSession(selectedBranchUuid);
@@ -366,7 +458,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setPagerNumber(session.pagerNumber || "");
     setCustomerName(session.customerName || "");
     setCustomerPhone(session.customerPhone || "");
-    setSelectedVoucherId(toText(checkout.promoVoucherId));
+    setSelectedVoucherId(toText(checkout.selectedVoucherKey || checkout.promoSelectionKey || checkout.promoVoucherId));
     setPointsInput(checkout.pointsSpent ? String(checkout.pointsSpent) : "");
     setPaymentMethod("bank_qr");
     setPaymentConfirmed(
@@ -410,6 +502,35 @@ export default function PosPage({ products = [], categories = [], branches = [],
       setRecentOrdersError(error?.message || "Không tải được đơn gần đây.");
     } finally {
       setRecentOrdersLoading(false);
+    }
+  };
+
+  const handleReprintRecentOrder = async (order) => {
+    const orderId = toText(order?.id || order?.orderCode);
+    if (!orderId) return;
+
+    setReprintingOrderId(orderId);
+    setRecentOrdersActionMessage("");
+    setRecentOrdersActionType("");
+
+    try {
+      if (hasAndroidPrinterBridge()) {
+        const result = await createCustomerBillPrintJob(order, {
+          branchUuid: selectedBranchUuid,
+          requestedBy: posSession?.cashierName || "POS"
+        });
+        setRecentOrdersActionMessage(result.message || (result.ok ? "Đã gửi in lại bill." : "Không in lại được bill."));
+        setRecentOrdersActionType(result.ok ? "success" : "error");
+      } else {
+        const result = await printCustomerBill(order);
+        setRecentOrdersActionMessage(result.message || (result.ok ? "Đã mở hộp thoại in lại bill." : "Không in lại được bill."));
+        setRecentOrdersActionType(result.ok ? "success" : "error");
+      }
+    } catch (error) {
+      setRecentOrdersActionMessage(error?.message || "Không in lại được bill.");
+      setRecentOrdersActionType("error");
+    } finally {
+      setReprintingOrderId("");
     }
   };
 
@@ -827,6 +948,11 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
     const orderIdentity = identity || createPosOrderIdentity(new Date());
     const selectedVoucher = loyaltyBenefit.selectedVoucher;
+    const loyaltyValidation = await validateLiveLoyaltySelection({ selectedVoucher });
+    if (!loyaltyValidation.ok) {
+      setCreateError(loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại.");
+      return { ok: false, message: loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại." };
+    }
     const paymentReference = buildPosPaymentReference(orderIdentity, selectedBranch);
     const result = await createPosPaymentSession({
       requestKey: `pos:${selectedBranchUuid}:${orderIdentity.orderCode}`,
@@ -851,6 +977,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
         promoCode: toText(selectedVoucher?.code).toUpperCase(),
         promoSource: toText(selectedVoucher?.source),
         promoVoucherId: toText(selectedVoucher?.id),
+        selectedVoucherKey: loyaltyBenefit.selectedVoucherKey,
+        promoSelectionKey: loyaltyBenefit.selectedVoucherKey,
         pointsSpent: loyaltyBenefit.pointsSpent,
         pointsDiscountAmount: loyaltyBenefit.pointsDiscount,
         pointRedeemRule: loyaltyBenefit.loyaltyRule
@@ -910,13 +1038,6 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setQrPrintMessageType("");
 
     try {
-      if (!hasAndroidPrinterBridge()) {
-        return {
-          ok: true,
-          fallbackToBrowser: true
-        };
-      }
-
       const result = await createPosQrPrintJob({
         branch: selectedBranch,
         amount,
@@ -977,6 +1098,19 @@ export default function PosPage({ products = [], categories = [], branches = [],
     const checkout = session.checkoutSnapshot || {};
     const sessionTotals = checkout.totals || posTotals;
     const orderIdentity = session.orderIdentity || checkout.orderIdentity || qrPreviewIdentity;
+    const loyaltyValidation = await validateLiveLoyaltySelection({
+      phone: session.customerPhone || customerPhone,
+      pointsSpent: checkout.pointsSpent || 0,
+      selectedVoucher: {
+        id: checkout.promoVoucherId,
+        code: checkout.promoCode,
+        source: checkout.promoSource
+      }
+    });
+    if (!loyaltyValidation.ok) {
+      setCreateError(loyaltyValidation.message || "Ưu đãi loyalty không còn hợp lệ để chốt đơn QR.");
+      return false;
+    }
     setPaymentConfirmed({
       method: "bank_qr",
       reference: session.paymentReference,
@@ -1121,9 +1255,15 @@ export default function PosPage({ products = [], categories = [], branches = [],
       return;
     }
 
+    const selectedVoucher = loyaltyBenefit.selectedVoucher;
+    const loyaltyValidation = await validateLiveLoyaltySelection({ selectedVoucher });
+    if (!loyaltyValidation.ok) {
+      setCreateError(loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại.");
+      return;
+    }
+
     setCreatingOrder(true);
     setCreateError("");
-    const selectedVoucher = loyaltyBenefit.selectedVoucher;
     const result = await createPosTakeawayOrder({
       cart,
       totals: posTotals,
@@ -1446,11 +1586,16 @@ export default function PosPage({ products = [], categories = [], branches = [],
                 paymentSessionsLoading={pendingPaymentsLoading}
                 error={recentOrdersError}
                 paymentSessionsError={pendingPaymentsError}
+                actionMessage={recentOrdersActionMessage}
+                actionMessageType={recentOrdersActionType}
                 cancellingOrderId={cancellingOrderId}
+                reprintingOrderId={reprintingOrderId}
                 activePaymentSessionId={qrDraftOrder?.id}
+                activeShiftId={activeShift?.id}
                 cancellingPaymentSessionId={cancellingPaymentSessionId}
                 onRefresh={handleRefreshHistory}
                 onCancelOrder={handleCancelRecentOrder}
+                onReprintOrder={handleReprintRecentOrder}
                 onOpenPaymentSession={handleOpenPendingPayment}
                 onCancelPaymentSession={setPendingCancelTarget}
               />
