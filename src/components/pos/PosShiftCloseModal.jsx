@@ -6,6 +6,34 @@ import {
   getCashBreakdownTotal
 } from "../../services/posCashBreakdownService.js";
 
+function getDifferenceState(hasCountedCash, difference) {
+  if (!hasCountedCash) {
+    return {
+      className: "is-pending",
+      label: "Chưa đếm tiền"
+    };
+  }
+
+  if (difference === 0) {
+    return {
+      className: "is-even",
+      label: "Khớp tiền"
+    };
+  }
+
+  if (difference > 0) {
+    return {
+      className: "is-over",
+      label: "Thừa tiền"
+    };
+  }
+
+  return {
+    className: "is-short",
+    label: "Thiếu tiền"
+  };
+}
+
 export default function PosShiftCloseModal({
   open = false,
   activeShift = null,
@@ -34,11 +62,22 @@ export default function PosShiftCloseModal({
   const countedAmount = getCashBreakdownTotal(cashBreakdown);
   const difference = countedAmount - expectedCash;
   const hasCountedCash = Boolean(cashBreakdown);
+  const differenceState = getDifferenceState(hasCountedCash, difference);
 
   return (
     <div className="pos-modal-layer" role="presentation">
-      <button type="button" className="pos-modal-backdrop" aria-label="Đóng kết ca" onClick={onClose} />
-      <section className="pos-cash-payment-modal pos-shift-close-modal" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="pos-modal-backdrop"
+        aria-label="Đóng kết ca"
+        onClick={onClose}
+      />
+
+      <section
+        className="pos-cash-payment-modal pos-shift-close-modal"
+        role="dialog"
+        aria-modal="true"
+      >
         <header>
           <div>
             <span>POS</span>
@@ -66,46 +105,69 @@ export default function PosShiftCloseModal({
           </div>
         </div>
 
-        <div className="pos-shift-breakdown-box">
-          <span>Tiền mặt thực đếm</span>
-          <strong>{hasCountedCash ? formatMoney(countedAmount) : "Chưa đếm tiền"}</strong>
-          <p>{formatCashBreakdownSummary(cashBreakdown)}</p>
-        </div>
+        <section className="pos-shift-close-section">
+          <div className="pos-shift-close-section-head">
+            <div>
+              <span>Đếm tiền cuối ca</span>
+              <strong>{hasCountedCash ? "Đã nhập theo mệnh giá" : "Chưa đếm tiền thực tế"}</strong>
+            </div>
+            <button
+              type="button"
+              className="pos-shift-cash-count-button"
+              onClick={() => setCashCounterOpen(true)}
+            >
+              {hasCountedCash ? "Đếm lại" : "Đếm theo mệnh giá"}
+            </button>
+          </div>
 
-        <button
-          type="button"
-          className="pos-shift-cash-count-button"
-          onClick={() => setCashCounterOpen(true)}
-        >
-          {hasCountedCash ? "Đếm lại theo mệnh giá" : "Đếm tiền theo mệnh giá"}
-        </button>
+          <div className="pos-shift-breakdown-box pos-shift-close-breakdown">
+            <span>Tiền mặt thực đếm</span>
+            <strong>{hasCountedCash ? formatMoney(countedAmount) : "Chưa có dữ liệu"}</strong>
+            <p>{formatCashBreakdownSummary(cashBreakdown)}</p>
+          </div>
 
-        <div className={`pos-shift-close-difference ${!hasCountedCash ? "is-pending" : difference === 0 ? "is-even" : difference > 0 ? "is-over" : "is-short"}`}>
-          <span>{!hasCountedCash ? "Chưa đếm tiền" : difference === 0 ? "Khớp tiền" : difference > 0 ? "Thừa tiền" : "Thiếu tiền"}</span>
-          <strong>{!hasCountedCash ? formatMoney(0) : formatMoney(Math.abs(difference))}</strong>
-        </div>
+          <div className={`pos-shift-close-difference ${differenceState.className}`}>
+            <div>
+              <span>{differenceState.label}</span>
+              <strong>{!hasCountedCash ? formatMoney(0) : formatMoney(Math.abs(difference))}</strong>
+            </div>
+            <div className="pos-shift-close-difference-meta">
+              <small>Thực đếm: {hasCountedCash ? formatMoney(countedAmount) : "--"}</small>
+              <small>Dự kiến: {formatMoney(expectedCash)}</small>
+            </div>
+          </div>
+        </section>
 
-        <label className="pos-payment-cash-input">
-          <span>Ghi chú kết ca</span>
-          <textarea
-            value={closingNote}
-            rows={3}
-            placeholder="Ví dụ: Bàn giao ca tối..."
-            onChange={(event) => setClosingNote(event.target.value)}
-          />
-        </label>
+        <section className="pos-shift-close-section">
+          <div className="pos-shift-close-section-head">
+            <div>
+              <span>Biên bản kết ca</span>
+              <strong>Ghi chú và in phiếu bàn giao</strong>
+            </div>
+          </div>
 
-        <label className="pos-shift-print-toggle">
-          <input
-            type="checkbox"
-            checked={printReceipt}
-            onChange={(event) => setPrintReceipt(event.target.checked)}
-          />
-          <span>
-            <strong>In phiếu kết ca</strong>
-            <small>Máy in POS sẽ nhận lệnh sau khi kết ca thành công.</small>
-          </span>
-        </label>
+          <label className="pos-payment-cash-input">
+            <span>Ghi chú kết ca</span>
+            <textarea
+              value={closingNote}
+              rows={3}
+              placeholder="Ví dụ: Bàn giao ca tối, thiếu 1 tờ 20.000đ..."
+              onChange={(event) => setClosingNote(event.target.value)}
+            />
+          </label>
+
+          <label className="pos-shift-print-toggle">
+            <input
+              type="checkbox"
+              checked={printReceipt}
+              onChange={(event) => setPrintReceipt(event.target.checked)}
+            />
+            <span>
+              <strong>In phiếu kết ca</strong>
+              <small>Phiếu sẽ in số liệu ca, chênh lệch tiền và phần nhân viên ký.</small>
+            </span>
+          </label>
+        </section>
 
         {error ? <div className="pos-create-message is-error">{error}</div> : null}
 

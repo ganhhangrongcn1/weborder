@@ -1,9 +1,61 @@
-import { buildPosPaymentReference, buildPosQrImageUrl, calculateCashChange, getPosQrPaymentConfig, normalizeCashReceived } from "../../services/posPaymentService.js";
+import {
+  buildPosPaymentReference,
+  buildPosQrImageUrl,
+  calculateCashChange,
+  getPosQrPaymentConfig,
+  normalizeCashReceived
+} from "../../services/posPaymentService.js";
 import { createPosOrderIdentity } from "../../services/posService.js";
 import { PosIcon } from "./PosPrimitives.jsx";
 import { formatMoney } from "./posHelpers.js";
 
 const CASH_SUGGESTIONS = [50000, 100000, 200000, 500000];
+
+function openBrowserQrPrint({ qrUrl, amount, transferContent }) {
+  if (!qrUrl) {
+    return {
+      ok: false,
+      message: "Chưa tạo được mã QR để in."
+    };
+  }
+
+  const printWindow = window.open("", "_blank", "width=360,height=520");
+  if (!printWindow) {
+    return {
+      ok: false,
+      message: "Trình duyệt đang chặn cửa sổ in QR."
+    };
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>In QR ${transferContent}</title>
+        <style>
+          body{font-family:system-ui,Arial,sans-serif;margin:0;padding:14px;text-align:center;color:#111827}
+          img{width:260px;max-width:100%;display:block;margin:8px auto}
+          strong{display:block;font-size:20px;margin-top:8px}
+          span{display:block;font-size:14px;margin-top:4px}
+        </style>
+      </head>
+      <body>
+        <img src="${qrUrl}" alt="QR thanh toán" />
+        <strong>${formatMoney(amount)}</strong>
+        <span>${transferContent}</span>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+
+  return {
+    ok: true,
+    message: "Đã mở hộp thoại in QR."
+  };
+}
 
 export function CashPaymentModal({ amount, cashReceived, setCashReceived, onClose, onConfirm }) {
   const normalized = normalizeCashReceived(cashReceived);
@@ -81,43 +133,36 @@ export function QrPaymentModal({
   processing,
   loading,
   errorMessage,
+  printMessage = "",
+  printMessageType = "",
+  printingQr = false,
   canConfirmManually = false,
   onClose,
   onCancelPending,
-  onConfirmPaid
+  onConfirmPaid,
+  onPrintQr
 }) {
   const identity = draftOrder || previewIdentity || createPosOrderIdentity(new Date());
   const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
   const config = getPosQrPaymentConfig(branch);
   const transferContent = buildPosPaymentReference(identity, branch);
 
-  const handlePrintQr = () => {
-    if (!qrUrl) return;
-    const printWindow = window.open("", "_blank", "width=360,height=520");
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>In QR ${transferContent}</title>
-          <style>
-            body{font-family:system-ui,Arial,sans-serif;margin:0;padding:14px;text-align:center;color:#111827}
-            img{width:260px;max-width:100%;display:block;margin:8px auto}
-            strong{display:block;font-size:20px;margin-top:8px}
-            span{display:block;font-size:14px;margin-top:4px}
-          </style>
-        </head>
-        <body>
-          <img src="${qrUrl}" alt="QR thanh toán" />
-          <strong>${formatMoney(amount)}</strong>
-          <span>${transferContent}</span>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+  const handlePrintQr = async () => {
+    if (typeof onPrintQr === "function") {
+      const result = await onPrintQr({
+        qrUrl,
+        amount,
+        transferContent,
+        identity
+      });
+
+      if (result?.fallbackToBrowser) {
+        openBrowserQrPrint({ qrUrl, amount, transferContent });
+      }
+      return;
+    }
+
+    openBrowserQrPrint({ qrUrl, amount, transferContent });
   };
 
   return (
@@ -130,7 +175,11 @@ export function QrPaymentModal({
             <strong>Quét mã thanh toán</strong>
           </div>
           <div className="pos-qr-payment-header-actions">
-            {config.ready ? <button type="button" onClick={handlePrintQr}>In QR</button> : null}
+            {config.ready ? (
+              <button type="button" disabled={printingQr} onClick={handlePrintQr}>
+                {printingQr ? "Đang in..." : "In QR"}
+              </button>
+            ) : null}
             <button type="button" onClick={onClose}>Đóng</button>
           </div>
         </header>
@@ -161,6 +210,11 @@ export function QrPaymentModal({
                 <strong>{transferContent}</strong>
               </div>
             ) : null}
+            {printMessage ? (
+              <div className={`pos-create-message ${printMessageType === "success" ? "is-success" : "is-error"}`}>
+                {printMessage}
+              </div>
+            ) : null}
             {errorMessage ? (
               <div className="pos-create-message is-error">
                 {errorMessage}
@@ -178,14 +232,14 @@ export function QrPaymentModal({
               <button
                 type="button"
                 className="pos-qr-cancel-button"
-                disabled={processing || loading}
+                disabled={processing || loading || printingQr}
                 onClick={onCancelPending}
               >
                 Hủy QR
               </button>
             ) : null}
             {canConfirmManually ? (
-              <button type="button" className="pos-modal-primary" disabled={processing || loading} onClick={onConfirmPaid}>
+              <button type="button" className="pos-modal-primary" disabled={processing || loading || printingQr} onClick={onConfirmPaid}>
                 {processing ? "Đang xử lý..." : "Xác nhận tay"}
               </button>
             ) : null}

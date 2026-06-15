@@ -13,9 +13,10 @@ import { formatMoney, getBranchLabel, getBranchUuid } from "../components/pos/po
 import usePosCart from "../hooks/usePosCart.js";
 import usePosCatalog from "../hooks/usePosCatalog.js";
 import usePosCustomerLookup from "../hooks/usePosCustomerLookup.js";
-import { createPosShiftClosePrintJob } from "../services/printJobService.js";
+import { createPosQrPrintJob, createPosShiftClosePrintJob } from "../services/printJobService.js";
 import { startPosAutoPrint } from "../services/posAutomationService.js";
 import { buildPosPaymentReference, calculateCashChange, normalizeCashReceived } from "../services/posPaymentService.js";
+import { hasAndroidPrinterBridge } from "../services/printerService.js";
 import {
   cancelPosPaymentSession,
   confirmPosPaymentSessionManually,
@@ -245,6 +246,9 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [qrPreviewIdentity, setQrPreviewIdentity] = useState(null);
   const [qrDraftLoading, setQrDraftLoading] = useState(false);
   const [qrDraftError, setQrDraftError] = useState("");
+  const [qrPrintLoading, setQrPrintLoading] = useState(false);
+  const [qrPrintMessage, setQrPrintMessage] = useState("");
+  const [qrPrintMessageType, setQrPrintMessageType] = useState("");
   const [selectedVoucherId, setSelectedVoucherId] = useState("");
   const [pointsInput, setPointsInput] = useState("");
   const [recentOrders, setRecentOrders] = useState([]);
@@ -885,6 +889,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setPaymentMethod("bank_qr");
     setCreateError("");
     setQrDraftError("");
+    setQrPrintMessage("");
+    setQrPrintMessageType("");
     const previewIdentity = qrDraftOrder || createPosOrderIdentity(new Date());
     setQrPreviewIdentity(previewIdentity);
     setQrDraftLoading(true);
@@ -896,6 +902,47 @@ export default function PosPage({ products = [], categories = [], branches = [],
       return;
     }
     setQrPaymentOpen(true);
+  };
+
+  const handlePrintQr = async ({ qrUrl, amount, transferContent, identity }) => {
+    setQrPrintLoading(true);
+    setQrPrintMessage("");
+    setQrPrintMessageType("");
+
+    try {
+      if (!hasAndroidPrinterBridge()) {
+        return {
+          ok: true,
+          fallbackToBrowser: true
+        };
+      }
+
+      const result = await createPosQrPrintJob({
+        branch: selectedBranch,
+        amount,
+        qrUrl,
+        transferContent,
+        orderCode: qrDraftOrder?.displayOrderCode || qrDraftOrder?.orderCode || identity?.displayOrderCode || identity?.orderCode,
+        customerName: customerName || customerLookup.result?.customerName || ""
+      }, {
+        branchUuid: selectedBranchUuid,
+        requestedBy: posSession?.cashierName || "POS"
+      });
+
+      setQrPrintMessage(result.message || (result.ok ? "Đã gửi lệnh in QR." : "Không in được QR."));
+      setQrPrintMessageType(result.ok ? "success" : "error");
+      return result;
+    } catch (error) {
+      const message = error?.message || "Không gửi được lệnh in QR.";
+      setQrPrintMessage(message);
+      setQrPrintMessageType("error");
+      return {
+        ok: false,
+        message
+      };
+    } finally {
+      setQrPrintLoading(false);
+    }
   };
 
   const handleConfirmQrPaid = async () => {
@@ -1515,10 +1562,18 @@ export default function PosPage({ products = [], categories = [], branches = [],
           processing={creatingOrder}
           loading={qrDraftLoading}
           errorMessage={qrDraftError}
+          printMessage={qrPrintMessage}
+          printMessageType={qrPrintMessageType}
+          printingQr={qrPrintLoading}
           canConfirmManually={toText(posSession?.role).toLowerCase() === "admin"}
-          onClose={() => setQrPaymentOpen(false)}
+          onClose={() => {
+            setQrPaymentOpen(false);
+            setQrPrintMessage("");
+            setQrPrintMessageType("");
+          }}
           onCancelPending={() => setCancelQrConfirmOpen(true)}
           onConfirmPaid={handleConfirmQrPaid}
+          onPrintQr={handlePrintQr}
         />
       ) : null}
 

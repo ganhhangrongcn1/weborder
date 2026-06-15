@@ -21,6 +21,7 @@ const KITCHEN_TICKET_JOB_TYPE = "kitchen_ticket";
 const DEFAULT_PRINTER_KEY = "cashier-80mm";
 const DEFAULT_KITCHEN_PRINTER_KEY = "kitchen-80mm";
 const POS_SHIFT_CLOSE_SOURCE_TYPE = "pos_shift_close";
+const POS_PAYMENT_QR_SOURCE_TYPE = "pos_payment_qr";
 const AUTO_PRINT_WINDOW_MINUTES = 5;
 const AUTO_PRINT_EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
 const PRINT_JOB_STATUS_COLUMNS = [
@@ -113,6 +114,35 @@ function pushCashBreakdownLines(lines, title, breakdown, width) {
   entries.forEach((entry) => {
     lines.push(alignReceiptLine(`${entry.label} x ${entry.count}`, toMoney(entry.total), width));
   });
+}
+
+function buildPosQrReceiptText({
+  branchName = "",
+  amount = 0,
+  transferContent = "",
+  orderCode = "",
+  customerName = ""
+} = {}) {
+  const width = 42;
+  const lines = [
+    "@@CENTER:GÁNH HÀNG RONG",
+    "@@CENTER:QUÉT MÃ THANH TOÁN",
+    buildLine("-", width)
+  ];
+
+  if (branchName) lines.push(`Chi nhánh: ${toText(branchName)}`);
+  if (orderCode) lines.push(`Mã bill: ${toText(orderCode)}`);
+  if (customerName) lines.push(`Khách: ${toText(customerName)}`);
+
+  lines.push(alignReceiptLine("Số tiền", toMoney(amount), width));
+  lines.push(buildLine("-", width));
+  lines.push("@@CENTER:Đưa mã này cho khách quét");
+  lines.push("@@QR");
+  lines.push(buildLine("-", width));
+  lines.push(`Nội dung: ${toText(transferContent)}`);
+  lines.push(buildLine("-", width));
+  lines.push("@@CENTER:Cảm ơn quý khách!");
+  return lines.join("\n");
 }
 
 function _buildPosShiftCloseReceiptText({
@@ -448,6 +478,90 @@ export async function createPosShiftClosePrintJob({
     ok: true,
     job: data || null,
     message: "Đã gửi lệnh in phiếu kết ca tới máy POS."
+  };
+}
+
+export async function createPosQrPrintJob({
+  branch = null,
+  amount = 0,
+  qrUrl = "",
+  transferContent = "",
+  orderCode = "",
+  customerName = ""
+} = {}, options = {}) {
+  const client = await getClient();
+  if (!client) {
+    return {
+      ok: false,
+      message: "Chưa kết nối được Supabase để gửi lệnh in QR."
+    };
+  }
+
+  const safeQrUrl = toText(qrUrl);
+  if (!safeQrUrl) {
+    return {
+      ok: false,
+      message: "Chưa tạo được mã QR để in."
+    };
+  }
+
+  const now = new Date().toISOString();
+  const branchUuid = toText(branch?.id || branch?.branch_uuid || options.branchUuid);
+  const branchName = toText(branch?.name || branch?.branchName || options.branchName);
+  const safeOrderCode = toText(orderCode || transferContent || `QR-${Date.now()}`);
+  const row = {
+    branch_uuid: branchUuid,
+    printer_key: toText(options.printerKey || DEFAULT_PRINTER_KEY),
+    job_type: CUSTOMER_BILL_JOB_TYPE,
+    status: PRINT_JOB_STATUS.pending,
+    order_id: null,
+    order_code: safeOrderCode,
+    source_type: POS_PAYMENT_QR_SOURCE_TYPE,
+    payload: {
+      printerName: toText(options.printerName),
+      receiptWidthMm: Number(options.receiptWidthMm || 80),
+      type: POS_PAYMENT_QR_SOURCE_TYPE,
+      text: buildPosQrReceiptText({
+        branchName,
+        amount,
+        transferContent,
+        orderCode: safeOrderCode,
+        customerName
+      }),
+      loyaltyUrl: safeQrUrl,
+      order: {
+        id: "",
+        orderCode: safeOrderCode,
+        sourceType: POS_PAYMENT_QR_SOURCE_TYPE,
+        branchName,
+        customerName: toText(customerName || "QR thanh toán"),
+        createdAt: now,
+        items: [],
+        totalAmount: Math.max(0, Math.round(toNumber(amount)))
+      }
+    },
+    requested_by: toText(options.requestedBy),
+    requested_at: now,
+    created_at: now,
+    updated_at: now
+  };
+
+  const { data, error } = await client
+    .from("print_jobs")
+    .insert(row)
+    .select(PRINT_JOB_STATUS_COLUMNS)
+    .maybeSingle();
+  if (error) {
+    return {
+      ok: false,
+      message: error.message || "Không tạo được lệnh in QR."
+    };
+  }
+
+  return {
+    ok: true,
+    job: data || null,
+    message: "Đã gửi lệnh in QR tới máy POS."
   };
 }
 
