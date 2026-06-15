@@ -767,6 +767,7 @@ export async function createPosTakeawayOrder({
   paidAt = "",
   paymentMeta = null,
   orderIdentity = null,
+  posShiftId = "",
   status = "pending_zalo",
   kitchenStatus = "pending"
 } = {}) {
@@ -810,7 +811,7 @@ export async function createPosTakeawayOrder({
   const normalizedPromoCode = toText(promoCode).toUpperCase();
   const branchInfo = normalizeBranchForOrder(branch || {});
   const shiftInfo = shift && typeof shift === "object" ? shift : null;
-  const shiftId = toText(shiftInfo?.id || shiftInfo?.shiftId);
+  const shiftId = toText(posShiftId || shiftInfo?.id || shiftInfo?.shiftId);
   const normalizedCustomerPhone = getCustomerKey(customerPhone);
   const isWalkInCustomer = !normalizedCustomerPhone;
   const phone = normalizedCustomerPhone;
@@ -830,6 +831,7 @@ export async function createPosTakeawayOrder({
     customerName: displayCustomerName,
     orderCustomerName: displayCustomerName,
     shiftId,
+    posShiftId: shiftId,
     items,
     subtotal,
     total: totalAmount,
@@ -873,6 +875,8 @@ export async function createPosTakeawayOrder({
       customerPhone: phone,
       customerPhoneKey,
       shiftId,
+      posShiftId: shiftId,
+      pos_shift_id: shiftId,
       shift: shiftInfo ? {
         id: shiftId,
         branchValue: toText(shiftInfo.branchValue),

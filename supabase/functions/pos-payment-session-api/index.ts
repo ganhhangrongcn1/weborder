@@ -21,6 +21,7 @@ const SESSION_COLUMNS = [
   "source",
   "status",
   "branch_uuid",
+  "pos_shift_id",
   "branch_name",
   "cashier_name",
   "customer_name",
@@ -204,6 +205,7 @@ async function createSession(
   const paymentReference = toText(body.payment_reference).toUpperCase();
   const requestKey = toText(body.request_key);
   const branchUuid = toText(body.branch_uuid);
+  const posShiftId = toText(body.pos_shift_id);
   const pagerNumber = toText(body.pager_number);
   const amountExpected = toMoney(body.amount_expected);
   const cartSnapshot = Array.isArray(body.cart_snapshot) ? body.cart_snapshot : [];
@@ -220,6 +222,22 @@ async function createSession(
   }
   if (!isUuid(branchUuid) || !canAccessBranch(profile, branchUuid)) {
     return response({ ok: false, message: "Tài khoản không có quyền tại chi nhánh này." }, 403);
+  }
+  if (posShiftId && !isUuid(posShiftId)) {
+    return response({ ok: false, message: "Ca POS không hợp lệ." }, 400);
+  }
+  if (posShiftId) {
+    const { data: shift, error: shiftError } = await serviceClient
+      .from("pos_shifts")
+      .select("id,branch_uuid,status")
+      .eq("id", posShiftId)
+      .eq("branch_uuid", branchUuid)
+      .eq("status", "open")
+      .maybeSingle();
+
+    if (shiftError || !shift) {
+      return response({ ok: false, message: "Ca POS không còn mở hoặc không thuộc chi nhánh này." }, 409);
+    }
   }
   if (!pagerNumber || !amountExpected || !cartSnapshot.length) {
     return response({ ok: false, message: "Bill chưa đủ món, thẻ rung hoặc số tiền." }, 400);
@@ -273,6 +291,7 @@ async function createSession(
       source: "pos",
       status: "pending_payment",
       branch_uuid: branchUuid,
+      pos_shift_id: posShiftId || null,
       branch_name: toText(body.branch_name),
       cashier_name: toText(profile.name || profile.email || body.cashier_name),
       customer_name: toText(body.customer_name),

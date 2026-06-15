@@ -305,7 +305,7 @@ export default function PosCartPanel({
     cart.length &&
     !creatingOrder &&
     !isQrWaiting &&
-    (paymentMethod === "cash" || Boolean(paymentConfirmed))
+    Boolean(paymentConfirmed)
   );
   const customer = customerLookup.result;
   const selectedVoucher = loyaltyBenefit?.selectedVoucher || null;
@@ -480,7 +480,7 @@ export default function PosCartPanel({
           <section className="pos-payment-box pos-payment-box--footer">
             <div className="pos-payment-methods pos-payment-methods--footer">
               <PaymentMethodButton active={paymentMethod === "cash"} iconName="cash" label="Tiền mặt" disabled={Boolean(paymentConfirmed) || qrDraftLoading} onClick={onOpenCashPayment} />
-              <PaymentMethodButton active={paymentMethod === "bank_qr"} iconName="qr" label={qrDraftLoading ? "Đang tạo QR" : "QR chuyển khoản"} disabled={qrDraftLoading} onClick={onOpenQrPayment} />
+              <PaymentMethodButton active={paymentMethod === "bank_qr"} iconName="qr" label={qrDraftLoading ? "Đang tạo QR" : "QR chuyển khoản"} disabled={Boolean(paymentConfirmed) || qrDraftLoading} onClick={onOpenQrPayment} />
             </div>
             {paymentConfirmed ? (
               <div className="pos-payment-status">
@@ -499,7 +499,7 @@ export default function PosCartPanel({
           </section>
           {createError ? <div className="pos-create-message is-error">{createError}</div> : null}
           <button type="button" className="pos-checkout-button" disabled={!canCreateOrder} onClick={onCreateOrder}>
-            {creatingOrder ? "Đang tạo đơn..." : "Tạo đơn"}
+            {creatingOrder ? "Đang tạo đơn..." : paymentConfirmed ? "Tạo đơn" : "Xác nhận thanh toán"}
           </button>
         </div>
       ) : null}

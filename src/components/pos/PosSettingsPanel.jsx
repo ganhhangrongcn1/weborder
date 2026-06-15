@@ -1,4 +1,17 @@
-export default function PosSettingsPanel({ branchLabel = "", cashierName = "" }) {
+import { formatMoney } from "./posHelpers.js";
+
+function formatShiftTime(value = "") {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit"
+  });
+}
+
+export default function PosSettingsPanel({ branchLabel = "", cashierName = "", activeShift = null }) {
   return (
     <section className="pos-settings-grid">
       <article className="pos-settings-card is-wide">
@@ -14,8 +27,15 @@ export default function PosSettingsPanel({ branchLabel = "", cashierName = "" })
       </article>
       <article className="pos-settings-card">
         <span>Ca bán</span>
-        <strong>Tạm khóa để ổn định POS</strong>
-        <p>Sau khi POS ổn định, mình sẽ làm lại mở ca, chốt ca và thống kê theo ca ở bước riêng.</p>
+        <strong>{activeShift?.id ? "Đang mở ca" : "Chưa mở ca"}</strong>
+        {activeShift?.id ? (
+          <>
+            <p>Mở lúc {formatShiftTime(activeShift.openedAt)} · Tiền đầu ca {formatMoney(activeShift.openingCash)}</p>
+            <small>Mã ca: {activeShift.id}</small>
+          </>
+        ) : (
+          <p>POS cần mở ca trước khi bán hàng.</p>
+        )}
       </article>
     </section>
   );

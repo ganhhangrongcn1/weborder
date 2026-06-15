@@ -47,6 +47,7 @@ const CUSTOMER_ORDER_COLUMNS = [
   "delivery_branch_address",
   "pickup_time_text",
   "delivery_address",
+  "pos_shift_id",
   "kitchen_status",
   "kitchen_done_at",
   "created_at",
@@ -72,6 +73,19 @@ function isSupabaseReady() {
   const info = getRepositoryRuntimeInfo();
   if (info.source === "supabase") return true;
   return isSupabaseConfigSyncEnabled();
+}
+
+function getObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function isWalkInOrder(order = {}) {
+  const metadata = getObject(order.metadata);
+  return Boolean(
+    metadata.walkIn ||
+      metadata.walk_in ||
+      String(order.customerPhoneKey || order.phone || "").startsWith("walkin:")
+  );
 }
 
 async function getSupabaseClientAsync() {
@@ -865,20 +879,28 @@ async function readOrdersByPhoneFromTable(options = {}) {
 
   const map = {};
   (orders || []).forEach((order) => {
-    const phone = getOrderPhoneKey(order.customer_phone || "");
-    if (!phone) return;
     const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : {};
+    const isWalkIn = Boolean(metadata.walkIn || metadata.walk_in);
+    const phone = getOrderPhoneKey(order.customer_phone || "") || (
+      isWalkIn ? String(metadata.customerPhoneKey || metadata.customer_phone_key || `walkin:${order.id || order.order_code}`).trim() : ""
+    );
+    if (!phone) return;
     const next = {
       id: order.id,
       orderCode: order.order_code || order.id,
+      displayOrderCode: order.display_order_code || metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id,
       phone,
-      customerPhone: phone,
+      customerPhone: isWalkIn ? "" : phone,
       customerName: order.customer_name || "",
       status: order.status || "pending_zalo",
       kitchenStatus: order.kitchen_status || metadata.kitchenStatus || "",
       kitchenDoneAt: order.kitchen_done_at || metadata.kitchenDoneAt || "",
       fulfillmentType: order.fulfillment_type || "delivery",
       paymentMethod: order.payment_method || "cash",
+      paymentStatus: order.payment_status || metadata.paymentStatus || metadata.payment_status || "unpaid",
+      paymentAmount: Number(order.payment_amount || metadata.paymentAmount || metadata.payment_amount || order.total_amount || 0),
+      paymentReference: order.payment_reference || metadata.paymentReference || metadata.payment_reference || "",
+      paidAt: order.paid_at || metadata.paidAt || metadata.paid_at || "",
       source: order.source || metadata.source || metadata.orderSource || metadata.channel || "online",
       channel: order.channel || metadata.channel || metadata.source || metadata.orderSource || "online",
       orderSource: metadata.orderSource || order.source || order.channel || "online",
@@ -889,6 +911,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
       promoDiscount: Number(order.promo_discount || 0),
       promoCode: order.promo_code || "",
       pointsDiscount: Number(order.points_discount || 0),
+      pointStatus: order.point_status || metadata.pointStatus || metadata.point_status || "pending",
       pointsEarned: Number(order.points_earned || 0),
       totalAmount: Number(order.total_amount || 0),
       total: Number(order.total_amount || 0),
@@ -909,6 +932,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
       deliveryBranchAddress: order.delivery_branch_address || metadata.deliveryBranchAddress || "",
       pickupTimeText: order.pickup_time_text || "",
       deliveryAddress: order.delivery_address || "",
+      posShiftId: order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id || metadata.shiftId || "",
       createdAt: order.created_at,
       items: itemMap.get(order.id) || []
     };
@@ -963,6 +987,7 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
     return {
       id: order.id,
       orderCode: order.order_code || order.id,
+      displayOrderCode: order.display_order_code || metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id,
       phone: phoneKey,
       customerPhone: phoneKey,
       customerName: order.customer_name || "",
@@ -971,6 +996,10 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
       kitchenDoneAt: order.kitchen_done_at || metadata.kitchenDoneAt || "",
       fulfillmentType: order.fulfillment_type || "delivery",
       paymentMethod: order.payment_method || "cash",
+      paymentStatus: order.payment_status || metadata.paymentStatus || metadata.payment_status || "unpaid",
+      paymentAmount: Number(order.payment_amount || metadata.paymentAmount || metadata.payment_amount || order.total_amount || 0),
+      paymentReference: order.payment_reference || metadata.paymentReference || metadata.payment_reference || "",
+      paidAt: order.paid_at || metadata.paidAt || metadata.paid_at || "",
       source: order.source || metadata.source || metadata.orderSource || metadata.channel || "online",
       channel: order.channel || metadata.channel || metadata.source || metadata.orderSource || "online",
       orderSource: metadata.orderSource || order.source || order.channel || "online",
@@ -981,6 +1010,7 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
       promoDiscount: Number(order.promo_discount || 0),
       promoCode: order.promo_code || "",
       pointsDiscount: Number(order.points_discount || 0),
+      pointStatus: order.point_status || metadata.pointStatus || metadata.point_status || "pending",
       pointsEarned: Number(order.points_earned || 0),
       totalAmount: Number(order.total_amount || 0),
       total: Number(order.total_amount || 0),
@@ -1001,6 +1031,7 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
       deliveryBranchAddress: order.delivery_branch_address || metadata.deliveryBranchAddress || "",
       pickupTimeText: order.pickup_time_text || "",
       deliveryAddress: order.delivery_address || "",
+      posShiftId: order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id || metadata.shiftId || "",
       createdAt: order.created_at,
       items: itemMap.get(order.id) || []
     };
@@ -1008,13 +1039,14 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
 }
 
 function toOrderRows(order = {}) {
+  const walkIn = isWalkInOrder(order);
   const phone = normalizePhone(order.phone || order.customerPhone || "");
-  if (!phone) return null;
+  if (!phone && !walkIn) return null;
   const id = String(order.id || order.orderCode || `order_${Date.now()}`);
   const orderRow = {
     id,
     order_code: String(order.orderCode || id),
-    customer_phone: phone,
+    customer_phone: phone || null,
     customer_name: String(order.customerName || ""),
     fulfillment_type: String(order.fulfillmentType || "delivery"),
     payment_method: String(order.paymentMethod || "cash"),
@@ -1045,6 +1077,7 @@ function toOrderRows(order = {}) {
     delivery_branch_address: String(order.deliveryBranchAddress || ""),
     pickup_time_text: String(order.pickupTimeText || ""),
     delivery_address: String(order.deliveryAddress || ""),
+    pos_shift_id: toNullableUuid(order.posShiftId || order.pos_shift_id || order.shiftId),
     metadata: order
   };
   const itemRows = (order.items || []).map((item, index) => buildOrderItemRow(item, id, index));
@@ -1132,7 +1165,7 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
 
     const customerRowsRaw = Array.from(
       new Map(
-        orderRows.map((row) => [
+        orderRows.filter((row) => row.customer_phone).map((row) => [
           row.customer_phone,
           {
             phone: row.customer_phone,
@@ -1373,16 +1406,25 @@ async function applyLoyaltyEvent({
 
   // Guard against duplicate order-scoped events (ORDER_EARN / ORDER_SPEND).
   if (normalizedOrderId && (normalizedEntryType === "ORDER_EARN" || normalizedEntryType === "ORDER_SPEND")) {
-    const { data: existingRows, error: existingError } = await client
-      .from("loyalty_ledger")
-      .select("id")
-      .eq("customer_phone", key)
-      .eq("entry_type", normalizedEntryType)
-      .eq("order_id", normalizedOrderId)
-      .limit(1);
-    if (existingError) throw existingError;
-    if (Array.isArray(existingRows) && existingRows.length) {
-      return readLoyaltyForPhoneFromTable(key);
+    try {
+      const { data: existingRows, error: existingError } = await client
+        .from("loyalty_ledger")
+        .select("id")
+        .eq("customer_phone", key)
+        .eq("entry_type", normalizedEntryType)
+        .eq("order_id", normalizedOrderId)
+        .limit(1);
+      if (existingError) throw existingError;
+      if (Array.isArray(existingRows) && existingRows.length) {
+        return readLoyaltyForPhoneFromTable(key);
+      }
+    } catch (error) {
+      // The SECURITY DEFINER RPC below performs the same idempotency check.
+      // Staff may not have direct select policy on loyalty_ledger, and that is OK.
+      console.warn("[coreSupabaseRepository] skip client loyalty duplicate check", {
+        code: error?.code || "",
+        message: error?.message || String(error || "")
+      });
     }
   }
 
