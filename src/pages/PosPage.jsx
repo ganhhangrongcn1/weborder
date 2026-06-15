@@ -5,12 +5,15 @@ import { CashPaymentModal, PosConfirmModal, QrPaymentModal } from "../components
 import ProductOptionsModal from "../components/pos/ProductOptionsModal.jsx";
 import { CategoryButton, PosPagerInlinePicker, PosPagerModal, PosWorkspaceNav, ProductCard } from "../components/pos/PosPrimitives.jsx";
 import PosRecentOrdersPanel from "../components/pos/PosRecentOrdersPanel.jsx";
+import PosShiftCloseModal from "../components/pos/PosShiftCloseModal.jsx";
 import PosShiftOpenPanel from "../components/pos/PosShiftOpenPanel.jsx";
+import PosShiftOverviewPanel from "../components/pos/PosShiftOverviewPanel.jsx";
 import PosSettingsPanel from "../components/pos/PosSettingsPanel.jsx";
 import { formatMoney, getBranchLabel, getBranchUuid } from "../components/pos/posHelpers.js";
 import usePosCart from "../hooks/usePosCart.js";
 import usePosCatalog from "../hooks/usePosCatalog.js";
 import usePosCustomerLookup from "../hooks/usePosCustomerLookup.js";
+import { createPosShiftClosePrintJob } from "../services/printJobService.js";
 import { startPosAutoPrint } from "../services/posAutomationService.js";
 import { buildPosPaymentReference, calculateCashChange, normalizeCashReceived } from "../services/posPaymentService.js";
 import {
@@ -35,7 +38,7 @@ import {
   getBusyPosPagerNumbersAsync,
   getPosRecentOrdersAsync
 } from "../services/posService.js";
-import { clearActivePosShift, fetchActivePosShift, openPosShift, readActivePosShift } from "../services/posShiftService.js";
+import { clearActivePosShift, closePosShift, fetchActivePosShift, fetchPosShiftSummary, openPosShift, readActivePosShift } from "../services/posShiftService.js";
 import "../styles/pos.css";
 
 const POS_REGISTER_KEY = "main";
@@ -256,6 +259,12 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [activeShift, setActiveShift] = useState(null);
   const [shiftLoading, setShiftLoading] = useState(false);
   const [shiftError, setShiftError] = useState("");
+  const [shiftSummary, setShiftSummary] = useState(null);
+  const [shiftSummaryLoading, setShiftSummaryLoading] = useState(false);
+  const [shiftSummaryError, setShiftSummaryError] = useState("");
+  const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
+  const [closingShift, setClosingShift] = useState(false);
+  const [shiftCloseError, setShiftCloseError] = useState("");
 
   const { activeCategory, setActiveCategory, categories: posCategories, visibleProducts } = usePosCatalog({ products, categories });
   const { cart, totals, addProduct, updateQuantity, removeItem, syncGiftItems, restoreCart, clearCart } = usePosCart();
@@ -421,6 +430,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const loadActiveShift = async ({ silent = false } = {}) => {
     if (!selectedBranchUuid) {
       setActiveShift(null);
+      setShiftSummary(null);
       return null;
     }
 
@@ -440,6 +450,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       setActiveShift(result.shift);
     } else if (result.ok) {
       setActiveShift(null);
+      setShiftSummary(null);
     }
 
     if (!result.ok && !cachedShift?.id) {
@@ -447,6 +458,27 @@ export default function PosPage({ products = [], categories = [], branches = [],
     }
     if (!silent) setShiftLoading(false);
     return result.shift || null;
+  };
+
+  const loadShiftSummary = async ({ silent = false, shift = activeShift } = {}) => {
+    if (!shift?.id) {
+      setShiftSummary(null);
+      return null;
+    }
+
+    if (!silent) setShiftSummaryLoading(true);
+    setShiftSummaryError("");
+    const result = await fetchPosShiftSummary({
+      shiftId: shift.id,
+      openingCash: shift.openingCash
+    });
+    if (result.ok) {
+      setShiftSummary(result.summary);
+    } else {
+      setShiftSummaryError(result.message || "Không tải được tổng ca POS.");
+    }
+    if (!silent) setShiftSummaryLoading(false);
+    return result.summary || null;
   };
 
   const requireOpenShift = () => {
@@ -498,6 +530,11 @@ export default function PosPage({ products = [], categories = [], branches = [],
   }, [posSession?.branchValue, selectedBranchUuid]);
 
   useEffect(() => {
+    if (!activeShift?.id) return;
+    loadShiftSummary({ silent: true });
+  }, [activeShift?.id]);
+
+  useEffect(() => {
     if (!posSession || !selectedBranchUuid) return undefined;
 
     let active = true;
@@ -507,7 +544,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
     subscribePosPaymentSessionsByBranch(selectedBranchUuid, () => {
       if (!active) return;
       if (refreshTimer) window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(loadPendingPaymentSessions, 250);
+      refreshTimer = window.setTimeout(() => {
+        loadPendingPaymentSessions();
+        loadShiftSummary({ silent: true });
+      }, 250);
     }).then((unsubscribe) => {
       if (!active) {
         if (typeof unsubscribe === "function") unsubscribe();
@@ -521,7 +561,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       if (refreshTimer) window.clearTimeout(refreshTimer);
       unsubscribeRealtime();
     };
-  }, [posSession, selectedBranchUuid]);
+  }, [posSession, selectedBranchUuid, activeShift?.id]);
 
   useEffect(() => {
     if (!posSession || !selectedBranchUuid || qrDraftOrder || cart.length) return undefined;
@@ -715,6 +755,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       resetComposer();
       await loadBusyPagers();
       await loadRecentOrders();
+      await loadShiftSummary({ silent: true });
     } finally {
       setCancellingQr(false);
     }
@@ -882,6 +923,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       resetComposer();
       await loadBusyPagers();
       await loadRecentOrders();
+      await loadShiftSummary({ silent: true });
       return true;
     }
 
@@ -1072,6 +1114,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
     resetComposer();
     await loadBusyPagers();
     await loadRecentOrders();
+    await loadShiftSummary({ silent: true });
   };
 
   const handleCancelRecentOrder = async (order) => {
@@ -1093,12 +1136,14 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
     await loadBusyPagers();
     await loadRecentOrders();
+    await loadShiftSummary({ silent: true });
   };
 
   const handleRefreshHistory = async () => {
     await Promise.all([
       loadRecentOrders(),
-      loadPendingPaymentSessions()
+      loadPendingPaymentSessions(),
+      loadShiftSummary({ silent: true })
     ]);
   };
 
@@ -1107,6 +1152,87 @@ export default function PosPage({ products = [], categories = [], branches = [],
     if (workspace === "history") {
       handleRefreshHistory();
     }
+    if (workspace === "shift") {
+      loadShiftSummary();
+    }
+  };
+
+  const handleRequestCloseShift = async () => {
+    setShiftCloseError("");
+    if (cart.length || qrDraftOrder || paymentConfirmed) {
+      setShiftCloseError("Vui lòng hoàn tất hoặc xóa bill hiện tại trước khi kết ca.");
+      setShiftCloseOpen(true);
+      return;
+    }
+
+    const latestSummary = await loadShiftSummary({ silent: true });
+    if ((latestSummary?.pendingQrCount || 0) > 0) {
+      setShiftCloseError("Còn phiên QR đang chờ thanh toán. Vui lòng hủy hoặc hoàn tất trước khi kết ca.");
+    }
+    setShiftCloseOpen(true);
+  };
+
+  const handleConfirmCloseShift = async ({
+    closingCashCounted = 0,
+    closingCashBreakdown = null,
+    closingNote = "",
+    printReceipt = true
+  } = {}) => {
+    if (closingShift || !activeShift?.id) return false;
+
+    setClosingShift(true);
+    setShiftCloseError("");
+
+    const latestSummary = await loadShiftSummary({ silent: true });
+    if ((latestSummary?.pendingQrCount || 0) > 0) {
+      setShiftCloseError("Còn phiên QR đang chờ thanh toán. Vui lòng hủy hoặc hoàn tất trước khi kết ca.");
+      setClosingShift(false);
+      return false;
+    }
+
+    const result = await closePosShift({
+      shift: activeShift,
+      summary: latestSummary || shiftSummary,
+      closingCashCounted,
+      closingCashBreakdown,
+      closingNote
+    });
+    setClosingShift(false);
+
+    if (!result.ok) {
+      setShiftCloseError(result.message || "Không kết được ca POS.");
+      return false;
+    }
+
+    if (printReceipt) {
+      const printResult = await createPosShiftClosePrintJob({
+        shift: result.shift || activeShift,
+        summary: latestSummary || shiftSummary,
+        closingCashCounted,
+        closingCashBreakdown,
+        closingNote
+      }, {
+        branchUuid: selectedBranchUuid,
+        requestedBy: posSession?.cashierName || "Thu ngân"
+      });
+      if (!printResult.ok) {
+        console.warn("[POS] close shift print job failed", printResult.message);
+      }
+    }
+
+    clearActivePosShift(selectedBranchUuid, POS_REGISTER_KEY);
+    setShiftCloseOpen(false);
+    setActiveShift(null);
+    setShiftSummary(null);
+    setShiftSummaryError("");
+    setActiveWorkspace("orders");
+    resetComposer();
+    await Promise.all([
+      loadBusyPagers(),
+      loadRecentOrders(),
+      loadPendingPaymentSessions()
+    ]);
+    return true;
   };
 
   const handleOpenPendingPayment = (session) => {
@@ -1158,6 +1284,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       setPendingCancelTarget(null);
       await loadPendingPaymentSessions();
       await loadBusyPagers();
+      await loadShiftSummary({ silent: true });
     } finally {
       setCancellingPaymentSessionId("");
     }
@@ -1168,11 +1295,12 @@ export default function PosPage({ products = [], categories = [], branches = [],
     if (selectedBranchUuid) clearActivePosShift(selectedBranchUuid, POS_REGISTER_KEY);
     setPosSession(null);
     setActiveShift(null);
+    setShiftSummary(null);
     resetComposer({ preserveRememberedSession: true });
     setBusyPagers([]);
   };
 
-  const handleOpenShift = async ({ openingCash = 0, openingNote = "" } = {}) => {
+  const handleOpenShift = async ({ openingCash = 0, openingCashBreakdown = null, openingNote = "" } = {}) => {
     if (!selectedBranchUuid) return;
     setShiftLoading(true);
     setShiftError("");
@@ -1183,6 +1311,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       cashierName: posSession?.cashierName || "Thu ngân",
       profileId: posSession?.profileId,
       openingCash,
+      openingCashBreakdown,
       openingNote
     });
     setShiftLoading(false);
@@ -1193,11 +1322,13 @@ export default function PosPage({ products = [], categories = [], branches = [],
     }
 
     setActiveShift(result.shift);
+    setShiftSummary(null);
     setCreateError("");
     await Promise.all([
       loadBusyPagers(),
       loadRecentOrders(),
-      loadPendingPaymentSessions()
+      loadPendingPaymentSessions(),
+      loadShiftSummary({ silent: true, shift: result.shift })
     ]);
   };
 
@@ -1279,9 +1410,24 @@ export default function PosPage({ products = [], categories = [], branches = [],
             </section>
           ) : null}
 
+          {activeWorkspace === "shift" ? (
+            <section className="pos-workspace-panel">
+              <PosShiftOverviewPanel
+                cashierName={posSession?.cashierName || "Thu ngân"}
+                activeShift={activeShift}
+                shiftSummary={shiftSummary}
+                shiftSummaryError={shiftSummaryError}
+                onRequestCloseShift={handleRequestCloseShift}
+              />
+            </section>
+          ) : null}
+
           {activeWorkspace === "settings" ? (
             <section className="pos-workspace-panel">
-              <PosSettingsPanel branchLabel={branchLabel} cashierName={posSession?.cashierName || "Thu ngân"} activeShift={activeShift} />
+              <PosSettingsPanel
+                branchLabel={branchLabel}
+                cashierName={posSession?.cashierName || "Thu ngân"}
+              />
             </section>
           ) : null}
 
@@ -1344,6 +1490,21 @@ export default function PosPage({ products = [], categories = [], branches = [],
       {cashPaymentOpen ? (
         <CashPaymentModal amount={posTotals.total} cashReceived={cashReceived} setCashReceived={setCashReceived} onClose={() => setCashPaymentOpen(false)} onConfirm={handleConfirmCash} />
       ) : null}
+
+      <PosShiftCloseModal
+        open={shiftCloseOpen}
+        activeShift={activeShift}
+        summary={shiftSummary}
+        loading={closingShift}
+        error={shiftCloseError}
+        onClose={() => {
+          if (!closingShift) {
+            setShiftCloseOpen(false);
+            setShiftCloseError("");
+          }
+        }}
+        onConfirm={handleConfirmCloseShift}
+      />
 
       {qrPaymentOpen ? (
         <QrPaymentModal

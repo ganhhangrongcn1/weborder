@@ -2,6 +2,10 @@ import {
   getSupabaseAdminAuthClient,
   initSupabaseAdminAuthClient
 } from "./supabase/supabaseRuntimeClient.js";
+import {
+  getCashBreakdownTotal,
+  normalizeCashBreakdown
+} from "./posCashBreakdownService.js";
 
 const POS_ACTIVE_SHIFT_KEY = "ghr:pos-active-shift:v2";
 const POS_SHIFT_COLUMNS = [
@@ -14,11 +18,13 @@ const POS_SHIFT_COLUMNS = [
   "opened_by_profile_id",
   "opened_by_auth_user_id",
   "opening_cash",
+  "opening_cash_breakdown",
   "opening_note",
   "opened_at",
   "closed_by_profile_id",
   "closed_by_auth_user_id",
   "closing_cash_counted",
+  "closing_cash_breakdown",
   "closing_note",
   "closed_at",
   "paid_order_count",
@@ -98,6 +104,8 @@ function normalizeShift(raw = {}) {
 
   const registerKey = normalizeRegisterKey(raw.register_key || raw.registerKey);
   const closingSummary = getObject(raw.closing_summary || raw.closingSummary);
+  const openingCashBreakdown = normalizeCashBreakdown(raw.opening_cash_breakdown || raw.openingCashBreakdown);
+  const closingCashBreakdown = normalizeCashBreakdown(raw.closing_cash_breakdown || raw.closingCashBreakdown);
 
   return {
     id,
@@ -111,11 +119,13 @@ function normalizeShift(raw = {}) {
     openedByProfileId: toText(raw.opened_by_profile_id || raw.openedByProfileId),
     openedByAuthUserId: toText(raw.opened_by_auth_user_id || raw.openedByAuthUserId),
     openingCash: Math.max(0, toNumber(raw.opening_cash ?? raw.openingCash, 0)),
+    openingCashBreakdown,
     openingNote: toText(raw.opening_note || raw.openingNote),
     openedAt,
     closedByProfileId: toText(raw.closed_by_profile_id || raw.closedByProfileId),
     closedByAuthUserId: toText(raw.closed_by_auth_user_id || raw.closedByAuthUserId),
     closingCashCounted: raw.closing_cash_counted ?? raw.closingCashCounted ?? null,
+    closingCashBreakdown,
     closingNote: toText(raw.closing_note || raw.closingNote),
     closedAt: toText(raw.closed_at || raw.closedAt),
     paidOrderCount: Math.max(0, toNumber(raw.paid_order_count ?? raw.paidOrderCount, 0)),
@@ -227,6 +237,7 @@ export async function openPosShift({
   cashierName = "",
   profileId = "",
   openingCash = 0,
+  openingCashBreakdown = null,
   openingNote = ""
 } = {}) {
   const safeBranchUuid = toText(branchUuid);
@@ -261,6 +272,7 @@ export async function openPosShift({
     };
   }
 
+  const normalizedOpeningBreakdown = normalizeCashBreakdown(openingCashBreakdown);
   const payload = {
     branch_uuid: safeBranchUuid,
     branch_name: toText(branchName),
@@ -269,7 +281,10 @@ export async function openPosShift({
     cashier_name: toText(cashierName) || "Thu ngân",
     opened_by_profile_id: toText(profileId) || null,
     opened_by_auth_user_id: auth.userId,
-    opening_cash: Math.max(0, Math.round(toNumber(openingCash, 0))),
+    opening_cash: Math.max(0, Math.round(
+      normalizedOpeningBreakdown ? getCashBreakdownTotal(normalizedOpeningBreakdown) : toNumber(openingCash, 0)
+    )),
+    opening_cash_breakdown: normalizedOpeningBreakdown || {},
     opening_note: toText(openingNote)
   };
 
@@ -300,6 +315,233 @@ export async function openPosShift({
 
 export function clearActivePosShift(branchValue = "", registerKey = "main") {
   clearCachedActivePosShift(branchValue, registerKey);
+}
+
+function isCancelledStatus(value = "") {
+  return ["cancelled", "canceled", "cancel"].includes(toText(value).toLowerCase());
+}
+
+function isPaidOrder(order = {}) {
+  const metadata = getObject(order.metadata);
+  const paymentStatus = toText(metadata.paymentStatus || metadata.payment_status || "paid").toLowerCase();
+  return paymentStatus === "paid" && !isCancelledStatus(order.status || metadata.status || metadata.orderStatus);
+}
+
+function normalizePaymentMethod(value = "") {
+  const method = toText(value).toLowerCase();
+  if (["bank_qr", "qr", "transfer", "bank_transfer", "sepay"].includes(method)) return "bank_qr";
+  return "cash";
+}
+
+export async function fetchPosShiftSummary({ shiftId = "", openingCash = 0 } = {}) {
+  const safeShiftId = toText(shiftId);
+  const emptySummary = {
+    orderCount: 0,
+    cashOrderCount: 0,
+    qrOrderCount: 0,
+    cancelledOrderCount: 0,
+    pendingQrCount: 0,
+    cashTotal: 0,
+    qrTotal: 0,
+    cancelledTotal: 0,
+    revenue: 0,
+    openingCash: Math.max(0, toNumber(openingCash, 0)),
+    expectedCash: Math.max(0, toNumber(openingCash, 0)),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!safeShiftId) {
+    return {
+      ok: false,
+      summary: emptySummary,
+      message: "Thiếu mã ca POS."
+    };
+  }
+
+  const auth = await getAuthenticatedContext();
+  if (!auth.client || !auth.userId) {
+    return {
+      ok: false,
+      summary: emptySummary,
+      message: auth.message
+    };
+  }
+
+  const [ordersResult, sessionsResult] = await Promise.all([
+    auth.client
+      .from("orders")
+      .select("id,status,payment_method,total_amount,metadata,created_at,pos_shift_id")
+      .eq("pos_shift_id", safeShiftId)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    auth.client
+      .from("pos_payment_sessions")
+      .select("id,status,amount_expected,amount_paid,pos_shift_id,created_at")
+      .eq("pos_shift_id", safeShiftId)
+      .order("created_at", { ascending: false })
+      .limit(1000)
+  ]);
+
+  if (ordersResult.error) {
+    return {
+      ok: false,
+      summary: emptySummary,
+      message: ordersResult.error.message || "Không tải được đơn trong ca."
+    };
+  }
+  if (sessionsResult.error) {
+    return {
+      ok: false,
+      summary: emptySummary,
+      message: sessionsResult.error.message || "Không tải được phiên QR trong ca."
+    };
+  }
+
+  const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
+  const sessions = Array.isArray(sessionsResult.data) ? sessionsResult.data : [];
+  const paidOrders = orders.filter(isPaidOrder);
+  const cancelledOrders = orders.filter((order) => isCancelledStatus(order.status || getObject(order.metadata).status));
+
+  const totals = paidOrders.reduce((summary, order) => {
+    const method = normalizePaymentMethod(order.payment_method || getObject(order.metadata).paymentMethod);
+    const amount = Math.max(0, toNumber(order.total_amount, 0));
+    if (method === "bank_qr") {
+      summary.qrOrderCount += 1;
+      summary.qrTotal += amount;
+    } else {
+      summary.cashOrderCount += 1;
+      summary.cashTotal += amount;
+    }
+    return summary;
+  }, {
+    cashOrderCount: 0,
+    qrOrderCount: 0,
+    cashTotal: 0,
+    qrTotal: 0
+  });
+
+  const pendingQrCount = sessions.filter((session) => {
+    const status = toText(session.status).toLowerCase();
+    return ["draft", "pending_payment"].includes(status);
+  }).length;
+  const cancelledTotal = cancelledOrders.reduce(
+    (sum, order) => sum + Math.max(0, toNumber(order.total_amount, 0)),
+    0
+  );
+  const safeOpeningCash = Math.max(0, toNumber(openingCash, 0));
+
+  return {
+    ok: true,
+    summary: {
+      orderCount: paidOrders.length,
+      cashOrderCount: totals.cashOrderCount,
+      qrOrderCount: totals.qrOrderCount,
+      cancelledOrderCount: cancelledOrders.length,
+      pendingQrCount,
+      cashTotal: totals.cashTotal,
+      qrTotal: totals.qrTotal,
+      cancelledTotal,
+      revenue: totals.cashTotal + totals.qrTotal,
+      openingCash: safeOpeningCash,
+      expectedCash: safeOpeningCash + totals.cashTotal,
+      updatedAt: new Date().toISOString()
+    },
+    message: ""
+  };
+}
+
+export async function closePosShift({
+  shift = null,
+  summary = null,
+  closingCashCounted = 0,
+  closingCashBreakdown = null,
+  closingNote = ""
+} = {}) {
+  const normalizedShift = normalizeShift(shift);
+  const shiftId = toText(normalizedShift?.id);
+  if (!shiftId) {
+    return {
+      ok: false,
+      shift: null,
+      message: "Thiếu ca POS cần kết."
+    };
+  }
+
+  const auth = await getAuthenticatedContext();
+  if (!auth.client || !auth.userId) {
+    return {
+      ok: false,
+      shift: null,
+      message: auth.message
+    };
+  }
+
+  const safeSummary = getObject(summary);
+  const normalizedClosingBreakdown = normalizeCashBreakdown(closingCashBreakdown);
+  const countedCash = Math.max(0, Math.round(
+    normalizedClosingBreakdown ? getCashBreakdownTotal(normalizedClosingBreakdown) : toNumber(closingCashCounted, 0)
+  ));
+  const cashTotal = Math.max(0, toNumber(safeSummary.cashTotal, 0));
+  const qrTotal = Math.max(0, toNumber(safeSummary.qrTotal, 0));
+  const cancelledTotal = Math.max(0, toNumber(safeSummary.cancelledTotal, 0));
+  const openingCash = Math.max(0, toNumber(normalizedShift.openingCash, 0));
+  const expectedCash = Math.max(0, toNumber(safeSummary.expectedCash, openingCash + cashTotal));
+  const closedAt = new Date().toISOString();
+  const note = toText(closingNote);
+
+  const payload = {
+    status: "closed",
+    closed_by_auth_user_id: auth.userId,
+    closing_cash_counted: countedCash,
+    closing_cash_breakdown: normalizedClosingBreakdown || {},
+    closing_note: note,
+    closed_at: closedAt,
+    paid_order_count: Math.max(0, Math.round(toNumber(safeSummary.orderCount, 0))),
+    cash_order_count: Math.max(0, Math.round(toNumber(safeSummary.cashOrderCount, 0))),
+    qr_order_count: Math.max(0, Math.round(toNumber(safeSummary.qrOrderCount, 0))),
+    cancelled_order_count: Math.max(0, Math.round(toNumber(safeSummary.cancelledOrderCount, 0))),
+    cash_sales_snapshot: cashTotal,
+    qr_sales_snapshot: qrTotal,
+    cancelled_amount_snapshot: cancelledTotal,
+    cash_refund_snapshot: Math.max(0, toNumber(safeSummary.cashRefundTotal, 0)),
+    qr_refund_snapshot: Math.max(0, toNumber(safeSummary.qrRefundTotal, 0)),
+    expected_cash_snapshot: expectedCash,
+    closing_summary: {
+      ...safeSummary,
+      openingCash,
+      openingCashBreakdown: normalizedShift.openingCashBreakdown || {},
+      closingCashCounted: countedCash,
+      closingCashBreakdown: normalizedClosingBreakdown || {},
+      closingNote: note,
+      expectedCash,
+      cashDifference: countedCash - expectedCash,
+      closedAt
+    }
+  };
+
+  const { data, error } = await auth.client
+    .from("pos_shifts")
+    .update(payload)
+    .eq("id", shiftId)
+    .eq("status", "open")
+    .select(POS_SHIFT_COLUMNS)
+    .single();
+
+  if (error) {
+    return {
+      ok: false,
+      shift: null,
+      message: error.message || "Không kết được ca POS."
+    };
+  }
+
+  clearCachedActivePosShift(normalizedShift.branchUuid, normalizedShift.registerKey);
+
+  return {
+    ok: true,
+    shift: normalizeShift(data),
+    message: "Đã kết ca POS."
+  };
 }
 
 export function getPosShiftOrderStats(orders = [], shift = null) {

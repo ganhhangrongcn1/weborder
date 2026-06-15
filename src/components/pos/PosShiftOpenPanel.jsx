@@ -1,29 +1,10 @@
 import { useState } from "react";
+import PosCashCountModal from "./PosCashCountModal.jsx";
 import { formatMoney } from "./posHelpers.js";
-
-function toNumber(value = 0) {
-  const parsed = Number(String(value || "").replace(/[^\d]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatCashInput(value = "") {
-  const amount = toNumber(value);
-  return amount ? amount.toLocaleString("vi-VN") : "";
-}
-
-function formatOpeningCashAmount(value = 0) {
-  const amount = toNumber(value);
-  return amount.toLocaleString("vi-VN");
-}
-
-const OPENING_CASH_PRESETS = [
-  { label: "0đ", value: 0 },
-  { label: "300.000đ", value: 300000 },
-  { label: "500.000đ", value: 500000 },
-  { label: "1.000.000đ", value: 1000000 },
-  { label: "1.500.000đ", value: 1500000 },
-  { label: "2.000.000đ", value: 2000000 }
-];
+import {
+  formatCashBreakdownSummary,
+  getCashBreakdownTotal
+} from "../../services/posCashBreakdownService.js";
 
 export default function PosShiftOpenPanel({
   branchLabel = "",
@@ -33,16 +14,20 @@ export default function PosShiftOpenPanel({
   onOpenShift,
   onLogout
 }) {
-  const [openingCash, setOpeningCash] = useState("");
+  const [openingBreakdown, setOpeningBreakdown] = useState(null);
   const [openingNote, setOpeningNote] = useState("");
-  const amount = toNumber(openingCash);
+  const [cashCounterOpen, setCashCounterOpen] = useState(false);
+
+  const amount = getCashBreakdownTotal(openingBreakdown);
+  const hasOpeningCount = Boolean(openingBreakdown);
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (loading) return;
+    if (loading || !hasOpeningCount) return;
     onOpenShift?.({
       openingCash: amount,
-      openingNote
+      openingNote,
+      openingCashBreakdown: openingBreakdown
     });
   };
 
@@ -69,34 +54,19 @@ export default function PosShiftOpenPanel({
           </div>
         </div>
 
-        <label>
+        <div className="pos-shift-breakdown-box">
           <span>Tiền mặt đầu ca</span>
-          <input
-            value={openingCash}
-            inputMode="numeric"
-            placeholder="0"
-            onChange={(event) => setOpeningCash(formatCashInput(event.target.value))}
-            autoFocus
-          />
-        </label>
-
-        <div className="pos-shift-cash-presets" aria-label="Chọn nhanh tiền đầu ca">
-          {OPENING_CASH_PRESETS.map((preset) => {
-            const selected = preset.value === 0
-              ? openingCash !== "" && amount === 0
-              : amount === preset.value;
-            return (
-              <button
-                key={preset.value}
-                type="button"
-                className={selected ? "is-selected" : ""}
-                onClick={() => setOpeningCash(formatOpeningCashAmount(preset.value))}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
+          <strong>{hasOpeningCount ? formatMoney(amount) : "Chưa đếm tiền"}</strong>
+          <p>{formatCashBreakdownSummary(openingBreakdown)}</p>
         </div>
+
+        <button
+          type="button"
+          className="pos-shift-cash-count-button"
+          onClick={() => setCashCounterOpen(true)}
+        >
+          {hasOpeningCount ? "Đếm lại theo mệnh giá" : "Đếm tiền theo mệnh giá"}
+        </button>
 
         <label>
           <span>Ghi chú</span>
@@ -110,10 +80,22 @@ export default function PosShiftOpenPanel({
 
         {error ? <div className="pos-create-message is-error">{error}</div> : null}
 
-        <button type="submit" className="pos-shift-open-submit" disabled={loading}>
+        <button type="submit" className="pos-shift-open-submit" disabled={loading || !hasOpeningCount}>
           {loading ? "Đang mở ca..." : "Mở ca"}
         </button>
       </form>
+
+      <PosCashCountModal
+        open={cashCounterOpen}
+        title="Đếm tiền đầu ca"
+        subtitle="Nhập đầy đủ số tờ đang có trong két trước khi bán."
+        initialCounts={openingBreakdown}
+        onClose={() => setCashCounterOpen(false)}
+        onApply={({ counts }) => {
+          setOpeningBreakdown(counts);
+          setCashCounterOpen(false);
+        }}
+      />
     </section>
   );
 }
