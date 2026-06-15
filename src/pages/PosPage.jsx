@@ -3,7 +3,7 @@ import PosCartPanel from "../components/pos/PosCartPanel.jsx";
 import PosLoginScreen from "../components/pos/PosLoginScreen.jsx";
 import { CashPaymentModal, PosConfirmModal, QrPaymentModal } from "../components/pos/PosPaymentModals.jsx";
 import ProductOptionsModal from "../components/pos/ProductOptionsModal.jsx";
-import { CategoryButton, PosPagerInlinePicker, PosPagerModal, PosSessionBrand, ProductCard, UtilityActionButton } from "../components/pos/PosPrimitives.jsx";
+import { CategoryButton, PosPagerInlinePicker, PosPagerModal, PosWorkspaceNav, ProductCard } from "../components/pos/PosPrimitives.jsx";
 import PosRecentOrdersPanel from "../components/pos/PosRecentOrdersPanel.jsx";
 import PosSettingsPanel from "../components/pos/PosSettingsPanel.jsx";
 import { formatMoney, getBranchLabel, getBranchUuid } from "../components/pos/posHelpers.js";
@@ -16,9 +16,14 @@ import {
   cancelPosPaymentSession,
   confirmPosPaymentSessionManually,
   createPosPaymentSession,
+  forgetPosPaymentSession,
+  listPosPaymentSessions,
   markPosPaymentSessionConverted,
+  readRememberedPosPaymentSession,
   readPosPaymentSession,
-  subscribePosPaymentSession
+  rememberPosPaymentSession,
+  subscribePosPaymentSession,
+  subscribePosPaymentSessionsByBranch
 } from "../services/posPaymentSessionService.js";
 import { clearPosSession, getBranchValue, readPosSession } from "../services/posSessionService.js";
 import {
@@ -239,9 +244,14 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [recentOrdersLoading, setRecentOrdersLoading] = useState(false);
   const [recentOrdersError, setRecentOrdersError] = useState("");
   const [cancellingOrderId, setCancellingOrderId] = useState("");
+  const [pendingPaymentSessions, setPendingPaymentSessions] = useState([]);
+  const [pendingPaymentsLoading, setPendingPaymentsLoading] = useState(false);
+  const [pendingPaymentsError, setPendingPaymentsError] = useState("");
+  const [pendingCancelTarget, setPendingCancelTarget] = useState(null);
+  const [cancellingPaymentSessionId, setCancellingPaymentSessionId] = useState("");
 
   const { activeCategory, setActiveCategory, categories: posCategories, visibleProducts } = usePosCatalog({ products, categories });
-  const { cart, totals, addProduct, updateQuantity, removeItem, syncGiftItems, clearCart } = usePosCart();
+  const { cart, totals, addProduct, updateQuantity, removeItem, syncGiftItems, restoreCart, clearCart } = usePosCart();
   const customerLookup = usePosCustomerLookup(customerPhone);
   const loyaltyBenefit = useMemo(
     () => buildPosLoyaltyBenefit({
@@ -280,7 +290,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const draftLocked = Boolean(paymentConfirmed || isQrDraftPending);
   const isMenuLocked = Boolean(paymentConfirmed);
 
-  const resetComposer = () => {
+  const resetComposer = ({ preserveRememberedSession = false } = {}) => {
+    if (!preserveRememberedSession) {
+      forgetPosPaymentSession(selectedBranchUuid);
+    }
     setPagerNumber("");
     setPagerPickerOpen(false);
     setPendingPagerProduct(null);
@@ -300,6 +313,35 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setCancelQrConfirmOpen(false);
     setCancellingQr(false);
     clearCart();
+  };
+
+  const restorePaymentSessionToComposer = (session, { restored = true } = {}) => {
+    if (!session?.id) return;
+
+    const status = toText(session.status).toLowerCase();
+    const checkout = session.checkoutSnapshot || {};
+    restoreCart(session.cartSnapshot, checkout.orderNote || "");
+    setPagerNumber(session.pagerNumber || "");
+    setCustomerName(session.customerName || "");
+    setCustomerPhone(session.customerPhone || "");
+    setSelectedVoucherId(toText(checkout.promoVoucherId));
+    setPointsInput(checkout.pointsSpent ? String(checkout.pointsSpent) : "");
+    setPaymentMethod("bank_qr");
+    setPaymentConfirmed(
+      ["paid", "converting"].includes(status)
+        ? {
+            method: "bank_qr",
+            reference: session.paymentReference,
+            paidAt: session.paidAt || new Date().toISOString(),
+            amount: session.amountPaid || session.amountExpected
+          }
+        : null
+    );
+    setQrPreviewIdentity(session.orderIdentity || checkout.orderIdentity || null);
+    setQrDraftOrder({ ...session, restored });
+    setQrDraftError("");
+    setCreateError("");
+    rememberPosPaymentSession(selectedBranchUuid, session.id);
   };
 
   const loadBusyPagers = async () => {
@@ -329,6 +371,24 @@ export default function PosPage({ products = [], categories = [], branches = [],
     }
   };
 
+  const loadPendingPaymentSessions = async () => {
+    if (!selectedBranchUuid) {
+      setPendingPaymentSessions([]);
+      return;
+    }
+
+    setPendingPaymentsLoading(true);
+    setPendingPaymentsError("");
+    try {
+      const rows = await listPosPaymentSessions(selectedBranchUuid);
+      setPendingPaymentSessions(rows);
+    } catch (error) {
+      setPendingPaymentsError(error?.message || "Không tải được các phiên QR đang chờ.");
+    } finally {
+      setPendingPaymentsLoading(false);
+    }
+  };
+
   const cancelPendingQrDraft = async ({ silent = false, reason = "Nhân viên đổi bill trước khi thanh toán" } = {}) => {
     if (!isQrDraftPending || !qrDraftOrder) return true;
 
@@ -354,6 +414,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setQrDraftLoading(false);
     setQrDraftError("");
     setQrPaymentOpen(false);
+    forgetPosPaymentSession(selectedBranchUuid);
 
     if (!silent) {
       setCreateError("");
@@ -365,7 +426,85 @@ export default function PosPage({ products = [], categories = [], branches = [],
     if (!posSession?.branchValue) return;
     loadBusyPagers();
     loadRecentOrders();
-  }, [posSession?.branchValue]);
+    loadPendingPaymentSessions();
+  }, [posSession?.branchValue, selectedBranchUuid]);
+
+  useEffect(() => {
+    if (!posSession || !selectedBranchUuid) return undefined;
+
+    let active = true;
+    let refreshTimer = null;
+    let unsubscribeRealtime = () => {};
+
+    subscribePosPaymentSessionsByBranch(selectedBranchUuid, () => {
+      if (!active) return;
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(loadPendingPaymentSessions, 250);
+    }).then((unsubscribe) => {
+      if (!active) {
+        if (typeof unsubscribe === "function") unsubscribe();
+        return;
+      }
+      unsubscribeRealtime = typeof unsubscribe === "function" ? unsubscribe : () => {};
+    });
+
+    return () => {
+      active = false;
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      unsubscribeRealtime();
+    };
+  }, [posSession, selectedBranchUuid]);
+
+  useEffect(() => {
+    if (!posSession || !selectedBranchUuid || qrDraftOrder || cart.length) return undefined;
+
+    const rememberedSessionId = readRememberedPosPaymentSession(selectedBranchUuid);
+    if (!rememberedSessionId) return undefined;
+
+    let active = true;
+
+    const restorePaymentSession = async () => {
+      setQrDraftLoading(true);
+      try {
+        const session = await readPosPaymentSession(rememberedSessionId);
+        if (!active || !session) return;
+
+        const status = toText(session.status).toLowerCase();
+        const expiresAt = new Date(session.expiresAt || "").getTime();
+        if (
+          status === "pending_payment" &&
+          Number.isFinite(expiresAt) &&
+          expiresAt <= Date.now()
+        ) {
+          await cancelPosPaymentSession(session.id, "Phiên QR hết hạn trước khi POS được mở lại");
+          forgetPosPaymentSession(selectedBranchUuid);
+          if (active) {
+            setCreateError("Phiên QR trước đã hết hạn. Bạn có thể tạo bill mới.");
+          }
+          return;
+        }
+
+        if (["cancelled", "expired", "converted", "failed"].includes(status)) {
+          forgetPosPaymentSession(selectedBranchUuid);
+          return;
+        }
+
+        restorePaymentSessionToComposer(session);
+      } catch (error) {
+        if (active) {
+          setCreateError(error?.message || "Không khôi phục được phiên QR đang chờ.");
+        }
+      } finally {
+        if (active) setQrDraftLoading(false);
+      }
+    };
+
+    restorePaymentSession();
+
+    return () => {
+      active = false;
+    };
+  }, [posSession, selectedBranchUuid]);
 
   useEffect(() => {
     if (!toText(customerPhone)) return;
@@ -601,6 +740,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
     }
 
     setQrDraftOrder(result.session);
+    rememberPosPaymentSession(selectedBranchUuid, result.session?.id);
     return result;
   };
 
@@ -881,10 +1021,71 @@ export default function PosPage({ products = [], categories = [], branches = [],
     await loadRecentOrders();
   };
 
+  const handleRefreshHistory = async () => {
+    await Promise.all([
+      loadRecentOrders(),
+      loadPendingPaymentSessions()
+    ]);
+  };
+
+  const handleOpenPendingPayment = (session) => {
+    const sessionId = toText(session?.id);
+    if (!sessionId) return;
+
+    const currentSessionId = toText(qrDraftOrder?.id);
+    const isCurrentSession = currentSessionId === sessionId;
+    if (currentSessionId && !isCurrentSession) {
+      setPendingPaymentsError("Bill hiện tại đang có một phiên QR khác. Hãy hoàn tất hoặc hủy bill đó trước.");
+      return;
+    }
+    if (cart.length && !isCurrentSession) {
+      setPendingPaymentsError("Giỏ bán hàng hiện đang có món. Hãy hoàn tất hoặc xóa bill trước khi mở phiên QR khác.");
+      return;
+    }
+
+    if (!isCurrentSession) {
+      restorePaymentSessionToComposer(session);
+    }
+    setPendingPaymentsError("");
+    setActiveWorkspace("orders");
+    if (toText(session.status).toLowerCase() === "pending_payment") {
+      setQrPaymentOpen(true);
+    }
+  };
+
+  const handleConfirmCancelPaymentSession = async () => {
+    const sessionId = toText(pendingCancelTarget?.id);
+    if (!sessionId || cancellingPaymentSessionId) return;
+
+    setCancellingPaymentSessionId(sessionId);
+    setPendingPaymentsError("");
+    try {
+      const result = await cancelPosPaymentSession(
+        sessionId,
+        "Nhân viên hủy tại màn hình quản lý phiên QR"
+      );
+      if (!result.ok) {
+        setPendingPaymentsError(result.message || "Không hủy được phiên QR.");
+        return;
+      }
+
+      if (toText(qrDraftOrder?.id) === sessionId) {
+        resetComposer();
+      } else if (readRememberedPosPaymentSession(selectedBranchUuid) === sessionId) {
+        forgetPosPaymentSession(selectedBranchUuid);
+      }
+      setPendingCancelTarget(null);
+      await loadPendingPaymentSessions();
+      await loadBusyPagers();
+    } finally {
+      setCancellingPaymentSessionId("");
+    }
+  };
+
   const handleLogout = async () => {
     await clearPosSession();
     setPosSession(null);
-    resetComposer();
+    resetComposer({ preserveRememberedSession: true });
     setBusyPagers([]);
   };
 
@@ -898,14 +1099,6 @@ export default function PosPage({ products = [], categories = [], branches = [],
         <div className={`pos-content-grid ${activeWorkspace === "orders" ? "is-orders" : "is-secondary"}`}>
           {activeWorkspace === "orders" ? (
             <section className="pos-menu-panel">
-              <div className="pos-menu-toolbar">
-                <PosSessionBrand branchLabel={branchLabel} />
-                <div className="pos-utility-actions">
-                  <UtilityActionButton label="Lịch sử" onClick={() => setActiveWorkspace("history")} />
-                  <UtilityActionButton label="Thiết lập" onClick={() => setActiveWorkspace("settings")} />
-                  <UtilityActionButton label="Đổi ca" tone="danger" onClick={handleLogout} />
-                </div>
-              </div>
               <nav className="pos-category-list" aria-label="Danh mục POS">
                 {posCategories.map((category) => (
                   <CategoryButton key={category} label={category} active={activeCategory === category} onClick={() => setActiveCategory(category)} />
@@ -935,33 +1128,26 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
           {activeWorkspace === "history" ? (
             <section className="pos-workspace-panel">
-              <div className="pos-workspace-toolbar">
-                <PosSessionBrand branchLabel={branchLabel} />
-                <div className="pos-utility-actions">
-                  <UtilityActionButton label="Bán hàng" onClick={() => setActiveWorkspace("orders")} />
-                  <UtilityActionButton label="Thiết lập" onClick={() => setActiveWorkspace("settings")} />
-                </div>
-              </div>
               <PosRecentOrdersPanel
                 orders={recentOrders}
+                paymentSessions={pendingPaymentSessions}
                 loading={recentOrdersLoading}
+                paymentSessionsLoading={pendingPaymentsLoading}
                 error={recentOrdersError}
+                paymentSessionsError={pendingPaymentsError}
                 cancellingOrderId={cancellingOrderId}
-                onRefresh={loadRecentOrders}
+                activePaymentSessionId={qrDraftOrder?.id}
+                cancellingPaymentSessionId={cancellingPaymentSessionId}
+                onRefresh={handleRefreshHistory}
                 onCancelOrder={handleCancelRecentOrder}
+                onOpenPaymentSession={handleOpenPendingPayment}
+                onCancelPaymentSession={setPendingCancelTarget}
               />
             </section>
           ) : null}
 
           {activeWorkspace === "settings" ? (
             <section className="pos-workspace-panel">
-              <div className="pos-workspace-toolbar">
-                <PosSessionBrand branchLabel={branchLabel} />
-                <div className="pos-utility-actions">
-                  <UtilityActionButton label="Bán hàng" onClick={() => setActiveWorkspace("orders")} />
-                  <UtilityActionButton label="Lịch sử" onClick={() => setActiveWorkspace("history")} />
-                </div>
-              </div>
               <PosSettingsPanel branchLabel={branchLabel} cashierName={posSession?.cashierName || "Thu ngân"} />
             </section>
           ) : null}
@@ -997,6 +1183,14 @@ export default function PosPage({ products = [], categories = [], branches = [],
             />
           ) : null}
         </div>
+
+        <PosWorkspaceNav
+          activeWorkspace={activeWorkspace}
+          pendingCount={pendingPaymentSessions.length}
+          branchLabel={branchLabel}
+          onChange={setActiveWorkspace}
+          onLogout={handleLogout}
+        />
       </section>
 
       {configuringProduct ? (
@@ -1021,7 +1215,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
       {qrPaymentOpen ? (
         <QrPaymentModal
           branch={selectedBranch}
-          amount={posTotals.total}
+          amount={qrDraftOrder?.amountExpected || posTotals.total}
           draftOrder={qrDraftOrder}
           previewIdentity={qrPreviewIdentity}
           processing={creatingOrder}
@@ -1043,6 +1237,17 @@ export default function PosPage({ products = [], categories = [], branches = [],
         processing={cancellingQr}
         onClose={() => setCancelQrConfirmOpen(false)}
         onConfirm={handleConfirmCancelQr}
+      />
+
+      <PosConfirmModal
+        open={Boolean(pendingCancelTarget)}
+        title="Hủy phiên QR?"
+        message={`Mã ${pendingCancelTarget?.paymentReference || ""}. Chỉ hủy khi khách chưa chuyển khoản.`}
+        confirmLabel="Hủy phiên"
+        cancelLabel="Giữ lại"
+        processing={Boolean(cancellingPaymentSessionId)}
+        onClose={() => setPendingCancelTarget(null)}
+        onConfirm={handleConfirmCancelPaymentSession}
       />
     </main>
   );

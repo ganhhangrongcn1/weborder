@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { canCancelPosOrder } from "../../services/posService.js";
+import PosPendingPaymentsPanel from "./PosPendingPaymentsPanel.jsx";
 import { formatMoney, getOrderCode, getOrderStatusLabel, getOrderTotal, toText } from "./posHelpers.js";
 
 const STATUS_FILTERS = [
@@ -145,7 +146,21 @@ function OrderDetailModal({ order, cancellingOrderId, onClose, onCancelOrder }) 
   );
 }
 
-export default function PosRecentOrdersPanel({ orders, loading, error, cancellingOrderId, onRefresh, onCancelOrder }) {
+export default function PosRecentOrdersPanel({
+  orders,
+  paymentSessions = [],
+  loading,
+  paymentSessionsLoading = false,
+  error,
+  paymentSessionsError = "",
+  cancellingOrderId,
+  activePaymentSessionId = "",
+  cancellingPaymentSessionId = "",
+  onRefresh,
+  onCancelOrder,
+  onOpenPaymentSession,
+  onCancelPaymentSession
+}) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("today");
   const [selectedOrderId, setSelectedOrderId] = useState("");
@@ -154,6 +169,23 @@ export default function PosRecentOrdersPanel({ orders, loading, error, cancellin
     if (dateFilter === "today" && !isToday(order.createdAt)) return false;
     return statusFilter === "all" || getOrderStatusGroup(order) === statusFilter;
   }), [dateFilter, orders, statusFilter]);
+  const filteredPaymentSessions = useMemo(
+    () => (Array.isArray(paymentSessions) ? paymentSessions : []).filter((session) => {
+      if (dateFilter === "today" && !isToday(session.createdAt)) return false;
+      const status = toText(session.status).toLowerCase();
+      const group = ["draft", "pending_payment"].includes(status)
+        ? "pending_payment"
+        : "processing";
+      return statusFilter === "all" || statusFilter === group;
+    }),
+    [dateFilter, paymentSessions, statusFilter]
+  );
+  const pendingPaymentCount = useMemo(
+    () => (Array.isArray(paymentSessions) ? paymentSessions : []).filter((session) => (
+      ["draft", "pending_payment"].includes(toText(session.status).toLowerCase())
+    )).length,
+    [paymentSessions]
+  );
   const selectedOrder = useMemo(
     () => (Array.isArray(orders) ? orders : []).find((order) => toText(order.id || order.orderCode) === selectedOrderId) || null,
     [orders, selectedOrderId]
@@ -170,7 +202,9 @@ export default function PosRecentOrdersPanel({ orders, loading, error, cancellin
               className={statusFilter === filter.id ? "is-active" : ""}
               onClick={() => setStatusFilter(filter.id)}
             >
-              {filter.label}
+              {filter.id === "pending_payment" && pendingPaymentCount > 0
+                ? `${filter.label} (${pendingPaymentCount})`
+                : filter.label}
             </button>
           ))}
         </div>
@@ -179,15 +213,27 @@ export default function PosRecentOrdersPanel({ orders, loading, error, cancellin
             <option value="today">Hôm nay</option>
             <option value="all">Tất cả ngày</option>
           </select>
-          <button type="button" onClick={onRefresh} disabled={loading}>
-            {loading ? "Đang tải..." : "Tải lại"}
+          <button type="button" onClick={onRefresh} disabled={loading || paymentSessionsLoading}>
+            {loading || paymentSessionsLoading ? "Đang tải..." : "Tải lại"}
           </button>
         </div>
       </div>
 
       {error ? <div className="pos-create-message is-error">{error}</div> : null}
+      {paymentSessionsError ? <div className="pos-create-message is-error">{paymentSessionsError}</div> : null}
 
       <div className="pos-recent-orders-list pos-recent-orders-list--embedded">
+        {filteredPaymentSessions.length ? (
+          <PosPendingPaymentsPanel
+            embedded
+            sessions={filteredPaymentSessions}
+            activeSessionId={activePaymentSessionId}
+            cancellingSessionId={cancellingPaymentSessionId}
+            onOpen={onOpenPaymentSession}
+            onCancel={onCancelPaymentSession}
+          />
+        ) : null}
+
         {filteredOrders.length ? filteredOrders.map((order) => {
           const orderId = toText(order.id || order.orderCode);
           const items = Array.isArray(order.items) ? order.items : [];
@@ -219,7 +265,7 @@ export default function PosRecentOrdersPanel({ orders, loading, error, cancellin
               ) : null}
             </button>
           );
-        }) : (
+        }) : filteredPaymentSessions.length ? null : (
           <div className="pos-cart-empty">
             <strong>Không có đơn phù hợp.</strong>
             <span>Thử đổi trạng thái hoặc phạm vi ngày.</span>

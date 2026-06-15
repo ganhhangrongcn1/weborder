@@ -36,6 +36,8 @@ const TERMINAL_STATUSES = new Set([
   POS_PAYMENT_SESSION_STATUSES.FAILED
 ]);
 
+const ACTIVE_SESSION_STORAGE_KEY = "ghr_pos_active_payment_sessions";
+
 function toText(value = "") {
   return String(value ?? "").trim();
 }
@@ -71,6 +73,50 @@ function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
+}
+
+function readRememberedSessions() {
+  if (typeof window === "undefined") return {};
+  try {
+    return getObject(JSON.parse(window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY) || "{}"));
+  } catch {
+    return {};
+  }
+}
+
+export function rememberPosPaymentSession(branchUuid = "", sessionId = "") {
+  const safeBranchUuid = toText(branchUuid);
+  const safeSessionId = toText(sessionId);
+  if (typeof window === "undefined" || !safeBranchUuid || !safeSessionId) return;
+
+  try {
+    window.localStorage.setItem(
+      ACTIVE_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        ...readRememberedSessions(),
+        [safeBranchUuid]: safeSessionId
+      })
+    );
+  } catch {
+    // Local storage may be unavailable in private or restricted browser contexts.
+  }
+}
+
+export function readRememberedPosPaymentSession(branchUuid = "") {
+  return toText(readRememberedSessions()[toText(branchUuid)]);
+}
+
+export function forgetPosPaymentSession(branchUuid = "") {
+  const safeBranchUuid = toText(branchUuid);
+  if (typeof window === "undefined" || !safeBranchUuid) return;
+
+  try {
+    const sessions = readRememberedSessions();
+    delete sessions[safeBranchUuid];
+    window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(sessions));
+  } catch {
+    // Local storage may be unavailable in private or restricted browser contexts.
+  }
 }
 
 async function getClient() {
@@ -173,6 +219,9 @@ async function invokeSessionAction(body = {}) {
   return {
     ok: true,
     session: normalizeSessionRow(data.session),
+    sessions: Array.isArray(data.sessions)
+      ? data.sessions.map((session) => normalizeSessionRow(session))
+      : [],
     reused: Boolean(data.reused)
   };
 }
@@ -234,6 +283,18 @@ export async function readPosPaymentSession(sessionId = "") {
   return result.session;
 }
 
+export async function listPosPaymentSessions(branchUuid = "") {
+  const safeBranchUuid = toText(branchUuid);
+  if (!safeBranchUuid) return [];
+
+  const result = await invokeSessionAction({
+    action: "list",
+    branch_uuid: safeBranchUuid
+  });
+  if (!result.ok) throw new Error(result.message);
+  return result.sessions;
+}
+
 export async function subscribePosPaymentSession(sessionId = "", onChange) {
   const safeSessionId = toText(sessionId);
   if (!safeSessionId || typeof onChange !== "function") return () => {};
@@ -255,6 +316,39 @@ export async function subscribePosPaymentSession(sessionId = "", onChange) {
         const nextRow = payload?.new;
         if (!nextRow?.id) return;
         onChange(normalizeSessionRow(nextRow), payload);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    try {
+      client.removeChannel(channel);
+    } catch {
+      // noop
+    }
+  };
+}
+
+export async function subscribePosPaymentSessionsByBranch(branchUuid = "", onChange) {
+  const safeBranchUuid = toText(branchUuid);
+  if (!safeBranchUuid || typeof onChange !== "function") return () => {};
+
+  const client = await getClient();
+  if (!client) return () => {};
+
+  const channel = client
+    .channel(`pos-payment-sessions-branch-${safeBranchUuid}-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "pos_payment_sessions",
+        filter: `branch_uuid=eq.${safeBranchUuid}`
+      },
+      (payload) => {
+        const row = payload?.new?.id ? payload.new : payload?.old;
+        onChange(row?.id ? normalizeSessionRow(row) : null, payload);
       }
     )
     .subscribe();

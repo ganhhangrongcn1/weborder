@@ -489,7 +489,7 @@ export default function PosCartPanel({
               </div>
             ) : isQrWaiting ? (
               <div className="pos-payment-status">
-                <span>Đơn đang chờ chuyển khoản</span>
+                <span>{qrDraftOrder.restored ? "Đã khôi phục · đang chờ chuyển khoản" : "Đơn đang chờ chuyển khoản"}</span>
                 <strong>{qrDraftOrder.orderCode || qrDraftOrder.displayOrderCode || qrDraftOrder.id}</strong>
                 <button type="button" className="pos-payment-status-action" onClick={onClear}>
                   Hủy để sửa bill

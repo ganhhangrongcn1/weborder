@@ -404,6 +404,55 @@ async function getSession(
   return response({ ok: true, session: current.data });
 }
 
+async function listSessions(
+  serviceClient: ReturnType<typeof createClient>,
+  profile: JsonRecord,
+  body: JsonRecord
+) {
+  const branchUuid = toText(body.branch_uuid);
+  if (!isUuid(branchUuid) || !canAccessBranch(profile, branchUuid)) {
+    return response({ ok: false, message: "Tài khoản không có quyền tại chi nhánh này." }, 403);
+  }
+
+  const now = new Date().toISOString();
+  const { error: expireError } = await serviceClient
+    .from("pos_payment_sessions")
+    .update({
+      status: "expired",
+      failure_reason: "Phiên QR hết hạn sau 15 phút",
+      updated_at: now
+    })
+    .eq("branch_uuid", branchUuid)
+    .eq("source", "pos")
+    .eq("status", "pending_payment")
+    .lt("expires_at", now);
+
+  if (expireError) {
+    console.warn("[pos-payment-session-api] expire sessions failed", {
+      branchUuid,
+      message: toText(expireError.message)
+    });
+  }
+
+  const { data, error } = await serviceClient
+    .from("pos_payment_sessions")
+    .select(SESSION_COLUMNS)
+    .eq("branch_uuid", branchUuid)
+    .eq("source", "pos")
+    .in("status", ["draft", "pending_payment", "paid", "converting"])
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    return response({
+      ok: false,
+      message: error.message || "Không tải được các phiên QR đang xử lý."
+    }, 500);
+  }
+
+  return response({ ok: true, sessions: data || [] });
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -454,6 +503,9 @@ Deno.serve(async (request) => {
   }
   if (action === "read") {
     return getSession(serviceClient, access.profile, payload);
+  }
+  if (action === "list") {
+    return listSessions(serviceClient, access.profile, payload);
   }
   if (["cancel", "confirm_paid", "convert"].includes(action)) {
     if (

@@ -87,6 +87,11 @@ export default function usePosCart() {
     setOrderNote("");
   };
 
+  const restoreCart = (items = [], note = "") => {
+    setCart(Array.isArray(items) ? items.filter((item) => item?.cartId || item?.productId || item?.id) : []);
+    setOrderNote(String(note || ""));
+  };
+
   return {
     cart,
     totals,
@@ -97,6 +102,7 @@ export default function usePosCart() {
     updateQuantity,
     removeItem,
     syncGiftItems,
+    restoreCart,
     clearCart
   };
 }

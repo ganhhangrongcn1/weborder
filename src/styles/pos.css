@@ -7,8 +7,12 @@
 }
 
 .pos-shell {
-  min-height: 100dvh;
-  padding: 14px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  height: 100dvh;
+  min-height: 620px;
+  padding: 10px;
 }
 
 .pos-login-page {
@@ -260,8 +264,8 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
-  height: calc(100dvh - 24px);
-  min-height: 620px;
+  height: auto;
+  min-height: 0;
 }
 
 .pos-content-grid.is-orders {
@@ -328,7 +332,7 @@
 
 .pos-menu-panel {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   padding: 14px;
   overflow: hidden;
 }
@@ -337,7 +341,7 @@
 .pos-workspace-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -349,11 +353,11 @@
   gap: 8px;
   min-width: 205px;
   max-width: 320px;
-  border: 1px solid #d7dee8;
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 6px 9px;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .pos-session-brand > span {
@@ -405,6 +409,10 @@
 }
 
 .pos-utility-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   height: 38px;
   border: 1px solid #d7dee8;
   background: #ffffff;
@@ -415,6 +423,17 @@
   font-size: 12px;
   font-weight: 900;
   cursor: pointer;
+}
+
+.pos-utility-action .pos-icon,
+.pos-workspace-nav .pos-icon {
+  display: grid;
+  place-items: center;
+}
+
+.pos-utility-action .pos-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .pos-utility-action.is-danger {
@@ -443,10 +462,246 @@
 
 .pos-workspace-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
   padding: 14px;
   overflow: hidden;
+}
+
+.pos-workspace-nav {
+  display: grid;
+  grid-template-columns: 44px minmax(360px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  margin: 0;
+  padding: 5px 6px;
+  border: 1px solid #dce3ec;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+
+.pos-footer-brand-button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #14532d;
+  border-radius: 7px;
+  background: #156b3a;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 950;
+  cursor: pointer;
+  transition: background-color 0.18s ease, transform 0.12s ease;
+}
+
+.pos-footer-brand-button:hover {
+  background: #14532d;
+}
+
+.pos-footer-brand-button:active {
+  transform: translateY(1px);
+}
+
+.pos-footer-brand-button:focus-visible {
+  outline: 3px solid rgba(21, 107, 58, 0.2);
+  outline-offset: 2px;
+}
+
+.pos-workspace-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  min-width: 0;
+}
+
+.pos-workspace-links button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  place-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #64748b;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+}
+
+.pos-workspace-links button em {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border: 1px solid #f7c56f;
+  background: #fff7df;
+  color: #9a4c12;
+  border-radius: 10px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 950;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-workspace-links button.is-active em {
+  border-color: #83c79a;
+  background: #ffffff;
+  color: #14532d;
+}
+
+.pos-workspace-links button .pos-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.pos-workspace-links button > span:last-of-type {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pos-workspace-links button:hover {
+  background: #f1f5f3;
+  color: #14532d;
+}
+
+.pos-workspace-links button:active,
+.pos-footer-logout:active {
+  transform: translateY(1px);
+}
+
+.pos-workspace-links button.is-active {
+  border-color: #9fd5ae;
+  background: #eaf7ee;
+  color: #14532d;
+  box-shadow: inset 0 0 0 1px rgba(21, 107, 58, 0.04);
+}
+
+.pos-workspace-links button:focus-visible,
+.pos-footer-logout:focus-visible {
+  outline: 3px solid rgba(21, 107, 58, 0.18);
+  outline-offset: -2px;
+}
+
+.pos-footer-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 92px;
+  min-height: 44px;
+  border: 1px solid #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+  border-radius: 7px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.pos-footer-logout .pos-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.pos-footer-logout:hover {
+  background: #fff1f2;
+}
+
+.pos-branch-info-modal {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  width: min(420px, calc(100vw - 28px));
+  border: 1px solid #dce3ec;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.pos-branch-info-modal > header {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.pos-branch-info-modal > header > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #156b3a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.pos-branch-info-modal > header div {
+  display: grid;
+  gap: 2px;
+}
+
+.pos-branch-info-modal small,
+.pos-branch-info-modal > div > span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.pos-branch-info-modal > header strong {
+  color: #172033;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.pos-branch-info-modal > header button {
+  height: 36px;
+  border: 1px solid #d7dee8;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 8px;
+  padding: 0 11px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pos-branch-info-modal > div {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #dce3ec;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 11px 12px;
+}
+
+.pos-branch-info-modal > div > strong {
+  color: #17311d;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.4;
 }
 
 .pos-menu-head,
@@ -3036,7 +3291,29 @@
 
 @media (max-width: 760px) {
   .pos-shell {
-    padding: 10px 10px 86px;
+    height: auto;
+    min-height: 100dvh;
+    padding: 8px 8px 150px;
+  }
+
+  .pos-workspace-nav {
+    position: fixed;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    z-index: 25;
+    grid-template-columns: 38px minmax(0, 1fr) 42px;
+    gap: 5px;
+  }
+
+  .pos-footer-logout {
+    min-width: 42px;
+    width: 42px;
+    padding: 0;
+  }
+
+  .pos-footer-logout > span:last-child {
+    display: none;
   }
 
   .pos-content-grid {
@@ -3112,7 +3389,7 @@
   .pos-mobile-cart-button {
     position: fixed;
     right: 12px;
-    bottom: 12px;
+    bottom: 76px;
     left: 12px;
     z-index: 30;
     display: flex;
@@ -3190,6 +3467,258 @@
   gap: 10px;
   min-height: 0;
   overflow: hidden;
+}
+
+.pos-pending-payments-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pos-pending-payments-panel.is-embedded {
+  display: grid;
+  flex: none;
+  gap: 7px;
+  overflow: visible;
+}
+
+.pos-pending-payments-panel.is-embedded .pos-pending-payments-list {
+  display: grid;
+  flex: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.pos-pending-payments-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 2px;
+}
+
+.pos-pending-payments-group-title strong {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.pos-pending-payments-group-title span {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border: 1px solid #f7c56f;
+  background: #fff7df;
+  color: #9a4c12;
+  border-radius: 10px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.pos-pending-payments-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 2px 2px 10px;
+}
+
+.pos-pending-payments-toolbar > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pos-pending-payments-toolbar strong {
+  color: #172033;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.pos-pending-payments-toolbar span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pos-pending-payments-toolbar button {
+  flex: 0 0 auto;
+  height: 36px;
+  border: 1px solid #d7dee8;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.pos-pending-payments-toolbar button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pos-pending-payments-list {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-height: 0;
+  padding-right: 3px;
+  align-content: start;
+  overflow-y: auto;
+}
+
+.pos-pending-payment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #dce3ec;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.pos-pending-payment-row:hover {
+  border-color: #9bbdaa;
+  background: #f9fcfa;
+}
+
+.pos-pending-payment-row.is-active {
+  border-color: #58a871;
+  box-shadow: inset 3px 0 0 #247340;
+}
+
+.pos-pending-payment-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pos-pending-payment-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pos-pending-payment-title > strong {
+  overflow: hidden;
+  color: #17311d;
+  font-size: 16px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pos-pending-payment-status {
+  flex: 0 0 auto;
+  border-radius: 6px;
+  padding: 4px 7px;
+  font-size: 10px;
+  font-weight: 950;
+}
+
+.pos-pending-payment-status.is-pending,
+.pos-pending-payment-status.is-draft {
+  background: #fff7df;
+  color: #9a4c12;
+}
+
+.pos-pending-payment-status.is-paid {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.pos-pending-payment-status.is-processing {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.pos-pending-payment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.pos-pending-payment-meta span,
+.pos-pending-payment-main p {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pos-pending-payment-main p {
+  overflow: hidden;
+  margin: 0;
+  color: #334155;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pos-pending-payment-total {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+}
+
+.pos-pending-payment-total span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.pos-pending-payment-total strong {
+  color: #166534;
+  font-size: 15px;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pos-pending-payment-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.pos-pending-payment-actions button {
+  height: 38px;
+  border: 1px solid #d7dee8;
+  background: #ffffff;
+  color: #334155;
+  border-radius: 8px;
+  padding: 0 11px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.pos-pending-payment-actions button.is-primary {
+  border-color: #8bc49d;
+  background: #eaf7ee;
+  color: #14532d;
+}
+
+.pos-pending-payment-actions button.is-danger {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.pos-pending-payment-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .pos-order-history-toolbar {
@@ -3594,6 +4123,25 @@
 }
 
 @media (max-width: 760px) {
+  .pos-workspace-links {
+    gap: 4px;
+  }
+
+  .pos-workspace-links button {
+    gap: 4px;
+    padding-inline: 5px;
+  }
+
+  .pos-workspace-links button em {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    font-size: 9px;
+  }
+
   .pos-order-history-toolbar {
     align-items: stretch;
     flex-direction: column;
@@ -3601,6 +4149,27 @@
 
   .pos-order-history-actions {
     justify-content: flex-end;
+  }
+
+  .pos-pending-payments-toolbar {
+    align-items: flex-start;
+  }
+
+  .pos-pending-payment-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .pos-pending-payment-total {
+    align-self: start;
+  }
+
+  .pos-pending-payment-actions {
+    grid-column: 1 / -1;
+  }
+
+  .pos-pending-payment-actions button {
+    flex: 1 1 0;
   }
 
   .pos-order-detail-summary {
