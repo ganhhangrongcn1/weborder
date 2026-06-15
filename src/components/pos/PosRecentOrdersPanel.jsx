@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { canCancelPosOrder } from "../../services/posService.js";
 import PosPendingPaymentsPanel from "./PosPendingPaymentsPanel.jsx";
-import { formatMoney, getOrderCode, getOrderStatusLabel, getOrderTotal, toText } from "./posHelpers.js";
+import { formatMoney, getOrderCode, getOrderTotal, toText } from "./posHelpers.js";
 
 const STATUS_FILTERS = [
   { id: "all", label: "Tất cả" },
@@ -18,12 +18,28 @@ function getObject(value) {
 function getOrderStatusGroup(order = {}) {
   const metadata = getObject(order.metadata);
   const status = toText(order.status || order.orderStatus || metadata.status).toLowerCase();
+  const kitchenStatus = toText(
+    order.kitchenStatus ||
+    order.kitchen_status ||
+    metadata.kitchenStatus ||
+    metadata.kitchen_status
+  ).toLowerCase();
   const paymentStatus = toText(order.paymentStatus || metadata.paymentStatus || metadata.payment_status).toLowerCase();
 
-  if (["cancelled", "canceled", "cancel"].includes(status)) return "cancelled";
-  if (["done", "completed", "complete"].includes(status)) return "completed";
+  if (["cancelled", "canceled", "cancel"].includes(status) ||
+    ["cancelled", "canceled", "cancel"].includes(kitchenStatus)) return "cancelled";
+  if (["done", "completed", "complete"].includes(status) ||
+    ["done", "completed", "complete"].includes(kitchenStatus)) return "completed";
   if (status === "pending_payment" || paymentStatus === "pending") return "pending_payment";
   return "processing";
+}
+
+function getOrderHistoryStatusLabel(order = {}) {
+  const statusGroup = getOrderStatusGroup(order);
+  if (statusGroup === "completed") return "Hoàn tất";
+  if (statusGroup === "cancelled") return "Đã hủy";
+  if (statusGroup === "pending_payment") return "Chờ thanh toán";
+  return "Đang xử lý";
 }
 
 function getPaymentLabel(order = {}) {
@@ -97,7 +113,7 @@ function OrderDetailModal({ order, cancellingOrderId, onClose, onCancelOrder }) 
         </header>
 
         <div className="pos-order-detail-summary">
-          <div><span>Trạng thái</span><strong>{getOrderStatusLabel(order.status)}</strong></div>
+          <div><span>Trạng thái</span><strong>{getOrderHistoryStatusLabel(order)}</strong></div>
           <div><span>Thời gian</span><strong>{formatOrderTime(order.createdAt)}</strong></div>
           <div><span>Thẻ rung</span><strong>{order.pagerNumber ? `Thẻ ${order.pagerNumber}` : "Không có"}</strong></div>
           <div><span>Tổng tiền</span><strong>{formatMoney(getOrderTotal(order))}</strong></div>
@@ -244,7 +260,7 @@ export default function PosRecentOrdersPanel({
               <div className="pos-recent-order-title-row">
                 <strong>{getOrderCode(order)}</strong>
                 <span className="pos-recent-order-total">{formatMoney(getOrderTotal(order))}</span>
-                <em className={`pos-order-status pos-order-status--${statusGroup}`}>{getOrderStatusLabel(order.status)}</em>
+                <em className={`pos-order-status pos-order-status--${statusGroup}`}>{getOrderHistoryStatusLabel(order)}</em>
               </div>
               <div className="pos-recent-order-meta">
                 <span>{formatOrderTime(order.createdAt)}</span>

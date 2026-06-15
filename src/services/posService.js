@@ -5,6 +5,52 @@ import { getRuntimeSupabaseClient } from "./repositories/repositoryRuntime.js";
 
 const ALL_CATEGORY = "Tất cả";
 const WALK_IN_PHONE = "";
+const POS_HISTORY_ORDER_COLUMNS = [
+  "id",
+  "order_code",
+  "customer_phone",
+  "customer_name",
+  "fulfillment_type",
+  "payment_method",
+  "status",
+  "subtotal",
+  "promo_discount",
+  "promo_code",
+  "points_discount",
+  "points_earned",
+  "total_amount",
+  "branch_id",
+  "branch_uuid",
+  "branch_name",
+  "branch_address",
+  "pickup_branch_id",
+  "pickup_branch_uuid",
+  "pickup_branch_name",
+  "pickup_branch_address",
+  "delivery_branch_id",
+  "delivery_branch_uuid",
+  "delivery_branch_name",
+  "delivery_branch_address",
+  "kitchen_status",
+  "kitchen_done_at",
+  "created_at",
+  "metadata"
+].join(",");
+const POS_HISTORY_ITEM_COLUMNS = [
+  "id",
+  "order_id",
+  "product_id",
+  "product_name",
+  "quantity",
+  "unit_price",
+  "line_total",
+  "spice",
+  "note",
+  "toppings",
+  "option_groups",
+  "kitchen_item_status",
+  "metadata"
+].join(",");
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -354,6 +400,140 @@ function matchesPosBranch(order = {}, branchValue = "") {
   return getOrderBranchKeys(order).includes(safeBranchValue);
 }
 
+function mapPosHistoryItem(row = {}) {
+  const metadata = getObject(row.metadata);
+  const toppings = Array.isArray(row.toppings) ? row.toppings : [];
+  const optionGroups = Array.isArray(row.option_groups) ? row.option_groups : [];
+  const options = Array.from(new Set([
+    ...(Array.isArray(metadata.options) ? metadata.options : []),
+    ...toppings.map((option) => option?.label || option?.name || option?.value),
+    ...optionGroups.flatMap((group) => (
+      Array.isArray(group?.options)
+        ? group.options
+        : Array.isArray(group?.items)
+          ? group.items
+          : []
+    )).map((option) => option?.label || option?.name || option?.value || option?.title)
+  ].map(toText).filter(Boolean)));
+
+  return {
+    id: toText(row.id || row.product_id),
+    sourceItemId: toText(row.id),
+    orderId: toText(row.order_id),
+    productId: toText(row.product_id),
+    name: toText(row.product_name),
+    quantity: Math.max(1, toNumber(row.quantity, 1)),
+    price: toNumber(row.unit_price, 0),
+    unitTotal: toNumber(row.unit_price, 0),
+    lineTotal: toNumber(row.line_total, 0),
+    spice: toText(row.spice),
+    note: toText(row.note),
+    toppings,
+    optionGroups,
+    options,
+    kitchenItemStatus: toText(row.kitchen_item_status || metadata.kitchenItemStatus || "pending"),
+    metadata
+  };
+}
+
+function mapPosHistoryOrder(row = {}, itemMap = new Map()) {
+  const metadata = getObject(row.metadata);
+  const customerPhone = getCustomerKey(row.customer_phone || metadata.customerPhone);
+  const source = toText(row.source || metadata.source || metadata.orderSource || metadata.channel || "weborder");
+  const orderCode = toText(row.order_code || metadata.orderCode || row.id);
+
+  return {
+    id: toText(row.id || orderCode),
+    orderCode,
+    displayOrderCode: toText(metadata.displayOrderCode || metadata.display_order_code || orderCode),
+    pagerNumber: normalizePagerNumber(metadata.pagerNumber || metadata.pager_number),
+    phone: customerPhone,
+    customerPhone,
+    customerPhoneKey: customerPhone || toText(metadata.customerPhoneKey || metadata.customer_phone_key),
+    customerName: toText(row.customer_name || metadata.customerName),
+    status: toText(row.status || metadata.status || "pending_zalo"),
+    orderStatus: toText(row.status || metadata.status || "pending_zalo"),
+    kitchenStatus: toText(row.kitchen_status || metadata.kitchenStatus || metadata.kitchen_status),
+    kitchenDoneAt: toText(row.kitchen_done_at || metadata.kitchenDoneAt),
+    fulfillmentType: toText(row.fulfillment_type || metadata.fulfillmentType || "pickup"),
+    paymentMethod: toText(row.payment_method || metadata.paymentMethod || "unpaid"),
+    paymentStatus: toText(metadata.paymentStatus || metadata.payment_status || "unpaid"),
+    paymentAmount: toNumber(metadata.paymentAmount || metadata.payment_amount || row.total_amount, 0),
+    paymentReference: toText(metadata.paymentReference || metadata.payment_reference),
+    paidAt: toText(metadata.paidAt || metadata.paid_at),
+    source,
+    channel: toText(metadata.channel || source),
+    orderSource: toText(metadata.orderSource || source),
+    partnerSource: toText(metadata.partnerSource),
+    subtotal: toNumber(row.subtotal, 0),
+    promoDiscount: toNumber(row.promo_discount, 0),
+    promoCode: toText(row.promo_code),
+    pointsDiscount: toNumber(row.points_discount, 0),
+    pointsEarned: toNumber(row.points_earned, 0),
+    totalAmount: toNumber(row.total_amount, 0),
+    total: toNumber(row.total_amount, 0),
+    branchId: toText(row.branch_id || metadata.branchId),
+    branchUuid: toText(row.branch_uuid || metadata.branchUuid),
+    branchName: toText(row.branch_name || metadata.branchName),
+    branchAddress: toText(row.branch_address || metadata.branchAddress),
+    pickupBranchId: toText(row.pickup_branch_id || metadata.pickupBranchId),
+    pickupBranchUuid: toText(row.pickup_branch_uuid || metadata.pickupBranchUuid),
+    pickupBranchName: toText(row.pickup_branch_name || metadata.pickupBranchName),
+    pickupBranchAddress: toText(row.pickup_branch_address || metadata.pickupBranchAddress),
+    deliveryBranchId: toText(row.delivery_branch_id || metadata.deliveryBranchId),
+    deliveryBranchUuid: toText(row.delivery_branch_uuid || metadata.deliveryBranchUuid),
+    deliveryBranchName: toText(row.delivery_branch_name || metadata.deliveryBranchName),
+    deliveryBranchAddress: toText(row.delivery_branch_address || metadata.deliveryBranchAddress),
+    createdAt: toText(row.created_at || metadata.createdAt),
+    items: itemMap.get(toText(row.id)) || [],
+    metadata
+  };
+}
+
+async function getPosRecentOrdersFromSupabaseAsync({ branchValue = "", limit = 30 } = {}) {
+  const client = getRuntimeSupabaseClient();
+  if (!client) return null;
+
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(toNumber(limit, 30))));
+  const scanLimit = Math.max(120, Math.min(400, safeLimit * 4));
+  const { data: orderRows, error: orderError } = await client
+    .from("orders")
+    .select(POS_HISTORY_ORDER_COLUMNS)
+    .order("created_at", { ascending: false })
+    .limit(scanLimit);
+
+  if (orderError) throw orderError;
+
+  const matchedOrders = (Array.isArray(orderRows) ? orderRows : [])
+    .map((row) => mapPosHistoryOrder(row))
+    .filter((order) => isPosOrder(order))
+    .filter((order) => matchesPosBranch(order, branchValue))
+    .slice(0, safeLimit);
+  const orderIds = matchedOrders.map((order) => order.id).filter(Boolean);
+
+  if (!orderIds.length) return [];
+
+  const { data: itemRows, error: itemError } = await client
+    .from("order_items")
+    .select(POS_HISTORY_ITEM_COLUMNS)
+    .in("order_id", orderIds);
+
+  if (itemError) throw itemError;
+
+  const itemMap = new Map();
+  (Array.isArray(itemRows) ? itemRows : []).forEach((row) => {
+    const orderId = toText(row.order_id);
+    const current = itemMap.get(orderId) || [];
+    current.push(mapPosHistoryItem(row));
+    itemMap.set(orderId, current);
+  });
+
+  return matchedOrders.map((order) => ({
+    ...order,
+    items: itemMap.get(order.id) || []
+  }));
+}
+
 function getRemoteOrderBranchKeys(row = {}) {
   const metadata = getObject(row.metadata);
   return [
@@ -474,10 +654,19 @@ export function canCancelPosOrder(order = {}) {
 }
 
 export async function getPosRecentOrdersAsync({ branchValue = "", limit = 30 } = {}) {
-  const allByPhone = await orderStorage.getAllByPhoneAsync();
   const safeLimit = Math.max(1, Math.min(100, Math.floor(toNumber(limit, 30))));
-  return Object.values(allByPhone || {})
-    .flat()
+  try {
+    const remoteOrders = await getPosRecentOrdersFromSupabaseAsync({
+      branchValue,
+      limit: safeLimit
+    });
+    if (Array.isArray(remoteOrders)) return remoteOrders;
+  } catch (error) {
+    console.warn("[posService] read POS history from Supabase failed", error);
+  }
+
+  const allByPhone = await orderStorage.getAllByPhoneAsync();
+  return Object.values(allByPhone || {}).flat()
     .filter((order) => isPosOrder(order))
     .filter((order) => matchesPosBranch(order, branchValue))
     .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())

@@ -1028,6 +1028,13 @@ export default function PosPage({ products = [], categories = [], branches = [],
     ]);
   };
 
+  const handleWorkspaceChange = (workspace) => {
+    setActiveWorkspace(workspace);
+    if (workspace === "history") {
+      handleRefreshHistory();
+    }
+  };
+
   const handleOpenPendingPayment = (session) => {
     const sessionId = toText(session?.id);
     if (!sessionId) return;
@@ -1188,7 +1195,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
           activeWorkspace={activeWorkspace}
           pendingCount={pendingPaymentSessions.length}
           branchLabel={branchLabel}
-          onChange={setActiveWorkspace}
+          onChange={handleWorkspaceChange}
           onLogout={handleLogout}
         />
       </section>
