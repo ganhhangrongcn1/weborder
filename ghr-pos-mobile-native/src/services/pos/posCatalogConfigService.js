@@ -1,0 +1,158 @@
+import { supabase } from "../supabase/client";
+
+function toText(value = "") {
+  return String(value || "").normalize("NFC").trim();
+}
+
+function toNumber(value = 0) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeBoolean(value, fallback = true) {
+  if (typeof value === "boolean") return value;
+  if (value == null) return fallback;
+  const text = toText(value).toLowerCase();
+  if (["false", "0", "off", "no"].includes(text)) return false;
+  if (["true", "1", "on", "yes"].includes(text)) return true;
+  return fallback;
+}
+
+function normalizeCoupon(row = {}) {
+  const data = getObject(row.data);
+  return {
+    ...data,
+    id: toText(data.id || row.id || row.code),
+    code: toText(data.code || row.code).toUpperCase(),
+    name: toText(data.name || row.name || row.code || "Voucher"),
+    discountType: toText(data.discountType || row.discount_type || "fixed") === "percent" ? "percent" : "fixed",
+    value: toNumber(data.value ?? row.value, 0),
+    maxDiscount: toNumber(data.maxDiscount ?? row.max_discount, 0),
+    minOrder: toNumber(data.minOrder ?? row.min_order, 0),
+    startAt: toText(data.startAt || row.start_at),
+    endAt: toText(data.endAt || data.expiry || row.end_at),
+    expiry: toText(data.endAt || data.expiry || row.end_at),
+    customerType: toText(data.customerType || row.customer_type || "all").toLowerCase(),
+    usageLimit: toNumber(data.usageLimit ?? row.usage_limit, 0),
+    perUserLimit: Math.max(1, toNumber(data.perUserLimit ?? row.per_user_limit, 1)),
+    totalUsed: toNumber(data.totalUsed ?? row.total_used, 0),
+    voucherType: toText(data.voucherType || row.voucher_type || "checkout").toLowerCase(),
+    fulfillmentType: toText(data.fulfillmentType || row.fulfillment_type || "all").toLowerCase(),
+    scopeType: toText(data.scopeType || row.scope_type || "all").toLowerCase(),
+    scopeValues: toText(data.scopeValues || row.scope_values),
+    stackable: Boolean(data.stackable ?? row.stackable),
+    active: normalizeBoolean(data.active ?? row.active, true)
+  };
+}
+
+function normalizeSmartPromotion(row = {}) {
+  const data = getObject(row.data);
+  const condition = getObject(data.condition || row.condition);
+  const reward = getObject(data.reward || row.reward);
+  const displayPlaces = Array.isArray(data.displayPlaces)
+    ? data.displayPlaces
+    : Array.isArray(row.display_places)
+      ? row.display_places
+      : [];
+
+  return {
+    ...data,
+    id: toText(data.id || row.id || row.code || row.name),
+    code: toText(data.code || row.code).toUpperCase(),
+    name: toText(data.name || row.name || "Khuyến mãi"),
+    title: toText(data.title || row.title || data.name || row.name),
+    text: toText(data.text || row.text),
+    type: toText(data.type || row.type || "gift_threshold").toLowerCase(),
+    icon: toText(data.icon || row.icon),
+    active: normalizeBoolean(data.active ?? row.active, true),
+    displayPlaces,
+    condition: {
+      minSubtotal: toNumber(condition.minSubtotal ?? condition.min_subtotal, 0),
+      customerType: toText(condition.customerType || condition.customer_type || "all").toLowerCase(),
+      productIds: toText(condition.productIds || condition.product_ids),
+      categoryIds: toText(condition.categoryIds || condition.category_ids)
+    },
+    reward: {
+      type: toText(reward.type || "gift").toLowerCase(),
+      productId: toText(reward.productId || reward.product_id),
+      value: toText(reward.value),
+      name: toText(reward.name || reward.title || reward.value)
+    },
+    startAt: toText(data.startAt || row.start_at),
+    endAt: toText(data.endAt || row.end_at),
+    priority: toNumber(data.priority ?? row.priority, 99)
+  };
+}
+
+async function readCoupons() {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("coupons")
+    .select("id,data,code,name,discount_type,value,max_discount,min_order,start_at,end_at,customer_type,usage_limit,per_user_limit,total_used,voucher_type,fulfillment_type,scope_type,scope_values,stackable,active,updated_at")
+    .order("updated_at", { ascending: false });
+
+  if (error || !Array.isArray(data)) return [];
+  return data.map(normalizeCoupon).filter((coupon) => coupon.id || coupon.code);
+}
+
+async function readSmartPromotions() {
+  if (!supabase) return [];
+
+  const selectCandidates = [
+    "id,data,name,title,text,type,icon,condition,reward,display_places,start_at,end_at,priority,active,updated_at",
+    "id,data,name,type,condition,reward,display_places,start_at,end_at,priority,active,updated_at",
+    "id,data,updated_at",
+    "id,data"
+  ];
+
+  for (const columns of selectCandidates) {
+    const { data, error } = await supabase
+      .from("smart_promotions")
+      .select(columns)
+      .order("updated_at", { ascending: false });
+
+    if (error) continue;
+    return (Array.isArray(data) ? data : [])
+      .map(normalizeSmartPromotion)
+      .filter((promotion) => promotion.id);
+  }
+
+  return [];
+}
+
+export async function fetchPosCatalogConfig() {
+  if (!supabase) {
+    return {
+      ok: true,
+      coupons: [],
+      smartPromotions: [],
+      message: ""
+    };
+  }
+
+  try {
+    const [coupons, smartPromotions] = await Promise.all([
+      readCoupons(),
+      readSmartPromotions()
+    ]);
+
+    return {
+      ok: true,
+      coupons,
+      smartPromotions,
+      message: ""
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      coupons: [],
+      smartPromotions: [],
+      message: error?.message || "Không tải được cấu hình khuyến mãi POS."
+    };
+  }
+}
