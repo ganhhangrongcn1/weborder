@@ -89,11 +89,12 @@ export async function getPosRecentOrders({ branchUuid = "", limit = 8 } = {}) {
   if (!supabase) return [];
 
   const safeLimit = Math.max(1, Math.min(30, Math.floor(Number(limit || 8))));
+  const fetchLimit = Math.max(24, safeLimit * 3);
   const { data, error } = await supabase
     .from("orders")
     .select("id,order_code,customer_name,customer_phone,total_amount,payment_method,status,kitchen_status,branch_uuid,pickup_branch_uuid,metadata,created_at,pos_shift_id")
     .order("created_at", { ascending: false })
-    .limit(80);
+    .limit(fetchLimit);
 
   if (error || !Array.isArray(data)) return [];
 
@@ -261,6 +262,94 @@ export async function readPosOrderForPrint(orderId = "") {
         total: Number(orderRow.total_amount || 0)
       },
       cart
+    }
+  };
+}
+
+export async function readPosOrderDetail(orderId = "") {
+  const safeOrderId = toText(orderId);
+  if (!safeOrderId) {
+    return { ok: false, message: "Thiếu mã đơn để xem chi tiết." };
+  }
+  if (!supabase) {
+    return { ok: false, message: "Supabase chưa sẵn sàng." };
+  }
+
+  const [{ data: orderRow, error: orderError }, { data: itemRows, error: itemError }] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("id,order_code,customer_name,customer_phone,total_amount,subtotal,promo_discount,points_discount,payment_method,status,kitchen_status,branch_name,metadata,created_at,pos_shift_id")
+      .eq("id", safeOrderId)
+      .maybeSingle(),
+    supabase
+      .from("order_items")
+      .select("product_id,product_name,quantity,unit_price,line_total,note,option_groups,metadata")
+      .eq("order_id", safeOrderId)
+      .order("id", { ascending: true })
+  ]);
+
+  if (orderError || !orderRow) {
+    return { ok: false, message: orderError?.message || "Không tìm thấy đơn để xem chi tiết." };
+  }
+  if (itemError) {
+    return { ok: false, message: itemError.message || "Không đọc được chi tiết món của đơn." };
+  }
+
+  const metadata = getObject(orderRow.metadata);
+  const items = (Array.isArray(itemRows) ? itemRows : []).map((item, index) => {
+    const itemMetadata = getObject(item.metadata);
+    const optionGroups = Array.isArray(item.option_groups) ? item.option_groups : [];
+    const selectedOptions = Array.isArray(itemMetadata.selectedOptions)
+      ? itemMetadata.selectedOptions
+      : optionGroups.flatMap((group) =>
+          (Array.isArray(group?.options) ? group.options : []).map((option) => ({
+            id: toText(option.id),
+            name: toText(option.name),
+            price: Number(option.price || 0),
+            groupId: toText(group.id),
+            groupName: toText(group.name)
+          }))
+        );
+
+    return {
+      id: `${safeOrderId}-${index + 1}`,
+      productId: toText(item.product_id),
+      name: toText(item.product_name || "Món"),
+      quantity: Math.max(1, Number(item.quantity || 1)),
+      unitPrice: Number(item.unit_price || 0),
+      lineTotal: Number(item.line_total || 0),
+      note: toText(item.note),
+      selectedOptions,
+      optionGroups
+    };
+  });
+
+  return {
+    ok: true,
+    order: {
+      id: toText(orderRow.id || orderRow.order_code),
+      displayOrderCode: toText(metadata.displayOrderCode || orderRow.order_code || orderRow.id),
+      customerName: toText(orderRow.customer_name),
+      customerPhone: toText(orderRow.customer_phone),
+      pagerNumber: getRemoteOrderPagerNumber(orderRow),
+      branchName: toText(orderRow.branch_name || metadata.branchName),
+      orderNote: toText(metadata.orderNote || metadata.note),
+      paymentMethod: toText(orderRow.payment_method || metadata.paymentMethod).toLowerCase(),
+      paymentStatus: toText(metadata.paymentStatus || metadata.payment_status || "paid").toLowerCase(),
+      paymentReference: toText(metadata.paymentReference || metadata.payment_reference),
+      paidAt: toText(metadata.paidAt || metadata.paid_at),
+      createdAt: toText(orderRow.created_at),
+      subtotal: Number(orderRow.subtotal || orderRow.total_amount || 0),
+      promoDiscount: Number(orderRow.promo_discount || metadata.promoDiscount || 0),
+      pointsDiscountAmount: Number(orderRow.points_discount || metadata.pointsDiscountAmount || 0),
+      totalAmount: Number(orderRow.total_amount || 0),
+      status: toText(orderRow.status || metadata.status),
+      kitchenStatus: toText(orderRow.kitchen_status || metadata.kitchenStatus || metadata.kitchen_status),
+      posShiftId: toText(orderRow.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id),
+      cashierName: toText(metadata.cashierName || metadata.shift?.cashierName),
+      items,
+      metadata,
+      canCancel: canCancelPosOrder(orderRow)
     }
   };
 }

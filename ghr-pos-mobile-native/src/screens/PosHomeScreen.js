@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import CashPaymentModal from "../features/pos/components/CashPaymentModal";
 import PosBenefitCard from "../features/pos/components/PosBenefitCard";
 import PaymentBar from "../features/pos/components/PaymentBar";
+import PosCashCountModal from "../features/pos/components/PosCashCountModal";
 import PosCartPanel from "../features/pos/components/PosCartPanel";
 import PosCustomerModal from "../features/pos/components/PosCustomerModal";
 import PosCustomerSummaryCard from "../features/pos/components/PosCustomerSummaryCard";
@@ -11,6 +12,7 @@ import PosHistoryPanel from "../features/pos/components/PosHistoryPanel";
 import PosIcon from "../features/pos/components/PosIcon";
 import PosMenuPanel from "../features/pos/components/PosMenuPanel";
 import PosPagerModal from "../features/pos/components/PosPagerModal";
+import PosShiftCloseModal from "../features/pos/components/PosShiftCloseModal";
 import ProductOptionsModal from "../features/pos/components/ProductOptionsModal";
 import QrPaymentModal from "../features/pos/components/QrPaymentModal";
 import usePosComposer from "../features/pos/hooks/usePosComposer";
@@ -23,6 +25,7 @@ import {
   selectLocalUsbPrinter,
   setLocalPrinterMode
 } from "../services/pos/posPrinterService";
+import { formatCashBreakdownSummary } from "../services/pos/posCashBreakdownService";
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../styles/posTheme";
 import { formatMoney } from "../utils/format";
 
@@ -41,6 +44,9 @@ export default function PosHomeScreen() {
   const [activeTab, setActiveTab] = useState("sale");
   const [cashPaymentOpen, setCashPaymentOpen] = useState(false);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
+  const [openingCashCounterOpen, setOpeningCashCounterOpen] = useState(false);
+  const [openingCashBreakdown, setOpeningCashBreakdown] = useState(null);
   const [cashReceived, setCashReceived] = useState("");
   const [printerConfig, setPrinterConfig] = useState(null);
   const [lanHost, setLanHost] = useState("");
@@ -67,10 +73,6 @@ export default function PosHomeScreen() {
     shift,
     shiftSummary,
     shiftSummaryError,
-    closingCash,
-    setClosingCash,
-    closingNote,
-    setClosingNote,
     openingCash,
     setOpeningCash,
     pagerNumber,
@@ -120,6 +122,7 @@ export default function PosHomeScreen() {
     cancelPaymentSessionFromHistory,
     cancelRecentOrder,
     reprintRecentOrder,
+    openRecentOrderDetail,
     refreshCurrentPosRuntime,
     confirmQrPaidManually,
     printQrReceiptNow,
@@ -192,6 +195,8 @@ export default function PosHomeScreen() {
     setCashPaymentOpen(false);
   };
 
+  const openingCashAmount = Number(openingCash || 0);
+
   useEffect(() => {
     let active = true;
 
@@ -217,6 +222,13 @@ export default function PosHomeScreen() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (hasOpenShift) {
+      setOpeningCashCounterOpen(false);
+      setOpeningCashBreakdown(null);
+    }
+  }, [hasOpenShift]);
 
   const refreshPrinterState = async () => {
     const [config, devices] = await Promise.all([
@@ -346,55 +358,104 @@ export default function PosHomeScreen() {
 
   if (!hasOpenShift) {
     return (
-      <View style={styles.centerPage}>
-        <View style={styles.shiftCard}>
-          <View style={styles.shiftHead}>
-            <View style={styles.flexOne}>
-              <Text style={styles.label}>Mở ca bán hàng</Text>
-              <Text style={styles.shiftTitle}>{branchName}</Text>
-              <Text style={styles.shiftSubtitle}>{cashierName}</Text>
+      <>
+        <View style={styles.centerPage}>
+          <View style={styles.shiftCard}>
+            <View style={styles.shiftHead}>
+              <View style={styles.flexOne}>
+                <Text style={styles.label}>Mở ca bán hàng</Text>
+                <Text style={styles.shiftTitle}>{branchName}</Text>
+                <Text style={styles.shiftSubtitle}>{cashierName}</Text>
+              </View>
+              <Pressable style={styles.smallGhostButton} onPress={signOut}>
+                <Text style={styles.smallGhostText}>Đổi tài khoản</Text>
+              </Pressable>
             </View>
-            <Pressable style={styles.smallGhostButton} onPress={signOut}>
-              <Text style={styles.smallGhostText}>Đổi tài khoản</Text>
+
+            <View style={styles.shiftSummary}>
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryLabel}>Chi nhánh</Text>
+                <Text style={styles.summaryValue} numberOfLines={1}>{branchName}</Text>
+              </View>
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryLabel}>Trạng thái</Text>
+                <Text style={styles.summaryValue}>Chưa mở ca</Text>
+              </View>
+            </View>
+
+            <View style={styles.openingShiftPanel}>
+              <View style={styles.openingCashHead}>
+                <View style={styles.openingCashHeading}>
+                  <View style={styles.openingCashIconWrap}>
+                    <PosIcon name="cash" size={14} color={POS_COLORS.primaryDark} />
+                  </View>
+                  <Text style={styles.label}>Tiền đầu ca</Text>
+                </View>
+                <Pressable
+                  style={styles.openingCashAction}
+                  onPress={() => setOpeningCashCounterOpen(true)}
+                >
+                  <Text style={styles.openingCashActionText}>
+                    {openingCashAmount > 0 ? "Đếm lại" : "Đếm theo mệnh giá"}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.openingCashCard}>
+                <Text style={styles.openingCashValue}>
+                  {openingCashAmount > 0 ? formatMoney(openingCashAmount) : "Chưa nhập tiền đầu ca"}
+                </Text>
+                <Text style={styles.openingCashHint}>
+                  {openingCashBreakdown
+                    ? formatCashBreakdownSummary(openingCashBreakdown)
+                    : "Nhập số tờ đầu ca bằng popup giống phần kết ca."}
+                </Text>
+              </View>
+
+              <View style={styles.openingShiftNote}>
+                <PosIcon name="history" size={14} color={POS_COLORS.slate} />
+                <Text style={styles.openingShiftNoteText}>
+                  Kiểm tiền theo mệnh giá trước khi mở ca để tổng quan ca chính xác hơn.
+                </Text>
+              </View>
+            </View>
+
+            {!!shiftMessage && <Text style={styles.noticeBox}>{shiftMessage}</Text>}
+
+            <Pressable
+              style={[styles.submitButton, busy && styles.submitButtonDisabled]}
+              onPress={() => {
+                if (!openingCashBreakdown) {
+                  setOpeningCashCounterOpen(true);
+                  return;
+                }
+                openShiftNow({
+                  openingCashCounted: openingCashAmount,
+                  openingCashBreakdown
+                });
+              }}
+              disabled={busy}
+            >
+              <Text style={[styles.submitText, busy && styles.disabledText]}>
+                {busy ? "Đang mở ca..." : openingCashBreakdown ? "Mở ca POS" : "Kiểm tiền đầu ca"}
+              </Text>
             </Pressable>
           </View>
-
-          <View style={styles.shiftSummary}>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Chi nhánh</Text>
-              <Text style={styles.summaryValue} numberOfLines={1}>{branchName}</Text>
-            </View>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Trạng thái</Text>
-              <Text style={styles.summaryValue}>Chưa mở ca</Text>
-            </View>
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.label}>Tiền đầu ca</Text>
-            <TextInput
-              value={openingCash}
-              onChangeText={setOpeningCash}
-              placeholder="0"
-              placeholderTextColor="#94a3b8"
-              keyboardType="number-pad"
-              style={styles.input}
-            />
-          </View>
-
-          {!!shiftMessage && <Text style={styles.noticeBox}>{shiftMessage}</Text>}
-
-          <Pressable
-            style={[styles.submitButton, busy && styles.submitButtonDisabled]}
-            onPress={openShiftNow}
-            disabled={busy}
-          >
-            <Text style={[styles.submitText, busy && styles.disabledText]}>
-              {busy ? "Đang mở ca..." : "Mở ca POS"}
-            </Text>
-          </Pressable>
         </View>
-      </View>
+
+        <PosCashCountModal
+          visible={openingCashCounterOpen}
+          title="Đếm tiền đầu ca"
+          subtitle="Nhập số tờ thực tế mang vào đầu ca."
+          initialCounts={openingCashBreakdown}
+          onClose={() => setOpeningCashCounterOpen(false)}
+          onApply={({ counts, total }) => {
+            setOpeningCashBreakdown(counts);
+            setOpeningCash(String(total || ""));
+            setOpeningCashCounterOpen(false);
+          }}
+        />
+      </>
     );
   }
 
@@ -472,90 +533,12 @@ export default function PosHomeScreen() {
     </View>
   );
 
-  const renderShiftWorkspace = () => (
-    <View style={styles.secondaryPanel}>
-      <Text style={styles.label}>Tổng quan ca</Text>
-      <Text style={styles.secondaryTitle}>{shiftLabel}</Text>
-      {!!shiftSummaryError && <Text style={styles.errorBox}>{shiftSummaryError}</Text>}
-
-      <View style={styles.shiftSummary}>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Chi nhánh</Text>
-          <Text style={styles.summaryValue} numberOfLines={1}>{branchName}</Text>
-        </View>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Nhân sự</Text>
-          <Text style={styles.summaryValue} numberOfLines={1}>{cashierName}</Text>
-        </View>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Mở ca</Text>
-          <Text style={styles.summaryValue}>{formatMoney(shift?.openingCash || 0)}</Text>
-        </View>
-      </View>
-
-      <View style={styles.shiftSummary}>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Doanh thu</Text>
-          <Text style={styles.summaryValue}>{formatMoney(shiftSummary?.revenue || 0)}</Text>
-        </View>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Tiền mặt</Text>
-          <Text style={styles.summaryValue}>{formatMoney(shiftSummary?.cashTotal || 0)}</Text>
-        </View>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>QR</Text>
-          <Text style={styles.summaryValue}>{formatMoney(shiftSummary?.qrTotal || 0)}</Text>
-        </View>
-      </View>
-
-      <View style={styles.shiftSummary}>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Đơn đã trả</Text>
-          <Text style={styles.summaryValue}>{shiftSummary?.orderCount || 0}</Text>
-        </View>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Đơn hủy</Text>
-          <Text style={styles.summaryValue}>{shiftSummary?.cancelledOrderCount || 0}</Text>
-        </View>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>QR đang chờ</Text>
-          <Text style={styles.summaryValue}>{shiftSummary?.pendingQrCount || 0}</Text>
-        </View>
-      </View>
-
-      <View style={styles.closeShiftBox}>
-        <View style={styles.field}>
-          <Text style={styles.label}>Tiền mặt thực đếm</Text>
-          <TextInput
-            value={closingCash}
-            onChangeText={setClosingCash}
-            placeholder={String(shiftSummary?.expectedCash || 0)}
-            placeholderTextColor="#94a3b8"
-            keyboardType="number-pad"
-            style={styles.input}
-          />
-        </View>
-        <View style={styles.field}>
-          <Text style={styles.label}>Ghi chú kết ca</Text>
-          <TextInput
-            value={closingNote}
-            onChangeText={setClosingNote}
-            placeholder="Ghi chú nếu lệch tiền"
-            placeholderTextColor="#94a3b8"
-            style={styles.input}
-          />
-        </View>
-        <View style={styles.closeShiftActions}>
-          <Pressable style={styles.smallGhostButton} onPress={refreshCurrentPosRuntime} disabled={busy}>
-            <Text style={styles.smallGhostText}>Tải lại tổng quan</Text>
-          </Pressable>
-          <Pressable style={[styles.closeShiftButton, busy && styles.submitButtonDisabled]} onPress={closeShiftNow} disabled={busy}>
-            <Text style={[styles.closeShiftText, busy && styles.disabledText]}>Kết ca</Text>
-          </Pressable>
-        </View>
-      </View>
-    </View>
-  );
+  const formatShiftMetaTime = (value) => {
+    if (!value) return "--";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "--";
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")} ${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+  };
 
   const renderSettingsWorkspace = () => (
     <View style={styles.secondaryPanel}>
@@ -666,30 +649,25 @@ export default function PosHomeScreen() {
   );
 
   const renderShiftWorkspaceV2 = () => {
-    const expectedCash = Number(shiftSummary?.expectedCash || 0);
-    const countedCash = Number(closingCash || 0);
-    const overCash = Math.max(0, countedCash - expectedCash);
-    const shortCash = Math.max(0, expectedCash - countedCash);
+    const expectedCash = Number(shiftSummary?.expectedCash || shift?.openingCash || 0);
+    const openedAtText = formatShiftMetaTime(shift?.openedAt);
+    const shiftCode = shift?.id ? String(shift.id).slice(0, 8).toUpperCase() : "--";
 
     return (
       <View style={styles.secondaryPanel}>
-        <Text style={styles.label}>Tổng quan ca</Text>
-        <Text style={styles.secondaryTitle}>{shiftLabel}</Text>
         {!!shiftSummaryError && <Text style={styles.errorBox}>{shiftSummaryError}</Text>}
 
         <View style={styles.summaryCard}>
-          <View style={styles.shiftSummary}>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Chi nhánh</Text>
-              <Text style={styles.summaryValue} numberOfLines={1}>{branchName}</Text>
+          <View style={styles.shiftHeroRow}>
+            <View style={styles.shiftHeroMain}>
+              <Text style={styles.sectionCaption}>Ca đang mở</Text>
+              <Text style={styles.shiftHeroTitle} numberOfLines={1}>{branchName}</Text>
+              <Text style={styles.shiftHeroMeta}>Thu ngân: {cashierName}</Text>
+              <Text style={styles.shiftHeroMeta}>Mở lúc {openedAtText} • Mã ca {shiftCode}</Text>
             </View>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Nhân sự</Text>
-              <Text style={styles.summaryValue} numberOfLines={1}>{cashierName}</Text>
-            </View>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Mở ca</Text>
-              <Text style={styles.summaryValue}>{formatMoney(shift?.openingCash || 0)}</Text>
+            <View style={styles.shiftHeroBadge}>
+              <Text style={styles.shiftHeroBadgeValue}>{formatMoney(shift?.openingCash || 0)}</Text>
+              <Text style={styles.shiftHeroBadgeLabel}>Tiền đầu ca</Text>
             </View>
           </View>
         </View>
@@ -706,7 +684,7 @@ export default function PosHomeScreen() {
               <Text style={styles.summaryValue}>{formatMoney(shiftSummary?.cashTotal || 0)}</Text>
             </View>
             <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>QR</Text>
+              <Text style={styles.summaryLabel}>Chuyển khoản</Text>
               <Text style={styles.summaryValue}>{formatMoney(shiftSummary?.qrTotal || 0)}</Text>
             </View>
           </View>
@@ -724,7 +702,7 @@ export default function PosHomeScreen() {
               <Text style={styles.summaryValue}>{shiftSummary?.cancelledOrderCount || 0}</Text>
             </View>
             <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>QR đang chờ</Text>
+              <Text style={styles.summaryLabel}>CK đang chờ</Text>
               <Text style={styles.summaryValue}>{shiftSummary?.pendingQrCount || 0}</Text>
             </View>
           </View>
@@ -732,46 +710,26 @@ export default function PosHomeScreen() {
 
         <View style={styles.closeShiftBox}>
           <Text style={styles.sectionCaption}>Chốt ca</Text>
-          <View style={styles.shiftSummary}>
+          <View style={styles.shiftClosingPreview}>
             <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Tiền mặt hệ thống</Text>
+              <Text style={styles.summaryLabel}>Tiền mặt dự kiến</Text>
               <Text style={styles.summaryValue}>{formatMoney(expectedCash)}</Text>
             </View>
             <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Lệch dư</Text>
-              <Text style={styles.summaryValue}>{formatMoney(overCash)}</Text>
+              <Text style={styles.summaryLabel}>CK chưa xử lý</Text>
+              <Text style={styles.summaryValue}>{shiftSummary?.pendingQrCount || 0}</Text>
             </View>
             <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Lệch thiếu</Text>
-              <Text style={styles.summaryValue}>{formatMoney(shortCash)}</Text>
+              <Text style={styles.summaryLabel}>Đơn hủy</Text>
+              <Text style={styles.summaryValue}>{shiftSummary?.cancelledOrderCount || 0}</Text>
             </View>
           </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Tiền mặt thực đếm</Text>
-            <TextInput
-              value={closingCash}
-              onChangeText={setClosingCash}
-              placeholder={String(expectedCash)}
-              placeholderTextColor="#94a3b8"
-              keyboardType="number-pad"
-              style={styles.input}
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={styles.label}>Ghi chú kết ca</Text>
-            <TextInput
-              value={closingNote}
-              onChangeText={setClosingNote}
-              placeholder="Ghi chú nếu lệch tiền"
-              placeholderTextColor="#94a3b8"
-              style={styles.input}
-            />
-          </View>
           <View style={styles.closeShiftActions}>
-            <Pressable style={styles.smallGhostButton} onPress={refreshCurrentPosRuntime} disabled={busy}>
-              <Text style={styles.smallGhostText}>Tải lại tổng quan</Text>
-            </Pressable>
-            <Pressable style={[styles.closeShiftButton, busy && styles.submitButtonDisabled]} onPress={closeShiftNow} disabled={busy}>
+            <Pressable
+              style={[styles.closeShiftButton, busy && styles.submitButtonDisabled]}
+              onPress={() => setShiftCloseOpen(true)}
+              disabled={busy}
+            >
               <Text style={[styles.closeShiftText, busy && styles.disabledText]}>Kết ca</Text>
             </Pressable>
           </View>
@@ -921,11 +879,13 @@ export default function PosHomeScreen() {
               paymentSessions={pendingPaymentSessions}
               loading={historyLoading}
               error={historyError}
+              activeShiftId={shift?.id || ""}
               onRefresh={refreshCurrentPosRuntime}
               onOpenPaymentSession={openPaymentSessionFromHistory}
               onCancelPaymentSession={cancelPaymentSessionFromHistory}
               onCancelOrder={cancelRecentOrder}
               onReprintOrder={reprintRecentOrder}
+              onOpenOrderDetail={openRecentOrderDetail}
             />
           )}
           {activeTab === "shift" && renderShiftWorkspaceV2()}
@@ -1011,6 +971,20 @@ export default function PosHomeScreen() {
           setPendingPagerProduct(null);
         }}
         onSelect={handleSelectPager}
+      />
+      <PosShiftCloseModal
+        visible={shiftCloseOpen}
+        shift={shift}
+        summary={shiftSummary}
+        loading={busy}
+        error={shiftSummaryError}
+        onClose={() => setShiftCloseOpen(false)}
+        onConfirm={async (payload) => {
+          const ok = await closeShiftNow(payload);
+          if (ok) {
+            setShiftCloseOpen(false);
+          }
+        }}
       />
       <CashPaymentModal
         visible={cashPaymentOpen}
@@ -1107,6 +1081,53 @@ const styles = StyleSheet.create({
   summaryCard: {
     gap: 8
   },
+  shiftHeroRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 10
+  },
+  shiftHeroMain: {
+    flex: 1,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.subtleSurface,
+    borderRadius: POS_RADIUS.md,
+    padding: 12
+  },
+  shiftHeroTitle: {
+    color: POS_COLORS.heading,
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: "900"
+  },
+  shiftHeroMeta: {
+    color: POS_COLORS.muted,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "800"
+  },
+  shiftHeroBadge: {
+    width: 144,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "#86efac",
+    backgroundColor: POS_COLORS.primarySoft,
+    borderRadius: POS_RADIUS.md,
+    padding: 12,
+    justifyContent: "center"
+  },
+  shiftHeroBadgeValue: {
+    color: POS_COLORS.primaryDark,
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  shiftHeroBadgeLabel: {
+    color: POS_COLORS.primaryDark,
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
   sectionCaption: {
     color: POS_COLORS.muted,
     fontSize: 11,
@@ -1131,6 +1152,27 @@ const styles = StyleSheet.create({
     backgroundColor: POS_COLORS.subtleSurface,
     borderRadius: POS_RADIUS.md,
     padding: 12
+  },
+  shiftClosingPreview: {
+    flexDirection: "row",
+    gap: 8
+  },
+  closeShiftHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    backgroundColor: "#eff6ff",
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  closeShiftHintText: {
+    flex: 1,
+    color: POS_COLORS.slate,
+    fontSize: 12,
+    fontWeight: "800"
   },
   printerStatusCard: {
     gap: 8,
@@ -1179,6 +1221,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     alignItems: "center"
+  },
+  closeShiftGhostButton: {
+    flex: 1,
+    minHeight: 38,
+    borderWidth: 1,
+    borderColor: POS_COLORS.inputBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12
+  },
+  closeShiftGhostText: {
+    color: POS_COLORS.slate,
+    fontSize: 12,
+    fontWeight: "900"
   },
   modeRow: {
     flexDirection: "row",
@@ -1439,6 +1497,87 @@ const styles = StyleSheet.create({
   },
   field: {
     gap: 7
+  },
+  openingShiftPanel: {
+    gap: 10,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.subtleSurface,
+    borderRadius: POS_RADIUS.md,
+    padding: 12
+  },
+  openingCashHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8
+  },
+  openingCashHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  openingCashIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    backgroundColor: POS_COLORS.primarySoft,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  openingCashAction: {
+    minHeight: 34,
+    borderWidth: 1,
+    borderColor: POS_COLORS.inputBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  openingCashActionText: {
+    color: POS_COLORS.slate,
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  openingCashCard: {
+    gap: 6,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    padding: 12
+  },
+  openingCashValue: {
+    color: POS_COLORS.heading,
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  openingCashHint: {
+    color: POS_COLORS.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700"
+  },
+  openingShiftNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    backgroundColor: "#eff6ff",
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  openingShiftNoteText: {
+    flex: 1,
+    color: POS_COLORS.slate,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800"
   },
   label: {
     color: POS_COLORS.muted,

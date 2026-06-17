@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { getCashBreakdownTotal, normalizeCashBreakdown } from "./posCashBreakdownService";
 
 const POS_SHIFT_SELECT = [
   "id",
@@ -8,10 +9,12 @@ const POS_SHIFT_SELECT = [
   "status",
   "cashier_name",
   "opening_cash",
+  "opening_cash_breakdown",
   "opening_note",
   "opened_at",
   "closed_at",
   "closing_cash_counted",
+  "closing_cash_breakdown",
   "closing_note",
   "closing_summary"
 ].join(",");
@@ -55,10 +58,12 @@ function normalizeShift(row = null) {
     status: toText(row.status).toLowerCase(),
     cashierName: toText(row.cashier_name),
     openingCash: Math.max(0, toNumber(row.opening_cash, 0)),
+    openingCashBreakdown: normalizeCashBreakdown(row.opening_cash_breakdown || row.openingCashBreakdown),
     openingNote: toText(row.opening_note),
     openedAt: toText(row.opened_at),
     closedAt: toText(row.closed_at),
     closingCashCounted: Math.max(0, toNumber(row.closing_cash_counted, 0)),
+    closingCashBreakdown: normalizeCashBreakdown(row.closing_cash_breakdown || row.closingCashBreakdown),
     closingNote: toText(row.closing_note),
     closingSummary: getObject(row.closing_summary)
   };
@@ -124,6 +129,7 @@ export async function openPosShift({
   profileId,
   authUserId,
   openingCash = 0,
+  openingCashBreakdown = null,
   openingNote = ""
 }) {
   if (!toText(branchUuid)) {
@@ -150,6 +156,7 @@ export async function openPosShift({
       opened_by_profile_id: toText(profileId) || null,
       opened_by_auth_user_id: toText(authUserId) || null,
       opening_cash: Math.max(0, Math.round(toNumber(openingCash, 0))),
+      opening_cash_breakdown: normalizeCashBreakdown(openingCashBreakdown) || {},
       opening_note: toText(openingNote)
     };
 
@@ -179,6 +186,7 @@ export async function openPosShift({
     status: "open",
     cashierName: toText(cashierName) || "Thu ngân",
     openingCash: Math.max(0, toNumber(openingCash, 0)),
+    openingCashBreakdown: normalizeCashBreakdown(openingCashBreakdown),
     openingNote: toText(openingNote),
     openedAt: new Date().toISOString()
   };
@@ -298,6 +306,7 @@ export async function closePosShift({
   shift = null,
   summary = null,
   closingCashCounted = 0,
+  closingCashBreakdown = null,
   closingNote = "",
   authUserId = ""
 } = {}) {
@@ -312,13 +321,18 @@ export async function closePosShift({
   }
 
   if (!supabase) {
+    const normalizedClosingBreakdown = normalizeCashBreakdown(closingCashBreakdown);
+    const countedCash = normalizedClosingBreakdown
+      ? getCashBreakdownTotal(normalizedClosingBreakdown)
+      : Math.max(0, Math.round(toNumber(closingCashCounted, 0)));
     return {
       ok: true,
       shift: {
         ...normalizedShift,
         status: "closed",
         closedAt: new Date().toISOString(),
-        closingCashCounted: Math.max(0, Math.round(toNumber(closingCashCounted, 0))),
+        closingCashCounted: countedCash,
+        closingCashBreakdown: normalizedClosingBreakdown,
         closingNote: toText(closingNote)
       },
       message: "Đã kết ca POS."
@@ -326,7 +340,10 @@ export async function closePosShift({
   }
 
   const safeSummary = getObject(summary);
-  const countedCash = Math.max(0, Math.round(toNumber(closingCashCounted, 0)));
+  const normalizedClosingBreakdown = normalizeCashBreakdown(closingCashBreakdown);
+  const countedCash = normalizedClosingBreakdown
+    ? getCashBreakdownTotal(normalizedClosingBreakdown)
+    : Math.max(0, Math.round(toNumber(closingCashCounted, 0)));
   const openingCashValue = Math.max(0, toNumber(normalizedShift.openingCash, 0));
   const cashTotal = Math.max(0, toNumber(safeSummary.cashTotal, 0));
   const expectedCash = Math.max(0, toNumber(safeSummary.expectedCash, openingCashValue + cashTotal));
@@ -336,7 +353,7 @@ export async function closePosShift({
     status: "closed",
     closed_by_auth_user_id: toText(authUserId) || null,
     closing_cash_counted: countedCash,
-    closing_cash_breakdown: {},
+    closing_cash_breakdown: normalizedClosingBreakdown || {},
     closing_note: note,
     closed_at: closedAt,
     paid_order_count: Math.max(0, Math.round(toNumber(safeSummary.orderCount, 0))),
@@ -349,11 +366,11 @@ export async function closePosShift({
     cash_refund_snapshot: 0,
     qr_refund_snapshot: 0,
     expected_cash_snapshot: expectedCash,
-    cash_difference: countedCash - expectedCash,
     closing_summary: {
       ...safeSummary,
       openingCash: openingCashValue,
       closingCashCounted: countedCash,
+      closingCashBreakdown: normalizedClosingBreakdown || {},
       closingNote: note,
       expectedCash,
       cashDifference: countedCash - expectedCash,

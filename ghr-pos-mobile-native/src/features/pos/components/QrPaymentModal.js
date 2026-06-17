@@ -25,11 +25,18 @@ export default function QrPaymentModal({
   const identity = draftSession || previewIdentity || {};
   const sessionStatus = String(draftSession?.status || "").trim().toLowerCase();
   const sessionPaid = ["paid", "converting", "converted"].includes(sessionStatus);
+  const canRetryFinalize = sessionPaid && Boolean(errorMessage);
   const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
   const config = getPosQrPaymentConfig(branch);
   const transferContent = draftSession?.paymentReference || buildPosPaymentReference(identity, branch);
   const dialogWidth = getPosDialogWidth(width, 430);
   const qrSize = Math.min(dialogWidth - 72, 190);
+
+  const primaryLabel = processing
+    ? "Đang xử lý..."
+    : canRetryFinalize
+      ? "Chốt lại đơn"
+      : "Xác nhận tay";
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -79,7 +86,9 @@ export default function QrPaymentModal({
 
               {draftSession ? (
                 <View style={styles.statusBox}>
-                  <Text style={styles.statusLabel}>{sessionPaid ? "Đã nhận chuyển khoản" : "Đang chờ thanh toán"}</Text>
+                  <Text style={styles.statusLabel}>
+                    {sessionPaid ? "Đã nhận chuyển khoản" : "Đang chờ thanh toán"}
+                  </Text>
                   <Text style={styles.statusValue} numberOfLines={1}>
                     {draftSession.displayOrderCode || draftSession.orderCode || draftSession.paymentReference}
                   </Text>
@@ -99,7 +108,7 @@ export default function QrPaymentModal({
                   >
                     <Text style={styles.cancelText}>Hủy QR</Text>
                   </Pressable>
-                  {sessionPaid ? (
+                  {sessionPaid && !canRetryFinalize ? (
                     <View style={[styles.primaryButton, styles.primaryWaiting]}>
                       <Text style={styles.primaryWaitingText}>Đang chốt đơn...</Text>
                     </View>
@@ -110,7 +119,7 @@ export default function QrPaymentModal({
                       onPress={onConfirmPaid}
                     >
                       <Text style={[styles.primaryText, processing && styles.disabledText]}>
-                        {processing ? "Đang xử lý..." : "Xác nhận tay"}
+                        {primaryLabel}
                       </Text>
                     </Pressable>
                   )}
