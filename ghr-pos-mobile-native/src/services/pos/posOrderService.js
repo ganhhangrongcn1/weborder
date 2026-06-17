@@ -1,5 +1,6 @@
 import { createPosOrderIdentity } from "../../shared/pos/posOrderIdentity";
 import { supabase } from "../supabase/client";
+import { applyPosOrderLoyaltyMobile } from "./posLoyaltyService";
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -163,6 +164,7 @@ export async function createPosTakeawayOrderMobile({
   const voucherDiscountAmount = Math.max(0, toNumber(promoDiscount || totals.voucherDiscount, 0));
   const pointsSpent = Math.max(0, Math.floor(toNumber(pointsDiscount, 0)));
   const pointDiscountAmount = Math.max(0, toNumber(pointsDiscountAmount || totals.pointsDiscount, 0));
+  const normalizedOrderStatus = "pending_zalo";
   const displayCustomerName = toText(customerName) || `Khách thẻ ${pager}`;
   const displayCustomerPhone = toText(customerPhone);
   const branchInfo = normalizeBranchForOrder(branch || {});
@@ -219,7 +221,7 @@ export async function createPosTakeawayOrderMobile({
       customer_name: displayCustomerName,
       fulfillment_type: "pickup",
       payment_method: paymentMethod,
-      status: "pending_zalo",
+      status: normalizedOrderStatus,
       subtotal,
       shipping_fee: 0,
       original_shipping_fee: 0,
@@ -273,6 +275,24 @@ export async function createPosTakeawayOrderMobile({
       return { ok: false, message: itemResult.message || "Không tạo được món trong đơn POS." };
     }
 
+    let loyaltyWarning = "";
+    try {
+      await applyPosOrderLoyaltyMobile({
+        phone: displayCustomerPhone,
+        orderId: orderIdentity.orderCode,
+        amount: totalAmount,
+        createdAt,
+        orderStatus: normalizedOrderStatus,
+        pointsDiscount: pointsSpent,
+        promoSource,
+        promoVoucherId,
+        promoCode,
+        loyaltyRule: safeRedeemRule
+      });
+    } catch (error) {
+      loyaltyWarning = ` Đơn đã tạo nhưng chưa đồng bộ được điểm loyalty: ${error?.message || "kiểm tra RPC apply_loyalty_event."}`;
+    }
+
     return {
       ok: true,
       order: {
@@ -280,7 +300,7 @@ export async function createPosTakeawayOrderMobile({
         orderCode: orderIdentity.orderCode,
         displayOrderCode: orderIdentity.displayOrderCode
       },
-      message: `Đã tạo đơn ${orderIdentity.displayOrderCode}.`
+      message: `Đã tạo đơn ${orderIdentity.displayOrderCode}.${loyaltyWarning}`
     };
   }
 
