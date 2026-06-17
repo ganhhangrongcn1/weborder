@@ -1,5 +1,5 @@
 import React, { memo } from "react";
-import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { buildVoucherSelectionKey } from "../../../shared/pos/posLoyalty";
 import { POS_COLORS, POS_RADIUS } from "../../../styles/posTheme";
@@ -7,6 +7,36 @@ import { formatMoney } from "../../../utils/format";
 
 function toDigits(value = "") {
   return String(value || "").replace(/\D+/g, "").slice(0, 11);
+}
+
+function StatCell({ label, value }) {
+  return (
+    <View style={styles.statCell}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function VoucherButton({ voucher, active, disabled, onPress }) {
+  return (
+    <Pressable
+      style={[
+        styles.voucherChip,
+        active && styles.voucherChipActive,
+        disabled && styles.voucherChipDisabled
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Text style={[styles.voucherTitle, active && styles.voucherTitleActive]} numberOfLines={1}>
+        {voucher.title || voucher.name || voucher.code || "Voucher"}
+      </Text>
+      <Text style={[styles.voucherMeta, active && styles.voucherMetaActive]} numberOfLines={1}>
+        {voucher.conditionText || voucher.code || "Áp dụng tại quầy"}
+      </Text>
+    </Pressable>
+  );
 }
 
 const CustomerLookupPanel = memo(function CustomerLookupPanel({
@@ -19,171 +49,141 @@ const CustomerLookupPanel = memo(function CustomerLookupPanel({
   selectedVoucherId,
   setSelectedVoucherId,
   pointsInput,
-  setPointsInput,
-  onClear,
-  compact = false
+  setPointsInput
 }) {
-  const { width } = useWindowDimensions();
   const customer = lookup?.result;
+  const stats = customer?.stats || {};
   const vouchers = loyaltyBenefit?.loyaltyVouchers || [];
-  const pointSuggestions = loyaltyBenefit?.pointSuggestions || [];
-  const hasBenefit = Boolean(
-    (loyaltyBenefit?.voucherDiscount || 0) > 0 || (loyaltyBenefit?.pointsDiscount || 0) > 0
-  );
-  const horizontalFields = compact && width >= 360;
-  const statusText = lookup?.loading
-    ? "Đang tra khách..."
-    : lookup?.error
-      ? lookup.error
-      : customer
-        ? customer.registeredCustomer
-          ? "Đã nhận diện thành viên"
-          : "Đã nhận diện khách vãng lai"
-        : customerPhone
-          ? "Đã nhập SĐT"
-          : "Chưa nhập SĐT";
+  const visibleVouchers = vouchers.slice(0, 2);
+  const pointSuggestions = (loyaltyBenefit?.pointSuggestions || []).slice(0, 3);
+  const availablePoints = Number(loyaltyBenefit?.availablePoints || 0);
+  const usablePoints = Number(loyaltyBenefit?.usablePoints || 0);
+  const pointSpendStep = Math.max(1, Number(loyaltyBenefit?.pointSpendStep || 1000));
+  const discountTotal = Number(loyaltyBenefit?.voucherDiscount || 0) + Number(loyaltyBenefit?.pointsDiscount || 0);
+  const customerTitle = customer?.customerStatusTitle || customer?.customerName || "";
+  const customerLabel = customer?.customerStatusLabel || (customer?.registeredCustomer ? "Khách thành viên" : "SĐT mới");
+  const customerDetail = customer?.customerStatusDetail || "";
+  const normalizePointInput = () => {
+    const rawPoints = Number(String(pointsInput || "").replace(/\D/g, ""));
+    const normalizedPoints = Math.min(
+      usablePoints,
+      Math.floor(Math.max(0, rawPoints) / pointSpendStep) * pointSpendStep
+    );
+    setPointsInput(normalizedPoints > 0 ? String(normalizedPoints) : "");
+  };
 
   return (
-    <View style={[styles.panel, compact && styles.panelCompact]}>
-      <View style={styles.head}>
-        <View style={styles.flexOne}>
-          {compact ? (
-            <View style={styles.compactLabels}>
-              <Text style={styles.compactLabel}>Tên khách</Text>
-              <Text style={styles.compactLabel}>SĐT</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.eyebrow}>Khách hàng</Text>
-              <Text style={styles.title}>Thông tin và loyalty</Text>
-            </>
-          )}
+    <View style={styles.panel}>
+      <View style={styles.inputRow}>
+        <View style={styles.inputField}>
+          <Text style={styles.fieldLabel}>Tên khách</Text>
+          <TextInput
+            value={customerName}
+            onChangeText={setCustomerName}
+            placeholder="Tên khách"
+            placeholderTextColor="#94a3b8"
+            style={styles.input}
+          />
         </View>
-        <Pressable style={styles.clearButton} onPress={onClear} disabled={!customerName && !customerPhone}>
-          <Text style={styles.clearText}>Xóa</Text>
-        </Pressable>
+        <View style={styles.inputField}>
+          <Text style={styles.fieldLabel}>Số điện thoại</Text>
+          <TextInput
+            value={customerPhone}
+            onChangeText={(value) => setCustomerPhone(toDigits(value))}
+            placeholder="Số điện thoại"
+            placeholderTextColor="#94a3b8"
+            keyboardType="number-pad"
+            maxLength={11}
+            style={styles.input}
+          />
+        </View>
       </View>
 
-      <View style={[styles.inputGrid, horizontalFields && styles.inputRow]}>
-        <TextInput
-          value={customerName}
-          onChangeText={setCustomerName}
-          placeholder="Tên khách"
-          placeholderTextColor="#94a3b8"
-          style={[styles.input, horizontalFields && styles.inputHalf]}
-        />
-        <TextInput
-          value={customerPhone}
-          onChangeText={(value) => setCustomerPhone(toDigits(value))}
-          placeholder="Số điện thoại"
-          placeholderTextColor="#94a3b8"
-          keyboardType="number-pad"
-          maxLength={11}
-          style={[styles.input, horizontalFields && styles.inputHalf]}
-        />
-      </View>
-
-      <View
-        style={[
-          styles.statusBox,
-          lookup?.error && styles.statusError,
-          customer && styles.statusReady
-        ]}
-      >
-        <Text
-          style={[
-            styles.statusText,
-            lookup?.error && styles.statusErrorText,
-            customer && styles.statusReadyText
-          ]}
-        >
-          {statusText}
-        </Text>
-      </View>
-
-      {!compact && customer ? (
-        <View style={styles.statsGrid}>
-          <View style={styles.statCell}>
-            <Text style={styles.statLabel}>Tổng đơn</Text>
-            <Text style={styles.statValue}>{Number(customer.stats?.totalOrders || 0)}</Text>
+      {customer ? (
+        <View style={styles.summaryCard}>
+          <View style={styles.cardHead}>
+            <View style={styles.flexOne}>
+              <Text style={styles.cardEyebrow}>Tổng hợp theo SĐT</Text>
+              <Text style={styles.cardTitle} numberOfLines={1}>
+                {customerTitle || customerLabel}
+              </Text>
+              <Text style={styles.cardSubTitle} numberOfLines={1}>{customerLabel}</Text>
+            </View>
+            <View style={styles.orderCountBox}>
+              <Text style={styles.cardEyebrow}>Tổng đơn</Text>
+              <Text style={styles.orderCount}>{Number(stats.totalOrders || 0)}</Text>
+            </View>
           </View>
-          <View style={styles.statCell}>
-            <Text style={styles.statLabel}>Tổng mua</Text>
-            <Text style={styles.statValue}>{formatMoney(customer.stats?.totalSpent || 0)}</Text>
+          <View style={styles.statsGrid}>
+            <StatCell label="Tổng mua" value={formatMoney(stats.totalSpent || 0)} />
+            <StatCell label="Đã tích" value={`${Number(stats.claimedPoints || 0).toLocaleString("vi-VN")} điểm`} />
+            <StatCell label="Chờ tích" value={`${Number(stats.pendingPoints || 0).toLocaleString("vi-VN")} điểm`} />
           </View>
-          <View style={styles.statCell}>
-            <Text style={styles.statLabel}>Điểm</Text>
-            <Text style={styles.statValue}>
-              {Number(customer.loyalty?.totalPoints || 0).toLocaleString("vi-VN")}
-            </Text>
-          </View>
-          <View style={styles.statCell}>
-            <Text style={styles.statLabel}>Voucher</Text>
-            <Text style={styles.statValue}>{Number(customer.availableVouchers?.length || 0)}</Text>
-          </View>
+          {!!customerDetail && <Text style={styles.customerDetail} numberOfLines={1}>{customerDetail}</Text>}
         </View>
       ) : null}
 
-      {!compact && customer ? (
+      {customer ? (
         <View style={styles.benefitBox}>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Ưu đãi loyalty</Text>
-            {hasBenefit ? (
-              <Text style={styles.discountText}>
-                -{formatMoney((loyaltyBenefit?.voucherDiscount || 0) + (loyaltyBenefit?.pointsDiscount || 0))}
-              </Text>
-            ) : null}
+          <View style={styles.cardHead}>
+            <View style={styles.flexOne}>
+              <Text style={styles.cardEyebrow}>Ưu đãi khách hàng</Text>
+              <Text style={styles.cardTitle} numberOfLines={1}>{customer.customerName || customerLabel}</Text>
+            </View>
+            <View style={styles.orderCountBox}>
+              <Text style={styles.cardEyebrow}>Đã giảm</Text>
+              <Text style={styles.discountText}>{formatMoney(discountTotal)}</Text>
+            </View>
           </View>
 
-          {vouchers.length ? (
-            <View style={styles.voucherList}>
-              {vouchers.map((voucher) => {
-                const voucherKey = buildVoucherSelectionKey(voucher);
-                const active = selectedVoucherId === voucherKey;
-                const disabled = Number(voucher.minOrder || 0) > Number(loyaltyBenefit?.subtotal || 0);
-                return (
-                  <Pressable
-                    key={voucherKey}
-                    style={[
-                      styles.voucherChip,
-                      active && styles.voucherChipActive,
-                      disabled && styles.voucherChipDisabled
-                    ]}
-                    onPress={() => setSelectedVoucherId(active ? "" : voucherKey)}
-                    disabled={disabled}
-                  >
-                    <Text style={[styles.voucherTitle, active && styles.voucherTitleActive]} numberOfLines={1}>
-                      {voucher.title || voucher.code || "Voucher"}
-                    </Text>
-                    <Text style={[styles.voucherMeta, active && styles.voucherMetaActive]} numberOfLines={1}>
-                      {voucher.conditionText || "Áp dụng tại quầy"}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+          <View style={styles.inlineSection}>
+            <View style={styles.inlineHead}>
+              <Text style={styles.sectionTitle}>Voucher loyalty</Text>
+              <Text style={styles.sectionCount}>{vouchers.length}</Text>
             </View>
-          ) : (
-            <Text style={styles.emptyBenefit}>Khách chưa có voucher loyalty khả dụng.</Text>
-          )}
+            {visibleVouchers.length ? (
+              <View style={styles.voucherList}>
+                {visibleVouchers.map((voucher) => {
+                  const voucherKey = buildVoucherSelectionKey(voucher);
+                  const active = selectedVoucherId === voucherKey;
+                  const disabled = Number(voucher.minOrder || 0) > Number(loyaltyBenefit?.subtotal || 0);
+                  return (
+                    <VoucherButton
+                      key={voucherKey}
+                      voucher={voucher}
+                      active={active}
+                      disabled={disabled}
+                      onPress={() => setSelectedVoucherId(active ? "" : voucherKey)}
+                    />
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={styles.emptyBenefit}>Chưa có voucher loyalty khả dụng.</Text>
+            )}
+          </View>
 
           <View style={styles.pointCard}>
             <View style={styles.pointRow}>
               <View style={styles.pointCopy}>
                 <Text style={styles.pointLabel}>Dùng điểm</Text>
-                <Text style={styles.pointHint}>
-                  Còn {Number(loyaltyBenefit?.availablePoints || 0).toLocaleString("vi-VN")} điểm
-                </Text>
+                <Text style={styles.pointHint}>Còn {availablePoints.toLocaleString("vi-VN")} điểm</Text>
               </View>
+              {Number(pointsInput || 0) > 0 ? (
+                <Pressable style={styles.clearPointsButton} onPress={() => setPointsInput("")}>
+                  <Text style={styles.clearPointsText}>Hủy dùng điểm</Text>
+                </Pressable>
+              ) : null}
               <TextInput
                 value={pointsInput}
-                onChangeText={setPointsInput}
+                onChangeText={(value) => setPointsInput(toDigits(value))}
                 placeholder="0"
                 placeholderTextColor="#94a3b8"
                 keyboardType="number-pad"
+                onEndEditing={normalizePointInput}
                 style={styles.pointInput}
               />
             </View>
-
             {pointSuggestions.length ? (
               <View style={styles.suggestionList}>
                 {pointSuggestions.map((suggestion) => (
@@ -192,7 +192,7 @@ const CustomerLookupPanel = memo(function CustomerLookupPanel({
                     style={styles.suggestionChip}
                     onPress={() => setPointsInput(String(suggestion.points))}
                   >
-                    <Text style={styles.suggestionText}>
+                    <Text style={styles.suggestionText} numberOfLines={1}>
                       {suggestion.label} · {Number(suggestion.points || 0).toLocaleString("vi-VN")} điểm
                     </Text>
                   </Pressable>
@@ -210,93 +210,44 @@ export default CustomerLookupPanel;
 
 const styles = StyleSheet.create({
   panel: {
-    gap: 10,
-    borderWidth: 1,
-    borderColor: POS_COLORS.border,
-    backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
-    padding: 12
-  },
-  panelCompact: {
-    paddingVertical: 12
-  },
-  head: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12
-  },
-  flexOne: {
-    flex: 1
-  },
-  eyebrow: {
-    color: POS_COLORS.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    textTransform: "uppercase"
-  },
-  title: {
-    marginTop: 2,
-    color: POS_COLORS.heading,
-    fontSize: 17,
-    fontWeight: "900"
-  },
-  compactLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10
-  },
-  compactLabel: {
-    flex: 1,
-    color: POS_COLORS.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    textTransform: "uppercase"
-  },
-  clearButton: {
-    minWidth: 62,
-    minHeight: 34,
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    backgroundColor: POS_COLORS.dangerSoft,
-    borderRadius: POS_RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 10
-  },
-  clearText: {
-    color: POS_COLORS.danger,
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  inputGrid: {
-    gap: 10
+    gap: 8
   },
   inputRow: {
     flexDirection: "row",
     gap: 10
   },
-  inputHalf: {
-    flex: 1
+  inputField: {
+    flex: 1,
+    gap: 5
+  },
+  fieldLabel: {
+    color: POS_COLORS.muted,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase"
   },
   input: {
-    minHeight: 42,
+    minHeight: 38,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 12,
+    paddingHorizontal: 11,
     color: POS_COLORS.heading,
     fontSize: 13,
     fontWeight: "800"
   },
   statusBox: {
+    minHeight: 40,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.subtleSurface,
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10
+    paddingHorizontal: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
   },
   statusReady: {
     borderColor: "#bbf7d0",
@@ -306,9 +257,18 @@ const styles = StyleSheet.create({
     borderColor: "#fecaca",
     backgroundColor: "#fef2f2"
   },
+  statusCopy: {
+    flex: 1
+  },
   statusText: {
     color: POS_COLORS.muted,
     fontSize: 12,
+    fontWeight: "900"
+  },
+  tierText: {
+    marginTop: 2,
+    color: POS_COLORS.slate,
+    fontSize: 11,
     fontWeight: "700"
   },
   statusReadyText: {
@@ -317,66 +277,138 @@ const styles = StyleSheet.create({
   statusErrorText: {
     color: POS_COLORS.danger
   },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
-  statCell: {
-    minWidth: "47%",
-    flexGrow: 1,
+  clearInline: {
+    minHeight: 30,
     borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
-    backgroundColor: POS_COLORS.subtleSurface,
+    borderColor: "#fecaca",
+    backgroundColor: POS_COLORS.dangerSoft,
+    borderRadius: POS_RADIUS.sm,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  clearInlineText: {
+    color: POS_COLORS.danger,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  summaryCard: {
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    backgroundColor: "#eff6ff",
     borderRadius: POS_RADIUS.md,
     padding: 10
   },
+  benefitBox: {
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    backgroundColor: "#eff6ff",
+    borderRadius: POS_RADIUS.md,
+    padding: 10
+  },
+  cardHead: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  flexOne: {
+    flex: 1
+  },
+  cardEyebrow: {
+    color: POS_COLORS.muted,
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  cardTitle: {
+    marginTop: 3,
+    color: POS_COLORS.heading,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  cardSubTitle: {
+    marginTop: 2,
+    color: POS_COLORS.primaryDark,
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  customerDetail: {
+    color: POS_COLORS.slate,
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  orderCountBox: {
+    alignItems: "flex-end",
+    minWidth: 78
+  },
+  orderCount: {
+    marginTop: 3,
+    color: POS_COLORS.heading,
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  discountText: {
+    marginTop: 3,
+    color: POS_COLORS.heading,
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  statsGrid: {
+    flexDirection: "row",
+    gap: 7
+  },
+  statCell: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 9,
+    paddingVertical: 8
+  },
   statLabel: {
     color: POS_COLORS.muted,
-    fontSize: 11,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     textTransform: "uppercase"
   },
   statValue: {
     marginTop: 4,
     color: POS_COLORS.heading,
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: "900"
   },
-  benefitBox: {
-    gap: 10,
-    borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
-    backgroundColor: POS_COLORS.subtleSurface,
-    borderRadius: POS_RADIUS.md,
-    padding: 10
+  inlineSection: {
+    gap: 7
   },
-  sectionHead: {
+  inlineHead: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8
+    justifyContent: "space-between"
   },
   sectionTitle: {
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "900"
   },
-  discountText: {
-    color: POS_COLORS.primaryDark,
-    fontSize: 14,
+  sectionCount: {
+    color: POS_COLORS.muted,
+    fontSize: 12,
     fontWeight: "900"
   },
   voucherList: {
-    gap: 8
+    gap: 6
   },
   voucherChip: {
-    gap: 4,
+    gap: 3,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    paddingHorizontal: 9,
+    paddingVertical: 8
   },
   voucherChipActive: {
     borderColor: "#86efac",
@@ -395,24 +427,31 @@ const styles = StyleSheet.create({
   },
   voucherMeta: {
     color: POS_COLORS.slate,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "700"
   },
   voucherMetaActive: {
     color: POS_COLORS.primaryDark
   },
   emptyBenefit: {
-    color: POS_COLORS.muted,
-    fontSize: 12,
-    fontWeight: "700"
-  },
-  pointCard: {
-    gap: 10,
     borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
+    borderStyle: "dashed",
+    borderColor: "#dbeafe",
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    paddingVertical: 8,
+    color: POS_COLORS.muted,
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  pointCard: {
+    gap: 7,
+    borderWidth: 1,
+    borderColor: "#dbeafe",
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    padding: 9
   },
   pointRow: {
     flexDirection: "row",
@@ -422,6 +461,21 @@ const styles = StyleSheet.create({
   pointCopy: {
     flex: 1,
     gap: 2
+  },
+  clearPointsButton: {
+    minHeight: 36,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    backgroundColor: POS_COLORS.dangerSoft,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  clearPointsText: {
+    color: POS_COLORS.danger,
+    fontSize: 11,
+    fontWeight: "900"
   },
   pointLabel: {
     color: POS_COLORS.heading,
@@ -434,32 +488,35 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   pointInput: {
-    minWidth: 96,
-    minHeight: 40,
+    minWidth: 86,
+    minHeight: 36,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     color: POS_COLORS.heading,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "900",
     textAlign: "right"
   },
   suggestionList: {
-    gap: 8
+    flexDirection: "row",
+    gap: 6
   },
   suggestionChip: {
+    flex: 1,
     borderWidth: 1,
     borderColor: "#bbf7d0",
     backgroundColor: "#f0fdf4",
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10
+    paddingHorizontal: 8,
+    paddingVertical: 7
   },
   suggestionText: {
     color: POS_COLORS.primaryDark,
-    fontSize: 11,
-    fontWeight: "800"
+    fontSize: 10,
+    fontWeight: "800",
+    textAlign: "center"
   }
 });

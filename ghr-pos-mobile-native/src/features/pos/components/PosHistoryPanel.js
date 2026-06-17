@@ -3,7 +3,6 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
-import PosIcon from "./PosIcon";
 import PosOrderDetailModal from "./PosOrderDetailModal";
 
 const STATUS_FILTERS = [
@@ -137,7 +136,11 @@ function OrderCard({ order, loading, onOpen }) {
 
 function SessionCard({ session, loading, onOpen, onCancel }) {
   return (
-    <View style={styles.card}>
+    <Pressable
+      style={({ pressed }) => [styles.card, styles.sessionCard, pressed && styles.cardPressed]}
+      onPress={() => onOpen?.(session)}
+      disabled={loading}
+    >
       <View style={styles.cardHead}>
         <View style={styles.flexOne}>
           <Text style={styles.rowTitle} numberOfLines={1}>
@@ -160,23 +163,17 @@ function SessionCard({ session, loading, onOpen, onCancel }) {
         </View>
       </View>
 
-      <View style={styles.cardActions}>
+      <View style={styles.inlineActions}>
+        <Text style={styles.tapHint}>Bấm để mở QR</Text>
         <Pressable
-          style={[styles.actionButton, styles.primaryActionButton]}
-          onPress={() => onOpen?.(session)}
-          disabled={loading}
-        >
-          <Text style={[styles.primaryActionText, loading && styles.disabledText]}>Mở QR</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.actionButton, styles.dangerActionButton]}
+          style={styles.cancelPill}
           onPress={() => onCancel?.(session)}
           disabled={loading}
         >
-          <Text style={[styles.dangerActionText, loading && styles.disabledText]}>Hủy</Text>
+          <Text style={[styles.dangerActionText, loading && styles.disabledText]}>Hủy QR</Text>
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -221,6 +218,17 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
     )).length,
     [paymentSessions]
   );
+  const historyRecords = useMemo(
+    () => [
+      ...filteredPaymentSessions.map((session) => ({ kind: "session", id: `session-${session.id}`, session })),
+      ...filteredOrders.map((order) => ({ kind: "order", id: `order-${order.id}`, order }))
+    ],
+    [filteredOrders, filteredPaymentSessions]
+  );
+  const activeRangeLabel = RANGE_FILTERS.find((filter) => filter.id === rangeFilter)?.label || "Ca này";
+  const toggleRangeFilter = () => {
+    setRangeFilter((current) => (current === "shift" ? "today" : "shift"));
+  };
 
   const handleOpenDetail = async (order) => {
     if (!order?.id || !onOpenOrderDetail) return;
@@ -244,94 +252,68 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
         contentContainerStyle={styles.panel}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.head}>
-          <View style={styles.titleRow}>
-            <View style={styles.titleIcon}>
-              <PosIcon name="history" size={16} color={POS_COLORS.primaryDark} />
-            </View>
-            <View style={styles.titleCopy}>
-              <Text style={styles.eyebrow}>Vận hành</Text>
-              <Text style={styles.title}>QR và lịch sử đơn</Text>
-            </View>
+        <View style={styles.toolbar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+            style={styles.filterScroll}
+          >
+            {STATUS_FILTERS.map((filter) => {
+              const active = statusFilter === filter.id;
+              const label = filter.id === "pending_payment" && pendingPaymentCount > 0
+                ? `${filter.label} (${pendingPaymentCount})`
+                : filter.label;
+              return (
+                <Pressable
+                  key={filter.id}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                  onPress={() => setStatusFilter(filter.id)}
+                >
+                  <Text style={[styles.filterText, active && styles.filterTextActive]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          <View style={styles.toolbarActions}>
+            <Pressable style={styles.rangeSelect} onPress={toggleRangeFilter}>
+              <Text style={styles.rangeText}>{activeRangeLabel}</Text>
+              <Text style={styles.chevron}>⌄</Text>
+            </Pressable>
+            <Pressable style={styles.refreshButton} onPress={onRefresh} disabled={loading}>
+              <Text style={styles.refreshText}>{loading ? "Đang tải" : "Tải lại"}</Text>
+            </Pressable>
           </View>
-          <Pressable style={styles.refreshButton} onPress={onRefresh} disabled={loading}>
-            <Text style={styles.refreshText}>{loading ? "Đang tải" : "Làm mới"}</Text>
-          </Pressable>
         </View>
-
-        <View style={styles.rangeRow}>
-          {RANGE_FILTERS.map((filter) => {
-            const active = rangeFilter === filter.id;
-            return (
-              <Pressable
-                key={filter.id}
-                style={[styles.rangeButton, active && styles.rangeButtonActive]}
-                onPress={() => setRangeFilter(filter.id)}
-              >
-                <Text style={[styles.rangeText, active && styles.rangeTextActive]}>{filter.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          {STATUS_FILTERS.map((filter) => {
-            const active = statusFilter === filter.id;
-            const label = filter.id === "pending_payment" && pendingPaymentCount > 0
-              ? `${filter.label} (${pendingPaymentCount})`
-              : filter.label;
-            return (
-              <Pressable
-                key={filter.id}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-                onPress={() => setStatusFilter(filter.id)}
-              >
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
 
         {!!error && <Text style={styles.errorText}>{error}</Text>}
 
-        <View style={styles.section}>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>QR đang chờ</Text>
-            <Text style={styles.countText}>{filteredPaymentSessions.length}</Text>
-          </View>
-
-          {filteredPaymentSessions.length ? (
-            filteredPaymentSessions.map((session) => (
-              <SessionCard
-                key={session.id}
-                session={session}
-                loading={loading}
-                onOpen={onOpenPaymentSession}
-                onCancel={onCancelPaymentSession}
-              />
+        <View style={styles.historyFrame}>
+          {historyRecords.length ? (
+            historyRecords.map((record) => (
+              record.kind === "session" ? (
+                <SessionCard
+                  key={record.id}
+                  session={record.session}
+                  loading={loading}
+                  onOpen={onOpenPaymentSession}
+                  onCancel={onCancelPaymentSession}
+                />
+              ) : (
+                <OrderCard
+                  key={record.id}
+                  order={record.order}
+                  loading={loading}
+                  onOpen={handleOpenDetail}
+                />
+              )
             ))
           ) : (
-            <Text style={styles.empty}>Không có QR đang chờ.</Text>
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Đơn gần đây</Text>
-            <Text style={styles.countText}>{filteredOrders.length}</Text>
-          </View>
-
-          {filteredOrders.length ? (
-            filteredOrders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                loading={loading}
-                onOpen={handleOpenDetail}
-              />
-            ))
-          ) : (
-            <Text style={styles.empty}>Chưa có đơn POS gần đây.</Text>
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>Không có đơn phù hợp.</Text>
+              <Text style={styles.emptyCopy}>Đổi trạng thái hoặc phạm vi lọc.</Text>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -361,8 +343,29 @@ const styles = StyleSheet.create({
     borderRadius: POS_RADIUS.md
   },
   panel: {
-    gap: 12,
-    padding: 12
+    gap: 10,
+    padding: 8
+  },
+  toolbar: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    padding: 8
+  },
+  filterScroll: {
+    flex: 1,
+    minWidth: 0
+  },
+  toolbarActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
   },
   head: {
     flexDirection: "row",
@@ -415,6 +418,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900"
   },
+  rangeSelect: {
+    minWidth: 110,
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: POS_COLORS.inputBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12
+  },
   rangeRow: {
     flexDirection: "row",
     gap: 8
@@ -442,7 +458,9 @@ const styles = StyleSheet.create({
     color: POS_COLORS.primaryDark
   },
   filterRow: {
-    gap: 8
+    gap: 8,
+    alignItems: "center",
+    paddingRight: 4
   },
   filterChip: {
     minHeight: 34,
@@ -466,6 +484,11 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: POS_COLORS.primaryDark
   },
+  chevron: {
+    color: POS_COLORS.slate,
+    fontSize: 14,
+    fontWeight: "900"
+  },
   errorText: {
     borderWidth: 1,
     borderColor: "#fecaca",
@@ -476,8 +499,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800"
   },
-  section: {
-    gap: 8
+  historyFrame: {
+    flexGrow: 1,
+    minHeight: 430,
+    gap: 8,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    padding: 10
   },
   sectionHead: {
     flexDirection: "row",
@@ -505,7 +536,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
-    backgroundColor: POS_COLORS.subtleSurface,
+    backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     padding: 10
   },
@@ -514,6 +545,10 @@ const styles = StyleSheet.create({
   },
   orderCard: {
     gap: 0
+  },
+  sessionCard: {
+    borderColor: "#bfdbfe",
+    backgroundColor: "#f8fbff"
   },
   cardHead: {
     flexDirection: "row",
@@ -568,6 +603,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8
   },
+  inlineActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: POS_COLORS.softBorder,
+    paddingTop: 8
+  },
   actionButton: {
     flex: 1,
     minHeight: 36,
@@ -594,6 +638,40 @@ const styles = StyleSheet.create({
     color: POS_COLORS.danger,
     fontSize: 11,
     fontWeight: "900"
+  },
+  cancelPill: {
+    minHeight: 30,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    backgroundColor: POS_COLORS.dangerSoft,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  tapHint: {
+    color: POS_COLORS.muted,
+    fontSize: 10,
+    fontWeight: "800"
+  },
+  emptyState: {
+    minHeight: 130,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10
+  },
+  emptyTitle: {
+    color: POS_COLORS.heading,
+    fontSize: 16,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  emptyCopy: {
+    color: POS_COLORS.slate,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center"
   },
   empty: {
     color: POS_COLORS.muted,

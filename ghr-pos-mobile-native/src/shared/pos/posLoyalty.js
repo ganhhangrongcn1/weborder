@@ -7,6 +7,32 @@ function toNumber(value = 0) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function greatestCommonDivisor(a = 1, b = 1) {
+  let x = Math.abs(Math.floor(toNumber(a, 1))) || 1;
+  let y = Math.abs(Math.floor(toNumber(b, 1))) || 1;
+  while (y) {
+    const next = x % y;
+    x = y;
+    y = next;
+  }
+  return x || 1;
+}
+
+function leastCommonMultiple(a = 1, b = 1) {
+  const x = Math.max(1, Math.floor(toNumber(a, 1)));
+  const y = Math.max(1, Math.floor(toNumber(b, 1)));
+  return Math.floor((x * y) / greatestCommonDivisor(x, y));
+}
+
+function getPointSpendStep(redeemPointUnit = 1) {
+  return leastCommonMultiple(redeemPointUnit, 1000);
+}
+
+function roundPointsToSpendStep(points = 0, spendStep = 1000) {
+  const safeStep = Math.max(1, Math.floor(toNumber(spendStep, 1000)));
+  return Math.floor(Math.max(0, Math.floor(toNumber(points, 0))) / safeStep) * safeStep;
+}
+
 function isDateActive(startAt = "", endAt = "", now = new Date()) {
   const start = toText(startAt);
   const end = toText(endAt);
@@ -56,7 +82,9 @@ function buildPointRoundSuggestions(loyaltyBenefit = {}) {
   const availablePoints = Math.max(0, Math.floor(toNumber(loyaltyBenefit.availablePoints, 0)));
   const redeemPointUnit = Math.max(1, Math.floor(toNumber(loyaltyBenefit.redeemPointUnit, 1)));
   const redeemValue = Math.max(1, Math.floor(toNumber(loyaltyBenefit.redeemValue, 1)));
-  const maxUnits = Math.floor(availablePoints / redeemPointUnit);
+  const pointSpendStep = getPointSpendStep(redeemPointUnit);
+  const usablePoints = roundPointsToSpendStep(availablePoints, pointSpendStep);
+  const maxUnits = Math.floor(usablePoints / redeemPointUnit);
   const maxDiscount = Math.min(baseTotal, maxUnits * redeemValue);
   const suggestions = [];
   const seen = new Set();
@@ -68,8 +96,8 @@ function buildPointRoundSuggestions(loyaltyBenefit = {}) {
     if (!remainder || remainder > maxDiscount) return;
 
     const unitCount = Math.ceil(remainder / redeemValue);
-    const points = unitCount * redeemPointUnit;
-    if (!points || points > availablePoints || seen.has(points)) return;
+    const points = roundPointsToSpendStep(unitCount * redeemPointUnit, pointSpendStep);
+    if (!points || points > usablePoints || seen.has(points)) return;
 
     seen.add(points);
     suggestions.push({
@@ -78,10 +106,10 @@ function buildPointRoundSuggestions(loyaltyBenefit = {}) {
     });
   });
 
-  if (availablePoints > 0 && !seen.has(availablePoints)) {
+  if (usablePoints > 0 && !seen.has(usablePoints)) {
     suggestions.push({
       label: "Dùng tối đa",
-      points: availablePoints
+      points: usablePoints
     });
   }
 
@@ -169,6 +197,8 @@ export function buildPosLoyaltyBenefit({
   const availablePoints = Math.max(0, Math.floor(toNumber(loyalty.totalPoints || customer?.totalPoints, 0)));
   const redeemPointUnit = Math.max(1, Math.floor(toNumber(loyaltyRule.redeemPointUnit, 1)));
   const redeemValue = Math.max(1, Math.floor(toNumber(loyaltyRule.redeemValue, 1)));
+  const pointSpendStep = getPointSpendStep(redeemPointUnit);
+  const usablePoints = roundPointsToSpendStep(availablePoints, pointSpendStep);
   const now = new Date();
 
   const loyaltyVouchers = (Array.isArray(customer?.availableVouchers) ? customer.availableVouchers : [])
@@ -183,10 +213,11 @@ export function buildPosLoyaltyBenefit({
   const availableVouchers = [...loyaltyVouchers, ...checkoutVouchers];
   const selectedVoucher = availableVouchers.find((voucher) => buildVoucherSelectionKey(voucher) === selectedVoucherId) || null;
   const voucherDiscount = selectedVoucher ? calculateVoucherDiscount(selectedVoucher, baseSubtotal) : 0;
-  const maxPointUnits = Math.floor(availablePoints / redeemPointUnit);
+  const maxPointUnits = Math.floor(usablePoints / redeemPointUnit);
   const maxPointDiscount = Math.min(Math.max(0, baseSubtotal - voucherDiscount), maxPointUnits * redeemValue);
   const typedPoints = Math.max(0, Math.floor(toNumber(String(pointsInput).replace(/[^\d]/g, ""), 0)));
-  const normalizedPointUnits = Math.min(maxPointUnits, Math.floor(typedPoints / redeemPointUnit));
+  const normalizedTypedPoints = roundPointsToSpendStep(typedPoints, pointSpendStep);
+  const normalizedPointUnits = Math.min(maxPointUnits, Math.floor(normalizedTypedPoints / redeemPointUnit));
   const pointsSpent = normalizedPointUnits * redeemPointUnit;
   const pointsDiscount = Math.min(maxPointDiscount, normalizedPointUnits * redeemValue);
 
@@ -194,6 +225,8 @@ export function buildPosLoyaltyBenefit({
     subtotal: baseSubtotal,
     loyaltyRule,
     availablePoints,
+    usablePoints,
+    pointSpendStep,
     redeemPointUnit,
     redeemValue,
     loyaltyVouchers,

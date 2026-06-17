@@ -1,5 +1,6 @@
 import { createPosOrderIdentity } from "../../shared/pos/posOrderIdentity";
 import { supabase } from "../supabase/client";
+import { ensurePosGuestProfile } from "./posCustomerService";
 import { applyPosOrderLoyaltyMobile } from "./posLoyaltyService";
 
 function toText(value = "") {
@@ -180,6 +181,7 @@ export async function createPosTakeawayOrderMobile({
   );
 
   if (supabase) {
+    let profileWarning = "";
     const metadata = {
       source: "pos",
       channel: "pos",
@@ -241,6 +243,18 @@ export async function createPosTakeawayOrderMobile({
       metadata
     };
 
+    if (displayCustomerPhone) {
+      const profileResult = await ensurePosGuestProfile({
+        phone: displayCustomerPhone,
+        name: customerName || safeCustomerLookup?.customerName || "",
+        source: "pos_mobile",
+        sourceRef: orderIdentity.orderCode
+      });
+      if (!profileResult.ok) {
+        profileWarning = ` Chưa tạo được hồ sơ khách vãng lai: ${profileResult.message || "kiểm tra RPC upsert_customer_stub_profile."}`;
+      }
+    }
+
     const { error: orderError } = await supabase.from("orders").upsert(orderRow, { onConflict: "id" });
     if (orderError) {
       return { ok: false, message: orderError.message || "Không tạo được đơn POS." };
@@ -300,7 +314,7 @@ export async function createPosTakeawayOrderMobile({
         orderCode: orderIdentity.orderCode,
         displayOrderCode: orderIdentity.displayOrderCode
       },
-      message: `Đã tạo đơn ${orderIdentity.displayOrderCode}.${loyaltyWarning}`
+      message: `Đã tạo đơn ${orderIdentity.displayOrderCode}.${profileWarning}${loyaltyWarning}`
     };
   }
 

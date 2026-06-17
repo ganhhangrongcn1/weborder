@@ -18,14 +18,17 @@ export default function PosCustomerSummaryCard({
   onClear
 }) {
   const customer = lookup?.result;
+  const statusDetail = customer?.customerStatusDetail || "";
   const statusText = lookup?.loading
     ? "Đang tra khách..."
     : lookup?.error
       ? lookup.error
       : customer
-        ? customer.registeredCustomer
-          ? "Đã nhận diện thành viên"
-          : "Đã nhận diện khách vãng lai"
+        ? [
+            customer.customerStatusShortLabel ||
+              (customer.registeredCustomer ? "Đã nhận diện thành viên" : "Khách chưa đăng ký"),
+            statusDetail
+          ].filter(Boolean).join(" · ")
         : customerPhone
           ? "Đã nhập SĐT"
           : "Chưa nhập SĐT";

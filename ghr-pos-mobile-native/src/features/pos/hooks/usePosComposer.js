@@ -479,7 +479,18 @@ export default function usePosComposer() {
   useEffect(() => {
     if (!customerPhone) return;
     if (!customerLookup.result?.customerName) return;
-    if (customerName.trim()) return;
+    const currentName = customerName.trim().toLowerCase();
+    const genericNames = new Set([
+      "khách vãng lai",
+      "khach vang lai",
+      "khách cũ",
+      "khach cu",
+      "khách mới",
+      "khach moi",
+      "sđt mới",
+      "sdt moi"
+    ]);
+    if (currentName && !genericNames.has(currentName)) return;
     setCustomerName(customerLookup.result.customerName);
   }, [customerLookup.result?.customerName, customerName, customerPhone]);
 
