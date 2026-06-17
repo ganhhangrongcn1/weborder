@@ -37,6 +37,13 @@ import {
   rememberPosPaymentSession
 } from "../../../services/pos/posPaymentSessionService";
 import { fetchPosCatalogConfig } from "../../../services/pos/posCatalogConfigService";
+import {
+  checkPosSupabaseConnection,
+  getPosOfflineOrderCount,
+  markPosOfflineOrderRetry,
+  readPosOfflineOrderQueue,
+  removePosOfflineOrder
+} from "../../../services/pos/posOfflineOrderQueueService";
 import { fetchPosProducts } from "../../../services/pos/posProductService";
 import { closePosShift, fetchActivePosShift, fetchPosShiftSummary, openPosShift } from "../../../services/pos/posShiftService";
 import { createPosOrderIdentity } from "../../../shared/pos/posOrderIdentity";
@@ -94,6 +101,14 @@ export default function usePosComposer() {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState("");
   const [qrPrintBusy, setQrPrintBusy] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState({
+    checking: false,
+    online: null,
+    message: "Chưa kiểm tra kết nối.",
+    lastCheckedAt: ""
+  });
+  const [offlineOrderCount, setOfflineOrderCount] = useState(0);
+  const [offlineSyncBusy, setOfflineSyncBusy] = useState(false);
 
   const catalog = useMemo(
     () => buildPosCatalog({ products: rawProducts }),
@@ -216,6 +231,93 @@ export default function usePosComposer() {
     return result.summary || null;
   };
 
+  const refreshOfflineOrderCount = async () => {
+    const nextCount = await getPosOfflineOrderCount();
+    setOfflineOrderCount(nextCount);
+    return nextCount;
+  };
+
+  const checkConnectionNow = async () => {
+    setConnectionStatus((current) => ({
+      ...current,
+      checking: true
+    }));
+    const result = await checkPosSupabaseConnection();
+    setConnectionStatus({
+      checking: false,
+      online: Boolean(result.online),
+      warning: Boolean(result.warning),
+      message: result.message || (result.online ? "Kết nối Supabase ổn." : "Đang offline."),
+      lastCheckedAt: new Date().toISOString()
+    });
+    await refreshOfflineOrderCount();
+    return result;
+  };
+
+  const syncOfflineOrdersNow = async ({ silent = false } = {}) => {
+    if (offlineSyncBusy) return { ok: false, synced: 0, remaining: offlineOrderCount };
+
+    const connection = await checkPosSupabaseConnection();
+    setConnectionStatus({
+      checking: false,
+      online: Boolean(connection.online),
+      warning: Boolean(connection.warning),
+      message: connection.message || (connection.online ? "Kết nối Supabase ổn." : "Đang offline."),
+      lastCheckedAt: new Date().toISOString()
+    });
+
+    if (!connection.online) {
+      const count = await refreshOfflineOrderCount();
+      if (!silent) {
+        setShiftMessage(count
+          ? `Đang offline. Còn ${count} đơn lưu tạm trên máy.`
+          : "Đang offline, chưa có đơn lưu tạm.");
+      }
+      return { ok: false, synced: 0, remaining: count };
+    }
+
+    const queue = await readPosOfflineOrderQueue();
+    if (!queue.length) {
+      setOfflineOrderCount(0);
+      if (!silent) setShiftMessage("Không có đơn offline cần đồng bộ.");
+      return { ok: true, synced: 0, remaining: 0 };
+    }
+
+    setOfflineSyncBusy(true);
+    let synced = 0;
+    for (const entry of queue) {
+      const result = await createPosTakeawayOrderMobile({
+        ...(entry.orderPayload || {}),
+        skipOfflineQueue: true
+      });
+
+      if (result.ok && !result.offline) {
+        await removePosOfflineOrder(entry.id);
+        synced += 1;
+      } else {
+        await markPosOfflineOrderRetry(entry.id, result.message || "Chưa đồng bộ được đơn offline.");
+        break;
+      }
+    }
+    setOfflineSyncBusy(false);
+
+    const remaining = await refreshOfflineOrderCount();
+    if (!silent || synced > 0) {
+      setShiftMessage(remaining
+        ? `Đã đồng bộ ${synced} đơn. Còn ${remaining} đơn lưu tạm.`
+        : synced
+          ? `Đã đồng bộ ${synced} đơn offline lên Supabase.`
+          : "Chưa đồng bộ được đơn offline, app sẽ thử lại khi có mạng.");
+    }
+
+    if (synced > 0 && profile?.branchUuid) {
+      await refreshPosRuntime(profile.branchUuid);
+      await refreshShiftSummary(shift);
+    }
+
+    return { ok: remaining === 0, synced, remaining };
+  };
+
   const applyPaymentSessionState = (session) => {
     if (!session?.id) return;
     setQrSession(session);
@@ -317,6 +419,10 @@ export default function usePosComposer() {
       return false;
     }
 
+    if (result.offline) {
+      await refreshOfflineOrderCount();
+    }
+
     let printMessage = "";
     try {
       const receiptText = buildPosCustomerBillText({
@@ -357,8 +463,10 @@ export default function usePosComposer() {
     setQrSession(null);
     setQrPreviewIdentity(null);
     setQrModalOpen(false);
-    await refreshPosRuntime(profile.branchUuid);
-    await refreshShiftSummary(shift);
+    if (!result.offline) {
+      await refreshPosRuntime(profile.branchUuid);
+      await refreshShiftSummary(shift);
+    }
     setShiftMessage(`${result.message || ""}${printMessage}`.trim());
     return true;
   };
@@ -371,6 +479,7 @@ export default function usePosComposer() {
         fetchPosProducts(),
         fetchPosCatalogConfig()
       ]);
+      await refreshOfflineOrderCount();
       if (active) {
         if (productResult.ok) {
           setRawProducts(productResult.products);
@@ -409,6 +518,8 @@ export default function usePosComposer() {
         await refreshShiftSummary(shiftResult.shift);
       }
       await refreshPosRuntime(restored.profile.branchUuid);
+      await checkConnectionNow();
+      await syncOfflineOrdersNow({ silent: true });
 
       const rememberedSessionId = await readRememberedPosPaymentSession(restored.profile.branchUuid);
       if (!active || !rememberedSessionId) return;
@@ -1060,6 +1171,8 @@ export default function usePosComposer() {
   };
 
   const refreshCurrentPosRuntime = async () => {
+    await checkConnectionNow();
+    await syncOfflineOrdersNow({ silent: true });
     await refreshPosRuntime(profile?.branchUuid);
     await refreshShiftSummary(shift);
   };
@@ -1342,6 +1455,9 @@ export default function usePosComposer() {
     if (!result.ok) {
       return;
     }
+    if (result.offline) {
+      await refreshOfflineOrderCount();
+    }
 
     let printMessage = "";
     try {
@@ -1384,8 +1500,10 @@ export default function usePosComposer() {
     setQrSession(null);
     setQrPreviewIdentity(null);
     setQrModalOpen(false);
-    await refreshPosRuntime(profile.branchUuid);
-    await refreshShiftSummary(shift);
+    if (!result.offline) {
+      await refreshPosRuntime(profile.branchUuid);
+      await refreshShiftSummary(shift);
+    }
     setShiftMessage(`${result.message || ""}${printMessage}`.trim());
   };
 
@@ -1449,6 +1567,9 @@ export default function usePosComposer() {
     pendingPaymentSessions,
     historyLoading,
     historyError,
+    connectionStatus,
+    offlineOrderCount,
+    offlineSyncBusy,
     addProduct,
     updateCartItem,
     changeQuantity,
@@ -1462,6 +1583,8 @@ export default function usePosComposer() {
     reprintRecentOrder,
     openRecentOrderDetail,
     refreshCurrentPosRuntime,
+    checkConnectionNow,
+    syncOfflineOrdersNow,
     confirmQrPaidManually,
     printQrReceiptNow,
     createCashOrder,

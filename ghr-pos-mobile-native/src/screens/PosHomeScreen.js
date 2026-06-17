@@ -111,6 +111,9 @@ export default function PosHomeScreen() {
     pendingPaymentSessions,
     historyLoading,
     historyError,
+    connectionStatus,
+    offlineOrderCount,
+    offlineSyncBusy,
     addProduct,
     updateCartItem,
     changeQuantity,
@@ -124,6 +127,8 @@ export default function PosHomeScreen() {
     reprintRecentOrder,
     openRecentOrderDetail,
     refreshCurrentPosRuntime,
+    checkConnectionNow,
+    syncOfflineOrdersNow,
     confirmQrPaidManually,
     printQrReceiptNow,
     createCashOrder,
@@ -756,17 +761,69 @@ export default function PosHomeScreen() {
         <View style={styles.summaryCard}>
           <View style={styles.shiftSummary}>
             <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Tài khoản</Text>
-              <Text style={styles.summaryValue} numberOfLines={1}>{cashierName}</Text>
+              <Text style={styles.summaryLabel}>Chi nhánh</Text>
+              <Text style={styles.summaryValue} numberOfLines={1}>{branchName}</Text>
             </View>
             <View style={styles.summaryCell}>
               <Text style={styles.summaryLabel}>Thẻ đang bận</Text>
               <Text style={styles.summaryValue}>{busyPagers.length} thẻ</Text>
             </View>
             <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Chế độ in</Text>
-              <Text style={styles.summaryValue}>{printerConfig?.mode === "lan" ? "LAN/WiFi" : "USB"}</Text>
+              <Text style={styles.summaryLabel}>Đơn lưu tạm</Text>
+              <Text style={styles.summaryValue}>{offlineOrderCount} đơn</Text>
             </View>
+          </View>
+        </View>
+
+        <View style={styles.closeShiftBox}>
+          <Text style={styles.sectionCaption}>Kết nối & đồng bộ</Text>
+          <View style={styles.printerStatusCard}>
+            <View style={styles.printerStatusHead}>
+              <Text style={styles.printerStatusTitle}>Supabase</Text>
+              <View style={[
+                styles.printerBadge,
+                connectionStatus.online ? styles.printerBadgeReady : styles.printerBadgeIdle
+              ]}>
+                <Text style={[
+                  styles.printerBadgeText,
+                  connectionStatus.online ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle
+                ]}>
+                  {connectionStatus.checking
+                    ? "Đang kiểm tra"
+                    : connectionStatus.online == null
+                      ? "Chưa kiểm tra"
+                      : connectionStatus.online
+                        ? "Online"
+                        : "Offline"}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.placeholderText}>
+              {connectionStatus.message || "Bấm kiểm tra để xem trạng thái kết nối."}
+            </Text>
+            <Text style={styles.noticeText}>
+              {offlineOrderCount
+                ? `${offlineOrderCount} đơn đang lưu tạm trong máy, sẽ đồng bộ khi có mạng.`
+                : "Không có đơn offline đang chờ đồng bộ."}
+            </Text>
+          </View>
+          <View style={styles.closeShiftActions}>
+            <Pressable
+              style={styles.smallGhostButton}
+              onPress={checkConnectionNow}
+              disabled={connectionStatus.checking || offlineSyncBusy}
+            >
+              <Text style={styles.smallGhostText}>Kiểm tra kết nối</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.closeShiftButton, offlineSyncBusy && styles.submitButtonDisabled]}
+              onPress={() => syncOfflineOrdersNow()}
+              disabled={offlineSyncBusy}
+            >
+              <Text style={[styles.closeShiftText, offlineSyncBusy && styles.disabledText]}>
+                {offlineSyncBusy ? "Đang đồng bộ" : "Đồng bộ ngay"}
+              </Text>
+            </Pressable>
           </View>
         </View>
 

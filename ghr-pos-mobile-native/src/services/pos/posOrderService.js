@@ -2,6 +2,10 @@ import { createPosOrderIdentity } from "../../shared/pos/posOrderIdentity";
 import { supabase } from "../supabase/client";
 import { ensurePosGuestProfile } from "./posCustomerService";
 import { applyPosOrderLoyaltyMobile } from "./posLoyaltyService";
+import {
+  isLikelyPosNetworkError,
+  queuePosOfflineOrder
+} from "./posOfflineOrderQueueService";
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -123,6 +127,62 @@ async function replaceOrderItems(orderId = "", itemRows = []) {
   return { ok: true };
 }
 
+function buildOfflineOrderPayload({
+  cart = [],
+  totals = {},
+  pagerNumber = "",
+  customerName = "",
+  customerPhone = "",
+  branch = null,
+  orderNote = "",
+  shift = null,
+  cashierName = "Thu ngân",
+  customerLookup = null,
+  promoDiscount = 0,
+  promoCode = "",
+  promoSource = "",
+  promoVoucherId = "",
+  pointsDiscount = 0,
+  pointsDiscountAmount = 0,
+  pointRedeemRule = null,
+  paymentMethod = "cash",
+  paymentStatus = "paid",
+  paymentAmount = 0,
+  paymentReference = "",
+  paidAt = "",
+  posShiftId = "",
+  paymentMeta = null,
+  orderIdentity = null
+} = {}) {
+  return {
+    cart,
+    totals,
+    pagerNumber,
+    customerName,
+    customerPhone,
+    branch,
+    orderNote,
+    shift,
+    cashierName,
+    customerLookup,
+    promoDiscount,
+    promoCode,
+    promoSource,
+    promoVoucherId,
+    pointsDiscount,
+    pointsDiscountAmount,
+    pointRedeemRule,
+    paymentMethod,
+    paymentStatus,
+    paymentAmount,
+    paymentReference,
+    paidAt,
+    posShiftId,
+    paymentMeta,
+    orderIdentity
+  };
+}
+
 export async function createPosTakeawayOrderMobile({
   cart = [],
   totals = {},
@@ -148,7 +208,8 @@ export async function createPosTakeawayOrderMobile({
   paidAt = "",
   posShiftId = "",
   paymentMeta = null,
-  orderIdentity: providedOrderIdentity = null
+  orderIdentity: providedOrderIdentity = null,
+  skipOfflineQueue = false
 } = {}) {
   const items = normalizeCartForOrder(cart);
   if (!items.length) return { ok: false, message: "Chưa có món trong bill." };
@@ -179,6 +240,75 @@ export async function createPosTakeawayOrderMobile({
     paymentReference ||
     orderIdentity.orderCode
   );
+  const offlinePayload = buildOfflineOrderPayload({
+    cart,
+    totals,
+    pagerNumber: pager,
+    customerName,
+    customerPhone: displayCustomerPhone,
+    branch,
+    orderNote,
+    shift,
+    cashierName,
+    customerLookup: safeCustomerLookup,
+    promoDiscount,
+    promoCode,
+    promoSource,
+    promoVoucherId,
+    pointsDiscount: pointsSpent,
+    pointsDiscountAmount: pointDiscountAmount,
+    pointRedeemRule: safeRedeemRule,
+    paymentMethod,
+    paymentStatus,
+    paymentAmount,
+    paymentReference,
+    paidAt,
+    posShiftId: shiftId,
+    paymentMeta: safePaymentMeta,
+    orderIdentity
+  });
+
+  const queueOfflineOrder = async (reason = "") => {
+    if (!skipOfflineQueue) {
+      await queuePosOfflineOrder(offlinePayload, reason);
+    }
+    const order = {
+      id: orderIdentity.orderCode,
+      orderCode: orderIdentity.orderCode,
+      displayOrderCode: orderIdentity.displayOrderCode,
+      customerName: displayCustomerName,
+      customerPhone: displayCustomerPhone,
+      pagerNumber: pager,
+      branchName: branchInfo.branchName,
+      orderNote: toText(orderNote),
+      shiftId,
+      cashierName: toText(cashierName),
+      paymentMethod,
+      paymentStatus,
+      paymentAmount: Math.max(0, toNumber(paymentAmount || totalAmount)),
+      paymentReference: toText(paymentReference),
+      paidAt: toText(paidAt) || createdAt,
+      subtotal,
+      promoDiscount: voucherDiscountAmount,
+      promoCode: toText(promoCode).toUpperCase(),
+      promoSource: toText(promoSource),
+      promoVoucherId: toText(promoVoucherId),
+      pointsDiscount: pointsSpent,
+      pointsDiscountAmount: pointDiscountAmount,
+      pointRedeemRule: safeRedeemRule,
+      totalAmount,
+      items
+    };
+
+    return {
+      ok: true,
+      offline: true,
+      order,
+      message: skipOfflineQueue
+        ? `Chưa đồng bộ được đơn ${order.displayOrderCode}.`
+        : `Đã lưu tạm đơn ${order.displayOrderCode} trên máy. Khi có mạng app sẽ đồng bộ lên Supabase.`
+    };
+  };
 
   if (supabase) {
     let profileWarning = "";
@@ -255,8 +385,20 @@ export async function createPosTakeawayOrderMobile({
       }
     }
 
-    const { error: orderError } = await supabase.from("orders").upsert(orderRow, { onConflict: "id" });
+    let orderWriteResult = {};
+    try {
+      orderWriteResult = await supabase.from("orders").upsert(orderRow, { onConflict: "id" });
+    } catch (error) {
+      if (isLikelyPosNetworkError(error)) {
+        return queueOfflineOrder(error?.message || "Mất kết nối khi tạo đơn POS.");
+      }
+      return { ok: false, message: error?.message || "Không tạo được đơn POS." };
+    }
+    const { error: orderError } = orderWriteResult;
     if (orderError) {
+      if (isLikelyPosNetworkError(orderError)) {
+        return queueOfflineOrder(orderError.message || "Mất kết nối khi tạo đơn POS.");
+      }
       return { ok: false, message: orderError.message || "Không tạo được đơn POS." };
     }
 
@@ -284,8 +426,19 @@ export async function createPosTakeawayOrderMobile({
       };
     });
 
-    const itemResult = await replaceOrderItems(orderIdentity.orderCode, itemRows);
+    let itemResult = {};
+    try {
+      itemResult = await replaceOrderItems(orderIdentity.orderCode, itemRows);
+    } catch (error) {
+      if (isLikelyPosNetworkError(error)) {
+        return queueOfflineOrder(error?.message || "Mất kết nối khi lưu món POS.");
+      }
+      return { ok: false, message: error?.message || "Không tạo được món trong đơn POS." };
+    }
     if (!itemResult.ok) {
+      if (isLikelyPosNetworkError(itemResult.error || itemResult.message)) {
+        return queueOfflineOrder(itemResult.message || "Mất kết nối khi lưu món POS.");
+      }
       return { ok: false, message: itemResult.message || "Không tạo được món trong đơn POS." };
     }
 
@@ -318,37 +471,5 @@ export async function createPosTakeawayOrderMobile({
     };
   }
 
-  const order = {
-    id: orderIdentity.orderCode,
-    orderCode: orderIdentity.orderCode,
-    displayOrderCode: orderIdentity.displayOrderCode,
-    customerName: displayCustomerName,
-    customerPhone: displayCustomerPhone,
-    pagerNumber: pager,
-    branchName: branchInfo.branchName,
-    orderNote: toText(orderNote),
-    shiftId,
-    cashierName: toText(cashierName),
-    paymentMethod,
-    paymentStatus,
-    paymentAmount: Math.max(0, toNumber(paymentAmount || totalAmount)),
-    paymentReference: toText(paymentReference),
-    paidAt: toText(paidAt) || createdAt,
-    subtotal,
-    promoDiscount: voucherDiscountAmount,
-    promoCode: toText(promoCode).toUpperCase(),
-    promoSource: toText(promoSource),
-    promoVoucherId: toText(promoVoucherId),
-    pointsDiscount: pointsSpent,
-    pointsDiscountAmount: pointDiscountAmount,
-    pointRedeemRule: safeRedeemRule,
-    totalAmount,
-    items
-  };
-
-  return {
-    ok: true,
-    order,
-    message: `Đã tạo đơn ${order.displayOrderCode}.`
-  };
+  return queueOfflineOrder("Chưa có kết nối Supabase.");
 }
