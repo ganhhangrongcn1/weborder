@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View
+} from "react-native";
 
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
+import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
 
 function toNumber(value = 0) {
   const parsed = Number(value || 0);
@@ -23,7 +33,24 @@ function buildSelectedList(groups = [], selectedOptions = {}) {
     .filter(Boolean);
 }
 
-export default function ProductOptionsModal({ product, onClose, onSubmit }) {
+function buildInitialSelectedOptions(groups = [], selectedOptions = []) {
+  return (Array.isArray(selectedOptions) ? selectedOptions : []).reduce((result, option) => {
+    const matchedGroup = (Array.isArray(groups) ? groups : []).find((group) => group.id === option.groupId);
+    if (!matchedGroup) return result;
+    return {
+      ...result,
+      [matchedGroup.id]: option.id
+    };
+  }, {});
+}
+
+export default function ProductOptionsModal({
+  product,
+  initialConfig = null,
+  submitLabel = "",
+  onClose,
+  onSubmit
+}) {
   const { width } = useWindowDimensions();
   const [quantity, setQuantity] = useState(1);
   const [note, setNote] = useState("");
@@ -31,11 +58,12 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
   const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
-    setQuantity(1);
-    setNote("");
-    setSelectedOptions({});
+    const groups = Array.isArray(product?.optionGroups) ? product.optionGroups : [];
+    setQuantity(Math.max(1, Number(initialConfig?.quantity || 1)));
+    setNote(String(initialConfig?.note || ""));
+    setSelectedOptions(buildInitialSelectedOptions(groups, initialConfig?.selectedOptions));
     setSubmitError("");
-  }, [product?.id]);
+  }, [initialConfig, product?.id]);
 
   const groups = Array.isArray(product?.optionGroups) ? product.optionGroups : [];
   const selectedList = useMemo(
@@ -47,16 +75,25 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
   const missingRequiredGroups = groups.filter((group) => group.required && !selectedOptions[group.id]);
   const canSubmit = Boolean(product) && missingRequiredGroups.length === 0;
   const compactGrid = width >= 680;
+  const dialogWidth = getPosDialogWidth(width, width >= 680 ? 620 : 420);
 
-  const handleSelectOption = (groupId, optionId) => {
-    setSelectedOptions((current) => ({ ...current, [groupId]: optionId }));
+  const handleSelectOption = (group, optionId) => {
+    setSelectedOptions((current) => {
+      const currentValue = current[group.id];
+      if (!group.required && currentValue === optionId) {
+        const next = { ...current };
+        delete next[group.id];
+        return next;
+      }
+      return { ...current, [group.id]: optionId };
+    });
     setSubmitError("");
   };
 
   const handleSubmit = () => {
     if (!product) return;
     if (!canSubmit) {
-      setSubmitError("Vui lòng chọn đủ tùy chọn bắt buộc trước khi thêm vào bill.");
+      setSubmitError("Vui lòng chọn đủ tùy chọn bắt buộc trước khi lưu món.");
       return;
     }
 
@@ -71,7 +108,7 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
     <Modal visible={Boolean(product)} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.layer}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, width >= 680 && styles.sheetDesktop]}>
+        <View style={[styles.sheet, { width: dialogWidth }, width >= 680 && styles.sheetDesktop]}>
           <View style={styles.header}>
             <View style={styles.flexOne}>
               <Text style={styles.eyebrow}>Tùy chọn món</Text>
@@ -97,7 +134,7 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
                   </View>
                 </View>
                 {group.required ? (
-                  <Text style={styles.groupNote}>Chọn 1 mục trước khi thêm món.</Text>
+                  <Text style={styles.groupNote}>Chọn 1 mục trước khi lưu món.</Text>
                 ) : null}
 
                 <View style={styles.optionGrid}>
@@ -111,7 +148,7 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
                           compactGrid && styles.optionButtonHalf,
                           active && styles.optionButtonActive
                         ]}
-                        onPress={() => handleSelectOption(group.id, option.id)}
+                        onPress={() => handleSelectOption(group, option.id)}
                       >
                         <Text style={[styles.optionName, active && styles.optionNameActive]}>
                           {option.name}
@@ -165,7 +202,7 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
                 <Text style={styles.totalValue}>{formatMoney(optionTotal)}</Text>
               </View>
               <View style={styles.totalRow}>
-                <Text style={styles.totalStrongLabel}>Tổng thêm bill</Text>
+                <Text style={styles.totalStrongLabel}>Tổng món</Text>
                 <Text style={styles.totalStrongValue}>{formatMoney(total)}</Text>
               </View>
             </View>
@@ -179,7 +216,7 @@ export default function ProductOptionsModal({ product, onClose, onSubmit }) {
             onPress={handleSubmit}
           >
             <Text style={[styles.submitText, !canSubmit && styles.submitTextDisabled]}>
-              Thêm vào bill · {formatMoney(total)}
+              {submitLabel || `Thêm vào bill · ${formatMoney(total)}`}
             </Text>
           </Pressable>
         </View>
@@ -200,19 +237,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15, 23, 42, 0.42)"
   },
   sheet: {
-    width: "100%",
-    maxWidth: 560,
     maxHeight: "82%",
-    borderRadius: POS_RADIUS.lg,
+    borderRadius: POS_MODAL.radius,
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
-    padding: 14,
+    padding: POS_MODAL.padding,
     ...POS_SHADOW
   },
-  sheetDesktop: {
-    maxWidth: 620
-  },
+  sheetDesktop: {},
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -222,17 +255,20 @@ const styles = StyleSheet.create({
     borderBottomColor: POS_COLORS.softBorder,
     paddingBottom: 12
   },
+  flexOne: {
+    flex: 1
+  },
   eyebrow: {
     color: POS_COLORS.muted,
-    fontSize: 11,
+    fontSize: POS_MODAL.eyebrowSize,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   title: {
     marginTop: 3,
     color: POS_COLORS.heading,
-    fontSize: 22,
-    lineHeight: 25,
+    fontSize: POS_MODAL.titleSize,
+    lineHeight: POS_MODAL.titleLineHeight,
     fontWeight: "900"
   },
   basePrice: {
@@ -242,7 +278,7 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   closeButton: {
-    minHeight: 36,
+    minHeight: POS_MODAL.closeButtonHeight,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     borderRadius: POS_RADIUS.md,
@@ -361,82 +397,80 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
-    color: POS_COLORS.text,
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    color: POS_COLORS.heading,
+    fontSize: 13,
     fontWeight: "800"
   },
   noteInput: {
-    minHeight: 82,
+    minHeight: 72,
+    paddingTop: 11,
     textAlignVertical: "top"
   },
   summaryCard: {
-    gap: 10,
+    gap: 8,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.subtleSurface,
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    padding: 11
   },
   qtyRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12
+    gap: 10
   },
   qtyLabel: {
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "900"
   },
   qtyControls: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6
+    gap: 8
   },
   qtyButton: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
+    backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: POS_COLORS.surface
+    justifyContent: "center"
   },
   qtyButtonPrimary: {
-    borderColor: POS_COLORS.primary,
+    borderColor: "#9fd5ae",
     backgroundColor: POS_COLORS.primarySoft
   },
   qtyButtonText: {
     color: POS_COLORS.slate,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900"
   },
   qtyButtonPrimaryText: {
     color: POS_COLORS.primaryDark
   },
   qtyValueBox: {
-    minWidth: 38,
-    height: 38,
+    minWidth: 34,
+    height: 34,
     borderRadius: POS_RADIUS.md,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: POS_COLORS.surface
+    justifyContent: "center"
   },
   qtyValue: {
     color: POS_COLORS.heading,
-    textAlign: "center",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900"
   },
   totalRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8
+    gap: 10
   },
   totalLabel: {
     color: POS_COLORS.muted,
@@ -444,33 +478,28 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   totalValue: {
-    color: POS_COLORS.slate,
-    fontSize: 13,
+    color: POS_COLORS.heading,
+    fontSize: 12,
     fontWeight: "900"
   },
   totalStrongLabel: {
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "900"
   },
   totalStrongValue: {
-    color: "#166534",
-    fontSize: 18,
+    color: POS_COLORS.primaryDark,
+    fontSize: 16,
     fontWeight: "900"
   },
   errorBox: {
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    backgroundColor: POS_COLORS.dangerSoft,
     color: POS_COLORS.danger,
-    borderRadius: POS_RADIUS.md,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800"
   },
   submitButton: {
     minHeight: 48,
+    marginTop: 12,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,
@@ -479,18 +508,15 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   submitButtonDisabled: {
-    borderColor: "#94a3b8",
+    borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.disabled
   },
   submitText: {
     color: POS_COLORS.surface,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900"
   },
   submitTextDisabled: {
     color: POS_COLORS.muted
-  },
-  flexOne: {
-    flex: 1
   }
 });

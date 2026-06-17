@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    padding: 9
   },
   headRow: {
     flexDirection: "row",
@@ -111,19 +111,19 @@ const styles = StyleSheet.create({
     flex: 1
   },
   fieldInput: {
-    minHeight: 40,
+    minHeight: 38,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 10,
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800"
   },
   openButton: {
     minWidth: 58,
-    minHeight: 40,
+    minHeight: 38,
     borderWidth: 1,
     borderColor: "#c7d2fe",
     backgroundColor: "#f8fafc",
@@ -143,8 +143,8 @@ const styles = StyleSheet.create({
     gap: 4
   },
   clearButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: POS_COLORS.muted,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800"
   },
   statusReadyText: {

@@ -91,19 +91,19 @@ export default function PaymentBar({
 const styles = StyleSheet.create({
   wrap: {
     flexShrink: 0,
-    gap: 10,
-    padding: 10,
+    gap: 8,
+    padding: 8,
     borderTopWidth: 1,
     borderTopColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface
   },
   infoCard: {
-    gap: 8,
+    gap: 7,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.subtleSurface,
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    padding: 9
   },
   summaryRow: {
     flexDirection: "row",
@@ -136,13 +136,13 @@ const styles = StyleSheet.create({
   },
   totalValue: {
     color: "#166534",
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 20,
+    lineHeight: 24,
     fontWeight: "900"
   },
   status: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700"
   },
   actions: {
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   secondary: {
     flex: 1,
-    minHeight: 46,
+    minHeight: 42,
     borderRadius: POS_RADIUS.md,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   },
   primary: {
     flex: 1.35,
-    minHeight: 46,
+    minHeight: 42,
     borderRadius: POS_RADIUS.md,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,

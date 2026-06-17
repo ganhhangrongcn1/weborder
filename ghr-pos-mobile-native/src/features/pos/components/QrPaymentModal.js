@@ -1,9 +1,10 @@
 import React from "react";
-import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { buildPosPaymentReference, buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/pos/posPaymentService";
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
+import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
 
 export default function QrPaymentModal({
   visible,
@@ -20,16 +21,21 @@ export default function QrPaymentModal({
   onConfirmPaid,
   onPrint
 }) {
+  const { width } = useWindowDimensions();
   const identity = draftSession || previewIdentity || {};
+  const sessionStatus = String(draftSession?.status || "").trim().toLowerCase();
+  const sessionPaid = ["paid", "converting", "converted"].includes(sessionStatus);
   const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
   const config = getPosQrPaymentConfig(branch);
   const transferContent = draftSession?.paymentReference || buildPosPaymentReference(identity, branch);
+  const dialogWidth = getPosDialogWidth(width, 430);
+  const qrSize = Math.min(dialogWidth - 72, 190);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.layer}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { width: dialogWidth }]}>
           <View style={styles.header}>
             <View style={styles.flexOne}>
               <Text style={styles.eyebrow}>Chuyển khoản QR</Text>
@@ -51,18 +57,19 @@ export default function QrPaymentModal({
             <View style={styles.body}>
               <View style={styles.qrBox}>
                 {qrUrl ? (
-                  <Image source={{ uri: qrUrl }} style={styles.qrImage} resizeMode="contain" />
+                  <Image source={{ uri: qrUrl }} style={{ width: qrSize, height: qrSize }} resizeMode="contain" />
                 ) : (
                   <Text style={styles.qrFallback}>Chưa tạo được QR</Text>
                 )}
               </View>
 
-              <View style={styles.summaryGrid}>
-                <View style={styles.summaryCell}>
+              <View style={styles.summaryBox}>
+                <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Số tiền</Text>
                   <Text style={styles.summaryValue}>{formatMoney(amount)}</Text>
                 </View>
-                <View style={styles.summaryCell}>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Nội dung</Text>
                   <Text style={styles.summaryValue} numberOfLines={2}>
                     {transferContent}
@@ -72,8 +79,8 @@ export default function QrPaymentModal({
 
               {draftSession ? (
                 <View style={styles.statusBox}>
-                  <Text style={styles.statusLabel}>Đang chờ thanh toán</Text>
-                  <Text style={styles.statusValue}>
+                  <Text style={styles.statusLabel}>{sessionPaid ? "Đã nhận chuyển khoản" : "Đang chờ thanh toán"}</Text>
+                  <Text style={styles.statusValue} numberOfLines={1}>
                     {draftSession.displayOrderCode || draftSession.orderCode || draftSession.paymentReference}
                   </Text>
                   <Text style={styles.statusMeta}>Trạng thái: {draftSession.status}</Text>
@@ -92,15 +99,21 @@ export default function QrPaymentModal({
                   >
                     <Text style={styles.cancelText}>Hủy QR</Text>
                   </Pressable>
-                  <Pressable
-                    style={[styles.primaryButton, processing && styles.disabledPrimary]}
-                    disabled={processing}
-                    onPress={onConfirmPaid}
-                  >
-                    <Text style={[styles.primaryText, processing && styles.disabledText]}>
-                      {processing ? "Đang xử lý..." : "Xác nhận tay"}
-                    </Text>
-                  </Pressable>
+                  {sessionPaid ? (
+                    <View style={[styles.primaryButton, styles.primaryWaiting]}>
+                      <Text style={styles.primaryWaitingText}>Đang chốt đơn...</Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      style={[styles.primaryButton, processing && styles.disabledPrimary]}
+                      disabled={processing}
+                      onPress={onConfirmPaid}
+                    >
+                      <Text style={[styles.primaryText, processing && styles.disabledText]}>
+                        {processing ? "Đang xử lý..." : "Xác nhận tay"}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
               ) : null}
             </View>
@@ -118,46 +131,51 @@ export default function QrPaymentModal({
 const styles = StyleSheet.create({
   layer: {
     flex: 1,
+    alignItems: "center",
     justifyContent: "center",
-    padding: 14
+    padding: 16
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(15, 23, 42, 0.42)"
   },
   sheet: {
-    gap: 12,
+    gap: POS_MODAL.gap,
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.lg,
-    padding: 14,
+    borderRadius: POS_MODAL.radius,
+    padding: POS_MODAL.padding,
     ...POS_SHADOW
   },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    gap: 12
+    gap: 10
   },
   headerActions: {
     flexDirection: "row",
     gap: 8
   },
+  flexOne: {
+    flex: 1
+  },
   eyebrow: {
     color: POS_COLORS.muted,
-    fontSize: 11,
+    fontSize: POS_MODAL.eyebrowSize,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   title: {
-    marginTop: 3,
+    marginTop: 2,
     color: POS_COLORS.heading,
-    fontSize: 22,
+    fontSize: POS_MODAL.titleSize,
+    lineHeight: POS_MODAL.titleLineHeight,
     fontWeight: "900"
   },
   ghostButton: {
-    minHeight: 36,
+    minHeight: POS_MODAL.closeButtonHeight,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     borderRadius: POS_RADIUS.md,
@@ -171,7 +189,7 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   closeButton: {
-    minHeight: 36,
+    minHeight: POS_MODAL.closeButtonHeight,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     borderRadius: POS_RADIUS.md,
@@ -185,10 +203,9 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   body: {
-    gap: 12
+    gap: 10
   },
   qrBox: {
-    minHeight: 260,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.subtleSurface,
@@ -197,33 +214,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 10
   },
-  qrImage: {
-    width: 250,
-    height: 250
-  },
   qrFallback: {
     color: POS_COLORS.muted,
     fontWeight: "900"
   },
-  summaryGrid: {
-    gap: 8
-  },
-  summaryCell: {
-    gap: 4,
+  summaryBox: {
+    gap: 8,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.subtleSurface,
     borderRadius: POS_RADIUS.md,
     padding: 10
   },
+  summaryRow: {
+    gap: 4
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: POS_COLORS.softBorder
+  },
   summaryLabel: {
     color: POS_COLORS.muted,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   summaryValue: {
     color: POS_COLORS.heading,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "900"
   },
   statusBox: {
@@ -236,18 +254,18 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     color: POS_COLORS.primaryDark,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   statusValue: {
     color: POS_COLORS.primaryDark,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "900"
   },
   statusMeta: {
     color: POS_COLORS.primaryDark,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "800"
   },
   notice: {
@@ -272,7 +290,7 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 42,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
@@ -281,8 +299,8 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   primaryButton: {
-    flex: 1.2,
-    minHeight: 44,
+    flex: 1.15,
+    minHeight: 42,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,
@@ -298,6 +316,14 @@ const styles = StyleSheet.create({
     color: POS_COLORS.surface,
     fontWeight: "900"
   },
+  primaryWaiting: {
+    backgroundColor: POS_COLORS.disabled,
+    borderColor: "#94a3b8"
+  },
+  primaryWaitingText: {
+    color: POS_COLORS.slate,
+    fontWeight: "900"
+  },
   disabledButton: {
     opacity: 0.55
   },
@@ -307,8 +333,5 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: POS_COLORS.muted
-  },
-  flexOne: {
-    flex: 1
   }
 });

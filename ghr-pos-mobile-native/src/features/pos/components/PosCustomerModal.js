@@ -1,8 +1,9 @@
 import React from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import CustomerLookupPanel from "./CustomerLookupPanel";
+import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
 
 export default function PosCustomerModal({
   visible,
@@ -19,11 +20,14 @@ export default function PosCustomerModal({
   onClear,
   onClose
 }) {
+  const { width } = useWindowDimensions();
+  const dialogWidth = getPosDialogWidth(width, 560);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.layer}>
         <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { width: dialogWidth }]}>
           <View style={styles.header}>
             <View style={styles.flexOne}>
               <Text style={styles.eyebrow}>POS</Text>
@@ -71,15 +75,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15, 23, 42, 0.36)"
   },
   sheet: {
-    width: "100%",
-    maxWidth: 620,
     maxHeight: "86%",
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.lg,
-    padding: 14,
-    gap: 12,
+    borderRadius: POS_MODAL.radius,
+    padding: POS_MODAL.padding,
+    gap: POS_MODAL.gap,
     ...POS_SHADOW
   },
   header: {
@@ -93,18 +95,18 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: POS_COLORS.muted,
-    fontSize: 11,
+    fontSize: POS_MODAL.eyebrowSize,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   title: {
     marginTop: 2,
     color: POS_COLORS.heading,
-    fontSize: 20,
+    fontSize: POS_MODAL.titleSize,
     fontWeight: "900"
   },
   closeButton: {
-    minHeight: 36,
+    minHeight: POS_MODAL.closeButtonHeight,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,

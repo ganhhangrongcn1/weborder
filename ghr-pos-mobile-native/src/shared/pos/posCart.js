@@ -68,6 +68,47 @@ export function updatePosCartItemQuantity(item = {}, quantity = 1) {
   };
 }
 
+export function updatePosCartItemConfig(item = {}, product = {}, config = {}) {
+  const quantity = Math.max(1, Math.floor(toNumber(config.quantity ?? item.quantity, 1)));
+  const unitPrice = config.unitPrice != null
+    ? toNumber(config.unitPrice, 0)
+    : toNumber(item.price ?? product.price, 0);
+  const toppings = Array.isArray(config.toppings) ? config.toppings : (Array.isArray(item.toppings) ? item.toppings : []);
+  const selectedOptions = Array.isArray(config.selectedOptions)
+    ? config.selectedOptions
+    : (Array.isArray(item.selectedOptions) ? item.selectedOptions : []);
+  const toppingTotal = toppings.reduce(
+    (sum, topping) => sum + toNumber(topping.price, 0) * Math.max(1, Math.floor(toNumber(topping.quantity, 1))),
+    0
+  );
+  const optionTotal = selectedOptions.reduce((sum, option) => sum + toNumber(option.price, 0), 0);
+  const unitTotal = unitPrice + toppingTotal + optionTotal;
+  const note = toText(config.note ?? item.note);
+  const spice = toText(config.spice ?? item.spice);
+  const options = Array.isArray(config.options) && config.options.length
+    ? config.options.filter(Boolean).map(toText).filter(Boolean)
+    : buildOptionSummary(spice, toppings, selectedOptions);
+
+  return {
+    ...item,
+    productId: product.id || item.productId,
+    id: product.id || item.id,
+    name: product.name || item.name,
+    image: product.image || item.image || "",
+    category: product.category || item.category || "",
+    quantity,
+    price: unitPrice,
+    unitTotal,
+    lineTotal: unitTotal * quantity,
+    spice,
+    toppings,
+    selectedOptions,
+    options,
+    note,
+    metadata: item.metadata && typeof item.metadata === "object" ? item.metadata : {}
+  };
+}
+
 export function calculatePosCartTotals(cart = []) {
   const items = Array.isArray(cart) ? cart : [];
   const quantity = items.reduce((sum, item) => sum + toNumber(item.quantity, 0), 0);

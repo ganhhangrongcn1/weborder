@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import CashPaymentModal from "../features/pos/components/CashPaymentModal";
+import PosBenefitCard from "../features/pos/components/PosBenefitCard";
 import PaymentBar from "../features/pos/components/PaymentBar";
 import PosCartPanel from "../features/pos/components/PosCartPanel";
 import PosCustomerModal from "../features/pos/components/PosCustomerModal";
@@ -34,6 +35,7 @@ const POS_TABS = [
 
 export default function PosHomeScreen() {
   const [optionProduct, setOptionProduct] = useState(null);
+  const [editingCartItem, setEditingCartItem] = useState(null);
   const [pendingPagerProduct, setPendingPagerProduct] = useState(null);
   const [pagerPickerOpen, setPagerPickerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("sale");
@@ -81,13 +83,13 @@ export default function PosHomeScreen() {
     setCustomerPhone,
     customerLookup,
     loyaltyBenefit,
+    promotionHints,
     selectedVoucherId,
     setSelectedVoucherId,
     pointsInput,
     setPointsInput,
-    orderNote,
-    setOrderNote,
     products,
+    allProducts,
     categories,
     activeCategory,
     setActiveCategory,
@@ -108,6 +110,7 @@ export default function PosHomeScreen() {
     historyLoading,
     historyError,
     addProduct,
+    updateCartItem,
     changeQuantity,
     clearCart,
     confirmCash,
@@ -128,11 +131,6 @@ export default function PosHomeScreen() {
     hasOpenShift
   } = usePosComposer();
 
-  const cartCount = useMemo(
-    () => cart.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-    [cart]
-  );
-
   const continueAddProduct = (product) => {
     if (!product) return;
     if (Array.isArray(product?.optionGroups) && product.optionGroups.length) {
@@ -152,8 +150,28 @@ export default function PosHomeScreen() {
   };
 
   const handleSubmitOptions = (product, config) => {
+    if (editingCartItem?.cartId) {
+      updateCartItem(editingCartItem.cartId, product, config);
+      setEditingCartItem(null);
+      setOptionProduct(null);
+      return;
+    }
     addProduct(product, config);
     setOptionProduct(null);
+  };
+
+  const handleEditCartItem = (item) => {
+    if (!item?.cartId) return;
+    const sourceProduct = allProducts.find((product) => product.id === item.productId) || {
+      id: item.productId || item.id,
+      name: item.name,
+      price: item.price,
+      image: item.image,
+      category: item.category,
+      optionGroups: []
+    };
+    setEditingCartItem(item);
+    setOptionProduct(sourceProduct);
   };
 
   const handleSelectPager = (nextPager) => {
@@ -400,14 +418,9 @@ export default function PosHomeScreen() {
         />
       </View>
 
-      <View style={[styles.orderColumn, !isWide && styles.orderColumnStack]}>
-        <ScrollView
-          style={styles.orderScroll}
-          contentContainerStyle={styles.orderContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <PosCustomerSummaryCard
+        <View style={[styles.orderColumn, !isWide && styles.orderColumnStack]}>
+          <View style={styles.orderTop}>
+            <PosCustomerSummaryCard
             customerName={customerName}
             customerPhone={customerPhone}
             setCustomerName={setCustomerName}
@@ -420,42 +433,30 @@ export default function PosHomeScreen() {
               setSelectedVoucherId("");
               setPointsInput("");
             }}
-          />
+            />
 
-          {cart.length ? (
-            <View style={styles.notePanel}>
-              <View style={styles.noteHead}>
-                <View style={styles.noteTitleRow}>
-                  <View style={styles.noteIconBox}>
-                    <PosIcon name="order" size={15} color={POS_COLORS.primaryDark} />
-                  </View>
-                  <Text style={styles.noteLabel}>Thông tin bill</Text>
-                </View>
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeValue}>{cartCount}</Text>
-                  <Text style={styles.cartBadgeLabel}>món</Text>
-                </View>
-              </View>
-              <TextInput
-                value={orderNote}
-                onChangeText={setOrderNote}
-                placeholder="Ghi chú đơn"
-                placeholderTextColor="#94a3b8"
-                style={[styles.input, styles.compactInput]}
-              />
-              {!!menuMessage && <Text style={styles.noticeText}>{menuMessage}</Text>}
-              {!!shiftMessage && <Text style={styles.noticeText}>{shiftMessage}</Text>}
-            </View>
-          ) : null}
+            <PosBenefitCard
+              loyaltyBenefit={loyaltyBenefit}
+              selectedVoucherId={selectedVoucherId}
+              setSelectedVoucherId={setSelectedVoucherId}
+              promotionHints={promotionHints}
+              disabled={busy || Boolean(paymentConfirmed)}
+            />
 
+            {!!menuMessage && <Text style={styles.noticeBox}>{menuMessage}</Text>}
+            {!!shiftMessage && <Text style={styles.noticeText}>{shiftMessage}</Text>}
+        </View>
+
+        <View style={styles.orderBody}>
           <PosCartPanel
             cart={cart}
             totals={totals}
             onChangeQuantity={changeQuantity}
+            onEditItem={handleEditCartItem}
             onClear={clearCart}
             fillAvailable={!cart.length}
           />
-        </ScrollView>
+        </View>
 
         {cart.length ? (
           <PaymentBar
@@ -973,7 +974,12 @@ export default function PosHomeScreen() {
 
       <ProductOptionsModal
         product={optionProduct}
-        onClose={() => setOptionProduct(null)}
+        initialConfig={editingCartItem}
+        submitLabel={editingCartItem ? "Lưu món" : ""}
+        onClose={() => {
+          setOptionProduct(null);
+          setEditingCartItem(null);
+        }}
         onSubmit={handleSubmitOptions}
       />
       <PosCustomerModal
@@ -1026,7 +1032,7 @@ export default function PosHomeScreen() {
         printBusy={qrPrintBusy}
         errorMessage={qrError}
         onClose={() => setQrModalOpen(false)}
-        onCancel={cancelQrPayment}
+        onCancel={() => cancelQrPayment(qrSession)}
         onConfirmPaid={confirmQrPaidManually}
         onPrint={printQrReceiptNow}
       />
@@ -1065,6 +1071,7 @@ const styles = StyleSheet.create({
   },
   orderColumn: {
     width: 372,
+    flexShrink: 0,
     minHeight: 0,
     overflow: "hidden",
     borderWidth: 1,
@@ -1076,73 +1083,17 @@ const styles = StyleSheet.create({
     width: "100%",
     flex: 1
   },
-  orderScroll: {
-    flex: 1,
-    minHeight: 0
-  },
-  orderContent: {
+  orderTop: {
     gap: 6,
     padding: 6,
-    paddingBottom: 8,
-    flexGrow: 1
+    paddingBottom: 0
   },
-  notePanel: {
-    gap: 8,
-    borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
-    backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
-    padding: 8
-  },
-  noteHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8
-  },
-  noteTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8
-  },
-  noteIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: POS_COLORS.primarySoft,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  compactInput: {
-    minHeight: 40,
-    paddingVertical: 8
-  },
-  noteLabel: {
-    color: POS_COLORS.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    textTransform: "uppercase"
-  },
-  cartBadge: {
-    minWidth: 56,
-    minHeight: 46,
-    borderWidth: 1,
-    borderColor: "#bbf7d0",
-    backgroundColor: POS_COLORS.primarySoft,
-    borderRadius: POS_RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  cartBadgeValue: {
-    color: POS_COLORS.primaryDark,
-    fontSize: 18,
-    lineHeight: 20,
-    fontWeight: "900"
-  },
-  cartBadgeLabel: {
-    color: "#166534",
-    fontSize: 10,
-    fontWeight: "800"
+  orderBody: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: 6,
+    paddingTop: 6,
+    paddingBottom: 8
   },
   secondaryPanel: {
     flex: 1,

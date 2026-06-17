@@ -25,7 +25,7 @@ const CustomerLookupPanel = memo(function CustomerLookupPanel({
 }) {
   const { width } = useWindowDimensions();
   const customer = lookup?.result;
-  const vouchers = loyaltyBenefit?.availableVouchers || [];
+  const vouchers = loyaltyBenefit?.loyaltyVouchers || [];
   const pointSuggestions = loyaltyBenefit?.pointSuggestions || [];
   const hasBenefit = Boolean(
     (loyaltyBenefit?.voucherDiscount || 0) > 0 || (loyaltyBenefit?.pointsDiscount || 0) > 0
@@ -127,7 +127,7 @@ const CustomerLookupPanel = memo(function CustomerLookupPanel({
       {!compact && customer ? (
         <View style={styles.benefitBox}>
           <View style={styles.sectionHead}>
-            <Text style={styles.sectionTitle}>Ưu đãi POS</Text>
+            <Text style={styles.sectionTitle}>Ưu đãi loyalty</Text>
             {hasBenefit ? (
               <Text style={styles.discountText}>
                 -{formatMoney((loyaltyBenefit?.voucherDiscount || 0) + (loyaltyBenefit?.pointsDiscount || 0))}
@@ -163,7 +163,7 @@ const CustomerLookupPanel = memo(function CustomerLookupPanel({
               })}
             </View>
           ) : (
-            <Text style={styles.emptyBenefit}>Khách chưa có voucher khả dụng.</Text>
+            <Text style={styles.emptyBenefit}>Khách chưa có voucher loyalty khả dụng.</Text>
           )}
 
           <View style={styles.pointCard}>
@@ -254,14 +254,15 @@ const styles = StyleSheet.create({
     textTransform: "uppercase"
   },
   clearButton: {
+    minWidth: 62,
     minHeight: 34,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 11,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    paddingHorizontal: 10
   },
   clearText: {
     color: POS_COLORS.danger,
@@ -272,43 +273,43 @@ const styles = StyleSheet.create({
     gap: 10
   },
   inputRow: {
-    flexDirection: "row"
+    flexDirection: "row",
+    gap: 10
   },
   inputHalf: {
     flex: 1
   },
   input: {
-    minHeight: 44,
+    minHeight: 42,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
-    color: POS_COLORS.text,
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
+    color: POS_COLORS.heading,
+    fontSize: 13,
     fontWeight: "800"
   },
   statusBox: {
     borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
+    borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.subtleSurface,
     borderRadius: POS_RADIUS.md,
-    paddingVertical: 9,
-    paddingHorizontal: 10
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   statusReady: {
     borderColor: "#bbf7d0",
-    backgroundColor: POS_COLORS.primarySoft
+    backgroundColor: "#f0fdf4"
   },
   statusError: {
     borderColor: "#fecaca",
-    backgroundColor: POS_COLORS.dangerSoft
+    backgroundColor: "#fef2f2"
   },
   statusText: {
     color: POS_COLORS.muted,
     fontSize: 12,
-    fontWeight: "900"
+    fontWeight: "700"
   },
   statusReadyText: {
     color: POS_COLORS.primaryDark
@@ -319,11 +320,11 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8
+    gap: 10
   },
   statCell: {
+    minWidth: "47%",
     flexGrow: 1,
-    flexBasis: "47%",
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.subtleSurface,
@@ -332,51 +333,53 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     color: POS_COLORS.muted,
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: 11,
+    fontWeight: "800",
     textTransform: "uppercase"
   },
   statValue: {
     marginTop: 4,
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "900"
   },
   benefitBox: {
     gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: POS_COLORS.softBorder,
-    paddingTop: 10
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.subtleSurface,
+    borderRadius: POS_RADIUS.md,
+    padding: 10
   },
   sectionHead: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 10
+    gap: 8
   },
   sectionTitle: {
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "900"
   },
   discountText: {
     color: POS_COLORS.primaryDark,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "900"
   },
   voucherList: {
     gap: 8
   },
   voucherChip: {
+    gap: 4,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    paddingVertical: 9,
-    paddingHorizontal: 10
+    padding: 10
   },
   voucherChipActive: {
-    borderColor: POS_COLORS.primary,
+    borderColor: "#86efac",
     backgroundColor: POS_COLORS.primarySoft
   },
   voucherChipDisabled: {
@@ -384,17 +387,16 @@ const styles = StyleSheet.create({
   },
   voucherTitle: {
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900"
   },
   voucherTitleActive: {
     color: POS_COLORS.primaryDark
   },
   voucherMeta: {
-    marginTop: 3,
-    color: POS_COLORS.muted,
+    color: POS_COLORS.slate,
     fontSize: 11,
-    fontWeight: "800"
+    fontWeight: "700"
   },
   voucherMetaActive: {
     color: POS_COLORS.primaryDark
@@ -402,13 +404,13 @@ const styles = StyleSheet.create({
   emptyBenefit: {
     color: POS_COLORS.muted,
     fontSize: 12,
-    fontWeight: "800"
+    fontWeight: "700"
   },
   pointCard: {
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
-    backgroundColor: POS_COLORS.subtleSurface,
+    backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     padding: 10
   },
@@ -418,7 +420,8 @@ const styles = StyleSheet.create({
     gap: 10
   },
   pointCopy: {
-    flex: 1
+    flex: 1,
+    gap: 2
   },
   pointLabel: {
     color: POS_COLORS.heading,
@@ -426,41 +429,37 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   pointHint: {
-    marginTop: 3,
     color: POS_COLORS.muted,
     fontSize: 11,
-    fontWeight: "800"
+    fontWeight: "700"
   },
   pointInput: {
-    width: 112,
+    minWidth: 96,
     minHeight: 40,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
-    color: POS_COLORS.text,
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-    fontWeight: "900",
+    paddingHorizontal: 12,
+    color: POS_COLORS.heading,
+    fontSize: 13,
+    fontWeight: "800",
     textAlign: "right"
   },
   suggestionList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8
   },
   suggestionChip: {
     borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
-    backgroundColor: POS_COLORS.surface,
+    borderColor: "#bbf7d0",
+    backgroundColor: "#f0fdf4",
     borderRadius: POS_RADIUS.md,
-    paddingVertical: 8,
-    paddingHorizontal: 10
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   suggestionText: {
-    color: POS_COLORS.slate,
+    color: POS_COLORS.primaryDark,
     fontSize: 11,
-    fontWeight: "900"
+    fontWeight: "800"
   }
 });

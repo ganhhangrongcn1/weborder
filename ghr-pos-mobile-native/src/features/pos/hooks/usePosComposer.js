@@ -43,6 +43,7 @@ import { ALL_CATEGORY, buildPosCatalog, filterPosProducts } from "../../../share
 import {
   calculatePosCartTotals,
   createPosCartItem,
+  updatePosCartItemConfig,
   updatePosCartItemQuantity
 } from "../../../shared/pos/posCart";
 import { buildPosLoyaltyBenefit, buildVoucherSelectionKey } from "../../../shared/pos/posLoyalty";
@@ -244,6 +245,118 @@ export default function usePosComposer() {
     setShiftMessage("Đã khôi phục QR đang chờ thanh toán.");
   };
 
+  const finalizePaidQrSession = async (session) => {
+    if (!session?.id || !session?.isPaymentSession) return false;
+
+    const checkout = session.checkoutSnapshot || {};
+    const sessionTotals = checkout.totals || totals;
+    const sessionCustomer = checkout.customerLookup || customerLookup.result;
+    const qrPaymentConfirmed = {
+      method: "bank_qr",
+      reference: session.paymentReference,
+      paidAt: session.paidAt || new Date().toISOString(),
+      amount: session.amountPaid || session.amountExpected,
+      paymentSessionId: session.id,
+      orderIdentity: session.orderIdentity || checkout.orderIdentity || null
+    };
+
+    const loyaltyValidation = await validateLiveLoyaltySelection();
+    if (!loyaltyValidation.ok) {
+      setPaymentConfirmed(qrPaymentConfirmed);
+      setShiftMessage(loyaltyValidation.message || "Uu dai loyalty khong con hop le de chot don QR.");
+      return false;
+    }
+
+    setBusy(true);
+    setQrError("");
+    const result = await createPosTakeawayOrderMobile({
+      cart: Array.isArray(session.cartSnapshot) && session.cartSnapshot.length ? session.cartSnapshot : cart,
+      totals: sessionTotals,
+      pagerNumber: session.pagerNumber || normalizedPager,
+      customerName: session.customerName || customerName || customerLookup.result?.customerName || "",
+      customerPhone: normalizeCustomerPhone(session.customerPhone || customerPhone),
+      branch: {
+        branchUuid: profile.branchUuid,
+        branchName: profile.branchName
+      },
+      orderNote,
+      shift: checkout.shift || shift,
+      cashierName: session.cashierName || profile.name || profile.email,
+      customerLookup: loyaltyValidation.customer || sessionCustomer,
+      promoDiscount: checkout.promoDiscount || loyaltyBenefit.voucherDiscount,
+      promoCode: String(checkout.promoCode || loyaltyBenefit.selectedVoucher?.code || "").trim().toUpperCase(),
+      promoSource: String(checkout.promoSource || loyaltyBenefit.selectedVoucher?.source || ""),
+      promoVoucherId: String(checkout.promoVoucherId || loyaltyBenefit.selectedVoucher?.id || "").trim(),
+      pointsDiscount: checkout.pointsDiscount || checkout.pointsSpent || loyaltyBenefit.pointsSpent,
+      pointsDiscountAmount: checkout.pointsDiscountAmount || loyaltyBenefit.pointsDiscount,
+      pointRedeemRule: checkout.pointRedeemRule || loyaltyBenefit.loyaltyRule,
+      paymentMethod: "bank_qr",
+      paymentStatus: "paid",
+      paymentAmount: session.amountPaid || session.amountExpected,
+      paymentReference: session.paymentReference,
+      paidAt: session.paidAt || new Date().toISOString(),
+      posShiftId: session.posShiftId || checkout.posShiftId || shift?.id,
+      paymentMeta: {
+        provider: session.provider || "sepay",
+        paymentSessionId: session.id
+      },
+      orderIdentity: session.orderIdentity || checkout.orderIdentity || null
+    });
+    setBusy(false);
+
+    if (!result.ok) {
+      setPaymentConfirmed(qrPaymentConfirmed);
+      setQrError(result.message || "Da nhan tien nhung chua tao duoc don.");
+      setShiftMessage(result.message || "Da nhan tien nhung chua tao duoc don.");
+      return false;
+    }
+
+    let printMessage = "";
+    try {
+      const receiptText = buildPosCustomerBillText({
+        order: result.order,
+        cart: Array.isArray(session.cartSnapshot) && session.cartSnapshot.length ? session.cartSnapshot : cart,
+        totals: sessionTotals,
+        customerName: session.customerName || customerName || customerLookup.result?.customerName || "",
+        customerPhone: normalizeCustomerPhone(session.customerPhone || customerPhone),
+        pagerNumber: session.pagerNumber || normalizedPager,
+        branchName: profile.branchName,
+        cashierName: session.cashierName || profile.name || profile.email,
+        orderNote,
+        paymentConfirmed: qrPaymentConfirmed
+      });
+      await printLocalReceipt({
+        text: receiptText,
+        sourceType: "customer_bill"
+      });
+      printMessage = " Da in bill tai may POS.";
+    } catch (printError) {
+      printMessage = ` Da tao don nhung chua in duoc bill: ${printError?.message || "Loi may in."}`;
+    }
+
+    await markPosPaymentSessionConverted(
+      session.id,
+      result.order?.id || result.order?.orderCode
+    );
+
+    setCart([]);
+    setPaymentConfirmed(null);
+    setOrderNote("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setSelectedVoucherId("");
+    setPointsInput("");
+    setPagerNumber("");
+    await forgetPosPaymentSession(profile.branchUuid);
+    setQrSession(null);
+    setQrPreviewIdentity(null);
+    setQrModalOpen(false);
+    await refreshPosRuntime(profile.branchUuid);
+    await refreshShiftSummary(shift);
+    setShiftMessage(`${result.message || ""}${printMessage}`.trim());
+    return true;
+  };
+
   useEffect(() => {
     let active = true;
 
@@ -388,8 +501,9 @@ export default function usePosComposer() {
     if (!qrSession?.id || !qrSession.isPaymentSession) return undefined;
 
     let active = true;
+    let finalizing = false;
     const handleSession = async (session) => {
-      if (!active || !session) return;
+      if (!active || !session || finalizing) return;
       if (isPosPaymentSessionExpired(session)) {
         await cancelPosPaymentSession(session.id, "POS mobile tự đóng QR đã hết hạn");
         if (!active) return;
@@ -415,6 +529,12 @@ export default function usePosComposer() {
           await refreshPosRuntime(profile.branchUuid);
         }
         setShiftMessage("Phiên QR này đã kết thúc.");
+        return;
+      }
+      if (isPosPaymentSessionPaid(session)) {
+        finalizing = true;
+        const completed = await finalizePaidQrSession(session);
+        if (!completed) finalizing = false;
         return;
       }
       applyPaymentSessionState(session);
@@ -522,6 +642,24 @@ export default function usePosComposer() {
     setPaymentConfirmed(null);
   };
 
+  const updateCartItem = async (cartId, product, config = {}) => {
+    if (!cartId) return;
+    if (qrSession?.id) {
+      const cancelled = await cancelPendingQrForBillChange("POS mobile sửa món làm thay đổi bill trước khi thanh toán");
+      if (!cancelled) return;
+    }
+
+    setCart((current) =>
+      current.map((item) => (
+        item.cartId === cartId
+          ? updatePosCartItemConfig(item, product || item, config)
+          : item
+      ))
+    );
+    setPaymentConfirmed(null);
+    setShiftMessage("");
+  };
+
   const clearCart = async () => {
     if (qrSession?.id) {
       const cancelled = await cancelPendingQrForBillChange("POS mobile xóa bill đang chờ thanh toán");
@@ -599,6 +737,7 @@ export default function usePosComposer() {
 
   const signIn = async () => {
     setBusy(true);
+    setQrError("");
     setAuthMessage("");
     setShiftMessage("");
 
@@ -795,14 +934,18 @@ export default function usePosComposer() {
     setShiftMessage("Đã tạo QR, đang chờ khách chuyển khoản.");
   };
 
-  const cancelQrPayment = async () => {
-    if (!qrSession?.id) {
+  const cancelQrPayment = async (session = null) => {
+    const activeSession = session?.id ? session : qrSession;
+    if (!activeSession?.id) {
       setQrSession(null);
+      setQrPreviewIdentity(null);
       setQrModalOpen(false);
+      setQrError("");
       return;
     }
     setBusy(true);
-    const result = await cancelPosPaymentSession(qrSession.id, "POS mobile hủy QR");
+    setQrError("");
+    const result = await cancelPosPaymentSession(activeSession.id, "POS mobile hủy QR");
     setBusy(false);
     if (!result.ok) {
       setQrError(result.message || "Không hủy được QR.");
@@ -812,8 +955,10 @@ export default function usePosComposer() {
     setQrPreviewIdentity(null);
     setQrModalOpen(false);
     setPaymentConfirmed(null);
+    setQrError("");
     if (profile?.branchUuid) {
       await forgetPosPaymentSession(profile.branchUuid);
+      await refreshPosRuntime(profile.branchUuid);
     }
     setShiftMessage("Đã hủy QR thanh toán.");
   };
@@ -1056,6 +1201,7 @@ export default function usePosComposer() {
   const confirmQrPaidManually = async () => {
     if (!qrSession?.id) return;
     setBusy(true);
+    setQrError("");
     const result = await confirmPosPaymentSessionManually(qrSession.id);
     setBusy(false);
     if (!result.ok) {
@@ -1064,8 +1210,10 @@ export default function usePosComposer() {
     }
     setQrSession(result.session);
     if (isPosPaymentSessionPaid(result.session)) {
-      applyPaymentSessionState(result.session);
+      await finalizePaidQrSession(result.session);
+      return;
     }
+    applyPaymentSessionState(result.session);
   };
 
   const createCashOrder = async () => {
@@ -1203,6 +1351,7 @@ export default function usePosComposer() {
     setCustomerPhone,
     customerLookup,
     loyaltyBenefit,
+    promotionHints,
     selectedVoucherId,
     setSelectedVoucherId,
     pointsInput,
@@ -1210,6 +1359,7 @@ export default function usePosComposer() {
     orderNote,
     setOrderNote,
     products: visibleProducts,
+    allProducts: catalog.products,
     categories: catalog.categories,
     activeCategory: effectiveCategory,
     setActiveCategory,
@@ -1230,6 +1380,7 @@ export default function usePosComposer() {
     historyLoading,
     historyError,
     addProduct,
+    updateCartItem,
     changeQuantity,
     clearCart,
     confirmCash,

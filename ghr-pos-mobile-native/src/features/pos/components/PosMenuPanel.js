@@ -20,7 +20,7 @@ const PosMenuPanel = memo(function PosMenuPanel({
 }) {
   const listCategories = categories.length ? categories : [ALL_CATEGORY];
   const safeColumns = Math.max(2, Math.min(5, Number(columns || 3)));
-  const cardWidth = safeColumns >= 5 ? 118 : safeColumns === 4 ? 130 : safeColumns === 3 ? 144 : 160;
+  const cardWidth = safeColumns >= 5 ? 114 : safeColumns === 4 ? 126 : safeColumns === 3 ? 138 : 154;
   const pagerSelected = Boolean(normalizedPager);
 
   return (
@@ -92,14 +92,16 @@ const PosMenuPanel = memo(function PosMenuPanel({
               </View>
 
               <View style={styles.productBody}>
-                <Text style={styles.productName} numberOfLines={3}>
-                  {item.name}
-                </Text>
-                <Text style={styles.productMeta} numberOfLines={1}>
-                  {Array.isArray(item.optionGroups) && item.optionGroups.length
-                    ? `${item.category} · Có tùy chọn`
-                    : item.category}
-                </Text>
+                <View style={styles.productCopy}>
+                  <Text style={styles.productName} numberOfLines={2}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.productMeta} numberOfLines={1}>
+                    {Array.isArray(item.optionGroups) && item.optionGroups.length
+                      ? `${item.category} · Có tùy chọn`
+                      : item.category}
+                  </Text>
+                </View>
                 <Text style={styles.productPrice}>{formatMoney(item.price)}</Text>
               </View>
             </Pressable>
@@ -118,10 +120,10 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minHeight: 0,
-    gap: 10,
+    gap: 8,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    padding: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: POS_COLORS.border
   },
@@ -134,11 +136,11 @@ const styles = StyleSheet.create({
     backgroundColor: POS_COLORS.subtleSurface
   },
   categoryList: {
-    gap: 8,
-    padding: 7
+    gap: 6,
+    padding: 6
   },
   categoryChip: {
-    minHeight: 32,
+    minHeight: 30,
     maxWidth: 156,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
@@ -154,21 +156,21 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: POS_COLORS.slate,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900"
   },
   categoryTextActive: {
     color: POS_COLORS.primaryDark
   },
   pagerCard: {
-    gap: 4,
-    minHeight: 58,
+    gap: 3,
+    minHeight: 54,
     borderWidth: 1,
     borderColor: "#facc15",
     backgroundColor: "#fffbeb",
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 12,
-    paddingVertical: 9
+    paddingVertical: 8
   },
   pagerReady: {
     borderColor: "#86efac",
@@ -203,8 +205,8 @@ const styles = StyleSheet.create({
   },
   pagerValue: {
     color: POS_COLORS.heading,
-    fontSize: 18,
-    lineHeight: 20,
+    fontSize: 17,
+    lineHeight: 19,
     fontWeight: "900"
   },
   pagerValueBusy: {
@@ -226,11 +228,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     alignContent: "flex-start",
-    gap: 10,
+    gap: 8,
     paddingBottom: 4
   },
   productCard: {
-    minHeight: 174,
+    minHeight: 176,
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
@@ -254,27 +256,34 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   productBody: {
-    minHeight: 54,
-    paddingHorizontal: 9,
-    paddingTop: 8,
-    paddingBottom: 10
+    minHeight: 64,
+    flexGrow: 1,
+    paddingHorizontal: 8,
+    paddingTop: 7,
+    paddingBottom: 9,
+    justifyContent: "space-between"
+  },
+  productCopy: {
+    minHeight: 34,
+    gap: 3
   },
   productName: {
+    minHeight: 28,
     color: POS_COLORS.heading,
-    fontSize: 12,
-    lineHeight: 15,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: "900"
   },
   productMeta: {
-    marginTop: 3,
+    minHeight: 12,
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: "800"
   },
   productPrice: {
-    marginTop: 7,
     color: "#166534",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900"
   },
   empty: {
