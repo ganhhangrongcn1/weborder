@@ -1,7 +1,7 @@
 import { AppState } from "react-native";
 
 import { supabase } from "../supabase/client";
-import { printLocalReceipt } from "./posPrinterService";
+import { playLocalNewOrderAlert, printLocalReceipt } from "./posPrinterService";
 
 const JOB_TYPE = "customer_bill";
 const PRINTER_KEY = "cashier-80mm";
@@ -155,6 +155,7 @@ async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
     if (typeof onStatus === "function") {
       onStatus({ running: true, tone: "printing", message: `Đang in ${claimed.order_code || "bill"}...` });
     }
+    await playLocalNewOrderAlert();
     await printLocalReceipt(printPayload);
     await markPrinted(claimed.id);
     if (typeof onStatus === "function") {

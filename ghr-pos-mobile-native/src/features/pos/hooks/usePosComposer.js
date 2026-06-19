@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   restorePosSession,
@@ -12,6 +12,7 @@ import {
   buildPosQrReceiptText,
   buildPosShiftCloseReceiptText,
   openLocalCashDrawer,
+  playLocalQrPaymentAlert,
   printLocalReceipt,
   startLocalPrintStationService,
   stopLocalPrintStationService
@@ -63,6 +64,7 @@ import { calculateCashChange, normalizeCashReceived } from "../../../shared/pos/
 import { buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
 
 export default function usePosComposer() {
+  const announcedQrPaymentIdsRef = useRef(new Set());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState(null);
@@ -363,6 +365,15 @@ export default function usePosComposer() {
 
   const finalizePaidQrSession = async (session) => {
     if (!session?.id || !session?.isPaymentSession) return false;
+
+    if (!announcedQrPaymentIdsRef.current.has(session.id)) {
+      announcedQrPaymentIdsRef.current.add(session.id);
+      try {
+        await playLocalQrPaymentAlert();
+      } catch {
+        // Âm báo không được làm gián đoạn bước chốt đơn đã nhận tiền.
+      }
+    }
 
     const checkout = session.checkoutSnapshot || {};
     const sessionTotals = checkout.totals || totals;

@@ -13,7 +13,10 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.media.MediaPlayer;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.content.pm.PackageManager;
 
 import androidx.annotation.NonNull;
@@ -56,7 +59,12 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     private final SharedPreferences prefs;
     private final UsbManager usbManager;
     private final PendingIntent permissionIntent;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private Promise pendingUsbPromise;
+    private MediaPlayer alertPlayer;
+    private MediaPlayer qrPaymentPlayer;
+    private boolean alertSoundPlaying = false;
+    private int alertSoundCount = 0;
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
@@ -217,6 +225,49 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
+    public void playNewOrderAlert(Promise promise) {
+        mainHandler.post(() -> {
+            if (alertSoundPlaying) {
+                promise.resolve(false);
+                return;
+            }
+            alertSoundPlaying = true;
+            alertSoundCount = 0;
+            playNextAlertSound();
+            promise.resolve(true);
+        });
+    }
+
+    @ReactMethod
+    public void playQrPaymentAlert(Promise promise) {
+        mainHandler.post(() -> {
+            if (qrPaymentPlayer != null && qrPaymentPlayer.isPlaying()) {
+                promise.resolve(false);
+                return;
+            }
+
+            try {
+                releaseQrPaymentPlayer();
+                qrPaymentPlayer = MediaPlayer.create(reactContext, R.raw.qr_payment);
+                if (qrPaymentPlayer == null) {
+                    promise.reject("QR_PAYMENT_ALERT_FAILED", "Không mở được âm báo thanh toán QR.");
+                    return;
+                }
+                qrPaymentPlayer.setOnCompletionListener(player -> releaseQrPaymentPlayer());
+                qrPaymentPlayer.setOnErrorListener((player, what, extra) -> {
+                    releaseQrPaymentPlayer();
+                    return true;
+                });
+                qrPaymentPlayer.start();
+                promise.resolve(true);
+            } catch (Exception error) {
+                releaseQrPaymentPlayer();
+                promise.reject("QR_PAYMENT_ALERT_FAILED", safeText(error.getMessage()));
+            }
+        });
+    }
+
+    @ReactMethod
     public void startPrintStationService(String branchUuid, String branchName, String deviceId, Promise promise) {
         String safeBranchUuid = safeText(branchUuid);
         if (safeBranchUuid.isEmpty()) {
@@ -267,6 +318,78 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
         } catch (Exception error) {
             promise.reject("PRINT_STATION_STOP_FAILED", safeText(error.getMessage()));
         }
+    }
+
+    private void playNextAlertSound() {
+        if (!alertSoundPlaying) return;
+        if (alertSoundCount >= 3) {
+            stopNewOrderAlert();
+            return;
+        }
+
+        try {
+            releaseAlertPlayer();
+            alertPlayer = MediaPlayer.create(reactContext, R.raw.new_order);
+            if (alertPlayer == null) {
+                stopNewOrderAlert();
+                return;
+            }
+
+            alertSoundCount += 1;
+            alertPlayer.setOnCompletionListener(player -> {
+                releaseAlertPlayer();
+                mainHandler.postDelayed(this::playNextAlertSound, 180);
+            });
+            alertPlayer.setOnErrorListener((player, what, extra) -> {
+                stopNewOrderAlert();
+                return true;
+            });
+            alertPlayer.start();
+        } catch (Exception ignored) {
+            stopNewOrderAlert();
+        }
+    }
+
+    private void stopNewOrderAlert() {
+        alertSoundPlaying = false;
+        alertSoundCount = 0;
+        mainHandler.removeCallbacksAndMessages(null);
+        releaseAlertPlayer();
+    }
+
+    private void releaseAlertPlayer() {
+        try {
+            if (alertPlayer != null) {
+                alertPlayer.setOnCompletionListener(null);
+                alertPlayer.setOnErrorListener(null);
+                if (alertPlayer.isPlaying()) alertPlayer.stop();
+                alertPlayer.release();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            alertPlayer = null;
+        }
+    }
+
+    private void releaseQrPaymentPlayer() {
+        try {
+            if (qrPaymentPlayer != null) {
+                qrPaymentPlayer.setOnCompletionListener(null);
+                qrPaymentPlayer.setOnErrorListener(null);
+                if (qrPaymentPlayer.isPlaying()) qrPaymentPlayer.stop();
+                qrPaymentPlayer.release();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            qrPaymentPlayer = null;
+        }
+    }
+
+    @Override
+    public void invalidate() {
+        stopNewOrderAlert();
+        releaseQrPaymentPlayer();
+        super.invalidate();
     }
 
     private WritableMap buildPrinterConfig() {

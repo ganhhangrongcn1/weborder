@@ -107,6 +107,18 @@ export async function openLocalCashDrawer() {
   return printerModule.openCashDrawer();
 }
 
+export async function playLocalNewOrderAlert() {
+  if (!isLocalPrinterAvailable()) return false;
+  if (typeof printerModule.playNewOrderAlert !== "function") return false;
+  return printerModule.playNewOrderAlert();
+}
+
+export async function playLocalQrPaymentAlert() {
+  if (!isLocalPrinterAvailable()) return false;
+  if (typeof printerModule.playQrPaymentAlert !== "function") return false;
+  return printerModule.playQrPaymentAlert();
+}
+
 export async function startLocalPrintStationService({ branchUuid = "", branchName = "", deviceId = "" } = {}) {
   if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
   if (typeof printerModule.startPrintStationService !== "function") {
