@@ -11,7 +11,10 @@ import {
   buildPosCustomerBillText,
   buildPosQrReceiptText,
   buildPosShiftCloseReceiptText,
-  printLocalReceipt
+  openLocalCashDrawer,
+  printLocalReceipt,
+  startLocalPrintStationService,
+  stopLocalPrintStationService
 } from "../../../services/pos/posPrinterService";
 import {
   cancelPosOrder,
@@ -37,6 +40,7 @@ import {
   rememberPosPaymentSession
 } from "../../../services/pos/posPaymentSessionService";
 import { fetchPosCatalogConfig } from "../../../services/pos/posCatalogConfigService";
+import { startPosPrintStation } from "../../../services/pos/posPrintStationService";
 import {
   checkPosSupabaseConnection,
   getPosOfflineOrderCount,
@@ -109,6 +113,11 @@ export default function usePosComposer() {
   });
   const [offlineOrderCount, setOfflineOrderCount] = useState(0);
   const [offlineSyncBusy, setOfflineSyncBusy] = useState(false);
+  const [printStationStatus, setPrintStationStatus] = useState({
+    running: false,
+    tone: "idle",
+    message: "Trạm in chưa khởi động."
+  });
 
   const catalog = useMemo(
     () => buildPosCatalog({ products: rawProducts }),
@@ -553,6 +562,62 @@ export default function usePosComposer() {
   }, []);
 
   useEffect(() => {
+    const branchUuid = String(profile?.branchUuid || "").trim();
+    const userId = String(session?.user?.id || "").trim();
+    if (!branchUuid || !userId) {
+      setPrintStationStatus({
+        running: false,
+        tone: "idle",
+        message: "Đăng nhập POS để khởi động trạm in."
+      });
+      return undefined;
+    }
+
+    let active = true;
+    let stopStation = () => {};
+    const deviceId = `pos-native-${userId}`;
+
+    const startStation = async () => {
+      await startLocalPrintStationService({
+        branchUuid,
+        branchName: profile?.branchName || "",
+        deviceId
+      });
+      if (!active) {
+        await stopLocalPrintStationService();
+        return;
+      }
+      const stop = await startPosPrintStation({
+        branchUuid,
+        deviceId,
+        onStatus: (status) => {
+          if (active) setPrintStationStatus(status);
+        }
+      });
+      if (!active) {
+        if (typeof stop === "function") stop();
+        return;
+      }
+      stopStation = typeof stop === "function" ? stop : () => {};
+    };
+
+    startStation().catch((error) => {
+      if (!active) return;
+      setPrintStationStatus({
+        running: false,
+        tone: "error",
+        message: error?.message || "Không khởi động được trạm in chạy nền."
+      });
+    });
+
+    return () => {
+      active = false;
+      stopStation();
+      void stopLocalPrintStationService();
+    };
+  }, [profile?.branchName, profile?.branchUuid, session?.user?.id]);
+
+  useEffect(() => {
     const phoneKey = normalizeCustomerPhone(customerPhone);
     if (!phoneKey) {
       setCustomerLookup({
@@ -990,9 +1055,16 @@ export default function usePosComposer() {
       change: calculateCashChange(totals.total, normalizedReceived),
       reference: `CASH-${Date.now()}`
     });
-    setShiftMessage("Đã xác nhận thanh toán tiền mặt.");
+    setShiftMessage("Đã xác nhận thanh toán tiền mặt. Đang mở két tiền...");
+    void openLocalCashDrawer()
+      .then(() => {
+        setShiftMessage("Đã xác nhận thanh toán tiền mặt. Đã gửi lệnh mở két tiền.");
+      })
+      .catch((error) => {
+        setShiftMessage(`Đã xác nhận thanh toán tiền mặt. Chưa mở được két: ${error?.message || "kiểm tra máy in/két tiền."}`);
+      });
+    return true;
   };
-
   const openQrPayment = async () => {
     if (!profile || !shift?.id) {
       setShiftMessage("Cần đăng nhập và mở ca trước khi tạo QR.");
@@ -1568,6 +1640,7 @@ export default function usePosComposer() {
     historyLoading,
     historyError,
     connectionStatus,
+    printStationStatus,
     offlineOrderCount,
     offlineSyncBusy,
     addProduct,

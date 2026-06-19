@@ -38,7 +38,10 @@ final class EscPosRasterPrinter {
             String footerText,
             String footerQrUrl
     ) {
-        ReceiptRasterParts parts = splitReceiptFooter(cleanVietnamese(text));
+        String cleanText = cleanVietnamese(text);
+        ReceiptRasterParts parts = "pos_payment_qr".equals(normalizeSourceType(sourceType))
+                ? new ReceiptRasterParts(cleanText, "")
+                : splitReceiptFooter(cleanText);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         output.write(0x1B);
         output.write(0x40);
@@ -54,6 +57,10 @@ final class EscPosRasterPrinter {
         output.write(0x42);
         output.write(0x00);
         return output.toByteArray();
+    }
+
+    private static String normalizeSourceType(String value) {
+        return String.valueOf(value == null ? "" : value).trim().toLowerCase();
     }
 
     static String cleanVietnamese(String value) {

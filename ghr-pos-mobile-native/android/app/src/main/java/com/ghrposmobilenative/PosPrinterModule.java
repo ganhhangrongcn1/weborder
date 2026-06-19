@@ -1,5 +1,7 @@
 package vn.ghr.posmobile;
 
+import android.Manifest;
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -12,6 +14,7 @@ import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
+import android.content.pm.PackageManager;
 
 import androidx.annotation.NonNull;
 
@@ -45,6 +48,9 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     private static final String PRINTER_MODE_LAN = "lan";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posmobile.USB_PERMISSION";
     private static final int DEFAULT_LAN_PORT = 9100;
+    private static final byte[] CASH_DRAWER_KICK_COMMAND = new byte[] {
+            0x1B, 0x70, 0x00, 0x19, (byte) 0xFA
+    };
 
     private final ReactApplicationContext reactContext;
     private final SharedPreferences prefs;
@@ -200,6 +206,69 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
         }
     }
 
+    @ReactMethod
+    public void openCashDrawer(Promise promise) {
+        try {
+            writeRawPrinterBytes(CASH_DRAWER_KICK_COMMAND);
+            promise.resolve(buildPrinterConfig());
+        } catch (Exception error) {
+            promise.reject("CASH_DRAWER_FAILED", safeText(error.getMessage()));
+        }
+    }
+
+    @ReactMethod
+    public void startPrintStationService(String branchUuid, String branchName, String deviceId, Promise promise) {
+        String safeBranchUuid = safeText(branchUuid);
+        if (safeBranchUuid.isEmpty()) {
+            promise.reject("PRINT_STATION_BRANCH_REQUIRED", "Chưa xác định chi nhánh cho trạm in.");
+            return;
+        }
+
+        prefs.edit()
+                .putBoolean(PosPrintStationKeepAliveService.KEY_STATION_ENABLED, true)
+                .putString(PosPrintStationKeepAliveService.KEY_STATION_BRANCH_UUID, safeBranchUuid)
+                .putString(PosPrintStationKeepAliveService.KEY_STATION_BRANCH_NAME, safeText(branchName))
+                .putString(PosPrintStationKeepAliveService.KEY_STATION_DEVICE_ID, safeText(deviceId))
+                .apply();
+
+        try {
+            if (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    reactContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Activity activity = getCurrentActivity();
+                if (activity != null) {
+                    activity.requestPermissions(
+                            new String[] { Manifest.permission.POST_NOTIFICATIONS },
+                            30605
+                    );
+                }
+            }
+            Intent serviceIntent = new Intent(reactContext, PosPrintStationKeepAliveService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                reactContext.startForegroundService(serviceIntent);
+            } else {
+                reactContext.startService(serviceIntent);
+            }
+            promise.resolve(buildPrinterConfig());
+        } catch (Exception error) {
+            promise.reject("PRINT_STATION_START_FAILED", safeText(error.getMessage()));
+        }
+    }
+
+    @ReactMethod
+    public void stopPrintStationService(Promise promise) {
+        prefs.edit()
+                .putBoolean(PosPrintStationKeepAliveService.KEY_STATION_ENABLED, false)
+                .apply();
+        try {
+            reactContext.stopService(new Intent(reactContext, PosPrintStationKeepAliveService.class));
+            promise.resolve(buildPrinterConfig());
+        } catch (Exception error) {
+            promise.reject("PRINT_STATION_STOP_FAILED", safeText(error.getMessage()));
+        }
+    }
+
     private WritableMap buildPrinterConfig() {
         WritableMap map = Arguments.createMap();
         String mode = getPrinterMode();
@@ -212,6 +281,14 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
         map.putBoolean("usbConnected", selected != null);
         map.putBoolean("usbPermission", usbPermission);
         map.putString("usbLabel", selected != null ? buildUsbLabel(selected) : "");
+        map.putBoolean(
+                "printStationEnabled",
+                prefs.getBoolean(PosPrintStationKeepAliveService.KEY_STATION_ENABLED, false)
+        );
+        map.putString(
+                "printStationBranchUuid",
+                prefs.getString(PosPrintStationKeepAliveService.KEY_STATION_BRANCH_UUID, "")
+        );
         return map;
     }
 
@@ -322,6 +399,81 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
             OutputStream outputStream = socket.getOutputStream();
             outputStream.write(buildEscPosRaster(text, qrUrl, sourceType, footerText, footerQrUrl));
             outputStream.flush();
+        }
+    }
+
+    private void writeRawPrinterBytes(byte[] data) throws Exception {
+        if (PRINTER_MODE_LAN.equals(getPrinterMode())) {
+            writeRawPrinterBytesViaLan(data);
+            return;
+        }
+        writeRawPrinterBytesViaUsb(data);
+    }
+
+    private void writeRawPrinterBytesViaLan(byte[] data) throws Exception {
+        String host = safeText(prefs.getString(KEY_LAN_HOST, ""));
+        int port = getLanPort();
+        if (host.isEmpty()) {
+            throw new Exception("Chưa nhập IP máy in LAN/WiFi.");
+        }
+
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), 5000);
+            socket.setSoTimeout(5000);
+            OutputStream outputStream = socket.getOutputStream();
+            outputStream.write(data);
+            outputStream.flush();
+        }
+    }
+
+    private void writeRawPrinterBytesViaUsb(byte[] data) throws Exception {
+        UsbDevice device = getSelectedDevice();
+        if (device == null) {
+            throw new Exception("Chưa thấy máy in USB.");
+        }
+        if (usbManager == null || !usbManager.hasPermission(device)) {
+            throw new Exception("Máy in USB chưa được cấp quyền.");
+        }
+
+        UsbInterface usbInterface = null;
+        UsbEndpoint outEndpoint = null;
+        for (int i = 0; i < device.getInterfaceCount(); i++) {
+            UsbInterface candidate = device.getInterface(i);
+            for (int j = 0; j < candidate.getEndpointCount(); j++) {
+                UsbEndpoint endpoint = candidate.getEndpoint(j);
+                if (endpoint.getDirection() == android.hardware.usb.UsbConstants.USB_DIR_OUT) {
+                    usbInterface = candidate;
+                    outEndpoint = endpoint;
+                    break;
+                }
+            }
+            if (outEndpoint != null) break;
+        }
+
+        if (usbInterface == null || outEndpoint == null) {
+            throw new Exception("Không tìm thấy cổng in USB.");
+        }
+
+        UsbDeviceConnection connection = usbManager.openDevice(device);
+        if (connection == null) {
+            throw new Exception("Không mở được kết nối máy in USB.");
+        }
+
+        try {
+            if (!connection.claimInterface(usbInterface, true)) {
+                throw new Exception("Không nhận được quyền cổng USB.");
+            }
+
+            int sent = connection.bulkTransfer(outEndpoint, data, data.length, 5000);
+            if (sent <= 0) {
+                throw new Exception("Máy in không nhận lệnh mở két.");
+            }
+        } finally {
+            try {
+                connection.releaseInterface(usbInterface);
+            } catch (Exception ignored) {
+            }
+            connection.close();
         }
     }
 

@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import CashPaymentModal from "../features/pos/components/CashPaymentModal";
 import PosBenefitCard from "../features/pos/components/PosBenefitCard";
@@ -19,6 +19,7 @@ import usePosComposer from "../features/pos/hooks/usePosComposer";
 import {
   getLocalPrinterConfig,
   listLocalUsbPrinters,
+  openLocalCashDrawer,
   printLocalTestBill,
   requestLocalUsbPrinterPermission,
   saveLocalLanPrinter,
@@ -112,6 +113,7 @@ export default function PosHomeScreen() {
     historyLoading,
     historyError,
     connectionStatus,
+    printStationStatus,
     offlineOrderCount,
     offlineSyncBusy,
     addProduct,
@@ -301,6 +303,20 @@ export default function PosHomeScreen() {
       setPrinterMessage("Đã gửi bill test tới máy in.");
     } catch (error) {
       setPrinterMessage(error?.message || "Không in được bill test.");
+    } finally {
+      setPrinterBusy(false);
+    }
+  };
+
+  const handleCashDrawerTest = async () => {
+    setPrinterBusy(true);
+    setPrinterMessage("");
+    try {
+      await openLocalCashDrawer();
+      await refreshPrinterState();
+      setPrinterMessage("Đã gửi lệnh mở két tiền.");
+    } catch (error) {
+      setPrinterMessage(error?.message || "Không mở được két tiền.");
     } finally {
       setPrinterBusy(false);
     }
@@ -752,9 +768,18 @@ export default function PosHomeScreen() {
       : printerConfig.mode === "lan"
         ? `Máy in LAN: ${printerConfig.lanHost || "chưa nhập IP"}:${printerConfig.lanPort || 9100}`
         : `Máy in USB: ${printerConfig.usbLabel || "chưa chọn"}${printerConfig.usbPermission ? " · sẵn sàng" : " · cần cấp quyền"}`;
+    const drawerStatusText = printerReady
+      ? "Két sẽ tự mở khi xác nhận thanh toán tiền mặt. QR không tự mở két."
+      : "Chọn máy in trước để mở két tiền qua cổng DK/RJ11 của máy in.";
+    const printStationReady = Boolean(printStationStatus?.running && printStationStatus?.tone !== "error");
 
     return (
-      <View style={styles.secondaryPanel}>
+      <ScrollView
+        style={styles.secondaryScroll}
+        contentContainerStyle={styles.secondaryScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.secondaryPanel, styles.settingsPanel]}>
         <Text style={styles.label}>Thiết lập</Text>
         <Text style={styles.secondaryTitle}>POS chi nhánh</Text>
 
@@ -772,6 +797,27 @@ export default function PosHomeScreen() {
               <Text style={styles.summaryLabel}>Đơn lưu tạm</Text>
               <Text style={styles.summaryValue}>{offlineOrderCount} đơn</Text>
             </View>
+          </View>
+        </View>
+
+        <View style={styles.settingsStatusGrid}>
+          <View style={styles.settingsStatusTile}>
+            <Text style={styles.summaryLabel}>Supabase</Text>
+            <Text style={styles.settingsStatusValue}>
+              {connectionStatus.online ? "Online" : connectionStatus.online == null ? "Chưa kiểm tra" : "Offline"}
+            </Text>
+          </View>
+          <View style={styles.settingsStatusTile}>
+            <Text style={styles.summaryLabel}>Máy in</Text>
+            <Text style={styles.settingsStatusValue}>{printerReady ? "Sẵn sàng" : "Cần thiết lập"}</Text>
+          </View>
+          <View style={styles.settingsStatusTile}>
+            <Text style={styles.summaryLabel}>Két tiền</Text>
+            <Text style={styles.settingsStatusValue}>{printerReady ? "Tự mở" : "Theo máy in"}</Text>
+          </View>
+          <View style={styles.settingsStatusTile}>
+            <Text style={styles.summaryLabel}>Trạm in</Text>
+            <Text style={styles.settingsStatusValue}>{printStationReady ? "Đang chạy" : "Cần kiểm tra"}</Text>
           </View>
         </View>
 
@@ -807,6 +853,19 @@ export default function PosHomeScreen() {
                 : "Không có đơn offline đang chờ đồng bộ."}
             </Text>
           </View>
+          <View style={styles.printerStatusCard}>
+            <View style={styles.printerStatusHead}>
+              <Text style={styles.printerStatusTitle}>Trạm in tự động</Text>
+              <View style={[styles.printerBadge, printStationReady ? styles.printerBadgeReady : styles.printerBadgeIdle]}>
+                <Text style={[styles.printerBadgeText, printStationReady ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle]}>
+                  {printStationReady ? "Đang chạy" : "Chưa sẵn sàng"}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.placeholderText}>
+              {printStationStatus?.message || "Trạm in sẽ tự khởi động sau khi đăng nhập chi nhánh."}
+            </Text>
+          </View>
           <View style={styles.closeShiftActions}>
             <Pressable
               style={styles.smallGhostButton}
@@ -839,6 +898,18 @@ export default function PosHomeScreen() {
               </View>
             </View>
             <Text style={styles.placeholderText}>{printerStatusText}</Text>
+          </View>
+
+          <View style={styles.printerStatusCard}>
+            <View style={styles.printerStatusHead}>
+              <Text style={styles.printerStatusTitle}>Két tiền</Text>
+              <View style={[styles.printerBadge, printerReady ? styles.printerBadgeReady : styles.printerBadgeIdle]}>
+                <Text style={[styles.printerBadgeText, printerReady ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle]}>
+                  {printerReady ? "Tự động" : "Chưa sẵn sàng"}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.placeholderText}>{drawerStatusText}</Text>
           </View>
 
           <View style={styles.modeRow}>
@@ -916,12 +987,21 @@ export default function PosHomeScreen() {
               <Text style={[styles.closeShiftText, printerBusy && styles.disabledText]}>In test</Text>
             </Pressable>
           </View>
+          <Pressable
+            style={[styles.cashDrawerButton, printerBusy && styles.submitButtonDisabled]}
+            onPress={handleCashDrawerTest}
+            disabled={printerBusy}
+          >
+            <PosIcon name="cash" size={16} color={printerBusy ? POS_COLORS.muted : POS_COLORS.primaryDark} />
+            <Text style={[styles.cashDrawerButtonText, printerBusy && styles.disabledText]}>Mở két thử</Text>
+          </Pressable>
         </View>
 
         <Pressable style={styles.smallGhostButton} onPress={refreshCurrentPosRuntime}>
           <Text style={styles.smallGhostText}>Tải lại dữ liệu POS</Text>
         </Pressable>
-      </View>
+        </View>
+      </ScrollView>
     );
   };
 
@@ -1135,8 +1215,42 @@ const styles = StyleSheet.create({
     borderRadius: POS_RADIUS.md,
     padding: 14
   },
+  secondaryScroll: {
+    flex: 1,
+    minHeight: 0
+  },
+  secondaryScrollContent: {
+    paddingBottom: 6
+  },
+  settingsPanel: {
+    flex: 0
+  },
   summaryCard: {
     gap: 8
+  },
+  settingsStatusGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  settingsStatusTile: {
+    flex: 1,
+    minWidth: 132,
+    minHeight: 58,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.subtleSurface,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    justifyContent: "center"
+  },
+  settingsStatusValue: {
+    color: POS_COLORS.heading,
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900"
   },
   shiftHeroRow: {
     flexDirection: "row",
@@ -1356,6 +1470,23 @@ const styles = StyleSheet.create({
   },
   closeShiftText: {
     color: POS_COLORS.surface,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  cashDrawerButton: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#9fd5ae",
+    backgroundColor: POS_COLORS.primarySoft,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12
+  },
+  cashDrawerButtonText: {
+    color: POS_COLORS.primaryDark,
     fontSize: 12,
     fontWeight: "900"
   },

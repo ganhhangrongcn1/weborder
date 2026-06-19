@@ -99,6 +99,28 @@ export async function printLocalTestBill() {
   return printerModule.printTestBill();
 }
 
+export async function openLocalCashDrawer() {
+  if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
+  if (typeof printerModule.openCashDrawer !== "function") {
+    throw new Error("Bản POS app này chưa hỗ trợ mở két tiền.");
+  }
+  return printerModule.openCashDrawer();
+}
+
+export async function startLocalPrintStationService({ branchUuid = "", branchName = "", deviceId = "" } = {}) {
+  if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
+  if (typeof printerModule.startPrintStationService !== "function") {
+    throw new Error("Bản POS app này chưa hỗ trợ trạm in chạy nền.");
+  }
+  return printerModule.startPrintStationService(branchUuid, branchName, deviceId);
+}
+
+export async function stopLocalPrintStationService() {
+  if (!isLocalPrinterAvailable()) return null;
+  if (typeof printerModule.stopPrintStationService !== "function") return null;
+  return printerModule.stopPrintStationService();
+}
+
 export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = "", footerText = "", footerQrUrl = "" } = {}) {
   if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
   return printerModule.printReceipt({
