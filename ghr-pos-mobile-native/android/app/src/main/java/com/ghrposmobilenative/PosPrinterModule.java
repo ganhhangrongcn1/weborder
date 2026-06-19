@@ -51,8 +51,12 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     private static final String PRINTER_MODE_LAN = "lan";
     private static final String ACTION_USB_PERMISSION = "vn.ghr.posmobile.USB_PERMISSION";
     private static final int DEFAULT_LAN_PORT = 9100;
-    private static final byte[] CASH_DRAWER_KICK_COMMAND = new byte[] {
-            0x1B, 0x70, 0x00, 0x19, (byte) 0xFA
+    private static final byte[][] CASH_DRAWER_KICK_COMMANDS = new byte[][] {
+            new byte[] { 0x1B, 0x40 },
+            new byte[] { 0x1B, 0x70, 0x00, 0x32, (byte) 0xFA },
+            new byte[] { 0x1B, 0x70, 0x01, 0x32, (byte) 0xFA },
+            new byte[] { 0x1B, 0x70, 0x30, 0x32, (byte) 0xFA },
+            new byte[] { 0x1B, 0x70, 0x31, 0x32, (byte) 0xFA }
     };
 
     private final ReactApplicationContext reactContext;
@@ -217,7 +221,14 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void openCashDrawer(Promise promise) {
         try {
-            writeRawPrinterBytes(CASH_DRAWER_KICK_COMMAND);
+            for (byte[] command : CASH_DRAWER_KICK_COMMANDS) {
+                writeRawPrinterBytes(command);
+                try {
+                    Thread.sleep(80);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             promise.resolve(buildPrinterConfig());
         } catch (Exception error) {
             promise.reject("CASH_DRAWER_FAILED", safeText(error.getMessage()));

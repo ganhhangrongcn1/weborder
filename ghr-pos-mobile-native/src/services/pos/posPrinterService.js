@@ -3,6 +3,18 @@ import { NativeModules, Platform } from "react-native";
 import { formatMoney } from "../../utils/format";
 
 const printerModule = NativeModules.PosPrinter || null;
+const NO_FOOTER_SOURCE_TYPES = new Set(["pos_payment_qr", "pos_shift_close"]);
+const DEFAULT_RECEIPT_FOOTER_TEXT = [
+  "------------------------------------------",
+  "@@CENTER:Quét QR tích điểm ngay",
+  "@@QR",
+  "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon",
+  "@@CENTER:đều được tích điểm tại Gánh Hàng Rong",
+  "@@CENTER:Quét để xem đơn và dùng điểm",
+  "@@CENTER:Hotline: 0933 799 061",
+  "@@CENTER:Cảm ơn quý khách!"
+].join("\n");
+const DEFAULT_RECEIPT_FOOTER_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -135,12 +147,14 @@ export async function stopLocalPrintStationService() {
 
 export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = "", footerText = "", footerQrUrl = "" } = {}) {
   if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
+  const safeSourceType = toText(sourceType).toLowerCase();
+  const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType);
   return printerModule.printReceipt({
     text,
     qrUrl,
-    sourceType,
-    footerText,
-    footerQrUrl
+    sourceType: safeSourceType || sourceType,
+    footerText: toText(footerText) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_TEXT : ""),
+    footerQrUrl: toText(footerQrUrl) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_QR_URL : "")
   });
 }
 

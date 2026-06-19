@@ -226,7 +226,23 @@ function getOrderAutoPrintTimeValue(order = {}) {
 function isAutoPrintableOrder(order = {}) {
   const kitchenStatus = toText(order.kitchenStatus || order.status).toLowerCase();
   const orderStatus = toText(order.status).toLowerCase();
+  const metadata = order.metadata && typeof order.metadata === "object" ? order.metadata : {};
+  const sourceText = [
+    order.source,
+    order.sourceType,
+    order.orderSource,
+    order.channel,
+    order.platform,
+    order.partnerSource,
+    metadata.source,
+    metadata.sourceType,
+    metadata.orderSource,
+    metadata.channel,
+    metadata.platform,
+    metadata.partnerSource
+  ].map((value) => toText(value).toLowerCase()).filter(Boolean);
   if (!getOrderAutoPrintKey(order)) return false;
+  if (sourceText.includes("pos") || sourceText.includes("pos_mobile")) return false;
   if (["done", "completed", "ready", "cancelled", "canceled", "preorder"].includes(kitchenStatus)) return false;
   if (["done", "completed", "cancelled", "canceled", "preorder"].includes(orderStatus)) return false;
   return true;

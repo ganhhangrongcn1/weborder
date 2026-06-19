@@ -25,7 +25,7 @@ import {
   readPosOrderDetail,
   readPosOrderForPrint
 } from "../../../services/pos/posOrderQueryService";
-import { buildPosPaymentReference } from "../../../services/pos/posPaymentService";
+import { buildPosPaymentReference, buildPosQrImageUrl } from "../../../services/pos/posPaymentService";
 import {
   cancelPosPaymentSession,
   confirmPosPaymentSessionManually,
@@ -1267,6 +1267,15 @@ export default function usePosComposer() {
     }
 
     const identity = qrSession?.orderIdentity || qrPreviewIdentity || {};
+    const qrUrl = qrSession?.qrImageUrl || buildPosQrImageUrl({
+      branch,
+      amount: qrSession?.amountExpected || totals.total,
+      orderIdentity: identity
+    });
+    if (!qrUrl) {
+      setQrError("Chưa tạo được mã QR để in. Kiểm tra cấu hình ngân hàng của chi nhánh.");
+      return;
+    }
     const receiptText = buildPosQrReceiptText({
       branchName: profile?.branchName,
       amount: qrSession?.amountExpected || totals.total,
@@ -1280,7 +1289,7 @@ export default function usePosComposer() {
     try {
       await printLocalReceipt({
         text: receiptText,
-        qrUrl: qrSession?.qrImageUrl || "",
+        qrUrl,
         sourceType: "pos_payment_qr"
       });
       setShiftMessage("Đã in phiếu QR tại máy POS.");

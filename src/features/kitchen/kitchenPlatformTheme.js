@@ -20,6 +20,13 @@ const ADMIN_ORDER_SOURCE_TONES = {
     color: "#1d4ed8",
     strong: "#1e3a8a"
   },
+  counter: {
+    background: "#fff7ed",
+    soft: "#fffbeb",
+    border: "#fed7aa",
+    color: "#c2410c",
+    strong: "#7c2d12"
+  },
   delivery: {
     background: "#dcfce7",
     soft: "#f0fdf4",
@@ -76,6 +83,9 @@ export function getKitchenPlatformTone(platform = "") {
   if (value.includes("grab")) return ADMIN_ORDER_SOURCE_TONES.grab;
   if (value.includes("shopee")) return ADMIN_ORDER_SOURCE_TONES.shopee;
   if (value.includes("xanh")) return ADMIN_ORDER_SOURCE_TONES.xanhngon;
+  if (value.includes("pos") || value.includes("tai quay") || value.includes("quay")) {
+    return ADMIN_ORDER_SOURCE_TONES.counter;
+  }
   if (value.includes("qr")) return ADMIN_ORDER_SOURCE_TONES.qr;
   if (value.includes("pickup") || value.includes("tu lay") || value.includes("den lay")) {
     return ADMIN_ORDER_SOURCE_TONES.pickup;
