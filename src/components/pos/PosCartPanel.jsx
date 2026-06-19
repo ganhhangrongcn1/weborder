@@ -338,6 +338,7 @@ export default function PosCartPanel({
   paymentConfirmed,
   qrDraftOrder,
   qrDraftLoading,
+  offlineMode = false,
   draftLocked,
   createError,
   creatingOrder,
@@ -380,6 +381,8 @@ export default function PosCartPanel({
         : "";
   const actionLabel = customerLookup.loading ? "Đang tra" : "Xem";
   const benefitCopy = buildBenefitCompactCopy({ promotionHints, loyaltyBenefit, selectedVoucher });
+  const benefitDisabled = draftLocked || Boolean(paymentConfirmed) || offlineMode;
+  const benefitDisabledReason = offlineMode ? "Cần mạng để áp dụng voucher hoặc điểm loyalty." : "";
   const hasBenefitCompact = Boolean(
     (promotionHints || []).length ||
     (loyaltyBenefit?.normalVouchers || []).length ||
@@ -450,8 +453,9 @@ export default function PosCartPanel({
                 setSelectedVoucherId={setSelectedVoucherId}
                 pointsInput={pointsInput}
                 setPointsInput={setPointsInput}
-                disabled={draftLocked || Boolean(paymentConfirmed)}
+                disabled={benefitDisabled}
               />
+              {benefitDisabledReason ? <div className="pos-create-message is-error">{benefitDisabledReason}</div> : null}
             </div>
             <button type="button" className="pos-modal-primary" onClick={() => setCustomerBenefitOpen(false)}>
               Xong
@@ -466,7 +470,7 @@ export default function PosCartPanel({
         loyaltyBenefit={loyaltyBenefit}
         selectedVoucherId={selectedVoucherId}
         setSelectedVoucherId={setSelectedVoucherId}
-        disabled={draftLocked || Boolean(paymentConfirmed)}
+        disabled={benefitDisabled}
         promotionHints={promotionHints}
       />
 
@@ -493,10 +497,10 @@ export default function PosCartPanel({
       {cart.length ? (
         <div className="pos-cart-footer">
           {hasBenefitCompact ? (
-            <button type="button" className="pos-benefit-compact-trigger" onClick={() => setVoucherOpen(true)}>
+            <button type="button" className="pos-benefit-compact-trigger" disabled={offlineMode} title={benefitDisabledReason} onClick={() => setVoucherOpen(true)}>
               <span>Ưu đãi & tư vấn</span>
-              <strong>{benefitCopy.title}</strong>
-              <small>{benefitCopy.subtitle}</small>
+              <strong>{offlineMode ? "Cần mạng để dùng ưu đãi" : benefitCopy.title}</strong>
+              <small>{offlineMode ? "POS vẫn bán tiền mặt không ưu đãi bình thường" : benefitCopy.subtitle}</small>
               <em>Mở</em>
             </button>
           ) : null}
@@ -531,8 +535,14 @@ export default function PosCartPanel({
           <section className="pos-payment-box pos-payment-box--footer">
             <div className="pos-payment-methods pos-payment-methods--footer">
               <PaymentMethodButton active={paymentMethod === "cash"} iconName="cash" label="Tiền mặt" disabled={Boolean(paymentConfirmed) || qrDraftLoading} onClick={onOpenCashPayment} />
-              <PaymentMethodButton active={paymentMethod === "bank_qr"} iconName="qr" label={qrDraftLoading ? "Đang tạo QR" : "QR chuyển khoản"} disabled={Boolean(paymentConfirmed) || qrDraftLoading} onClick={onOpenQrPayment} />
+              <PaymentMethodButton active={paymentMethod === "bank_qr"} iconName="qr" label={qrDraftLoading ? "Đang tạo QR" : "QR chuyển khoản"} disabled={Boolean(paymentConfirmed) || qrDraftLoading || offlineMode} title={offlineMode ? "Cần mạng để tạo QR chuyển khoản." : ""} onClick={onOpenQrPayment} />
             </div>
+            {offlineMode ? (
+              <div className="pos-payment-status is-warning">
+                <span>Mất mạng</span>
+                <strong>Chỉ nhận tiền mặt. QR và ưu đãi đang tạm khóa.</strong>
+              </div>
+            ) : null}
             {paymentConfirmed ? (
               <div className="pos-payment-status">
                 <span>Đã xác nhận thanh toán</span>

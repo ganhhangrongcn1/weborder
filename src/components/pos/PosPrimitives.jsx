@@ -136,11 +136,16 @@ const POS_WORKSPACES = [
 export function PosWorkspaceNav({
   activeWorkspace = "orders",
   pendingCount = 0,
+  online = true,
+  syncLabel = "",
   branchLabel = "",
   onChange,
   onLogout
 }) {
   const [branchPopupOpen, setBranchPopupOpen] = useState(false);
+  const safePendingCount = Math.max(0, Number(pendingCount || 0));
+  const statusText = online ? "Online" : "Mất mạng";
+  const detailText = syncLabel || (safePendingCount > 0 ? `${safePendingCount} đơn chờ đồng bộ` : "Đã đồng bộ");
 
   return (
     <>
@@ -157,7 +162,7 @@ export function PosWorkspaceNav({
 
         <nav className="pos-workspace-links" aria-label="Điều hướng POS">
           {POS_WORKSPACES.map((workspace) => {
-            const count = workspace.id === "history" ? Number(pendingCount || 0) : 0;
+            const count = workspace.id === "history" ? safePendingCount : 0;
             return (
               <button
                 key={workspace.id}
@@ -178,6 +183,11 @@ export function PosWorkspaceNav({
           <PosIcon name="logout" />
           <span>Đổi ca</span>
         </button>
+
+        <div className={`pos-sync-status ${online ? "is-online" : "is-offline"} ${safePendingCount > 0 ? "has-pending" : ""}`}>
+          <span>{statusText}</span>
+          <strong>{detailText}</strong>
+        </div>
       </footer>
 
       {branchPopupOpen ? (

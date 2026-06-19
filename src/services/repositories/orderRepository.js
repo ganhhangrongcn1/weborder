@@ -5,11 +5,16 @@ import { normalizeOrdersByPhoneMap } from "./phoneDataMigration.js";
 import { getRuntimeStrategy } from "./runtimeStrategy.js";
 import { STORAGE_KEYS } from "./storageKeys.js";
 import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
+import { enqueuePosOfflineOrder, removePosOfflineOrder } from "../posOfflineQueueService.js";
 
 const repository = createRuntimeAppConfigRepository();
 const REMOTE_CACHE_TTL_MS = 8000;
 const CUSTOMER_REALTIME_SYNC_DELAY_MS = 900;
 const DEFAULT_CUSTOMER_ORDER_SYNC_LIMIT = 6;
+const ORDER_SYNC_STATUS = {
+  pending: "pending_sync",
+  synced: "synced"
+};
 let ordersRemoteCache = { value: null, cachedAt: 0 };
 let ordersReadInFlight = null;
 
@@ -177,16 +182,67 @@ function resolveOrderStorageKey(order = {}) {
   return orderId ? `walkin:${orderId}` : "";
 }
 
+function getObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function isPosOrderForSync(order = {}) {
+  const metadata = getObject(order.metadata);
+  return [order.channel, order.platform, order.orderSource, order.partnerSource, metadata.channel, metadata.source, metadata.orderSource]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .includes("pos");
+}
+
+function isCashPaidPosOrder(order = {}) {
+  if (!isPosOrderForSync(order)) return false;
+  const metadata = getObject(order.metadata);
+  const paymentMethod = String(order.paymentMethod || metadata.paymentMethod || "").trim().toLowerCase();
+  const paymentStatus = String(order.paymentStatus || metadata.paymentStatus || "").trim().toLowerCase();
+  return paymentMethod === "cash" && paymentStatus === "paid";
+}
+
+function withOrderSyncStatus(order = {}, syncStatus = "", syncError = "") {
+  if (!isPosOrderForSync(order) || !syncStatus) return order;
+  const metadata = getObject(order.metadata);
+  const nextMetadata = {
+    ...metadata,
+    syncStatus,
+    syncUpdatedAt: new Date().toISOString()
+  };
+
+  if (syncError) {
+    nextMetadata.syncError = syncError;
+  } else {
+    delete nextMetadata.syncError;
+  }
+
+  return {
+    ...order,
+    syncStatus,
+    syncError: syncError || "",
+    metadata: nextMetadata
+  };
+}
+
+function sameOrderIdentity(order = {}, targetId = "") {
+  const safeTargetId = String(targetId || "").trim();
+  if (!safeTargetId) return false;
+  return [order.id, order.orderCode].map((value) => String(value || "").trim()).includes(safeTargetId);
+}
+
 async function persistOrderLocalAsync(nextOrder, phoneKey) {
   await repository.setAsync(STORAGE_KEYS.lastCreatedOrderId, String(nextOrder.id || nextOrder.orderCode || "").trim());
   await repository.setAsync(STORAGE_KEYS.currentOrder, nextOrder || null);
   const all = await orderRepository.getAllByPhoneAsync();
   const current = Array.isArray(all[phoneKey]) ? all[phoneKey] : [];
-  const next = { ...all, [phoneKey]: [nextOrder, ...current] };
+  const orderId = String(nextOrder.id || nextOrder.orderCode || "").trim();
+  const withoutCurrentOrder = current.filter((order) => !sameOrderIdentity(order, orderId));
+  const next = { ...all, [phoneKey]: [nextOrder, ...withoutCurrentOrder] };
   const normalizedNext = normalizeOrdersByPhoneMap(next);
   await repository.setAsync(STORAGE_KEYS.ordersByPhone, normalizedNext);
   ordersRemoteCache = { value: normalizedNext, cachedAt: Date.now() };
   notifyOrdersChanged({ source: "persist-order-local", changedPhones: [phoneKey] });
+  return nextOrder;
 }
 
 export const orderRepository = {
@@ -384,7 +440,8 @@ export const orderRepository = {
     nextOrder.customerPhone = normalizedPhone;
     nextOrder.customerPhoneKey = key;
     nextOrder.rawCustomerPhone = nextOrder.rawCustomerPhone || nextOrder.customerPhone || nextOrder.phone;
-    await persistOrderLocalAsync(nextOrder, key);
+    const localPendingOrder = withOrderSyncStatus(nextOrder, ORDER_SYNC_STATUS.pending);
+    await persistOrderLocalAsync(localPendingOrder, key);
     const runtime = getRuntimeStrategy();
     const shouldWriteOrders = canWriteOrdersToSupabase();
     console.info("[order-debug] upsertOrderAsync:runtime", {
@@ -406,6 +463,10 @@ export const orderRepository = {
         console.info("[order-debug] upsertOrderAsync:remote-write:ok", {
           orderId: nextOrder.id
         });
+        const syncedOrder = withOrderSyncStatus(nextOrder, ORDER_SYNC_STATUS.synced);
+        await persistOrderLocalAsync(syncedOrder, key);
+        removePosOfflineOrder(syncedOrder);
+        return syncedOrder;
       } catch (error) {
         console.warn("[orderRepository] upsert single order failed", error);
         console.error("[order-debug] upsertOrderAsync:remote-write:failed", {
@@ -414,12 +475,25 @@ export const orderRepository = {
           details: error?.details || "",
           hint: error?.hint || ""
         });
+        if (isCashPaidPosOrder(nextOrder)) {
+          const pendingOrder = withOrderSyncStatus(
+            nextOrder,
+            ORDER_SYNC_STATUS.pending,
+            error?.message || "Supabase write failed"
+          );
+          await persistOrderLocalAsync(pendingOrder, key);
+          enqueuePosOfflineOrder(pendingOrder, error?.message || "Supabase write failed");
+          return pendingOrder;
+        }
         throw error;
       }
     } else {
       console.warn("[order-debug] upsertOrderAsync:remote-write:skipped");
+      if (isCashPaidPosOrder(nextOrder)) {
+        enqueuePosOfflineOrder(localPendingOrder, "Supabase chưa sẵn sàng.");
+      }
     }
-    return nextOrder;
+    return localPendingOrder;
   },
   subscribeRealtimeByPhone(phone, onSynced) {
     const key = getCustomerKey(phone);

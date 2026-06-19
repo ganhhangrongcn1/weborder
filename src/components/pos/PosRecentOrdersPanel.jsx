@@ -256,8 +256,10 @@ function OrderDetailModal({
 export default function PosRecentOrdersPanel({
   orders,
   paymentSessions = [],
+  offlineOrders = [],
   loading,
   paymentSessionsLoading = false,
+  offlineOrdersSyncing = false,
   error,
   paymentSessionsError = "",
   actionMessage = "",
@@ -271,7 +273,8 @@ export default function PosRecentOrdersPanel({
   onCancelOrder,
   onReprintOrder,
   onOpenPaymentSession,
-  onCancelPaymentSession
+  onCancelPaymentSession,
+  onSyncOfflineOrders
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [rangeFilter, setRangeFilter] = useState("shift");
@@ -301,6 +304,10 @@ export default function PosRecentOrdersPanel({
       ["draft", "pending_payment"].includes(toText(session.status).toLowerCase())
     )).length,
     [paymentSessions]
+  );
+  const pendingOfflineOrders = useMemo(
+    () => (Array.isArray(offlineOrders) ? offlineOrders : []).filter((order) => toText(order.id || order.orderCode)),
+    [offlineOrders]
   );
 
   const selectedOrder = useMemo(
@@ -340,6 +347,39 @@ export default function PosRecentOrdersPanel({
       {actionMessage ? <div className={`pos-create-message ${actionMessageType === "success" ? "is-success" : "is-error"}`}>{actionMessage}</div> : null}
       {error ? <div className="pos-create-message is-error">{error}</div> : null}
       {paymentSessionsError ? <div className="pos-create-message is-error">{paymentSessionsError}</div> : null}
+
+      {pendingOfflineOrders.length ? (
+        <section className="pos-offline-sync-panel">
+          <header>
+            <div>
+              <span>Đơn chờ đồng bộ</span>
+              <strong>{pendingOfflineOrders.length} đơn đang lưu trên máy</strong>
+            </div>
+            <button type="button" disabled={offlineOrdersSyncing || typeof onSyncOfflineOrders !== "function"} onClick={onSyncOfflineOrders}>
+              {offlineOrdersSyncing ? "Đang đồng bộ..." : "Đồng bộ lại"}
+            </button>
+          </header>
+          <div className="pos-offline-sync-list">
+            {pendingOfflineOrders.slice(0, 4).map((order) => {
+              const metadata = getObject(order.metadata);
+              const orderId = toText(order.id || order.orderCode);
+              const syncError = toText(order.syncError || metadata.syncError);
+              const attempts = Number(order.syncAttemptCount || metadata.syncAttemptCount || 0);
+              return (
+                <article key={orderId}>
+                  <div>
+                    <strong>{getOrderCode(order)}</strong>
+                    <span>{formatOrderTime(order.createdAt)} · {formatMoney(getOrderTotal(order))}</span>
+                  </div>
+                  <em>{attempts > 0 ? `${attempts} lần thử` : "Chưa thử lại"}</em>
+                  {syncError ? <small>{syncError}</small> : null}
+                </article>
+              );
+            })}
+          </div>
+          {pendingOfflineOrders.length > 4 ? <p>+{pendingOfflineOrders.length - 4} đơn khác đang chờ đồng bộ.</p> : null}
+        </section>
+      ) : null}
 
       <div className="pos-recent-orders-list pos-recent-orders-list--embedded">
         {filteredPaymentSessions.length ? (

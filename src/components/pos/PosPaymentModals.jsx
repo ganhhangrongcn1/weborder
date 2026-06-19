@@ -252,9 +252,9 @@ export function PosConfirmModal({
   );
 }
 
-export function PaymentMethodButton({ active, iconName, label, disabled, onClick }) {
+export function PaymentMethodButton({ active, iconName, label, disabled, title = "", onClick }) {
   return (
-    <button type="button" className={`pos-payment-method-button ${active ? "is-active" : ""}`} disabled={disabled} onClick={onClick}>
+    <button type="button" className={`pos-payment-method-button ${active ? "is-active" : ""}`} disabled={disabled} title={title} onClick={onClick}>
       <span>
         <PosIcon name={iconName} />
       </span>

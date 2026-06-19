@@ -1,6 +1,7 @@
 import { orderStorage } from "./orderService.js";
 import { getCustomerKey } from "./storageService.js";
 import { applyOrderLoyaltyAsync } from "./loyaltyService.js";
+import { getPendingPosOfflineOrders } from "./posOfflineQueueService.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import { getRuntimeSupabaseClient } from "./repositories/repositoryRuntime.js";
 
@@ -647,6 +648,21 @@ function isOrderPagerClosed(order = {}) {
   return isOrderClosedStatus(kitchenStatus);
 }
 
+function mergePosRecentOrders(primary = [], pending = [], limit = 30) {
+  const seen = new Set();
+  return [...(pending || []), ...(primary || [])]
+    .filter(Boolean)
+    .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())
+    .filter((order) => {
+      const id = toText(order.id || order.orderCode);
+      if (!id) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .slice(0, Math.max(1, Math.min(100, Math.floor(toNumber(limit, 30)))));
+}
+
 export function canCancelPosOrder(order = {}) {
   const status = toText(order.status).toLowerCase();
   if (!status) return false;
@@ -657,22 +673,23 @@ export function canCancelPosOrder(order = {}) {
 
 export async function getPosRecentOrdersAsync({ branchValue = "", limit = 30 } = {}) {
   const safeLimit = Math.max(1, Math.min(100, Math.floor(toNumber(limit, 30))));
+  const pendingOfflineOrders = getPendingPosOfflineOrders({ branchValue });
   try {
     const remoteOrders = await getPosRecentOrdersFromSupabaseAsync({
       branchValue,
       limit: safeLimit
     });
-    if (Array.isArray(remoteOrders)) return remoteOrders;
+    if (Array.isArray(remoteOrders)) return mergePosRecentOrders(remoteOrders, pendingOfflineOrders, safeLimit);
   } catch (error) {
     console.warn("[posService] read POS history from Supabase failed", error);
   }
 
   const allByPhone = await orderStorage.getAllByPhoneAsync();
-  return Object.values(allByPhone || {}).flat()
+  const localOrders = Object.values(allByPhone || {}).flat()
     .filter((order) => isPosOrder(order))
     .filter((order) => matchesPosBranch(order, branchValue))
-    .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime())
-    .slice(0, safeLimit);
+    .sort((first, second) => new Date(second.createdAt || 0).getTime() - new Date(first.createdAt || 0).getTime());
+  return mergePosRecentOrders(localOrders, pendingOfflineOrders, safeLimit);
 }
 
 export async function getBusyPosPagerNumbersAsync({ branchValue = "" } = {}) {
@@ -1016,10 +1033,14 @@ export async function createPosTakeawayOrder({
         loyaltyWarning = ` Đơn đã tạo nhưng chưa trừ được điểm: ${error?.message || "kiểm tra policy Supabase loyalty."}`;
       }
     }
+    const syncWarning = savedOrder?.syncStatus === "pending_sync"
+      ? " Đơn đã lưu trên máy và sẽ đồng bộ Supabase khi mạng ổn định."
+      : "";
     return {
       ok: true,
       order: savedOrder,
-      message: `Đã tạo đơn ${orderCode} cho thẻ ${pager}.${loyaltyWarning}`
+      syncStatus: savedOrder?.syncStatus || "synced",
+      message: `Đã tạo đơn ${orderCode} cho thẻ ${pager}.${syncWarning}${loyaltyWarning}`
     };
   } catch (error) {
     return {

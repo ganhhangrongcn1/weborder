@@ -16,6 +16,16 @@ import usePosCustomerLookup from "../hooks/usePosCustomerLookup.js";
 import { lookupPosCustomerByPhone } from "../services/posCustomerService.js";
 import { createCustomerBillPrintJob, createPosQrPrintJob, createPosShiftClosePrintJob } from "../services/printJobService.js";
 import { startPosAutoPrint } from "../services/posAutomationService.js";
+import {
+  readPosCatalogCache,
+  savePosCatalogCache,
+  subscribePosCatalogCache
+} from "../services/posCatalogCacheService.js";
+import {
+  getPendingPosOfflineOrders,
+  subscribePosOfflineQueue,
+  syncPendingPosOfflineOrders
+} from "../services/posOfflineQueueService.js";
 import { buildPosPaymentReference, calculateCashChange, normalizeCashReceived } from "../services/posPaymentService.js";
 import { hasAndroidPrinterBridge, printCustomerBill } from "../services/printerService.js";
 import {
@@ -298,6 +308,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [pendingPaymentSessions, setPendingPaymentSessions] = useState([]);
   const [pendingPaymentsLoading, setPendingPaymentsLoading] = useState(false);
   const [pendingPaymentsError, setPendingPaymentsError] = useState("");
+  const [pendingOfflineOrders, setPendingOfflineOrders] = useState([]);
+  const [pendingOfflineOrderCount, setPendingOfflineOrderCount] = useState(0);
+  const [offlineOrdersSyncing, setOfflineOrdersSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
   const [pendingCancelTarget, setPendingCancelTarget] = useState(null);
   const [cancellingPaymentSessionId, setCancellingPaymentSessionId] = useState("");
   const [activeShift, setActiveShift] = useState(null);
@@ -309,8 +323,18 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
   const [closingShift, setClosingShift] = useState(false);
   const [shiftCloseError, setShiftCloseError] = useState("");
+  const [posCatalogCache, setPosCatalogCache] = useState(() => readPosCatalogCache());
 
-  const { activeCategory, setActiveCategory, categories: posCategories, visibleProducts } = usePosCatalog({ products, categories });
+  const hasLiveProducts = Array.isArray(products) && products.length > 0;
+  const hasLiveBranches = Array.isArray(branches) && branches.length > 0;
+  const effectiveProducts = hasLiveProducts ? products : posCatalogCache.products;
+  const effectiveCategories = hasLiveProducts || (Array.isArray(categories) && categories.length)
+    ? categories
+    : posCatalogCache.categories;
+  const effectiveBranches = hasLiveBranches ? branches : posCatalogCache.branches;
+  const usingCachedCatalog = !hasLiveProducts && posCatalogCache.products.length > 0;
+
+  const { activeCategory, setActiveCategory, categories: posCategories, visibleProducts } = usePosCatalog({ products: effectiveProducts, categories: effectiveCategories });
   const { cart, totals, addProduct, updateQuantity, removeItem, syncGiftItems, restoreCart, clearCart } = usePosCart();
   const customerLookup = usePosCustomerLookup(customerPhone);
   const loyaltyBenefit = useMemo(
@@ -329,9 +353,15 @@ export default function PosPage({ products = [], categories = [], branches = [],
     pointsDiscount: loyaltyBenefit.pointsDiscount,
     total: Math.max(0, totals.subtotal - loyaltyBenefit.voucherDiscount - loyaltyBenefit.pointsDiscount)
   }), [loyaltyBenefit.pointsDiscount, loyaltyBenefit.voucherDiscount, totals]);
+  const usesOfflineLockedBenefit = Boolean(
+    loyaltyBenefit.selectedVoucher ||
+    toNumber(loyaltyBenefit.pointsSpent, 0) > 0 ||
+    toNumber(loyaltyBenefit.voucherDiscount, 0) > 0 ||
+    toNumber(loyaltyBenefit.pointsDiscount, 0) > 0
+  );
   const promotionHints = useMemo(
-    () => buildPromotionHints(smartPromotions, products, totals.subtotal),
-    [products, smartPromotions, totals.subtotal]
+    () => buildPromotionHints(smartPromotions, effectiveProducts, totals.subtotal),
+    [effectiveProducts, smartPromotions, totals.subtotal]
   );
   const billPaymentKey = useMemo(() => JSON.stringify({
     items: cart.map((item) => ({
@@ -355,9 +385,14 @@ export default function PosPage({ products = [], categories = [], branches = [],
     posTotals.voucherDiscount
   ]);
 
-  const selectedBranch = (Array.isArray(branches) ? branches : []).find((branch, index) => getBranchValue(branch, index) === posSession?.branchValue) || null;
+  const selectedBranch = (Array.isArray(effectiveBranches) ? effectiveBranches : []).find((branch, index) => getBranchValue(branch, index) === posSession?.branchValue) || null;
   const branchLabel = selectedBranch ? getBranchLabel(selectedBranch) : posSession?.branchName || "";
   const selectedBranchUuid = selectedBranch ? getBranchUuid(selectedBranch, getBranchValue) : posSession?.branchValue || "";
+  const syncStatusLabel = pendingOfflineOrderCount > 0
+    ? `${pendingOfflineOrderCount} đơn chờ đồng bộ`
+    : "Đã đồng bộ";
+  const workspacePendingCount = pendingPaymentSessions.length + pendingOfflineOrderCount;
+  const offlineMode = !isOnline;
   const hasOpenShift = Boolean(activeShift?.id && toText(activeShift.status).toLowerCase() === "open");
   const hasSelectedPager = Boolean(pagerNumber.trim());
   const selectedPagerIsBusy = hasSelectedPager &&
@@ -380,6 +415,13 @@ export default function PosPage({ products = [], categories = [], branches = [],
     const normalizedPhone = toText(phone);
     const usesLoyaltyPoints = toNumber(pointsSpent, 0) > 0;
     const usesLoyaltyVoucher = toText(selectedVoucher?.source).toLowerCase() === "loyalty";
+
+    if (offlineMode && (usesLoyaltyPoints || selectedVoucher)) {
+      return {
+        ok: false,
+        message: "Đang mất mạng. Vui lòng bỏ voucher/điểm loyalty hoặc nhận tiền mặt không ưu đãi."
+      };
+    }
 
     if (!normalizedPhone || (!usesLoyaltyPoints && !usesLoyaltyVoucher)) {
       return { ok: true, customer: customerLookup.result };
@@ -503,6 +545,45 @@ export default function PosPage({ products = [], categories = [], branches = [],
     } finally {
       setRecentOrdersLoading(false);
     }
+  };
+
+  const loadPendingOfflineOrders = () => {
+    if (!selectedBranchUuid) {
+      setPendingOfflineOrders([]);
+      setPendingOfflineOrderCount(0);
+      return [];
+    }
+
+    const rows = getPendingPosOfflineOrders({ branchValue: selectedBranchUuid });
+    setPendingOfflineOrders(rows);
+    setPendingOfflineOrderCount(rows.length);
+    return rows;
+  };
+
+  const syncPendingOfflineOrders = async ({ silent = true } = {}) => {
+    if (!selectedBranchUuid) return null;
+    const result = await syncPendingPosOfflineOrders({
+      branchValue: selectedBranchUuid,
+      limit: 20
+    });
+    loadPendingOfflineOrders();
+
+    if (result?.syncedCount > 0) {
+      if (!silent) {
+        setRecentOrdersActionMessage(result.message || `Đã đồng bộ ${result.syncedCount} đơn POS.`);
+        setRecentOrdersActionType("success");
+      }
+      await loadRecentOrders();
+      await loadBusyPagers();
+      if (activeShift?.id) {
+        await loadShiftSummary({ silent: true });
+      }
+    } else if (!silent && result?.failedCount > 0) {
+      setRecentOrdersActionMessage(result.message || "Một số đơn POS chưa đồng bộ được.");
+      setRecentOrdersActionType("error");
+    }
+
+    return result;
   };
 
   const handleReprintRecentOrder = async (order) => {
@@ -652,7 +733,75 @@ export default function PosPage({ products = [], categories = [], branches = [],
     loadBusyPagers();
     loadRecentOrders();
     loadPendingPaymentSessions();
+    loadPendingOfflineOrders();
   }, [posSession?.branchValue, selectedBranchUuid]);
+
+  useEffect(() => {
+    if (hasLiveProducts || hasLiveBranches) {
+      setPosCatalogCache(savePosCatalogCache({ products, categories, branches }));
+    }
+  }, [hasLiveProducts, hasLiveBranches, products, categories, branches]);
+
+  useEffect(() => {
+    const unsubscribe = subscribePosCatalogCache(() => {
+      setPosCatalogCache(readPosCatalogCache());
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const refreshPendingOfflineCount = () => loadPendingOfflineOrders();
+    const updateOnline = () => setIsOnline(typeof navigator === "undefined" ? true : navigator.onLine !== false);
+
+    refreshPendingOfflineCount();
+    updateOnline();
+
+    const unsubscribeQueue = subscribePosOfflineQueue(refreshPendingOfflineCount);
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+
+    return () => {
+      unsubscribeQueue();
+      window.removeEventListener("online", updateOnline);
+      window.removeEventListener("offline", updateOnline);
+    };
+  }, [selectedBranchUuid]);
+
+  useEffect(() => {
+    if (!posSession || !selectedBranchUuid || typeof window === "undefined") return undefined;
+    let active = true;
+    let timer = null;
+
+    const runSync = ({ silent = true } = {}) => {
+      if (!active) return;
+      syncPendingOfflineOrders({ silent }).catch((error) => {
+        if (!silent) {
+          setRecentOrdersActionMessage(error?.message || "Không đồng bộ được đơn POS đang chờ.");
+          setRecentOrdersActionType("error");
+        }
+      });
+    };
+
+    timer = window.setTimeout(() => runSync({ silent: true }), 900);
+    const handleOnline = () => runSync({ silent: false });
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [posSession, selectedBranchUuid, activeShift?.id]);
+
+  useEffect(() => {
+    if (!offlineMode || paymentConfirmed || isQrDraftPending) return;
+    if (!selectedVoucherId && !toText(pointsInput)) return;
+    setSelectedVoucherId("");
+    setPointsInput("");
+    setCreateError("Đang mất mạng nên POS đã bỏ voucher/điểm loyalty khỏi bill. Bạn vẫn có thể nhận tiền mặt.");
+  }, [offlineMode, paymentConfirmed, isQrDraftPending, selectedVoucherId, pointsInput]);
 
   useEffect(() => {
     if (!activeShift?.id) return;
@@ -892,6 +1041,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
       setCreateError("Chưa có món trong bill.");
       return;
     }
+    if (offlineMode && usesOfflineLockedBenefit) {
+      setCreateError("Đang mất mạng. Vui lòng bỏ voucher/điểm loyalty trước khi nhận tiền mặt.");
+      return;
+    }
     if (isQrDraftPending) {
       const cancelled = await cancelPendingQrDraft({
         silent: true,
@@ -932,6 +1085,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
   const createQrDraftOrder = async (identity = null) => {
     if (!requireOpenShift()) return { ok: false };
+    if (offlineMode) {
+      setCreateError("Đang mất mạng. QR chuyển khoản cần mạng để tạo và xác nhận thanh toán.");
+      return { ok: false, message: "Đang mất mạng. QR chuyển khoản cần mạng để tạo và xác nhận thanh toán." };
+    }
     if (!cart.length) {
       setCreateError("Chưa có món trong bill.");
       return { ok: false };
@@ -997,6 +1154,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
   const handleOpenQrPayment = async () => {
     if (!requireOpenShift()) return;
+    if (offlineMode) {
+      setCreateError("Đang mất mạng. Vui lòng nhận tiền mặt hoặc thử lại QR khi có mạng.");
+      return;
+    }
     if (posTotals.total <= 0) {
       setCreateError("Bill hiện chưa có số tiền để tạo QR thanh toán.");
       return;
@@ -1068,6 +1229,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
   const handleConfirmQrPaid = async () => {
     if (!qrDraftOrder) return;
+    if (offlineMode) {
+      setCreateError("Đang mất mạng. Không thể xác nhận thanh toán QR lúc này.");
+      return;
+    }
 
     setCreatingOrder(true);
     const result = qrDraftOrder.isPaymentSession
@@ -1254,6 +1419,14 @@ export default function PosPage({ products = [], categories = [], branches = [],
       setCreateError("Vui lòng xác nhận thanh toán trước khi tạo đơn POS.");
       return;
     }
+    if (offlineMode && paymentMethod === "bank_qr") {
+      setCreateError("Đang mất mạng. Không thể tạo đơn QR lúc này.");
+      return;
+    }
+    if (offlineMode && usesOfflineLockedBenefit) {
+      setCreateError("Đang mất mạng. Vui lòng bỏ voucher/điểm loyalty trước khi tạo đơn tiền mặt.");
+      return;
+    }
 
     const selectedVoucher = loyaltyBenefit.selectedVoucher;
     const loyaltyValidation = await validateLiveLoyaltySelection({ selectedVoucher });
@@ -1264,6 +1437,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
     setCreatingOrder(true);
     setCreateError("");
+    setRecentOrdersActionMessage("");
+    setRecentOrdersActionType("");
     const result = await createPosTakeawayOrder({
       cart,
       totals: posTotals,
@@ -1299,6 +1474,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
     }
 
     resetComposer();
+    setRecentOrdersActionMessage(result.message || "Đã tạo đơn POS.");
+    setRecentOrdersActionType("success");
     await loadBusyPagers();
     await loadRecentOrders();
     await loadShiftSummary({ silent: true });
@@ -1327,11 +1504,43 @@ export default function PosPage({ products = [], categories = [], branches = [],
   };
 
   const handleRefreshHistory = async () => {
+    loadPendingOfflineOrders();
     await Promise.all([
       loadRecentOrders(),
       loadPendingPaymentSessions(),
       loadShiftSummary({ silent: true })
     ]);
+  };
+
+  const handleSyncOfflineOrders = async () => {
+    if (offlineOrdersSyncing) return;
+    setOfflineOrdersSyncing(true);
+    setRecentOrdersActionMessage("");
+    setRecentOrdersActionType("");
+
+    try {
+      const result = await syncPendingOfflineOrders({ silent: false });
+      if (!result || result.skipped) {
+        setRecentOrdersActionMessage(result?.message || "Thiết bị đang offline, chưa thể đồng bộ đơn POS.");
+        setRecentOrdersActionType("error");
+      } else if (result.failedCount > 0) {
+        setRecentOrdersActionMessage(result.message || "Một số đơn POS chưa đồng bộ được.");
+        setRecentOrdersActionType("error");
+      } else if (result.syncedCount > 0) {
+        setRecentOrdersActionMessage(result.message || `Đã đồng bộ ${result.syncedCount} đơn POS.`);
+        setRecentOrdersActionType("success");
+      } else {
+        setRecentOrdersActionMessage("Không còn đơn POS chờ đồng bộ.");
+        setRecentOrdersActionType("success");
+      }
+    } catch (error) {
+      setRecentOrdersActionMessage(error?.message || "Không đồng bộ được đơn POS đang chờ.");
+      setRecentOrdersActionType("error");
+    } finally {
+      setOfflineOrdersSyncing(false);
+      loadPendingOfflineOrders();
+      await loadRecentOrders();
+    }
   };
 
   const handleWorkspaceChange = (workspace) => {
@@ -1520,7 +1729,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
   };
 
   if (!posSession || !selectedBranch) {
-    return <PosLoginScreen branches={branches} onLogin={setPosSession} />;
+    return <PosLoginScreen branches={effectiveBranches} onLogin={setPosSession} />;
   }
 
   if (!hasOpenShift) {
@@ -1549,6 +1758,12 @@ export default function PosPage({ products = [], categories = [], branches = [],
                   <CategoryButton key={category} label={category} active={activeCategory === category} onClick={() => setActiveCategory(category)} />
                 ))}
               </nav>
+              {usingCachedCatalog ? (
+                <div className="pos-catalog-cache-banner">
+                  <span>Đang dùng menu đã lưu trên máy</span>
+                  <strong>{posCatalogCache.cachedAt ? `Cập nhật ${new Date(posCatalogCache.cachedAt).toLocaleString("vi-VN")}` : "Bản gần nhất"}</strong>
+                </div>
+              ) : null}
               <div className="pos-pager-toolbar">
                 <PosPagerInlinePicker
                   value={pagerNumber}
@@ -1582,8 +1797,10 @@ export default function PosPage({ products = [], categories = [], branches = [],
               <PosRecentOrdersPanel
                 orders={recentOrders}
                 paymentSessions={pendingPaymentSessions}
+                offlineOrders={pendingOfflineOrders}
                 loading={recentOrdersLoading}
                 paymentSessionsLoading={pendingPaymentsLoading}
+                offlineOrdersSyncing={offlineOrdersSyncing}
                 error={recentOrdersError}
                 paymentSessionsError={pendingPaymentsError}
                 actionMessage={recentOrdersActionMessage}
@@ -1598,6 +1815,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
                 onReprintOrder={handleReprintRecentOrder}
                 onOpenPaymentSession={handleOpenPendingPayment}
                 onCancelPaymentSession={setPendingCancelTarget}
+                onSyncOfflineOrders={handleSyncOfflineOrders}
               />
             </section>
           ) : null}
@@ -1642,6 +1860,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
               paymentConfirmed={paymentConfirmed}
               qrDraftOrder={qrDraftOrder}
               qrDraftLoading={qrDraftLoading}
+              offlineMode={offlineMode}
               draftLocked={draftLocked}
               createError={createError}
               creatingOrder={creatingOrder}
@@ -1657,7 +1876,9 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
         <PosWorkspaceNav
           activeWorkspace={activeWorkspace}
-          pendingCount={pendingPaymentSessions.length}
+          pendingCount={workspacePendingCount}
+          online={isOnline}
+          syncLabel={syncStatusLabel}
           branchLabel={branchLabel}
           onChange={handleWorkspaceChange}
           onLogout={handleLogout}

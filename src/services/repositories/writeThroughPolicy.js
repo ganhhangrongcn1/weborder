@@ -76,7 +76,7 @@ export const DOMAIN_DATA_POLICY = {
     readStrategy: "supabase-only",
     writeStrategy: "remote-only",
     allowRuntimeWrites: true,
-    allowFallbackLocal: false,
+    allowFallbackLocal: true,
     strictRemoteWrite: true
   },
   loyalty: {
