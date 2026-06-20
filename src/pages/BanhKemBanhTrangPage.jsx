@@ -383,8 +383,8 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           </div>
           <div className="cake-hero__grid" aria-label="Mẫu bánh bán chạy">
             {featuredProducts.map((product) => (
-              <button key={product.id} type="button" onClick={() => setSelectedProduct(product)}>
-                <img src={product.image} alt={product.name} />
+              <button key={product.id} type="button" onClick={() => setSelectedProduct(product)} aria-label={`Xem chi tiết ${product.name}`}>
+                <img src={product.image} alt={product.name} width="520" height="520" decoding="async" />
               </button>
             ))}
           </div>
@@ -397,7 +397,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             <p className="cake-eyebrow">Danh sách mẫu</p>
             <h2>Chọn bánh muốn tư vấn</h2>
           </div>
-          <p>{loading ? "Đang tải dữ liệu..." : `${products.length} mẫu đang bán`}</p>
+          <p>{loading ? "Đang tải dữ liệu…" : `${products.length} mẫu đang bán`}</p>
         </div>
 
         {error ? <p className="cake-empty-state">{error}</p> : null}
@@ -407,8 +407,8 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           <div className="cake-grid">
             {products.map((product) => (
               <article key={product.id} className="cake-card">
-                <button type="button" className="cake-card__image" onClick={() => openProductDetail(product)}>
-                  <img src={product.image} alt={product.name} />
+                <button type="button" className="cake-card__image" onClick={() => openProductDetail(product)} aria-label={`Xem chi tiết ${product.name}`}>
+                  <img src={product.image} alt={product.name} width="640" height="640" loading="lazy" decoding="async" />
                   <span className="cake-card__badge">{product.serving}</span>
                   <strong className="cake-card__price">{formatMoney(product.price)}</strong>
                 </button>
@@ -424,16 +424,16 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       </section>
 
       {selectedProduct && (
-        <div className="cake-modal" role="dialog" aria-modal="true">
-          <div className="cake-modal__backdrop" onClick={() => setSelectedProduct(null)} />
+        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-detail-title">
+          <button type="button" className="cake-modal__backdrop" aria-label="Đóng chi tiết bánh" tabIndex="-1" onClick={() => setSelectedProduct(null)} />
           <div className="cake-detail">
-            <button className="cake-modal__close" type="button" onClick={() => setSelectedProduct(null)}>×</button>
+            <button className="cake-modal__close" type="button" onClick={() => setSelectedProduct(null)} aria-label="Đóng chi tiết bánh">×</button>
             <div className="cake-detail__image-wrap">
-              <img className="cake-detail__image" src={selectedProduct.image} alt={selectedProduct.name} />
+              <img className="cake-detail__image" src={selectedProduct.image} alt={selectedProduct.name} width="760" height="760" decoding="async" />
             </div>
             <div className="cake-detail__content">
               <p className="cake-eyebrow"><Icon name="user" size={13} /> {selectedProduct.serving}</p>
-              <h2>{selectedProduct.name}</h2>
+              <h2 id="cake-detail-title">{selectedProduct.name}</h2>
               <strong>{formatMoney(selectedProduct.price)}</strong>
               <p>{selectedProduct.description}</p>
 
@@ -465,15 +465,15 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       )}
 
       {orderingProduct && (
-        <div className="cake-modal" role="dialog" aria-modal="true">
-          <div className="cake-modal__backdrop" onClick={closeOrderForm} />
+        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-order-title">
+          <button type="button" className="cake-modal__backdrop" aria-label="Đóng form đặt bánh" tabIndex="-1" onClick={closeOrderForm} />
           <form className="cake-order-form" onSubmit={submitOrder}>
-            <button className="cake-modal__close" type="button" onClick={closeOrderForm}>×</button>
+            <button className="cake-modal__close" type="button" onClick={closeOrderForm} aria-label="Đóng form đặt bánh">×</button>
             <div className="cake-order-form__head">
-              <img src={orderingProduct.image} alt={orderingProduct.name} />
+              <img src={orderingProduct.image} alt={orderingProduct.name} width="96" height="96" decoding="async" />
               <div>
-                <p className="cake-eyebrow">Đặt bánh</p>
-                <h2>{orderingProduct.name}</h2>
+                <p className="cake-eyebrow">Tạo đơn bánh</p>
+                <h2 id="cake-order-title">{orderingProduct.name}</h2>
                 <strong>{formatMoney(finalCakePrice)}</strong>
               </div>
             </div>
@@ -527,7 +527,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                           className={form.decorationOptionId === item.id ? "is-active" : ""}
                           onClick={() => updateForm("decorationOptionId", item.id)}
                         >
-                          <img src={item.image} alt={item.name} />
+                          <img src={item.image} alt={item.name} width="320" height="240" loading="lazy" decoding="async" />
                           <strong>{item.name}</strong>
                           <span>{decorationIncluded ? "Đã bao gồm" : `+${formatMoney(Number(item.price || 0))}`}</span>
                         </button>
@@ -538,12 +538,13 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               ) : null}
 
               <label>
-                <span>Ghi chú phụ kiện theo yêu cầu (nếu có)</span>
+                <span>Ghi chú phụ kiện</span>
                 <textarea
                   rows="2"
+                  name="addOnNote"
                   value={form.addOnNote}
                   onChange={(event) => updateForm("addOnNote", event.target.value)}
-                  placeholder="VD: Chọn mẫu 2, đổi màu nơ vàng..."
+                  placeholder="VD: Chọn mẫu 2, đổi màu nơ vàng…"
                 />
               </label>
             </div>
@@ -551,12 +552,28 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
             <div className="cake-form-grid">
               <label>
-                <span>Họ tên</span>
-                <input value={form.customerName} onChange={(event) => updateForm("customerName", event.target.value)} required placeholder="Tên khách nhận bánh" />
+                <span>Tên người nhận</span>
+                <input
+                  name="customerName"
+                  value={form.customerName}
+                  onChange={(event) => updateForm("customerName", event.target.value)}
+                  required
+                  autoComplete="name"
+                  placeholder="Tên người nhận bánh"
+                />
               </label>
               <label>
                 <span>Số điện thoại</span>
-                <input value={form.customerPhone} onChange={(event) => updateForm("customerPhone", event.target.value)} required placeholder="09xxxxxxxx" />
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  name="customerPhone"
+                  value={form.customerPhone}
+                  onChange={(event) => updateForm("customerPhone", event.target.value)}
+                  required
+                  autoComplete="tel"
+                  placeholder="09xxxxxxxx"
+                />
               </label>
               <div className="cake-time-picker">
                 <div>
@@ -569,6 +586,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                   <span>Ngày lấy</span>
                   <input
                     type="date"
+                    name="pickupDate"
                     min={formatDateValue(minPickupTimeValue)}
                     value={selectedPickupDateValue}
                     onChange={(event) => updatePickupDate(event.target.value)}
@@ -578,6 +596,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                 <label>
                   <span>Giờ lấy</span>
                   <select
+                    name="pickupTime"
                     value={pickupTimeOptions.some((item) => item.value === selectedPickupTimeValue) ? selectedPickupTimeValue : pickupTimeOptions[0]?.value || ""}
                     onChange={(event) => updatePickupClock(event.target.value)}
                     required
@@ -589,14 +608,20 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                 </label>
               </div>
               <label>
-                <span>Tên muốn ghi trên bánh</span>
-                <input value={form.cakeMessage} onChange={(event) => updateForm("cakeMessage", event.target.value)} placeholder="VD: Chúc mừng sinh nhật An" />
+                <span>Chữ ghi trên bánh</span>
+                <input
+                  name="cakeMessage"
+                  value={form.cakeMessage}
+                  onChange={(event) => updateForm("cakeMessage", event.target.value)}
+                  autoComplete="off"
+                  placeholder="VD: Chúc mừng sinh nhật An"
+                />
               </label>
             </div>
 
             <div className="cake-segmented">
               {pickupEnabled ? (
-                <button type="button" className={form.fulfillmentType === "pickup" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "pickup")}>Ghé lấy</button>
+                <button type="button" className={form.fulfillmentType === "pickup" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "pickup")}>Tự đến lấy</button>
               ) : null}
               {deliveryEnabled ? (
                 <button type="button" className={form.fulfillmentType === "delivery" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "delivery")}>Giao hàng</button>
@@ -641,28 +666,34 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             )}
 
             <label className="cake-note-field">
-              <span>Ghi chú thêm</span>
-              <textarea rows="3" value={form.note} onChange={(event) => updateForm("note", event.target.value)} placeholder="Ví dụ: ít cay, gọi trước khi giao..." />
+              <span>Ghi chú cho quán</span>
+              <textarea
+                rows="3"
+                name="note"
+                value={form.note}
+                onChange={(event) => updateForm("note", event.target.value)}
+                placeholder="Ví dụ: ít cay, gọi trước khi giao…"
+              />
             </label>
 
-            <button className="cake-primary-btn" type="submit" disabled={submitting}>
-              {submitting ? "Đang xác nhận..." : "Xác nhận đơn"}
+            <button className="cake-primary-btn cake-order-submit" type="submit" disabled={submitting} aria-busy={submitting ? "true" : "false"}>
+              {submitting ? "Đang tạo đơn…" : "Tạo đơn và gửi Zalo"}
             </button>
             <p className="cake-zalo-copy-note">
-              Sau bước này, app sẽ copy nội dung đơn và hiện nút mở Zalo để bạn gửi cho quán.
+              App sẽ chuẩn bị nội dung đơn để bạn gửi Zalo cho quán xác nhận.
             </p>
           </form>
         </div>
       )}
 
       {successOrder ? (
-        <div className="cake-modal" role="dialog" aria-modal="true">
-          <div className="cake-modal__backdrop" onClick={() => setSuccessOrder(null)} />
+        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-success-title">
+          <button type="button" className="cake-modal__backdrop" aria-label="Đóng thông báo đặt bánh" tabIndex="-1" onClick={() => setSuccessOrder(null)} />
           <div className="cake-success-popup">
-            <button className="cake-modal__close" type="button" onClick={() => setSuccessOrder(null)}>×</button>
-            <div className="cake-success-popup__icon">{successOrder.zaloSent ? "✓" : successOrder.isCompletingZalo ? "..." : "!"}</div>
-            <p className="cake-eyebrow">{successOrder.zaloSent ? "Đã hoàn tất" : successOrder.isCompletingZalo ? "Đang gửi Zalo" : "Còn 1 bước cuối"}</p>
-            <h3>{successOrder.zaloSent ? "Cảm ơn bạn, quán sẽ xác nhận đơn sớm" : successOrder.isCompletingZalo ? "Đang mở Zalo để gửi đơn..." : "Gửi đơn qua Zalo để quán xác nhận"}</h3>
+            <button className="cake-modal__close" type="button" onClick={() => setSuccessOrder(null)} aria-label="Đóng thông báo đặt bánh">×</button>
+            <div className="cake-success-popup__icon">{successOrder.zaloSent ? "✓" : successOrder.isCompletingZalo ? "…" : "!"}</div>
+            <p className="cake-eyebrow">{successOrder.zaloSent ? "Đã hoàn tất" : successOrder.isCompletingZalo ? "Đang mở Zalo" : "Gần xong rồi"}</p>
+            <h3 id="cake-success-title">{successOrder.zaloSent ? "Cảm ơn bạn, quán sẽ xác nhận đơn sớm" : successOrder.isCompletingZalo ? "Đang mở Zalo để gửi đơn…" : "Gửi tin nhắn Zalo để quán xác nhận mẫu bánh"}</h3>
             {successOrder.zaloSent ? (
               <p>
                 CSKH sẽ kiểm tra tin nhắn Zalo, xác nhận mẫu bánh, giờ nhận và các ghi chú trang trí với bạn.
@@ -674,11 +705,10 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             ) : (
               <>
                 <p>
-                  Nội dung đơn đã được chuẩn bị và copy sẵn. Bạn cần bấm nút bên dưới để mở Zalo,
-                  dán nội dung và gửi cho quán.
+                Nội dung đơn đã được chuẩn bị sẵn. Bạn chỉ cần mở Zalo, dán tin nhắn và gửi cho quán.
                 </p>
                 <p>
-                  Đơn chỉ được CSKH xác nhận sau khi quán nhận được tin nhắn Zalo của bạn.
+                Quán sẽ kiểm tra mẫu bánh, giờ nhận và ghi chú trang trí trước khi xác nhận.
                 </p>
               </>
             )}
@@ -698,7 +728,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                 </button>
               ) : successOrder.isCompletingZalo ? (
                 <button className="cake-primary-btn" type="button" disabled>
-                  Đang gửi Zalo...
+                  Đang gửi Zalo…
                 </button>
               ) : (
                 <>
@@ -709,7 +739,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                     rel="noopener noreferrer"
                     onClick={copySuccessZaloMessage}
                   >
-                    Mở Zalo để gửi đơn ngay
+                    Mở Zalo gửi đơn
                   </a>
                   <button className="cake-secondary-btn" type="button" onClick={() => setSuccessOrder(null)}>
                     Tiếp tục xem mẫu bánh
@@ -722,12 +752,12 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       ) : null}
 
       {pickupTimeWarningOpen ? (
-        <div className="cake-modal" role="dialog" aria-modal="true">
-          <div className="cake-modal__backdrop" onClick={() => setPickupTimeWarningOpen(false)} />
+        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-time-warning-title">
+          <button type="button" className="cake-modal__backdrop" aria-label="Đóng cảnh báo giờ lấy bánh" tabIndex="-1" onClick={() => setPickupTimeWarningOpen(false)} />
           <div className="cake-addon-popup">
-            <button className="cake-modal__close" type="button" onClick={() => setPickupTimeWarningOpen(false)}>×</button>
+            <button className="cake-modal__close" type="button" onClick={() => setPickupTimeWarningOpen(false)} aria-label="Đóng cảnh báo giờ lấy bánh">×</button>
             <div className="cake-addon-popup__body">
-              <h3>Chọn lại giờ lấy bánh</h3>
+              <h3 id="cake-time-warning-title">Chọn lại giờ lấy bánh</h3>
               <p>{PICKUP_TIME_WARNING}</p>
               <button className="cake-primary-btn" type="button" onClick={() => setPickupTimeWarningOpen(false)}>Chọn lại giờ lấy</button>
             </div>
@@ -736,31 +766,30 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       ) : null}
 
       {addonInfoPopup ? (
-        <div className="cake-modal" role="dialog" aria-modal="true">
-          <div className="cake-modal__backdrop" onClick={() => setAddonInfoPopup("")} />
+        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-addon-popup-title">
+          <button type="button" className="cake-modal__backdrop" aria-label="Đóng thông tin phụ kiện" tabIndex="-1" onClick={() => setAddonInfoPopup("")} />
           <div className="cake-addon-popup">
-            <button className="cake-modal__close" type="button" onClick={() => setAddonInfoPopup("")}>×</button>
+            <button className="cake-modal__close" type="button" onClick={() => setAddonInfoPopup("")} aria-label="Đóng thông tin phụ kiện">×</button>
 
             {addonInfoPopup === "chibi" ? (
               <div className="cake-addon-popup__body">
-                <h3>{chibiAddon.name || "Hình chibi cá nhân hóa"}</h3>
+                <h3 id="cake-addon-popup-title">{chibiAddon.name || "Hình chibi cá nhân hóa"}</h3>
                 <p>
-                  Chibi bên em làm theo ảnh thật người anh/chị muốn tặng. Bên em sẽ vẽ lại theo phong cách hoạt hình, gửi anh/chị duyệt trước.
-                  Khi anh/chị đồng ý, quán mới in, cắt và gắn lên bánh. Phụ phí dịch vụ chibi: {formatMoney(Number(chibiAddon.price || 0))}/mẫu.
-                  Anh/chị tham khảo hình mẫu bên dưới giúp em nhé.
+                  Chibi được vẽ theo ảnh thật của người nhận. Quán sẽ liên hệ xin ảnh, gửi mẫu để anh/chị duyệt trước khi in và gắn lên bánh.
+                  Phụ phí dịch vụ chibi: {formatMoney(Number(chibiAddon.price || 0))}/mẫu.
                 </p>
-                {chibiAddon.image ? <img src={chibiAddon.image} alt={chibiAddon.name || "Hình chibi"} /> : null}
+                {chibiAddon.image ? <img src={chibiAddon.image} alt={chibiAddon.name || "Hình chibi"} width="860" height="640" loading="lazy" decoding="async" /> : null}
               </div>
             ) : null}
 
             {addonInfoPopup === "decoration" ? (
               <div className="cake-addon-popup__body">
-                <h3>{decorationAddon.name || "Phụ kiện trang trí theo yêu cầu"}</h3>
+                <h3 id="cake-addon-popup-title">{decorationAddon.name || "Phụ kiện trang trí theo yêu cầu"}</h3>
                 <p>Có 3 mẫu phụ kiện đi kèm. Quán gửi thêm hình thực tế để anh/chị tham khảo trước khi chọn.</p>
                 <div className="cake-addon-popup__gallery">
                   {decorationOptions.map((item) => (
                     <figure key={item.id}>
-                      <img src={item.image} alt={item.name} />
+                      <img src={item.image} alt={item.name} width="320" height="240" loading="lazy" decoding="async" />
                       <figcaption>{item.name} - +{formatMoney(Number(item.price || 0))}</figcaption>
                     </figure>
                   ))}
@@ -771,7 +800,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                     <div className="cake-addon-popup__gallery">
                       {decorationReferenceImages.map((image, index) => (
                         <figure key={`ref-${index + 1}`}>
-                          <img src={image} alt={`Phụ kiện thực tế ${index + 1}`} />
+                          <img src={image} alt={`Phụ kiện thực tế ${index + 1}`} width="320" height="240" loading="lazy" decoding="async" />
                           <figcaption>Mẫu thực tế {index + 1}</figcaption>
                         </figure>
                       ))}

@@ -574,7 +574,7 @@ function formatCakePickupDateTime(value) {
 }
 
 export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, orderCode, selectedAddOns = {}, addOnTotal = 0, finalTotal = 0 }) {
-  const fulfillmentLabel = form.fulfillmentType === "delivery" ? "Giao hàng" : "Khách ghé lấy";
+  const fulfillmentLabel = form.fulfillmentType === "delivery" ? "Giao hàng" : "Khách tự đến lấy";
   const cakeTotal = Number(finalTotal || Number(product?.price || 0));
   const hasConfirmedShippingFee = form.fulfillmentType === "delivery" && shippingFee !== null && shippingFee !== undefined;
   const confirmedShippingFee = hasConfirmedShippingFee ? Number(shippingFee || 0) : 0;
@@ -592,7 +592,7 @@ export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, 
     "💰 Chi phí tạm tính",
     `- Bánh + phụ kiện: ${cakeTotal.toLocaleString("vi-VN")}đ`,
     form.fulfillmentType === "delivery"
-      ? `- Phí giao bánh: ${hasConfirmedShippingFee ? `${confirmedShippingFee.toLocaleString("vi-VN")}đ` : "Shop xác nhận sau"}`
+      ? `- Phí giao bánh: ${hasConfirmedShippingFee ? `${confirmedShippingFee.toLocaleString("vi-VN")}đ` : "Quán xác nhận sau"}`
       : "",
     hasConfirmedShippingFee ? `- Tổng tạm tính: ${(cakeTotal + confirmedShippingFee).toLocaleString("vi-VN")}đ` : ""
   ];
@@ -607,7 +607,7 @@ export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, 
     "📝 Ghi chú cho shop",
     selectedAddOns?.chibi?.selected ? "- Vui lòng liên hệ khách để xin ảnh làm chibi trước khi in." : "",
     form.addOnNote ? `- Ghi chú phụ kiện: ${form.addOnNote}` : "",
-    form.note ? `- Ghi chú thêm: ${form.note}` : ""
+    form.note ? `- Ghi chú cho quán: ${form.note}` : ""
   ];
   const lines = [
     "🎂 ĐƠN BÁNH SINH NHẬT BÁNH TRÁNG",
@@ -622,7 +622,7 @@ export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, 
     ...addOnLines,
     "",
     "👤 Thông tin khách",
-    `- Tên khách: ${form.customerName || ""}`,
+    `- Tên người nhận: ${form.customerName || ""}`,
     `- SĐT: ${form.customerPhone || ""}`,
     "",
     "⏰ Thời gian nhận bánh",

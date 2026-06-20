@@ -1,8 +1,10 @@
 .cake-page {
   min-height: 100vh;
-  background: #fff8e5;
+  background: #fff9ec;
   color: #211711;
   font-family: system-ui, Arial, sans-serif;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: rgba(122, 60, 13, 0.16);
 }
 
 .cake-hero {
@@ -11,7 +13,10 @@
   gap: 28px;
   align-items: center;
   padding: 34px clamp(16px, 5vw, 72px) 26px;
-  background: #ffd51f;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 42%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0 1px, transparent 1px 18px),
+    #f4cb32;
 }
 
 .cake-hero__content {
@@ -31,6 +36,7 @@
   font-size: clamp(36px, 7vw, 72px);
   line-height: 0.95;
   font-weight: 950;
+  text-wrap: balance;
 }
 
 .cake-hero p {
@@ -58,6 +64,8 @@
   font-weight: 850;
   padding: 13px 18px;
   text-decoration: none;
+  touch-action: manipulation;
+  transition: background-color 180ms ease, box-shadow 180ms ease, color 180ms ease, transform 180ms ease;
 }
 
 .cake-hero__actions span {
@@ -106,6 +114,7 @@
   cursor: pointer;
   padding: 0;
   background: transparent;
+  touch-action: manipulation;
 }
 
 .cake-hero__grid img {
@@ -115,6 +124,7 @@
   object-fit: cover;
   border-radius: 8px;
   box-shadow: 0 12px 26px rgba(80, 43, 0, 0.2);
+  transition: transform 220ms ease, box-shadow 220ms ease;
 }
 
 .cake-list-section {
@@ -158,10 +168,11 @@
 
 .cake-card {
   overflow: hidden;
-  border: 1px solid #f2d38b;
+  border: 1px solid #f0d89d;
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 10px 24px rgba(77, 42, 0, 0.08);
+  box-shadow: 0 10px 24px rgba(93, 57, 12, 0.09);
+  transition: box-shadow 180ms ease, transform 180ms ease, border-color 180ms ease;
 }
 
 .cake-card__image {
@@ -175,6 +186,7 @@
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
+  transition: transform 220ms ease;
 }
 
 .cake-card__badge,
@@ -256,6 +268,8 @@
   margin-top: 2px;
   padding: 8px;
   text-align: center;
+  touch-action: manipulation;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
 
 .cake-modal {
@@ -264,13 +278,20 @@
   z-index: 100;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
 }
 
 .cake-modal__backdrop {
   position: absolute;
   inset: 0;
+  border: 0;
   background: rgba(19, 12, 7, 0.58);
+  cursor: pointer;
+  padding: 0;
 }
 
 .cake-detail,
@@ -283,6 +304,7 @@
   border-radius: 8px;
   background: #f4d400;
   box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
+  overscroll-behavior: contain;
 }
 
 .cake-detail {
@@ -304,6 +326,8 @@
   cursor: pointer;
   font-size: 26px;
   line-height: 1;
+  touch-action: manipulation;
+  transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
 
 .cake-order-form > .cake-modal__close,
@@ -509,6 +533,8 @@
   font-size: 12px;
   font-weight: 800;
   padding: 6px 8px;
+  touch-action: manipulation;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
 
 .cake-addon-actions button.is-active {
@@ -604,6 +630,8 @@
   gap: 5px;
   padding: 8px;
   text-align: left;
+  touch-action: manipulation;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .cake-addon-option-grid button.is-active {
@@ -660,6 +688,7 @@
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
+  overscroll-behavior: contain;
   padding: 20px;
 }
 
@@ -734,6 +763,7 @@
   border: 1px solid #f1d9a6;
   box-shadow: 0 18px 44px rgba(35, 22, 12, 0.22);
   text-align: center;
+  overscroll-behavior: contain;
 }
 
 .cake-success-popup > .cake-modal__close {
@@ -812,6 +842,8 @@
   cursor: pointer;
   font-weight: 850;
   padding: 12px 16px;
+  touch-action: manipulation;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
 
 .cake-order-form {
@@ -868,6 +900,7 @@
   color: #211711;
   font: inherit;
   padding: 12px;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .cake-time-picker {
@@ -921,6 +954,8 @@
   cursor: pointer;
   font-weight: 850;
   padding: 11px;
+  touch-action: manipulation;
+  transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
 }
 
 .cake-segmented button.is-active {
@@ -931,6 +966,62 @@
 .cake-primary-btn:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.cake-page :is(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid #0f766e;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.18);
+}
+
+.cake-form-grid input:focus-visible,
+.cake-form-grid select:focus-visible,
+.cake-note-field textarea:focus-visible,
+.cake-addon-order-box textarea:focus-visible {
+  border-color: #0f766e;
+  background: #fff;
+}
+
+.cake-hero__actions a:hover,
+.cake-primary-btn:hover:not(:disabled) {
+  background: #3a2518;
+  box-shadow: 0 10px 22px rgba(33, 23, 17, 0.18);
+  transform: translateY(-1px);
+}
+
+.cake-card:hover {
+  border-color: #e9bc5d;
+  box-shadow: 0 16px 32px rgba(93, 57, 12, 0.14);
+  transform: translateY(-2px);
+}
+
+.cake-card:hover .cake-card__image img,
+.cake-hero__grid button:hover img {
+  transform: scale(1.025);
+}
+
+.cake-card__body button:hover,
+.cake-addon-actions button:hover,
+.cake-addon-check button:hover,
+.cake-secondary-btn:hover {
+  border-color: #dca63a;
+  background: #fff1ba;
+  color: #4f2d09;
+}
+
+.cake-addon-option-grid button:hover,
+.cake-segmented button:hover:not(.is-active) {
+  background: #fff8e8;
+  transform: translateY(-1px);
+}
+
+.cake-modal__close:hover {
+  background: #3a2518;
+  transform: translateY(-1px);
+}
+
+.cake-page :is(a, button):not(.cake-modal__backdrop):active {
+  transform: translateY(1px);
 }
 
 .cake-zalo-copy-note {
@@ -975,6 +1066,11 @@
 }
 
 @media (max-width: 560px) {
+  .cake-hero {
+    gap: 20px;
+    padding-top: 26px;
+  }
+
   .cake-section-head {
     align-items: start;
     flex-direction: column;
@@ -996,5 +1092,26 @@
 
   .cake-hero h1 {
     font-size: 42px;
+  }
+
+  .cake-order-form {
+    width: 100%;
+    padding: 14px;
+  }
+
+  .cake-order-submit {
+    position: sticky;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 8;
+    box-shadow: 0 12px 26px rgba(33, 23, 17, 0.22);
+  }
+
+  .cake-addon-check {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cake-addon-check button {
+    grid-column: 2;
+    justify-self: start;
   }
 }
