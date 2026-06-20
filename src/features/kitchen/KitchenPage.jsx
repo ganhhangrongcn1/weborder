@@ -269,6 +269,10 @@ function getOrderPrintState(order = {}, jobsByOrderKey = {}, printingOrderKey = 
   };
 }
 
+function isBlockingAutoPrintStatus(status = "") {
+  return ["pending", "printing", "printed", "submitting"].includes(toText(status).toLowerCase());
+}
+
 function upsertPrintJobIntoMap(currentMap = {}, job = {}) {
   const keys = getPrintJobOrderKeys(job);
   if (!keys.length) return currentMap;
@@ -720,7 +724,7 @@ export default function KitchenPage() {
       }
 
       const printState = getOrderPrintState(order, printJobsByOrderKey);
-      if (printState.status) {
+      if (isBlockingAutoPrintStatus(printState.status)) {
         autoPrintedOrderKeysRef.current.add(autoPrintKey);
         return;
       }

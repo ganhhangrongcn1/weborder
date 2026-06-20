@@ -267,6 +267,7 @@ async function findExistingCustomerBillPrintJob(client, row = {}) {
       .eq("job_type", row.job_type || CUSTOMER_BILL_JOB_TYPE)
       .eq("printer_key", row.printer_key || DEFAULT_PRINTER_KEY)
       .eq(key.column, key.value)
+      .gte("created_at", getAutoPrintCutoffIso())
       .in("status", [
         PRINT_JOB_STATUS.pending,
         PRINT_JOB_STATUS.printing
@@ -312,6 +313,12 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
     created_at: now,
     updated_at: now
   };
+
+  await markExpiredPendingPrintJobs({
+    branchUuid: row.branch_uuid,
+    printerKey: row.printer_key,
+    jobType: row.job_type
+  });
 
   const existingJob = await findExistingCustomerBillPrintJob(client, row);
   if (existingJob) {
