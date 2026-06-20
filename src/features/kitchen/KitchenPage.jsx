@@ -8,9 +8,11 @@ import KitchenOrderStrip from "./KitchenOrderStrip.jsx";
 import {
   getPrinterConfig,
   hasAndroidPrinterBridge,
-  printCustomerBill
+  printCustomerBill,
+  PRINTER_MODE
 } from "../../services/printerService.js";
 import {
+  CUSTOMER_BILL_JOB_TYPE,
   DEFAULT_PRINTER_KEY,
   claimPrintJob,
   createCustomerBillPrintJob,
@@ -572,6 +574,7 @@ export default function KitchenPage() {
       const recentJobs = await readRecentPrintJobs({
         branchUuid,
         printerKey,
+        jobType: CUSTOMER_BILL_JOB_TYPE,
         limit: 120
       });
 
@@ -584,6 +587,7 @@ export default function KitchenPage() {
       unsubscribe = await subscribePrintJobChanges({
         branchUuid,
         printerKey,
+        jobType: CUSTOMER_BILL_JOB_TYPE,
         deviceId,
         onJobChange: (job) => {
           setPrintJobsByOrderKey((currentMap) => upsertPrintJobIntoMap(currentMap, job));
@@ -600,7 +604,9 @@ export default function KitchenPage() {
   }, [profile, session]);
 
   useEffect(() => {
-    if (!session || !profile || !hasAndroidPrinterBridge()) return undefined;
+    const canAutoPrintWithAndroid = hasAndroidPrinterBridge();
+    const canAutoPrintWithBridge = printerSettings.mode === PRINTER_MODE.bridge && String(printerSettings.bridgeUrl || "").trim();
+    if (!session || !profile || (!canAutoPrintWithAndroid && !canAutoPrintWithBridge)) return undefined;
 
     let stopped = false;
     let unsubscribe = () => {};
@@ -648,16 +654,21 @@ export default function KitchenPage() {
     }
 
     async function startPrintStation() {
-      setPrinterNotice("POS đang chờ lệnh in từ iPad.");
+      setPrinterNotice("Máy in đang chờ lệnh in.");
 
       unsubscribe = await subscribePrintJobs({
         branchUuid,
         printerKey,
+        jobType: CUSTOMER_BILL_JOB_TYPE,
         deviceId,
         onPendingJob: processPrintJob
       });
 
-      const pendingJobs = await readPendingPrintJobs({ branchUuid, printerKey });
+      const pendingJobs = await readPendingPrintJobs({
+        branchUuid,
+        printerKey,
+        jobType: CUSTOMER_BILL_JOB_TYPE
+      });
       if (!stopped) {
         pendingJobs.forEach((job) => processPrintJob(job));
       }
@@ -838,6 +849,7 @@ export default function KitchenPage() {
       const result = await createCustomerBillPrintJob(order, {
         branchUuid: profile?.branchUuid || "",
         printerKey: DEFAULT_PRINTER_KEY,
+        jobType: CUSTOMER_BILL_JOB_TYPE,
         requestedBy: options.requestedBy || profile?.email || profile?.name || "",
         printerOptions: getPrinterRuntimeOptions()
       });

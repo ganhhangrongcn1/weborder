@@ -5,6 +5,7 @@ import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 
 const KITCHEN_SOURCE = {
   website: "website",
+  pos: "pos",
   partner: "partner"
 };
 
@@ -212,6 +213,39 @@ function buildKitchenStableKey(sourceType = "", ...values) {
   return key ? `${toText(sourceType || "order")}:${key}` : "";
 }
 
+function isPosOrderSource(value = "") {
+  const key = toText(value).toLowerCase().replace(/[\s-]+/g, "_");
+  return ["pos", "pos_mobile", "posmobile", "counter", "tai_quay"].includes(key);
+}
+
+function resolveWebsiteKitchenSource(row = {}, metadata = {}) {
+  const nestedMetadata = getObject(metadata.metadata);
+  const rawSource = toText(
+    row.source ||
+      metadata.source ||
+      metadata.orderSource ||
+      metadata.channel ||
+      metadata.platform ||
+      metadata.sourceType ||
+      nestedMetadata.source ||
+      nestedMetadata.orderSource ||
+      nestedMetadata.channel ||
+      nestedMetadata.platform ||
+      nestedMetadata.sourceType
+  );
+
+  if (isPosOrderSource(rawSource)) return "pos_mobile";
+
+  return resolveOrderSourceKey({
+    ...metadata,
+    source: rawSource || row.source || metadata.source,
+    channel: row.channel || metadata.channel,
+    orderSource: metadata.orderSource || rawSource || row.source,
+    platform: metadata.platform || rawSource,
+    fulfillmentType: row.fulfillment_type || metadata.fulfillmentType
+  });
+}
+
 function normalizeKitchenStatus(...values) {
   const combined = values.map((value) => toText(value).toLowerCase()).filter(Boolean);
 
@@ -355,6 +389,25 @@ function getWebsiteBranchDisplayStatus(orderStatus = "", kitchenStatus = "", ful
 function isWebsiteOrderReady(order = {}) {
   const status = normalizeOrderStatus(order.status);
   return status === "ready_for_pickup" || status === "ready_for_delivery";
+}
+
+function shouldHideWebsiteOrderUntilPaid(order = {}) {
+  if (order.sourceType !== KITCHEN_SOURCE.website) return false;
+
+  const status = normalizeOrderStatus(order.status);
+  const kitchenStatus = normalizeKitchenStatus(order.kitchenStatus);
+  const paymentMethod = normalizeOrderStatus(order.paymentMethod);
+  const paymentStatus = normalizeOrderStatus(order.paymentStatus);
+
+  if (status === "pending_payment" || kitchenStatus === "waiting_payment") {
+    return true;
+  }
+
+  if (paymentMethod === "bank_qr" && paymentStatus && paymentStatus !== "paid") {
+    return true;
+  }
+
+  return false;
 }
 
 function isLegacyWebsiteKitchenDone(order = {}) {
@@ -756,12 +809,8 @@ function mapPartnerRawDishesToKitchenItems(row = {}) {
 function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
   const metadata = getObject(row.metadata);
   const nestedMetadata = getObject(metadata.metadata);
-  const source = resolveOrderSourceKey({
-    ...metadata,
-    source: row.source || metadata.source,
-    channel: row.channel || metadata.channel,
-    orderSource: metadata.orderSource || row.source
-  });
+  const source = resolveWebsiteKitchenSource(row, metadata);
+  const sourceType = isPosOrderSource(source) ? KITCHEN_SOURCE.pos : KITCHEN_SOURCE.website;
   const id = toText(row.id || row.order_code);
   const orderCode = toText(row.order_code || metadata.orderCode || id);
   const nexposStatus = toText(row.nexpos_status || metadata.nexposStatus || metadata.nexpos_status);
@@ -779,7 +828,7 @@ function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
 
   return {
     id,
-    stableKey: buildKitchenStableKey(KITCHEN_SOURCE.website, id, orderCode),
+    stableKey: buildKitchenStableKey(sourceType, id, orderCode),
     orderCode,
     displayOrderCode: toText(
       row.display_order_code ||
@@ -789,8 +838,10 @@ function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
       nestedMetadata.display_order_code ||
       orderCode
     ),
-    sourceType: KITCHEN_SOURCE.website,
+    sourceType,
     source,
+    orderSource: source,
+    channel: source,
     platform: getPlatformLabel(source),
     branchId: toText(row.branch_id || metadata.branchId),
     branchUuid: toText(row.branch_uuid || metadata.branchUuid),
@@ -818,6 +869,8 @@ function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     displayStatus: getWebsiteBranchDisplayStatus(status, kitchenStatus, toText(row.fulfillment_type || metadata.fulfillmentType)),
     fulfillmentType: toText(row.fulfillment_type || metadata.fulfillmentType),
     paymentMethod: toText(row.payment_method || metadata.paymentMethod),
+    paymentStatus: toText(row.payment_status || metadata.paymentStatus || nestedMetadata.paymentStatus),
+    paidAt: toText(row.paid_at || metadata.paidAt || nestedMetadata.paidAt),
     pickupTimeText: toText(row.pickup_time_text || metadata.pickupTimeText || metadata.pickup_time_text || nestedMetadata.pickupTimeText || nestedMetadata.pickup_time_text),
     subtotal: toNumber(row.subtotal ?? metadata.subtotal, 0),
     shippingFee: toNumber(row.shipping_fee ?? metadata.shippingFee, 0),
@@ -1033,7 +1086,8 @@ export async function getWebsiteKitchenOrders(options = {}) {
 
   return orderRows
     .map((row) => mapWebsiteKitchenOrder(row, itemsByOrderId))
-    .filter((order) => matchesBranch(order, options));
+    .filter((order) => matchesBranch(order, options))
+    .filter((order) => !shouldHideWebsiteOrderUntilPaid(order));
 }
 
 export async function getPartnerKitchenOrders(options = {}) {
