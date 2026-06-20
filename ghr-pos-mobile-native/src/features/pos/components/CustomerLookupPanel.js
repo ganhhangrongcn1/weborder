@@ -210,7 +210,7 @@ export default CustomerLookupPanel;
 
 const styles = StyleSheet.create({
   panel: {
-    gap: 8
+    gap: 10
   },
   inputRow: {
     flexDirection: "row",
@@ -218,23 +218,23 @@ const styles = StyleSheet.create({
   },
   inputField: {
     flex: 1,
-    gap: 5
+    gap: 6
   },
   fieldLabel: {
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   input: {
-    minHeight: 38,
+    minHeight: 52,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 11,
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: "800"
   },
   statusBox: {
@@ -293,20 +293,20 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   summaryCard: {
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
     borderColor: "#bfdbfe",
     backgroundColor: "#eff6ff",
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    padding: 12
   },
   benefitBox: {
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
     borderColor: "#bfdbfe",
     backgroundColor: "#eff6ff",
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    padding: 12
   },
   cardHead: {
     flexDirection: "row",
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     marginTop: 3,
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900"
   },
   cardSubTitle: {
@@ -346,13 +346,13 @@ const styles = StyleSheet.create({
   orderCount: {
     marginTop: 3,
     color: POS_COLORS.heading,
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: "900"
   },
   discountText: {
     marginTop: 3,
     color: POS_COLORS.heading,
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: "900"
   },
   statsGrid: {
@@ -403,12 +403,14 @@ const styles = StyleSheet.create({
   },
   voucherChip: {
     gap: 3,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 9,
-    paddingVertical: 8
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    justifyContent: "center"
   },
   voucherChipActive: {
     borderColor: "#86efac",
@@ -419,7 +421,7 @@ const styles = StyleSheet.create({
   },
   voucherTitle: {
     color: POS_COLORS.heading,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   voucherTitleActive: {
@@ -427,7 +429,7 @@ const styles = StyleSheet.create({
   },
   voucherMeta: {
     color: POS_COLORS.slate,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "700"
   },
   voucherMetaActive: {
@@ -463,7 +465,7 @@ const styles = StyleSheet.create({
     gap: 2
   },
   clearPointsButton: {
-    minHeight: 36,
+    minHeight: 46,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
@@ -474,7 +476,7 @@ const styles = StyleSheet.create({
   },
   clearPointsText: {
     color: POS_COLORS.danger,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "900"
   },
   pointLabel: {
@@ -489,14 +491,14 @@ const styles = StyleSheet.create({
   },
   pointInput: {
     minWidth: 86,
-    minHeight: 36,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 10,
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: "900",
     textAlign: "right"
   },
@@ -506,16 +508,18 @@ const styles = StyleSheet.create({
   },
   suggestionChip: {
     flex: 1,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: "#bbf7d0",
     backgroundColor: "#f0fdf4",
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 8,
-    paddingVertical: 7
+    paddingVertical: 9,
+    justifyContent: "center"
   },
   suggestionText: {
     color: POS_COLORS.primaryDark,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "800",
     textAlign: "center"
   }

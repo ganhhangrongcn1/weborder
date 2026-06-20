@@ -74,8 +74,8 @@ export default function ProductOptionsModal({
   const total = (toNumber(product?.price, 0) + optionTotal) * quantity;
   const missingRequiredGroups = groups.filter((group) => group.required && !selectedOptions[group.id]);
   const canSubmit = Boolean(product) && missingRequiredGroups.length === 0;
-  const compactGrid = width >= 680;
-  const dialogWidth = getPosDialogWidth(width, width >= 680 ? 620 : 420);
+  const compactGrid = width >= 760;
+  const dialogWidth = getPosDialogWidth(width, width >= 760 ? 700 : 500);
 
   const handleSelectOption = (group, optionId) => {
     setSelectedOptions((current) => {
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   body: {
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
   groupTitle: {
     flex: 1,
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900"
   },
   groupBadge: {
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     backgroundColor: POS_COLORS.surface
   },
   groupBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900"
   },
   groupBadgeTextRequired: {
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
   },
   groupNote: {
     color: POS_COLORS.muted,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "800"
   },
   optionGrid: {
@@ -350,14 +350,14 @@ const styles = StyleSheet.create({
     gap: 8
   },
   optionButton: {
-    minHeight: 46,
+    minHeight: 58,
     width: "100%",
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 11,
-    paddingVertical: 9
+    paddingHorizontal: 13,
+    paddingVertical: 11
   },
   optionButtonHalf: {
     width: "48.9%"
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
   },
   optionName: {
     color: POS_COLORS.slate,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "900"
   },
   optionNameActive: {
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
   optionPrice: {
     marginTop: 3,
     color: POS_COLORS.muted,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "800"
   },
   optionPriceActive: {
@@ -388,23 +388,23 @@ const styles = StyleSheet.create({
   },
   label: {
     color: POS_COLORS.muted,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   input: {
-    minHeight: 44,
+    minHeight: 54,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 12,
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "800"
   },
   noteInput: {
-    minHeight: 72,
+    minHeight: 92,
     paddingTop: 11,
     textAlignVertical: "top"
   },
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   qtyLabel: {
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "900"
   },
   qtyControls: {
@@ -433,8 +433,8 @@ const styles = StyleSheet.create({
     gap: 8
   },
   qtyButton: {
-    width: 34,
-    height: 34,
+    width: 48,
+    height: 48,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
@@ -448,22 +448,22 @@ const styles = StyleSheet.create({
   },
   qtyButtonText: {
     color: POS_COLORS.slate,
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: "900"
   },
   qtyButtonPrimaryText: {
     color: POS_COLORS.primaryDark
   },
   qtyValueBox: {
-    minWidth: 34,
-    height: 34,
+    minWidth: 48,
+    height: 48,
     borderRadius: POS_RADIUS.md,
     alignItems: "center",
     justifyContent: "center"
   },
   qtyValue: {
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: "900"
   },
   totalRow: {
@@ -474,22 +474,22 @@ const styles = StyleSheet.create({
   },
   totalLabel: {
     color: POS_COLORS.muted,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "800"
   },
   totalValue: {
     color: POS_COLORS.heading,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   totalStrongLabel: {
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "900"
   },
   totalStrongValue: {
     color: POS_COLORS.primaryDark,
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: "900"
   },
   errorBox: {
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   submitButton: {
-    minHeight: 48,
+    minHeight: 58,
     marginTop: 12,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: POS_COLORS.surface,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900"
   },
   submitTextDisabled: {

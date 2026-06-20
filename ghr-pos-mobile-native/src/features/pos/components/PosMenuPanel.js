@@ -19,8 +19,8 @@ const PosMenuPanel = memo(function PosMenuPanel({
   onAddProduct
 }) {
   const listCategories = categories.length ? categories : [ALL_CATEGORY];
-  const safeColumns = Math.max(2, Math.min(5, Number(columns || 3)));
-  const cardWidth = safeColumns >= 5 ? 114 : safeColumns === 4 ? 126 : safeColumns === 3 ? 138 : 154;
+  const safeColumns = Math.max(2, Math.min(3, Number(columns || 2)));
+  const cardWidth = safeColumns === 3 ? "31.8%" : "48.7%";
   const pagerSelected = Boolean(normalizedPager);
 
   return (
@@ -120,33 +120,33 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minHeight: 0,
-    gap: 8,
+    gap: 10,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: POS_COLORS.border
   },
   categoryScroller: {
     flexGrow: 0,
-    maxHeight: 46,
+    maxHeight: 58,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     borderRadius: POS_RADIUS.md,
     backgroundColor: POS_COLORS.subtleSurface
   },
   categoryList: {
-    gap: 6,
-    padding: 6
+    gap: 8,
+    padding: 7
   },
   categoryChip: {
-    minHeight: 30,
-    maxWidth: 156,
+    minHeight: 42,
+    maxWidth: 190,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 10,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center"
   },
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: POS_COLORS.slate,
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: "900"
   },
   categoryTextActive: {
@@ -228,11 +228,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     alignContent: "flex-start",
-    gap: 8,
-    paddingBottom: 4
+    gap: 10,
+    paddingBottom: 8
   },
   productCard: {
-    minHeight: 176,
+    minHeight: 210,
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
@@ -252,38 +252,38 @@ const styles = StyleSheet.create({
   },
   imageText: {
     color: POS_COLORS.primary,
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: "900"
   },
   productBody: {
-    minHeight: 64,
+    minHeight: 78,
     flexGrow: 1,
-    paddingHorizontal: 8,
-    paddingTop: 7,
-    paddingBottom: 9,
+    paddingHorizontal: 10,
+    paddingTop: 9,
+    paddingBottom: 11,
     justifyContent: "space-between"
   },
   productCopy: {
-    minHeight: 34,
-    gap: 3
+    minHeight: 44,
+    gap: 4
   },
   productName: {
-    minHeight: 28,
+    minHeight: 36,
     color: POS_COLORS.heading,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 14,
+    lineHeight: 18,
     fontWeight: "900"
   },
   productMeta: {
-    minHeight: 12,
+    minHeight: 16,
     color: POS_COLORS.muted,
-    fontSize: 9,
-    lineHeight: 12,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: "800"
   },
   productPrice: {
     color: "#166534",
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: "900"
   },
   empty: {

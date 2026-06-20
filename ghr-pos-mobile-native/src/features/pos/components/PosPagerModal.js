@@ -25,7 +25,7 @@ export default function PosPagerModal({
       ),
     [busyPagers]
   );
-  const sheetWidth = Math.min(Math.max(width - 40, 0), 430);
+  const sheetWidth = Math.min(Math.max(width - 24, 0), 560);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   closeButton: {
-    minHeight: 36,
+    minHeight: 44,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   grid: {
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   },
   pagerButton: {
     width: "23%",
-    minHeight: 64,
+    minHeight: 78,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   pagerText: {
     color: POS_COLORS.slate,
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "900"
   },
   pagerTextActive: {
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   pagerMeta: {
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "800"
   },
   pagerMetaActive: {

@@ -29,8 +29,8 @@ export default function QrPaymentModal({
   const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
   const config = getPosQrPaymentConfig(branch);
   const transferContent = draftSession?.paymentReference || buildPosPaymentReference(identity, branch);
-  const dialogWidth = getPosDialogWidth(width, 430);
-  const qrSize = Math.min(dialogWidth - 72, 190);
+  const dialogWidth = getPosDialogWidth(width, 520);
+  const qrSize = Math.min(dialogWidth - 64, 280);
 
   const primaryLabel = processing
     ? "Đang xử lý..."
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   },
   ghostText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   closeButton: {
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   body: {
@@ -244,13 +244,13 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   summaryValue: {
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900"
   },
   statusBox: {
@@ -263,13 +263,13 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     color: POS_COLORS.primaryDark,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   statusValue: {
     color: POS_COLORS.primaryDark,
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "900"
   },
   statusMeta: {
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 54,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1.15,
-    minHeight: 42,
+    minHeight: 54,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,
@@ -319,10 +319,12 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     color: POS_COLORS.danger,
+    fontSize: 15,
     fontWeight: "900"
   },
   primaryText: {
     color: POS_COLORS.surface,
+    fontSize: 15,
     fontWeight: "900"
   },
   primaryWaiting: {
@@ -331,6 +333,7 @@ const styles = StyleSheet.create({
   },
   primaryWaitingText: {
     color: POS_COLORS.slate,
+    fontSize: 15,
     fontWeight: "900"
   },
   disabledButton: {

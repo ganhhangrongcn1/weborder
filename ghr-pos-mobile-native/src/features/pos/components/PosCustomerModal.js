@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import CustomerLookupPanel from "./CustomerLookupPanel";
@@ -21,7 +21,7 @@ export default function PosCustomerModal({
   onClose
 }) {
   const { width } = useWindowDimensions();
-  const dialogWidth = getPosDialogWidth(width, 620);
+  const dialogWidth = getPosDialogWidth(width, 700);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -38,7 +38,7 @@ export default function PosCustomerModal({
             </Pressable>
           </View>
 
-          <View style={styles.body}>
+          <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
             <CustomerLookupPanel
               customerName={customerName}
               setCustomerName={setCustomerName}
@@ -52,7 +52,7 @@ export default function PosCustomerModal({
               setPointsInput={setPointsInput}
               onClear={onClear}
             />
-          </View>
+          </ScrollView>
 
           <Pressable style={styles.doneButton} onPress={onClose}>
             <Text style={styles.doneText}>Xong</Text>
@@ -75,12 +75,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15, 23, 42, 0.36)"
   },
   sheet: {
+    maxHeight: "88%",
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_MODAL.radius,
-    padding: 14,
-    gap: 10,
+    padding: POS_MODAL.padding,
+    gap: POS_MODAL.gap,
     ...POS_SHADOW
   },
   header: {
@@ -101,7 +102,8 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 2,
     color: POS_COLORS.heading,
-    fontSize: 20,
+    fontSize: POS_MODAL.titleSize,
+    lineHeight: POS_MODAL.titleLineHeight,
     fontWeight: "900"
   },
   closeButton: {
@@ -116,14 +118,14 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   body: {
     gap: 8
   },
   doneButton: {
-    minHeight: 42,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: "#166534",
     backgroundColor: "#2f7d3f",
@@ -133,7 +135,7 @@ const styles = StyleSheet.create({
   },
   doneText: {
     color: POS_COLORS.surface,
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "900"
   }
 });

@@ -52,7 +52,7 @@ export default function PosShiftCloseModal({
   onConfirm
 }) {
   const { width } = useWindowDimensions();
-  const dialogWidth = getPosDialogWidth(width, 560);
+  const dialogWidth = getPosDialogWidth(width, 680);
   const [closingNote, setClosingNote] = useState("");
   const [printReceipt, setPrintReceipt] = useState(true);
   const [cashCounterOpen, setCashCounterOpen] = useState(false);
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   body: {
@@ -294,13 +294,13 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   summaryValue: {
     color: POS_COLORS.heading,
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "900"
   },
   section: {
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   requiredAction: {
     minWidth: 128,
-    minHeight: 44,
+    minHeight: 54,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
   },
   requiredActionText: {
     color: POS_COLORS.surface,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   breakdownCard: {
@@ -455,14 +455,14 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   noteInput: {
-    minHeight: 88,
+    minHeight: 104,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: POS_COLORS.heading,
-    fontSize: 14
+    fontSize: 16
   },
   printRow: {
     flexDirection: "row",
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
   },
   printTitle: {
     color: POS_COLORS.heading,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   printHint: {
@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   submitButton: {
-    minHeight: 46,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,
@@ -510,6 +510,7 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: POS_COLORS.surface,
+    fontSize: 16,
     fontWeight: "900"
   },
   disabledText: {

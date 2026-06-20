@@ -64,9 +64,9 @@ export default function CashPaymentModal({
   const missing = Math.max(0, amount - normalized);
   const paidEnough = normalized >= amount;
   const suggestions = useMemo(() => buildSmartSuggestions(amount), [amount]);
-  const dialogWidth = getPosDialogWidth(width, 420);
-  const quickColumns = dialogWidth >= 360 ? 4 : 3;
-  const quickButtonWidth = quickColumns === 4 ? "23.5%" : "31.8%";
+  const dialogWidth = getPosDialogWidth(width, 500);
+  const quickColumns = 3;
+  const quickButtonWidth = "31.8%";
   const quickItems = [
     { key: "exact", label: "Đủ tiền", value: amount, selected: normalized === amount },
     ...suggestions.map((value) => ({
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   amountRow: {
@@ -233,13 +233,13 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     color: POS_COLORS.slate,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800"
   },
   amountValue: {
     color: POS_COLORS.heading,
-    fontSize: 17,
-    lineHeight: 21,
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: "900"
   },
   quickGrid: {
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
     gap: 7
   },
   quickButton: {
-    minHeight: 38,
+    minHeight: 54,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   },
   quickText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   quickTextActive: {
@@ -278,18 +278,18 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: POS_COLORS.slate,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800"
   },
   input: {
-    minHeight: 50,
+    minHeight: 60,
     borderWidth: 1.5,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     color: POS_COLORS.text,
     borderRadius: 14,
     paddingHorizontal: 14,
-    fontSize: 17,
+    fontSize: 22,
     fontWeight: "900"
   },
   inputPaid: {
@@ -329,12 +329,12 @@ const styles = StyleSheet.create({
   },
   resultLabel: {
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900"
   },
   resultValue: {
     color: POS_COLORS.heading,
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: "900"
   },
   resultValuePaid: {
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
     color: POS_COLORS.danger
   },
   primaryButton: {
-    minHeight: 44,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     color: POS_COLORS.surface,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900"
   },
   disabledText: {

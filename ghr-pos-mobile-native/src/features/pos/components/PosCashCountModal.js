@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   },
   ghostButtonText: {
     color: POS_COLORS.muted,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   closeButton: {
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   content: {
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   },
   moneyCard: {
     flex: 1,
-    minHeight: 92,
+    minHeight: 112,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.surface,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   },
   moneyLabel: {
     color: POS_COLORS.heading,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900"
   },
   moneyMeta: {
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   countBadge: {
-    minWidth: 52,
+    minWidth: 58,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.subtleSurface,
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   },
   countBadgeValue: {
     color: POS_COLORS.heading,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   countBadgeValueActive: {
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   },
   activeCountBadgeText: {
     color: POS_COLORS.heading,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "900"
   },
   activeValueRow: {
@@ -424,8 +424,8 @@ const styles = StyleSheet.create({
   activeValue: {
     flex: 1,
     color: POS_COLORS.heading,
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 24,
+    lineHeight: 29,
     fontWeight: "900"
   },
   activeStepper: {
@@ -434,8 +434,8 @@ const styles = StyleSheet.create({
     gap: 6
   },
   stepButton: {
-    width: 42,
-    height: 42,
+    width: 54,
+    height: 54,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   stepButtonText: {
     color: POS_COLORS.heading,
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: "900"
   },
   stepButtonTextDisabled: {
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   },
   keyButton: {
     flex: 1,
-    minHeight: 46,
+    minHeight: 58,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   },
   keyButtonText: {
     color: POS_COLORS.heading,
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "900"
   },
   totalBox: {
@@ -494,12 +494,12 @@ const styles = StyleSheet.create({
   totalValue: {
     marginTop: 4,
     color: POS_COLORS.primaryDark,
-    fontSize: 18,
-    lineHeight: 22,
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: "900"
   },
   applyButton: {
-    minHeight: 46,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,
@@ -509,7 +509,7 @@ const styles = StyleSheet.create({
   },
   applyText: {
     color: POS_COLORS.surface,
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "900"
   }
 });

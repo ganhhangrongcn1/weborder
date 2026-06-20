@@ -57,7 +57,7 @@ export default function PosOrderDetailModal({
   onCancel
 }) {
   const { width } = useWindowDimensions();
-  const dialogWidth = getPosDialogWidth(width, 560);
+  const dialogWidth = getPosDialogWidth(width, 680);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   },
   closeText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   body: {
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 56,
     borderWidth: 1,
     borderRadius: POS_RADIUS.md,
     alignItems: "center",
@@ -460,10 +460,12 @@ const styles = StyleSheet.create({
   },
   ghostActionText: {
     color: POS_COLORS.slate,
+    fontSize: 15,
     fontWeight: "900"
   },
   dangerActionText: {
     color: POS_COLORS.danger,
+    fontSize: 15,
     fontWeight: "900"
   },
   disabledText: {

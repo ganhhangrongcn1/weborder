@@ -70,7 +70,7 @@ export default function PosBenefitCard({
     () => buildBenefitCompactCopy({ promotionHints, loyaltyBenefit, selectedVoucher }),
     [loyaltyBenefit, promotionHints, selectedVoucher]
   );
-  const dialogWidth = getPosDialogWidth(width, 520);
+  const dialogWidth = getPosDialogWidth(width, 640);
 
   const handleToggleVoucher = (voucher) => {
     const voucherKey = buildVoucherSelectionKey(voucher);
@@ -195,6 +195,7 @@ export default function PosBenefitCard({
 
 const styles = StyleSheet.create({
   triggerCard: {
+    minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -209,9 +210,9 @@ const styles = StyleSheet.create({
     opacity: 0.65
   },
   triggerIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: POS_COLORS.primarySoft
@@ -228,14 +229,14 @@ const styles = StyleSheet.create({
   },
   triggerTitle: {
     color: POS_COLORS.heading,
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: "900"
   },
   triggerSubtitle: {
     color: POS_COLORS.slate,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: "700"
   },
   triggerActions: {
@@ -243,8 +244,8 @@ const styles = StyleSheet.create({
     gap: 6
   },
   triggerButton: {
-    width: 34,
-    height: 34,
+    width: 42,
+    height: 42,
     borderWidth: 1,
     borderColor: "#c7d2fe",
     backgroundColor: "#f8fafc",
@@ -310,7 +311,7 @@ const styles = StyleSheet.create({
   },
   sheetCloseText: {
     color: POS_COLORS.slate,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   sheetBody: {
@@ -382,8 +383,8 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   clearButton: {
-    width: 30,
-    height: 30,
+    width: 44,
+    height: 44,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
@@ -417,11 +418,13 @@ const styles = StyleSheet.create({
   },
   voucherChip: {
     gap: 4,
+    minHeight: 60,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    padding: 12,
+    justifyContent: "center"
   },
   voucherChipActive: {
     borderColor: "#86efac",
@@ -439,7 +442,7 @@ const styles = StyleSheet.create({
   voucherTitle: {
     flex: 1,
     color: POS_COLORS.heading,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "900"
   },
   voucherTitleActive: {
@@ -447,7 +450,7 @@ const styles = StyleSheet.create({
   },
   voucherMeta: {
     color: POS_COLORS.slate,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700"
   },
   voucherMetaActive: {

@@ -1,13 +1,13 @@
 export const POS_MODAL = {
-  padding: 14,
+  padding: 18,
   radius: 16,
-  gap: 10,
-  closeButtonHeight: 32,
-  titleSize: 18,
-  titleLineHeight: 22,
-  eyebrowSize: 10
+  gap: 12,
+  closeButtonHeight: 44,
+  titleSize: 22,
+  titleLineHeight: 28,
+  eyebrowSize: 11
 };
 
 export function getPosDialogWidth(screenWidth, maxWidth = 420) {
-  return Math.min(Math.max(screenWidth - 32, 0), maxWidth);
+  return Math.min(Math.max(screenWidth - 24, 0), maxWidth);
 }
