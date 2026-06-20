@@ -820,6 +820,9 @@ export default function useKitchenOrders(options = null) {
         setError(result.message || "Khong cap nhat duoc trang thai don.");
         return;
       }
+      if (result.warning) {
+        setError(result.warning);
+      }
     } catch (err) {
       if (orderRuntimeKey) forgetRecentlyClosedOrder(order, recentlyClosedOrderKeysRef.current);
       setOrders(previousOrders);

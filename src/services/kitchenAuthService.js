@@ -1,6 +1,7 @@
 import {
   getSupabaseKitchenAuthClient,
-  initSupabaseKitchenAuthClient
+  initSupabaseKitchenAuthClient,
+  syncScopedSessionToRuntime
 } from "./supabase/supabaseRuntimeClient.js";
 
 const AUTH_TIMEOUT_MS = 15000;
@@ -196,8 +197,10 @@ export async function loginKitchenWithPassword({ email, password }) {
     const access = await resolveKitchenAccessFromSession(client, data?.session || null);
     if (!access.session) {
       await withTimeout(() => client.auth.signOut()).catch(() => {});
+      await syncScopedSessionToRuntime("kitchen", null).catch(() => {});
       return { ok: false, message: access.message || "Tài khoản này không có quyền vào app bếp." };
     }
+    await syncScopedSessionToRuntime("kitchen", access.session).catch(() => {});
     return { ok: true, session: access.session, profile: access.profile || null };
   } catch (error) {
     if (isTransientAuthError(error)) {
@@ -207,6 +210,7 @@ export async function loginKitchenWithPassword({ email, password }) {
       };
     }
     await withTimeout(() => client.auth.signOut()).catch(() => {});
+    await syncScopedSessionToRuntime("kitchen", null).catch(() => {});
     return { ok: false, message: normalizeAuthError(error, "Không thể xác minh quyền bếp.") };
   }
 }
@@ -216,6 +220,7 @@ export async function logoutKitchen() {
   if (!client) return { ok: false, message: "Supabase chưa sẵn sàng." };
   const { error } = await withTimeout(() => client.auth.signOut());
   if (error) return { ok: false, message: String(error.message || "Đăng xuất thất bại.") };
+  await syncScopedSessionToRuntime("kitchen", null).catch(() => {});
   return { ok: true };
 }
 
@@ -225,6 +230,7 @@ export async function subscribeKitchenAuth(onChange) {
 
   const { data } = client.auth.onAuthStateChange(async (_event, session) => {
     try {
+      await syncScopedSessionToRuntime("kitchen", session || null).catch(() => {});
       const access = await resolveKitchenAccessFromSession(client, session || null);
       onChange(access);
     } catch (error) {

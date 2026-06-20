@@ -105,3 +105,22 @@ export async function initSupabaseKitchenAuthClient() {
 export function getSupabaseKitchenAuthClient() {
   return getScopedExistingClient("kitchen");
 }
+
+export async function syncScopedSessionToRuntime(scope = "runtime", session = null) {
+  const runtimeClient = getSupabaseRuntimeClient() || await initSupabaseRuntimeClient();
+  if (!runtimeClient) return null;
+
+  const scopedClient = getScopedExistingClient(scope) || await createSupabaseClientForScope(scope);
+  const nextSession = session || (scopedClient ? (await scopedClient.auth.getSession()).data?.session || null : null);
+
+  if (nextSession?.access_token && nextSession?.refresh_token) {
+    await runtimeClient.auth.setSession({
+      access_token: nextSession.access_token,
+      refresh_token: nextSession.refresh_token
+    });
+    return runtimeClient;
+  }
+
+  await runtimeClient.auth.signOut().catch(() => {});
+  return runtimeClient;
+}

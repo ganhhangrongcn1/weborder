@@ -1,4 +1,4 @@
-import { getSupabaseAdminAuthClient, initSupabaseAdminAuthClient } from "./supabase/supabaseRuntimeClient.js";
+import { getSupabaseAdminAuthClient, initSupabaseAdminAuthClient, syncScopedSessionToRuntime } from "./supabase/supabaseRuntimeClient.js";
 
 const ADMIN_AUTH_TIMEOUT_MS = 6000;
 const PROFILE_TABLE = "profiles";
@@ -217,14 +217,17 @@ export async function loginAdminWithPassword({ email, password }) {
     const access = await withTimeout(() => resolveAdminAccessFromSession(client, data?.session || null));
     if (!access.session) {
       await withTimeout(() => client.auth.signOut()).catch(() => {});
+      await syncScopedSessionToRuntime("admin", null).catch(() => {});
       return {
         ok: false,
         message: access.message || "Tài khoản này không có quyền vào khu quản trị."
       };
     }
+    await syncScopedSessionToRuntime("admin", access.session).catch(() => {});
     return { ok: true, session: access.session, profile: access.profile || null };
   } catch (accessError) {
     await withTimeout(() => client.auth.signOut()).catch(() => {});
+    await syncScopedSessionToRuntime("admin", null).catch(() => {});
     return {
       ok: false,
       message: normalizeAdminAuthError(accessError, "Không thể xác minh quyền quản trị.")
@@ -237,6 +240,7 @@ export async function logoutAdmin() {
   if (!client) return { ok: false, message: "Supabase chưa sẵn sàng." };
   const { error } = await withTimeout(() => client.auth.signOut());
   if (error) return { ok: false, message: String(error.message || "Đăng xuất thất bại.") };
+  await syncScopedSessionToRuntime("admin", null).catch(() => {});
   return { ok: true };
 }
 
@@ -245,6 +249,7 @@ export async function subscribeAdminAuth(onChange) {
   if (!client || typeof onChange !== "function") return () => {};
   const { data } = client.auth.onAuthStateChange(async (_event, session) => {
     try {
+      await syncScopedSessionToRuntime("admin", session || null).catch(() => {});
       const access = await resolveAdminAccessFromSession(client, session || null);
       onChange(access);
     } catch (error) {

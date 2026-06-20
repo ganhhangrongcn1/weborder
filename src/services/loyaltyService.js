@@ -267,64 +267,41 @@ export async function applyOrderLoyaltyAsync({
         return sameVoucher ? { ...voucher, used: true, usedAt: createdAt, orderCode: orderId } : voucher;
       })
     : phoneLoyalty.voucherHistory || [];
-  const nextPointHistory = [
-    ...(alreadyEarned || pointsEarned <= 0 ? [] : [pointEntry]),
-    ...(alreadySpent || spendPoints <= 0 ? [] : [spendEntry]),
-    ...pointHistory
-  ];
-  const nextTotalPoints = Math.max(
-    0,
-    Number(phoneLoyalty.totalPoints || 0) + pointsEarned - (alreadySpent ? 0 : spendPoints)
-  );
-  const nextPhoneLoyalty = {
-    ...phoneLoyalty,
-    phone: key,
-    totalPoints: nextTotalPoints,
-    pointHistory: nextPointHistory,
-    voucherHistory: nextVoucherHistory
-  };
-
-  const saved = await loyaltyRepository.saveByPhoneAsync(key, nextPhoneLoyalty, defaultLoyaltyData);
-  const remoteEventTasks = [];
+  const remoteEvents = [];
   if (!alreadyEarned && pointsEarned > 0) {
-    remoteEventTasks.push(
-      loyaltyRepository.appendEventByPhoneAsync(
-        key,
-        {
-          entryType: "ORDER_EARN",
-          points: pointsEarned,
-          orderId,
-          amount: Number(amount || 0),
-          title: pointEntry.title,
-          note: pointEntry.note,
-          createdAt,
-          metadata: pointEntry
-        },
-        defaultLoyaltyData
-      )
-    );
+    remoteEvents.push({
+      entryType: "ORDER_EARN",
+      points: pointsEarned,
+      orderId,
+      amount: Number(amount || 0),
+      title: pointEntry.title,
+      note: pointEntry.note,
+      createdAt,
+      metadata: pointEntry
+    });
   }
   if (!alreadySpent && spendPoints > 0) {
-    remoteEventTasks.push(
-      loyaltyRepository.appendEventByPhoneAsync(
-        key,
-        {
-          entryType: "ORDER_SPEND",
-          points: -spendPoints,
-          orderId,
-          amount: Number(amount || 0),
-          title: spendEntry.title,
-          note: spendEntry.note,
-          createdAt,
-          metadata: spendEntry
-        },
-        defaultLoyaltyData
-      )
+    remoteEvents.push({
+      entryType: "ORDER_SPEND",
+      points: -spendPoints,
+      orderId,
+      amount: Number(amount || 0),
+      title: spendEntry.title,
+      note: spendEntry.note,
+      createdAt,
+      metadata: spendEntry
+    });
+  }
+
+  for (const event of remoteEvents) {
+    await loyaltyRepository.appendEventByPhoneAsync(
+      key,
+      event,
+      defaultLoyaltyData,
+      { throwOnError: true }
     );
   }
-  if (remoteEventTasks.length) {
-    await Promise.allSettled(remoteEventTasks);
-  }
+
   if (promoSource === "loyalty" && (promoVoucherId || promoCode)) {
     await loyaltyRepository.markVoucherUsedByPhoneAsync(
       key,
@@ -337,7 +314,11 @@ export async function applyOrderLoyaltyAsync({
       defaultLoyaltyData
     );
   }
-  return saved;
+  return loyaltyRepository.getByPhoneAsync(key, {
+    ...phoneLoyalty,
+    phone: key,
+    voucherHistory: nextVoucherHistory
+  });
 }
 
 export function reconcileLoyaltyFromOrders(phone, orderStorage) {

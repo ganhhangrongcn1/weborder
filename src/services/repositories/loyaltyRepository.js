@@ -386,10 +386,13 @@ export const loyaltyRepository = {
   async saveLoyaltyRuleAsync(rule) {
     return this.saveCrmConfigAsync(rule);
   },
-  async appendEventByPhoneAsync(phone, event = {}, fallback = {}) {
+  async appendEventByPhoneAsync(phone, event = {}, fallback = {}, options = {}) {
     const key = getCustomerKey(phone);
     if (!key) return { ...(fallback || {}), phone: key };
     if (!shouldWriteDomainToSupabase("loyalty")) {
+      if (options?.throwOnError) {
+        throw new Error("Chức năng ghi điểm Supabase đang bị tắt.");
+      }
       return this.getByPhoneAsync(key, fallback);
     }
     try {
@@ -413,6 +416,7 @@ export const loyaltyRepository = {
       return remoteOnly;
     } catch (error) {
       logSupabaseError("append loyalty event", error, { phone: key, eventType: event.entryType || event.type || "OTHER" });
+      if (options?.throwOnError) throw error;
       return this.getByPhoneAsync(key, fallback);
     }
   }

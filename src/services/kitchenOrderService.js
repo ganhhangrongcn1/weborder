@@ -1219,19 +1219,26 @@ export async function markKitchenOrderDone(order = {}) {
     };
   }
 
+  let loyaltyWarning = "";
   if (action.settleOrder) {
-    await applyOrderLoyaltyAsync(getOrderLoyaltyPayload(order, updatedAt));
+    try {
+      await applyOrderLoyaltyAsync(getOrderLoyaltyPayload(order, updatedAt));
+    } catch (loyaltyError) {
+      loyaltyWarning = `Đơn đã hoàn thành nhưng chưa cộng được điểm: ${loyaltyError?.message || "Vui lòng kiểm tra quyền tài khoản Bếp."}`;
+    }
   }
 
   return {
     ok: true,
+    loyaltyUpdated: !loyaltyWarning,
+    warning: loyaltyWarning,
     message: action.type === "ready_for_pickup"
       ? "Đơn đã chuyển sang chờ khách lấy."
       : action.type === "ready_for_delivery"
         ? "Đơn đã chuyển sang chờ shipper."
         : action.type === "handoff_shipper"
           ? "Đơn đã chuyển sang đang giao."
-          : "Đơn đã hoàn thành và điểm khách hàng đã được cập nhật."
+          : loyaltyWarning || "Đơn đã hoàn thành và điểm khách hàng đã được cập nhật."
   };
 }
 
