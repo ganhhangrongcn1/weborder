@@ -1,5 +1,6 @@
 import { NativeModules, Platform } from "react-native";
 
+import { getCashBreakdownEntries } from "./posCashBreakdownService";
 import { formatMoney } from "../../utils/format";
 
 const printerModule = NativeModules.PosPrinter || null;
@@ -251,6 +252,7 @@ export function buildPosShiftCloseReceiptText({
   shift = {},
   summary = {},
   closingCashCounted = 0,
+  closingCashBreakdown = null,
   closingNote = ""
 } = {}) {
   const width = 42;
@@ -284,6 +286,15 @@ export function buildPosShiftCloseReceiptText({
     alignReceiptLine("Don QR", `${Math.max(0, Math.round(toNumber(summary.qrOrderCount, 0)))} don`, width),
     alignReceiptLine("Don huy", `${Math.max(0, Math.round(toNumber(summary.cancelledOrderCount, 0)))} don`, width)
   ];
+
+  const cashBreakdownEntries = getCashBreakdownEntries(closingCashBreakdown);
+  if (cashBreakdownEntries.length) {
+    lines.push(buildLine("-", width));
+    lines.push("Chi tiet tien cuoi ca");
+    cashBreakdownEntries.forEach((entry) => {
+      lines.push(alignReceiptLine(`${entry.label} x ${entry.count}`, formatMoney(entry.total), width));
+    });
+  }
 
   if (toText(closingNote)) {
     lines.push(buildLine("-", width));

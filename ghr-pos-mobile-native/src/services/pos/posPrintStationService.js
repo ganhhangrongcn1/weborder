@@ -10,6 +10,7 @@ const AUTO_PRINT_WINDOW_MS = 5 * 60 * 1000;
 const MAX_JOBS_PER_POLL = 3;
 const EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
 const NO_FOOTER_SOURCE_TYPES = new Set(["pos_payment_qr", "pos_shift_close"]);
+const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "counter", "tai_quay"]);
 const DEFAULT_FOOTER_TEXT = [
   "------------------------------------------",
   "@@CENTER:Quét QR tích điểm ngay",
@@ -28,6 +29,43 @@ function toText(value = "") {
 
 function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeSourceToken(value = "") {
+  return toText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function isPosOrderPrintJob(job = {}) {
+  const payload = getObject(job.payload);
+  const order = getObject(payload.order);
+  const orderCode = toText(job.order_code || order.orderCode || order.order_code);
+  if (orderCode.toUpperCase().startsWith("POS-")) return true;
+
+  const sourceTokens = [
+    job.source_type,
+    payload.sourceType,
+    payload.source,
+    payload.channel,
+    payload.orderSource,
+    payload.platform,
+    order.sourceType,
+    order.source,
+    order.channel,
+    order.orderSource,
+    order.platform
+  ].map(normalizeSourceToken).filter(Boolean);
+
+  return sourceTokens.some((token) => (
+    POS_ORDER_SOURCE_TYPES.has(token) ||
+    token.includes("pos") ||
+    token.includes("tai_quay")
+  ));
 }
 
 function getCutoffIso() {
@@ -148,6 +186,14 @@ function buildPrintPayload(job = {}) {
 async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
   const claimed = await claimJob(job, branchUuid, deviceId);
   if (!claimed) return false;
+
+  if (isPosOrderPrintJob(claimed)) {
+    await markPrinted(claimed.id);
+    if (typeof onStatus === "function") {
+      onStatus({ running: true, tone: "ready", message: `Đã bỏ qua bill POS ${claimed.order_code || ""}.` });
+    }
+    return false;
+  }
 
   try {
     const printPayload = buildPrintPayload(claimed);

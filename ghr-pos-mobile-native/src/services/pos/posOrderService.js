@@ -313,9 +313,11 @@ export async function createPosTakeawayOrderMobile({
   if (supabase) {
     let profileWarning = "";
     const metadata = {
-      source: "pos",
-      channel: "pos",
-      orderSource: "pos",
+      source: "pos_mobile",
+      channel: "pos_mobile",
+      orderSource: "pos_mobile",
+      sourceType: "pos",
+      platform: "pos_mobile",
       orderType: "takeaway",
       walkIn: true,
       displayOrderCode: orderIdentity.displayOrderCode,
@@ -417,7 +419,10 @@ export async function createPosTakeawayOrderMobile({
         option_groups: optionGroups,
         kitchen_item_status: "pending",
         metadata: {
-          source: "pos",
+          source: "pos_mobile",
+          channel: "pos_mobile",
+          orderSource: "pos_mobile",
+          sourceType: "pos",
           requestKey,
           lineKey: buildOrderItemLineKey(item, index),
           selectedOptions: item.selectedOptions,

@@ -1438,6 +1438,7 @@ export default function usePosComposer() {
     let closePrintMessage = "";
     if (printReceipt) {
       try {
+        setShiftMessage("Đang in phiếu kết ca...");
         const receiptText = buildPosShiftCloseReceiptText({
           shift: {
             ...shift,
@@ -1445,6 +1446,7 @@ export default function usePosComposer() {
           },
           summary: latestSummary || shiftSummary || {},
           closingCashCounted,
+          closingCashBreakdown,
           closingNote: nextClosingNote
         });
         await printLocalReceipt({

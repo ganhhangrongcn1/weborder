@@ -26,6 +26,36 @@ function isOrderCompletedStatus(status = "") {
   return ["done", "completed", "complete"].includes(normalized);
 }
 
+function normalizeSourceToken(value = "") {
+  return toText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function isPosSourceToken(value = "") {
+  const token = normalizeSourceToken(value);
+  return ["pos", "pos_mobile", "posmobile", "counter", "tai_quay"].includes(token);
+}
+
+function isPosRemoteOrder(row = {}) {
+  const metadata = getObject(row.metadata);
+  return [
+    row.source,
+    row.channel,
+    row.order_source,
+    row.platform,
+    metadata.source,
+    metadata.channel,
+    metadata.orderSource,
+    metadata.sourceType,
+    metadata.platform
+  ].some(isPosSourceToken);
+}
+
 export function canCancelPosOrder(order = {}) {
   const status = toText(order.status || getObject(order.metadata).status).toLowerCase();
   return Boolean(order?.id) && !["done", "completed", "complete", "cancelled", "canceled", "cancel"].includes(status);
@@ -159,10 +189,7 @@ export async function getPosRecentOrders({ branchUuid = "", limit = 8 } = {}) {
 
   const rows = data
     .filter((row) => matchesRemoteOrderBranch(row, branchUuid))
-    .filter((row) => {
-      const metadata = getObject(row.metadata);
-      return toText(metadata.source || metadata.orderSource || metadata.channel).toLowerCase() === "pos";
-    })
+    .filter(isPosRemoteOrder)
     .slice(0, safeLimit);
 
   await Promise.allSettled(rows.map((row) => syncCompletedOrderLoyalty(row)));
