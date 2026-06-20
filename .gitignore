@@ -144,3 +144,7 @@ vite.config.ts.timestamp-*
 .expo/
 ghr-pos-mobile/.expo/
 ghr-pos-mobile/.idea/
+.local-tools/
+.local-downloads/
+.local-temp/
+.local-backups/
