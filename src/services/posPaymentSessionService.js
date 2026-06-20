@@ -37,6 +37,34 @@ const TERMINAL_STATUSES = new Set([
 ]);
 
 const ACTIVE_SESSION_STORAGE_KEY = "ghr_pos_active_payment_sessions";
+const PAYMENT_SESSION_LIST_COLUMNS = [
+  "id",
+  "payment_reference",
+  "request_key",
+  "provider",
+  "source",
+  "status",
+  "branch_uuid",
+  "pos_shift_id",
+  "branch_name",
+  "cashier_name",
+  "customer_name",
+  "customer_phone",
+  "pager_number",
+  "currency",
+  "amount_expected",
+  "amount_paid",
+  "cart_snapshot",
+  "checkout_snapshot",
+  "provider_payload",
+  "order_id",
+  "expires_at",
+  "paid_at",
+  "cancelled_at",
+  "converted_at",
+  "created_at",
+  "updated_at"
+].join(",");
 
 function toText(value = "") {
   return String(value ?? "").trim();
@@ -73,6 +101,34 @@ function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
+}
+
+function normalizeInvokeErrorMessage(error = null, data = null, functionMessage = "") {
+  const safeFunctionMessage = toText(functionMessage);
+  if (safeFunctionMessage) return safeFunctionMessage;
+
+  const rawMessage = toText(data?.message || error?.message);
+  const normalizedMessage = rawMessage.toLowerCase();
+
+  if (
+    normalizedMessage.includes("jwt") ||
+    normalizedMessage.includes("unauthorized") ||
+    normalizedMessage.includes("401") ||
+    normalizedMessage.includes("auth")
+  ) {
+    return "Phiên đăng nhập POS đã hết hạn. Vui lòng đăng nhập lại.";
+  }
+
+  if (
+    normalizedMessage.includes("failed to send a request") ||
+    normalizedMessage.includes("edge function") ||
+    normalizedMessage.includes("fetch") ||
+    normalizedMessage.includes("network")
+  ) {
+    return "Không kết nối được dịch vụ QR chuyển khoản. Kiểm tra mạng hoặc Edge Function pos-payment-session-api.";
+  }
+
+  return rawMessage || "Không gọi được dịch vụ thanh toán.";
 }
 
 function readRememberedSessions() {
@@ -207,7 +263,7 @@ async function invokeSessionAction(body = {}) {
     }
     return {
       ok: false,
-      message: functionMessage || toText(data?.message || error.message) || "Không gọi được dịch vụ thanh toán."
+      message: normalizeInvokeErrorMessage(error, data, functionMessage)
     };
   }
   if (!data?.ok) {
@@ -289,12 +345,32 @@ export async function listPosPaymentSessions(branchUuid = "") {
   const safeBranchUuid = toText(branchUuid);
   if (!safeBranchUuid) return [];
 
-  const result = await invokeSessionAction({
-    action: "list",
-    branch_uuid: safeBranchUuid
-  });
-  if (!result.ok) throw new Error(result.message);
-  return result.sessions;
+  const auth = await getAuthenticatedClient();
+  if (!auth.client || !auth.accessToken) {
+    throw new Error(auth.message || "Phiên đăng nhập POS đã hết hạn. Vui lòng đăng nhập lại.");
+  }
+
+  const { data, error } = await auth.client
+    .from("pos_payment_sessions")
+    .select(PAYMENT_SESSION_LIST_COLUMNS)
+    .eq("branch_uuid", safeBranchUuid)
+    .in("status", [
+      POS_PAYMENT_SESSION_STATUSES.DRAFT,
+      POS_PAYMENT_SESSION_STATUSES.PENDING_PAYMENT,
+      POS_PAYMENT_SESSION_STATUSES.PAID,
+      POS_PAYMENT_SESSION_STATUSES.CONVERTING
+    ])
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    throw new Error(
+      error.message ||
+      "Không tải được các phiên QR đang chờ. Kiểm tra quyền POS hoặc bảng pos_payment_sessions."
+    );
+  }
+
+  return Array.isArray(data) ? data.map((session) => normalizeSessionRow(session)) : [];
 }
 
 export async function subscribePosPaymentSession(sessionId = "", onChange) {

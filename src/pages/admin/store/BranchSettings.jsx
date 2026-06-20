@@ -1,8 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { goongAutocomplete, goongPlaceDetail, hasGoongApiKey } from "../../../services/goongService.js";
+import { buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/posPaymentService.js";
 import { DEFAULT_SHIPPING_CONFIG } from "../../../services/shippingService.js";
 import { syncBranchesToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
 import { AdminButton, AdminCard, AdminInput } from "../ui/index.js";
+
+const BANK_OPTIONS = [
+  { bin: "970422", name: "MB Bank" },
+  { bin: "970436", name: "Vietcombank" },
+  { bin: "970418", name: "BIDV" },
+  { bin: "970407", name: "Techcombank" },
+  { bin: "970405", name: "Agribank" },
+  { bin: "970415", name: "VietinBank" },
+  { bin: "970416", name: "ACB" },
+  { bin: "970432", name: "VPBank" },
+  { bin: "970423", name: "TPBank" },
+  { bin: "970403", name: "Sacombank" },
+  { bin: "970431", name: "Eximbank" },
+  { bin: "970443", name: "HDBank" },
+  { bin: "970437", name: "SeaBank" },
+  { bin: "970448", name: "OCB" },
+  { bin: "970438", name: "BaoViet Bank" },
+  { bin: "970454", name: "VietCapital Bank" },
+  { bin: "970441", name: "VIB" },
+  { bin: "970440", name: "SHB" },
+  { bin: "970400", name: "Saigonbank" },
+  { bin: "970439", name: "Public Bank Vietnam" }
+];
 
 export default function BranchSettings({
   branches,
@@ -22,6 +46,7 @@ export default function BranchSettings({
   const [shippingSaveMessage, setShippingSaveMessage] = useState("");
   const [branchSaving, setBranchSaving] = useState(false);
   const [shippingSaving, setShippingSaving] = useState(false);
+  const [previewBranchId, setPreviewBranchId] = useState("");
   const getSiteOrigin = () => {
     if (typeof window === "undefined") return "";
     return String(window.location.origin || "").trim();
@@ -95,6 +120,13 @@ export default function BranchSettings({
     printWindow.print();
   };
 
+  const getBranchPaymentPreviewUrl = (branch) =>
+    buildPosQrImageUrl({
+      branch,
+      amount: 25000,
+      orderIdentity: { displayOrderCode: "TEST-QR" }
+    });
+
   useEffect(() => {
     setDraftBranches(Array.isArray(branches) ? branches : []);
   }, [branches]);
@@ -165,6 +197,40 @@ export default function BranchSettings({
           ? {
               ...item,
               [field]: value
+            }
+          : item
+      )
+    );
+  };
+
+  const updateBranchPaymentField = (branchId, field, value) => {
+    setDraftBranches(
+      draftBranches.map((item) =>
+        item.id === branchId
+          ? {
+              ...item,
+              paymentSettings: {
+                ...(item?.paymentSettings && typeof item.paymentSettings === "object" ? item.paymentSettings : {}),
+                [field]: String(value || "").trim()
+              }
+            }
+          : item
+      )
+    );
+  };
+
+  const updateBranchBankSelection = (branchId, selectedBin) => {
+    const matchedBank = BANK_OPTIONS.find((item) => item.bin === String(selectedBin || "").trim());
+    setDraftBranches(
+      draftBranches.map((item) =>
+        item.id === branchId
+          ? {
+              ...item,
+              paymentSettings: {
+                ...(item?.paymentSettings && typeof item.paymentSettings === "object" ? item.paymentSettings : {}),
+                bankBin: matchedBank?.bin || "",
+                bankName: matchedBank?.name || ""
+              }
             }
           : item
       )
@@ -276,6 +342,15 @@ export default function BranchSettings({
                     lng: "",
                     shipEnabled: true,
                     pickupEnabled: true,
+                    paymentSettings: {
+                      provider: "vietqr",
+                      bankBin: "",
+                      bankName: "",
+                      accountNumber: "",
+                      accountName: "",
+                      sepayBankAccountId: "",
+                      sepayMerchantCode: ""
+                    },
                     openTime: "09:00",
                     closeTime: "21:00",
                     time: "09:00 - 21:00",
@@ -294,6 +369,12 @@ export default function BranchSettings({
           {draftBranches.map((branch) => {
             const { openTime, closeTime } = extractOpenCloseTime(branch);
             const showingSuggestions = addressSuggestions.branchId === branch.id;
+            const paymentSettings = branch?.paymentSettings && typeof branch.paymentSettings === "object"
+              ? branch.paymentSettings
+              : {};
+            const qrPaymentConfig = getPosQrPaymentConfig(branch);
+            const paymentPreviewOpen = previewBranchId === branch.id;
+            const paymentPreviewUrl = paymentPreviewOpen && qrPaymentConfig.ready ? getBranchPaymentPreviewUrl(branch) : "";
 
             return (
               <div key={branch.id} className="admin-edit-card">
@@ -420,6 +501,123 @@ export default function BranchSettings({
                           In QR
                         </AdminButton>
                       </div>
+                    </div>
+
+                    <div className="admin-input flex flex-col gap-3">
+                      <span className="text-xs font-semibold text-brown/70">Tài khoản nhận chuyển khoản POS</span>
+                      <div className="admin-edit-fields admin-branch-top-grid">
+                        <label className="admin-input flex flex-col gap-2">
+                          <span className="text-xs font-semibold text-brown/70">Kiểu QR POS</span>
+                          <select
+                            className="admin-input"
+                            value={paymentSettings.provider ?? "vietqr"}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "provider", event.target.value)}
+                          >
+                            <option value="vietqr">VietQR thủ công</option>
+                            <option value="sepay">SePay tự động</option>
+                          </select>
+                        </label>
+                        <label className="admin-input flex flex-col gap-2">
+                          <span className="text-xs font-semibold text-brown/70">Ngân hàng</span>
+                          <select
+                            className="admin-input"
+                            value={paymentSettings.bankBin ?? ""}
+                            onChange={(event) => updateBranchBankSelection(branch.id, event.target.value)}
+                          >
+                            <option value="">Chọn ngân hàng</option>
+                            {BANK_OPTIONS.map((bank) => (
+                              <option key={bank.bin} value={bank.bin}>
+                                {bank.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <AdminInput
+                          className="admin-input"
+                          placeholder="Tên ngân hàng"
+                          value={paymentSettings.bankName ?? ""}
+                          onChange={(event) => updateBranchPaymentField(branch.id, "bankName", event.target.value)}
+                        />
+                        <AdminInput
+                          className="admin-input"
+                          placeholder="Số tài khoản"
+                          value={paymentSettings.accountNumber ?? ""}
+                          onChange={(event) => updateBranchPaymentField(branch.id, "accountNumber", event.target.value)}
+                        />
+                        <AdminInput
+                          className="admin-input"
+                          placeholder="Tên chủ tài khoản"
+                          value={paymentSettings.accountName ?? ""}
+                          onChange={(event) => updateBranchPaymentField(branch.id, "accountName", event.target.value)}
+                        />
+                        <AdminInput
+                          className="admin-input"
+                          placeholder="SePay Bank Account ID"
+                          value={paymentSettings.sepayBankAccountId ?? ""}
+                          onChange={(event) => updateBranchPaymentField(branch.id, "sepayBankAccountId", event.target.value)}
+                        />
+                        <AdminInput
+                          className="admin-input"
+                          placeholder="Mã cửa hàng SePay (ví dụ: CN02)"
+                          value={paymentSettings.sepayMerchantCode ?? ""}
+                          onChange={(event) => updateBranchPaymentField(branch.id, "sepayMerchantCode", event.target.value.toUpperCase())}
+                        />
+                      </div>
+                      <p className="text-xs text-brown/60">
+                        POS dùng các ô này để tạo QR chuyển khoản. Nếu chọn SePay tự động thì chi nhánh này sẽ dùng mã đơn đầy đủ để chờ webhook SePay tự xác nhận thanh toán. Lưu chi nhánh là sẽ cập nhật luôn lên Supabase.
+                      </p>
+                      {String(paymentSettings.provider || "vietqr").toLowerCase() === "sepay" ? (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs text-emerald-800">
+                          Đang bật chế độ SePay tự động cho chi nhánh này. Khi Edge Function webhook đã deploy đúng trên Supabase thì đơn QR thanh toán xong sẽ tự xác nhận, tự gửi bếp và tự tạo lệnh in bill.
+                        </div>
+                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AdminButton
+                          variant="secondary"
+                          onClick={() => setPreviewBranchId(paymentPreviewOpen ? "" : branch.id)}
+                        >
+                          {paymentPreviewOpen ? "Ẩn QR mẫu" : "Xem trước QR"}
+                        </AdminButton>
+                        {!qrPaymentConfig.ready ? (
+                          <span className="text-xs text-amber-700">
+                            Chọn ngân hàng và điền đủ số tài khoản, tên chủ tài khoản để xem QR mẫu.
+                          </span>
+                        ) : null}
+                      </div>
+                      {paymentPreviewOpen ? (
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                          {qrPaymentConfig.ready ? (
+                            <div className="flex flex-col items-center gap-3">
+                              <img
+                                src={paymentPreviewUrl}
+                                alt={`QR thanh toán mẫu ${String(branch?.name || "")}`}
+                                className="h-64 w-64 rounded-2xl border border-slate-200 bg-white object-contain p-2"
+                              />
+                              <div className="grid gap-1 text-center text-xs text-brown/70">
+                                <strong className="text-sm text-brown">
+                                  QR mẫu {String(branch?.name || "")}
+                                </strong>
+                                <span>
+                                  Chế độ: {String(paymentSettings.provider || "vietqr").toLowerCase() === "sepay" ? "SePay tự động" : "VietQR thủ công"}
+                                </span>
+                                <span>Số tiền test: 25.000đ</span>
+                                <span>Nội dung: TEST-QR</span>
+                                <span>{paymentSettings.accountNumber || "Chưa có số tài khoản"} · {paymentSettings.accountName || "Chưa có tên tài khoản"}</span>
+                                {paymentSettings.sepayBankAccountId ? (
+                                  <span>SePay Account ID: {paymentSettings.sepayBankAccountId}</span>
+                                ) : null}
+                                {paymentSettings.sepayMerchantCode ? (
+                                  <span>SePay Store: {paymentSettings.sepayMerchantCode}</span>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-4 text-sm text-amber-800">
+                              Chi nhánh này chưa đủ thông tin để tạo QR mẫu.
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                   <div className="admin-branch-actions">

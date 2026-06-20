@@ -737,6 +737,10 @@
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
 }
 
+.pos-workspace-nav.has-print-station {
+  grid-template-columns: 44px minmax(320px, 1fr) auto minmax(148px, 190px) minmax(142px, 178px);
+}
+
 .pos-footer-brand-button {
   display: grid;
   place-items: center;
@@ -910,6 +914,45 @@
 }
 
 .pos-sync-status.is-offline {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
+.pos-print-station-status {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 44px;
+  align-content: center;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 7px;
+  padding: 7px 10px;
+}
+
+.pos-print-station-status span,
+.pos-print-station-status strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pos-print-station-status span {
+  font-size: 10px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.pos-print-station-status strong {
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.pos-print-station-status.is-error {
   border-color: #fecaca;
   background: #fff1f2;
   color: #b91c1c;
@@ -1920,10 +1963,31 @@
   padding: 16px;
 }
 
+.pos-settings-card.is-ready {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.pos-settings-card.is-warning {
+  border-color: #f7c56f;
+  background: #fff7df;
+}
+
+.pos-settings-card.is-error {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.pos-settings-card.pos-settings-hero {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
 .pos-settings-card strong {
   color: #111827;
   font-size: 15px;
   font-weight: 950;
+  overflow-wrap: anywhere;
 }
 
 .pos-settings-card p {
@@ -1949,6 +2013,44 @@
 
 .pos-settings-card.is-wide {
   grid-column: 1 / -1;
+}
+
+.pos-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.pos-settings-actions button {
+  min-height: 38px;
+  border: 1px solid #14532d;
+  background: #156b3a;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.pos-settings-actions button:disabled {
+  opacity: 0.66;
+  cursor: not-allowed;
+}
+
+.pos-settings-actions button:focus-visible {
+  outline: 3px solid rgba(21, 107, 58, 0.18);
+  outline-offset: 2px;
+}
+
+.pos-settings-message.is-success {
+  color: #166534;
+}
+
+.pos-settings-message.is-error {
+  color: #b91c1c;
 }
 
 .pos-shift-overview {
@@ -4092,7 +4194,7 @@
   .pos-shell {
     height: auto;
     min-height: 100dvh;
-    padding: 8px 8px 184px;
+    padding: 8px 8px 220px;
   }
 
   .pos-workspace-nav {
@@ -4104,6 +4206,10 @@
     grid-template-columns: 38px minmax(0, 1fr) 42px;
     grid-template-rows: auto auto;
     gap: 5px;
+  }
+
+  .pos-workspace-nav.has-print-station {
+    grid-template-rows: auto auto auto;
   }
 
   .pos-sync-status {
@@ -4121,6 +4227,24 @@
   }
 
   .pos-sync-status span {
+    margin-right: 6px;
+  }
+
+  .pos-print-station-status {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    min-height: 30px;
+    padding: 5px 8px;
+    text-align: center;
+  }
+
+  .pos-print-station-status span,
+  .pos-print-station-status strong {
+    display: inline;
+    white-space: normal;
+  }
+
+  .pos-print-station-status span {
     margin-right: 6px;
   }
 
@@ -4207,7 +4331,7 @@
   .pos-mobile-cart-button {
     position: fixed;
     right: 12px;
-    bottom: 112px;
+    bottom: 146px;
     left: 12px;
     z-index: 30;
     display: flex;

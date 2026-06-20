@@ -35,6 +35,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -68,12 +69,12 @@ public class PrintStationEngine {
 
     private static final String PRINTER_MODE_USB = "usb";
     private static final String PRINTER_MODE_LAN = "lan";
-    private static final String PRINTER_KEY = "cashier-80mm";
-    private static final String JOB_TYPE = "customer_bill";
+    private static final String PRINTER_KEY = BuildConfig.DEFAULT_PRINTER_KEY;
+    private static final String JOB_TYPE = BuildConfig.DEFAULT_PRINT_JOB_TYPE;
     private static final String PRINT_JOB_SELECT = "id,order_code,source_type,payload,retry_count";
-    private static final String SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
-    private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
-    private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/orders";
+    private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
+    private static final String SUPABASE_ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
+    private static final String LOYALTY_QR_URL = BuildConfig.LOYALTY_QR_URL;
     private static final String SOURCE_TYPE_POS_PAYMENT_QR = "pos_payment_qr";
     private static final String SOURCE_TYPE_POS_SHIFT_CLOSE = "pos_shift_close";
     private static final String DEFAULT_RECEIPT_FOOTER_TEXT =
@@ -535,23 +536,13 @@ public class PrintStationEngine {
     }
 
     private byte[] buildEscPosRaster(String text, String qrUrl, String sourceType) {
-        ReceiptRasterParts parts = splitReceiptFooter(text);
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        output.write(0x1B);
-        output.write(0x40);
-
-        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
-        if (!shouldSkipFixedFooter(sourceType)) {
-            byte[] footerBytes = getFixedFooterRasterBytes(DEFAULT_RECEIPT_FOOTER_TEXT);
-            output.write(footerBytes, 0, footerBytes.length);
-        }
-
-        output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
-        output.write(0x1D);
-        output.write(0x56);
-        output.write(0x42);
-        output.write(0x00);
-        return output.toByteArray();
+        return EscPosRasterPrinter.buildReceiptRaster(
+                text,
+                qrUrl,
+                sourceType,
+                DEFAULT_RECEIPT_FOOTER_TEXT,
+                LOYALTY_QR_URL
+        );
     }
 
     private boolean shouldSkipFixedFooter(String sourceType) {
@@ -835,9 +826,9 @@ public class PrintStationEngine {
 
     private String getBranchLabel() {
         String name = prefs.getString(KEY_BRANCH_NAME, "").trim();
-        if (!name.isEmpty()) return name;
+        if (!name.isEmpty()) return cleanVietnamese(name);
         String alias = prefs.getString(KEY_BRANCH_ALIAS, "").trim();
-        if (!alias.isEmpty()) return alias;
+        if (!alias.isEmpty()) return cleanVietnamese(alias);
         String uuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
         return uuid.length() > 8 ? uuid.substring(0, 8) + "..." : uuid;
     }
@@ -856,9 +847,29 @@ public class PrintStationEngine {
     }
 
     private String shortError(Exception error) {
-        String message = error.getMessage();
+        String message = cleanVietnamese(error.getMessage());
         if (message == null || message.trim().isEmpty()) return "Unknown error";
         return message.length() > 180 ? message.substring(0, 180) : message;
+    }
+
+    private String cleanVietnamese(String value) {
+        String text = String.valueOf(value == null ? "" : value);
+        for (int i = 0; i < 3 && looksMojibake(text); i++) {
+            String decoded = new String(text.getBytes(Charset.forName("Windows-1252")), StandardCharsets.UTF_8);
+            if (decoded.equals(text)) break;
+            text = decoded;
+        }
+        return text;
+    }
+
+    private boolean looksMojibake(String value) {
+        if (value == null || value.isEmpty()) return false;
+        return value.contains("Ã")
+                || value.contains("Â")
+                || value.contains("Ä")
+                || value.contains("Æ")
+                || value.contains("áº")
+                || value.contains("á»");
     }
 
     private int dp(int value) {
@@ -866,7 +877,7 @@ public class PrintStationEngine {
     }
 
     private void log(String message) {
-        Log.i(TAG, message);
+        Log.i(TAG, cleanVietnamese(message));
     }
 
     private void playNewOrderAlert() {

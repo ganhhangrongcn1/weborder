@@ -14,7 +14,7 @@ import usePosCart from "../hooks/usePosCart.js";
 import usePosCatalog from "../hooks/usePosCatalog.js";
 import usePosCustomerLookup from "../hooks/usePosCustomerLookup.js";
 import { lookupPosCustomerByPhone } from "../services/posCustomerService.js";
-import { createCustomerBillPrintJob, createPosQrPrintJob, createPosShiftClosePrintJob } from "../services/printJobService.js";
+import { createPosQrPrintJob, createPosShiftClosePrintJob } from "../services/printJobService.js";
 import { startPosAutoPrint } from "../services/posAutomationService.js";
 import {
   readPosCatalogCache,
@@ -26,8 +26,8 @@ import {
   subscribePosOfflineQueue,
   syncPendingPosOfflineOrders
 } from "../services/posOfflineQueueService.js";
-import { buildPosPaymentReference, calculateCashChange, normalizeCashReceived } from "../services/posPaymentService.js";
-import { hasAndroidPrinterBridge, printCustomerBill } from "../services/printerService.js";
+import { buildPosPaymentReference, calculateCashChange, getPosQrPaymentConfig, normalizeCashReceived } from "../services/posPaymentService.js";
+import { hasAndroidPrinterBridge, printCustomerBill, printPosQrReceipt, printXprinterTestBill } from "../services/printerService.js";
 import {
   cancelPosPaymentSession,
   confirmPosPaymentSessionManually,
@@ -312,6 +312,11 @@ export default function PosPage({ products = [], categories = [], branches = [],
   const [pendingOfflineOrderCount, setPendingOfflineOrderCount] = useState(0);
   const [offlineOrdersSyncing, setOfflineOrdersSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
+  const [printStationLabel, setPrintStationLabel] = useState("");
+  const [printStationTone, setPrintStationTone] = useState("idle");
+  const [printerTesting, setPrinterTesting] = useState(false);
+  const [printerTestMessage, setPrinterTestMessage] = useState("");
+  const [printerTestTone, setPrinterTestTone] = useState("");
   const [pendingCancelTarget, setPendingCancelTarget] = useState(null);
   const [cancellingPaymentSessionId, setCancellingPaymentSessionId] = useState("");
   const [activeShift, setActiveShift] = useState(null);
@@ -393,6 +398,7 @@ export default function PosPage({ products = [], categories = [], branches = [],
     : "Đã đồng bộ";
   const workspacePendingCount = pendingPaymentSessions.length + pendingOfflineOrderCount;
   const offlineMode = !isOnline;
+  const qrPaymentReady = getPosQrPaymentConfig(selectedBranch || {}).ready;
   const hasOpenShift = Boolean(activeShift?.id && toText(activeShift.status).toLowerCase() === "open");
   const hasSelectedPager = Boolean(pagerNumber.trim());
   const selectedPagerIsBusy = hasSelectedPager &&
@@ -586,6 +592,28 @@ export default function PosPage({ products = [], categories = [], branches = [],
     return result;
   };
 
+  const printPosBillLocalFirst = async (order = {}) => {
+    if (!hasAndroidPrinterBridge()) {
+      return {
+        ok: true,
+        skipped: true,
+        message: ""
+      };
+    }
+
+    const result = await printCustomerBill(order, {
+      branchName: branchLabel,
+      printerName: "Xprinter",
+      receiptWidthMm: 80
+    });
+
+    return {
+      ok: Boolean(result?.ok),
+      skipped: false,
+      message: result?.message || (result?.ok ? "Đã in bill." : "Không in được bill.")
+    };
+  };
+
   const handleReprintRecentOrder = async (order) => {
     const orderId = toText(order?.id || order?.orderCode);
     if (!orderId) return;
@@ -595,18 +623,9 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setRecentOrdersActionType("");
 
     try {
-      if (hasAndroidPrinterBridge()) {
-        const result = await createCustomerBillPrintJob(order, {
-          branchUuid: selectedBranchUuid,
-          requestedBy: posSession?.cashierName || "POS"
-        });
-        setRecentOrdersActionMessage(result.message || (result.ok ? "Đã gửi in lại bill." : "Không in lại được bill."));
-        setRecentOrdersActionType(result.ok ? "success" : "error");
-      } else {
-        const result = await printCustomerBill(order);
-        setRecentOrdersActionMessage(result.message || (result.ok ? "Đã mở hộp thoại in lại bill." : "Không in lại được bill."));
-        setRecentOrdersActionType(result.ok ? "success" : "error");
-      }
+      const result = await printCustomerBill(order);
+      setRecentOrdersActionMessage(result.message || (result.ok ? "Đã in lại bill." : "Không in lại được bill."));
+      setRecentOrdersActionType(result.ok ? "success" : "error");
     } catch (error) {
       setRecentOrdersActionMessage(error?.message || "Không in lại được bill.");
       setRecentOrdersActionType("error");
@@ -912,14 +931,30 @@ export default function PosPage({ products = [], categories = [], branches = [],
 
   useEffect(() => {
     if (!posSession || !selectedBranchUuid) return undefined;
+    if (!hasAndroidPrinterBridge()) {
+      setPrintStationLabel("");
+      setPrintStationTone("idle");
+      return undefined;
+    }
 
     let active = true;
     let cleanup = () => {};
 
+    setPrintStationLabel("Sẵn sàng nhận lệnh");
+    setPrintStationTone("ready");
     startPosAutoPrint({
       branchUuid: selectedBranchUuid,
+      onPrinted: (job) => {
+        if (!active) return;
+        setPrintStationLabel(`Đã in ${job?.order_code || "bill"}`);
+        setPrintStationTone("ready");
+      },
       onFailed: (_job, result) => {
-        if (active) setCreateError(result?.message || "Không in được bill tự động.");
+        if (!active) return;
+        const message = result?.message || "Không in được bill tự động.";
+        setPrintStationLabel("Lỗi in tự động");
+        setPrintStationTone("error");
+        setCreateError(message);
       }
     }).then((unsubscribe) => {
       if (!active) {
@@ -1199,19 +1234,26 @@ export default function PosPage({ products = [], categories = [], branches = [],
     setQrPrintMessageType("");
 
     try {
-      const result = await createPosQrPrintJob({
+      const qrPayload = {
         branch: selectedBranch,
         amount,
         qrUrl,
         transferContent,
         orderCode: qrDraftOrder?.displayOrderCode || qrDraftOrder?.orderCode || identity?.displayOrderCode || identity?.orderCode,
         customerName: customerName || customerLookup.result?.customerName || ""
-      }, {
+      };
+      const result = hasAndroidPrinterBridge()
+        ? await printPosQrReceipt(qrPayload, {
+          branchName: branchLabel,
+          printerName: "Xprinter",
+          receiptWidthMm: 80
+        })
+        : await createPosQrPrintJob(qrPayload, {
         branchUuid: selectedBranchUuid,
         requestedBy: posSession?.cashierName || "POS"
       });
 
-      setQrPrintMessage(result.message || (result.ok ? "Đã gửi lệnh in QR." : "Không in được QR."));
+      setQrPrintMessage(result.message || (result.ok ? "Đã in QR." : "Không in được QR."));
       setQrPrintMessageType(result.ok ? "success" : "error");
       return result;
     } catch (error) {
@@ -1331,6 +1373,11 @@ export default function PosPage({ products = [], categories = [], branches = [],
     if (!conversion.ok) {
       setCreateError(conversion.message || "Đơn đã tạo nhưng chưa chốt được phiên thanh toán.");
       return false;
+    }
+
+    const printResult = await printPosBillLocalFirst(result.order);
+    if (!printResult.ok) {
+      setCreateError(printResult.message || "Đơn đã tạo nhưng chưa in được bill. Vui lòng bấm In lại.");
     }
 
     resetComposer();
@@ -1473,9 +1520,16 @@ export default function PosPage({ products = [], categories = [], branches = [],
       return;
     }
 
+    const printResult = await printPosBillLocalFirst(result.order);
+    const printSuffix = printResult.skipped
+      ? ""
+      : printResult.ok
+        ? " Đã in bill."
+        : ` ${printResult.message || "Không in được bill, vui lòng bấm In lại."}`;
+
     resetComposer();
-    setRecentOrdersActionMessage(result.message || "Đã tạo đơn POS.");
-    setRecentOrdersActionType("success");
+    setRecentOrdersActionMessage(`${result.message || "Đã tạo đơn POS."}${printSuffix}`);
+    setRecentOrdersActionType(printResult.ok ? "success" : "error");
     await loadBusyPagers();
     await loadRecentOrders();
     await loadShiftSummary({ silent: true });
@@ -1540,6 +1594,28 @@ export default function PosPage({ products = [], categories = [], branches = [],
       setOfflineOrdersSyncing(false);
       loadPendingOfflineOrders();
       await loadRecentOrders();
+    }
+  };
+
+  const handleTestPrinter = async () => {
+    if (printerTesting) return;
+    setPrinterTesting(true);
+    setPrinterTestMessage("");
+    setPrinterTestTone("");
+
+    try {
+      const result = await printXprinterTestBill({
+        branchName: branchLabel,
+        printerName: "Xprinter",
+        receiptWidthMm: 80
+      });
+      setPrinterTestMessage(result.message || (result.ok ? "Đã gửi bill test tới máy in." : "Không in được bill test."));
+      setPrinterTestTone(result.ok ? "success" : "error");
+    } catch (error) {
+      setPrinterTestMessage(error?.message || "Không in được bill test.");
+      setPrinterTestTone("error");
+    } finally {
+      setPrinterTesting(false);
     }
   };
 
@@ -1837,6 +1913,16 @@ export default function PosPage({ products = [], categories = [], branches = [],
               <PosSettingsPanel
                 branchLabel={branchLabel}
                 cashierName={posSession?.cashierName || "Thu ngân"}
+                online={isOnline}
+                printStationLabel={printStationLabel}
+                printStationTone={printStationTone}
+                pendingOfflineOrderCount={pendingOfflineOrderCount}
+                usingCachedCatalog={usingCachedCatalog}
+                qrReady={qrPaymentReady}
+                printerTesting={printerTesting}
+                printerTestMessage={printerTestMessage}
+                printerTestTone={printerTestTone}
+                onTestPrinter={hasAndroidPrinterBridge() ? handleTestPrinter : undefined}
               />
             </section>
           ) : null}
@@ -1879,6 +1965,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
           pendingCount={workspacePendingCount}
           online={isOnline}
           syncLabel={syncStatusLabel}
+          printStationLabel={printStationLabel}
+          printStationTone={printStationTone}
           branchLabel={branchLabel}
           onChange={handleWorkspaceChange}
           onLogout={handleLogout}

@@ -138,6 +138,8 @@ export function PosWorkspaceNav({
   pendingCount = 0,
   online = true,
   syncLabel = "",
+  printStationLabel = "",
+  printStationTone = "idle",
   branchLabel = "",
   onChange,
   onLogout
@@ -149,7 +151,7 @@ export function PosWorkspaceNav({
 
   return (
     <>
-      <footer className="pos-workspace-nav">
+      <footer className={`pos-workspace-nav ${printStationLabel ? "has-print-station" : ""}`}>
         <button
           type="button"
           className="pos-footer-brand-button"
@@ -188,6 +190,13 @@ export function PosWorkspaceNav({
           <span>{statusText}</span>
           <strong>{detailText}</strong>
         </div>
+
+        {printStationLabel ? (
+          <div className={`pos-print-station-status is-${printStationTone}`}>
+            <span>Trạm in</span>
+            <strong>{printStationLabel}</strong>
+          </div>
+        ) : null}
       </footer>
 
       {branchPopupOpen ? (

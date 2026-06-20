@@ -65,8 +65,8 @@ public class PrintStationKeepAliveService extends Service {
 
         return builder
                 .setSmallIcon(android.R.drawable.stat_sys_upload_done)
-                .setContentTitle("GHR Print Station đang bật")
-                .setContentText("Có thể mở iPOS, lệnh in từ iPad vẫn được giữ kết nối.")
+                .setContentTitle("GHR Print Station \u0111ang b\u1eadt")
+                .setContentText("C\u00f3 th\u1ec3 m\u1edf iPOS, l\u1ec7nh in t\u1eeb iPad v\u1eabn \u0111\u01b0\u1ee3c gi\u1eef k\u1ebft n\u1ed1i.")
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .build();
@@ -80,7 +80,7 @@ public class PrintStationKeepAliveService extends Service {
                 "GHR Print Station",
                 NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Giữ trạm in bill chạy khi chuyển sang app khác.");
+        channel.setDescription("Gi\u1eef tr\u1ea1m in bill ch\u1ea1y khi chuy\u1ec3n sang app kh\u00e1c.");
 
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) manager.createNotificationChannel(channel);

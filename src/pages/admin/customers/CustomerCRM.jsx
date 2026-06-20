@@ -52,10 +52,14 @@ function hasOrderEarnLedger(order = {}, pointRows = []) {
 
 function getOrderPointStatus(order = {}, pointRows = []) {
   const rawStatus = String(order.pointStatus || order.point_status || "").trim().toLowerCase();
+  const hasLedger = Number(order.pointsEarned || 0) > 0 || hasOrderEarnLedger(order, pointRows);
+  if (hasLedger) return { key: "claimed", label: "Đã tích điểm" };
   if (rawStatus === "claimed") return { key: "claimed", label: "Đã tích điểm" };
   if (["rejected", "expired", "cancelled", "canceled"].includes(rawStatus)) return { key: "blocked", label: "Không tích điểm" };
   if (rawStatus === "pending") return { key: "pending", label: "Chưa tích điểm" };
-  if (Number(order.pointsEarned || 0) > 0 || hasOrderEarnLedger(order, pointRows)) return { key: "claimed", label: "Đã tích điểm" };
+  if (["done", "completed", "complete"].includes(String(order.status || "").trim().toLowerCase())) {
+    return { key: "pending", label: "Chưa tích điểm" };
+  }
   if (order.sourceType === "partner" || order.partnerSource) return { key: "pending", label: "Chưa tích điểm" };
   return { key: "unknown", label: "Chưa rõ" };
 }

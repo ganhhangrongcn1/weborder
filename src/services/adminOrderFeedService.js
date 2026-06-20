@@ -199,8 +199,15 @@ async function readPartnerOrderItemsByOrderIds(client, orderIds = []) {
 }
 
 function normalizeWebOrder(order = {}) {
+  const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : {};
   const source = resolveOrderSourceKey(order);
   const orderCode = String(order.orderCode || order.id || "").trim();
+  const displayOrderCode = String(
+    order.displayOrderCode ||
+    metadata.displayOrderCode ||
+    metadata.display_order_code ||
+    orderCode
+  ).trim() || orderCode;
   return {
     ...order,
     id: order.id || orderCode,
@@ -209,7 +216,7 @@ function normalizeWebOrder(order = {}) {
     orderSource: source,
     channel: source,
     orderCode,
-    displayOrderCode: order.displayOrderCode || orderCode
+    displayOrderCode
   };
 }
 

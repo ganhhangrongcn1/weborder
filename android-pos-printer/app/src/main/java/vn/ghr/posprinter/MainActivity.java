@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
@@ -60,6 +61,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -69,7 +71,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
@@ -78,6 +79,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCESS_TOKEN = "access_token";
     private static final String KEY_REFRESH_TOKEN = "refresh_token";
     private static final String KEY_AUTH_USER_ID = "auth_user_id";
+    private static final String KEY_PROFILE_ID = "profile_id";
     private static final String KEY_PROFILE_NAME = "profile_name";
     private static final String KEY_PROFILE_ROLE = "profile_role";
     private static final String KEY_BRANCH_UUID = "branch_uuid";
@@ -93,12 +95,12 @@ public class MainActivity extends Activity {
     private static final String PRINTER_MODE_USB = "usb";
     private static final String PRINTER_MODE_LAN = "lan";
     private static final String PROFILE_TABLE = "profiles";
-    private static final String PRINTER_KEY = "cashier-80mm";
-    private static final String JOB_TYPE = "customer_bill";
+    private static final String PRINTER_KEY = BuildConfig.DEFAULT_PRINTER_KEY;
+    private static final String JOB_TYPE = BuildConfig.DEFAULT_PRINT_JOB_TYPE;
     private static final String PRINT_JOB_SELECT = "id,order_code,source_type,payload,retry_count";
-    private static final String SUPABASE_URL = "https://qjaklysckgzdfjthzkzu.supabase.co";
-    private static final String SUPABASE_ANON_KEY = "sb_publishable_VPLwhy64zz2QQUyy02xzsg_CXs2A1JI";
-    private static final String LOYALTY_QR_URL = "https://ganhhangrong.vn/orders";
+    private static final String SUPABASE_URL = BuildConfig.SUPABASE_URL;
+    private static final String SUPABASE_ANON_KEY = BuildConfig.SUPABASE_ANON_KEY;
+    private static final String LOYALTY_QR_URL = BuildConfig.LOYALTY_QR_URL;
     private static final String SOURCE_TYPE_POS_PAYMENT_QR = "pos_payment_qr";
     private static final String SOURCE_TYPE_POS_SHIFT_CLOSE = "pos_shift_close";
     private static final String DEFAULT_RECEIPT_FOOTER_TEXT =
@@ -140,6 +142,7 @@ public class MainActivity extends Activity {
     private TextView statusText;
     private TextView printerText;
     private TextView stationText;
+    private TextView shiftText;
     private TextView logText;
     private Button stationButton;
     private Button usbModeButton;
@@ -148,11 +151,25 @@ public class MainActivity extends Activity {
     private LinearLayout loggedInPanel;
     private LinearLayout usbPanel;
     private LinearLayout lanPanel;
+    private LinearLayout productListPanel;
+    private LinearLayout cartListPanel;
     private TextView accountSummaryText;
+    private TextView menuStatusText;
+    private TextView cartSummaryText;
+    private TextView paymentStateText;
+    private EditText openingCashInput;
+    private EditText openingNoteInput;
+    private EditText pagerNumberInput;
+    private EditText customerNameInput;
+    private EditText orderNoteInput;
+    private Button createOrderButton;
 
     private String selectedMode = PRINTER_MODE_USB;
     private String pendingPrintText = "";
     private String pendingPrintQrUrl = "";
+    private JSONArray posProducts = new JSONArray();
+    private JSONArray posCart = new JSONArray();
+    private final PosDraftState posDraftState = new PosDraftState();
     private boolean stationRunning = false;
     private boolean polling = false;
     private boolean realtimeConnecting = false;
@@ -240,6 +257,11 @@ public class MainActivity extends Activity {
         updatePrinterStatus();
         updateStationUi();
         log("Má»Ÿ GHR Print Station.");
+        refreshActiveShiftAsync();
+        updateCartUi();
+        if (!prefs.getString(KEY_ACCESS_TOKEN, "").trim().isEmpty()) {
+            refreshPosMenuAsync();
+        }
 
         if (prefs.getBoolean(KEY_STATION_ENABLED, false)) {
             startStation();
@@ -291,14 +313,14 @@ public class MainActivity extends Activity {
         brand.setPadding(dp(12), 0, 0, 0);
 
         TextView title = new TextView(this);
-        title.setText("GÃ¡nh HÃ ng Rong");
+        title.setText(cleanVietnamese("GÃ¡nh HÃ ng Rong"));
         title.setTextColor(Color.rgb(15, 23, 42));
         title.setTextSize(20);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         brand.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Tráº¡m in bill khÃ¡ch Â· Xprinter 80mm");
+        subtitle.setText(cleanVietnamese("Tráº¡m in bill khÃ¡ch Â· Xprinter 80mm"));
         subtitle.setTextColor(Color.rgb(71, 85, 105));
         subtitle.setTextSize(13);
         subtitle.setTypeface(Typeface.DEFAULT_BOLD);
@@ -317,6 +339,8 @@ public class MainActivity extends Activity {
         root.addView(printerText, fullWidthParams());
 
         root.addView(buildAuthSection());
+        root.addView(buildPosShiftSection());
+        root.addView(buildNativePosOrderSection());
 
         root.addView(makeSectionTitle("Káº¿t ná»‘i mÃ¡y in"));
         LinearLayout modeRow = new LinearLayout(this);
@@ -441,6 +465,469 @@ public class MainActivity extends Activity {
         return wrapper;
     }
 
+    private View buildPosShiftSection() {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        wrapper.addView(makeSectionTitle("Ca POS"));
+
+        shiftText = makeInfoText("Chưa tải ca POS.", Color.rgb(71, 85, 105));
+        wrapper.addView(shiftText, fullWidthParams());
+
+        openingCashInput = makeInput("Tiền đầu ca");
+        openingCashInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        wrapper.addView(openingCashInput, fullWidthParams());
+
+        openingNoteInput = makeInput("Ghi chú mở ca");
+        openingNoteInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        wrapper.addView(openingNoteInput, fullWidthParams());
+
+        Button openShiftButton = makeButton("Mở ca POS", true);
+        openShiftButton.setOnClickListener(view -> openPosShiftAsync());
+        wrapper.addView(openShiftButton, tallButtonParams());
+
+        Button refreshShiftButton = makeButton("Tải lại ca POS", false);
+        refreshShiftButton.setOnClickListener(view -> refreshActiveShiftAsync());
+        wrapper.addView(refreshShiftButton, tallButtonParams());
+
+        return wrapper;
+    }
+
+    @Deprecated
+    private View buildNativePosOrderSectionLegacy() {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        wrapper.addView(makeSectionTitle("Món bán nhanh"));
+
+        menuStatusText = makeInfoText("Chưa tải menu POS.", Color.rgb(71, 85, 105));
+        wrapper.addView(menuStatusText, fullWidthParams());
+
+        Button refreshMenuButton = makeButton("Tải menu POS", false);
+        refreshMenuButton.setOnClickListener(view -> refreshPosMenuAsync());
+        wrapper.addView(refreshMenuButton, tallButtonParams());
+
+        productListPanel = new LinearLayout(this);
+        productListPanel.setOrientation(LinearLayout.VERTICAL);
+        wrapper.addView(productListPanel, fullWidthParams());
+
+        wrapper.addView(makeSectionTitle("Bill hiện tại"));
+        cartSummaryText = makeInfoText("Chưa có món.", Color.rgb(71, 85, 105));
+        wrapper.addView(cartSummaryText, fullWidthParams());
+
+        cartListPanel = new LinearLayout(this);
+        cartListPanel.setOrientation(LinearLayout.VERTICAL);
+        wrapper.addView(cartListPanel, fullWidthParams());
+
+        Button clearCartButton = makeButton("Xóa bill", false);
+        clearCartButton.setOnClickListener(view -> {
+            posCart = new JSONArray();
+            updateCartUi();
+        });
+        wrapper.addView(clearCartButton, tallButtonParams());
+
+        Button cashPaymentButton = makeButton("Thanh toán tiền mặt", true);
+        cashPaymentButton.setOnClickListener(view -> showCashPaymentDialog());
+        wrapper.addView(cashPaymentButton, tallButtonParams());
+
+        return wrapper;
+    }
+
+    @Deprecated
+    private View buildNativePosOrderSectionLegacyV2() {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        wrapper.addView(makeSectionTitle("Món bán nhanh"));
+
+        menuStatusText = makeInfoText("Chưa tải menu POS.", Color.rgb(71, 85, 105));
+        wrapper.addView(menuStatusText, fullWidthParams());
+
+        Button refreshMenuButton = makeButton("Tải menu POS", false);
+        refreshMenuButton.setOnClickListener(view -> refreshPosMenuAsync());
+        wrapper.addView(refreshMenuButton, tallButtonParams());
+
+        productListPanel = new LinearLayout(this);
+        productListPanel.setOrientation(LinearLayout.VERTICAL);
+        wrapper.addView(productListPanel, fullWidthParams());
+
+        wrapper.addView(makeSectionTitle("Bill hiện tại"));
+
+        pagerNumberInput = makeInput("Thẻ rung");
+        pagerNumberInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        wrapper.addView(pagerNumberInput, fullWidthParams());
+
+        customerNameInput = makeInput("Tên khách (không bắt buộc)");
+        customerNameInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        wrapper.addView(customerNameInput, fullWidthParams());
+
+        orderNoteInput = makeInput("Ghi chú đơn (không bắt buộc)");
+        orderNoteInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        wrapper.addView(orderNoteInput, fullWidthParams());
+
+        cartSummaryText = makeInfoText("Chưa có món.", Color.rgb(71, 85, 105));
+        wrapper.addView(cartSummaryText, fullWidthParams());
+
+        cartListPanel = new LinearLayout(this);
+        cartListPanel.setOrientation(LinearLayout.VERTICAL);
+        wrapper.addView(cartListPanel, fullWidthParams());
+
+        paymentStateText = makeInfoText("Chưa xác nhận thanh toán.", Color.rgb(71, 85, 105));
+        wrapper.addView(paymentStateText, fullWidthParams());
+
+        Button clearCartButton = makeButton("Xóa bill", false);
+        clearCartButton.setOnClickListener(view -> {
+            posCart = new JSONArray();
+            clearConfirmedPayment();
+            updateCartUi();
+        });
+        wrapper.addView(clearCartButton, tallButtonParams());
+
+        Button cashPaymentButton = makeButton("Xác nhận tiền mặt", true);
+        cashPaymentButton.setOnClickListener(view -> showCashPaymentDialogLegacyV2());
+        wrapper.addView(cashPaymentButton, tallButtonParams());
+
+        createOrderButton = makeButton("Tạo đơn + in bill", false);
+        createOrderButton.setOnClickListener(view -> showCreateOrderConfirmDialog());
+        wrapper.addView(createOrderButton, tallButtonParams());
+
+        updatePaymentStateUi();
+        return wrapper;
+    }
+
+    private View buildNativePosOrderSection() {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+
+        PosOrderSection.Refs refs = PosOrderSection.build(this, wrapper, new PosOrderSection.Listener() {
+            @Override
+            public void onRefreshMenu() {
+                refreshPosMenuAsync();
+            }
+
+            @Override
+            public void onClearCart() {
+                posCart = new JSONArray();
+                clearConfirmedPayment();
+                updateCartUi();
+            }
+
+            @Override
+            public void onCashPayment() {
+                showCashPaymentDialog();
+            }
+
+            @Override
+            public void onCreateOrder() {
+                showCreateOrderConfirmDialog();
+            }
+        });
+
+        menuStatusText = refs.menuStatusText;
+        productListPanel = refs.productListPanel;
+        pagerNumberInput = refs.pagerNumberInput;
+        customerNameInput = refs.customerNameInput;
+        orderNoteInput = refs.orderNoteInput;
+        cartSummaryText = refs.cartSummaryText;
+        cartListPanel = refs.cartListPanel;
+        paymentStateText = refs.paymentStateText;
+        createOrderButton = refs.createOrderButton;
+
+        updatePaymentStateUi();
+        return wrapper;
+    }
+
+    @Deprecated
+    private void showCashPaymentDialogLegacyV2() {
+        String validationError = validateOrderDraftBeforePayment();
+        if (!validationError.isEmpty()) {
+            toast(validationError);
+            return;
+        }
+
+        int total = getCartTotal(posCart);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(4), dp(8), dp(4), 0);
+
+        TextView totalText = makeInfoText("Tổng cần thu: " + formatMoney(total), Color.rgb(15, 118, 110));
+        panel.addView(totalText, fullWidthParams());
+
+        EditText cashInput = makeInput("Tiền khách đưa");
+        cashInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        cashInput.setText(String.valueOf(Math.max(total, posDraftState.getConfirmedCashReceived())));
+        panel.addView(cashInput, fullWidthParams());
+
+        LinearLayout suggestionRow = new LinearLayout(this);
+        suggestionRow.setOrientation(LinearLayout.HORIZONTAL);
+        int[] suggestions = new int[]{50000, 100000, 200000, 500000};
+        for (int i = 0; i < suggestions.length; i++) {
+            int value = suggestions[i];
+            Button button = makeButton(formatMoney(value), false);
+            button.setOnClickListener(view -> cashInput.setText(String.valueOf(value)));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(52), 1f);
+            if (i < suggestions.length - 1) params.setMargins(0, 0, dp(6), 0);
+            suggestionRow.addView(button, params);
+        }
+        panel.addView(suggestionRow, fullWidthParams());
+
+        TextView changeText = makeInfoText("Tiền thối: 0đ", Color.rgb(71, 85, 105));
+        panel.addView(changeText, fullWidthParams());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(cleanVietnamese("Thanh toán tiền mặt"))
+                .setView(panel)
+                .setNegativeButton(cleanVietnamese("Hủy"), null)
+                .setPositiveButton(cleanVietnamese("Xác nhận"), null)
+                .create();
+
+        dialog.setOnShowListener(item -> dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(view -> {
+            int received = parseMoney(cashInput.getText().toString());
+            int change = received - total;
+            changeText.setText(cleanVietnamese("Tiền thối: " + formatMoney(Math.max(0, change))));
+            if (received < total) {
+                changeText.setTextColor(Color.rgb(185, 28, 28));
+                toast("Tiền khách đưa chưa đủ.");
+                return;
+            }
+            confirmCashPayment(received);
+            dialog.dismiss();
+        }));
+
+        dialog.show();
+    }
+
+    private void showCashPaymentDialog() {
+        String validationError = validateOrderDraftBeforePayment();
+        if (!validationError.isEmpty()) {
+            toast(validationError);
+            return;
+        }
+        PosCashPaymentDialog.show(this, getCartTotal(posCart), posDraftState.getConfirmedCashReceived(), this::confirmCashPayment);
+    }
+
+    private void showCreateOrderConfirmDialog() {
+        String validationError = validateDraftBeforeCreateOrder();
+        if (!validationError.isEmpty()) {
+            toast(validationError);
+            return;
+        }
+
+        String summary = "Thẻ rung: " + getPagerNumber()
+                + "\nTổng cần thu: " + formatMoney(getCartTotal(posCart))
+                + "\nTiền khách đưa: " + formatMoney(posDraftState.getConfirmedCashReceived())
+                + "\nTiền thối: " + formatMoney(Math.max(0, posDraftState.getConfirmedChangeAmount()))
+                + "\n\nXác nhận tạo đơn POS và in bill?";
+        PosCreateOrderConfirmDialog.show(this, cleanVietnamese(summary), this::createCashOrderAsync);
+    }
+
+    private void confirmCashPayment(int receivedAmount) {
+        posDraftState.confirmCashPayment(receivedAmount, getCartTotal(posCart), buildBillPaymentKey(), buildIsoUtcNow());
+        updatePaymentStateUi();
+        toast("Đã xác nhận thanh toán tiền mặt.");
+    }
+
+    private void createCashOrderAsync() {
+        final JSONArray cartSnapshot;
+        try {
+            cartSnapshot = new JSONArray(posCart.toString());
+        } catch (Exception error) {
+            toast("Không đọc được bill hiện tại.");
+            return;
+        }
+
+        String validationError = validateDraftBeforeCreateOrder();
+        if (!validationError.isEmpty()) {
+            toast(validationError);
+            return;
+        }
+
+        int total = getCartTotal(cartSnapshot);
+        log("Đang tạo đơn POS tiền mặt...");
+        new Thread(() -> {
+            try {
+                JSONObject activeShift = readActiveShift();
+                if (activeShift == null) {
+                    runOnUiThread(() -> toast("Chưa mở ca POS. Vui lòng mở ca trước."));
+                    updateShiftUi(null, "Chưa có ca POS đang mở.");
+                    return;
+                }
+
+                String orderCode = buildPosOrderCode();
+                String displayOrderCode = buildShortDisplayOrderCode(orderCode);
+                String createdAt = posDraftState.getConfirmedPaidAt().isEmpty() ? buildIsoUtcNow() : posDraftState.getConfirmedPaidAt();
+                String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
+                String branchName = getBranchLabel();
+                String cashierName = firstText(
+                        prefs.getString(KEY_PROFILE_NAME, ""),
+                        prefs.getString(KEY_AUTH_EMAIL, ""),
+                        "Thu ngân"
+                );
+                String shiftId = activeShift.optString("id", "");
+                String pagerNumber = getPagerNumber();
+                String customerName = getCustomerNameOrFallback(pagerNumber);
+                String orderNote = getOrderNote();
+
+                JSONObject metadata = new JSONObject();
+                metadata.put("source", "pos");
+                metadata.put("channel", "pos");
+                metadata.put("orderSource", "pos");
+                metadata.put("orderType", "takeaway");
+                metadata.put("walkIn", customerNameInput == null || customerNameInput.getText().toString().trim().isEmpty());
+                metadata.put("displayOrderCode", displayOrderCode);
+                metadata.put("pagerNumber", pagerNumber);
+                metadata.put("pager_number", pagerNumber);
+                metadata.put("pagerStatus", "assigned");
+                metadata.put("paymentMethod", posDraftState.getConfirmedPaymentMethod());
+                metadata.put("paymentStatus", "paid");
+                metadata.put("paymentAmount", total);
+                metadata.put("paymentReference", posDraftState.getConfirmedPaymentReference());
+                metadata.put("cashReceived", posDraftState.getConfirmedCashReceived());
+                metadata.put("changeAmount", posDraftState.getConfirmedChangeAmount());
+                metadata.put("paidAt", createdAt);
+                metadata.put("posShiftId", shiftId);
+                metadata.put("pos_shift_id", shiftId);
+                metadata.put("cashierName", cashierName);
+                metadata.put("branchUuid", branchUuid);
+                metadata.put("branchName", branchName);
+                metadata.put("customerPhone", JSONObject.NULL);
+                metadata.put("customerPhoneKey", "walkin:" + orderCode);
+                metadata.put("orderNote", orderNote);
+                metadata.put("items", cartSnapshot);
+
+                JSONObject orderBody = new JSONObject();
+                orderBody.put("id", orderCode);
+                orderBody.put("order_code", orderCode);
+                orderBody.put("customer_phone", JSONObject.NULL);
+                orderBody.put("customer_name", customerName);
+                orderBody.put("fulfillment_type", "pickup");
+                orderBody.put("payment_method", posDraftState.getConfirmedPaymentMethod());
+                orderBody.put("status", "pending_zalo");
+                orderBody.put("subtotal", total);
+                orderBody.put("shipping_fee", 0);
+                orderBody.put("original_shipping_fee", 0);
+                orderBody.put("shipping_support_discount", 0);
+                orderBody.put("promo_discount", 0);
+                orderBody.put("promo_code", "");
+                orderBody.put("points_discount", 0);
+                orderBody.put("points_earned", 0);
+                orderBody.put("total_amount", total);
+                orderBody.put("branch_uuid", branchUuid.isEmpty() ? JSONObject.NULL : branchUuid);
+                orderBody.put("branch_name", branchName);
+                orderBody.put("pickup_branch_uuid", branchUuid.isEmpty() ? JSONObject.NULL : branchUuid);
+                orderBody.put("pickup_branch_name", branchName);
+                orderBody.put("pickup_time_text", "Lấy tại quầy");
+                orderBody.put("delivery_address", "Khách nhận tại quầy");
+                orderBody.put("pos_shift_id", shiftId.isEmpty() ? JSONObject.NULL : shiftId);
+                orderBody.put("metadata", metadata);
+
+                httpRequest(
+                        "POST",
+                        SUPABASE_URL + "/rest/v1/orders?select=id,order_code,total_amount,created_at",
+                        orderBody.toString(),
+                        true
+                );
+
+                JSONArray itemRows = buildCashOrderItemRows(orderCode, cartSnapshot);
+                if (itemRows.length() > 0) {
+                    httpRequest("POST", SUPABASE_URL + "/rest/v1/order_items", itemRows.toString(), false);
+                }
+
+                String receiptText = buildCashReceiptText(
+                        orderCode,
+                        displayOrderCode,
+                        cartSnapshot,
+                        total,
+                        posDraftState.getConfirmedCashReceived(),
+                        posDraftState.getConfirmedChangeAmount(),
+                        cashierName,
+                        branchName,
+                        pagerNumber,
+                        customerName,
+                        orderNote
+                );
+                boolean printed = printReceiptPayload(receiptText, LOYALTY_QR_URL, "");
+
+                runOnUiThread(() -> {
+                    posCart = new JSONArray();
+                    clearConfirmedPayment();
+                    if (pagerNumberInput != null) pagerNumberInput.setText("");
+                    if (customerNameInput != null) customerNameInput.setText("");
+                    if (orderNoteInput != null) orderNoteInput.setText("");
+                    updateCartUi();
+                    toast(printed ? "Đã tạo đơn và in bill." : "Đã tạo đơn, nhưng chưa in được bill.");
+                });
+                log((printed ? "Đã tạo đơn POS và in bill: " : "Đã tạo đơn POS, cần kiểm tra máy in: ") + orderCode);
+            } catch (Exception error) {
+                log("Không tạo được đơn POS tiền mặt: " + shortError(error));
+            }
+        }).start();
+    }
+
+    private String validateOrderDraftBeforePayment() {
+        if (prefs.getString(KEY_ACCESS_TOKEN, "").trim().isEmpty()) return "Vui lòng đăng nhập chi nhánh trước khi thanh toán.";
+        if (posDraftState.getCachedActiveShift() == null) return "Vui lòng mở ca POS trước khi thanh toán.";
+        if (posCart.length() == 0 || getCartTotal(posCart) <= 0) return "Chưa có món trong bill.";
+        if (getPagerNumber().isEmpty()) return "Vui lòng nhập thẻ rung trước khi thanh toán.";
+        return "";
+    }
+
+    private String validateDraftBeforeCreateOrder() {
+        String paymentError = validateOrderDraftBeforePayment();
+        if (!paymentError.isEmpty()) return paymentError;
+        if (!posDraftState.hasConfirmedPayment()) return "Vui lòng xác nhận thanh toán trước khi tạo đơn.";
+        if (!posDraftState.matchesBillKey(buildBillPaymentKey())) return "Bill đã thay đổi sau khi xác nhận tiền. Vui lòng xác nhận lại thanh toán.";
+        return "";
+    }
+
+    private void clearConfirmedPayment() {
+        posDraftState.clearConfirmedPayment();
+        updatePaymentStateUi();
+    }
+
+    private void syncConfirmedPaymentWithCurrentBill() {
+        if (!posDraftState.hasConfirmedPayment()) return;
+        if (!posDraftState.matchesBillKey(buildBillPaymentKey())) {
+            clearConfirmedPayment();
+        }
+    }
+
+    private void updatePaymentStateUi() {
+        if (paymentStateText == null) return;
+        if (!posDraftState.hasConfirmedPayment()) {
+            paymentStateText.setText(cleanVietnamese("Chưa xác nhận thanh toán."));
+            paymentStateText.setTextColor(Color.rgb(71, 85, 105));
+            if (createOrderButton != null) createOrderButton.setEnabled(false);
+            return;
+        }
+
+        String method = posDraftState.getConfirmedPaymentMethod();
+        String message = "Đã xác nhận " + ("cash".equals(method) ? "tiền mặt" : method)
+                + "\nKhách đưa: " + formatMoney(posDraftState.getConfirmedCashReceived())
+                + "\nTiền thối: " + formatMoney(posDraftState.getConfirmedChangeAmount());
+        paymentStateText.setText(cleanVietnamese(message));
+        paymentStateText.setTextColor(Color.rgb(15, 118, 110));
+        if (createOrderButton != null) createOrderButton.setEnabled(true);
+    }
+
+    private String buildBillPaymentKey() {
+        return getPagerNumber() + "|" + getCartTotal(posCart) + "|" + posCart.toString();
+    }
+
+    private String getPagerNumber() {
+        return pagerNumberInput == null ? "" : String.valueOf(pagerNumberInput.getText()).trim();
+    }
+
+    private String getCustomerNameOrFallback(String pagerNumber) {
+        String typedName = customerNameInput == null ? "" : String.valueOf(customerNameInput.getText()).trim();
+        return typedName.isEmpty() ? "Khách thẻ " + pagerNumber : typedName;
+    }
+
+    private String getOrderNote() {
+        return orderNoteInput == null ? "" : String.valueOf(orderNoteInput.getText()).trim();
+    }
+
+    private String buildIsoUtcNow() {
+        return PosOrderHelper.buildIsoUtcNow();
+    }
+
     private void loadSettingsToInputs() {
         emailInput.setText(prefs.getString(KEY_AUTH_EMAIL, ""));
         passwordInput.setText("");
@@ -488,6 +975,8 @@ public class MainActivity extends Activity {
                 applyProfileSession(accessToken, refreshToken, authUserId, authEmail, profile, authUserMetadata);
                 runOnUiThread(() -> passwordInput.setText(""));
                 log("ÄÄƒng nháº­p thÃ nh cÃ´ng: " + getBranchLabel() + ".");
+                refreshActiveShiftAsync();
+                refreshPosMenuAsync();
             } catch (Exception error) {
                 clearAuthSession(false);
                 log("ÄÄƒng nháº­p tháº¥t báº¡i: " + normalizeAuthError(error));
@@ -567,6 +1056,7 @@ public class MainActivity extends Activity {
                 .putString(KEY_ACCESS_TOKEN, accessToken)
                 .putString(KEY_REFRESH_TOKEN, refreshToken)
                 .putString(KEY_AUTH_USER_ID, authUserId)
+                .putString(KEY_PROFILE_ID, profile.optString("id", ""))
                 .putString(KEY_AUTH_EMAIL, authEmail)
                 .putString(KEY_PROFILE_NAME, profileName)
                 .putString(KEY_PROFILE_ROLE, role)
@@ -711,6 +1201,7 @@ public class MainActivity extends Activity {
                 .remove(KEY_ACCESS_TOKEN)
                 .remove(KEY_REFRESH_TOKEN)
                 .remove(KEY_AUTH_USER_ID)
+                .remove(KEY_PROFILE_ID)
                 .remove(KEY_PROFILE_NAME)
                 .remove(KEY_PROFILE_ROLE)
                 .remove(KEY_BRANCH_UUID)
@@ -723,7 +1214,536 @@ public class MainActivity extends Activity {
             if (clearEmail && emailInput != null) emailInput.setText("");
             if (passwordInput != null) passwordInput.setText("");
             updateStationUi();
+            updateShiftUi(null, "Chưa đăng nhập chi nhánh.");
         });
+    }
+
+    private void refreshActiveShiftAsync() {
+        if (shiftText == null) return;
+        String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
+        String accessToken = prefs.getString(KEY_ACCESS_TOKEN, "").trim();
+        if (branchUuid.isEmpty() || accessToken.isEmpty()) {
+            updateShiftUi(null, "Chưa đăng nhập chi nhánh.");
+            return;
+        }
+
+        updateShiftUi(null, "Đang tải ca POS...");
+        new Thread(() -> {
+            try {
+                JSONObject shift = readActiveShift();
+                updateShiftUi(shift, shift == null ? "Chưa có ca POS đang mở." : "");
+            } catch (Exception error) {
+                updateShiftUi(null, "Không tải được ca POS: " + shortError(error));
+            }
+        }).start();
+    }
+
+    private void openPosShiftAsync() {
+        saveSettingsFromInputs();
+        String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
+        String authUserId = prefs.getString(KEY_AUTH_USER_ID, "").trim();
+        if (branchUuid.isEmpty() || authUserId.isEmpty()) {
+            status("Vui lòng đăng nhập chi nhánh trước khi mở ca POS.");
+            return;
+        }
+
+        int openingCash = parseMoney(openingCashInput == null ? "" : openingCashInput.getText().toString());
+        String openingNote = openingNoteInput == null ? "" : openingNoteInput.getText().toString().trim();
+        updateShiftUi(null, "Đang mở ca POS...");
+
+        new Thread(() -> {
+            try {
+                JSONObject existingShift = readActiveShift();
+                if (existingShift != null) {
+                    updateShiftUi(existingShift, "Đã khôi phục ca POS đang mở.");
+                    return;
+                }
+
+                JSONObject body = new JSONObject();
+                body.put("branch_uuid", branchUuid);
+                body.put("branch_name", prefs.getString(KEY_BRANCH_NAME, ""));
+                body.put("register_key", "main");
+                body.put("status", "open");
+                body.put("cashier_name", firstText(
+                        prefs.getString(KEY_PROFILE_NAME, ""),
+                        prefs.getString(KEY_AUTH_EMAIL, ""),
+                        "Thu ngân"
+                ));
+                String profileId = prefs.getString(KEY_PROFILE_ID, "").trim();
+                if (profileId.isEmpty()) {
+                    body.put("opened_by_profile_id", JSONObject.NULL);
+                } else {
+                    body.put("opened_by_profile_id", profileId);
+                }
+                body.put("opened_by_auth_user_id", authUserId);
+                body.put("opening_cash", Math.max(0, openingCash));
+                body.put("opening_note", openingNote);
+
+                JSONArray rows = new JSONArray(httpRequest(
+                        "POST",
+                        SUPABASE_URL + "/rest/v1/pos_shifts?select=id,branch_uuid,branch_name,register_key,status,cashier_name,opening_cash,opening_note,opened_at",
+                        body.toString(),
+                        true
+                ));
+                JSONObject shift = rows.length() > 0 ? rows.getJSONObject(0) : readActiveShift();
+                updateShiftUi(shift, shift == null ? "Đã gửi yêu cầu mở ca POS." : "Đã mở ca POS.");
+            } catch (Exception error) {
+                updateShiftUi(null, "Không mở được ca POS: " + shortError(error));
+            }
+        }).start();
+    }
+
+    private JSONObject readActiveShift() throws Exception {
+        String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
+        if (branchUuid.isEmpty()) return null;
+
+        String url = SUPABASE_URL + "/rest/v1/pos_shifts"
+                + "?select=id,branch_uuid,branch_name,register_key,status,cashier_name,opening_cash,opening_note,opened_at"
+                + "&branch_uuid=eq." + enc(branchUuid)
+                + "&register_key=eq.main"
+                + "&status=eq.open"
+                + "&order=opened_at.desc"
+                + "&limit=1";
+        JSONArray rows = new JSONArray(httpRequest("GET", url, null, false));
+        return rows.length() > 0 ? rows.getJSONObject(0) : null;
+    }
+
+    private void updateShiftUi(JSONObject shift, String message) {
+        runOnUiThread(() -> {
+            if (shiftText == null) return;
+            if (shift == null) {
+                posDraftState.setCachedActiveShift(null);
+                shiftText.setText(cleanVietnamese(String.valueOf(message == null ? "" : message)));
+                shiftText.setTextColor(Color.rgb(71, 85, 105));
+                return;
+            }
+
+            posDraftState.setCachedActiveShift(shift);
+            String openedAt = formatShiftDateTime(shift.optString("opened_at", ""));
+            String cashierName = firstText(shift.optString("cashier_name", ""), "Thu ngân");
+            String text = "Ca đang mở"
+                    + "\nThu ngân: " + cashierName
+                    + "\nTiền đầu ca: " + formatMoney(shift.optInt("opening_cash", 0))
+                    + (openedAt.isEmpty() ? "" : "\nMở lúc: " + openedAt);
+            if (message != null && !message.trim().isEmpty()) {
+                text = message.trim() + "\n" + text;
+            }
+            shiftText.setText(cleanVietnamese(text));
+            shiftText.setTextColor(Color.rgb(15, 118, 110));
+        });
+    }
+
+    private void refreshPosMenuAsync() {
+        if (menuStatusText == null) return;
+        if (prefs.getString(KEY_ACCESS_TOKEN, "").trim().isEmpty()) {
+            updateMenuUi("Vui lòng đăng nhập chi nhánh trước khi tải menu.", null);
+            return;
+        }
+
+        updateMenuUi("Đang tải menu POS...", null);
+        new Thread(() -> {
+            try {
+                String url = SUPABASE_URL + "/rest/v1/products"
+                        + "?select=id,name,price,category_id,badge,visible,active,sort_order"
+                        + "&active=eq.true"
+                        + "&visible=eq.true"
+                        + "&order=sort_order.asc"
+                        + "&limit=80";
+                JSONArray rows = new JSONArray(httpRequest("GET", url, null, false));
+                posProducts = rows;
+                updateMenuUi(rows.length() == 0 ? "Chưa có món đang bán." : "Đã tải " + rows.length() + " món.", rows);
+            } catch (Exception error) {
+                updateMenuUi("Không tải được menu POS: " + shortError(error), null);
+            }
+        }).start();
+    }
+
+    private void updateMenuUi(String message, JSONArray products) {
+        runOnUiThread(() -> {
+            if (menuStatusText != null) {
+                menuStatusText.setText(cleanVietnamese(message));
+                menuStatusText.setTextColor(products == null || products.length() == 0 ? Color.rgb(71, 85, 105) : Color.rgb(15, 118, 110));
+            }
+            renderProductButtons(products == null ? posProducts : products);
+        });
+    }
+
+    private void renderProductButtons(JSONArray products) {
+        if (productListPanel == null) return;
+        productListPanel.removeAllViews();
+
+        int count = Math.min(products == null ? 0 : products.length(), 30);
+        for (int i = 0; i < count; i++) {
+            JSONObject product = products.optJSONObject(i);
+            if (product == null) continue;
+
+            String name = cleanVietnamese(product.optString("name", "Món"));
+            int price = Math.max(0, (int) Math.round(product.optDouble("price", 0)));
+            String category = cleanVietnamese(firstText(product.optString("category_id", ""), product.optString("badge", "")));
+            String label = name + "\n" + formatMoney(price) + (category.isEmpty() ? "" : " · " + category);
+            Button button = makeButton(label, false);
+            button.setGravity(Gravity.CENTER_VERTICAL);
+            button.setOnClickListener(view -> addProductToCart(product));
+            productListPanel.addView(button, tallButtonParams());
+        }
+    }
+
+    private void addProductToCart(JSONObject product) {
+        if (product == null) return;
+        String productId = product.optString("id", "");
+        if (productId.trim().isEmpty()) return;
+
+        for (int i = 0; i < posCart.length(); i++) {
+            JSONObject item = posCart.optJSONObject(i);
+            if (item != null && productId.equals(item.optString("id", ""))) {
+                try {
+                    item.put("quantity", item.optInt("quantity", 1) + 1);
+                } catch (Exception ignored) {
+                }
+                updateCartUi();
+                return;
+            }
+        }
+
+        JSONObject item = new JSONObject();
+        try {
+            item.put("id", productId);
+            item.put("name", cleanVietnamese(product.optString("name", "Món")));
+            item.put("price", Math.max(0, (int) Math.round(product.optDouble("price", 0))));
+            item.put("quantity", 1);
+            posCart.put(item);
+        } catch (Exception ignored) {
+        }
+        updateCartUi();
+    }
+
+    private void changeCartQuantity(String productId, int delta) {
+        JSONArray nextCart = new JSONArray();
+        for (int i = 0; i < posCart.length(); i++) {
+            JSONObject item = posCart.optJSONObject(i);
+            if (item == null) continue;
+            if (productId.equals(item.optString("id", ""))) {
+                int nextQuantity = item.optInt("quantity", 1) + delta;
+                if (nextQuantity <= 0) continue;
+                try {
+                    item.put("quantity", nextQuantity);
+                } catch (Exception ignored) {
+                }
+            }
+            nextCart.put(item);
+        }
+        posCart = nextCart;
+        updateCartUi();
+    }
+
+    private void updateCartUi() {
+        runOnUiThread(() -> {
+            if (cartListPanel == null || cartSummaryText == null) return;
+            cartListPanel.removeAllViews();
+
+            int total = 0;
+            int itemCount = 0;
+            for (int i = 0; i < posCart.length(); i++) {
+                JSONObject item = posCart.optJSONObject(i);
+                if (item == null) continue;
+                int quantity = Math.max(1, item.optInt("quantity", 1));
+                int price = Math.max(0, item.optInt("price", 0));
+                total += quantity * price;
+                itemCount += quantity;
+
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+
+                TextView name = makeInfoText(
+                        quantity + " x " + cleanVietnamese(item.optString("name", "Món")) + "\n" + formatMoney(quantity * price),
+                        Color.rgb(15, 23, 42)
+                );
+                row.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+                Button minusButton = makeButton("-", false);
+                minusButton.setOnClickListener(view -> changeCartQuantity(item.optString("id", ""), -1));
+                row.addView(minusButton, new LinearLayout.LayoutParams(dp(56), dp(58)));
+
+                Button plusButton = makeButton("+", true);
+                plusButton.setOnClickListener(view -> changeCartQuantity(item.optString("id", ""), 1));
+                LinearLayout.LayoutParams plusParams = new LinearLayout.LayoutParams(dp(56), dp(58));
+                plusParams.setMargins(dp(6), 0, 0, 0);
+                row.addView(plusButton, plusParams);
+
+                cartListPanel.addView(row, fullWidthParams());
+            }
+
+            cartSummaryText.setText(cleanVietnamese(
+                    itemCount == 0
+                            ? "Chưa có món."
+                            : "Tổng: " + formatMoney(total) + "\nSố món: " + itemCount
+            ));
+            cartSummaryText.setTextColor(itemCount == 0 ? Color.rgb(71, 85, 105) : Color.rgb(15, 118, 110));
+            syncConfirmedPaymentWithCurrentBill();
+            updatePaymentStateUi();
+        });
+    }
+
+    @Deprecated
+    private void showCashPaymentDialogLegacy() {
+        if (prefs.getString(KEY_ACCESS_TOKEN, "").trim().isEmpty()) {
+            toast("Vui lòng đăng nhập chi nhánh trước khi thanh toán.");
+            return;
+        }
+        int total = getCartTotal(posCart);
+        if (total <= 0 || posCart.length() == 0) {
+            toast("Bill hiện tại chưa có món.");
+            return;
+        }
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(4), dp(8), dp(4), 0);
+
+        TextView totalText = makeInfoText("Tổng cần thu: " + formatMoney(total), Color.rgb(15, 118, 110));
+        panel.addView(totalText, fullWidthParams());
+
+        EditText cashInput = makeInput("Tiền khách đưa");
+        cashInput.setInputType(InputType.TYPE_CLASS_NUMBER);
+        cashInput.setText(String.valueOf(total));
+        panel.addView(cashInput, fullWidthParams());
+
+        TextView changeText = makeInfoText("Tiền thối: 0đ", Color.rgb(71, 85, 105));
+        panel.addView(changeText, fullWidthParams());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(cleanVietnamese("Thanh toán tiền mặt"))
+                .setView(panel)
+                .setNegativeButton(cleanVietnamese("Hủy"), null)
+                .setPositiveButton(cleanVietnamese("Tiếp tục"), null)
+                .create();
+
+        dialog.setOnShowListener(item -> dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(view -> {
+            int received = parseMoney(cashInput.getText().toString());
+            int change = received - total;
+            changeText.setText(cleanVietnamese("Tiền thối: " + formatMoney(Math.max(0, change))));
+            if (received < total) {
+                changeText.setTextColor(Color.rgb(185, 28, 28));
+                toast("Tiền khách đưa chưa đủ.");
+                return;
+            }
+            dialog.dismiss();
+            showCreateCashOrderConfirmLegacy(received);
+        }));
+
+        dialog.show();
+    }
+
+    @Deprecated
+    private void showCreateCashOrderConfirmLegacy(int receivedAmount) {
+        int total = getCartTotal(posCart);
+        if (total <= 0 || posCart.length() == 0) {
+            toast("Bill hiện tại chưa có món.");
+            return;
+        }
+
+        String summary = "Tổng cần thu: " + formatMoney(total)
+                + "\nTiền khách đưa: " + formatMoney(receivedAmount)
+                + "\nTiền thối: " + formatMoney(Math.max(0, receivedAmount - total))
+                + "\n\nXác nhận tạo đơn POS và in bill?";
+
+        new AlertDialog.Builder(this)
+                .setTitle(cleanVietnamese("Xác nhận tạo đơn"))
+                .setMessage(cleanVietnamese(summary))
+                .setNegativeButton(cleanVietnamese("Quay lại"), null)
+                .setPositiveButton(cleanVietnamese("Tạo đơn + in bill"), (dialog, which) -> createCashOrderAsyncLegacy(receivedAmount))
+                .show();
+    }
+
+    @Deprecated
+    private void createCashOrderAsyncLegacy(int receivedAmount) {
+        final JSONArray cartSnapshot;
+        try {
+            cartSnapshot = new JSONArray(posCart.toString());
+        } catch (Exception error) {
+            toast("Không đọc được bill hiện tại.");
+            return;
+        }
+
+        int total = getCartTotal(cartSnapshot);
+        if (total <= 0 || cartSnapshot.length() == 0) {
+            toast("Bill hiện tại chưa có món.");
+            return;
+        }
+        if (receivedAmount < total) {
+            toast("Tiền khách đưa chưa đủ.");
+            return;
+        }
+
+        log("Đang tạo đơn POS tiền mặt...");
+        new Thread(() -> {
+            try {
+                JSONObject activeShift = readActiveShift();
+                if (activeShift == null) {
+                    runOnUiThread(() -> toast("Chưa mở ca POS. Vui lòng mở ca trước."));
+                    updateShiftUi(null, "Chưa có ca POS đang mở.");
+                    return;
+                }
+
+                String orderCode = buildPosOrderCode();
+                String displayOrderCode = buildShortDisplayOrderCode(orderCode);
+                String createdAt = PosOrderHelper.buildIsoUtcNow();
+                String branchUuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
+                String branchName = getBranchLabel();
+                String cashierName = firstText(
+                        prefs.getString(KEY_PROFILE_NAME, ""),
+                        prefs.getString(KEY_AUTH_EMAIL, ""),
+                        "Thu ngân"
+                );
+                String shiftId = activeShift.optString("id", "");
+                int changeAmount = Math.max(0, receivedAmount - total);
+
+                JSONObject metadata = new JSONObject();
+                metadata.put("source", "pos");
+                metadata.put("channel", "pos");
+                metadata.put("orderSource", "pos");
+                metadata.put("orderType", "takeaway");
+                metadata.put("walkIn", true);
+                metadata.put("displayOrderCode", displayOrderCode);
+                metadata.put("paymentMethod", "cash");
+                metadata.put("paymentStatus", "paid");
+                metadata.put("paymentAmount", total);
+                metadata.put("cashReceived", receivedAmount);
+                metadata.put("changeAmount", changeAmount);
+                metadata.put("paidAt", createdAt);
+                metadata.put("posShiftId", shiftId);
+                metadata.put("pos_shift_id", shiftId);
+                metadata.put("cashierName", cashierName);
+                metadata.put("branchUuid", branchUuid);
+                metadata.put("branchName", branchName);
+                metadata.put("items", cartSnapshot);
+
+                JSONObject orderBody = new JSONObject();
+                orderBody.put("id", orderCode);
+                orderBody.put("order_code", orderCode);
+                orderBody.put("customer_phone", JSONObject.NULL);
+                orderBody.put("customer_name", "Khách POS");
+                orderBody.put("fulfillment_type", "pickup");
+                orderBody.put("payment_method", "cash");
+                orderBody.put("status", "pending_zalo");
+                orderBody.put("subtotal", total);
+                orderBody.put("shipping_fee", 0);
+                orderBody.put("original_shipping_fee", 0);
+                orderBody.put("shipping_support_discount", 0);
+                orderBody.put("promo_discount", 0);
+                orderBody.put("promo_code", "");
+                orderBody.put("points_discount", 0);
+                orderBody.put("points_earned", 0);
+                orderBody.put("total_amount", total);
+                orderBody.put("branch_uuid", branchUuid.isEmpty() ? JSONObject.NULL : branchUuid);
+                orderBody.put("branch_name", branchName);
+                orderBody.put("pickup_branch_uuid", branchUuid.isEmpty() ? JSONObject.NULL : branchUuid);
+                orderBody.put("pickup_branch_name", branchName);
+                orderBody.put("pickup_time_text", "Lấy tại quầy");
+                orderBody.put("delivery_address", "Khách nhận tại quầy");
+                orderBody.put("pos_shift_id", shiftId.isEmpty() ? JSONObject.NULL : shiftId);
+                orderBody.put("metadata", metadata);
+
+                httpRequest(
+                        "POST",
+                        SUPABASE_URL + "/rest/v1/orders?select=id,order_code,total_amount,created_at",
+                        orderBody.toString(),
+                        true
+                );
+
+                JSONArray itemRows = buildCashOrderItemRows(orderCode, cartSnapshot);
+                if (itemRows.length() > 0) {
+                    httpRequest(
+                            "POST",
+                            SUPABASE_URL + "/rest/v1/order_items",
+                            itemRows.toString(),
+                            false
+                    );
+                }
+
+                String receiptText = buildCashReceiptText(orderCode, displayOrderCode, cartSnapshot, total, receivedAmount, changeAmount, cashierName, branchName);
+                boolean printed = printReceiptPayload(receiptText, LOYALTY_QR_URL, "");
+
+                runOnUiThread(() -> {
+                    posCart = new JSONArray();
+                    updateCartUi();
+                    toast(printed ? "Đã tạo đơn và in bill." : "Đã tạo đơn, nhưng chưa in được bill.");
+                });
+                log((printed ? "Đã tạo đơn POS và in bill: " : "Đã tạo đơn POS, cần kiểm tra máy in: ") + orderCode);
+            } catch (Exception error) {
+                log("Không tạo được đơn POS tiền mặt: " + shortError(error));
+            }
+        }).start();
+    }
+
+    private JSONArray buildCashOrderItemRows(String orderCode, JSONArray cartSnapshot) throws Exception {
+        return PosOrderHelper.buildCashOrderItemRows(orderCode, cartSnapshot);
+    }
+
+    private String buildCashReceiptText(
+            String orderCode,
+            String displayOrderCode,
+            JSONArray cartSnapshot,
+            int total,
+            int receivedAmount,
+            int changeAmount,
+            String cashierName,
+            String branchName
+    ) {
+        return buildCashReceiptText(
+                orderCode,
+                displayOrderCode,
+                cartSnapshot,
+                total,
+                receivedAmount,
+                changeAmount,
+                cashierName,
+                branchName,
+                "",
+                "",
+                ""
+        );
+    }
+
+    private String buildCashReceiptText(
+            String orderCode,
+            String displayOrderCode,
+            JSONArray cartSnapshot,
+            int total,
+            int receivedAmount,
+            int changeAmount,
+            String cashierName,
+            String branchName,
+            String pagerNumber,
+            String customerName,
+            String orderNote
+    ) {
+        return PosOrderHelper.buildCashReceiptText(
+                orderCode,
+                displayOrderCode,
+                cartSnapshot,
+                total,
+                receivedAmount,
+                changeAmount,
+                cashierName,
+                branchName,
+                pagerNumber,
+                customerName,
+                orderNote
+        );
+    }
+
+    private int getCartTotal(JSONArray cart) {
+        return PosOrderHelper.getCartTotal(cart);
+    }
+
+    private String buildPosOrderCode() {
+        return PosOrderHelper.buildPosOrderCode();
+    }
+
+    private String buildShortDisplayOrderCode(String orderCode) {
+        return PosOrderHelper.buildShortDisplayOrderCode(orderCode);
     }
 
     private void startStation() {
@@ -787,18 +1807,18 @@ public class MainActivity extends Activity {
         if (accountSummaryText != null && loggedIn) {
             String email = prefs.getString(KEY_AUTH_EMAIL, "").trim();
             String branch = getBranchLabel();
-            accountSummaryText.setText((email.isEmpty() ? "ÄÃ£ Ä‘Äƒng nháº­p" : email) + "\nChi nhÃ¡nh: " + branch);
+            accountSummaryText.setText(cleanVietnamese((email.isEmpty() ? "ÄÃ£ Ä‘Äƒng nháº­p" : email) + "\nChi nhÃ¡nh: " + branch));
         }
 
         if (stationRunning) {
-            stationText.setText("Tráº¡m in Ä‘ang báº­t Â· " + getBranchLabel());
+            stationText.setText(cleanVietnamese("Tráº¡m in Ä‘ang báº­t Â· " + getBranchLabel()));
             stationText.setTextColor(Color.rgb(15, 118, 110));
-            stationButton.setText("Táº¯t tráº¡m in");
+            stationButton.setText(cleanVietnamese("Táº¯t tráº¡m in"));
             stationButton.setBackground(makeRoundRect(Color.rgb(239, 68, 68), 8, 1, Color.rgb(185, 28, 28)));
         } else {
-            stationText.setText(loggedIn ? "ÄÃ£ Ä‘Äƒng nháº­p Â· " + getBranchLabel() : "ChÆ°a Ä‘Äƒng nháº­p chi nhÃ¡nh");
+            stationText.setText(cleanVietnamese(loggedIn ? "ÄÃ£ Ä‘Äƒng nháº­p Â· " + getBranchLabel() : "ChÆ°a Ä‘Äƒng nháº­p chi nhÃ¡nh"));
             stationText.setTextColor(loggedIn ? Color.rgb(15, 118, 110) : Color.rgb(185, 28, 28));
-            stationButton.setText("Báº­t tráº¡m in");
+            stationButton.setText(cleanVietnamese("Báº­t tráº¡m in"));
             stationButton.setBackground(makeRoundRect(Color.rgb(20, 184, 166), 8, 1, Color.rgb(15, 118, 110)));
         }
     }
@@ -1211,25 +2231,25 @@ public class MainActivity extends Activity {
         if (PRINTER_MODE_LAN.equals(getPrinterMode())) {
             String host = prefs.getString(KEY_LAN_HOST, "").trim();
             if (host.isEmpty()) {
-                printerText.setText("MÃ¡y in LAN/WiFi: chÆ°a nháº­p IP");
+                printerText.setText(cleanVietnamese("MÃ¡y in LAN/WiFi: chÆ°a nháº­p IP"));
                 printerText.setTextColor(Color.rgb(194, 65, 12));
                 return;
             }
 
-            printerText.setText("MÃ¡y in LAN/WiFi: " + host + ":" + getLanPort());
+            printerText.setText(cleanVietnamese("MÃ¡y in LAN/WiFi: " + host + ":" + getLanPort()));
             printerText.setTextColor(Color.rgb(15, 118, 110));
             return;
         }
 
         UsbDevice device = getSelectedDevice();
         if (device == null) {
-            printerText.setText("MÃ¡y in USB: chÆ°a káº¿t ná»‘i");
+            printerText.setText(cleanVietnamese("MÃ¡y in USB: chÆ°a káº¿t ná»‘i"));
             printerText.setTextColor(Color.rgb(185, 28, 28));
             return;
         }
 
         boolean hasPermission = usbManager.hasPermission(device);
-        printerText.setText(hasPermission ? "MÃ¡y in USB: sáºµn sÃ ng" : "MÃ¡y in USB: cáº§n cáº¥p quyá»n");
+        printerText.setText(cleanVietnamese(hasPermission ? "MÃ¡y in USB: sáºµn sÃ ng" : "MÃ¡y in USB: cáº§n cáº¥p quyá»n"));
         printerText.setTextColor(hasPermission ? Color.rgb(15, 118, 110) : Color.rgb(194, 65, 12));
     }
 
@@ -1367,23 +2387,13 @@ public class MainActivity extends Activity {
     }
 
     private byte[] buildEscPosRaster(String text, String qrUrl, String sourceType) {
-        ReceiptRasterParts parts = splitReceiptFooter(text);
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        output.write(0x1B);
-        output.write(0x40);
-
-        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
-        if (!shouldSkipFixedFooter(sourceType)) {
-            byte[] footerBytes = getFixedFooterRasterBytes(DEFAULT_RECEIPT_FOOTER_TEXT);
-            output.write(footerBytes, 0, footerBytes.length);
-        }
-
-        output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
-        output.write(0x1D);
-        output.write(0x56);
-        output.write(0x42);
-        output.write(0x00);
-        return output.toByteArray();
+        return EscPosRasterPrinter.buildReceiptRaster(
+                text,
+                qrUrl,
+                sourceType,
+                DEFAULT_RECEIPT_FOOTER_TEXT,
+                LOYALTY_QR_URL
+        );
     }
 
     private boolean shouldSkipFixedFooter(String sourceType) {
@@ -1601,7 +2611,7 @@ public class MainActivity extends Activity {
 
     private Button makeButton(String label, boolean primary) {
         Button button = new Button(this);
-        button.setText(label);
+        button.setText(cleanVietnamese(label));
         button.setAllCaps(false);
         button.setTextSize(16);
         button.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1620,7 +2630,7 @@ public class MainActivity extends Activity {
     private EditText makeInput(String hint) {
         EditText input = new EditText(this);
         input.setSingleLine(true);
-        input.setHint(hint);
+        input.setHint(cleanVietnamese(hint));
         input.setTextSize(18);
         input.setMinHeight(dp(62));
         input.setPadding(dp(14), 0, dp(14), 0);
@@ -1630,7 +2640,7 @@ public class MainActivity extends Activity {
 
     private TextView makeSectionTitle(String text) {
         TextView title = new TextView(this);
-        title.setText(text);
+        title.setText(cleanVietnamese(text));
         title.setTextColor(Color.rgb(15, 23, 42));
         title.setTextSize(15);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1640,7 +2650,7 @@ public class MainActivity extends Activity {
 
     private TextView makeInfoText(String text, int color) {
         TextView view = new TextView(this);
-        view.setText(text);
+        view.setText(cleanVietnamese(text));
         view.setTextColor(color);
         view.setTextSize(13);
         view.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1689,15 +2699,43 @@ public class MainActivity extends Activity {
         }
     }
 
+    private int parseMoney(String value) {
+        try {
+            String digits = String.valueOf(value == null ? "" : value).replaceAll("[^0-9]", "");
+            if (digits.isEmpty()) return 0;
+            return Math.max(0, Integer.parseInt(digits));
+        } catch (Exception error) {
+            return 0;
+        }
+    }
+
+    private String formatMoney(int amount) {
+        return String.format(new Locale("vi", "VN"), "%,dđ", Math.max(0, amount));
+    }
+
+    private String formatShiftDateTime(String value) {
+        try {
+            if (value == null || value.trim().isEmpty()) return "";
+            String normalized = value.trim();
+            if (normalized.endsWith("Z")) normalized = normalized.replace("Z", "+0000");
+            normalized = normalized.replaceAll("([+-]\\d{2}):(\\d{2})$", "$1$2");
+            Date date = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).parse(normalized);
+            if (date == null) return "";
+            return new SimpleDateFormat("HH:mm dd/MM/yyyy", new Locale("vi", "VN")).format(date);
+        } catch (Exception error) {
+            return value == null ? "" : value;
+        }
+    }
+
     private int getLanPort() {
         return prefs.getInt(KEY_LAN_PORT, DEFAULT_LAN_PORT);
     }
 
     private String getBranchLabel() {
         String name = prefs.getString(KEY_BRANCH_NAME, "").trim();
-        if (!name.isEmpty()) return name;
+        if (!name.isEmpty()) return cleanVietnamese(name);
         String alias = prefs.getString(KEY_BRANCH_ALIAS, "").trim();
-        if (!alias.isEmpty()) return alias;
+        if (!alias.isEmpty()) return cleanVietnamese(alias);
         String uuid = prefs.getString(KEY_BRANCH_UUID, "").trim();
         return uuid.length() > 8 ? uuid.substring(0, 8) + "..." : uuid;
     }
@@ -1710,8 +2748,28 @@ public class MainActivity extends Activity {
         return "";
     }
 
+    private String cleanVietnamese(String value) {
+        String text = String.valueOf(value == null ? "" : value);
+        for (int i = 0; i < 3 && looksMojibake(text); i++) {
+            String decoded = new String(text.getBytes(Charset.forName("Windows-1252")), StandardCharsets.UTF_8);
+            if (decoded.equals(text)) break;
+            text = decoded;
+        }
+        return text;
+    }
+
+    private boolean looksMojibake(String value) {
+        if (value == null || value.isEmpty()) return false;
+        return value.contains("Ã")
+                || value.contains("Â")
+                || value.contains("Ä")
+                || value.contains("Æ")
+                || value.contains("áº")
+                || value.contains("á»");
+    }
+
     private String normalizeAuthError(Exception error) {
-        String raw = String.valueOf(error == null ? "" : error.getMessage()).trim();
+        String raw = cleanVietnamese(String.valueOf(error == null ? "" : error.getMessage())).trim();
         String lower = raw.toLowerCase(Locale.US);
         if (lower.contains("invalid login credentials")) return "Email hoáº·c máº­t kháº©u chÆ°a Ä‘Ãºng.";
         if (lower.contains("email not confirmed")) return "Email nÃ y chÆ°a Ä‘Æ°á»£c xÃ¡c nháº­n trong Supabase Auth.";
@@ -1722,7 +2780,7 @@ public class MainActivity extends Activity {
 
     private void ensureDeviceId() {
         if (prefs.getString(KEY_DEVICE_ID, "").isEmpty()) {
-            prefs.edit().putString(KEY_DEVICE_ID, "ghr-pos-" + UUID.randomUUID()).apply();
+            prefs.edit().putString(KEY_DEVICE_ID, "ghr-pos-" + java.util.UUID.randomUUID()).apply();
         }
     }
 
@@ -1854,14 +2912,14 @@ public class MainActivity extends Activity {
     }
 
     private String buildOperatorStatusText(String rawMessage) {
-        OperatorGuidance guidance = resolveOperatorGuidance(rawMessage);
+        OperatorGuidance guidance = resolveOperatorGuidance(cleanVietnamese(rawMessage));
         if (guidance.title.isEmpty()) return "";
         if (guidance.action.isEmpty()) return guidance.title;
         return guidance.title + "\n" + guidance.action;
     }
 
     private String buildOperatorLogLine(String rawMessage) {
-        OperatorGuidance guidance = resolveOperatorGuidance(rawMessage);
+        OperatorGuidance guidance = resolveOperatorGuidance(cleanVietnamese(rawMessage));
         if (guidance.title.isEmpty()) return "";
         if (guidance.action.isEmpty()) return guidance.title;
         return guidance.title + " - " + guidance.action;
@@ -1873,19 +2931,20 @@ public class MainActivity extends Activity {
 
     private void status(String message) {
         runOnUiThread(() -> {
-            if (statusText != null) statusText.setText(buildOperatorStatusText(message));
+            if (statusText != null) statusText.setText(cleanVietnamese(buildOperatorStatusText(message)));
         });
     }
 
     private void log(String message) {
-        Log.i("GHRPrintStation", String.valueOf(message == null ? "" : message));
+        String cleanMessage = cleanVietnamese(message);
+        Log.i("GHRPrintStation", cleanMessage);
         runOnUiThread(() -> {
             String time = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
             String old = logText == null ? "" : logText.getText().toString();
-            String next = "[" + time + "] " + buildOperatorLogLine(message) + "\n" + old;
+            String next = "[" + time + "] " + cleanVietnamese(buildOperatorLogLine(cleanMessage)) + "\n" + old;
             if (next.length() > 3000) next = next.substring(0, 3000);
             if (logText != null) logText.setText(next);
-            status(message);
+            status(cleanMessage);
         });
     }
 
@@ -1897,7 +2956,7 @@ public class MainActivity extends Activity {
     }
 
     private void toast(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, cleanVietnamese(message), Toast.LENGTH_SHORT).show();
     }
 
     private void playNewOrderAlert() {

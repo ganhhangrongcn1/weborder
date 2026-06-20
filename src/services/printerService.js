@@ -112,6 +112,35 @@ function alignMoneyLine(label = "", value = "", width = 42) {
   return `${left}${" ".repeat(gap)}${right}`;
 }
 
+function buildPosQrReceiptText({
+  branchName = "",
+  amount = 0,
+  transferContent = "",
+  orderCode = "",
+  customerName = ""
+} = {}) {
+  const width = 42;
+  const lines = [
+    "@@CENTER:GÁNH HÀNG RONG",
+    "@@CENTER:QUÉT MÃ THANH TOÁN",
+    buildLine("-", width)
+  ];
+
+  if (branchName) lines.push(`Chi nhánh: ${toText(branchName)}`);
+  if (orderCode) lines.push(`Mã bill: ${toText(orderCode)}`);
+  if (customerName) lines.push(`Khách: ${toText(customerName)}`);
+
+  lines.push(alignMoneyLine("Số tiền", toMoney(amount), width));
+  lines.push(buildLine("-", width));
+  lines.push("@@CENTER:Đưa mã này cho khách quét");
+  lines.push("@@QR");
+  lines.push(buildLine("-", width));
+  lines.push(`Nội dung: ${toText(transferContent)}`);
+  lines.push(buildLine("-", width));
+  lines.push("@@CENTER:Cảm ơn quý khách!");
+  return lines.join("\n");
+}
+
 function normalizeSource(value = "") {
   return toText(value).toLowerCase().replace(/[\s_-]+/g, "");
 }
@@ -305,8 +334,11 @@ function pushBranchFooter(lines, receipt, width) {
 
 function pushLoyaltyFooter(lines, width) {
   lines.push(buildLine("-", width));
-  lines.push("@@CENTER:Quét QR để tích điểm");
+  lines.push("@@CENTER:Quét QR tích điểm ngay");
   lines.push("@@QR");
+  lines.push("@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon");
+  lines.push("@@CENTER:đều được tích điểm tại Gánh Hàng Rong");
+  lines.push("@@CENTER:Quét để xem đơn và dùng điểm");
   lines.push(`@@CENTER:Hotline: ${SUPPORT_HOTLINE}`);
   lines.push("@@CENTER:Cảm ơn quý khách!");
 }
@@ -625,6 +657,67 @@ async function printViaAndroidBridge(order = {}, options = {}) {
     return {
       ok: false,
       message: error?.message || "App POS không in được bill USB."
+    };
+  }
+}
+
+export async function printPosQrReceipt({
+  branch = null,
+  amount = 0,
+  qrUrl = "",
+  transferContent = "",
+  orderCode = "",
+  customerName = ""
+} = {}, options = {}) {
+  const bridge = getAndroidPrinterBridge();
+  if (!bridge) {
+    return {
+      ok: false,
+      message: "Không tìm thấy app POS để in QR qua USB."
+    };
+  }
+
+  const safeQrUrl = toText(qrUrl);
+  if (!safeQrUrl) {
+    return {
+      ok: false,
+      message: "Chưa tạo được mã QR để in."
+    };
+  }
+
+  const config = getPrinterConfig(options);
+  const branchName = toText(branch?.name || branch?.branchName || options.branchName);
+  const safeOrderCode = toText(orderCode || transferContent || `QR-${Date.now()}`);
+  const payload = {
+    printerName: config.printerName,
+    receiptWidthMm: config.receiptWidthMm,
+    type: "pos_payment_qr",
+    text: buildPosQrReceiptText({
+      branchName,
+      amount,
+      transferContent,
+      orderCode: safeOrderCode,
+      customerName
+    }),
+    loyaltyUrl: safeQrUrl,
+    order: {
+      id: "",
+      orderCode: safeOrderCode,
+      sourceType: "pos_payment_qr",
+      branchName,
+      customerName: toText(customerName || "QR thanh toán"),
+      createdAt: new Date().toISOString(),
+      items: [],
+      totalAmount: Math.max(0, Math.round(toNumber(amount)))
+    }
+  };
+
+  try {
+    return parseBridgeResult(bridge.printCustomerBill(JSON.stringify(payload)), "Đã in QR thanh toán.");
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.message || "App POS không in được QR qua USB."
     };
   }
 }
