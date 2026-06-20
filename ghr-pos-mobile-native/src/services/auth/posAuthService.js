@@ -246,6 +246,15 @@ async function readProfileBySession(session) {
   return enrichProfileBranch(query.data);
 }
 
+async function clearLocalAuthSession() {
+  if (!supabase) return;
+  try {
+    await supabase.auth.signOut({ scope: "local" });
+  } catch {
+    // Recovery path only: clear local auth state when refresh tokens are stale.
+  }
+}
+
 export async function signInPosOperator({ email, password }) {
   const cleanEmail = normalizeEmail(email);
   const cleanPassword = String(password || "");
@@ -283,17 +292,17 @@ export async function signInPosOperator({ email, password }) {
   try {
     const profile = await readProfileBySession(data.session);
     if (!profile) {
-      await supabase.auth.signOut();
+      await clearLocalAuthSession();
       return { ok: false, message: "Tài khoản chưa có profile vận hành." };
     }
 
     if (!["admin", "staff", "kitchen"].includes(profile.role) || profile.status !== "active") {
-      await supabase.auth.signOut();
+      await clearLocalAuthSession();
       return { ok: false, message: "Tài khoản không có quyền POS hoặc chưa active." };
     }
 
     if (!profile.branchUuid) {
-      await supabase.auth.signOut();
+      await clearLocalAuthSession();
       return { ok: false, message: "Tài khoản này chưa được gán đúng chi nhánh trong profiles." };
     }
 
@@ -303,7 +312,7 @@ export async function signInPosOperator({ email, password }) {
       profile
     };
   } catch (errorProfile) {
-    await supabase.auth.signOut();
+    await clearLocalAuthSession();
     return {
       ok: false,
       message: errorProfile?.message || "Không đọc được profile vận hành."
@@ -323,13 +332,16 @@ export async function restorePosSession() {
 
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) {
+    if (error) {
+      await clearLocalAuthSession();
+    }
     return { ok: false, session: null, profile: null, message: error?.message || "" };
   }
 
   try {
     const profile = await readProfileBySession(data.session);
     if (!profile?.branchUuid) {
-      await supabase.auth.signOut();
+      await clearLocalAuthSession();
       return {
         ok: false,
         session: null,
@@ -343,6 +355,7 @@ export async function restorePosSession() {
       profile
     };
   } catch (profileError) {
+    await clearLocalAuthSession();
     return {
       ok: false,
       session: null,
@@ -354,7 +367,7 @@ export async function restorePosSession() {
 
 export async function signOutPosOperator() {
   if (supabase) {
-    await supabase.auth.signOut();
+    await clearLocalAuthSession();
   }
   return {
     ok: true

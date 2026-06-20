@@ -1,6 +1,7 @@
 package vn.ghr.posmobile;
 
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -12,6 +13,9 @@ import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.common.BitMatrix;
 
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -26,7 +30,8 @@ final class EscPosRasterPrinter {
     private static final int BIG_LINE_HEIGHT = 100;
     private static final int NORMAL_TEXT_SIZE = 24;
     private static final int NORMAL_LINE_HEIGHT = 34;
-    private static final int QR_SIZE_DOTS = 176;
+    private static final int PAYMENT_QR_SIZE_DOTS = 320;
+    private static final int FOOTER_QR_SIZE_DOTS = 220;
 
     private EscPosRasterPrinter() {
     }
@@ -46,9 +51,13 @@ final class EscPosRasterPrinter {
         output.write(0x1B);
         output.write(0x40);
 
-        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl));
+        int bodyQrSize = "pos_payment_qr".equals(normalizeSourceType(sourceType))
+                ? PAYMENT_QR_SIZE_DOTS
+                : FOOTER_QR_SIZE_DOTS;
+
+        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl, bodyQrSize));
         if (footerText != null && !footerText.trim().isEmpty()) {
-            writeRasterBitmap(output, renderTextBitmap(cleanVietnamese(footerText), RECEIPT_WIDTH_DOTS_80MM, footerQrUrl));
+            writeRasterBitmap(output, renderTextBitmap(cleanVietnamese(footerText), RECEIPT_WIDTH_DOTS_80MM, footerQrUrl, FOOTER_QR_SIZE_DOTS));
         }
 
         output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
@@ -125,14 +134,14 @@ final class EscPosRasterPrinter {
         return new ReceiptRasterParts(bodyText, footerText);
     }
 
-    private static Bitmap renderTextBitmap(String text, int width, String qrUrl) {
+    private static Bitmap renderTextBitmap(String text, int width, String qrUrl, int qrSize) {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(Color.BLACK);
         paint.setTextSize(NORMAL_TEXT_SIZE);
         paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
 
         int padding = 16;
-        Bitmap qrBitmap = createQrBitmap(qrUrl, QR_SIZE_DOTS);
+        Bitmap qrBitmap = createQrBitmap(qrUrl, qrSize);
         List<String> lines = expandReceiptLines(cleanVietnamese(text), paint, width - padding * 2);
         int height = Math.max(160, padding * 2 + estimateReceiptHeight(lines, qrBitmap));
 
@@ -220,6 +229,9 @@ final class EscPosRasterPrinter {
         String value = String.valueOf(qrUrl == null ? "" : qrUrl).trim();
         if (value.isEmpty()) return null;
         try {
+            Bitmap remoteQrBitmap = loadRemoteQrBitmap(value, size);
+            if (remoteQrBitmap != null) return remoteQrBitmap;
+
             Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
             hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
             hints.put(EncodeHintType.MARGIN, 1);
@@ -234,6 +246,53 @@ final class EscPosRasterPrinter {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private static Bitmap loadRemoteQrBitmap(String value, int size) {
+        if (!value.startsWith("http://") && !value.startsWith("https://")) return null;
+
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(value);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+            connection.setUseCaches(false);
+            connection.connect();
+            if (connection.getResponseCode() < 200 || connection.getResponseCode() >= 300) return null;
+
+            try (InputStream inputStream = connection.getInputStream()) {
+                Bitmap decoded = BitmapFactory.decodeStream(inputStream);
+                if (decoded == null) return null;
+                return fitBitmapOnWhiteCanvas(decoded, size);
+            }
+        } catch (Exception ignored) {
+            return null;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private static Bitmap fitBitmapOnWhiteCanvas(Bitmap source, int size) {
+        Bitmap result = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(result);
+        canvas.drawColor(Color.WHITE);
+
+        float scale = Math.min((float) size / source.getWidth(), (float) size / source.getHeight());
+        int targetWidth = Math.max(1, Math.round(source.getWidth() * scale));
+        int targetHeight = Math.max(1, Math.round(source.getHeight() * scale));
+        int left = (size - targetWidth) / 2;
+        int top = (size - targetHeight) / 2;
+
+        Bitmap scaled = Bitmap.createScaledBitmap(source, targetWidth, targetHeight, false);
+        Paint paint = new Paint();
+        paint.setFilterBitmap(false);
+        paint.setDither(false);
+        canvas.drawBitmap(scaled, left, top, paint);
+
+        if (scaled != source) scaled.recycle();
+        source.recycle();
+        return result;
     }
 
     private static List<String> wrapLines(String text, Paint paint, int maxWidth) {
