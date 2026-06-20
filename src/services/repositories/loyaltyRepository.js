@@ -386,6 +386,70 @@ export const loyaltyRepository = {
   async saveLoyaltyRuleAsync(rule) {
     return this.saveCrmConfigAsync(rule);
   },
+  async processOrderActionByPhoneAsync(phone, actionPayload = {}, fallback = {}, options = {}) {
+    const key = getCustomerKey(phone);
+    if (!key) return { ...(fallback || {}), phone: key };
+    if (!shouldWriteDomainToSupabase("loyalty")) {
+      if (options?.throwOnError) {
+        throw new Error("Chức năng ghi điểm Supabase đang bị tắt.");
+      }
+      return this.getByPhoneAsync(key, fallback);
+    }
+
+    try {
+      await coreSupabaseRepository.processOrderLoyalty({
+        sourceType: actionPayload.sourceType || "ORDER",
+        sourceOrderId: actionPayload.sourceOrderId || actionPayload.orderId || "",
+        action: actionPayload.action || "",
+        idempotencyKey: actionPayload.idempotencyKey || ""
+      });
+      const remoteOnly =
+        normalizeLoyaltyByPhoneMap({ [key]: await coreSupabaseRepository.readLoyaltyForPhoneFromTable(key) })[key] ||
+        { ...(fallback || {}), phone: key };
+      const localAll = normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}));
+      const nextAll = normalizeLoyaltyByPhoneMap({ ...localAll, [key]: remoteOnly });
+      await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, nextAll);
+      loyaltyRemoteCache = { value: nextAll, cachedAt: Date.now() };
+      notifyLoyaltyChanged();
+      return remoteOnly;
+    } catch (error) {
+      logSupabaseError("process loyalty v2 order action", error, {
+        phone: key,
+        sourceType: actionPayload.sourceType || "ORDER",
+        sourceOrderId: actionPayload.sourceOrderId || actionPayload.orderId || "",
+        action: actionPayload.action || ""
+      });
+      if (options?.throwOnError) throw error;
+      return this.getByPhoneAsync(key, fallback);
+    }
+  },
+  async processCheckinByPhoneAsync(phone, { idempotencyKey = "" } = {}, fallback = {}, options = {}) {
+    const key = getCustomerKey(phone);
+    if (!key) return { ...(fallback || {}), phone: key };
+    if (!shouldWriteDomainToSupabase("loyalty")) {
+      if (options?.throwOnError) {
+        throw new Error("Chức năng ghi điểm Supabase đang bị tắt.");
+      }
+      return this.getByPhoneAsync(key, fallback);
+    }
+
+    try {
+      await coreSupabaseRepository.processLoyaltyCheckin({ idempotencyKey });
+      const remoteOnly =
+        normalizeLoyaltyByPhoneMap({ [key]: await coreSupabaseRepository.readLoyaltyForPhoneFromTable(key) })[key] ||
+        { ...(fallback || {}), phone: key };
+      const localAll = normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}));
+      const nextAll = normalizeLoyaltyByPhoneMap({ ...localAll, [key]: remoteOnly });
+      await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, nextAll);
+      loyaltyRemoteCache = { value: nextAll, cachedAt: Date.now() };
+      notifyLoyaltyChanged();
+      return remoteOnly;
+    } catch (error) {
+      logSupabaseError("process loyalty v2 checkin", error, { phone: key });
+      if (options?.throwOnError) throw error;
+      return this.getByPhoneAsync(key, fallback);
+    }
+  },
   async appendEventByPhoneAsync(phone, event = {}, fallback = {}, options = {}) {
     const key = getCustomerKey(phone);
     if (!key) return { ...(fallback || {}), phone: key };

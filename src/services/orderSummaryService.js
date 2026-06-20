@@ -10,6 +10,10 @@ import {
 import { getCustomerOrderCountSummaryRpc } from "./customerOrderCountingRpcService.js";
 import { getCustomerKey } from "./storageService.js";
 import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
+import {
+  buildLoyaltyOrderPointLookup,
+  getNetOrderPoints
+} from "./loyaltyLedgerUtils.js";
 
 const PAGE_SIZE = 1000;
 
@@ -19,15 +23,15 @@ const EMPTY_SUMMARY = {
   pendingPoints: 0
 };
 
-function getOrderIds(order = {}) {
-  return [
-    order.id,
-    order.order_code,
-    order.display_order_code,
-    order.partner_order_code
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
+function normalizeLedgerRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).map((entry) => ({
+    type: entry.entry_type,
+    orderId: entry.order_id,
+    partnerOrderId: entry.partner_order_id,
+    partnerOrderCode: entry.partner_order_code,
+    points: Number(entry.points || 0),
+    amount: Number(entry.amount || 0)
+  }));
 }
 
 async function fetchAllPages(buildQuery) {
@@ -41,29 +45,6 @@ async function fetchAllPages(buildQuery) {
     if (page.length < PAGE_SIZE) break;
   }
   return rows;
-}
-
-function buildEarnedLookup(ledgerRows = []) {
-  const orderIds = new Set();
-  const partnerOrderIds = new Set();
-  let claimedPoints = 0;
-
-  (Array.isArray(ledgerRows) ? ledgerRows : []).forEach((entry) => {
-    const type = String(entry.entry_type || "").toUpperCase();
-    const points = toOrderCountingNumber(entry.points);
-    if (!["ORDER_EARN", "PARTNER_ORDER_EARN"].includes(type) || points <= 0) return;
-
-    claimedPoints += points;
-    const orderId = String(entry.order_id || "").trim();
-    const partnerOrderId = String(entry.partner_order_id || "").trim();
-    const partnerOrderCode = String(entry.partner_order_code || "").trim();
-
-    if (orderId) orderIds.add(orderId);
-    if (partnerOrderId) partnerOrderIds.add(partnerOrderId);
-    if (partnerOrderCode) orderIds.add(partnerOrderCode);
-  });
-
-  return { orderIds, partnerOrderIds, claimedPoints };
 }
 
 function mergeRowsById(...collections) {
@@ -94,7 +75,7 @@ export async function getCustomerOrderSummary(phone = "") {
 
   const phoneVariants = buildOrderCountingPhoneVariants([phoneKey]);
 
-  const [webOrdersByPhone, partnerOrdersByKey, partnerOrdersByPhone, ledgerRows, loyaltyRule] = await Promise.all([
+  const [webOrdersByPhone, partnerOrdersByKey, partnerOrdersByPhone, rawLedgerRows, loyaltyRule] = await Promise.all([
     fetchAllPages(() => client
       .from("orders")
       .select("id,order_code,status,total_amount,points_earned,customer_phone")
@@ -119,9 +100,24 @@ export async function getCustomerOrderSummary(phone = "") {
 
   const webOrders = mergeRowsById(webOrdersByPhone);
   const partnerOrders = mergeRowsById(partnerOrdersByKey, partnerOrdersByPhone);
+  const loyaltyLookup = buildLoyaltyOrderPointLookup(normalizeLedgerRows(rawLedgerRows));
 
-  const earnedLookup = buildEarnedLookup(ledgerRows);
-  const summary = { ...EMPTY_SUMMARY, claimedPoints: earnedLookup.claimedPoints };
+  const claimedPoints = [
+    ...webOrders.map((order) => getNetOrderPoints(loyaltyLookup, {
+      id: order.id,
+      orderCode: order.order_code
+    })),
+    ...partnerOrders.map((order) => getNetOrderPoints(loyaltyLookup, {
+      sourceType: "partner",
+      id: order.id,
+      orderCode: order.order_code,
+      displayOrderCode: order.display_order_code,
+      partnerOrderId: order.id,
+      partnerOrderCode: order.display_order_code || order.order_code
+    }))
+  ].reduce((sum, points) => sum + Math.max(0, Number(points || 0)), 0);
+
+  const summary = { ...EMPTY_SUMMARY, claimedPoints };
 
   webOrders.forEach((order) => {
     if (isExcludedOrderForCounting(order.status)) return;
@@ -129,9 +125,12 @@ export async function getCustomerOrderSummary(phone = "") {
     const total = toOrderCountingNumber(order.total_amount);
     Object.assign(summary, appendOrderCountSummary(summary, total, 1));
 
-    const alreadyEarned = getOrderIds(order).some((id) => earnedLookup.orderIds.has(id));
+    const netPoints = getNetOrderPoints(loyaltyLookup, {
+      id: order.id,
+      orderCode: order.order_code
+    });
     const points = toOrderCountingNumber(order.points_earned) || calculateOrderPoints(total, loyaltyRule);
-    if (!alreadyEarned && isCompletedOrderForCounting(order.status) && points > 0) {
+    if (netPoints <= 0 && isCompletedOrderForCounting(order.status) && points > 0) {
       summary.pendingPoints += points;
     }
   });
@@ -143,17 +142,18 @@ export async function getCustomerOrderSummary(phone = "") {
     const pointBase = toOrderCountingNumber(order.points_base_amount) || total;
     const points = calculateOrderPoints(pointBase, loyaltyRule);
     const pointStatus = String(order.point_status || "pending").toLowerCase();
-    const alreadyEarned = earnedLookup.partnerOrderIds.has(String(order.id || "").trim()) ||
-      getOrderIds(order).some((id) => earnedLookup.orderIds.has(id));
+    const netPoints = getNetOrderPoints(loyaltyLookup, {
+      sourceType: "partner",
+      id: order.id,
+      orderCode: order.order_code,
+      displayOrderCode: order.display_order_code,
+      partnerOrderId: order.id,
+      partnerOrderCode: order.display_order_code || order.order_code
+    });
 
     Object.assign(summary, appendOrderCountSummary(summary, total, 1));
 
-    if (!alreadyEarned && pointStatus === "claimed" && points > 0) {
-      summary.claimedPoints += points;
-      return;
-    }
-
-    if (!alreadyEarned && !["claimed", "rejected", "expired"].includes(pointStatus) && points > 0) {
+    if (netPoints <= 0 && !["claimed", "rejected", "expired"].includes(pointStatus) && points > 0) {
       summary.pendingPoints += points;
     }
   });

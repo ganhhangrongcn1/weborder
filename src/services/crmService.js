@@ -563,11 +563,11 @@ function buildCustomersSnapshotFromSources({
         ...defaultLoyaltyData,
         ...(loyaltyByPhone[customer.phone] || {})
       });
-      const orderEarnedPoints = sumPointsByTypes(phoneLoyalty.pointHistory, ["ORDER_EARN", "PARTNER_ORDER_EARN"]);
-      const checkinAndRewardPoints = sumPointsByTypes(phoneLoyalty.pointHistory, ["CHECKIN", "MILESTONE"]);
-      const spentPointsRaw = sumPointsByType(phoneLoyalty.pointHistory, (type) => type === "ORDER_SPEND");
-      const spentPoints = Math.abs(Math.min(0, Number(spentPointsRaw || 0)));
-      const otherAdjustPoints = sumPointsByType(phoneLoyalty.pointHistory, (type) => !["ORDER_EARN", "PARTNER_ORDER_EARN", "CHECKIN", "MILESTONE", "ORDER_SPEND"].includes(type));
+      const orderEarnedPoints = sumPointsByTypes(phoneLoyalty.pointHistory, ["ORDER_EARN", "PARTNER_ORDER_EARN", "ORDER_EARN_REVERSED"]);
+      const checkinAndRewardPoints = sumPointsByTypes(phoneLoyalty.pointHistory, ["CHECKIN", "CHECKIN_V2", "MILESTONE"]);
+      const spentPointsRaw = sumPointsByType(phoneLoyalty.pointHistory, (type) => type === "ORDER_SPEND" || type === "ORDER_SPEND_REVERSED");
+      const spentPoints = Math.max(0, Math.abs(Number(spentPointsRaw || 0)));
+      const otherAdjustPoints = sumPointsByType(phoneLoyalty.pointHistory, (type) => !["ORDER_EARN", "PARTNER_ORDER_EARN", "ORDER_EARN_REVERSED", "CHECKIN", "CHECKIN_V2", "MILESTONE", "ORDER_SPEND", "ORDER_SPEND_REVERSED"].includes(type));
       const totalFromHistory = (phoneLoyalty.pointHistory || []).reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
       const hasPointHistory = (phoneLoyalty.pointHistory || []).length > 0;
       const currentPoints = Math.max(0, Number(hasPointHistory ? totalFromHistory : (phoneLoyalty.totalPoints || 0)));

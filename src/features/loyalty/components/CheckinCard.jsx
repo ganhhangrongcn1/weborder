@@ -12,7 +12,9 @@ export default function CheckinCard({
   nextMilestone,
   progressPercent,
   recentDays,
-  handleCheckin
+  handleCheckin,
+  canCheckin = true,
+  checkinAuthNotice = ""
 }) {
   const loyaltyText = getLoyaltyText();
   const loyaltyBonusDisplay = getLoyaltyBonusDisplay();
@@ -50,9 +52,18 @@ export default function CheckinCard({
         </div>
       </CustomerCard>
 
-      <CustomerButton disabled={checkedInToday} onClick={handleCheckin} full className="mt-4">
-        {checkedInToday ? loyaltyText.checkedInToday : loyaltyText.checkinReward(checkinReward)}
+      <CustomerButton disabled={checkedInToday || !canCheckin} onClick={handleCheckin} full className="mt-4">
+        {checkedInToday
+          ? loyaltyText.checkedInToday
+          : !canCheckin
+            ? "Đăng nhập lại để điểm danh"
+            : loyaltyText.checkinReward(checkinReward)}
       </CustomerButton>
+      {!checkedInToday && !canCheckin && checkinAuthNotice ? (
+        <p className="mt-2 text-xs font-semibold leading-5 text-brown/55">
+          {checkinAuthNotice}
+        </p>
+      ) : null}
 
       <div className="checkin-bonus-grid">
         {loyaltyBonusDisplay.map((reward) => {

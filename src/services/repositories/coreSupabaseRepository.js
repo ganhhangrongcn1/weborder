@@ -3,6 +3,7 @@ import { getCustomerKey } from "../storageService.js";
 import { initSupabaseRuntimeClient } from "../supabase/supabaseRuntimeClient.js";
 import { isSupabaseConfigSyncEnabled } from "../supabase/runtimeFlags.js";
 import { buildBranchLookupMap, normalizeBranchKey } from "../branchIdentityService.js";
+import { isCheckinLikeEntryType } from "../loyaltyLedgerUtils.js";
 
 let ordersWriteQueue = Promise.resolve();
 let branchLookupCache = { value: null, cachedAt: 0 };
@@ -445,7 +446,7 @@ function buildCheckinStatsFromLedger(pointHistory = []) {
   const checkinDates = Array.from(
     new Set(
       (pointHistory || [])
-        .filter((entry) => String(entry?.type || "").toUpperCase() === "CHECKIN")
+        .filter((entry) => isCheckinLikeEntryType(entry?.type))
         .map((entry) => getDateKeyFromIso(entry?.createdAt))
         .filter(Boolean)
     )
@@ -485,6 +486,11 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     title: row.title || "",
     note: row.note || "",
     source: row.source || "",
+    sourceType: row.source_type || "",
+    sourceOrderId: row.source_order_id || "",
+    action: row.action || "",
+    actionVersion: Number(row.action_version || 0),
+    idempotencyKey: row.idempotency_key || "",
     partnerOrderCode: row.partner_order_code || "",
     partnerOrderId: row.partner_order_id || "",
     metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
@@ -1379,9 +1385,50 @@ async function readLoyaltyLedgerByPhonePaged(phone, { limit = 50, offset = 0 } =
     amount: Number(row.amount || 0),
     title: row.title || "",
     note: row.note || "",
+    source: row.source || "",
+    sourceType: row.source_type || "",
+    sourceOrderId: row.source_order_id || "",
+    action: row.action || "",
+    actionVersion: Number(row.action_version || 0),
+    partnerOrderId: row.partner_order_id || "",
+    partnerOrderCode: row.partner_order_code || "",
     createdAt: row.created_at
   }));
   return { rows, total: Number(count || 0) };
+}
+
+async function processOrderLoyalty({
+  sourceType = "ORDER",
+  sourceOrderId = "",
+  action = "",
+  idempotencyKey = ""
+} = {}) {
+  if (!isSupabaseReady()) return null;
+  const client = await getSupabaseClientAsync();
+  if (!client) return null;
+
+  const payload = {
+    p_source_type: String(sourceType || "ORDER").trim().toUpperCase(),
+    p_source_order_id: String(sourceOrderId || "").trim(),
+    p_action: String(action || "").trim().toUpperCase(),
+    p_idempotency_key: String(idempotencyKey || "").trim()
+  };
+
+  const { data, error } = await client.rpc("process_order_loyalty", payload);
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] || null : data || null;
+}
+
+async function processLoyaltyCheckin({ idempotencyKey = "" } = {}) {
+  if (!isSupabaseReady()) return null;
+  const client = await getSupabaseClientAsync();
+  if (!client) return null;
+
+  const { data, error } = await client.rpc("process_loyalty_checkin", {
+    p_idempotency_key: String(idempotencyKey || "").trim()
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] || null : data || null;
 }
 
 async function applyLoyaltyEvent({
@@ -1735,6 +1782,8 @@ export const coreSupabaseRepository = {
   readLoyaltyForPhoneFromTable,
   readLoyaltyAccountsSummaryFromTable,
   readLoyaltyLedgerByPhonePaged,
+  processOrderLoyalty,
+  processLoyaltyCheckin,
   applyLoyaltyEvent,
   writeLoyaltyByPhoneToTable,
   writeLoyaltyPhoneToTable,

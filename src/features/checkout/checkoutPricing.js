@@ -168,8 +168,11 @@ export function calculateCheckoutPricing({
   const redeemValue = Math.max(1, Number(loyaltyRule?.redeemValue || 1));
   const pointsBaseAmount = Math.max(Number(subtotal || 0) - Number(promoDiscount || 0), 0);
   const earnedPreviewPoints = Math.floor((pointsBaseAmount / currencyPerPoint) * pointPerUnit);
-  const maxDiscountFromPoints = Math.floor(Number(availablePoints || 0) / redeemPointUnit) * redeemValue;
-  const pointsDiscount = usePoints ? Math.min(maxDiscountFromPoints, Math.max(subtotal + checkoutShip - promoDiscount, 0)) : 0;
+  const maxRedeemUnitsByPoints = Math.floor(Number(availablePoints || 0) / redeemPointUnit);
+  const maxRedeemUnitsByTotal = Math.floor(Math.max(subtotal + checkoutShip - promoDiscount, 0) / redeemValue);
+  const spendUnits = usePoints ? Math.max(0, Math.min(maxRedeemUnitsByPoints, maxRedeemUnitsByTotal)) : 0;
+  const pointsSpent = spendUnits * redeemPointUnit;
+  const pointsDiscount = spendUnits * redeemValue;
   const checkoutTotal = Math.max(subtotal - promoDiscount - pointsDiscount + checkoutShip, 0);
 
   return {
@@ -184,6 +187,7 @@ export function calculateCheckoutPricing({
     redeemPointUnit,
     redeemValue,
     earnedPreviewPoints,
+    pointsSpent,
     pointsDiscount,
     checkoutTotal
   };

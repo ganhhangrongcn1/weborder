@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { loyaltyRepository } from "../services/repositories/loyaltyRepository.js";
 import { getRuntimeStrategy } from "../services/repositories/runtimeStrategy.js";
 import { getDataSource } from "../services/repositories/dataSource.js";
-import { getSupabaseCustomerSessionSnapshot, logoutCustomerAuthSession } from "../services/supabaseAuthService.js";
+import { getSupabaseCustomerSessionSnapshot, logoutCustomerAuthSession, syncAuthProfileToCustomerRow } from "../services/supabaseAuthService.js";
 import { customerRepository } from "../services/repositories/customerRepository.js";
 import { resolveVoucherUsageFromOrders } from "../services/loyaltyService.js";
 
@@ -73,6 +73,7 @@ export default function useCustomerSession({
   const [isSessionBootstrapping, setIsSessionBootstrapping] = useState(true);
   const [restoreTargetPhone, setRestoreTargetPhone] = useState("");
   const [currentPhone, setCurrentPhoneState] = useState(() => getCurrentRegisteredPhone());
+  const [hasCustomerAuthSession, setHasCustomerAuthSession] = useState(false);
   const isSupabaseSource = getDataSource() === "supabase";
   const orderLookupPhone = currentPhone || getCustomerKey(guestOrderPhone);
 
@@ -97,6 +98,10 @@ export default function useCustomerSession({
         const authSnapshot = await getSupabaseCustomerSessionSnapshot();
         if (authSnapshot?.ok && authSnapshot.phone) {
           try {
+            await syncAuthProfileToCustomerRow();
+          } catch {
+          }
+          try {
             await userStorage?.hydrateFromRemote?.();
           } catch {
           }
@@ -110,6 +115,7 @@ export default function useCustomerSession({
               });
           if (!disposed && hydratedUser) {
             restoredPhoneTarget = authSnapshot.phone;
+            setHasCustomerAuthSession(true);
             setRestoreTargetPhone(authSnapshot.phone);
             userStorage.saveCurrentPhone?.(authSnapshot.phone);
             customerRepository.saveSessionPointer({
@@ -135,6 +141,7 @@ export default function useCustomerSession({
         const hydratedUser = restoredUser || (isSupabaseSource ? buildRestoredSessionUser(defaultUserDemo, pointer.phone) : null);
         if (!disposed && hydratedUser) {
           restoredPhoneTarget = pointer.phone;
+          setHasCustomerAuthSession(false);
           setRestoreTargetPhone(pointer.phone);
           userStorage.saveCurrentPhone?.(pointer.phone);
           customerRepository.saveSessionPointer({
@@ -151,6 +158,7 @@ export default function useCustomerSession({
 
       if (!disposed) {
         customerRepository.clearSessionPointer?.();
+        setHasCustomerAuthSession(false);
         setCurrentPhoneState("");
         setRestoreTargetPhone("");
         restoredPhoneTarget = "";
@@ -402,9 +410,11 @@ export default function useCustomerSession({
     return saved;
   }, [currentPhone, getCustomerKey, orderStorage]);
 
-  function loginOrRegisterByPhone(phone, name = "", passwordDemo = "", shouldRegister = false) {
+  function loginOrRegisterByPhone(phone, name = "", passwordDemo = "", shouldRegister = false, options = {}) {
     const key = getCustomerKey(phone);
     if (!key) return null;
+    const authUserId = String(options?.authUserId || "").trim();
+    const nextHasCustomerAuthSession = Boolean(options?.hasCustomerAuthSession);
     const existing = userStorage.findByPhone(key);
     const isRegistered = Boolean(existing?.registered || existing?.passwordDemo);
     if (!shouldRegister && !isRegistered && !isSupabaseSource) return null;
@@ -426,8 +436,9 @@ export default function useCustomerSession({
     customerRepository.saveSessionPointer?.({
       phone: key,
       customerId: user?.id || key,
-      authUserId: ""
+      authUserId
     });
+    setHasCustomerAuthSession(nextHasCustomerAuthSession);
     setCurrentPhoneState(key);
     setDemoUserState(user);
     const linkedOrders = orderStorage.getByPhone(key);
@@ -449,6 +460,7 @@ export default function useCustomerSession({
   async function logoutDemoUser() {
     userStorage.clearCurrentPhone?.();
     customerRepository.clearSessionPointer?.();
+    setHasCustomerAuthSession(false);
     setCurrentPhoneState("");
     setRestoreTargetPhone("");
     setIsSessionRestoring(false);
@@ -470,8 +482,9 @@ export default function useCustomerSession({
   const profileLoyalty = currentPhone ? demoLoyalty : defaultLoyaltyData;
   const storedCurrentUser = currentPhone ? userStorage.findByPhone(currentPhone) : null;
   const sessionCurrentUser = currentPhone && getCustomerKey(demoUser?.phone) === currentPhone ? demoUser : null;
-  // Runtime source of truth for customer-authenticated experience:
-  // if currentPhone exists, user is treated as signed-in customer in UI flows.
+  // Runtime source of truth for member UI context:
+  // currentPhone means the app knows which member data to load.
+  // Protected RPC actions must additionally require hasCustomerAuthSession.
   const isRegisteredCustomer = Boolean(currentPhone);
   const memberProfileName = String(storedCurrentUser?.name || "").trim();
   const sessionProfileName = String(sessionCurrentUser?.name || "").trim();
@@ -523,6 +536,8 @@ export default function useCustomerSession({
     loginOrRegisterByPhone,
     logoutDemoUser,
     isRegisteredCustomer,
+    hasCustomerAuthSession,
+    requiresCustomerAuthSession: isSupabaseSource,
     activeDemoUser,
     profileOrders,
     profileLoyalty,

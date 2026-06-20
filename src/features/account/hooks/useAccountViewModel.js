@@ -504,7 +504,10 @@ export default function useAccountViewModel({
         setLookupUser(syncedUser);
       }
     }
-    const result = loginOrRegisterByPhone(lookupPhone);
+    const result = loginOrRegisterByPhone(lookupPhone, "", "", false, {
+      hasCustomerAuthSession: Boolean(authResult?.data?.session),
+      authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || ""
+    });
     if (!result) return;
     const freshUser = await resolveFreshUserAfterLogin(lookupPhone, result?.user || null);
     if (freshUser) {
@@ -542,7 +545,10 @@ export default function useAccountViewModel({
       if (!authSyncResult.ok && import.meta?.env?.DEV) {
         console.warn("[account] syncAuthProfileToCustomerRow failed", authSyncResult.message);
       }
-      const result = loginOrRegisterByPhone(phone);
+      const result = loginOrRegisterByPhone(phone, "", "", false, {
+        hasCustomerAuthSession: Boolean(authResult?.data?.session),
+        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || ""
+      });
       if (!result) return;
       const freshUser = await resolveFreshUserAfterLogin(phone, result?.user || null);
       if (freshUser) {
@@ -679,7 +685,11 @@ export default function useAccountViewModel({
       registerPhone,
       registerDraft.name.trim(),
       "",
-      true
+      true,
+      {
+        hasCustomerAuthSession: Boolean(registerAuthResult?.data?.session),
+        authUserId: shouldUseSupabaseAuth ? (registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "") : ""
+      }
     );
     if (!result) return;
     customerRepository.saveSessionPointer?.({

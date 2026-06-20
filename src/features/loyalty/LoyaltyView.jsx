@@ -12,6 +12,8 @@ export default function Loyalty(props) {
     demoLoyalty,
     setDemoLoyalty,
     isRegisteredCustomer,
+    hasCustomerAuthSession,
+    requiresCustomerAuthSession,
     currentPhone
   } = props;
 
@@ -21,9 +23,14 @@ export default function Loyalty(props) {
     demoLoyalty,
     setDemoLoyalty,
     currentPhone,
-    isRegisteredCustomer
+    isRegisteredCustomer,
+    hasCustomerAuthSession,
+    requiresCustomerAuthSession
   });
   const canUseMemberLoyalty = Boolean(currentPhone || isRegisteredCustomer);
+  const canUseProtectedLoyaltyAction = requiresCustomerAuthSession
+    ? Boolean(currentPhone && hasCustomerAuthSession)
+    : canUseMemberLoyalty;
 
   if (vm.simpleRewardsMode) {
     return (
@@ -64,6 +71,12 @@ export default function Loyalty(props) {
       progressPercent={vm.progressPercent}
       recentDays={vm.recentDays}
       handleCheckin={vm.handleCheckin}
+      canCheckin={canUseProtectedLoyaltyAction}
+      checkinAuthNotice={
+        requiresCustomerAuthSession && !canUseProtectedLoyaltyAction
+          ? "Phiên đăng nhập thành viên đã hết. Anh đăng nhập lại để điểm danh và dùng các thao tác tích điểm nhé."
+          : ""
+      }
     />
   );
 }

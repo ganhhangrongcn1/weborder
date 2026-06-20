@@ -1,6 +1,7 @@
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
 import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { formatSignedLoyaltyPoints } from "../../../services/loyaltyLedgerUtils.js";
 import { getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 
 export function getPointEntryTitle(entry = {}) {
@@ -34,7 +35,7 @@ export default function PointHistoryList({ entries, limit = 5 }) {
       {visibleEntries.map((entry) => (
         <CustomerCard key={entry.id} padding="sm" className="text-sm">
           <span className="block text-brown">{getPointEntryTitle(entry)}</span>
-          <strong className="text-orange-600">+{entry.points} điểm</strong>
+          <strong className="text-orange-600">{formatSignedLoyaltyPoints(entry.points)} điểm</strong>
         </CustomerCard>
       ))}
       {!safeEntries.length && <AppEmptyState icon={null} message={loyaltyText.noPointHistory} />}

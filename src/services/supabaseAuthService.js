@@ -1,6 +1,10 @@
 ﻿import { getCustomerKey } from "./storageService.js";
 import { isSupabaseRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
-import { getSupabaseCustomerAuthClient, initSupabaseCustomerAuthClient } from "./supabase/supabaseRuntimeClient.js";
+import {
+  getSupabaseCustomerAuthClient,
+  initSupabaseCustomerAuthClient,
+  syncScopedSessionToRuntime
+} from "./supabase/supabaseRuntimeClient.js";
 
 const PROFILE_TABLE = "profiles";
 const PHONE_AUTH_EMAIL_DOMAIN = "@phone.ghr.vn";
@@ -59,6 +63,7 @@ export async function getSupabaseCustomerSessionSnapshot() {
     const { data: sessionData, error: sessionError } = await client.auth.getSession();
     if (sessionError) return { ok: false, reason: "session_error", error: sessionError };
     const session = sessionData?.session || null;
+    await syncScopedSessionToRuntime("customer", session).catch(() => {});
     if (!session?.user) return { ok: false, reason: "no_session" };
     const authUser = session.user;
     const meta = authUser.user_metadata || {};
@@ -116,6 +121,7 @@ export async function registerPhonePasswordAuth({ phone, password, name = "", em
       }
     });
     if (error) return { ok: false, message: normalizeAuthError(error) };
+    await syncScopedSessionToRuntime("customer", data?.session || null).catch(() => {});
     return { ok: true, data };
   } catch (error) {
     return { ok: false, message: normalizeAuthError(error) };
@@ -131,6 +137,7 @@ export async function loginPhonePasswordAuth({ phone, password, email = "" }) {
   try {
     const { data, error } = await client.auth.signInWithPassword({ email: authEmail, password });
     if (error) return { ok: false, message: normalizeAuthError(error, "Đăng nhập thất bại.") };
+    await syncScopedSessionToRuntime("customer", data?.session || null).catch(() => {});
     return { ok: true, data };
   } catch (error) {
     return { ok: false, message: normalizeAuthError(error, "Đăng nhập thất bại.") };
@@ -234,6 +241,8 @@ export async function syncCustomerProfileToSupabase({ phone, name = "", email = 
     const safeAvatarUrl = String(avatarUrl || "").trim();
     const profileRow = {
       phone: normalizedPhone,
+      role: "customer",
+      status: "active",
       registered: true,
       updated_at: new Date().toISOString()
     };
@@ -277,6 +286,7 @@ export async function logoutCustomerAuthSession() {
   try {
     const { error } = await client.auth.signOut();
     if (error) return { ok: false, message: normalizeAuthError(error, "Đăng xuất thất bại.") };
+    await syncScopedSessionToRuntime("customer", null).catch(() => {});
     return { ok: true };
   } catch (error) {
     return { ok: false, message: normalizeAuthError(error, "Đăng xuất thất bại.") };

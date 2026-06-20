@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
 import { loyaltyByPhoneStorage, loyaltyStorage, normalizeLoyaltyData } from "../../../services/loyaltyService.js";
+import { buildCheckinIdempotencyKey } from "../../../services/loyaltyRuntimeService.js";
 import { loyaltyRepository } from "../../../services/repositories/loyaltyRepository.js";
 import {
   getDateKey,
@@ -58,7 +59,9 @@ export default function useLoyaltyViewModel({
   demoLoyalty,
   setDemoLoyalty,
   currentPhone,
-  isRegisteredCustomer
+  isRegisteredCustomer,
+  hasCustomerAuthSession,
+  requiresCustomerAuthSession
 }) {
   const setDemoLoyaltyRef = useRef(setDemoLoyalty);
   const setUserProfileRef = useRef(setUserProfile);
@@ -118,7 +121,7 @@ export default function useLoyaltyViewModel({
     const requestId = ++hydrateRequestIdRef.current;
 
     async function hydrateLoyaltyFromSource() {
-      if (!currentPhone || !isRegisteredCustomer) return;
+      if (!currentPhone) return;
       const remoteFirst = await loyaltyRepository.getByPhoneAsync(currentPhone, {
         ...normalizeLoyaltyData(defaultResetLoyalty()),
         totalPoints: Number(userProfile?.points || 0),
@@ -142,7 +145,7 @@ export default function useLoyaltyViewModel({
     return () => {
       active = false;
     };
-  }, [currentPhone, isRegisteredCustomer]);
+  }, [currentPhone, userProfile?.checkinStreak, userProfile?.points]);
 
   const today = getTodayKey();
   const checkedInToday = loyalty.lastCheckinDate === today;
@@ -165,7 +168,7 @@ export default function useLoyaltyViewModel({
 
   function saveLoyalty(nextData) {
     const normalized = normalizeLoyaltyData(nextData);
-    const saved = currentPhone && isRegisteredCustomer
+    const saved = currentPhone
       ? loyaltyByPhoneStorage.saveByPhone(currentPhone, normalized)
       : loyaltyStorage.save(normalized);
     setLoyalty(saved);
@@ -175,6 +178,13 @@ export default function useLoyaltyViewModel({
 
   async function handleCheckin() {
     if (checkedInToday) return;
+    const canUseLocalMemberCheckin = Boolean(currentPhone || isRegisteredCustomer);
+    const shouldUseProtectedCheckin = Boolean(currentPhone) && requiresCustomerAuthSession;
+    if (shouldUseProtectedCheckin && !hasCustomerAuthSession) {
+      alert("Phiên đăng nhập thành viên đã hết. Anh đăng xuất rồi đăng nhập lại giúp em 1 lần để điểm danh nhé.");
+      return;
+    }
+    if (!canUseLocalMemberCheckin && !shouldUseProtectedCheckin) return;
     const brokeChain = loyalty.lastCheckinDate && !isYesterday(loyalty.lastCheckinDate);
     const baseRewardHistory = brokeChain ? [] : loyalty.rewardHistory;
     const missedStreak = brokeChain ? loyalty.checkinStreak : loyalty.lastMissedStreak;
@@ -211,64 +221,48 @@ export default function useLoyaltyViewModel({
       lastMissedStreak: missedStreak,
       comebackUsedDate: useComeback ? today : loyalty.comebackUsedDate
     };
-    if (currentPhone && isRegisteredCustomer) {
-      const events = [
-        {
-          entryType: "CHECKIN",
-          points: checkinPoints,
-          orderId: "",
-          amount: 0,
-          title: pointEntries[0].title,
-          note: pointEntries[0].title,
-          createdAt: pointEntries[0].createdAt,
-          metadata: pointEntries[0]
-        },
-        ...milestoneRewards.map((reward, index) => ({
-          entryType: "MILESTONE",
-          points: reward.points,
-          orderId: "",
-          amount: 0,
-          title: pointEntries[index + 1]?.title || `Thưởng chuỗi ${reward.days} ngày`,
-          note: pointEntries[index + 1]?.title || `Thưởng chuỗi ${reward.days} ngày`,
-          createdAt: pointEntries[index + 1]?.createdAt || new Date().toISOString(),
-          metadata: pointEntries[index + 1] || {}
-        }))
-      ];
-      const results = await Promise.allSettled(
-        events.map((event) => loyaltyRepository.appendEventByPhoneAsync(currentPhone, event))
-      );
-      const failed = results.filter((item) => item.status === "rejected");
-      if (failed.length) {
-        console.error("[loyalty] appendEventByPhoneAsync failed", failed.map((item) => item.reason));
+
+    if (shouldUseProtectedCheckin) {
+      try {
+        const normalizedRemote = normalizeLoyaltyData(
+          await loyaltyRepository.processCheckinByPhoneAsync(
+            currentPhone,
+            { idempotencyKey: buildCheckinIdempotencyKey(today) },
+            defaultResetLoyalty(),
+            { throwOnError: true }
+          )
+        );
+        setLoyalty(normalizedRemote);
+        if (setDemoLoyalty) setDemoLoyalty(normalizedRemote);
+        if (setUserProfile) {
+          setUserProfile((profile) => ({
+            ...profile,
+            points: Number(normalizedRemote.totalPoints || 0),
+            checkinStreak: Number(normalizedRemote.checkinStreak || 0),
+            pointHistory: Array.isArray(normalizedRemote.pointHistory) ? normalizedRemote.pointHistory : profile.pointHistory
+          }));
+        }
+        if (voucher) setLuckyVoucher(voucher);
+        return;
+      } catch (error) {
+        console.error("[loyalty] processCheckinByPhoneAsync failed", error);
+        alert(error?.message || "Điểm danh chưa thành công. Anh đăng xuất rồi đăng nhập lại giúp em 1 lần nhé.");
         return;
       }
-      const refreshed = await loyaltyRepository.getByPhoneAsync(currentPhone, defaultResetLoyalty());
-      const normalizedRemote = normalizeLoyaltyData(refreshed);
-      setLoyalty(normalizedRemote);
-      if (setDemoLoyalty) setDemoLoyalty(normalizedRemote);
-      if (setUserProfile) {
-        setUserProfile((profile) => ({
-          ...profile,
-          points: Number(normalizedRemote.totalPoints || 0),
-          checkinStreak: Number(normalizedRemote.checkinStreak || 0),
-          pointHistory: Array.isArray(normalizedRemote.pointHistory) ? normalizedRemote.pointHistory : profile.pointHistory
-        }));
-      }
     }
-    if (!currentPhone || !isRegisteredCustomer) {
-      saveLoyalty(nextData);
-      setUserProfile((profile) => ({
-        ...profile,
-        points: Number(profile?.points || 0) + totalEarned,
-        checkinStreak: newStreak,
-        pointHistory: [...pointEntries, ...(Array.isArray(profile?.pointHistory) ? profile.pointHistory : [])]
-      }));
-    }
+
+    saveLoyalty(nextData);
+    setUserProfile((profile) => ({
+      ...profile,
+      points: Number(profile?.points || 0) + totalEarned,
+      checkinStreak: newStreak,
+      pointHistory: [...pointEntries, ...(Array.isArray(profile?.pointHistory) ? profile.pointHistory : [])]
+    }));
     if (voucher) setLuckyVoucher(voucher);
   }
 
   function resetDemo() {
-    const reset = currentPhone && isRegisteredCustomer
+    const reset = currentPhone
       ? loyaltyByPhoneStorage.saveByPhone(currentPhone, defaultResetLoyalty())
       : loyaltyStorage.reset();
     setLoyalty(reset);

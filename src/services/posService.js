@@ -753,9 +753,9 @@ export async function cancelPosOrderAsync(order = {}, { cashierName = "", reason
     return { ok: false, message: "Không tìm thấy đơn để hủy." };
   }
 
-  if ((usesLoyaltyDiscount || usesLoyaltyVoucher) && normalizedPhone) {
+  if (usesLoyaltyVoucher && normalizedPhone) {
     try {
-      if (usesLoyaltyDiscount) {
+      if (false && usesLoyaltyDiscount) {
         const refundPoints = Math.max(
           0,
           Math.floor(Number(order.pointsDiscount || metadata.pointsDiscount || metadata.pointsSpent || 0))
@@ -1026,8 +1026,11 @@ export async function createPosTakeawayOrder({
           promoSource: toText(promoSource),
           promoVoucherId: toText(promoVoucherId),
           promoCode: normalizedPromoCode,
-          pointsDiscount: spendPoints,
-          orderStatus: order.status
+          pointsSpent: spendPoints,
+          pointsDiscount: safePointsDiscountAmount,
+          orderStatus: order.status,
+          previousOrderStatus: "",
+          sourceType: "ORDER"
         });
       } catch (error) {
         loyaltyWarning = ` Đơn đã tạo nhưng chưa trừ được điểm: ${error?.message || "kiểm tra policy Supabase loyalty."}`;
@@ -1122,7 +1125,7 @@ export async function markPosQrOrderPaidAsync(
   );
 
   let loyaltyWarning = "";
-  if (spendPoints > 0 && phone && phone !== WALK_IN_PHONE) {
+  if (false && spendPoints > 0 && phone && phone !== WALK_IN_PHONE) {
     try {
       await applyOrderLoyaltyAsync({
         phone,

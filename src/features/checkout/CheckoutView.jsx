@@ -136,6 +136,7 @@ export default function Checkout({
     configSupportLimit,
     promoDiscount,
     earnedPreviewPoints,
+    pointsSpent,
     pointsDiscount,
     checkoutTotal
   } = calculateCheckoutPricing({
@@ -202,6 +203,7 @@ export default function Checkout({
     autoShipSupport,
     promoDiscount,
     selectedPromo,
+    pointsSpent,
     pointsDiscount,
     deliveryDistanceKm,
     deliveryInfo: checkoutDeliveryInfo,

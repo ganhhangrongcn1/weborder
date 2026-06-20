@@ -5,37 +5,18 @@ import { getPartnerOrdersByPhone, mergeCustomerLookupOrders } from "../../../ser
 import { loyaltyRepository } from "../../../services/repositories/loyaltyRepository.js";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { getDataSource } from "../../../services/repositories/dataSource.js";
+import {
+  buildLoyaltyOrderPointLookup,
+  getNetOrderPoints
+} from "../../../services/loyaltyLedgerUtils.js";
 
-function getOrderIdentityCandidates(order = {}) {
-  return [
-    order.id,
-    order.orderCode,
-    order.displayOrderCode,
-    order.partnerOrderCode
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-}
-
-function buildEarnedOrderSet(pointHistory = []) {
-  return new Set(
-    (Array.isArray(pointHistory) ? pointHistory : [])
-      .filter((entry) => {
-        const type = String(entry?.type || entry?.entryType || "").toUpperCase();
-        return type === "ORDER_EARN" || type === "PARTNER_ORDER_EARN";
-      })
-      .map((entry) => String(entry?.orderId || entry?.partnerOrderCode || entry?.displayOrderCode || "").trim())
-      .filter(Boolean)
-  );
-}
-
-function markPointStatus(orders = [], earnedOrderSet = new Set()) {
+function markPointStatus(orders = [], loyaltyLookup = {}) {
   return (orders || []).map((order) => {
     if (order?.sourceType === "partner" && order.pointStatus) return order;
-    const hasEarnedPoint = getOrderIdentityCandidates(order).some((candidate) => earnedOrderSet.has(candidate));
+    const netPoints = getNetOrderPoints(loyaltyLookup, order);
     return {
       ...order,
-      pointStatus: hasEarnedPoint ? "claimed" : "pending"
+      pointStatus: netPoints > 0 ? "claimed" : "pending"
     };
   });
 }
@@ -67,8 +48,11 @@ export default function useGuestOrderLookup() {
       const loyalty = normalizeLoyaltyData(
         await loyaltyRepository.getByPhoneAsync(normalizedPhone, defaultLoyaltyData)
       );
-      const earnedOrderSet = buildEarnedOrderSet(loyalty.pointHistory);
-      const nextOrders = markPointStatus(mergeCustomerLookupOrders(localOrders, partnerOrders), earnedOrderSet);
+      const loyaltyLookup = buildLoyaltyOrderPointLookup(loyalty.pointHistory);
+      const nextOrders = markPointStatus(
+        mergeCustomerLookupOrders(localOrders, partnerOrders),
+        loyaltyLookup
+      );
       setLookupPhone(normalizedPhone);
       setOrders(nextOrders);
       setNotice(

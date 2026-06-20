@@ -25,7 +25,9 @@ export default function MemberLoyaltyView({
   nextMilestone,
   progressPercent,
   recentDays,
-  handleCheckin
+  handleCheckin,
+  canCheckin,
+  checkinAuthNotice
 }) {
   const loyaltyText = getLoyaltyText();
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
@@ -65,6 +67,8 @@ export default function MemberLoyaltyView({
           progressPercent={progressPercent}
           recentDays={recentDays}
           handleCheckin={handleCheckin}
+          canCheckin={canCheckin}
+          checkinAuthNotice={checkinAuthNotice}
         />
 
         <PointsCard rows={loyaltyRulesRows} />

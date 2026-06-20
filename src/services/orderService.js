@@ -57,6 +57,7 @@ function getOrderPointsBaseAmount(order = {}) {
 }
 
 function buildOrderLoyaltyPayload(order = {}) {
+  const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : {};
   return {
     phone: getOrderPhoneForLoyalty(order),
     orderId: order.orderCode || order.id,
@@ -65,8 +66,16 @@ function buildOrderLoyaltyPayload(order = {}) {
     promoSource: order.promoSource || "",
     promoVoucherId: order.promoVoucherId || "",
     promoCode: order.promoCode || "",
+    pointsSpent: Number(
+      order.pointsSpent ??
+      metadata.pointsSpent ??
+      order.pointsDiscount ??
+      metadata.pointsDiscount ??
+      0
+    ),
     pointsDiscount: Number(order.pointsDiscount || 0),
-    orderStatus: order.status || ""
+    orderStatus: order.status || "",
+    sourceType: "ORDER"
   };
 }
 
@@ -148,9 +157,10 @@ export const orderStorage = {
       );
     }
 
-    if (didOrderBecomeDone(previousOrder, updatedOrder)) {
-      await applyOrderLoyaltyAsync(buildOrderLoyaltyPayload(updatedOrder));
-    }
+    await applyOrderLoyaltyAsync({
+      ...buildOrderLoyaltyPayload(updatedOrder),
+      previousOrderStatus: previousOrder?.status || ""
+    });
 
     return updatedOrder;
   }
@@ -200,6 +210,38 @@ function applyCreatedOrderLoyalty({
     promoCode,
     pointsDiscount: Number(pointsDiscount || 0),
     orderStatus: order.status
+  });
+  if (!currentPhone || isCurrentOrderPhone(currentPhone, order.phone)) {
+    setDemoLoyaltyState(nextPhoneLoyalty);
+  }
+  return nextPhoneLoyalty;
+}
+
+async function applyCreatedOrderLoyaltyAsync({
+  order,
+  pointsAmount,
+  createdAt,
+  promoSource,
+  promoVoucherId,
+  promoCode,
+  pointsSpent,
+  pointsDiscount,
+  currentPhone,
+  setDemoLoyaltyState
+}) {
+  const nextPhoneLoyalty = await applyOrderLoyaltyAsync({
+    phone: order.phone,
+    orderId: order.orderCode || order.id,
+    amount: pointsAmount,
+    createdAt,
+    promoSource,
+    promoVoucherId,
+    promoCode,
+    pointsSpent: Number(pointsSpent || 0),
+    pointsDiscount: Number(pointsDiscount || 0),
+    orderStatus: order.status,
+    previousOrderStatus: "",
+    sourceType: "ORDER"
   });
   if (!currentPhone || isCurrentOrderPhone(currentPhone, order.phone)) {
     setDemoLoyaltyState(nextPhoneLoyalty);
@@ -288,7 +330,7 @@ function finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, s
   setCart([]);
 }
 
-export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee = 0, originalShippingFee = shippingFee, shippingSupportDiscount = 0, promoDiscount = 0, promoCode = "", promoSource = "", promoVoucherId = "", pointsDiscount = 0, distanceKm = null, lat = null, lng = null, deliveryInfo, fulfillmentType, branchInfo = null, pickupTimeText = "", paymentMethod, orderSource = "online", userProfile, currentPhone, setDemoOrdersState, setDemoLoyaltyState, addressStorage, updateAddress, addAddress, setDefaultAddress, setDemoAddressesState, setUserProfile, getMemberRank, setCurrentOrder, setOrderStatus, setCart, saveDemoUser }) {
+export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee = 0, originalShippingFee = shippingFee, shippingSupportDiscount = 0, promoDiscount = 0, promoCode = "", promoSource = "", promoVoucherId = "", pointsSpent = 0, pointsDiscount = 0, pointsDiscountAmount = pointsDiscount, distanceKm = null, lat = null, lng = null, deliveryInfo, fulfillmentType, branchInfo = null, pickupTimeText = "", paymentMethod, orderSource = "online", userProfile, currentPhone, setDemoOrdersState, setDemoLoyaltyState, addressStorage, updateAddress, addAddress, setDefaultAddress, setDemoAddressesState, setUserProfile, getMemberRank, setCurrentOrder, setOrderStatus, setCart, saveDemoUser }) {
   if (!cart.length) return null;
   const orderCode = `GHR-${Date.now().toString().slice(-4)}`;
   const createdAt = new Date().toISOString();
@@ -316,7 +358,9 @@ export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee =
     promoCode,
     promoSource,
     promoVoucherId,
+    pointsSpent,
     pointsDiscount,
+    pointsDiscountAmount,
     distanceKm,
     deliveryFee: shippingFee,
     lat,
@@ -401,7 +445,9 @@ export async function createOrderAsync(params) {
     promoCode = "",
     promoSource = "",
     promoVoucherId = "",
+    pointsSpent = 0,
     pointsDiscount = 0,
+    pointsDiscountAmount = pointsDiscount,
     distanceKm = null,
     lat = null,
     lng = null,
@@ -456,7 +502,9 @@ export async function createOrderAsync(params) {
     promoCode,
     promoSource,
     promoVoucherId,
+    pointsSpent,
     pointsDiscount,
+    pointsDiscountAmount,
     distanceKm,
     deliveryFee: shippingFee,
     lat,
@@ -494,13 +542,14 @@ export async function createOrderAsync(params) {
   const savedOrder = await orderStorage.addOrderAsync(order);
   saveCreatedOrderCustomerMarker({ order, currentPhone, saveDemoUser });
   await syncCreatedOrderListAsync({ order, currentPhone, setDemoOrdersState });
-  const nextPhoneLoyalty = applyCreatedOrderLoyalty({
+  const nextPhoneLoyalty = await applyCreatedOrderLoyaltyAsync({
     order,
     pointsAmount,
     createdAt,
     promoSource,
     promoVoucherId,
     promoCode,
+    pointsSpent,
     pointsDiscount,
     currentPhone,
     setDemoLoyaltyState
@@ -595,4 +644,3 @@ export function reorder(order, catalogProducts = []) {
     };
   });
 }
-

@@ -437,8 +437,11 @@ function getOrderLoyaltyPayload(order = {}, completedAt = new Date().toISOString
     promoSource: metadata.promoSource || raw.promo_source || "",
     promoVoucherId: metadata.promoVoucherId || raw.promo_voucher_id || "",
     promoCode: metadata.promoCode || raw.promo_code || "",
+    pointsSpent: Number(metadata.pointsSpent ?? metadata.pointsDiscount ?? raw.points_discount ?? 0),
     pointsDiscount: Number(metadata.pointsDiscount ?? raw.points_discount ?? 0),
-    orderStatus: "done"
+    orderStatus: "done",
+    previousOrderStatus: order.status || raw.status || "",
+    sourceType: "ORDER"
   };
 }
 
