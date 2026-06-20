@@ -15,6 +15,7 @@ import PosPagerModal from "../features/pos/components/PosPagerModal";
 import PosShiftCloseModal from "../features/pos/components/PosShiftCloseModal";
 import ProductOptionsModal from "../features/pos/components/ProductOptionsModal";
 import QrPaymentModal from "../features/pos/components/QrPaymentModal";
+import UsbPrinterPickerModal from "../features/pos/components/UsbPrinterPickerModal";
 import usePosComposer from "../features/pos/hooks/usePosComposer";
 import {
   getLocalPrinterConfig,
@@ -53,11 +54,12 @@ export default function PosHomeScreen() {
   const [lanHost, setLanHost] = useState("");
   const [lanPort, setLanPort] = useState("9100");
   const [usbDevices, setUsbDevices] = useState([]);
+  const [usbPickerOpen, setUsbPickerOpen] = useState(false);
   const [printerBusy, setPrinterBusy] = useState(false);
   const [printerMessage, setPrinterMessage] = useState("");
   const { width } = useWindowDimensions();
   const isWide = width >= 820;
-  const productColumns = width >= 1320 ? 5 : width >= 1120 ? 4 : isWide ? 3 : 2;
+  const productColumns = width >= 1180 ? 3 : 2;
   const {
     email,
     setEmail,
@@ -249,6 +251,19 @@ export default function PosHomeScreen() {
     return config;
   };
 
+  const handleRefreshPrinterState = async () => {
+    setPrinterBusy(true);
+    setPrinterMessage("");
+    try {
+      await refreshPrinterState();
+      setPrinterMessage("Đã tải lại danh sách máy in.");
+    } catch (error) {
+      setPrinterMessage(error?.message || "Không tải lại được máy in.");
+    } finally {
+      setPrinterBusy(false);
+    }
+  };
+
   const handleSetPrinterMode = async (mode) => {
     setPrinterBusy(true);
     setPrinterMessage("");
@@ -287,6 +302,7 @@ export default function PosHomeScreen() {
       }
       await refreshPrinterState();
       setPrinterMessage("Đã chọn máy in USB.");
+      setUsbPickerOpen(false);
     } catch (error) {
       setPrinterMessage(error?.message || "Không chọn được máy in USB.");
     } finally {
@@ -561,114 +577,6 @@ export default function PosHomeScreen() {
     return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")} ${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
   };
 
-  const renderSettingsWorkspace = () => (
-    <View style={styles.secondaryPanel}>
-      <Text style={styles.label}>Thiết lập</Text>
-      <Text style={styles.secondaryTitle}>POS chi nhánh</Text>
-      <View style={styles.shiftSummary}>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Tài khoản</Text>
-          <Text style={styles.summaryValue} numberOfLines={1}>{cashierName}</Text>
-        </View>
-        <View style={styles.summaryCell}>
-          <Text style={styles.summaryLabel}>Thẻ đang bận</Text>
-          <Text style={styles.summaryValue}>{busyPagers.length} thẻ</Text>
-        </View>
-      </View>
-
-      <View style={styles.closeShiftBox}>
-        <Text style={styles.label}>Máy in bill</Text>
-        <View style={styles.modeRow}>
-          <Pressable
-            style={[styles.modeButton, printerConfig?.mode === "usb" && styles.modeButtonActive]}
-            onPress={() => handleSetPrinterMode("usb")}
-            disabled={printerBusy}
-          >
-            <Text style={[styles.modeButtonText, printerConfig?.mode === "usb" && styles.modeButtonTextActive]}>USB</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.modeButton, printerConfig?.mode === "lan" && styles.modeButtonActive]}
-            onPress={() => handleSetPrinterMode("lan")}
-            disabled={printerBusy}
-          >
-            <Text style={[styles.modeButtonText, printerConfig?.mode === "lan" && styles.modeButtonTextActive]}>LAN/WiFi</Text>
-          </Pressable>
-        </View>
-
-        {printerConfig?.mode === "lan" ? (
-          <View style={styles.field}>
-            <Text style={styles.label}>IP máy in LAN/WiFi</Text>
-            <TextInput
-              value={lanHost}
-              onChangeText={setLanHost}
-              placeholder="192.168.1.50"
-              placeholderTextColor="#94a3b8"
-              autoCapitalize="none"
-              style={styles.input}
-            />
-            <TextInput
-              value={lanPort}
-              onChangeText={setLanPort}
-              placeholder="9100"
-              placeholderTextColor="#94a3b8"
-              keyboardType="number-pad"
-              style={styles.input}
-            />
-            <Pressable style={styles.smallGhostButton} onPress={handleSaveLanPrinter} disabled={printerBusy}>
-              <Text style={styles.smallGhostText}>Lưu máy in LAN</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <View style={styles.field}>
-            <Text style={styles.label}>Máy in USB</Text>
-            {usbDevices.length ? (
-              usbDevices.map((device) => (
-                <Pressable
-                  key={`${device.vendorId}-${device.productId}`}
-                  style={[styles.usbDeviceButton, device.selected && styles.usbDeviceButtonActive]}
-                  onPress={() => handleSelectUsbPrinter(device)}
-                  disabled={printerBusy}
-                >
-                  <Text style={[styles.usbDeviceText, device.selected && styles.modeButtonTextActive]}>
-                    {device.label}
-                  </Text>
-                  <Text style={styles.usbStatusText}>
-                    {device.hasPermission ? "Sẵn sàng" : "Cần cấp quyền"}
-                  </Text>
-                </Pressable>
-              ))
-            ) : (
-              <Text style={styles.placeholderText}>Chưa thấy máy in USB. Kiểm tra cáp OTG hoặc nguồn máy in.</Text>
-            )}
-          </View>
-        )}
-
-        {!!printerConfig && (
-          <Text style={styles.placeholderText}>
-            {printerConfig.mode === "lan"
-              ? `Máy in LAN: ${printerConfig.lanHost || "chưa nhập IP"}:${printerConfig.lanPort || 9100}`
-              : `Máy in USB: ${printerConfig.usbLabel || "chưa chọn"}${printerConfig.usbPermission ? " · sẵn sàng" : " · cần cấp quyền"}`}
-          </Text>
-        )}
-
-        {!!printerMessage && <Text style={styles.noticeBox}>{printerMessage}</Text>}
-
-        <View style={styles.closeShiftActions}>
-          <Pressable style={styles.smallGhostButton} onPress={refreshPrinterState} disabled={printerBusy}>
-            <Text style={styles.smallGhostText}>Tải lại máy in</Text>
-          </Pressable>
-          <Pressable style={[styles.closeShiftButton, printerBusy && styles.submitButtonDisabled]} onPress={handlePrinterTest} disabled={printerBusy}>
-            <Text style={[styles.closeShiftText, printerBusy && styles.disabledText]}>In test</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <Pressable style={styles.smallGhostButton} onPress={refreshCurrentPosRuntime}>
-        <Text style={styles.smallGhostText}>Tải lại dữ liệu POS</Text>
-      </Pressable>
-    </View>
-  );
-
   const renderShiftWorkspaceV2 = () => {
     const expectedCash = Number(shiftSummary?.expectedCash || shift?.openingCash || 0);
     const openedAtText = formatShiftMetaTime(shift?.openedAt);
@@ -763,6 +671,8 @@ export default function PosHomeScreen() {
     const printerReady = printerConfig?.mode === "lan"
       ? Boolean(printerConfig?.lanHost)
       : Boolean(printerConfig?.usbLabel);
+    const selectedUsbLabel = printerConfig?.usbLabel || "Chưa chọn máy in USB";
+    const printerModeText = printerConfig?.mode === "lan" ? "LAN/WiFi" : "USB";
     const printerStatusText = !printerConfig
       ? "Chưa có cấu hình máy in."
       : printerConfig.mode === "lan"
@@ -772,6 +682,13 @@ export default function PosHomeScreen() {
       ? "Két sẽ tự mở khi xác nhận thanh toán tiền mặt. QR không tự mở két."
       : "Chọn máy in trước để mở két tiền qua cổng DK/RJ11 của máy in.";
     const printStationReady = Boolean(printStationStatus?.running && printStationStatus?.tone !== "error");
+    const connectionText = connectionStatus.checking
+      ? "Đang kiểm tra"
+      : connectionStatus.online == null
+        ? "Chưa kiểm tra"
+        : connectionStatus.online
+          ? "Online"
+          : "Offline";
 
     return (
       <ScrollView
@@ -780,226 +697,201 @@ export default function PosHomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.secondaryPanel, styles.settingsPanel]}>
-        <Text style={styles.label}>Thiết lập</Text>
-        <Text style={styles.secondaryTitle}>POS chi nhánh</Text>
+          <Text style={styles.label}>Thiết lập</Text>
+          <Text style={styles.secondaryTitle}>POS chi nhánh</Text>
 
-        <View style={styles.summaryCard}>
-          <View style={styles.shiftSummary}>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Chi nhánh</Text>
-              <Text style={styles.summaryValue} numberOfLines={1}>{branchName}</Text>
-            </View>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Thẻ đang bận</Text>
-              <Text style={styles.summaryValue}>{busyPagers.length} thẻ</Text>
-            </View>
-            <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Đơn lưu tạm</Text>
-              <Text style={styles.summaryValue}>{offlineOrderCount} đơn</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.settingsStatusGrid}>
-          <View style={styles.settingsStatusTile}>
-            <Text style={styles.summaryLabel}>Supabase</Text>
-            <Text style={styles.settingsStatusValue}>
-              {connectionStatus.online ? "Online" : connectionStatus.online == null ? "Chưa kiểm tra" : "Offline"}
-            </Text>
-          </View>
-          <View style={styles.settingsStatusTile}>
-            <Text style={styles.summaryLabel}>Máy in</Text>
-            <Text style={styles.settingsStatusValue}>{printerReady ? "Sẵn sàng" : "Cần thiết lập"}</Text>
-          </View>
-          <View style={styles.settingsStatusTile}>
-            <Text style={styles.summaryLabel}>Két tiền</Text>
-            <Text style={styles.settingsStatusValue}>{printerReady ? "Tự mở" : "Theo máy in"}</Text>
-          </View>
-          <View style={styles.settingsStatusTile}>
-            <Text style={styles.summaryLabel}>Trạm in</Text>
-            <Text style={styles.settingsStatusValue}>{printStationReady ? "Đang chạy" : "Cần kiểm tra"}</Text>
-          </View>
-        </View>
-
-        <View style={styles.closeShiftBox}>
-          <Text style={styles.sectionCaption}>Kết nối & đồng bộ</Text>
-          <View style={styles.printerStatusCard}>
-            <View style={styles.printerStatusHead}>
-              <Text style={styles.printerStatusTitle}>Supabase</Text>
-              <View style={[
-                styles.printerBadge,
-                connectionStatus.online ? styles.printerBadgeReady : styles.printerBadgeIdle
-              ]}>
-                <Text style={[
-                  styles.printerBadgeText,
-                  connectionStatus.online ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle
-                ]}>
-                  {connectionStatus.checking
-                    ? "Đang kiểm tra"
-                    : connectionStatus.online == null
-                      ? "Chưa kiểm tra"
-                      : connectionStatus.online
-                        ? "Online"
-                        : "Offline"}
-                </Text>
+          <View style={styles.closeShiftBox}>
+            <Text style={styles.sectionCaption}>Tổng quan</Text>
+            <View style={styles.shiftSummary}>
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryLabel}>Chi nhánh</Text>
+                <Text style={styles.summaryValue} numberOfLines={1}>{branchName}</Text>
+              </View>
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryLabel}>Thu ngân</Text>
+                <Text style={styles.summaryValue} numberOfLines={1}>{cashierName}</Text>
+              </View>
+              <View style={styles.summaryCell}>
+                <Text style={styles.summaryLabel}>Đơn offline</Text>
+                <Text style={styles.summaryValue}>{offlineOrderCount} đơn</Text>
               </View>
             </View>
-            <Text style={styles.placeholderText}>
-              {connectionStatus.message || "Bấm kiểm tra để xem trạng thái kết nối."}
-            </Text>
-            <Text style={styles.noticeText}>
-              {offlineOrderCount
-                ? `${offlineOrderCount} đơn đang lưu tạm trong máy, sẽ đồng bộ khi có mạng.`
-                : "Không có đơn offline đang chờ đồng bộ."}
-            </Text>
           </View>
-          <View style={styles.printerStatusCard}>
-            <View style={styles.printerStatusHead}>
-              <Text style={styles.printerStatusTitle}>Trạm in tự động</Text>
-              <View style={[styles.printerBadge, printStationReady ? styles.printerBadgeReady : styles.printerBadgeIdle]}>
-                <Text style={[styles.printerBadgeText, printStationReady ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle]}>
-                  {printStationReady ? "Đang chạy" : "Chưa sẵn sàng"}
-                </Text>
+
+          <View style={styles.closeShiftBox}>
+            <Text style={styles.sectionCaption}>Thiết bị bán hàng</Text>
+            <View style={styles.printerStatusCard}>
+              <View style={styles.printerStatusHead}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.printerStatusTitle}>Máy in bill</Text>
+                  <Text style={styles.placeholderText}>{printerStatusText}</Text>
+                </View>
+                <View style={[styles.printerBadge, printerReady ? styles.printerBadgeReady : styles.printerBadgeIdle]}>
+                  <Text style={[styles.printerBadgeText, printerReady ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle]}>
+                    {printerReady ? "Sẵn sàng" : "Cần thiết lập"}
+                  </Text>
+                </View>
               </View>
             </View>
-            <Text style={styles.placeholderText}>
-              {printStationStatus?.message || "Trạm in sẽ tự khởi động sau khi đăng nhập chi nhánh."}
-            </Text>
-          </View>
-          <View style={styles.closeShiftActions}>
-            <Pressable
-              style={styles.smallGhostButton}
-              onPress={checkConnectionNow}
-              disabled={connectionStatus.checking || offlineSyncBusy}
-            >
-              <Text style={styles.smallGhostText}>Kiểm tra kết nối</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.closeShiftButton, offlineSyncBusy && styles.submitButtonDisabled]}
-              onPress={() => syncOfflineOrdersNow()}
-              disabled={offlineSyncBusy}
-            >
-              <Text style={[styles.closeShiftText, offlineSyncBusy && styles.disabledText]}>
-                {offlineSyncBusy ? "Đang đồng bộ" : "Đồng bộ ngay"}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
 
-        <View style={styles.closeShiftBox}>
-          <Text style={styles.sectionCaption}>Máy in bill</Text>
-          <View style={styles.printerStatusCard}>
-            <View style={styles.printerStatusHead}>
-              <Text style={styles.printerStatusTitle}>Trạng thái hiện tại</Text>
-              <View style={[styles.printerBadge, printerReady ? styles.printerBadgeReady : styles.printerBadgeIdle]}>
-                <Text style={[styles.printerBadgeText, printerReady ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle]}>
-                  {printerReady ? "Sẵn sàng" : "Chưa xong"}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.placeholderText}>{printerStatusText}</Text>
-          </View>
-
-          <View style={styles.printerStatusCard}>
-            <View style={styles.printerStatusHead}>
-              <Text style={styles.printerStatusTitle}>Két tiền</Text>
-              <View style={[styles.printerBadge, printerReady ? styles.printerBadgeReady : styles.printerBadgeIdle]}>
-                <Text style={[styles.printerBadgeText, printerReady ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle]}>
-                  {printerReady ? "Tự động" : "Chưa sẵn sàng"}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.placeholderText}>{drawerStatusText}</Text>
-          </View>
-
-          <View style={styles.modeRow}>
-            <Pressable
-              style={[styles.modeButton, printerConfig?.mode === "usb" && styles.modeButtonActive]}
-              onPress={() => handleSetPrinterMode("usb")}
-              disabled={printerBusy}
-            >
-              <Text style={[styles.modeButtonText, printerConfig?.mode === "usb" && styles.modeButtonTextActive]}>USB</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.modeButton, printerConfig?.mode === "lan" && styles.modeButtonActive]}
-              onPress={() => handleSetPrinterMode("lan")}
-              disabled={printerBusy}
-            >
-              <Text style={[styles.modeButtonText, printerConfig?.mode === "lan" && styles.modeButtonTextActive]}>LAN/WiFi</Text>
-            </Pressable>
-          </View>
-
-          {printerConfig?.mode === "lan" ? (
-            <View style={styles.field}>
-              <Text style={styles.label}>IP máy in LAN/WiFi</Text>
-              <TextInput
-                value={lanHost}
-                onChangeText={setLanHost}
-                placeholder="192.168.1.50"
-                placeholderTextColor="#94a3b8"
-                autoCapitalize="none"
-                style={styles.input}
-              />
-              <TextInput
-                value={lanPort}
-                onChangeText={setLanPort}
-                placeholder="9100"
-                placeholderTextColor="#94a3b8"
-                keyboardType="number-pad"
-                style={styles.input}
-              />
-              <Pressable style={styles.smallGhostButton} onPress={handleSaveLanPrinter} disabled={printerBusy}>
-                <Text style={styles.smallGhostText}>Lưu máy in LAN</Text>
+            <View style={styles.modeRow}>
+              <Pressable
+                style={[styles.modeButton, printerConfig?.mode !== "lan" && styles.modeButtonActive]}
+                onPress={() => handleSetPrinterMode("usb")}
+                disabled={printerBusy}
+              >
+                <Text style={[styles.modeButtonText, printerConfig?.mode !== "lan" && styles.modeButtonTextActive]}>USB</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modeButton, printerConfig?.mode === "lan" && styles.modeButtonActive]}
+                onPress={() => handleSetPrinterMode("lan")}
+                disabled={printerBusy}
+              >
+                <Text style={[styles.modeButtonText, printerConfig?.mode === "lan" && styles.modeButtonTextActive]}>LAN/WiFi</Text>
               </Pressable>
             </View>
-          ) : (
-            <View style={styles.field}>
-              <Text style={styles.label}>Máy in USB</Text>
-              {usbDevices.length ? (
-                usbDevices.map((device) => (
-                  <Pressable
-                    key={`${device.vendorId}-${device.productId}`}
-                    style={[styles.usbDeviceButton, device.selected && styles.usbDeviceButtonActive]}
-                    onPress={() => handleSelectUsbPrinter(device)}
-                    disabled={printerBusy}
-                  >
-                    <Text style={[styles.usbDeviceText, device.selected && styles.modeButtonTextActive]}>
-                      {device.label}
-                    </Text>
-                    <Text style={styles.usbStatusText}>
-                      {device.hasPermission ? "Sẵn sàng" : "Cần cấp quyền"}
-                    </Text>
-                  </Pressable>
-                ))
-              ) : (
-                <Text style={styles.placeholderText}>Chưa thấy máy in USB. Kiểm tra cáp OTG hoặc nguồn máy in.</Text>
-              )}
+
+            {printerConfig?.mode === "lan" ? (
+              <View style={styles.field}>
+                <Text style={styles.label}>IP máy in LAN/WiFi</Text>
+                <TextInput
+                  value={lanHost}
+                  onChangeText={setLanHost}
+                  placeholder="192.168.1.50"
+                  placeholderTextColor="#94a3b8"
+                  autoCapitalize="none"
+                  style={styles.input}
+                />
+                <TextInput
+                  value={lanPort}
+                  onChangeText={setLanPort}
+                  placeholder="9100"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="number-pad"
+                  style={styles.input}
+                />
+                <Pressable style={styles.smallGhostButton} onPress={handleSaveLanPrinter} disabled={printerBusy}>
+                  <Text style={styles.smallGhostText}>Lưu máy in LAN</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.printerPickerCard}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.printerStatusTitle}>Máy in USB đang chọn</Text>
+                  <Text style={styles.placeholderText} numberOfLines={1}>{selectedUsbLabel}</Text>
+                  <Text style={styles.noticeText}>{usbDevices.length} máy in được tìm thấy • Chế độ {printerModeText}</Text>
+                </View>
+                <Pressable
+                  style={styles.pickPrinterButton}
+                  onPress={() => setUsbPickerOpen(true)}
+                  disabled={printerBusy}
+                >
+                  <Text style={styles.pickPrinterText}>Chọn máy in</Text>
+                </Pressable>
+              </View>
+            )}
+
+            <View style={styles.printerStatusCard}>
+              <View style={styles.printerStatusHead}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.printerStatusTitle}>Két tiền</Text>
+                  <Text style={styles.placeholderText}>{drawerStatusText}</Text>
+                </View>
+                <View style={[styles.printerBadge, printerReady ? styles.printerBadgeReady : styles.printerBadgeIdle]}>
+                  <Text style={[styles.printerBadgeText, printerReady ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle]}>
+                    {printerReady ? "Tự mở" : "Chờ máy in"}
+                  </Text>
+                </View>
+              </View>
             </View>
-          )}
 
-          {!!printerMessage && <Text style={styles.noticeBox}>{printerMessage}</Text>}
+            {!!printerMessage && <Text style={styles.noticeBox}>{printerMessage}</Text>}
 
-          <View style={styles.closeShiftActions}>
-            <Pressable style={styles.smallGhostButton} onPress={refreshPrinterState} disabled={printerBusy}>
-              <Text style={styles.smallGhostText}>Tải lại máy in</Text>
-            </Pressable>
-            <Pressable style={[styles.closeShiftButton, printerBusy && styles.submitButtonDisabled]} onPress={handlePrinterTest} disabled={printerBusy}>
-              <Text style={[styles.closeShiftText, printerBusy && styles.disabledText]}>In test</Text>
-            </Pressable>
+            <View style={styles.closeShiftActions}>
+              <Pressable style={styles.smallGhostButton} onPress={handleRefreshPrinterState} disabled={printerBusy}>
+                <Text style={styles.smallGhostText}>Tải lại máy in</Text>
+              </Pressable>
+              <Pressable style={[styles.closeShiftButton, printerBusy && styles.submitButtonDisabled]} onPress={handlePrinterTest} disabled={printerBusy}>
+                <Text style={[styles.closeShiftText, printerBusy && styles.disabledText]}>In test</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.cashDrawerButton, printerBusy && styles.submitButtonDisabled]}
+                onPress={handleCashDrawerTest}
+                disabled={printerBusy}
+              >
+                <PosIcon name="cash" size={16} color={printerBusy ? POS_COLORS.muted : POS_COLORS.primaryDark} />
+                <Text style={[styles.cashDrawerButtonText, printerBusy && styles.disabledText]}>Mở két thử</Text>
+              </Pressable>
+            </View>
           </View>
-          <Pressable
-            style={[styles.cashDrawerButton, printerBusy && styles.submitButtonDisabled]}
-            onPress={handleCashDrawerTest}
-            disabled={printerBusy}
-          >
-            <PosIcon name="cash" size={16} color={printerBusy ? POS_COLORS.muted : POS_COLORS.primaryDark} />
-            <Text style={[styles.cashDrawerButtonText, printerBusy && styles.disabledText]}>Mở két thử</Text>
-          </Pressable>
-        </View>
 
-        <Pressable style={styles.smallGhostButton} onPress={refreshCurrentPosRuntime}>
-          <Text style={styles.smallGhostText}>Tải lại dữ liệu POS</Text>
-        </Pressable>
+          <View style={styles.closeShiftBox}>
+            <Text style={styles.sectionCaption}>Kết nối & đồng bộ</Text>
+            <View style={styles.printerStatusCard}>
+              <View style={styles.printerStatusHead}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.printerStatusTitle}>Supabase</Text>
+                  <Text style={styles.placeholderText}>
+                    {connectionStatus.message || "Bấm kiểm tra để xem trạng thái kết nối."}
+                  </Text>
+                </View>
+                <View style={[
+                  styles.printerBadge,
+                  connectionStatus.online ? styles.printerBadgeReady : styles.printerBadgeIdle
+                ]}>
+                  <Text style={[
+                    styles.printerBadgeText,
+                    connectionStatus.online ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle
+                  ]}>
+                    {connectionText}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.noticeText}>
+                {offlineOrderCount
+                  ? `${offlineOrderCount} đơn đang lưu tạm trong máy, sẽ đồng bộ khi có mạng.`
+                  : "Không có đơn offline đang chờ đồng bộ."}
+              </Text>
+            </View>
+
+            <View style={styles.printerStatusCard}>
+              <View style={styles.printerStatusHead}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.printerStatusTitle}>Trạm in tự động</Text>
+                  <Text style={styles.placeholderText}>
+                    {printStationStatus?.message || "Trạm in sẽ tự khởi động sau khi đăng nhập chi nhánh."}
+                  </Text>
+                </View>
+                <View style={[styles.printerBadge, printStationReady ? styles.printerBadgeReady : styles.printerBadgeIdle]}>
+                  <Text style={[styles.printerBadgeText, printStationReady ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle]}>
+                    {printStationReady ? "Đang chạy" : "Cần kiểm tra"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.closeShiftActions}>
+              <Pressable
+                style={styles.smallGhostButton}
+                onPress={checkConnectionNow}
+                disabled={connectionStatus.checking || offlineSyncBusy}
+              >
+                <Text style={styles.smallGhostText}>Kiểm tra kết nối</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.closeShiftButton, offlineSyncBusy && styles.submitButtonDisabled]}
+                onPress={() => syncOfflineOrdersNow()}
+                disabled={offlineSyncBusy}
+              >
+                <Text style={[styles.closeShiftText, offlineSyncBusy && styles.disabledText]}>
+                  {offlineSyncBusy ? "Đang đồng bộ" : "Đồng bộ ngay"}
+                </Text>
+              </Pressable>
+              <Pressable style={styles.smallGhostButton} onPress={refreshCurrentPosRuntime}>
+                <Text style={styles.smallGhostText}>Tải lại POS</Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </ScrollView>
     );
@@ -1147,6 +1039,14 @@ export default function PosHomeScreen() {
         onConfirmPaid={confirmQrPaidManually}
         onPrint={printQrReceiptNow}
       />
+      <UsbPrinterPickerModal
+        visible={usbPickerOpen}
+        devices={usbDevices}
+        busy={printerBusy}
+        onClose={() => setUsbPickerOpen(false)}
+        onRefresh={handleRefreshPrinterState}
+        onSelect={handleSelectUsbPrinter}
+      />
     </View>
   );
 }
@@ -1227,30 +1127,6 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     gap: 8
-  },
-  settingsStatusGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  settingsStatusTile: {
-    flex: 1,
-    minWidth: 132,
-    minHeight: 58,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
-    backgroundColor: POS_COLORS.subtleSurface,
-    borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    justifyContent: "center"
-  },
-  settingsStatusValue: {
-    color: POS_COLORS.heading,
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: "900"
   },
   shiftHeroRow: {
     flexDirection: "row",
@@ -1364,6 +1240,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900"
   },
+  printerPickerCard: {
+    minHeight: 74,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    padding: 12
+  },
+  pickPrinterButton: {
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: POS_COLORS.primaryDark,
+    backgroundColor: POS_COLORS.primary,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  pickPrinterText: {
+    color: POS_COLORS.surface,
+    fontSize: 13,
+    fontWeight: "900"
+  },
   printerBadge: {
     borderWidth: 1,
     borderRadius: 999,
@@ -1415,7 +1317,7 @@ const styles = StyleSheet.create({
   },
   modeButton: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
@@ -1435,31 +1337,9 @@ const styles = StyleSheet.create({
   modeButtonTextActive: {
     color: POS_COLORS.primaryDark
   },
-  usbDeviceButton: {
-    gap: 4,
-    borderWidth: 1,
-    borderColor: POS_COLORS.inputBorder,
-    backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
-    padding: 10
-  },
-  usbDeviceButtonActive: {
-    borderColor: "#9fd5ae",
-    backgroundColor: POS_COLORS.primarySoft
-  },
-  usbDeviceText: {
-    color: POS_COLORS.heading,
-    fontSize: 12,
-    fontWeight: "900"
-  },
-  usbStatusText: {
-    color: POS_COLORS.muted,
-    fontSize: 11,
-    fontWeight: "800"
-  },
   closeShiftButton: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,
@@ -1474,7 +1354,7 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   cashDrawerButton: {
-    minHeight: 40,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1834,7 +1714,7 @@ const styles = StyleSheet.create({
     color: POS_COLORS.muted
   },
   smallGhostButton: {
-    minHeight: 38,
+    minHeight: 46,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
