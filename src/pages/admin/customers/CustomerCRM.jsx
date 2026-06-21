@@ -3,6 +3,10 @@ import Icon from "../../../components/Icon.jsx";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { getCustomerLoyaltyDetailAsync, getCustomerRecentOrdersAsync } from "../../../services/crmService.js";
 import { getOrderSourceBadge } from "../../../services/partnerOrderService.js";
+import {
+  buildLoyaltyOrderPointLookup,
+  resolveOrderPointStatus
+} from "../../../services/loyaltyLedgerUtils.js";
 import { formatMoney } from "../../../utils/format.js";
 
 const INITIAL_DETAIL_ORDER_LIMIT = 3;
@@ -24,49 +28,17 @@ function getOrderStatusLabel(status) {
   return "Chờ xác nhận";
 }
 
-function getOrderIdentityValues(order = {}) {
-  return [
-    order.id,
-    order.orderCode,
-    order.displayOrderCode,
-    order.nexposOrderId
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-}
-
-function hasOrderEarnLedger(order = {}, pointRows = []) {
-  const orderKeys = new Set(getOrderIdentityValues(order));
-  if (!orderKeys.size) return false;
-  return (pointRows || []).some((entry) => {
-    const type = String(entry?.type || "").toUpperCase();
-    if (!["ORDER_EARN", "PARTNER_ORDER_EARN"].includes(type)) return false;
-    return getOrderIdentityValues({
-      id: entry.orderId,
-      orderCode: entry.partnerOrderCode,
-      displayOrderCode: entry.displayOrderCode,
-      nexposOrderId: entry.partnerOrderId
-    }).some((key) => orderKeys.has(key));
-  });
-}
-
-function getOrderPointStatus(order = {}, pointRows = []) {
-  const rawStatus = String(order.pointStatus || order.point_status || "").trim().toLowerCase();
-  const hasLedger = Number(order.pointsEarned || 0) > 0 || hasOrderEarnLedger(order, pointRows);
-  if (hasLedger) return { key: "claimed", label: "Đã tích điểm" };
-  if (rawStatus === "claimed") return { key: "claimed", label: "Đã tích điểm" };
-  if (["rejected", "expired", "cancelled", "canceled"].includes(rawStatus)) return { key: "blocked", label: "Không tích điểm" };
-  if (rawStatus === "pending") return { key: "pending", label: "Chưa tích điểm" };
-  if (["done", "completed", "complete"].includes(String(order.status || "").trim().toLowerCase())) {
-    return { key: "pending", label: "Chưa tích điểm" };
-  }
-  if (order.sourceType === "partner" || order.partnerSource) return { key: "pending", label: "Chưa tích điểm" };
+function getOrderPointStatus(order = {}, loyaltyLookup = {}) {
+  const status = resolveOrderPointStatus(order, loyaltyLookup);
+  if (status === "claimed") return { key: "claimed", label: "Đã tích điểm" };
+  if (status === "blocked") return { key: "blocked", label: "Không tích điểm" };
+  if (status === "pending") return { key: "pending", label: "Chưa tích điểm" };
   return { key: "unknown", label: "Chưa rõ" };
 }
 
-function getOrderPointSummary(orders = [], pointRows = []) {
+function getOrderPointSummary(orders = [], loyaltyLookup = {}) {
   return orders.reduce((summary, order) => {
-    const status = getOrderPointStatus(order, pointRows).key;
+    const status = getOrderPointStatus(order, loyaltyLookup).key;
     if (status === "claimed") return { ...summary, claimed: summary.claimed + 1 };
     if (status === "pending") return { ...summary, pending: summary.pending + 1 };
     if (status === "blocked") return { ...summary, blocked: summary.blocked + 1 };
@@ -367,9 +339,13 @@ export default function CustomerCRM({
     ? loyaltyDetailByPhone[selectedCustomerPhoneKey] || null
     : null;
   const selectedPointRows = selectedLoyaltyDetail?.rows || selectedCustomer?.pointsHistory || [];
+  const selectedPointLookup = useMemo(
+    () => buildLoyaltyOrderPointLookup(selectedPointRows),
+    [selectedPointRows]
+  );
   const selectedPointSummary = useMemo(
-    () => getOrderPointSummary(selectedOrders, selectedPointRows),
-    [selectedOrders, selectedPointRows]
+    () => getOrderPointSummary(selectedOrders, selectedPointLookup),
+    [selectedOrders, selectedPointLookup]
   );
 
   const sortedSelectedVouchers = useMemo(() => {
@@ -601,7 +577,7 @@ export default function CustomerCRM({
                           <strong>{formatMoney(Number(order.totalAmount || order.total || 0))}</strong>
                           <em>{getOrderStatusLabel(order.status)}</em>
                           {(() => {
-                            const pointStatus = getOrderPointStatus(order, selectedPointRows);
+                            const pointStatus = getOrderPointStatus(order, selectedPointLookup);
                             return (
                               <em className={`crm-point-order-badge crm-point-order-badge--${pointStatus.key}`}>
                                 {pointStatus.label}

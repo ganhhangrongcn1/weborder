@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import AppHeader from "../../components/app/Header.jsx";
 import AppEmptyState from "../../components/app/EmptyState.jsx";
@@ -19,11 +19,64 @@ import {
   getCustomerOrderDisplayStatus,
   getCustomerOrderStatusToneClass
 } from "../../services/customerOrderStatusService.js";
+import {
+  buildCustomerOrderPointStatusMap,
+  getCustomerOrderPointStatuses,
+  resolveCustomerOrderPointStatus
+} from "../../services/customerOrderPointStatusService.js";
 import { getCustomerOrderSummary } from "../../services/orderSummaryService.js";
+import {
+  buildLoyaltyOrderPointLookup,
+  resolveOrderPointStatus
+} from "../../services/loyaltyLedgerUtils.js";
 import useGuestOrderLookup from "./hooks/useGuestOrderLookup.js";
 
 const ORDER_HISTORY_PAGE_SIZE = 4;
 const POST_LOGIN_REDIRECT_KEY = "ghr_post_login_redirect";
+
+function markOrdersPointStatus(orders = [], loyaltyLookup = {}) {
+  return (orders || []).map((order) => ({
+    ...order,
+    pointStatus: resolveOrderPointStatus(order, loyaltyLookup)
+  }));
+}
+
+function markOrdersPointStatusFromRpc(orders = [], statusMap = new Map(), loyaltyLookup = {}) {
+  return (orders || []).map((order) => {
+    const pointStatus = resolveCustomerOrderPointStatus(statusMap, order);
+    if (pointStatus) {
+      return {
+        ...order,
+        pointStatus
+      };
+    }
+    return {
+      ...order,
+      pointStatus: resolveOrderPointStatus(order, loyaltyLookup)
+    };
+  });
+}
+
+function createClaimedPointStatusMap(previousMap = new Map(), order = {}) {
+  const nextMap = new Map(previousMap);
+  [
+    order?.id,
+    order?.orderCode,
+    order?.order_code,
+    order?.displayOrderCode,
+    order?.display_order_code,
+    order?.partnerOrderId,
+    order?.partner_order_id,
+    order?.partnerOrderCode,
+    order?.partner_order_code
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .forEach((key) => {
+      nextMap.set(key, "claimed");
+    });
+  return nextMap;
+}
 
 export default function Tracking({
   navigate,
@@ -55,6 +108,7 @@ export default function Tracking({
     claimedPoints: 0,
     pendingPoints: 0
   });
+  const [currentOrderPointStatusMap, setCurrentOrderPointStatusMap] = useState(() => new Map());
   const guestLookup = useGuestOrderLookup();
 
   const historyOrders = Array.isArray(userProfile?.orderHistory) ? userProfile.orderHistory : [];
@@ -65,6 +119,7 @@ export default function Tracking({
     setVisibleOrderCount(ORDER_HISTORY_PAGE_SIZE);
     setLoadedHistoryOrders([]);
     setPartnerOrders([]);
+    setCurrentOrderPointStatusMap(new Map());
   }, [currentPhone]);
 
   useEffect(() => {
@@ -115,6 +170,36 @@ export default function Tracking({
     };
   }, [currentPhone, visibleOrderCount]);
 
+  useEffect(() => {
+    let disposed = false;
+
+    async function loadCurrentOrderPointStatuses() {
+      if (!currentPhone) {
+        setCurrentOrderPointStatusMap(new Map());
+        return;
+      }
+
+      try {
+        const rows = await getCustomerOrderPointStatuses(currentPhone, { limit: 300 });
+        if (!disposed) {
+          setCurrentOrderPointStatusMap(buildCustomerOrderPointStatusMap(rows));
+        }
+      } catch (error) {
+        if (import.meta?.env?.DEV) {
+          console.warn("[orders] load current order point statuses failed", error);
+        }
+        if (!disposed) {
+          setCurrentOrderPointStatusMap(new Map());
+        }
+      }
+    }
+
+    loadCurrentOrderPointStatuses();
+    return () => {
+      disposed = true;
+    };
+  }, [currentPhone, summaryRefreshKey]);
+
   const mergedOrders = mergeCustomerLookupOrders(
     [...baseHistoryOrders, ...fallbackOrder]
     .filter(Boolean)
@@ -128,8 +213,16 @@ export default function Tracking({
     }, []),
     partnerOrders
   );
+  const loyaltyLookup = useMemo(
+    () => buildLoyaltyOrderPointLookup(demoLoyalty?.pointHistory || []),
+    [demoLoyalty?.pointHistory]
+  );
+  const resolvedCurrentOrders = useMemo(
+    () => markOrdersPointStatusFromRpc(mergedOrders, currentOrderPointStatusMap, loyaltyLookup),
+    [currentOrderPointStatusMap, loyaltyLookup, mergedOrders]
+  );
 
-  const orders = [...(currentPhone ? mergedOrders : guestLookup.orders)].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
+  const orders = [...(currentPhone ? resolvedCurrentOrders : guestLookup.orders)].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
   const searchedOrders = currentPhone && orderSearch.trim()
     ? orders.filter((order) => {
         const keyword = orderSearch.trim().toLowerCase();
@@ -249,6 +342,7 @@ export default function Tracking({
 
       if (result.alreadyClaimed) {
         updateClaimedPartnerOrder(order.id);
+        setCurrentOrderPointStatusMap((previousMap) => createClaimedPointStatusMap(previousMap, order));
         setSummaryRefreshKey((key) => key + 1);
         setSelectedOrder((selected) => (
           String(selected?.id || "") === String(order.id)
@@ -273,6 +367,7 @@ export default function Tracking({
       }
 
       updateClaimedPartnerOrder(order.id);
+      setCurrentOrderPointStatusMap((previousMap) => createClaimedPointStatusMap(previousMap, order));
       setSummaryRefreshKey((key) => key + 1);
       setSelectedOrder((selected) => (
         String(selected?.id || "") === String(order.id)
@@ -555,12 +650,12 @@ export default function Tracking({
                         <Icon name="gift" size={14} className="shrink-0" />
                         {isClaiming ? "Đang nhận..." : `Nhận +${rewardPoints.toLocaleString("vi-VN")}`}
                       </button>
-                    ) : (
-                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-green-50 px-4 py-2 text-sm font-black text-green-700">
-                        <Icon name="check" size={14} className="shrink-0" />
-                        Đã nhận
+                    ) : pointBadge ? (
+                      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-black ${pointBadge.className}`}>
+                        <Icon name={String(order.pointStatus || "").toLowerCase() === "claimed" ? "check" : "clock"} size={14} className="shrink-0" />
+                        {pointBadge.label}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 </CustomerCard>
               );

@@ -114,9 +114,9 @@ function getStatusClass(status) {
   return STATUS_META[status]?.className || STATUS_META.doing.className;
 }
 
-function hasClaimedPartnerPoints(order = {}) {
+function isBlockedPointStatus(order = {}) {
   const status = String(order?.pointStatus || order?.point_status || "").trim().toLowerCase();
-  return ["claimed", "completed", "done", "success"].includes(status);
+  return ["rejected", "expired", "cancelled", "canceled"].includes(status);
 }
 
 function getPointStatusText(order = {}, estimatedPoints = 0) {
@@ -131,6 +131,15 @@ function getPointStatusText(order = {}, estimatedPoints = 0) {
 
 function OrderStatusBadge({ status }) {
   return <span className={`admin-order-status-badge ${getStatusClass(status)}`}>{getStatusLabel(status)}</span>;
+}
+
+function hasClaimedPartnerPoints() {
+  return false;
+}
+
+function getUnifiedPointStatusText(order = {}, estimatedPoints = 0) {
+  if (isBlockedPointStatus(order)) return "Không tích điểm";
+  return estimatedPoints > 0 ? `Dự kiến +${estimatedPoints.toLocaleString("vi-VN")} điểm` : "Không có điểm";
 }
 
 function OrderStatsCards({ stats }) {
@@ -441,7 +450,7 @@ function OrderDetailPanel({
   const pointsBaseAmount = Number(order.pointsBaseAmount || Math.max(totalValue - shippingFee, 0));
   const loyaltyRule = getLoyaltyRuleConfig();
   const estimatedPoints = Math.max(0, calculateOrderPoints(pointsBaseAmount, loyaltyRule));
-  const pointStatusText = getPointStatusText(order, estimatedPoints);
+  const pointStatusText = getUnifiedPointStatusText(order, estimatedPoints);
   const shouldShowShipperSection = fulfillmentType === "delivery" && !isPartnerOrder && sourceKey === "website";
 
   return (

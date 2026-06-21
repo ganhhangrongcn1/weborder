@@ -102,6 +102,14 @@ export function buildLoyaltyOrderPointLookup(entries = []) {
   return { orderPoints, partnerOrderPoints };
 }
 
+export function normalizeOrderPointStatus(value = "") {
+  return toText(value).toLowerCase();
+}
+
+export function isBlockedOrderPointStatus(value = "") {
+  return ["rejected", "expired", "cancelled", "canceled"].includes(normalizeOrderPointStatus(value));
+}
+
 export function getNetOrderPoints(lookup = {}, order = {}) {
   const sourceType = toText(order?.sourceType || order?.source_type).toLowerCase();
   const keys = [
@@ -120,6 +128,12 @@ export function getNetOrderPoints(lookup = {}, order = {}) {
     .filter(Boolean);
   const map = sourceType === "partner" || order?.partnerSource ? lookup.partnerOrderPoints : lookup.orderPoints;
   return keys.reduce((sum, key) => sum + toPoints(map?.get(key)), 0);
+}
+
+export function resolveOrderPointStatus(order = {}, lookup = {}) {
+  const rawStatus = normalizeOrderPointStatus(order?.pointStatus || order?.point_status || "");
+  if (isBlockedOrderPointStatus(rawStatus)) return "blocked";
+  return getNetOrderPoints(lookup, order) > 0 ? "claimed" : "pending";
 }
 
 export function formatSignedLoyaltyPoints(points = 0) {

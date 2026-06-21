@@ -1431,6 +1431,97 @@ async function processLoyaltyCheckin({ idempotencyKey = "" } = {}) {
   return Array.isArray(data) ? data[0] || null : data || null;
 }
 
+async function auditLoyaltyReconcileBacklog({
+  customerPhone = "",
+  sourceType = "",
+  limit = 200
+} = {}) {
+  if (!isSupabaseReady()) return [];
+  const client = await getSupabaseClientAsync();
+  if (!client) return [];
+
+  const { data, error } = await client.rpc("audit_loyalty_reconcile_backlog", {
+    p_customer_phone: String(customerPhone || "").trim() || null,
+    p_source_type: String(sourceType || "").trim().toUpperCase() || null,
+    p_limit: Math.max(1, Math.min(1000, Number(limit || 200)))
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function reconcileLoyaltyBacklog({
+  customerPhone = "",
+  sourceType = "",
+  limit = 200,
+  dryRun = true
+} = {}) {
+  if (!isSupabaseReady()) return [];
+  const client = await getSupabaseClientAsync();
+  if (!client) return [];
+
+  const { data, error } = await client.rpc("reconcile_loyalty_backlog", {
+    p_customer_phone: String(customerPhone || "").trim() || null,
+    p_source_type: String(sourceType || "").trim().toUpperCase() || null,
+    p_limit: Math.max(1, Math.min(1000, Number(limit || 200))),
+    p_dry_run: dryRun !== false
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function auditLoyaltyReconcilePlan({
+  customerPhone = "",
+  sourceType = "",
+  limit = 200
+} = {}) {
+  if (!isSupabaseReady()) return [];
+  const client = await getSupabaseClientAsync();
+  if (!client) return [];
+
+  const { data, error } = await client.rpc("audit_loyalty_reconcile_plan", {
+    p_customer_phone: String(customerPhone || "").trim() || null,
+    p_source_type: String(sourceType || "").trim().toUpperCase() || null,
+    p_limit: Math.max(1, Math.min(1000, Number(limit || 200)))
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function reconcileLoyaltyBacklogSafe({
+  customerPhone = "",
+  sourceType = "",
+  limit = 200,
+  dryRun = true
+} = {}) {
+  if (!isSupabaseReady()) return [];
+  const client = await getSupabaseClientAsync();
+  if (!client) return [];
+
+  const { data, error } = await client.rpc("reconcile_loyalty_backlog_safe", {
+    p_customer_phone: String(customerPhone || "").trim() || null,
+    p_source_type: String(sourceType || "").trim().toUpperCase() || null,
+    p_limit: Math.max(1, Math.min(1000, Number(limit || 200))),
+    p_dry_run: dryRun !== false
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function getCustomerOrderPointStatuses(phone = "", { limit = 200 } = {}) {
+  if (!isSupabaseReady()) return [];
+  const client = await getSupabaseClientAsync();
+  if (!client) return [];
+  const key = normalizePhone(phone);
+  if (!key) return [];
+
+  const { data, error } = await client.rpc("get_customer_order_point_statuses", {
+    p_customer_phone: key,
+    p_limit: Math.max(1, Math.min(500, Number(limit || 200)))
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
 async function applyLoyaltyEvent({
   phone = "",
   entryType = "OTHER",
@@ -1784,6 +1875,11 @@ export const coreSupabaseRepository = {
   readLoyaltyLedgerByPhonePaged,
   processOrderLoyalty,
   processLoyaltyCheckin,
+  auditLoyaltyReconcileBacklog,
+  reconcileLoyaltyBacklog,
+  auditLoyaltyReconcilePlan,
+  reconcileLoyaltyBacklogSafe,
+  getCustomerOrderPointStatuses,
   applyLoyaltyEvent,
   writeLoyaltyByPhoneToTable,
   writeLoyaltyPhoneToTable,
