@@ -2,7 +2,7 @@ import { getCustomerKey } from "./storageService.js";
 import { orderRepository } from "./repositories/orderRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
 import { composeMemberLoyaltySnapshot } from "./memberLoyaltySnapshotService.js";
-import { applyOrderLoyalty, applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfig, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
+import { applyOrderLoyalty, applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 
 const DONE_ORDER_STATUSES = new Set(["done", "completed", "hoan tat"]);
 
@@ -337,108 +337,6 @@ function finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, s
   setCurrentOrder(savedOrder);
   setOrderStatus("pending_zalo");
   setCart([]);
-}
-
-export function createOrder({ cart, totalAmount, pointsBaseAmount, shippingFee = 0, originalShippingFee = shippingFee, shippingSupportDiscount = 0, promoDiscount = 0, promoCode = "", promoSource = "", promoVoucherId = "", pointsSpent = 0, pointsDiscount = 0, pointsDiscountAmount = pointsDiscount, distanceKm = null, lat = null, lng = null, deliveryInfo, fulfillmentType, branchInfo = null, pickupTimeText = "", paymentMethod, orderSource = "online", userProfile, currentPhone, setDemoOrdersState, setDemoLoyaltyState, addressStorage, updateAddress, addAddress, setDefaultAddress, setDemoAddressesState, setUserProfile, getMemberRank, setCurrentOrder, setOrderStatus, setCart, saveDemoUser }) {
-  if (!cart.length) return null;
-  const orderCode = `GHR-${Date.now().toString().slice(-4)}`;
-  const createdAt = new Date().toISOString();
-  const subtotalAmount = Number(
-    cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
-  );
-  const pointsAmount = Number(
-    pointsBaseAmount ?? Math.max(subtotalAmount - Number(promoDiscount || 0), 0)
-  );
-  const pointsEarned = calculateOrderPoints(pointsAmount, getLoyaltyRuleConfig());
-  const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
-  const order = {
-    id: orderCode,
-    orderCode,
-    phone: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
-    customerPhoneKey: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
-    rawCustomerPhone: deliveryInfo?.phone || userProfile.phone || "",
-    items: cart,
-    subtotal: subtotalAmount,
-    pointsBaseAmount: pointsAmount,
-    shippingFee,
-    originalShippingFee,
-    shippingSupportDiscount,
-    promoDiscount,
-    promoCode,
-    promoSource,
-    promoVoucherId,
-    pointsSpent,
-    pointsDiscount,
-    pointsDiscountAmount,
-    distanceKm,
-    deliveryFee: shippingFee,
-    lat,
-    lng,
-    total: totalAmount,
-    totalAmount,
-    createdAt,
-    status: "pending_zalo",
-    customerName: deliveryInfo?.name || userProfile.name,
-    orderCustomerName: deliveryInfo?.name || userProfile.name,
-    customerPhone: deliveryInfo?.phone || userProfile.phone,
-    fulfillmentType,
-    branchId: branchIdentifiers.branchId,
-    branchUuid: branchIdentifiers.branchUuid,
-    branchName: branchInfo?.name || "",
-    branchAddress: branchInfo?.address || "",
-    pickupBranchId: branchIdentifiers.pickupBranchId,
-    pickupBranchUuid: branchIdentifiers.pickupBranchUuid,
-    pickupBranchName: fulfillmentType === "pickup" ? (branchInfo?.name || "") : "",
-    pickupBranchAddress: fulfillmentType === "pickup" ? (branchInfo?.address || "") : "",
-    deliveryBranchId: branchIdentifiers.deliveryBranchId,
-    deliveryBranchUuid: branchIdentifiers.deliveryBranchUuid,
-    deliveryBranchName: fulfillmentType === "delivery" ? (branchInfo?.name || "") : "",
-    deliveryBranchAddress: fulfillmentType === "delivery" ? (branchInfo?.address || "") : "",
-    pickupTimeText,
-    deliveryAddress: fulfillmentType === "pickup" ? "Khach tu den lay" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
-    paymentMethod,
-    source: orderSource,
-    channel: orderSource,
-    platform: orderSource,
-    orderSource,
-    pointsEarned
-  };
-  const savedOrder = orderStorage.addOrder(order);
-  saveCreatedOrderCustomerMarker({ order, currentPhone, saveDemoUser });
-  syncCreatedOrderList({ order, currentPhone, setDemoOrdersState });
-  const nextPhoneLoyalty = applyCreatedOrderLoyalty({
-    order,
-    pointsAmount,
-    createdAt,
-    promoSource,
-    promoVoucherId,
-    promoCode,
-    pointsDiscount,
-    currentPhone,
-    setDemoLoyaltyState
-  });
-  saveCreatedOrderAddress({
-    order,
-    deliveryInfo,
-    fulfillmentType,
-    currentPhone,
-    addressStorage,
-    updateAddress,
-    addAddress,
-    setDefaultAddress,
-    setDemoAddressesState
-  });
-  updateCreatedOrderProfile({
-    savedOrder,
-    totalAmount,
-    deliveryInfo,
-    fulfillmentType,
-    nextPhoneLoyalty,
-    setUserProfile,
-    getMemberRank
-  });
-  finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, setCart });
-  return order;
 }
 
 export async function createOrderAsync(params) {

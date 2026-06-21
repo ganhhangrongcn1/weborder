@@ -1,5 +1,4 @@
 import { getCustomerKey } from "./storageService.js";
-import { getDataSource } from "./repositories/dataSource.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import {
   buildOrderLoyaltyIdempotencyKey,
@@ -283,71 +282,6 @@ export async function applyOrderLoyaltyAsync({
   return loyaltyRepository.getByPhoneAsync(key, {
     ...phoneLoyalty,
     phone: key
-  });
-}
-
-export function reconcileLoyaltyFromOrders(phone, orderStorage) {
-  const key = getCustomerKey(phone);
-  if (!key) return defaultLoyaltyData;
-  if (getDataSource() === "supabase") {
-    return normalizeLoyaltyData(
-      loyaltyRepository.getByPhone(key, {
-        ...defaultLoyaltyData,
-        phone: key
-      })
-    );
-  }
-  const orders = orderStorage.getByPhone(key);
-  const loyalty = loyaltyByPhoneStorage.getByPhone(key);
-  const currentPointHistory = Array.isArray(loyalty.pointHistory) ? loyalty.pointHistory : [];
-  const nonOrderEntries = currentPointHistory.filter(
-    (entry) => String(entry?.type || "").toUpperCase() !== "ORDER_EARN"
-  );
-
-  const byOrderId = new Map();
-  orders.forEach((order) => {
-    const orderId = String(order?.orderCode || "").trim();
-    if (!orderId) return;
-    const amount = Number(
-      order.pointsBaseAmount ??
-        Math.max(
-          Number(order.subtotal ?? order.totalAmount ?? order.total ?? 0) -
-            Number(order.promoDiscount || 0),
-          0
-        )
-    );
-    const points = Number(order.pointsEarned ?? calculateOrderPoints(amount));
-    if (points <= 0) return;
-    const createdAt = order.createdAt || new Date().toISOString();
-    const existing = byOrderId.get(orderId);
-    if (!existing || new Date(createdAt).getTime() > new Date(existing.createdAt || 0).getTime()) {
-      byOrderId.set(orderId, {
-        id: `point-${orderId}`,
-        type: "ORDER_EARN",
-        orderId,
-        points,
-        amount,
-        createdAt,
-        note: "Tich diem tu don hang",
-        title: `Tich diem don ${orderId}`
-      });
-    }
-  });
-
-  const orderEntries = Array.from(byOrderId.values()).sort(
-    (a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0)
-  );
-  const nextPointHistory = [...orderEntries, ...nonOrderEntries];
-  const nextTotalPoints = nextPointHistory.reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
-  const prevTotal = Number(loyalty.totalPoints || 0);
-  const prevLen = currentPointHistory.length;
-  if (prevLen === nextPointHistory.length && prevTotal === nextTotalPoints) {
-    return normalizeLoyaltyData(loyalty);
-  }
-  return loyaltyByPhoneStorage.saveByPhone(key, {
-    ...loyalty,
-    totalPoints: Math.max(0, nextTotalPoints),
-    pointHistory: nextPointHistory
   });
 }
 

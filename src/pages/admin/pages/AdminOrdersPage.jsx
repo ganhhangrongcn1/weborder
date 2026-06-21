@@ -15,8 +15,6 @@ export default function AdminOrdersPage({
   refreshAdminOrdersFromRealtime,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
-  onAdjustPoints,
-  onResetPoints,
   onGiftVoucher,
   orderStorage,
   branches = [],
@@ -170,8 +168,6 @@ export default function AdminOrdersPage({
         setCrmSnapshot={setCrmSnapshot}
         selectedCustomerPhone={selectedCustomerPhone}
         setSelectedCustomerPhone={setSelectedCustomerPhone}
-        onAdjustPoints={onAdjustPoints}
-        onResetPoints={onResetPoints}
         onGiftVoucher={onGiftVoucher}
         orderStorage={orderStorage}
         branches={branches}

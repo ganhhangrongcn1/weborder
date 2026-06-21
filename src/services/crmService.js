@@ -12,7 +12,6 @@ import {
 } from "./customerOrderCountingService.js";
 import { getMonthlyCustomerGiftStatsByPhonesRpc } from "./customerOrderCountingRpcService.js";
 import { getAdminCrmAnalyticsRpc } from "./adminCrmAnalyticsService.js";
-import { getDataSource } from "./repositories/dataSource.js";
 import { activateLoyaltyRuleVersion, normalizeLoyaltyRuleVersionPayload } from "./loyaltyRuleVersionService.js";
 import { hasDateRange } from "../utils/adminDateRange.js";
 import {
@@ -58,11 +57,6 @@ function dedupeOrdersByIdentity(orders = []) {
     }
     return map;
   }, new Map()).values()];
-}
-
-function getPhoneRecord(allByPhone, phone) {
-  const key = getCustomerKey(phone);
-  return allByPhone[key] || { manualAdjust: 0, vouchers: [], updatedAt: null };
 }
 
 function normalizeName(value) {
@@ -134,15 +128,6 @@ export function saveCustomersMeta(next) {
   return customerRepository.saveCustomersMeta(next || {});
 }
 
-export function loadLoyaltyConfig() {
-  const saved = loyaltyRepository.getCrmConfig(defaultLoyaltyConfig);
-  return {
-    ...defaultLoyaltyConfig,
-    ...(saved || {}),
-    byPhone: { ...(saved?.byPhone || {}) }
-  };
-}
-
 function normalizeLoyaltyConfigInput(next) {
   const incomingStreakRewards = next?.streakRewards || {};
   return {
@@ -156,11 +141,6 @@ function normalizeLoyaltyConfigInput(next) {
     },
     byPhone: { ...(next?.byPhone || {}) }
   };
-}
-
-export function saveLoyaltyConfig(next) {
-  const normalized = normalizeLoyaltyConfigInput(next);
-  return loyaltyRepository.saveCrmConfig(normalized);
 }
 
 export async function saveLoyaltyConfigAsync(next) {
@@ -333,21 +313,6 @@ export function getCustomerTier(totalSpent = 0) {
   if (amount >= 2500000) return "Vàng";
   if (amount >= 1000000) return "Bạc";
   return "Đồng";
-}
-
-export function buildCustomersFromOrders(orderStorage) {
-  const orders = orderStorage?.getAll?.() || [];
-  const loyalty = loadLoyaltyConfig();
-  const customerMeta = loadCustomersMeta();
-  const registeredUsers = customerRepository.getUsers();
-  const loyaltyByPhone = loyaltyRepository.getAllByPhone();
-  return buildCustomersSnapshotFromSources({
-    orders,
-    loyalty,
-    customerMeta,
-    registeredUsers,
-    loyaltyByPhone
-  });
 }
 
 export async function buildCustomersFromOrdersAsync(orderStorage, options = {}) {
@@ -622,50 +587,6 @@ function buildCustomersSnapshotFromSources({
       matchedCustomerCount: comparedCustomers.length - mismatchedCustomers.length
     }
   };
-}
-
-export function adjustCustomerPoints(phone, deltaPoints) {
-  if (getDataSource() === "supabase") {
-    throw new Error("Điều chỉnh điểm kiểu cũ đã bị tắt trong chế độ Supabase.");
-  }
-  const key = getCustomerKey(phone);
-  if (!key) return loadLoyaltyConfig();
-  const loyalty = loadLoyaltyConfig();
-  const current = getPhoneRecord(loyalty.byPhone, key);
-  const next = {
-    ...loyalty,
-    byPhone: {
-      ...loyalty.byPhone,
-      [key]: {
-        ...current,
-        manualAdjust: Number(current.manualAdjust || 0) + Number(deltaPoints || 0),
-        updatedAt: new Date().toISOString()
-      }
-    }
-  };
-  return saveLoyaltyConfig(next);
-}
-
-export function resetCustomerPoints(phone, autoPoints = 0) {
-  if (getDataSource() === "supabase") {
-    throw new Error("Reset điểm kiểu cũ đã bị tắt trong chế độ Supabase.");
-  }
-  const key = getCustomerKey(phone);
-  if (!key) return loadLoyaltyConfig();
-  const loyalty = loadLoyaltyConfig();
-  const current = getPhoneRecord(loyalty.byPhone, key);
-  const next = {
-    ...loyalty,
-    byPhone: {
-      ...loyalty.byPhone,
-      [key]: {
-        ...current,
-        manualAdjust: -Math.max(0, Number(autoPoints || 0)),
-        updatedAt: new Date().toISOString()
-      }
-    }
-  };
-  return saveLoyaltyConfig(next);
 }
 
 export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 10.000đ") {
