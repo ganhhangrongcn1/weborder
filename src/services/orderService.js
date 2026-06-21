@@ -1,6 +1,7 @@
 import { getCustomerKey } from "./storageService.js";
 import { orderRepository } from "./repositories/orderRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
+import { composeMemberLoyaltySnapshot } from "./memberLoyaltySnapshotService.js";
 import { applyOrderLoyalty, applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfig, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 
 const DONE_ORDER_STATUSES = new Set(["done", "completed", "hoan tat"]);
@@ -211,10 +212,14 @@ function applyCreatedOrderLoyalty({
     pointsDiscount: Number(pointsDiscount || 0),
     orderStatus: order.status
   });
+  const nextSnapshot = composeMemberLoyaltySnapshot(
+    nextPhoneLoyalty,
+    orderStorage.getByPhone(order.phone)
+  );
   if (!currentPhone || isCurrentOrderPhone(currentPhone, order.phone)) {
-    setDemoLoyaltyState(nextPhoneLoyalty);
+    setDemoLoyaltyState(nextSnapshot);
   }
-  return nextPhoneLoyalty;
+  return nextSnapshot;
 }
 
 async function applyCreatedOrderLoyaltyAsync({
@@ -243,10 +248,14 @@ async function applyCreatedOrderLoyaltyAsync({
     previousOrderStatus: "",
     sourceType: "ORDER"
   });
+  const nextSnapshot = composeMemberLoyaltySnapshot(
+    nextPhoneLoyalty,
+    orderStorage.getByPhone(order.phone)
+  );
   if (!currentPhone || isCurrentOrderPhone(currentPhone, order.phone)) {
-    setDemoLoyaltyState(nextPhoneLoyalty);
+    setDemoLoyaltyState(nextSnapshot);
   }
-  return nextPhoneLoyalty;
+  return nextSnapshot;
 }
 
 function saveCreatedOrderAddress({

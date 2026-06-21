@@ -81,7 +81,11 @@ export default function useLoyaltyViewModel({
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
 
   const [loyalty, setLoyalty] = useState(() => {
-    const saved = normalizeLoyaltyData(demoLoyalty || loyaltyStorage.get());
+    const saved = normalizeLoyaltyData(
+      currentPhone
+        ? (demoLoyalty || defaultResetLoyalty())
+        : (demoLoyalty || loyaltyStorage.get())
+    );
     if (saved.totalPoints > 0 || saved.checkinHistory.length) return saved;
     return loyaltyStorage.save({
       ...saved,

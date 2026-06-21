@@ -12,13 +12,14 @@ import {
 } from "./customerOrderCountingService.js";
 import { getMonthlyCustomerGiftStatsByPhonesRpc } from "./customerOrderCountingRpcService.js";
 import { getAdminCrmAnalyticsRpc } from "./adminCrmAnalyticsService.js";
+import { getDataSource } from "./repositories/dataSource.js";
+import { activateLoyaltyRuleVersion, normalizeLoyaltyRuleVersionPayload } from "./loyaltyRuleVersionService.js";
 import { hasDateRange } from "../utils/adminDateRange.js";
 import {
   calculateOrderPoints,
   defaultLoyaltyData,
   getLoyaltyRuleConfig,
   normalizeLoyaltyData,
-  reconcileLoyaltyFromOrders,
   resolveVoucherUsageFromOrders
 } from "./loyaltyService.js";
 export const CRM_CUSTOMERS_KEY = "ghr_customers";
@@ -142,16 +143,12 @@ export function loadLoyaltyConfig() {
   };
 }
 
-export function saveLoyaltyConfig(next) {
+function normalizeLoyaltyConfigInput(next) {
   const incomingStreakRewards = next?.streakRewards || {};
-  const normalized = {
+  return {
     ...defaultLoyaltyConfig,
     ...(next || {}),
-    currencyPerPoint: Math.max(1, Number(next?.currencyPerPoint || defaultLoyaltyConfig.currencyPerPoint)),
-    pointPerUnit: Math.max(1, Number(next?.pointPerUnit || defaultLoyaltyConfig.pointPerUnit)),
-    checkinDailyPoints: Math.max(1, Number(next?.checkinDailyPoints || defaultLoyaltyConfig.checkinDailyPoints)),
-    redeemPointUnit: Math.max(1, Number(next?.redeemPointUnit || defaultLoyaltyConfig.redeemPointUnit)),
-    redeemValue: Math.max(1, Number(next?.redeemValue || defaultLoyaltyConfig.redeemValue)),
+    ...normalizeLoyaltyRuleVersionPayload(next),
     streakRewards: {
       7: Math.max(1, Number(incomingStreakRewards?.[7] || incomingStreakRewards?.["7"] || defaultLoyaltyConfig.streakRewards[7])),
       14: Math.max(1, Number(incomingStreakRewards?.[14] || incomingStreakRewards?.["14"] || defaultLoyaltyConfig.streakRewards[14])),
@@ -159,7 +156,17 @@ export function saveLoyaltyConfig(next) {
     },
     byPhone: { ...(next?.byPhone || {}) }
   };
+}
+
+export function saveLoyaltyConfig(next) {
+  const normalized = normalizeLoyaltyConfigInput(next);
   return loyaltyRepository.saveCrmConfig(normalized);
+}
+
+export async function saveLoyaltyConfigAsync(next) {
+  const normalized = normalizeLoyaltyConfigInput(next);
+  await activateLoyaltyRuleVersion(normalized);
+  return normalized;
 }
 
 
@@ -330,16 +337,6 @@ export function getCustomerTier(totalSpent = 0) {
 
 export function buildCustomersFromOrders(orderStorage) {
   const orders = orderStorage?.getAll?.() || [];
-  const uniquePhones = Array.from(
-    new Set(
-      orders
-        .map((order) => getCustomerKey(order.customerPhone || order.phone || ""))
-        .filter(Boolean)
-    )
-  );
-  uniquePhones.forEach((phone) => {
-    reconcileLoyaltyFromOrders(phone, orderStorage);
-  });
   const loyalty = loadLoyaltyConfig();
   const customerMeta = loadCustomersMeta();
   const registeredUsers = customerRepository.getUsers();
@@ -366,24 +363,6 @@ export async function buildCustomersFromOrdersAsync(orderStorage, options = {}) 
 
 export async function buildCustomersFromOrderListAsync(orders = [], orderStorage, options = {}) {
   const safeOrders = Array.isArray(orders) ? orders : [];
-  const uniquePhones = Array.from(
-    new Set(
-      safeOrders
-        .map((order) => getCustomerKey(order.customerPhone || order.phone || ""))
-        .filter(Boolean)
-    )
-  );
-  const shouldReconcile = options?.skipReconcile !== true;
-  if (shouldReconcile) {
-    uniquePhones.forEach((phone) => {
-      try {
-        reconcileLoyaltyFromOrders(phone, orderStorage);
-      } catch (error) {
-        console.error("[crmService] reconcile loyalty failed", { phone, error });
-      }
-    });
-  }
-
   const {
     loyalty,
     customerMeta,
@@ -646,6 +625,9 @@ function buildCustomersSnapshotFromSources({
 }
 
 export function adjustCustomerPoints(phone, deltaPoints) {
+  if (getDataSource() === "supabase") {
+    throw new Error("Điều chỉnh điểm kiểu cũ đã bị tắt trong chế độ Supabase.");
+  }
   const key = getCustomerKey(phone);
   if (!key) return loadLoyaltyConfig();
   const loyalty = loadLoyaltyConfig();
@@ -665,6 +647,9 @@ export function adjustCustomerPoints(phone, deltaPoints) {
 }
 
 export function resetCustomerPoints(phone, autoPoints = 0) {
+  if (getDataSource() === "supabase") {
+    throw new Error("Reset điểm kiểu cũ đã bị tắt trong chế độ Supabase.");
+  }
   const key = getCustomerKey(phone);
   if (!key) return loadLoyaltyConfig();
   const loyalty = loadLoyaltyConfig();

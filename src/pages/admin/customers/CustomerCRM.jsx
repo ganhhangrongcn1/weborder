@@ -1,5 +1,10 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import {
+  buildCustomerOrderPointStatusMap,
+  getCustomerOrderPointStatuses,
+  resolveCustomerOrderPointStatus
+} from "../../../services/customerOrderPointStatusService.js";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { getCustomerLoyaltyDetailAsync, getCustomerRecentOrdersAsync } from "../../../services/crmService.js";
 import { getOrderSourceBadge } from "../../../services/partnerOrderService.js";
@@ -28,17 +33,18 @@ function getOrderStatusLabel(status) {
   return "Chờ xác nhận";
 }
 
-function getOrderPointStatus(order = {}, loyaltyLookup = {}) {
-  const status = resolveOrderPointStatus(order, loyaltyLookup);
+function getOrderPointStatus(order = {}, statusMap = new Map(), loyaltyLookup = {}) {
+  const rpcStatus = resolveCustomerOrderPointStatus(statusMap, order);
+  const status = rpcStatus || resolveOrderPointStatus(order, loyaltyLookup);
   if (status === "claimed") return { key: "claimed", label: "Đã tích điểm" };
   if (status === "blocked") return { key: "blocked", label: "Không tích điểm" };
   if (status === "pending") return { key: "pending", label: "Chưa tích điểm" };
   return { key: "unknown", label: "Chưa rõ" };
 }
 
-function getOrderPointSummary(orders = [], loyaltyLookup = {}) {
+function getOrderPointSummary(orders = [], statusMap = new Map(), loyaltyLookup = {}) {
   return orders.reduce((summary, order) => {
-    const status = getOrderPointStatus(order, loyaltyLookup).key;
+    const status = getOrderPointStatus(order, statusMap, loyaltyLookup).key;
     if (status === "claimed") return { ...summary, claimed: summary.claimed + 1 };
     if (status === "pending") return { ...summary, pending: summary.pending + 1 };
     if (status === "blocked") return { ...summary, blocked: summary.blocked + 1 };
@@ -196,6 +202,8 @@ export default function CustomerCRM({
   const [detailOrderLimitByPhone, setDetailOrderLimitByPhone] = useState({});
   const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
   const [loyaltyDetailByPhone, setLoyaltyDetailByPhone] = useState({});
+  const [orderPointStatusRowsByPhone, setOrderPointStatusRowsByPhone] = useState({});
+  const [isLoyaltyDetailLoading, setIsLoyaltyDetailLoading] = useState(false);
   const crmAnalytics = crmSnapshot.crmAnalytics?.source === "rpc" ? crmSnapshot.crmAnalytics : null;
 
   const filteredCustomers = useMemo(() => {
@@ -301,33 +309,46 @@ export default function CustomerCRM({
       }));
     })();
     (async () => {
-      const result = await getCustomerLoyaltyDetailAsync(phone, { limit: 100, offset: 0 });
+      setIsLoyaltyDetailLoading(true);
+      try {
+        const result = await getCustomerLoyaltyDetailAsync(phone, { limit: 100, offset: 0 });
+        if (disposed) return;
+        const rows = Array.isArray(result?.rows) ? result.rows : [];
+        const orderEarn = rows
+          .filter((item) => ["ORDER_EARN", "PARTNER_ORDER_EARN"].includes(String(item?.type || "").toUpperCase()))
+          .reduce((sum, item) => sum + Number(item?.points || 0), 0);
+        const checkin = rows
+          .filter((item) => ["CHECKIN", "MILESTONE"].includes(String(item?.type || "").toUpperCase()))
+          .reduce((sum, item) => sum + Number(item?.points || 0), 0);
+        const spend = Math.abs(
+          rows
+            .filter((item) => String(item?.type || "").toUpperCase() === "ORDER_SPEND")
+            .reduce((sum, item) => sum + Number(item?.points || 0), 0)
+        );
+        const total = rows.reduce((sum, item) => sum + Number(item?.points || 0), 0);
+        const other = total - orderEarn - checkin + spend;
+        setLoyaltyDetailByPhone((current) => ({
+          ...current,
+          [phone]: {
+            rows,
+            total: Number(result?.total || rows.length),
+            orderEarn,
+            checkin,
+            spend,
+            other,
+            totalPoints: Math.max(0, total)
+          }
+        }));
+      } finally {
+        if (!disposed) setIsLoyaltyDetailLoading(false);
+      }
+    })();
+    (async () => {
+      const rows = await getCustomerOrderPointStatuses(phone, { limit: DETAIL_ORDER_FETCH_LIMIT }).catch(() => []);
       if (disposed) return;
-      const rows = Array.isArray(result?.rows) ? result.rows : [];
-      const orderEarn = rows
-        .filter((item) => ["ORDER_EARN", "PARTNER_ORDER_EARN"].includes(String(item?.type || "").toUpperCase()))
-        .reduce((sum, item) => sum + Number(item?.points || 0), 0);
-      const checkin = rows
-        .filter((item) => ["CHECKIN", "MILESTONE"].includes(String(item?.type || "").toUpperCase()))
-        .reduce((sum, item) => sum + Number(item?.points || 0), 0);
-      const spend = Math.abs(
-        rows
-          .filter((item) => String(item?.type || "").toUpperCase() === "ORDER_SPEND")
-          .reduce((sum, item) => sum + Number(item?.points || 0), 0)
-      );
-      const total = rows.reduce((sum, item) => sum + Number(item?.points || 0), 0);
-      const other = total - orderEarn - checkin + spend;
-      setLoyaltyDetailByPhone((current) => ({
+      setOrderPointStatusRowsByPhone((current) => ({
         ...current,
-        [phone]: {
-          rows,
-          total: Number(result?.total || rows.length),
-          orderEarn,
-          checkin,
-          spend,
-          other,
-          totalPoints: Math.max(0, total)
-        }
+        [phone]: Array.isArray(rows) ? rows : []
       }));
     })();
     return () => {
@@ -343,9 +364,15 @@ export default function CustomerCRM({
     () => buildLoyaltyOrderPointLookup(selectedPointRows),
     [selectedPointRows]
   );
+  const selectedOrderPointStatusMap = useMemo(
+    () => buildCustomerOrderPointStatusMap(
+      selectedCustomerPhoneKey ? orderPointStatusRowsByPhone[selectedCustomerPhoneKey] || [] : []
+    ),
+    [orderPointStatusRowsByPhone, selectedCustomerPhoneKey]
+  );
   const selectedPointSummary = useMemo(
-    () => getOrderPointSummary(selectedOrders, selectedPointLookup),
-    [selectedOrders, selectedPointLookup]
+    () => getOrderPointSummary(selectedOrders, selectedOrderPointStatusMap, selectedPointLookup),
+    [selectedOrderPointStatusMap, selectedOrders, selectedPointLookup]
   );
 
   const sortedSelectedVouchers = useMemo(() => {
@@ -543,10 +570,10 @@ export default function CustomerCRM({
                     <strong>{Number((selectedLoyaltyDetail?.totalPoints ?? selectedCustomer.currentPoints) || 0).toLocaleString("vi-VN")}</strong>
                   </div>
                   <div className="crm-points-grid">
-                    <span>Từ đơn hàng: {Number((selectedLoyaltyDetail?.orderEarn ?? 0) || 0).toLocaleString("vi-VN")}</span>
-                    <span>Điểm danh/thưởng: {Number((selectedLoyaltyDetail?.checkin ?? selectedCustomer.checkinAndRewardPoints) || 0).toLocaleString("vi-VN")}</span>
-                    <span>Đã dùng điểm: -{Number((selectedLoyaltyDetail?.spend ?? selectedCustomer.spentPoints) || 0).toLocaleString("vi-VN")}</span>
-                    <span>Điều chỉnh khác: {Number((selectedLoyaltyDetail?.other ?? selectedCustomer.otherAdjustPoints) || 0).toLocaleString("vi-VN")}</span>
+                    <span>Từ đơn hàng: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.orderEarn ?? 0) || 0).toLocaleString("vi-VN")}</span>
+                    <span>Điểm danh/thưởng: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.checkin ?? selectedCustomer.checkinAndRewardPoints) || 0).toLocaleString("vi-VN")}</span>
+                    <span>Đã dùng điểm: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : `-${Number((selectedLoyaltyDetail?.spend ?? selectedCustomer.spentPoints) || 0).toLocaleString("vi-VN")}`}</span>
+                    <span>Điều chỉnh khác: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.other ?? selectedCustomer.otherAdjustPoints) || 0).toLocaleString("vi-VN")}</span>
                   </div>
                   <div className="crm-point-status-grid">
                     <span className="crm-point-status crm-point-status--claimed">Đã tích điểm: {selectedPointSummary.claimed.toLocaleString("vi-VN")} đơn</span>
@@ -577,7 +604,7 @@ export default function CustomerCRM({
                           <strong>{formatMoney(Number(order.totalAmount || order.total || 0))}</strong>
                           <em>{getOrderStatusLabel(order.status)}</em>
                           {(() => {
-                            const pointStatus = getOrderPointStatus(order, selectedPointLookup);
+                            const pointStatus = getOrderPointStatus(order, selectedOrderPointStatusMap, selectedPointLookup);
                             return (
                               <em className={`crm-point-order-badge crm-point-order-badge--${pointStatus.key}`}>
                                 {pointStatus.label}

@@ -1,4 +1,5 @@
-import { recalculateAllLoyaltyFromOrders, saveLoyaltyConfig } from "../../../services/crmService.js";
+import { recalculateAllLoyaltyFromOrders, saveLoyaltyConfigAsync } from "../../../services/crmService.js";
+import { getDataSource } from "../../../services/repositories/dataSource.js";
 import { saveLoyaltyBonusDisplay, saveLoyaltyRule, saveLoyaltyRulesRows } from "../../../services/loyaltyConfigService.js";
 
 export default function useAdminLoyaltyActions({ orderStorage } = {}) {
@@ -14,9 +15,11 @@ export default function useAdminLoyaltyActions({ orderStorage } = {}) {
     saveLoyaltyBonusDisplay(payload);
   };
 
-  const handleSaveLoyaltyConfig = (payload) => {
-    saveLoyaltyConfig(payload);
-    recalculateAllLoyaltyFromOrders(orderStorage);
+  const handleSaveLoyaltyConfig = async (payload) => {
+    await saveLoyaltyConfigAsync(payload);
+    if (getDataSource() !== "supabase") {
+      recalculateAllLoyaltyFromOrders(orderStorage);
+    }
   };
 
   return {

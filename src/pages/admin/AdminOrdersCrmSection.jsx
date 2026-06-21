@@ -25,8 +25,6 @@ export default function AdminOrdersCrmSection({
   setCrmSnapshot,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
-  onAdjustPoints,
-  onResetPoints,
   onGiftVoucher,
   onCancelVoucher,
   onSaveLoyaltyConfig,
@@ -81,7 +79,7 @@ export default function AdminOrdersCrmSection({
   };
 
   const saveLoyaltyConfig = async (nextConfig) => {
-    onSaveLoyaltyConfig?.(nextConfig || crmSnapshot?.loyaltyConfig || {});
+    await Promise.resolve(onSaveLoyaltyConfig?.(nextConfig || crmSnapshot?.loyaltyConfig || {}));
     return await refreshCrm({ forceSupportRefresh: true });
   };
 
@@ -126,8 +124,6 @@ export default function AdminOrdersCrmSection({
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           refreshCrm={refreshCrm}
-          adjustCustomerPoints={onAdjustPoints}
-          resetCustomerPoints={onResetPoints}
           giftVoucherToCustomer={onGiftVoucher}
           cancelCustomerVoucher={onCancelVoucher}
           showCustomerTier={getCustomerTier}

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { loyaltyRepository } from "../services/repositories/loyaltyRepository.js";
-import { getRuntimeStrategy } from "../services/repositories/runtimeStrategy.js";
+import {
+  getMemberLoyaltySnapshot,
+  getStoredMemberLoyaltySnapshot
+} from "../services/memberLoyaltySnapshotService.js";
 import { getDataSource } from "../services/repositories/dataSource.js";
 import { getSupabaseCustomerSessionSnapshot, logoutCustomerAuthSession, syncAuthProfileToCustomerRow } from "../services/supabaseAuthService.js";
 import { customerRepository } from "../services/repositories/customerRepository.js";
-import { resolveVoucherUsageFromOrders } from "../services/loyaltyService.js";
 
 const CUSTOMER_TRACKING_INITIAL_LIMIT = 5;
 
@@ -51,7 +52,6 @@ export default function useCustomerSession({
   userStorage,
   getCustomerKey,
   orderStorage,
-  reconcileLoyaltyFromOrders,
   loyaltyByPhoneStorage,
   loyaltyStorage,
   addressStorage,
@@ -206,7 +206,7 @@ export default function useCustomerSession({
           await userStorage.hydrateFromRemote();
         }
 
-        const [remoteOrders, remoteLoyalty, remoteAddresses] = await Promise.all([
+        const [remoteOrders, remoteAddresses] = await Promise.all([
           orderStorage?.getByPhoneAsync
             ? withTimeout(
                 orderStorage.getByPhoneAsync(currentPhone, { limit: CUSTOMER_TRACKING_INITIAL_LIMIT }),
@@ -214,24 +214,19 @@ export default function useCustomerSession({
                 orderStorage.getByPhone(currentPhone).slice(0, CUSTOMER_TRACKING_INITIAL_LIMIT)
               )
             : Promise.resolve(orderStorage.getByPhone(currentPhone)),
-          loyaltyRepository?.getByPhoneAsync
-            ? loyaltyRepository.getByPhoneAsync(currentPhone, defaultLoyaltyData)
-            : Promise.resolve(loyaltyByPhoneStorage.getByPhone(currentPhone)),
           addressStorage?.getByPhoneAsync ? addressStorage.getByPhoneAsync(currentPhone) : Promise.resolve(addressStorage.getAll(currentPhone))
         ]);
+        const remoteLoyalty = await getMemberLoyaltySnapshot(currentPhone, {
+          orders: remoteOrders,
+          fallback: defaultLoyaltyData
+        });
 
         if (disposed) return;
 
         const latestUser = userStorage.findByPhone(currentPhone);
         if (latestUser) setDemoUserState(latestUser);
         if (Array.isArray(remoteOrders)) setDemoOrdersState(remoteOrders);
-        if (remoteLoyalty) {
-          const resolvedLoyalty = {
-            ...remoteLoyalty,
-            voucherHistory: resolveVoucherUsageFromOrders(remoteLoyalty?.voucherHistory || [], remoteOrders || [])
-          };
-          setDemoLoyaltyState(resolvedLoyalty);
-        }
+        if (remoteLoyalty) setDemoLoyaltyState(remoteLoyalty);
         if (Array.isArray(remoteAddresses)) setDemoAddressesState(remoteAddresses);
       } catch {
       } finally {
@@ -335,21 +330,15 @@ export default function useCustomerSession({
     const refreshCustomerData = () => {
       const key = getCustomerKey(currentPhone);
       const latestUser = userStorage.findByPhone(key);
+      const localOrders = orderStorage.getByPhone(key) || [];
       if (latestUser) setDemoUserState(latestUser);
-      setDemoOrdersState(orderStorage.getByPhone(key));
-      if (getRuntimeStrategy()?.effectiveSource !== "supabase") {
-        const reconciled = reconcileLoyaltyFromOrders(key, orderStorage);
-        setDemoLoyaltyState({
-          ...reconciled,
-          voucherHistory: resolveVoucherUsageFromOrders(reconciled?.voucherHistory || [], orderStorage.getByPhone(key) || [])
-        });
-      } else {
-        const remoteFirst = loyaltyByPhoneStorage.getByPhone(key);
-        setDemoLoyaltyState({
-          ...remoteFirst,
-          voucherHistory: resolveVoucherUsageFromOrders(remoteFirst?.voucherHistory || [], orderStorage.getByPhone(key) || [])
-        });
-      }
+      setDemoOrdersState(localOrders);
+      setDemoLoyaltyState(
+        getStoredMemberLoyaltySnapshot(key, {
+          orders: localOrders,
+          fallback: defaultLoyaltyData
+        })
+      );
       setDemoAddressesState(addressStorage.getAll(key));
     };
 
@@ -375,7 +364,7 @@ export default function useCustomerSession({
       }
       window.removeEventListener("ghr:orders-changed", scheduleRefreshCustomerData);
     };
-  }, [addressStorage, currentPhone, defaultLoyaltyData, enabled, getCustomerKey, loyaltyByPhoneStorage, orderStorage, userStorage, reconcileLoyaltyFromOrders]);
+  }, [addressStorage, currentPhone, defaultLoyaltyData, enabled, getCustomerKey, orderStorage, userStorage]);
 
   const saveDemoUser = useCallback((nextUser) => {
     const saved = userStorage.upsertUser(nextUser);
@@ -393,13 +382,23 @@ export default function useCustomerSession({
     const currentStored = currentPhone ? loyaltyByPhoneStorage.getByPhone(currentPhone) : loyaltyStorage.get();
     const hasChanged = JSON.stringify(currentStored || {}) !== JSON.stringify(nextLoyalty || {});
     if (!hasChanged) {
-      setDemoLoyaltyState(currentStored);
-      return currentStored;
+      const currentOrders = currentPhone ? orderStorage.getByPhone(currentPhone) : [];
+      const snapshot = getStoredMemberLoyaltySnapshot(currentPhone, {
+        orders: currentOrders,
+        fallback: currentStored
+      });
+      setDemoLoyaltyState(snapshot);
+      return snapshot;
     }
     const saved = currentPhone ? loyaltyByPhoneStorage.saveByPhone(currentPhone, nextLoyalty) : loyaltyStorage.save(nextLoyalty);
-    setDemoLoyaltyState(saved);
-    return saved;
-  }, [currentPhone, loyaltyByPhoneStorage, loyaltyStorage]);
+    const currentOrders = currentPhone ? orderStorage.getByPhone(currentPhone) : [];
+    const snapshot = getStoredMemberLoyaltySnapshot(currentPhone, {
+      orders: currentOrders,
+      fallback: saved
+    });
+    setDemoLoyaltyState(snapshot);
+    return snapshot;
+  }, [currentPhone, loyaltyByPhoneStorage, loyaltyStorage, orderStorage]);
 
   const saveDemoOrders = useCallback((nextOrders) => {
     if (!currentPhone) return nextOrders;
@@ -442,13 +441,10 @@ export default function useCustomerSession({
     setCurrentPhoneState(key);
     setDemoUserState(user);
     const linkedOrders = orderStorage.getByPhone(key);
-    const linkedLoyaltyBase = shouldRegister
-      ? reconcileLoyaltyFromOrders(key, orderStorage)
-      : loyaltyByPhoneStorage.getByPhone(key);
-    const linkedLoyalty = {
-      ...linkedLoyaltyBase,
-      voucherHistory: resolveVoucherUsageFromOrders(linkedLoyaltyBase?.voucherHistory || [], linkedOrders || [])
-    };
+    const linkedLoyalty = getStoredMemberLoyaltySnapshot(key, {
+      orders: linkedOrders,
+      fallback: loyaltyByPhoneStorage.getByPhone(key)
+    });
     const linkedAddresses = addressStorage.getAll(key);
     setDemoOrdersState(linkedOrders);
     setDemoLoyaltyState(linkedLoyalty);

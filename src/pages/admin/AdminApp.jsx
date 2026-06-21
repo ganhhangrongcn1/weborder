@@ -130,8 +130,6 @@ export default function AdminApp({
 
   const {
     saveOptionGroupPresetsState,
-    handleAdjustPoints,
-    handleResetPoints,
     handleGiftVoucher,
     handleCancelVoucher,
     handleSaveZalo,
@@ -419,8 +417,6 @@ export default function AdminApp({
           refreshAdminOrdersFromRealtime={refreshAdminOrdersFromRealtime}
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}
-          onAdjustPoints={handleAdjustPoints}
-          onResetPoints={handleResetPoints}
           onGiftVoucher={handleGiftVoucher}
           onCancelVoucher={handleCancelVoucher}
           orderStorage={orderStorage}

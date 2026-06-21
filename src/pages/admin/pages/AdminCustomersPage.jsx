@@ -13,8 +13,6 @@ export default function AdminCustomersPage({
   resetAdminRequestAudit,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
-  onAdjustPoints,
-  onResetPoints,
   onGiftVoucher,
   onCancelVoucher,
   onSaveLoyaltyConfig,
@@ -44,8 +42,6 @@ export default function AdminCustomersPage({
         setCrmSnapshot={setCrmSnapshot}
         selectedCustomerPhone={selectedCustomerPhone}
         setSelectedCustomerPhone={setSelectedCustomerPhone}
-        onAdjustPoints={onAdjustPoints}
-        onResetPoints={onResetPoints}
         onGiftVoucher={onGiftVoucher}
         onCancelVoucher={onCancelVoucher}
         onSaveLoyaltyConfig={onSaveLoyaltyConfig}

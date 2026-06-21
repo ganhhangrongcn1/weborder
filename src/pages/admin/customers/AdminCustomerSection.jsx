@@ -8,8 +8,6 @@ export default function AdminCustomerSection({
   selectedCustomerPhone,
   setSelectedCustomerPhone,
   refreshCrm,
-  adjustCustomerPoints,
-  resetCustomerPoints,
   giftVoucherToCustomer,
   cancelCustomerVoucher,
   showCustomerTier,
@@ -44,8 +42,6 @@ export default function AdminCustomerSection({
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           refreshCrm={refreshCrm}
-          adjustCustomerPoints={adjustCustomerPoints}
-          resetCustomerPoints={resetCustomerPoints}
           giftVoucherToCustomer={giftVoucherToCustomer}
           cancelCustomerVoucher={cancelCustomerVoucher}
           showCustomerTier={showCustomerTier}

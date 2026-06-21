@@ -1,4 +1,5 @@
 import { getCustomerKey } from "./storageService.js";
+import { getDataSource } from "./repositories/dataSource.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import {
   buildOrderLoyaltyIdempotencyKey,
@@ -288,6 +289,14 @@ export async function applyOrderLoyaltyAsync({
 export function reconcileLoyaltyFromOrders(phone, orderStorage) {
   const key = getCustomerKey(phone);
   if (!key) return defaultLoyaltyData;
+  if (getDataSource() === "supabase") {
+    return normalizeLoyaltyData(
+      loyaltyRepository.getByPhone(key, {
+        ...defaultLoyaltyData,
+        phone: key
+      })
+    );
+  }
   const orders = orderStorage.getByPhone(key);
   const loyalty = loyaltyByPhoneStorage.getByPhone(key);
   const currentPointHistory = Array.isArray(loyalty.pointHistory) ? loyalty.pointHistory : [];

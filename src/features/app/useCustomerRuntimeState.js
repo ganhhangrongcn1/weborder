@@ -12,7 +12,7 @@ import { createNavigationActions } from "./navigationActions.js";
 import { getCustomerKey } from "../../services/storageService.js";
 import { addressStorage, addAddress, updateAddress, setDefaultAddress } from "../../services/addressService.js";
 import { orderStorage, reorder } from "../../services/orderService.js";
-import { loyaltyStorage, loyaltyByPhoneStorage, defaultLoyaltyData, reconcileLoyaltyFromOrders } from "../../services/loyaltyService.js";
+import { loyaltyStorage, loyaltyByPhoneStorage, defaultLoyaltyData } from "../../services/loyaltyService.js";
 import { createUserStorage, isRegisteredUser, getCurrentRegisteredPhone } from "../../services/customerService.js";
 import { getMemberRank, normalizeUserProfile } from "../../utils/profile.js";
 import { closeOnlyOnBackdrop } from "../../utils/uiEvents.js";
@@ -127,7 +127,6 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     userStorage,
     getCustomerKey,
     orderStorage,
-    reconcileLoyaltyFromOrders,
     loyaltyByPhoneStorage,
     loyaltyStorage,
     addressStorage,

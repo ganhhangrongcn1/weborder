@@ -1431,6 +1431,32 @@ async function processLoyaltyCheckin({ idempotencyKey = "" } = {}) {
   return Array.isArray(data) ? data[0] || null : data || null;
 }
 
+async function activateLoyaltyRuleVersion({
+  earnNumerator = 1,
+  earnDenominator = 100,
+  redeemPointUnit = 1,
+  redeemValue = 1,
+  checkinDailyPoints = 0,
+  streakRewards = {},
+  idempotencyKey = ""
+} = {}) {
+  if (!isSupabaseReady()) return null;
+  const client = await getSupabaseClientAsync();
+  if (!client) return null;
+
+  const { data, error } = await client.rpc("activate_loyalty_rule_version", {
+    p_earn_numerator: Math.max(1, Math.floor(Number(earnNumerator || 1))),
+    p_earn_denominator: Math.max(1, Math.floor(Number(earnDenominator || 100))),
+    p_redeem_point_unit: Math.max(1, Math.floor(Number(redeemPointUnit || 1))),
+    p_redeem_value: Math.max(1, Math.floor(Number(redeemValue || 1))),
+    p_checkin_daily_points: Math.max(0, Math.floor(Number(checkinDailyPoints || 0))),
+    p_streak_rewards: streakRewards && typeof streakRewards === "object" ? streakRewards : {},
+    p_idempotency_key: String(idempotencyKey || "").trim()
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] || null : data || null;
+}
+
 async function auditLoyaltyReconcileBacklog({
   customerPhone = "",
   sourceType = "",
@@ -1875,6 +1901,7 @@ export const coreSupabaseRepository = {
   readLoyaltyLedgerByPhonePaged,
   processOrderLoyalty,
   processLoyaltyCheckin,
+  activateLoyaltyRuleVersion,
   auditLoyaltyReconcileBacklog,
   reconcileLoyaltyBacklog,
   auditLoyaltyReconcilePlan,

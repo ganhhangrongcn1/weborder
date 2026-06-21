@@ -1,4 +1,4 @@
-import { buildCustomersFromOrderListAsync, buildCustomersFromOrdersAsync, adjustCustomerPoints, resetCustomerPoints, giftVoucherToCustomer, cancelCustomerVoucher } from "../../../services/crmService.js";
+import { buildCustomersFromOrderListAsync, buildCustomersFromOrdersAsync, giftVoucherToCustomer, cancelCustomerVoucher } from "../../../services/crmService.js";
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
 import { recordAdminRequest } from "../../../services/adminRequestAuditService.js";
 
@@ -53,16 +53,6 @@ export default function useAdminOrderCrmActions({
     return nextSnapshot;
   };
 
-  const handleAdjustPoints = async (phone, delta) => {
-    await adjustCustomerPoints(phone, delta);
-    return await refreshCrmOnly();
-  };
-
-  const handleResetPoints = async (phone) => {
-    await resetCustomerPoints(phone);
-    return await refreshCrmOnly();
-  };
-
   const handleGiftVoucher = async (phone, voucher) => {
     const nextLoyalty = await giftVoucherToCustomer(phone, voucher);
     patchCustomerLoyaltyInSnapshot(phone, nextLoyalty);
@@ -80,8 +70,6 @@ export default function useAdminOrderCrmActions({
   };
 
   return {
-    handleAdjustPoints,
-    handleResetPoints,
     handleGiftVoucher,
     handleCancelVoucher,
     handleOrderUpdated
