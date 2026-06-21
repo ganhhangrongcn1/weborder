@@ -56,6 +56,7 @@ export default function LoyaltySettings({ crmSnapshot, setCrmSnapshot, onSave })
       redeemPointUnit,
       redeemValue
     };
+
     try {
       setCrmSnapshot((current) => ({
         ...current,
@@ -63,8 +64,9 @@ export default function LoyaltySettings({ crmSnapshot, setCrmSnapshot, onSave })
       }));
       await Promise.resolve(onSave?.(payload));
       setSaveMessage("Đã lưu cấu hình tích điểm.");
-    } catch {
-      setSaveMessage("Lưu cấu hình tích điểm thất bại. Kiểm tra kết nối/Pilot policy.");
+    } catch (error) {
+      const detail = String(error?.message || "").trim();
+      setSaveMessage(detail ? `Lưu cấu hình tích điểm thất bại: ${detail}` : "Lưu cấu hình tích điểm thất bại.");
     } finally {
       setIsSaving(false);
     }
@@ -100,7 +102,7 @@ export default function LoyaltySettings({ crmSnapshot, setCrmSnapshot, onSave })
         <small className="admin-loyalty-note">Khách hàng sẽ nhận được <strong>{pointPerUnit} điểm</strong> cho mỗi <strong>{currencyPerPoint.toLocaleString("vi-VN")}đ</strong> chi tiêu.</small>
       </AdminPanel>
 
-      <AdminPanel title="Điểm danh hàng ngày" className="admin-loyalty-card">
+      <AdminPanel title="Điểm danh hằng ngày" className="admin-loyalty-card">
         <div className="admin-ui-panel-body admin-loyalty-form-stack">
           <label className="admin-mini-card">
             <span>Điểm danh mỗi ngày</span>

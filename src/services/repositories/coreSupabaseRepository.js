@@ -1,6 +1,10 @@
 import { getRuntimeSupabaseClient, getRepositoryRuntimeInfo } from "./repositoryRuntime.js";
 import { getCustomerKey } from "../storageService.js";
-import { initSupabaseRuntimeClient } from "../supabase/supabaseRuntimeClient.js";
+import {
+  getSupabaseAdminAuthClient,
+  initSupabaseAdminAuthClient,
+  initSupabaseRuntimeClient
+} from "../supabase/supabaseRuntimeClient.js";
 import { isSupabaseConfigSyncEnabled } from "../supabase/runtimeFlags.js";
 import { buildBranchLookupMap, normalizeBranchKey } from "../branchIdentityService.js";
 import { isCheckinLikeEntryType } from "../loyaltyLedgerUtils.js";
@@ -95,6 +99,14 @@ async function getSupabaseClientAsync() {
   const initialized = await initSupabaseRuntimeClient();
   if (initialized) return initialized;
   return getRuntimeSupabaseClient();
+}
+
+async function getAdminSupabaseClientAsync() {
+  const existing = getSupabaseAdminAuthClient();
+  if (existing) return existing;
+  const initialized = await initSupabaseAdminAuthClient();
+  if (initialized) return initialized;
+  return getSupabaseAdminAuthClient();
 }
 
 function normalizePhone(phone) {
@@ -1441,7 +1453,7 @@ async function activateLoyaltyRuleVersion({
   idempotencyKey = ""
 } = {}) {
   if (!isSupabaseReady()) return null;
-  const client = await getSupabaseClientAsync();
+  const client = await getAdminSupabaseClientAsync() || await getSupabaseClientAsync();
   if (!client) return null;
 
   const { data, error } = await client.rpc("activate_loyalty_rule_version", {
