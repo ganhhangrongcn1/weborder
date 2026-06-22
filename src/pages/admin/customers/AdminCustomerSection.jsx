@@ -54,7 +54,12 @@ export default function AdminCustomerSection({
           setCustomersDatePreset={setCustomersDatePreset}
         />
       ) : (
-        <LoyaltySettings crmSnapshot={crmSnapshot} setCrmSnapshot={setCrmSnapshot} onSave={handleSaveLoyaltyRatio} />
+        <LoyaltySettings
+          crmSnapshot={crmSnapshot}
+          setCrmSnapshot={setCrmSnapshot}
+          onSave={handleSaveLoyaltyRatio}
+          coupons={coupons}
+        />
       )}
     </div>
   );

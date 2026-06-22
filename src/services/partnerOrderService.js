@@ -5,6 +5,7 @@ import {
   getCanonicalOrderBranchName,
   resolveOrderBranch
 } from "./branchIdentityService.js";
+import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
 
 const SOURCE_BADGES = {
   website: {
@@ -312,6 +313,7 @@ function mapPartnerOrderRow(row = {}) {
   const discountAmount = toNumber(row.discount_amount ?? financeData.total_promotion_price);
   const nexposOrderId = String(row.nexpos_order_id || rawData.nexpos_order_id || rawData.id || "").trim();
   const kitchenStatus = row.kitchen_work_status || row.kitchen_status || "";
+  const loyaltyAmount = buildPartnerLoyaltyAmountSnapshot(row);
   return {
     id: row.id,
     sourceType: "partner",
@@ -335,14 +337,17 @@ function mapPartnerOrderRow(row = {}) {
     promoDiscount: discountAmount,
     totalAmount,
     total: totalAmount,
-    pointsBaseAmount: toNumber(row.points_base_amount ?? totalAmount),
+    pointsBaseAmount: loyaltyAmount.pointsBaseAmount,
+    loyaltyEligibleAmount: loyaltyAmount.loyaltyEligibleAmount,
+    netReceivedAmount: loyaltyAmount.netReceivedAmount,
+    loyaltyHoldReason: loyaltyAmount.loyaltyHoldReason,
     status: normalizePartnerOrderStatus(row),
     orderStatus: row.order_status || "",
     nexposStatus: row.nexpos_status || row.raw_data?.status || "",
     kitchenStatus,
     kitchenWorkStatus: row.kitchen_work_status || "",
     kitchenDoneAt: row.kitchen_done_at || "",
-    pointStatus: row.point_status || "pending",
+    pointStatus: loyaltyAmount.pointStatus,
     fulfillmentType: "delivery",
     paymentMethod: "foodapp",
     createdAt: row.order_time || row.created_at || "",

@@ -3,9 +3,10 @@ import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 
 const defaultLoyaltyRule = {
   currencyPerPoint: 100,
-  pointPerUnit: 1,
+  pointPerUnit: 10,
   redeemPointUnit: 1,
-  redeemValue: 1
+  redeemValue: 1,
+  maxRedemptionPercent: 50
 };
 
 export function getCheckoutLoyaltyRule() {

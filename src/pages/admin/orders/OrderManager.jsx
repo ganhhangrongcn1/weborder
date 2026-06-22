@@ -446,8 +446,12 @@ function OrderDetailPanel({
   const coFundPromotion = Number(order.coFundPromotion || 0);
   const appPromotion = Math.max(totalPromotion - coFundPromotion, 0);
   const partnerGrossReceived = Number(order.grossReceived || 0);
-  const partnerNetReceived = Number(order.realReceived || order.netReceived || 0);
-  const pointsBaseAmount = Number(order.pointsBaseAmount || Math.max(totalValue - shippingFee, 0));
+  const partnerNetReceived = Number(order.netReceivedAmount || order.realReceived || order.netReceived || 0);
+  const pointsBaseAmount = Number(
+    isPartnerOrder
+      ? order.loyaltyEligibleAmount || order.netReceivedAmount || 0
+      : order.pointsBaseAmount || Math.max(totalValue - shippingFee, 0)
+  );
   const loyaltyRule = getLoyaltyRuleConfig();
   const estimatedPoints = Math.max(0, calculateOrderPoints(pointsBaseAmount, loyaltyRule));
   const pointStatusText = getUnifiedPointStatusText(order, estimatedPoints);
@@ -541,6 +545,9 @@ function OrderDetailPanel({
             {pointsDiscount > 0 ? <div className="discount"><span>Dùng điểm thưởng</span><strong>-{formatMoney(pointsDiscount)}</strong></div> : null}
             <div className="grand"><span>Tổng cộng</span><strong>{formatMoney(totalValue)}</strong></div>
             <div><span>Giá trị tính điểm loyalty</span><strong>{formatMoney(pointsBaseAmount)}</strong></div>
+            {isPartnerOrder && order.loyaltyHoldReason ? (
+              <div><span>Trạng thái loyalty</span><strong>Chờ dữ liệu thực nhận</strong></div>
+            ) : null}
             {!isPartnerOrder || hasClaimedPartnerPoints(order) ? (
               <div>
                 <span>{isPartnerOrder ? "Điểm đã cộng" : "Điểm dự kiến"}</span>

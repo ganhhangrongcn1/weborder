@@ -17,6 +17,42 @@ const CUTOVER_FILE = path.join(
   "supabase-sql",
   "loyalty-v2-phase-2-security-cutover.sql",
 );
+const PROGRAM_CONFIG_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260621102429_loyalty_program_phase_1_config.sql",
+);
+const PARTNER_NET_RECEIVED_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260621103652_loyalty_partner_net_received.sql",
+);
+const TIER_ENGINE_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260621130000_loyalty_tier_expiry_and_milestones.sql",
+);
+const DEFAULT_ACTIVATION_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260621131500_loyalty_program_default_activation.sql",
+);
+const REACHABLE_TIERS_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260622012305_loyalty_reachable_tiers_and_order_progress.sql",
+);
+const TIER_IDENTITY_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260622013732_loyalty_tier_names_and_icons.sql",
+);
 
 const assertIncludes = (content, expected, message) => {
   if (!content.includes(expected)) {
@@ -24,11 +60,17 @@ const assertIncludes = (content, expected, message) => {
   }
 };
 
-const [foundation, audit, postcheck, cutover] = await Promise.all([
+const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity] = await Promise.all([
   readFile(FOUNDATION_FILE, "utf8"),
   readFile(AUDIT_FILE, "utf8"),
   readFile(POSTCHECK_FILE, "utf8"),
   readFile(CUTOVER_FILE, "utf8"),
+  readFile(PROGRAM_CONFIG_FILE, "utf8"),
+  readFile(PARTNER_NET_RECEIVED_FILE, "utf8"),
+  readFile(TIER_ENGINE_FILE, "utf8"),
+  readFile(DEFAULT_ACTIVATION_FILE, "utf8"),
+  readFile(REACHABLE_TIERS_FILE, "utf8"),
+  readFile(TIER_IDENTITY_FILE, "utf8"),
 ]);
 
 assertIncludes(foundation, "begin;", "Foundation migration must be transactional");
@@ -96,10 +138,115 @@ assertIncludes(
   "app.loyalty_v2_allow_legacy_cutover",
   "Security cutover must require an explicit unlock flag",
 );
+assertIncludes(programConfig, "begin;", "Program config migration must be transactional");
+assertIncludes(programConfig, "commit;", "Program config migration must commit");
+assertIncludes(
+  programConfig,
+  "create or replace function public.activate_loyalty_program_version(",
+  "Missing five-tier loyalty program activation RPC",
+);
+assertIncludes(partnerNetReceived, "begin;", "Partner net received migration must be transactional");
+assertIncludes(partnerNetReceived, "commit;", "Partner net received migration must commit");
+assertIncludes(
+  partnerNetReceived,
+  "add column if not exists net_received_amount numeric null",
+  "Missing canonical partner net received amount",
+);
+assertIncludes(
+  partnerNetReceived,
+  "new.loyalty_hold_reason := 'missing_partner_net_received'",
+  "Missing reconciliation hold behavior",
+);
+if (/coalesce\(po\.(?:net_received_amount|points_base_amount)[^)]*po\.total_amount/i.test(partnerNetReceived)) {
+  throw new Error("Partner loyalty migration must not fall back to total_amount");
+}
+assertIncludes(
+  programConfig,
+  "jsonb_array_length(v_tiers) <> 5",
+  "Five-tier database validation is missing",
+);
+assertIncludes(
+  programConfig,
+  "values ('ghr_loyalty', v_config, now())",
+  "Program activation must update the shared ghr_loyalty config",
+);
 assertIncludes(
   cutover,
   "revoke all on public.loyalty_ledger from anon;",
   "Security cutover must revoke anonymous ledger access",
+);
+assertIncludes(tierEngine, "begin;", "Tier engine migration must be transactional");
+assertIncludes(tierEngine, "commit;", "Tier engine migration must commit");
+assertIncludes(
+  tierEngine,
+  "add column if not exists tier_qualifying_spend numeric not null default 0",
+  "Missing annual tier qualification state",
+);
+assertIncludes(
+  tierEngine,
+  "create or replace function loyalty_private.expire_loyalty_account_if_due(",
+  "Missing last-purchase point expiry engine",
+);
+assertIncludes(
+  tierEngine,
+  "unique (customer_phone, tier_id, cycle_year)",
+  "Milestone voucher grants must be idempotent per tier and year",
+);
+assertIncludes(
+  tierEngine,
+  "new.points_base_amount * 0.5",
+  "Order snapshot must enforce the 50 percent redemption ceiling",
+);
+assertIncludes(
+  tierEngine,
+  "new.loyalty_earn_numerator / new.loyalty_earn_denominator",
+  "Partner refresh must preserve the snapshotted tier earn rate",
+);
+assertIncludes(defaultActivation, "begin;", "Default tier activation must be transactional");
+assertIncludes(defaultActivation, "commit;", "Default tier activation must commit");
+assertIncludes(
+  defaultActivation,
+  "'ganh_legend', 'name', 'Huyền Thoại Gánh'",
+  "Default activation must include the highest agreed tier",
+);
+assertIncludes(
+  defaultActivation,
+  "'maxRedemptionPercent', 50",
+  "Default activation must publish the 50 percent redemption setting",
+);
+assertIncludes(reachableTiers, "begin;", "Reachable tier migration must be transactional");
+assertIncludes(reachableTiers, "commit;", "Reachable tier migration must commit");
+assertIncludes(
+  reachableTiers,
+  "add column if not exists tier_qualifying_order_count integer not null default 0",
+  "Missing annual qualifying order count",
+);
+assertIncludes(tierIdentity, "begin;", "Tier identity migration must be transactional");
+assertIncludes(tierIdentity, "commit;", "Tier identity migration must commit");
+assertIncludes(
+  tierIdentity,
+  "when 'inner_circle_fan' then 'Ghiền Chính Hiệu'",
+  "Tier identity migration must publish the agreed fourth tier name",
+);
+assertIncludes(
+  tierIdentity,
+  "when 'new_customer' then 'sprout'",
+  "Tier identity migration must publish stable icon keys",
+);
+assertIncludes(
+  reachableTiers,
+  "when 'returning_customer' then 500000",
+  "Returning customer threshold must be 500k",
+);
+assertIncludes(
+  reachableTiers,
+  "when 'ganh_legend' then 6000000",
+  "Legend threshold must be 6m",
+);
+assertIncludes(
+  reachableTiers,
+  "tier_qualifying_order_count = greatest(coalesce(tier_qualifying_order_count, 0) + 1, 0)",
+  "Completed loyalty events must advance annual order progress",
 );
 
 console.log("Loyalty V2 SQL smoke test passed.");

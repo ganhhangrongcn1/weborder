@@ -11,53 +11,53 @@ export default function CheckinCard({
   checkinReward,
   nextMilestone,
   progressPercent,
-  recentDays,
   handleCheckin,
+  onOpenDetails,
   canCheckin = true,
   checkinAuthNotice = ""
 }) {
   const loyaltyText = getLoyaltyText();
-  const loyaltyBonusDisplay = getLoyaltyBonusDisplay();
-
   return (
     <CustomerCard className="checkin-card">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="reward-icon"><Icon name="gift" size={17} /></span>
-          <h2>{loyaltyText.checkinTitle}</h2>
+          <h2>Ghé Gánh điểm danh</h2>
         </div>
-        <span className="streak-pill">{loyaltyText.streakPrefix} {loyalty.checkinStreak} {loyaltyText.streakUnit}</span>
+        <span className="streak-pill">Chuỗi vui: {loyalty.checkinStreak} ngày</span>
       </div>
 
       {comebackActive && (
-        <CustomerCard tone="notice" padding="sm" className="mt-3 text-xs font-bold leading-5 text-orange-700">
+        <div className="checkin-notice mt-3 text-xs font-bold leading-5 text-orange-700">
           {loyaltyText.comebackAlert(comebackStreak)}
-        </CustomerCard>
+        </div>
       )}
 
-      <CustomerCard tone="soft" padding="sm" className="mt-4">
+      <div className="checkin-progress mt-4">
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="text-xs font-bold text-brown/55">
-              {nextMilestone ? loyaltyText.milestoneProgress(nextMilestone.days) : loyaltyText.milestoneDone}
+              {nextMilestone
+                ? `Còn ${Math.max(nextMilestone.days - loyalty.checkinStreak, 0)} ngày nhận +${nextMilestone.points} điểm`
+                : "Bạn đã chinh phục chuỗi cao nhất"}
             </p>
             <strong className="mt-1 block text-lg text-brown">
               {loyalty.checkinStreak}/{nextMilestone?.days || 30} ngày
             </strong>
           </div>
-          <span className="text-sm font-black text-orange-600">{nextMilestone ? `+${nextMilestone.points}` : loyaltyText.milestoneTop}</span>
+          {!nextMilestone ? <span className="text-sm font-black text-orange-600">{loyaltyText.milestoneTop}</span> : null}
         </div>
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
           <div className="h-full rounded-full bg-gradient-main transition-all" style={{ width: `${progressPercent}%` }} />
         </div>
-      </CustomerCard>
+      </div>
 
       <CustomerButton disabled={checkedInToday || !canCheckin} onClick={handleCheckin} full className="mt-4">
         {checkedInToday
-          ? loyaltyText.checkedInToday
+          ? "Hôm nay bạn đã nhận điểm rồi"
           : !canCheckin
             ? "Đăng nhập lại để điểm danh"
-            : loyaltyText.checkinReward(checkinReward)}
+            : `Điểm danh, nhận +${checkinReward} điểm`}
       </CustomerButton>
       {!checkedInToday && !canCheckin && checkinAuthNotice ? (
         <p className="mt-2 text-xs font-semibold leading-5 text-brown/55">
@@ -65,36 +65,51 @@ export default function CheckinCard({
         </p>
       ) : null}
 
-      <div className="checkin-bonus-grid">
-        {loyaltyBonusDisplay.map((reward) => {
-          const received = loyalty.rewardHistory.includes(`milestone-${reward.days}`);
-          const missing = Math.max(reward.days - loyalty.checkinStreak, 0);
-          return (
-            <div key={reward.days}>
-              <span>{reward.days} ngày</span>
-              <strong>{received ? loyaltyText.bonusReceived : missing ? loyaltyText.bonusRemaining(missing) : `+${reward.points}`}</strong>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-4 grid grid-cols-7 gap-2">
-        {recentDays.map((day) => {
-          const checked = loyalty.checkinHistory.includes(day);
-          const isToday = day === today;
-          return (
-            <div
-              key={day}
-              className={`rounded-2xl border px-1 py-2 text-center text-[10px] font-black ${isToday ? "border-orange-400 bg-orange-50 text-orange-600" : "border-brown/5 bg-white text-brown/45"}`}
-            >
-              <span className="block">{day.slice(5).replace("-", "/")}</span>
-              <span className={`mx-auto mt-1 grid h-5 w-5 place-items-center rounded-full ${checked ? "bg-green-500 text-white" : "bg-cream text-brown/30"}`}>
-                {checked ? "✓" : "•"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      {onOpenDetails ? (
+        <button type="button" className="loyalty-text-action" onClick={onOpenDetails}>
+          Xem lịch quà của bạn <Icon name="back" size={15} />
+        </button>
+      ) : null}
     </CustomerCard>
+  );
+}
+
+export function CheckinDetails({ loyalty, today, recentDays }) {
+  const loyaltyText = getLoyaltyText();
+  const loyaltyBonusDisplay = getLoyaltyBonusDisplay();
+
+  return (
+    <div className="loyalty-checkin-details">
+      <section>
+        <h3>Quà theo chuỗi điểm danh</h3>
+        <div className="checkin-bonus-grid">
+          {loyaltyBonusDisplay.map((reward) => {
+            const received = loyalty.rewardHistory.includes(`milestone-${reward.days}`);
+            const missing = Math.max(reward.days - loyalty.checkinStreak, 0);
+            return (
+              <div key={reward.days}>
+                <span>{reward.days} ngày</span>
+                <strong>{received ? loyaltyText.bonusReceived : missing ? loyaltyText.bonusRemaining(missing) : `+${reward.points}`}</strong>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <section>
+        <h3>7 ngày gần nhất</h3>
+        <div className="loyalty-checkin-calendar">
+          {recentDays.map((day) => {
+            const checked = loyalty.checkinHistory.includes(day);
+            const isToday = day === today;
+            return (
+              <div key={day} className={isToday ? "is-today" : ""}>
+                <span>{day.slice(5).replace("-", "/")}</span>
+                <strong className={checked ? "is-checked" : ""}>{checked ? "✓" : "•"}</strong>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </div>
   );
 }

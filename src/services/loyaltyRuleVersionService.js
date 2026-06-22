@@ -1,6 +1,7 @@
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
 import { getDataSource } from "./repositories/dataSource.js";
+import { normalizeLoyaltyProgramConfig } from "./loyaltyProgramConfigService.js";
 
 function createRuleActivationIdempotencyKey() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -11,20 +12,18 @@ function createRuleActivationIdempotencyKey() {
 
 function normalizeStreakRewards(streakRewards = {}) {
   return {
-    7: Math.max(1, Math.floor(Number(streakRewards?.[7] || streakRewards?.["7"] || 1))),
-    14: Math.max(1, Math.floor(Number(streakRewards?.[14] || streakRewards?.["14"] || 1))),
-    30: Math.max(1, Math.floor(Number(streakRewards?.[30] || streakRewards?.["30"] || 1)))
+    7: Math.max(0, Math.floor(Number(streakRewards?.[7] ?? streakRewards?.["7"] ?? 0))),
+    14: Math.max(0, Math.floor(Number(streakRewards?.[14] ?? streakRewards?.["14"] ?? 0))),
+    30: Math.max(0, Math.floor(Number(streakRewards?.[30] ?? streakRewards?.["30"] ?? 0)))
   };
 }
 
 export function normalizeLoyaltyRuleVersionPayload(config = {}) {
+  const normalized = normalizeLoyaltyProgramConfig(config);
   return {
-    currencyPerPoint: Math.max(1, Math.floor(Number(config?.currencyPerPoint || 100))),
-    pointPerUnit: Math.max(1, Math.floor(Number(config?.pointPerUnit || 1))),
-    checkinDailyPoints: Math.max(1, Math.floor(Number(config?.checkinDailyPoints || 100))),
-    redeemPointUnit: Math.max(1, Math.floor(Number(config?.redeemPointUnit || 1))),
-    redeemValue: Math.max(1, Math.floor(Number(config?.redeemValue || 1))),
-    streakRewards: normalizeStreakRewards(config?.streakRewards || {})
+    ...normalized,
+    checkinDailyPoints: Math.max(0, Math.floor(Number(normalized.checkinDailyPoints || 0))),
+    streakRewards: normalizeStreakRewards(normalized.streakRewards || {})
   };
 }
 
@@ -48,17 +47,11 @@ export async function activateLoyaltyRuleVersion(config = {}) {
     };
   }
 
-  const result = await coreSupabaseRepository.activateLoyaltyRuleVersion({
-    earnNumerator: normalized.pointPerUnit,
-    earnDenominator: normalized.currencyPerPoint,
-    redeemPointUnit: normalized.redeemPointUnit,
-    redeemValue: normalized.redeemValue,
-    checkinDailyPoints: normalized.checkinDailyPoints,
-    streakRewards: normalized.streakRewards,
+  const result = await coreSupabaseRepository.activateLoyaltyProgramVersion({
+    programConfig: persistedConfig,
     idempotencyKey
   });
-
-  await loyaltyRepository.saveCrmConfigAsync(persistedConfig);
+  loyaltyRepository.primeCrmConfig(persistedConfig);
 
   return {
     ...(result || {}),

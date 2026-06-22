@@ -2,13 +2,26 @@ import Icon from "../../../components/Icon.jsx";
 import AppSectionTitle from "../../../components/app/SectionTitle.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
 import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
-import { getLoyaltyRulesRows, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getLoyaltyEarnPercent } from "../../../services/loyaltyProgramConfigService.js";
 
 export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyaltyRule }) {
   const loyaltyText = getLoyaltyText();
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
-  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
-  const loyaltyRulesRows = Array.isArray(getLoyaltyRulesRows()) ? getLoyaltyRulesRows() : [];
+  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 10));
+  const configuredTierRates = Array.isArray(loyaltyRule?.tiers)
+    ? loyaltyRule.tiers.map((tier) => getLoyaltyEarnPercent(tier.currencyPerPoint, tier.pointPerUnit))
+    : [];
+  const tierRates = configuredTierRates.length
+    ? configuredTierRates
+    : [getLoyaltyEarnPercent(currencyPerPoint, pointPerUnit)];
+  const minTierRate = Math.min(...tierRates);
+  const maxTierRate = Math.max(...tierRates);
+  const loyaltyRulesRows = [
+    { label: "Tích điểm theo hạng", value: `${minTierRate}% đến ${maxTierRate}%` },
+    { label: "Dùng điểm", value: `1 điểm = 1đ, tối đa ${loyaltyRule?.maxRedemptionPercent || 50}%` },
+    { label: "Hạn điểm", value: "12 tháng từ lần mua cuối" }
+  ];
   const safeBonusDisplay = Array.isArray(loyaltyBonusDisplay) ? loyaltyBonusDisplay : [];
 
   return (
@@ -34,12 +47,12 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyalt
             </div>
             <span className="streak-pill">{loyaltyText.signedOutCheckinHint}</span>
           </div>
-          <CustomerCard tone="soft" padding="sm" className="mt-4">
+          <div className="checkin-notice mt-4">
             <p className="text-sm font-bold leading-6 text-brown/65">{loyaltyText.signedOutCheckinDetail}</p>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
               <div className="h-full w-0 rounded-full bg-gradient-main" />
             </div>
-          </CustomerCard>
+          </div>
           <CustomerButton full className="mt-4" onClick={() => navigate("account", "account")}>
             {loyaltyText.checkinLoginHint}
           </CustomerButton>

@@ -267,7 +267,12 @@ export default function Tracking({
 
   const getOrderTotal = (order) => Number(order?.totalAmount || order?.total || 0);
   const getClaimablePoints = (order) => {
-    const amount = Number(order?.pointsBaseAmount || order?.totalAmount || order?.total || 0);
+    const isPartnerOrder = order?.sourceType === "partner";
+    const amount = Number(
+      isPartnerOrder
+        ? order?.loyaltyEligibleAmount || order?.netReceivedAmount || 0
+        : order?.pointsBaseAmount || order?.totalAmount || order?.total || 0
+    );
     return Math.max(0, Number(calculateOrderPoints(amount, getLoyaltyRuleConfig()) || 0));
   };
   const getOrderRewardPoints = (order) => {
@@ -283,6 +288,12 @@ export default function Tracking({
       return {
         label: "Đã tích điểm",
         className: "bg-green-50 text-green-700"
+      };
+    }
+    if (pointStatus === "waiting_data") {
+      return {
+        label: "Chờ đối soát",
+        className: "bg-slate-100 text-slate-600"
       };
     }
     return {
@@ -587,7 +598,7 @@ export default function Tracking({
                         <p className="text-sm text-brown/60">
                           Tổng tiền: <strong className="text-base text-brown">{formatMoney(getOrderTotal(order))}</strong>
                         </p>
-                        {pointBadge && String(order.pointStatus || "").toLowerCase() === "claimed" ? (
+                        {pointBadge && ["claimed", "waiting_data"].includes(String(order.pointStatus || "").toLowerCase()) ? (
                           <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${pointBadge.className}`}>
                             {pointBadge.label}
                           </span>

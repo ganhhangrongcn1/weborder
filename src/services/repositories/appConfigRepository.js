@@ -22,6 +22,10 @@ export function createAppConfigRepository(adapter = createRepositoryAdapter(), o
   const { enforceWritePolicy = false } = options;
 
   return {
+    prime(key, value) {
+      if (adapter.prime) return adapter.prime(key, value);
+      return value;
+    },
     get(key, fallback) {
       return adapter.load(key, fallback);
     },

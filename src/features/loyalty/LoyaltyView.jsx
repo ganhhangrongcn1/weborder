@@ -57,8 +57,11 @@ export default function Loyalty(props) {
 
   return (
     <MemberLoyaltyView
+      navigate={navigate}
       loyaltyRule={vm.loyaltyRule}
       loyalty={vm.loyalty}
+      tierJourney={vm.tierJourney}
+      currentPhone={currentPhone}
       userProfile={userProfile}
       luckyVoucher={vm.luckyVoucher}
       setLuckyVoucher={vm.setLuckyVoucher}

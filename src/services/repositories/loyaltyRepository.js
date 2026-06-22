@@ -197,6 +197,11 @@ export const loyaltyRepository = {
   getCrmConfig(fallback) {
     return repository.get(STORAGE_KEYS.crmLoyalty, fallback);
   },
+  primeCrmConfig(config) {
+    const primed = repository.prime(STORAGE_KEYS.crmLoyalty, config);
+    notifyLoyaltyChanged();
+    return primed;
+  },
   saveCrmConfig(config) {
     const saved = repository.set(STORAGE_KEYS.crmLoyalty, config);
     notifyLoyaltyChanged();

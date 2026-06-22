@@ -142,8 +142,12 @@ function buildPointRoundSuggestionsV2(loyaltyBenefit = {}) {
   const availablePoints = Math.max(0, Math.floor(toNumber(loyaltyBenefit.availablePoints, 0)));
   const redeemPointUnit = Math.max(1, Math.floor(toNumber(loyaltyBenefit.redeemPointUnit, 1)));
   const redeemValue = Math.max(1, Math.floor(toNumber(loyaltyBenefit.redeemValue, 1)));
+  const maxRedemptionPercent = Math.min(50, Math.max(0, toNumber(loyaltyBenefit.maxRedemptionPercent, 50)));
   const maxUnits = Math.floor(availablePoints / redeemPointUnit);
-  const maxDiscount = Math.min(baseTotal, maxUnits * redeemValue);
+  const maxDiscount = Math.min(
+    Math.floor(baseTotal * maxRedemptionPercent / 100),
+    maxUnits * redeemValue
+  );
   const suggestions = [];
   const seen = new Set();
 
@@ -164,10 +168,12 @@ function buildPointRoundSuggestionsV2(loyaltyBenefit = {}) {
     });
   });
 
-  if (availablePoints > 0 && !seen.has(availablePoints)) {
+  const maxSuggestedUnits = Math.floor(maxDiscount / redeemValue);
+  const maxSuggestedPoints = Math.min(availablePoints, maxSuggestedUnits * redeemPointUnit);
+  if (maxSuggestedPoints > 0 && !seen.has(maxSuggestedPoints)) {
     suggestions.push({
       label: "Dùng tối đa",
-      points: availablePoints
+      points: maxSuggestedPoints
     });
   }
 
@@ -181,6 +187,7 @@ function buildPosLoyaltyBenefit({ subtotal = 0, customer = null, coupons = [], s
   const availablePoints = Math.max(0, Math.floor(toNumber(loyalty.totalPoints || customer?.totalPoints, 0)));
   const redeemPointUnit = Math.max(1, Math.floor(toNumber(loyaltyRule.redeemPointUnit, 1)));
   const redeemValue = Math.max(1, Math.floor(toNumber(loyaltyRule.redeemValue, 1)));
+  const maxRedemptionPercent = Math.min(50, Math.max(0, toNumber(loyaltyRule.maxRedemptionPercent, 50)));
   const now = new Date();
   const couponById = Object.fromEntries((coupons || []).map((coupon) => [toText(coupon.id), coupon]));
   const couponByCode = Object.fromEntries((coupons || []).map((coupon) => [toText(coupon.code).toUpperCase(), coupon]));
@@ -216,9 +223,18 @@ function buildPosLoyaltyBenefit({ subtotal = 0, customer = null, coupons = [], s
   const voucherDiscount = selectedVoucher ? calculateVoucherDiscount(selectedVoucher, subtotal) : 0;
 
   const maxPointUnits = Math.floor(availablePoints / redeemPointUnit);
-  const maxPointDiscount = Math.min(Math.max(0, subtotal - voucherDiscount), maxPointUnits * redeemValue);
+  const eligiblePointAmount = Math.max(0, subtotal - voucherDiscount);
+  const maxPointDiscount = Math.min(
+    Math.floor(eligiblePointAmount * maxRedemptionPercent / 100),
+    maxPointUnits * redeemValue
+  );
   const typedPoints = Math.max(0, Math.floor(toNumber(String(pointsInput).replace(/[^\d]/g, ""), 0)));
-  const normalizedPointUnits = Math.min(maxPointUnits, Math.floor(typedPoints / redeemPointUnit));
+  const maxPointUnitsByOrder = Math.floor(maxPointDiscount / redeemValue);
+  const normalizedPointUnits = Math.min(
+    maxPointUnits,
+    maxPointUnitsByOrder,
+    Math.floor(typedPoints / redeemPointUnit)
+  );
   const pointsSpent = normalizedPointUnits * redeemPointUnit;
   const pointsDiscount = Math.min(maxPointDiscount, normalizedPointUnits * redeemValue);
 
@@ -228,6 +244,8 @@ function buildPosLoyaltyBenefit({ subtotal = 0, customer = null, coupons = [], s
     availablePoints,
     redeemPointUnit,
     redeemValue,
+    maxRedemptionPercent,
+    maxPointDiscount,
     normalVouchers,
     loyaltyVouchers,
     selectedVoucher,
@@ -240,7 +258,8 @@ function buildPosLoyaltyBenefit({ subtotal = 0, customer = null, coupons = [], s
       voucherDiscount,
       availablePoints,
       redeemPointUnit,
-      redeemValue
+      redeemValue,
+      maxRedemptionPercent
     })
   };
 }

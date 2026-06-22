@@ -11,9 +11,9 @@ export const loyaltyBonusDisplay = [
 ];
 
 export const loyaltyRulesRows = [
-  { label: "Tích điểm đơn hàng", value: "100đ = 1 điểm" },
-  { label: "Chu kỳ điểm danh", value: "100 / 200 / 500 điểm" },
-  { label: "Comeback", value: "x2 điểm ngày trở lại" }
+  { label: "Tích điểm theo hạng", value: "10% đến 15%" },
+  { label: "Dùng điểm", value: "1 điểm = 1đ, tối đa 50%" },
+  { label: "Hạn điểm", value: "12 tháng từ lần mua cuối" }
 ];
 
 export const loyaltySimpleGuestRows = (currencyPerPoint, pointPerUnit) => [

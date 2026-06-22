@@ -133,7 +133,9 @@ export function getNetOrderPoints(lookup = {}, order = {}) {
 export function resolveOrderPointStatus(order = {}, lookup = {}) {
   const rawStatus = normalizeOrderPointStatus(order?.pointStatus || order?.point_status || "");
   if (isBlockedOrderPointStatus(rawStatus)) return "blocked";
-  return getNetOrderPoints(lookup, order) > 0 ? "claimed" : "pending";
+  if (getNetOrderPoints(lookup, order) > 0) return "claimed";
+  if (rawStatus === "waiting_data") return "waiting_data";
+  return "pending";
 }
 
 export function formatSignedLoyaltyPoints(points = 0) {

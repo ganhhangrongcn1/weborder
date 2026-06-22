@@ -163,13 +163,15 @@ export function calculateCheckoutPricing({
   const customerExtraShip = fulfillmentType === "pickup" ? 0 : checkoutShip;
   const promoDiscount = selectedPromo?.discount || 0;
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
-  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
+  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 10));
   const redeemPointUnit = Math.max(1, Number(loyaltyRule?.redeemPointUnit || 1));
   const redeemValue = Math.max(1, Number(loyaltyRule?.redeemValue || 1));
+  const maxRedemptionPercent = Math.min(50, Math.max(0, Number(loyaltyRule?.maxRedemptionPercent ?? 50)));
   const pointsBaseAmount = Math.max(Number(subtotal || 0) - Number(promoDiscount || 0), 0);
   const earnedPreviewPoints = Math.floor((pointsBaseAmount / currencyPerPoint) * pointPerUnit);
   const maxRedeemUnitsByPoints = Math.floor(Number(availablePoints || 0) / redeemPointUnit);
-  const maxRedeemUnitsByTotal = Math.floor(Math.max(subtotal + checkoutShip - promoDiscount, 0) / redeemValue);
+  const maxPointDiscount = Math.floor(pointsBaseAmount * maxRedemptionPercent / 100);
+  const maxRedeemUnitsByTotal = Math.floor(maxPointDiscount / redeemValue);
   const spendUnits = usePoints ? Math.max(0, Math.min(maxRedeemUnitsByPoints, maxRedeemUnitsByTotal)) : 0;
   const pointsSpent = spendUnits * redeemPointUnit;
   const pointsDiscount = spendUnits * redeemValue;
@@ -186,6 +188,8 @@ export function calculateCheckoutPricing({
     pointPerUnit,
     redeemPointUnit,
     redeemValue,
+    maxRedemptionPercent,
+    maxPointDiscount,
     earnedPreviewPoints,
     pointsSpent,
     pointsDiscount,

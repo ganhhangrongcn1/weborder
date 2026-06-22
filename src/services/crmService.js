@@ -13,6 +13,11 @@ import {
 import { getMonthlyCustomerGiftStatsByPhonesRpc } from "./customerOrderCountingRpcService.js";
 import { getAdminCrmAnalyticsRpc } from "./adminCrmAnalyticsService.js";
 import { activateLoyaltyRuleVersion, normalizeLoyaltyRuleVersionPayload } from "./loyaltyRuleVersionService.js";
+import {
+  DEFAULT_LOYALTY_PROGRAM_CONFIG,
+  normalizeLoyaltyProgramConfig,
+  resolveLoyaltyTier
+} from "./loyaltyProgramConfigService.js";
 import { hasDateRange } from "../utils/adminDateRange.js";
 import {
   calculateOrderPoints,
@@ -24,19 +29,7 @@ import {
 export const CRM_CUSTOMERS_KEY = "ghr_customers";
 export const CRM_LOYALTY_KEY = "ghr_loyalty";
 
-const defaultLoyaltyConfig = {
-  currencyPerPoint: 100,
-  pointPerUnit: 1,
-  checkinDailyPoints: 100,
-  streakRewards: {
-    7: 700,
-    14: 1500,
-    30: 3000
-  },
-  redeemPointUnit: 1,
-  redeemValue: 1,
-  byPhone: {}
-};
+const defaultLoyaltyConfig = DEFAULT_LOYALTY_PROGRAM_CONFIG;
 const CRM_SUPPORT_CACHE_TTL_MS = 60000;
 let crmSupportCache = { value: null, cachedAt: 0 };
 let crmSupportInFlight = null;
@@ -129,18 +122,10 @@ export function saveCustomersMeta(next) {
 }
 
 function normalizeLoyaltyConfigInput(next) {
-  const incomingStreakRewards = next?.streakRewards || {};
-  return {
-    ...defaultLoyaltyConfig,
-    ...(next || {}),
+  return normalizeLoyaltyProgramConfig({
     ...normalizeLoyaltyRuleVersionPayload(next),
-    streakRewards: {
-      7: Math.max(1, Number(incomingStreakRewards?.[7] || incomingStreakRewards?.["7"] || defaultLoyaltyConfig.streakRewards[7])),
-      14: Math.max(1, Number(incomingStreakRewards?.[14] || incomingStreakRewards?.["14"] || defaultLoyaltyConfig.streakRewards[14])),
-      30: Math.max(1, Number(incomingStreakRewards?.[30] || incomingStreakRewards?.["30"] || defaultLoyaltyConfig.streakRewards[30]))
-    },
     byPhone: { ...(next?.byPhone || {}) }
-  };
+  });
 }
 
 export async function saveLoyaltyConfigAsync(next) {
@@ -307,12 +292,8 @@ function getDaysSince(dateValue) {
   return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
 }
 
-export function getCustomerTier(totalSpent = 0) {
-  const amount = Number(totalSpent || 0);
-  if (amount >= 5000000) return "Kim cương";
-  if (amount >= 2500000) return "Vàng";
-  if (amount >= 1000000) return "Bạc";
-  return "Đồng";
+export function getCustomerTier(totalSpent = 0, loyaltyConfig = defaultLoyaltyConfig) {
+  return resolveLoyaltyTier(totalSpent, loyaltyConfig).name;
 }
 
 export async function buildCustomersFromOrdersAsync(orderStorage, options = {}) {
@@ -328,6 +309,11 @@ export async function buildCustomersFromOrdersAsync(orderStorage, options = {}) 
 
 export async function buildCustomersFromOrderListAsync(orders = [], orderStorage, options = {}) {
   const safeOrders = Array.isArray(orders) ? orders : [];
+  const uniquePhones = Array.from(new Set(
+    safeOrders
+      .map((order) => getCustomerKey(order?.customerPhone || order?.phone || ""))
+      .filter(Boolean)
+  ));
   const {
     loyalty,
     customerMeta,
@@ -413,11 +399,10 @@ function buildCustomersSnapshotFromSources({
   auditEnabled = false,
   supabaseProfileCount = null
 }) {
-  const normalizedLoyaltyConfig = {
-    ...defaultLoyaltyConfig,
+  const normalizedLoyaltyConfig = normalizeLoyaltyProgramConfig({
     ...(loyalty || {}),
     byPhone: { ...(loyalty?.byPhone || {}) }
-  };
+  });
   const ratio = {
     currencyPerPoint: Math.max(1, Number(normalizedLoyaltyConfig.currencyPerPoint || defaultLoyaltyConfig.currencyPerPoint)),
     pointPerUnit: Math.max(1, Number(normalizedLoyaltyConfig.pointPerUnit || defaultLoyaltyConfig.pointPerUnit))
@@ -433,6 +418,7 @@ function buildCustomersSnapshotFromSources({
       name: orderName,
       lastOrderName: orderName,
       ...EMPTY_ORDER_COUNT_SUMMARY,
+      loyaltyQualifyingSpend: 0,
       lastOrderAt: null,
       orders: []
     };
@@ -443,6 +429,11 @@ function buildCustomersSnapshotFromSources({
     );
     current.totalOrders = nextSummary.totalOrders;
     current.totalSpent = nextSummary.totalSpent;
+    const isPartnerOrder = String(order?.sourceType || "").toLowerCase() === "partner" || Boolean(order?.partnerSource);
+    const loyaltyQualifyingAmount = isPartnerOrder
+      ? toOrderCountingNumber(order?.loyaltyEligibleAmount ?? order?.netReceivedAmount, 0)
+      : toOrderCountingNumber(order?.totalAmount ?? order?.total, 0);
+    current.loyaltyQualifyingSpend = toOrderCountingNumber(current.loyaltyQualifyingSpend, 0) + loyaltyQualifyingAmount;
     current.orders.push(order);
     if (!current.lastOrderAt || new Date(order.createdAt || 0) > new Date(current.lastOrderAt || 0)) {
       current.lastOrderAt = order.createdAt || null;
@@ -475,6 +466,7 @@ function buildCustomersSnapshotFromSources({
         name: registeredUser?.name || customerMeta?.[phone]?.name || "",
         lastOrderName: "",
         ...EMPTY_ORDER_COUNT_SUMMARY,
+        loyaltyQualifyingSpend: 0,
         lastOrderAt: registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null,
         orders: []
       };
@@ -486,6 +478,7 @@ function buildCustomersSnapshotFromSources({
       const clientTotalSpent = toOrderCountingNumber(customer.totalSpent, 0);
       const totalOrders = toOrderCountingNumber(rpcStats?.totalOrders ?? clientTotalOrders, 0);
       const totalSpent = toOrderCountingNumber(rpcStats?.totalSpent ?? clientTotalSpent, 0);
+      const loyaltyQualifyingSpend = toOrderCountingNumber(customer.loyaltyQualifyingSpend, 0);
       const rpcTotalOrders = rpcStats ? toOrderCountingNumber(rpcStats.totalOrders, 0) : null;
       const rpcTotalSpent = rpcStats ? toOrderCountingNumber(rpcStats.totalSpent, 0) : null;
       const transactionAudit = {
@@ -502,7 +495,7 @@ function buildCustomersSnapshotFromSources({
         (transactionAudit.orderDifference !== 0 || transactionAudit.spentDifference !== 0)
       );
       const lastOrderAt = crmAnalyticsCustomer?.lastOrderAt || customer.lastOrderAt || registeredUser?.metadata?.lastOrderAt || registeredUser?.updatedAt || null;
-      const autoPoints = Math.floor((Number(totalSpent || 0) / ratio.currencyPerPoint) * ratio.pointPerUnit);
+      const autoPoints = Math.floor((loyaltyQualifyingSpend / ratio.currencyPerPoint) * ratio.pointPerUnit);
       const phoneLoyalty = normalizeLoyaltyData({
         ...defaultLoyaltyData,
         ...(loyaltyByPhone[customer.phone] || {})
@@ -534,6 +527,7 @@ function buildCustomersSnapshotFromSources({
         ...(crmAnalyticsCustomer || {}),
         totalOrders,
         totalSpent,
+        loyaltyQualifyingSpend,
         transactionSummarySource,
         transactionAudit,
         lastOrderAt,
@@ -555,7 +549,7 @@ function buildCustomersSnapshotFromSources({
           registeredUser?.passwordDemo ||
           registeredUser?.email
         ),
-        tier: getCustomerTier(totalSpent),
+        tier: getCustomerTier(loyaltyQualifyingSpend, normalizedLoyaltyConfig),
         daysSinceLastOrder: getDaysSince(lastOrderAt),
         vouchers: resolvedVouchers,
         pointsHistory: phoneLoyalty.pointHistory

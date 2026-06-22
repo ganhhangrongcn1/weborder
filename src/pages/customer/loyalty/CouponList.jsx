@@ -3,9 +3,11 @@ import VoucherCard from "./VoucherCard.jsx";
 export default function CouponList({
   vouchers,
   isVoucherExpired,
-  EmptyState
+  EmptyState,
+  onUseVoucher
 }) {
-  const sortedVouchers = [...vouchers].sort((a, b) => {
+  const safeVouchers = Array.isArray(vouchers) ? vouchers : [];
+  const sortedVouchers = [...safeVouchers].sort((a, b) => {
     const score = (item) => {
       if (item?.canceled) return 3;
       if (item?.used) return 2;
@@ -20,8 +22,13 @@ export default function CouponList({
   return (
     <div className="space-y-2">
       {sortedVouchers.length === 0 && EmptyState}
-      {sortedVouchers.map((voucher) => (
-        <VoucherCard key={voucher.id} voucher={voucher} expired={isVoucherExpired(voucher)} />
+      {sortedVouchers.map((voucher, index) => (
+        <VoucherCard
+          key={voucher.id || voucher.code || `${voucher.title || "voucher"}-${index}`}
+          voucher={voucher}
+          expired={isVoucherExpired(voucher)}
+          onUse={onUseVoucher}
+        />
       ))}
     </div>
   );

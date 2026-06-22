@@ -124,12 +124,12 @@ partner_orders as (
     po.id::text as partner_order_identity,
     trim(coalesce(po.order_code, '')) as partner_order_code,
     coalesce(po.total_amount, 0)::numeric as total_amount,
-    coalesce(nullif(po.points_base_amount, 0), po.total_amount, 0)::numeric as points_base_amount,
+    coalesce(po.net_received_amount, 0)::numeric as points_base_amount,
     lower(trim(coalesce(po.point_status, 'pending'))) as point_status_key,
     public.normalize_order_counting_status(po.order_status) as order_status_key,
     public.normalize_order_counting_status(po.nexpos_status) as nexpos_status_key,
     public.normalize_order_counting_status(coalesce(po.raw_data ->> 'status', '')) as raw_status_key,
-    floor((coalesce(nullif(po.points_base_amount, 0), po.total_amount, 0)::numeric / nullif(r.currency_per_point, 0)) * r.point_per_unit)::integer as earned_points
+    floor((coalesce(po.net_received_amount, 0)::numeric / nullif(r.currency_per_point, 0)) * r.point_per_unit)::integer as earned_points
   from public.partner_orders po
   cross join identity i
   cross join rule r

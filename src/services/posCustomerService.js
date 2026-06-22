@@ -5,6 +5,7 @@ import { getCustomerKey } from "./storageService.js";
 import { orderStorage } from "./orderService.js";
 import { readCustomerPartnerOrdersForAdmin } from "./adminOrderFeedService.js";
 import { getCustomerOrderSummary } from "./orderSummaryService.js";
+import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -139,8 +140,11 @@ function normalizePartnerOrder(order = {}) {
     ? order.raw_data
     : (order?.rawData && typeof order.rawData === "object" ? order.rawData : {});
   const total = toNumber(order.total_amount ?? order.totalAmount ?? order.total ?? rawData.total_amount, 0);
-  const points = Math.max(0, Math.floor(toNumber(order.points_base_amount ?? order.pointsBaseAmount ?? total, 0) / 10000));
-  const pointStatus = normalizePointStatus(order.point_status || order.pointStatus || "pending", points);
+  const loyaltyAmount = buildPartnerLoyaltyAmountSnapshot(order);
+  const points = Math.max(0, Math.floor(loyaltyAmount.pointsBaseAmount / 10000));
+  const pointStatus = loyaltyAmount.pointStatus === "waiting_data"
+    ? "waiting_data"
+    : normalizePointStatus(order.point_status || order.pointStatus || "pending", points);
   return {
     id: toText(order.id || order.order_code || order.display_order_code),
     code: toText(order.display_order_code || order.displayOrderCode || order.order_code || order.orderCode || order.id),
@@ -262,6 +266,11 @@ export async function lookupPosCustomerByPhone(phone = "") {
     .slice(0, 8);
   const registeredCustomer = isRegisteredProfile(profile);
   const customerName = buildCustomerDisplayName(profile, phoneKey, latestOrder?.customerName || "");
+  const currentTierRule = (Array.isArray(loyaltyRule?.tiers) ? loyaltyRule.tiers : [])
+    .find((tier) => tier?.id === loyalty?.tierId);
+  const effectiveLoyaltyRule = currentTierRule
+    ? { ...loyaltyRule, ...currentTierRule }
+    : loyaltyRule;
 
   return {
     ok: true,
@@ -269,7 +278,7 @@ export async function lookupPosCustomerByPhone(phone = "") {
     profile: profile || null,
     customerName,
     loyalty,
-    loyaltyRule,
+    loyaltyRule: effectiveLoyaltyRule,
     availableVouchers,
     stats,
     registeredCustomer,

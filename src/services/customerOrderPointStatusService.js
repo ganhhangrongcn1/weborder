@@ -50,7 +50,11 @@ export function resolveCustomerOrderPointStatus(statusMap = new Map(), order = {
 
   for (const key of keys) {
     const status = toText(statusMap?.get?.(key)).toLowerCase();
-    if (status) return status;
+    if (status) {
+      const localStatus = toText(order?.pointStatus || order?.point_status).toLowerCase();
+      if (status === "pending" && localStatus === "waiting_data") return "waiting_data";
+      return status;
+    }
   }
   return "";
 }

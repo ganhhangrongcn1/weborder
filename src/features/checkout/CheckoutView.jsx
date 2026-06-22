@@ -121,6 +121,11 @@ export default function Checkout({
   const deliveryAvailable = deliveryEligibleBranches.length > 0;
   const checkoutLoyalty = currentPhone ? (demoLoyalty || {}) : (demoLoyalty || {});
   const [loyaltyRule, setLoyaltyRule] = useState(() => getCheckoutLoyaltyRule());
+  const effectiveLoyaltyRule = useMemo(() => {
+    const currentTier = (Array.isArray(loyaltyRule?.tiers) ? loyaltyRule.tiers : [])
+      .find((tier) => tier?.id === checkoutLoyalty?.tierId);
+    return currentTier ? { ...loyaltyRule, ...currentTier } : loyaltyRule;
+  }, [checkoutLoyalty?.tierId, loyaltyRule]);
 
   const promoCodes = useMemo(
     () => buildCheckoutPromoCodes(coupons, checkoutFallbackCoupons, subtotal, formatMoney, checkoutLoyalty?.voucherHistory || [], demoOrders || []),
@@ -149,7 +154,7 @@ export default function Checkout({
     selectedPromo,
     availablePoints,
     usePoints,
-    loyaltyRule
+    loyaltyRule: effectiveLoyaltyRule
   });
 
   const originalSubtotal = useMemo(

@@ -2,6 +2,7 @@ import { initSupabaseRuntimeClient, getSupabaseRuntimeClient } from "./supabase/
 import { normalizePartnerSource, resolveOrderSourceKey } from "./partnerOrderService.js";
 import { applyOrderLoyaltyAsync } from "./loyaltyService.js";
 import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
+import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
 
 const KITCHEN_SOURCE = {
   website: "website",
@@ -904,6 +905,7 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     row.order_status
   );
   const kitchenStatus = resolvePartnerKitchenStatus(row, nexposState);
+  const loyaltyAmount = buildPartnerLoyaltyAmountSnapshot(row);
 
   return {
     id,
@@ -947,14 +949,17 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     kitchenStatus,
     kitchenWorkStatus: toText(row.kitchen_work_status),
     kitchenDoneAt: toText(row.kitchen_done_at),
-    pointStatus: toText(row.point_status || "pending"),
+    pointStatus: loyaltyAmount.pointStatus,
     displayStatus: getDisplayStatus(kitchenStatus),
     fulfillmentType: "delivery",
     paymentMethod: "foodapp",
     subtotal: toNumber(row.subtotal, 0),
     shippingFee: toNumber(row.shipping_fee, 0),
     discountAmount: toNumber(row.discount_amount, 0),
-    pointsBaseAmount: toNumber(row.points_base_amount, row.total_amount),
+    pointsBaseAmount: loyaltyAmount.pointsBaseAmount,
+    loyaltyEligibleAmount: loyaltyAmount.loyaltyEligibleAmount,
+    netReceivedAmount: loyaltyAmount.netReceivedAmount,
+    loyaltyHoldReason: loyaltyAmount.loyaltyHoldReason,
     totalAmount: toNumber(row.total_amount, 0),
     total: toNumber(row.total_amount, 0),
     createdAt: toText(row.order_time || row.created_at),

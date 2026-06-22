@@ -23,7 +23,9 @@
 | `discount_amount` | `finance_data.total_promotion_price` | Fallback `total_discount` if needed, but some Grab rows are negative. |
 | `shipping_fee` | `finance_data.shipping_fee` or `shipment_fee` | Usually `0` in current samples. |
 | `total_amount` | `total` | Customer order menu total before platform settlement. |
-| `points_base_amount` | `finance_data.sell_price` | Recommended for loyalty after item/platform menu discount. Fallback `total`. |
+| `net_received_amount` | `finance_data.real_received`, then `finance_data.net_received`, then `total_for_biz` | Canonical amount actually received by the restaurant. Leave `null` when reconciliation data is missing. Never fall back to `total`. |
+| `points_base_amount` | copy `net_received_amount`; use `0` while missing | Loyalty snapshot only. Zero safely blocks legacy clients from falling back to the order total. The database trigger maintains this field. |
+| `loyalty_hold_reason` | database managed | `missing_partner_net_received` when reconciliation data is unavailable. Do not write a fake amount to clear it. |
 | `order_status` | `status` | Business status bucket used by app/admin/customer. See mapping below. |
 | `kitchen_status` | `status` | Compatibility field only. Must follow current DB contract, not invent new kitchen meanings. |
 | `kitchen_work_status` | internal app flow | Internal kitchen execution state. Default `pending`, kitchen marks `done` later. |

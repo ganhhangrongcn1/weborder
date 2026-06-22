@@ -1,4 +1,5 @@
 import { calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
+import { resolvePartnerNetReceivedAmount } from "./partnerOrderAmountService.js";
 import {
   EMPTY_ORDER_COUNT_SUMMARY,
   appendOrderCountSummary,
@@ -83,12 +84,12 @@ export async function getCustomerOrderSummary(phone = "") {
       .order("created_at", { ascending: false })),
     fetchAllPages(() => client
       .from("partner_orders")
-      .select("id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status")
+      .select("id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status,raw_data")
       .in("customer_phone_key", phoneVariants)
       .order("order_time", { ascending: false })),
     fetchAllPages(() => client
       .from("partner_orders")
-      .select("id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status")
+      .select("id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status,raw_data")
       .in("customer_phone", phoneVariants)
       .order("order_time", { ascending: false })),
     fetchAllPages(() => client
@@ -139,7 +140,7 @@ export async function getCustomerOrderSummary(phone = "") {
     if (isExcludedOrderForCounting(order.order_status, order.nexpos_status)) return;
 
     const total = toOrderCountingNumber(order.total_amount);
-    const pointBase = toOrderCountingNumber(order.points_base_amount) || total;
+    const pointBase = toOrderCountingNumber(resolvePartnerNetReceivedAmount(order));
     const points = calculateOrderPoints(pointBase, loyaltyRule);
     const pointStatus = String(order.point_status || "pending").toLowerCase();
     const netPoints = getNetOrderPoints(loyaltyLookup, {

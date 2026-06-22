@@ -61,28 +61,30 @@ export const loyaltyByPhoneStorage = {
 export function getLoyaltyRuleConfig() {
   return loyaltyRepository.getCrmConfig({
     currencyPerPoint: 100,
-    pointPerUnit: 1,
+    pointPerUnit: 10,
     checkinDailyPoints: 100,
     streakRewards: { 7: 700, 14: 1500, 30: 3000 },
     redeemPointUnit: 1,
-    redeemValue: 1
+    redeemValue: 1,
+    maxRedemptionPercent: 50
   });
 }
 
 export async function getLoyaltyRuleConfigAsync() {
   return loyaltyRepository.getCrmConfigAsync({
     currencyPerPoint: 100,
-    pointPerUnit: 1,
+    pointPerUnit: 10,
     checkinDailyPoints: 100,
     streakRewards: { 7: 700, 14: 1500, 30: 3000 },
     redeemPointUnit: 1,
-    redeemValue: 1
+    redeemValue: 1,
+    maxRedemptionPercent: 50
   });
 }
 
 export function calculateOrderPoints(amount, loyaltyRule = getLoyaltyRuleConfig()) {
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
-  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
+  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 10));
   return Math.floor((Number(amount || 0) / currencyPerPoint) * pointPerUnit);
 }
 

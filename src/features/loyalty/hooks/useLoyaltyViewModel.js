@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
 import { loyaltyByPhoneStorage, loyaltyStorage, normalizeLoyaltyData } from "../../../services/loyaltyService.js";
 import { buildCheckinIdempotencyKey } from "../../../services/loyaltyRuntimeService.js";
 import { loyaltyRepository } from "../../../services/repositories/loyaltyRepository.js";
+import { buildLoyaltyTierJourney } from "../../../services/loyaltyProgramConfigService.js";
 import {
   getDateKey,
   getTodayKey,
@@ -12,7 +13,7 @@ import {
 
 const DEFAULT_LOYALTY_RULE = {
   currencyPerPoint: 100,
-  pointPerUnit: 1,
+  pointPerUnit: 10,
   checkinDailyPoints: 100,
   streakRewards: {
     7: 700,
@@ -20,7 +21,8 @@ const DEFAULT_LOYALTY_RULE = {
     30: 3000
   },
   redeemPointUnit: 1,
-  redeemValue: 1
+  redeemValue: 1,
+  maxRedemptionPercent: 50
 };
 
 function getStreakRewards(loyaltyRule) {
@@ -78,7 +80,7 @@ export default function useLoyaltyViewModel({
   const simpleRewardsMode = !rewardFeatureFlags.enableCheckIn && !rewardFeatureFlags.enableLuckyDraw && !rewardFeatureFlags.enableComebackReward && !rewardFeatureFlags.enableMilestoneReward;
   const [loyaltyRule, setLoyaltyRule] = useState(() => loyaltyRepository.getLoyaltyRule(DEFAULT_LOYALTY_RULE));
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || DEFAULT_LOYALTY_RULE.currencyPerPoint));
-  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 1));
+  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 10));
 
   const [loyalty, setLoyalty] = useState(() => {
     const saved = normalizeLoyaltyData(
@@ -169,6 +171,10 @@ export default function useLoyaltyViewModel({
     date.setDate(date.getDate() - (6 - index));
     return getDateKey(date);
   });
+  const tierJourney = useMemo(
+    () => buildLoyaltyTierJourney(loyalty, loyaltyRule),
+    [loyalty, loyaltyRule]
+  );
 
   function saveLoyalty(nextData) {
     const normalized = normalizeLoyaltyData(nextData);
@@ -294,6 +300,7 @@ export default function useLoyaltyViewModel({
     currencyPerPoint,
     pointPerUnit,
     loyalty,
+    tierJourney,
     luckyVoucher,
     setLuckyVoucher,
     today,

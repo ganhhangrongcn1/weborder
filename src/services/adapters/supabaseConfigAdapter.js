@@ -160,6 +160,10 @@ export function createSupabaseConfigAdapter({
   }
 
   return {
+    prime(key, value) {
+      setCache(key, value, new Date().toISOString());
+      return value;
+    },
     load(key, fallback) {
       const cached = getFreshCache(key);
       const currentValue = cached ? (cached.value ?? fallback) : fallback;

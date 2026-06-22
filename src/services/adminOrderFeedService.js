@@ -6,6 +6,7 @@ import {
 } from "./partnerOrderService.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { buildOrderCountingPhoneVariants } from "./customerOrderCountingService.js";
+import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -117,6 +118,7 @@ function mapPartnerOrderRow(order = {}, itemsByOrderId = new Map()) {
   const coFundPromotion = toNumber(financeData.co_fund_promotion_price, 0);
   const otherPromotion = toNumber(financeData.other_promotion_price, 0);
   const totalAmount = toNumber(order.total_amount, toNumber(rawData.total, 0));
+  const loyaltyAmount = buildPartnerLoyaltyAmountSnapshot(order);
   return {
     id: order.id || orderCode,
     sourceType: "partner",
@@ -147,14 +149,17 @@ function mapPartnerOrderRow(order = {}, itemsByOrderId = new Map()) {
     totalPromotion,
     totalAmount,
     total: totalAmount,
-    pointsBaseAmount: toNumber(order.points_base_amount, totalAmount),
+    pointsBaseAmount: loyaltyAmount.pointsBaseAmount,
+    loyaltyEligibleAmount: loyaltyAmount.loyaltyEligibleAmount,
+    netReceivedAmount: loyaltyAmount.netReceivedAmount,
+    loyaltyHoldReason: loyaltyAmount.loyaltyHoldReason,
     grossReceived: toNumber(rawData.total_for_biz, toNumber(financeData.gross_received, 0)),
     netReceived: toNumber(financeData.net_received, 0),
     realReceived: toNumber(financeData.real_received, 0),
     financeData,
     rawData,
     nexposOrderId: order.nexpos_order_id || rawData.nexpos_order_id || rawData.id || "",
-    pointStatus: order.point_status || "pending",
+    pointStatus: loyaltyAmount.pointStatus,
     branchId: order.branch_id || "",
     branchUuid: order.branch_uuid || "",
     branchName: order.branch_name || order.nexpos_site_name || order.nexpos_hub_name || "",

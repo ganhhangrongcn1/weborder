@@ -519,6 +519,13 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     lastMissedStreak: Number(accountRow?.last_missed_streak || 0),
     comebackUsedDate: accountRow?.comeback_used_date || null,
     voucherHistory: Array.isArray(accountRow?.vouchers) ? accountRow.vouchers : [],
+    tierId: accountRow?.tier_id || "new_customer",
+    tierCycleYear: Number(accountRow?.tier_cycle_year || new Date().getFullYear()),
+    tierQualifyingSpend: Number(accountRow?.tier_qualifying_spend || 0),
+    tierQualifyingOrderCount: Number(accountRow?.tier_qualifying_order_count || 0),
+    tierQualifiedAt: accountRow?.tier_qualified_at || null,
+    lastPurchaseAt: accountRow?.last_purchase_at || null,
+    pointsExpiresAt: accountRow?.points_expires_at || null,
     pointHistory,
     checkinHistory: checkinStats.checkinHistory
   };
@@ -1321,12 +1328,26 @@ async function readLoyaltyForPhoneFromTable(phone) {
   const key = normalizePhone(phone);
   if (!key) return null;
 
-  const { data: account, error: accountError } = await client
-    .from("loyalty_accounts")
-    .select("*")
-    .eq("customer_phone", key)
-    .maybeSingle();
-  if (accountError) throw accountError;
+  let account = null;
+  const { data: preparedAccounts, error: prepareError } = await client.rpc(
+    "prepare_customer_loyalty_account",
+    { p_phone: key }
+  );
+  if (!prepareError) {
+    account = Array.isArray(preparedAccounts) ? preparedAccounts[0] || null : preparedAccounts || null;
+  } else if (!["42883", "PGRST202"].includes(String(prepareError.code || ""))) {
+    throw prepareError;
+  }
+
+  if (!account) {
+    const { data, error } = await client
+      .from("loyalty_accounts")
+      .select("*")
+      .eq("customer_phone", key)
+      .maybeSingle();
+    if (error) throw error;
+    account = data || null;
+  }
 
   const { data: ledger, error: ledgerError } = await client
     .from("loyalty_ledger")
@@ -1335,7 +1356,7 @@ async function readLoyaltyForPhoneFromTable(phone) {
     .order("created_at", { ascending: false });
   if (ledgerError) throw ledgerError;
 
-  return buildLoyaltySnapshotFromRows(account || null, ledger || [], key);
+  return buildLoyaltySnapshotFromRows(account, ledger || [], key);
 }
 
 async function readLoyaltyAccountsSummaryFromTable() {
@@ -1344,7 +1365,7 @@ async function readLoyaltyAccountsSummaryFromTable() {
   if (!client) return null;
   const { data, error } = await client
     .from("loyalty_accounts")
-    .select("customer_phone,total_points,checkin_streak,last_checkin_date,last_missed_streak,comeback_used_date,vouchers,updated_at");
+    .select("*");
   if (error) throw error;
   const map = {};
   (data || []).forEach((row) => {
@@ -1358,6 +1379,13 @@ async function readLoyaltyAccountsSummaryFromTable() {
       lastMissedStreak: Number(row.last_missed_streak || 0),
       comebackUsedDate: row.comeback_used_date || null,
       voucherHistory: Array.isArray(row.vouchers) ? row.vouchers : [],
+      tierId: row.tier_id || "new_customer",
+      tierCycleYear: Number(row.tier_cycle_year || new Date().getFullYear()),
+      tierQualifyingSpend: Number(row.tier_qualifying_spend || 0),
+      tierQualifyingOrderCount: Number(row.tier_qualifying_order_count || 0),
+      tierQualifiedAt: row.tier_qualified_at || null,
+      lastPurchaseAt: row.last_purchase_at || null,
+      pointsExpiresAt: row.points_expires_at || null,
       pointHistory: [],
       checkinHistory: [],
       updatedAt: row.updated_at || ""
@@ -1463,6 +1491,22 @@ async function activateLoyaltyRuleVersion({
     p_redeem_value: Math.max(1, Math.floor(Number(redeemValue || 1))),
     p_checkin_daily_points: Math.max(0, Math.floor(Number(checkinDailyPoints || 0))),
     p_streak_rewards: streakRewards && typeof streakRewards === "object" ? streakRewards : {},
+    p_idempotency_key: String(idempotencyKey || "").trim()
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] || null : data || null;
+}
+
+async function activateLoyaltyProgramVersion({
+  programConfig = {},
+  idempotencyKey = ""
+} = {}) {
+  if (!isSupabaseReady()) return null;
+  const client = await getAdminSupabaseClientAsync() || await getSupabaseClientAsync();
+  if (!client) return null;
+
+  const { data, error } = await client.rpc("activate_loyalty_program_version", {
+    p_program_config: programConfig && typeof programConfig === "object" ? programConfig : {},
     p_idempotency_key: String(idempotencyKey || "").trim()
   });
   if (error) throw error;
@@ -1914,6 +1958,7 @@ export const coreSupabaseRepository = {
   processOrderLoyalty,
   processLoyaltyCheckin,
   activateLoyaltyRuleVersion,
+  activateLoyaltyProgramVersion,
   auditLoyaltyReconcileBacklog,
   reconcileLoyaltyBacklog,
   auditLoyaltyReconcilePlan,
