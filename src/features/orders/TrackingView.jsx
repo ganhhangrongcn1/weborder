@@ -266,6 +266,11 @@ export default function Tracking({
   };
 
   const getOrderTotal = (order) => Number(order?.totalAmount || order?.total || 0);
+  const getOrderDisplayAmount = (order) => {
+    if (order?.sourceType !== "partner") return getOrderTotal(order);
+    return Number(order?.netReceivedAmount ?? order?.loyaltyEligibleAmount ?? 0);
+  };
+  const getOrderAmountLabel = (order) => order?.sourceType === "partner" ? "Thực nhận" : "Tổng tiền";
   const getClaimablePoints = (order) => {
     const isPartnerOrder = order?.sourceType === "partner";
     const amount = Number(
@@ -276,6 +281,8 @@ export default function Tracking({
     return Math.max(0, Number(calculateOrderPoints(amount, getLoyaltyRuleConfig()) || 0));
   };
   const getOrderRewardPoints = (order) => {
+    const expectedPoints = Number(order?.expectedEarnPoints || 0);
+    if (expectedPoints > 0) return expectedPoints;
     const savedPoints = Number(order?.pointsEarned || 0);
     return savedPoints > 0 ? savedPoints : getClaimablePoints(order);
   };
@@ -397,7 +404,7 @@ export default function Tracking({
             partnerOrderCode: order.orderCode,
             source: order.partnerSource || order.source || "",
             points: result.points,
-            amount: getOrderTotal(order),
+            amount: getOrderDisplayAmount(order),
             title: `Cộng điểm từ đơn ${order.displayOrderCode || order.orderCode}`,
             note: getOrderBranchName(order),
             createdAt: new Date().toISOString()
@@ -596,7 +603,7 @@ export default function Tracking({
 
                       <div className="mt-4 flex items-center justify-between gap-3 border-t border-orange-100 pt-3">
                         <p className="text-sm text-brown/60">
-                          Tổng tiền: <strong className="text-base text-brown">{formatMoney(getOrderTotal(order))}</strong>
+                          {getOrderAmountLabel(order)}: <strong className="text-base text-brown">{formatMoney(getOrderDisplayAmount(order))}</strong>
                         </p>
                         {pointBadge && ["claimed", "waiting_data"].includes(String(order.pointStatus || "").toLowerCase()) ? (
                           <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${pointBadge.className}`}>
@@ -648,9 +655,12 @@ export default function Tracking({
                   </div>
 
                   <div className="mt-4 flex items-center justify-between gap-3">
-                    <strong className="text-lg font-black text-orange-600">
-                      {formatMoney(getOrderTotal(order))}
-                    </strong>
+                    <div className="min-w-0">
+                      {isPartnerOrder ? <span className="block text-[11px] font-bold text-brown/55">Thực nhận</span> : null}
+                      <strong className="block text-lg font-black text-orange-600">
+                        {formatMoney(getOrderDisplayAmount(order))}
+                      </strong>
+                    </div>
                     {canClaimPoints ? (
                       <button
                         type="button"

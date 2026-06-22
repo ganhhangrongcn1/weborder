@@ -22,6 +22,7 @@ export default function OrderStatusSheet({
   const promoDiscount = Number(order.promoDiscount || 0);
   const pointsDiscount = Number(order.pointsDiscount || 0);
   const totalValue = Number(order.totalAmount || order.total || 0);
+  const netReceivedValue = Number(order.netReceivedAmount || order.loyaltyEligibleAmount || 0);
   const isPickupOrder = order.fulfillmentType === "pickup";
   const isPartnerOrder = order.sourceType === "partner";
   const sourceBadge = getOrderSourceBadge(order);
@@ -201,6 +202,13 @@ export default function OrderStatusSheet({
           <span>Tổng thanh toán</span>
           <strong>{formatMoney(totalValue)}</strong>
         </div>
+
+        {isPartnerOrder && netReceivedValue > 0 ? (
+          <div className="order-detail-total compact">
+            <span>Thực nhận tính điểm</span>
+            <strong>{formatMoney(netReceivedValue)}</strong>
+          </div>
+        ) : null}
       </div>
     </CustomerBottomSheet>
   );

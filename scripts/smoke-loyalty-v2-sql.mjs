@@ -53,6 +53,12 @@ const TIER_IDENTITY_FILE = path.join(
   "migrations",
   "20260622013732_loyalty_tier_names_and_icons.sql",
 );
+const ATOMIC_COMPLETION_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260622084850_complete_website_order_loyalty_atomic.sql",
+);
 
 const assertIncludes = (content, expected, message) => {
   if (!content.includes(expected)) {
@@ -60,7 +66,7 @@ const assertIncludes = (content, expected, message) => {
   }
 };
 
-const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity] = await Promise.all([
+const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion] = await Promise.all([
   readFile(FOUNDATION_FILE, "utf8"),
   readFile(AUDIT_FILE, "utf8"),
   readFile(POSTCHECK_FILE, "utf8"),
@@ -71,6 +77,7 @@ const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived,
   readFile(DEFAULT_ACTIVATION_FILE, "utf8"),
   readFile(REACHABLE_TIERS_FILE, "utf8"),
   readFile(TIER_IDENTITY_FILE, "utf8"),
+  readFile(ATOMIC_COMPLETION_FILE, "utf8"),
 ]);
 
 assertIncludes(foundation, "begin;", "Foundation migration must be transactional");
@@ -248,5 +255,39 @@ assertIncludes(
   "tier_qualifying_order_count = greatest(coalesce(tier_qualifying_order_count, 0) + 1, 0)",
   "Completed loyalty events must advance annual order progress",
 );
+assertIncludes(atomicCompletion, "begin;", "Atomic completion migration must be transactional");
+assertIncludes(atomicCompletion, "commit;", "Atomic completion migration must commit");
+assertIncludes(
+  atomicCompletion,
+  "create or replace function public.complete_website_order_with_loyalty(",
+  "Missing atomic website completion RPC",
+);
+assertIncludes(
+  atomicCompletion,
+  "security invoker",
+  "Atomic website completion RPC must use SECURITY INVOKER",
+);
+assertIncludes(
+  atomicCompletion,
+  "from public.process_order_loyalty(",
+  "Atomic website completion must reuse the Loyalty V2 engine",
+);
+assertIncludes(
+  atomicCompletion,
+  "from public, anon;",
+  "Atomic website completion must revoke anonymous execution",
+);
+const atomicCompletionFacade = atomicCompletion.match(
+  /create or replace function public\.complete_website_order_with_loyalty\(([\s\S]*?)\)\s*returns table/i,
+);
+if (!atomicCompletionFacade) {
+  throw new Error("Cannot inspect complete_website_order_with_loyalty signature");
+}
+if (/p_(customer_)?phone|p_points|p_amount/i.test(atomicCompletionFacade[1])) {
+  throw new Error("Atomic completion RPC must not accept phone, points, or amount from the client");
+}
+if (/security\s+definer/i.test(atomicCompletion)) {
+  throw new Error("Atomic website completion RPC must not use SECURITY DEFINER");
+}
 
 console.log("Loyalty V2 SQL smoke test passed.");

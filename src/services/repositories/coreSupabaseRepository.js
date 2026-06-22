@@ -1321,9 +1321,9 @@ async function readLoyaltyByPhoneFromTable() {
   return map;
 }
 
-async function readLoyaltyForPhoneFromTable(phone) {
+async function readLoyaltyForPhoneFromTable(phone, providedClient = null) {
   if (!isSupabaseReady()) return null;
-  const client = await getSupabaseClientAsync();
+  const client = providedClient || await getSupabaseClientAsync();
   if (!client) return null;
   const key = normalizePhone(phone);
   if (!key) return null;
@@ -1441,10 +1441,11 @@ async function processOrderLoyalty({
   sourceType = "ORDER",
   sourceOrderId = "",
   action = "",
-  idempotencyKey = ""
+  idempotencyKey = "",
+  client: providedClient = null
 } = {}) {
   if (!isSupabaseReady()) return null;
-  const client = await getSupabaseClientAsync();
+  const client = providedClient || await getSupabaseClientAsync();
   if (!client) return null;
 
   const payload = {
@@ -1455,6 +1456,23 @@ async function processOrderLoyalty({
   };
 
   const { data, error } = await client.rpc("process_order_loyalty", payload);
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] || null : data || null;
+}
+
+async function completeWebsiteOrderWithLoyalty({
+  orderId = "",
+  idempotencyKey = "",
+  client: providedClient = null
+} = {}) {
+  if (!isSupabaseReady()) return null;
+  const client = providedClient || await getSupabaseClientAsync();
+  if (!client) return null;
+
+  const { data, error } = await client.rpc("complete_website_order_with_loyalty", {
+    p_order_id: String(orderId || "").trim(),
+    p_idempotency_key: String(idempotencyKey || "").trim()
+  });
   if (error) throw error;
   return Array.isArray(data) ? data[0] || null : data || null;
 }
@@ -1761,6 +1779,7 @@ export const coreSupabaseRepository = {
   readLoyaltyAccountsSummaryFromTable,
   readLoyaltyLedgerByPhonePaged,
   processOrderLoyalty,
+  completeWebsiteOrderWithLoyalty,
   processLoyaltyCheckin,
   activateLoyaltyRuleVersion,
   activateLoyaltyProgramVersion,

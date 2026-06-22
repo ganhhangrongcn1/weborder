@@ -342,6 +342,7 @@ function mapPartnerOrderRow(row = {}) {
     pointsBaseAmount: loyaltyAmount.pointsBaseAmount,
     loyaltyEligibleAmount: loyaltyAmount.loyaltyEligibleAmount,
     netReceivedAmount: loyaltyAmount.netReceivedAmount,
+    expectedEarnPoints: toNumber(row.expected_earn_points),
     loyaltyHoldReason: loyaltyAmount.loyaltyHoldReason,
     status: normalizePartnerOrderStatus(row),
     orderStatus: row.order_status || "",
@@ -401,7 +402,7 @@ export async function getPartnerOrdersByPhone(phone, options = {}) {
   let ordersQuery = client
     .from("partner_orders")
     .select(
-      "id,order_code,display_order_code,partner_source,nexpos_order_id,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,customer_name,customer_phone,customer_phone_key,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,raw_data,order_time,created_at,updated_at"
+      "id,order_code,display_order_code,partner_source,nexpos_order_id,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,customer_name,customer_phone,customer_phone_key,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,expected_earn_points,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,raw_data,order_time,created_at,updated_at"
     )
     .eq("customer_phone_key", phoneKey)
     .order("order_time", { ascending: false });

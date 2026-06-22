@@ -1,6 +1,11 @@
-import { initSupabaseRuntimeClient, getSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
+import {
+  getSupabaseKitchenAuthClient,
+  getSupabaseRuntimeClient,
+  initSupabaseKitchenAuthClient,
+  initSupabaseRuntimeClient
+} from "./supabase/supabaseRuntimeClient.js";
 import { normalizePartnerSource, resolveOrderSourceKey } from "./partnerOrderService.js";
-import { applyOrderLoyaltyAsync } from "./loyaltyService.js";
+import { completeWebsiteOrderWithLoyaltyAsync } from "./loyaltyService.js";
 import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
 
@@ -417,33 +422,6 @@ function isLegacyWebsiteKitchenDone(order = {}) {
   return order.sourceType === KITCHEN_SOURCE.website &&
     kitchenStatus === "done" &&
     !["ready_for_pickup", "ready_for_delivery", "delivering", "done", "completed"].includes(status);
-}
-
-function getOrderLoyaltyPayload(order = {}, completedAt = new Date().toISOString()) {
-  const raw = getObject(order.raw);
-  const metadata = getObject(raw.metadata);
-  return {
-    phone: order.customerPhone || raw.customer_phone || metadata.customerPhone || metadata.phone || "",
-    orderId: order.orderCode || raw.order_code || order.id,
-    amount: Number(
-      metadata.pointsBaseAmount ??
-        raw.points_base_amount ??
-        Math.max(
-          Number(metadata.subtotal ?? raw.subtotal ?? order.totalAmount ?? 0) -
-            Number(metadata.promoDiscount ?? raw.promo_discount ?? 0),
-          0
-        )
-    ),
-    createdAt: completedAt,
-    promoSource: metadata.promoSource || raw.promo_source || "",
-    promoVoucherId: metadata.promoVoucherId || raw.promo_voucher_id || "",
-    promoCode: metadata.promoCode || raw.promo_code || "",
-    pointsSpent: Number(metadata.pointsSpent ?? metadata.pointsDiscount ?? raw.points_discount ?? 0),
-    pointsDiscount: Number(metadata.pointsDiscount ?? raw.points_discount ?? 0),
-    orderStatus: "done",
-    previousOrderStatus: order.status || raw.status || "",
-    sourceType: "ORDER"
-  };
 }
 
 export function getNextKitchenOrderAction(order = {}) {
@@ -972,7 +950,10 @@ function mapPartnerKitchenOrder(row = {}, itemsByOrderId = new Map()) {
 }
 
 async function getClient() {
-  return getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
+  return getSupabaseKitchenAuthClient() ||
+    (await initSupabaseKitchenAuthClient()) ||
+    getSupabaseRuntimeClient() ||
+    (await initSupabaseRuntimeClient());
 }
 
 async function readOrderItems(client, orderIds = []) {
@@ -1209,6 +1190,27 @@ export async function markKitchenOrderDone(order = {}) {
     };
   }
 
+  if (action.settleOrder) {
+    try {
+      const loyaltyResult = await completeWebsiteOrderWithLoyaltyAsync({
+        orderId: id,
+        client
+      });
+      return {
+        ok: true,
+        loyaltyUpdated: true,
+        loyaltyResult,
+        message: "Đơn đã hoàn thành và điểm khách hàng đã được cập nhật."
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        loyaltyUpdated: false,
+        message: error?.message || "Không thể hoàn tất đơn và cộng điểm."
+      };
+    }
+  }
+
   const { error } = await client
     .from("orders")
     .update({
@@ -1227,26 +1229,15 @@ export async function markKitchenOrderDone(order = {}) {
     };
   }
 
-  let loyaltyWarning = "";
-  if (action.settleOrder) {
-    try {
-      await applyOrderLoyaltyAsync(getOrderLoyaltyPayload(order, updatedAt));
-    } catch (loyaltyError) {
-      loyaltyWarning = `Đơn đã hoàn thành nhưng chưa cộng được điểm: ${loyaltyError?.message || "Vui lòng kiểm tra quyền tài khoản Bếp."}`;
-    }
-  }
-
   return {
     ok: true,
-    loyaltyUpdated: !loyaltyWarning,
-    warning: loyaltyWarning,
     message: action.type === "ready_for_pickup"
       ? "Đơn đã chuyển sang chờ khách lấy."
       : action.type === "ready_for_delivery"
         ? "Đơn đã chuyển sang chờ shipper."
         : action.type === "handoff_shipper"
           ? "Đơn đã chuyển sang đang giao."
-          : loyaltyWarning || "Đơn đã hoàn thành và điểm khách hàng đã được cập nhật."
+          : "Đã cập nhật trạng thái đơn."
   };
 }
 

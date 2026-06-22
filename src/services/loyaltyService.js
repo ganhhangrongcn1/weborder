@@ -99,7 +99,8 @@ export async function applyOrderLoyaltyAsync({
   orderStatus = "",
   previousOrderStatus = "",
   pointsSpent = pointsDiscount,
-  sourceType = "ORDER"
+  sourceType = "ORDER",
+  client = null
 }) {
   const key = getCustomerKey(phone);
   if (!key || !orderId) return loyaltyByPhoneStorage.getByPhone(key);
@@ -129,7 +130,7 @@ export async function applyOrderLoyaltyAsync({
         })
       },
       defaultLoyaltyData,
-      { throwOnError: true }
+      { throwOnError: true, client }
     );
   }
 
@@ -153,6 +154,21 @@ export async function applyOrderLoyaltyAsync({
   return loyaltyRepository.getByPhoneAsync(key, {
     ...phoneLoyalty,
     phone: key
+  });
+}
+
+export async function completeWebsiteOrderWithLoyaltyAsync({ orderId = "", client = null } = {}) {
+  const sourceOrderId = String(orderId || "").trim();
+  if (!sourceOrderId) throw new Error("Thiếu mã đơn để hoàn tất.");
+
+  return loyaltyRepository.completeWebsiteOrderWithLoyaltyAsync({
+    orderId: sourceOrderId,
+    idempotencyKey: buildOrderLoyaltyIdempotencyKey({
+      sourceType: "ORDER",
+      sourceOrderId,
+      action: "SETTLE_EARN"
+    }),
+    client
   });
 }
 
