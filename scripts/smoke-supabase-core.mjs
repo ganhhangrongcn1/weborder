@@ -23,13 +23,39 @@ async function assertSelect(table) {
   if (error) throw new Error(`[${table}] select failed: ${error.message}`);
 }
 
+async function assertLoyaltyAnonDenied(table) {
+  const { error: selectError } = await supabase
+    .from(table)
+    .select("*", { head: true, count: "exact" });
+  if (!selectError) {
+    throw new Error(`[${table}] anon select unexpectedly allowed`);
+  }
+
+  const deniedInsertRow = table === "loyalty_ledger"
+    ? {
+        id: `SMOKE-DENIED-${Date.now()}`,
+        customer_phone: probePhone,
+        entry_type: "OTHER",
+        points: 1,
+        amount: 0,
+        title: "Smoke denied"
+      }
+    : { customer_phone: probePhone, total_points: 1 };
+  const { error: insertError } = await supabase
+    .from(table)
+    .insert(deniedInsertRow);
+  if (!insertError) {
+    throw new Error(`[${table}] anon insert unexpectedly allowed`);
+  }
+}
+
 async function run() {
   await assertSelect("profiles");
   await assertSelect("customer_addresses");
   await assertSelect("orders");
   await assertSelect("order_items");
-  await assertSelect("loyalty_accounts");
-  await assertSelect("loyalty_ledger");
+  await assertLoyaltyAnonDenied("loyalty_accounts");
+  await assertLoyaltyAnonDenied("loyalty_ledger");
 
   const profileRow = {
     phone: probePhone,
@@ -73,29 +99,8 @@ async function run() {
   const { error: itemError } = await supabase.from("order_items").insert(itemRow);
   if (itemError) throw new Error(`[order_items] insert failed: ${itemError.message}`);
 
-  const loyaltyRow = {
-    customer_phone: probePhone,
-    total_points: 10
-  };
-  const { error: loyaltyError } = await supabase.from("loyalty_accounts").upsert(loyaltyRow, { onConflict: "customer_phone" });
-  if (loyaltyError) throw new Error(`[loyalty_accounts] upsert failed: ${loyaltyError.message}`);
-
-  const ledgerRow = {
-    id: `SMOKE-POINT-${Date.now()}`,
-    customer_phone: probePhone,
-    entry_type: "ORDER_EARN",
-    order_id: probeOrderId,
-    points: 10,
-    amount: 10000,
-    title: "Smoke"
-  };
-  const { error: ledgerError } = await supabase.from("loyalty_ledger").insert(ledgerRow);
-  if (ledgerError) throw new Error(`[loyalty_ledger] insert failed: ${ledgerError.message}`);
-
   await supabase.from("order_items").delete().eq("order_id", probeOrderId);
-  await supabase.from("loyalty_ledger").delete().eq("order_id", probeOrderId);
   await supabase.from("orders").delete().eq("id", probeOrderId);
-  await supabase.from("loyalty_accounts").delete().eq("customer_phone", probePhone);
   await supabase.from("customer_addresses").delete().eq("customer_phone", probePhone);
 
   console.log("Supabase core smoke test passed.");
