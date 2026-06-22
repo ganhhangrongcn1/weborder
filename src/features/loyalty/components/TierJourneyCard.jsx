@@ -58,13 +58,19 @@ export default function TierJourneyCard({ journey }) {
       <div className="loyalty-tier-focus">
         <article className="loyalty-tier-focus__item is-current">
           <small>Đang hưởng</small>
-          <strong><span aria-hidden="true">{getLoyaltyTierIconSymbol(currentTier.iconKey)}</span>{currentTier.name}</strong>
+          <strong>
+            <span aria-hidden="true">{getLoyaltyTierIconSymbol(currentTier.iconKey)}</span>
+            {currentTier.name}
+          </strong>
           <span>Tích {formatPercent(currentTier.earnPercent)}% mỗi đơn</span>
         </article>
         {nextTier ? (
           <article className="loyalty-tier-focus__item is-next">
             <small>Tiếp theo</small>
-            <strong><span aria-hidden="true">{getLoyaltyTierIconSymbol(nextTier.iconKey)}</span>{nextTier.name}</strong>
+            <strong>
+              <span aria-hidden="true">{getLoyaltyTierIconSymbol(nextTier.iconKey)}</span>
+              {nextTier.name}
+            </strong>
             <span>Tích {formatPercent(nextTier.earnPercent)}% mỗi đơn</span>
           </article>
         ) : (

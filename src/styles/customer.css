@@ -12,12 +12,12 @@
 @import "./customer/pages/menu.css";
 @import "./customer-checkout.css";
 @import "./customer/components/modal.css";
-@import "./customer/pages/loyalty.css";
 @import "./customer/pages/account.css";
 @import "./customer/utilities/colors.css";
 @import "./customer/utilities/spacing.css";
 @import "./customer/utilities/typography.css";
 @import "./customer/utilities/interactions.css";
+@import "./customer/pages/loyalty.css";
 @import "./customer/home/featured.css";
 @import "./customer/home/flashsale.css";
 @import "./customer/home/sections.css";

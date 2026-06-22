@@ -2,7 +2,7 @@ import Icon from "../../../components/Icon.jsx";
 import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 
 export default function PointsCard({
-  title = "Quy định điểm thưởng",
+  title = "Quy tắc sử dụng điểm",
   rows = []
 }) {
   return (

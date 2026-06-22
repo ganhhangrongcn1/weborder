@@ -17,6 +17,7 @@ export default function CheckinCard({
   checkinAuthNotice = ""
 }) {
   const loyaltyText = getLoyaltyText();
+
   return (
     <CustomerCard className="checkin-card">
       <div className="flex items-center justify-between gap-3">
@@ -27,11 +28,11 @@ export default function CheckinCard({
         <span className="streak-pill">Chuỗi vui: {loyalty.checkinStreak} ngày</span>
       </div>
 
-      {comebackActive && (
+      {comebackActive ? (
         <div className="checkin-notice mt-3 text-xs font-bold leading-5 text-orange-700">
           {loyaltyText.comebackAlert(comebackStreak)}
         </div>
-      )}
+      ) : null}
 
       <div className="checkin-progress mt-4">
         <div className="flex items-end justify-between gap-3">
@@ -45,7 +46,9 @@ export default function CheckinCard({
               {loyalty.checkinStreak}/{nextMilestone?.days || 30} ngày
             </strong>
           </div>
-          {!nextMilestone ? <span className="text-sm font-black text-orange-600">{loyaltyText.milestoneTop}</span> : null}
+          {!nextMilestone ? (
+            <span className="text-sm font-black text-orange-600">{loyaltyText.milestoneTop}</span>
+          ) : null}
         </div>
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
           <div className="h-full rounded-full bg-gradient-main transition-all" style={{ width: `${progressPercent}%` }} />
@@ -59,6 +62,7 @@ export default function CheckinCard({
             ? "Đăng nhập lại để điểm danh"
             : `Điểm danh, nhận +${checkinReward} điểm`}
       </CustomerButton>
+
       {!checkedInToday && !canCheckin && checkinAuthNotice ? (
         <p className="mt-2 text-xs font-semibold leading-5 text-brown/55">
           {checkinAuthNotice}
@@ -86,21 +90,30 @@ export function CheckinDetails({ loyalty, today, recentDays }) {
           {loyaltyBonusDisplay.map((reward) => {
             const received = loyalty.rewardHistory.includes(`milestone-${reward.days}`);
             const missing = Math.max(reward.days - loyalty.checkinStreak, 0);
+
             return (
               <div key={reward.days}>
                 <span>{reward.days} ngày</span>
-                <strong>{received ? loyaltyText.bonusReceived : missing ? loyaltyText.bonusRemaining(missing) : `+${reward.points}`}</strong>
+                <strong>
+                  {received
+                    ? loyaltyText.bonusReceived
+                    : missing
+                      ? loyaltyText.bonusRemaining(missing)
+                      : `+${reward.points}`}
+                </strong>
               </div>
             );
           })}
         </div>
       </section>
+
       <section>
         <h3>7 ngày gần nhất</h3>
         <div className="loyalty-checkin-calendar">
           {recentDays.map((day) => {
             const checked = loyalty.checkinHistory.includes(day);
             const isToday = day === today;
+
             return (
               <div key={day} className={isToday ? "is-today" : ""}>
                 <span>{day.slice(5).replace("-", "/")}</span>

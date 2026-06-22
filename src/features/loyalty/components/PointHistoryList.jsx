@@ -6,6 +6,7 @@ import { getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 
 export function getPointEntryTitle(entry = {}) {
   const type = String(entry.type || "").toUpperCase();
+
   if (type === "PARTNER_ORDER_EARN") {
     const source = entry.source || entry.metadata?.partnerSource || "";
     const sourceBadge = getOrderSourceBadge(source);
@@ -17,6 +18,7 @@ export function getPointEntryTitle(entry = {}) {
       entry.metadata?.partnerOrderCode ||
       entry.orderId ||
       "";
+
     return orderCode
       ? `Cộng điểm từ đơn ${sourceBadge.label} ${orderCode}`
       : "Cộng điểm từ đơn đối tác";
@@ -38,7 +40,7 @@ export default function PointHistoryList({ entries, limit = 5 }) {
           <strong className="text-orange-600">{formatSignedLoyaltyPoints(entry.points)} điểm</strong>
         </CustomerCard>
       ))}
-      {!safeEntries.length && <AppEmptyState icon={null} message={loyaltyText.noPointHistory} />}
+      {!safeEntries.length ? <AppEmptyState icon={null} message={loyaltyText.noPointHistory} /> : null}
     </div>
   );
 }

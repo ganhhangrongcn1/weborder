@@ -17,12 +17,12 @@ const SHEET_TITLES = {
 
 function VoucherLibrary({ vouchers, onUseVoucher }) {
   const safeVouchers = Array.isArray(vouchers) ? vouchers : [];
-  const usableVouchers = safeVouchers.filter((voucher) => (
-    !voucher?.canceled && !voucher?.used && !isVoucherExpired(voucher)
-  ));
-  const archivedVouchers = safeVouchers.filter((voucher) => (
-    voucher?.canceled || voucher?.used || isVoucherExpired(voucher)
-  ));
+  const usableVouchers = safeVouchers.filter(
+    (voucher) => !voucher?.canceled && !voucher?.used && !isVoucherExpired(voucher)
+  );
+  const archivedVouchers = safeVouchers.filter(
+    (voucher) => voucher?.canceled || voucher?.used || isVoucherExpired(voucher)
+  );
 
   return (
     <div className="loyalty-voucher-library">
@@ -35,6 +35,7 @@ function VoucherLibrary({ vouchers, onUseVoucher }) {
           onUseVoucher={onUseVoucher}
         />
       </section>
+
       {archivedVouchers.length > 0 ? (
         <details className="loyalty-voucher-archive">
           <summary>Lịch sử voucher ({archivedVouchers.length})</summary>
@@ -79,10 +80,7 @@ export default function LoyaltyDetailSheet({
       ) : null}
       {activeSheet === "rules" ? <PointsCard rows={pointRulesRows} /> : null}
       {activeSheet === "vouchers" ? (
-        <VoucherLibrary
-          vouchers={vouchers}
-          onUseVoucher={onUseVoucher}
-        />
+        <VoucherLibrary vouchers={vouchers} onUseVoucher={onUseVoucher} />
       ) : null}
       {activeSheet === "history" ? (
         <PointHistoryList entries={pointHistory} limit={Math.max(pointHistory.length, 5)} />

@@ -14,88 +14,103 @@ export default function LoyaltySummary({
   expiryText,
   progressPercent = 0,
   progressMessage = "",
+  metaSecondaryNote = "",
   onOpenTierDetails,
   actionLabel,
   onAction,
   ctaLabel,
-  onCta
+  onCta,
+  isGuest = false
 }) {
-  if (tierName) {
-    const safeProgress = Math.min(100, Math.max(0, Number(progressPercent || 0)));
-    return (
-      <section className="loyalty-overview" aria-labelledby="loyalty-overview-title">
-        <div className="loyalty-overview__head">
-          <div className="loyalty-overview__tier">
-            <span className="loyalty-overview__tier-icon" aria-hidden="true">
-              {getLoyaltyTierIconSymbol(tierIconKey)}
-            </span>
-            <div>
-              <p>{title}</p>
-              <h1 id="loyalty-overview-title">{tierName}</h1>
-            </div>
-          </div>
-          {onOpenTierDetails ? (
-            <button type="button" className="loyalty-overview__details" onClick={onOpenTierDetails}>
-              Lộ trình <Icon name="back" size={15} />
-            </button>
-          ) : null}
-        </div>
-
-        <p className="loyalty-overview__food-note">
-          <Icon name="dish" size={16} /> {tierMessage}
-        </p>
-
-        <div className="loyalty-overview__points">
-          <strong>{pointsValue}</strong>
-          <span>{subtitle}</span>
-        </div>
-
-        <div className="loyalty-overview__progress-copy">
-          <span>{progressMessage}</span>
-          <strong>{Math.round(safeProgress)}%</strong>
-        </div>
-        <div
-          className="loyalty-overview__progress"
-          role="progressbar"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow={Math.round(safeProgress)}
-        >
-          <span style={{ width: `${safeProgress}%` }} />
-        </div>
-
-        <div className="loyalty-overview__meta">
-          <span><b>{tierRateText}</b></span>
-          <span><b>{expiryText}</b></span>
-        </div>
-      </section>
-    );
-  }
+  const safeProgress = Math.min(100, Math.max(0, Number(progressPercent || 0)));
+  const primaryAction = onOpenTierDetails
+    ? {
+        label: "Lộ trình",
+        onClick: onOpenTierDetails
+      }
+    : actionLabel && onAction
+      ? {
+          label: actionLabel,
+          onClick: onAction
+        }
+      : null;
 
   return (
-    <div className="reward-hero">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          {tierName ? <p className="reward-hero__eyebrow">{title}</p> : null}
-          <h1>{tierName || title}</h1>
+    <section className={`loyalty-summary${isGuest ? " is-guest" : ""}`}>
+      <div className="loyalty-summary__head">
+        <div className="loyalty-summary__identity">
+          <span className="loyalty-summary__tier-icon" aria-hidden="true">
+            {tierIconKey ? getLoyaltyTierIconSymbol(tierIconKey) : "🔥"}
+          </span>
+          <div className="min-w-0">
+            <p className="loyalty-summary__eyebrow">{title}</p>
+            <h1>{tierName || title}</h1>
+          </div>
         </div>
-        {actionLabel && onAction ? (
-          <CustomerButton variant="secondary" size="sm" onClick={onAction}>
-            {actionLabel}
-          </CustomerButton>
+        {primaryAction ? (
+          <button type="button" className="loyalty-summary__route" onClick={primaryAction.onClick}>
+            {primaryAction.label}
+            <Icon name="back" size={15} />
+          </button>
         ) : null}
       </div>
-      <strong>{pointsValue}</strong>
-      <p>{subtitle}</p>
-      <div className="reward-hero__meta">
-        {tierRateText ? <span><b>{tierRateText}</b><small>theo hạng hiện tại</small></span> : null}
-        {expiryText ? <span><b>{expiryText}</b><small>{ratioText}</small></span> : <span>{ratioText}</span>}
+
+      {tierMessage ? (
+        <p className="loyalty-summary__message">
+          <Icon name="dish" size={14} />
+          <span>{tierMessage}</span>
+        </p>
+      ) : null}
+
+      <div className="loyalty-summary__points">
+        <strong>{pointsValue}</strong>
+        <span>{subtitle}</span>
       </div>
+
+      {progressMessage ? (
+        <div className="loyalty-summary__journey">
+          <div className="loyalty-summary__journey-copy">
+            <span>{progressMessage}</span>
+            <b>{Math.round(safeProgress)}%</b>
+          </div>
+          <div
+            className="loyalty-summary__progress"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow={Math.round(safeProgress)}
+          >
+            <span style={{ width: `${safeProgress}%` }} />
+          </div>
+        </div>
+      ) : null}
+
+      {(tierRateText || expiryText || ratioText) ? (
+        <div className="loyalty-summary__meta">
+          {tierRateText ? (
+            <div>
+              <b>{tierRateText}</b>
+              <small>{ratioText}</small>
+            </div>
+          ) : (
+            <div>
+              <b>{ratioText}</b>
+            </div>
+          )}
+          {expiryText ? (
+            <div>
+              <b>{expiryText}</b>
+              <small>{metaSecondaryNote}</small>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {ctaLabel && onCta ? (
-        <CustomerButton full variant="secondary" className="mt-5" onClick={onCta}>
+        <CustomerButton full className="loyalty-summary__cta" onClick={onCta}>
           {ctaLabel}
         </CustomerButton>
       ) : null}
-    </div>
+    </section>
   );
 }
