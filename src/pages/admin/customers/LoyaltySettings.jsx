@@ -16,6 +16,10 @@ function formatPercent(value) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(value);
 }
 
+function formatCurrency(value) {
+  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
+}
+
 function updateLoyaltyConfig(setCrmSnapshot, patch) {
   setCrmSnapshot((current) => ({
     ...current,
@@ -77,6 +81,17 @@ function getChecklistTone(status = "") {
   return tones[status] || "pending";
 }
 
+function getTierHint(index) {
+  const hints = [
+    "Hạng chào khách mới, nên dễ vào và tạo thiện cảm ngay từ đơn đầu.",
+    "Mốc đầu tiên để khách thấy hành trình này dễ chạm tới.",
+    "Hạng bắt đầu tạo cảm giác thân quen, nên ưu đãi rõ ràng hơn.",
+    "Hạng dành cho khách quay lại đều, phù hợp với quà có giá trị hơn.",
+    "Hạng cao nhất, giữ tỷ lệ tích điểm tối đa và quà lên hạng nổi bật nhất."
+  ];
+  return hints[index] || "Điều chỉnh tên, mốc và quà sao cho dễ vận hành lâu dài.";
+}
+
 export default function LoyaltySettings({
   crmSnapshot,
   setCrmSnapshot,
@@ -86,6 +101,7 @@ export default function LoyaltySettings({
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [saveTone, setSaveTone] = useState("success");
   const config = normalizeLoyaltyProgramConfig(crmSnapshot?.loyaltyConfig || {});
   const loyaltyCoupons = useMemo(() => (
     (coupons || [])
@@ -96,19 +112,35 @@ export default function LoyaltySettings({
     () => buildLoyaltyVoucherChecklist(config.tiers, loyaltyCoupons),
     [config.tiers, loyaltyCoupons]
   );
+  const assignedVoucherCount = useMemo(
+    () => voucherChecklist.filter((item) => item.assignedCoupon).length,
+    [voucherChecklist]
+  );
+  const activeVoucherCount = useMemo(
+    () => loyaltyCoupons.filter((voucher) => voucher.active !== false).length,
+    [loyaltyCoupons]
+  );
+  const earnPercents = useMemo(
+    () => config.tiers.map((tier) => getLoyaltyEarnPercent(tier.currencyPerPoint, tier.pointPerUnit)),
+    [config.tiers]
+  );
+  const maxEarnPercent = earnPercents.length ? Math.max(...earnPercents) : 0;
+  const minEarnPercent = earnPercents.length ? Math.min(...earnPercents) : 0;
 
   const handleSave = async () => {
     if (isSaving) return;
     setIsSaving(true);
     setSaveMessage("");
+    setSaveTone("success");
     const payload = normalizeLoyaltyProgramConfig(crmSnapshot?.loyaltyConfig || {});
 
     try {
       setCrmSnapshot((current) => ({ ...current, loyaltyConfig: payload }));
       await Promise.resolve(onSave?.(payload));
-      setSaveMessage("Đã lưu và kích hoạt phiên bản cấu hình loyalty mới.");
+      setSaveMessage("Đã lưu và kích hoạt cấu hình loyalty mới.");
     } catch (error) {
       const detail = String(error?.message || "").trim();
+      setSaveTone("error");
       setSaveMessage(
         detail
           ? `Không thể lưu cấu hình: ${detail}`
@@ -122,46 +154,101 @@ export default function LoyaltySettings({
   return (
     <section className="admin-stack admin-loyalty-settings">
       <AdminPanel
-        title="Trung tâm Loyalty"
+        title="Trung tâm loyalty"
         description="Giữ một nguồn cấu hình chung cho website, QR, POS và đơn đối tác."
+        className="admin-loyalty-card admin-loyalty-hub"
         action={(
           <AdminButton onClick={handleSave} disabled={isSaving}>
             {isSaving ? "Đang lưu..." : "Lưu và kích hoạt"}
           </AdminButton>
         )}
       >
-        <div className="admin-loyalty-overview">
-          <div><span>Quy đổi điểm</span><strong>1 điểm = 1đ</strong></div>
-          <div><span>Dùng điểm tối đa</span><strong>50% giá trị đơn</strong></div>
-          <div><span>Hết hạn điểm</span><strong>12 tháng từ lần mua cuối</strong></div>
-          <div><span>Chu kỳ hạng</span><strong>Theo năm dương lịch</strong></div>
+        <div className="admin-loyalty-hub-body">
+          <div className="admin-loyalty-hub-copy">
+            <span className="admin-loyalty-eyebrow">Một nơi để chốt luật chơi</span>
+            <h3>Thiết lập xong ở đây là khách và toàn bộ kênh bán sẽ dùng chung một logic.</h3>
+            <p>
+              Phần này nên ưu tiên dễ hiểu, dễ vận hành và chỉ thay khi thật sự cần.
+              Quà tặng theo mốc, tích điểm, giữ hạng và điểm danh đều đang bám theo cùng một cấu hình.
+            </p>
+          </div>
+
+          <div className="admin-loyalty-overview">
+            <div><span>Quy đổi điểm</span><strong>1 điểm = 1đ</strong></div>
+            <div><span>Dùng điểm tối đa</span><strong>50% giá trị đơn</strong></div>
+            <div><span>Hết hạn điểm</span><strong>12 tháng từ lần mua cuối</strong></div>
+            <div><span>Chu kỳ hạng</span><strong>Theo năm dương lịch</strong></div>
+          </div>
+        </div>
+
+        <div className="admin-loyalty-rule-grid">
+          <article>
+            <span>Tỷ lệ tích điểm</span>
+            <strong>{formatPercent(minEarnPercent)}% - {formatPercent(maxEarnPercent)}%</strong>
+            <small>Giữ cảm giác dễ mua từ hạng đầu và đủ hấp dẫn ở hạng cao nhất.</small>
+          </article>
+          <article>
+            <span>Voucher tự tặng</span>
+            <strong>{assignedVoucherCount}/{config.tiers.length} hạng đã gắn</strong>
+            <small>{activeVoucherCount} voucher loyalty đang hoạt động để dùng cho auto-grant.</small>
+          </article>
+          <article>
+            <span>Điểm danh</span>
+            <strong>{config.checkinEnabled ? "Đang bật" : "Đang tắt"}</strong>
+            <small>
+              Thưởng mỗi ngày {config.checkinDailyPoints.toLocaleString("vi-VN")} điểm,
+              cộng thêm ở mốc 7, 14 và 30 ngày.
+            </small>
+          </article>
         </div>
       </AdminPanel>
 
       {saveMessage ? (
-        <p className="admin-loyalty-save-message" role="status">{saveMessage}</p>
+        <p className={`admin-loyalty-save-message ${saveTone === "error" ? "is-error" : ""}`} role="status">
+          {saveMessage}
+        </p>
       ) : null}
 
-      <AdminPanel title="5 hạng thành viên" className="admin-loyalty-card">
-        <div className="admin-loyalty-tier-list">
-          <div className="admin-loyalty-tier-header" aria-hidden="true">
-            <span>Tên và icon</span>
-            <span>Mốc chi tiêu năm</span>
-            <span>Tích điểm</span>
-            <span>Tỷ lệ</span>
-            <span>Quà đạt mốc</span>
+      <AdminPanel
+        title="5 hạng thành viên"
+        description="Mỗi hạng là một nấc tiến gần hơn. Ở đây anh chỉ cần chốt tên, icon, mốc chi tiêu, tỷ lệ tích điểm và quà tặng theo mốc."
+        className="admin-loyalty-card"
+      >
+        <div className="admin-loyalty-tier-intro">
+          <div>
+            <strong>Khách sẽ nhìn thấy rõ hạng hiện tại và hạng kế tiếp</strong>
+            <small>Vì chỉ có 5 hạng nên mình ưu tiên cấu trúc dạng thẻ, dễ rà và dễ sửa hơn bảng ngang dài.</small>
           </div>
+          <div className="admin-loyalty-tier-metrics">
+            <span>{config.tiers.length} hạng</span>
+            <span>Cao nhất {formatPercent(maxEarnPercent)}%</span>
+            <span>{assignedVoucherCount} quà đã gắn</span>
+          </div>
+        </div>
+
+        <div className="admin-loyalty-tier-cards">
           {config.tiers.map((tier, index) => {
             const earnPercent = getLoyaltyEarnPercent(tier.currencyPerPoint, tier.pointPerUnit);
             return (
-              <div className="admin-loyalty-tier-row" key={tier.id}>
-                <div className="admin-loyalty-tier-identity">
+              <article className="admin-loyalty-tier-card-item" key={tier.id}>
+                <div className="admin-loyalty-tier-card-head">
                   <div className="admin-loyalty-tier-preview">
                     <span className="admin-loyalty-tier-symbol" aria-hidden="true">
                       {getLoyaltyTierIconSymbol(tier.iconKey)}
                     </span>
-                    <div><strong>{tier.name}</strong><small>ID: {tier.id}</small></div>
+                    <div>
+                      <small>Hạng {index + 1}</small>
+                      <strong>{tier.name}</strong>
+                      <p>{getTierHint(index)}</p>
+                    </div>
                   </div>
+                  <div className="admin-loyalty-percent-badge">
+                    <span>Tích điểm</span>
+                    <strong>{formatPercent(earnPercent)}%</strong>
+                  </div>
+                </div>
+
+                <div className="admin-loyalty-tier-card-grid">
                   <div className="admin-loyalty-tier-identity-fields">
                     <label className="admin-loyalty-field">
                       <span>Tên hiển thị</span>
@@ -189,79 +276,110 @@ export default function LoyaltySettings({
                       </AdminSelect>
                     </label>
                   </div>
-                </div>
-                <label className="admin-loyalty-field">
-                  <span>Mốc chi tiêu năm</span>
-                  <AdminInput
-                    type="number"
-                    min="0"
-                    step="100000"
-                    value={tier.minAnnualSpend}
-                    disabled={index === 0}
-                    onChange={(event) => updateTier(setCrmSnapshot, index, {
-                      minAnnualSpend: Math.max(0, Number(event.target.value || 0))
-                    })}
-                  />
-                </label>
-                <div className="admin-loyalty-rate-inputs">
+
                   <label className="admin-loyalty-field">
-                    <span>Số tiền</span>
+                    <span>Mốc chi tiêu năm</span>
                     <AdminInput
                       type="number"
-                      min="1"
-                      value={tier.currencyPerPoint}
+                      min="0"
+                      step="100000"
+                      value={tier.minAnnualSpend}
+                      disabled={index === 0}
                       onChange={(event) => updateTier(setCrmSnapshot, index, {
-                        currencyPerPoint: Math.max(1, Number(event.target.value || 1))
+                        minAnnualSpend: Math.max(0, Number(event.target.value || 0))
                       })}
                     />
+                    <small className="admin-loyalty-field-note">
+                      {index === 0
+                        ? "Hạng khởi đầu luôn bắt đầu từ 0đ."
+                        : `Khách đạt từ ${formatCurrency(tier.minAnnualSpend)} trong năm sẽ vào hạng này.`}
+                    </small>
                   </label>
-                  <span className="admin-loyalty-rate-equals">=</span>
-                  <label className="admin-loyalty-field">
-                    <span>Điểm</span>
-                    <AdminInput
-                      type="number"
-                      min="1"
-                      value={tier.pointPerUnit}
+
+                  <div className="admin-loyalty-rate-card">
+                    <div className="admin-loyalty-rate-card-head">
+                      <span>Công thức tích điểm</span>
+                      <small>{tier.currencyPerPoint.toLocaleString("vi-VN")}đ = {tier.pointPerUnit.toLocaleString("vi-VN")} điểm</small>
+                    </div>
+                    <div className="admin-loyalty-rate-inputs">
+                      <label className="admin-loyalty-field">
+                        <span>Số tiền</span>
+                        <AdminInput
+                          type="number"
+                          min="1"
+                          value={tier.currencyPerPoint}
+                          onChange={(event) => updateTier(setCrmSnapshot, index, {
+                            currencyPerPoint: Math.max(1, Number(event.target.value || 1))
+                          })}
+                        />
+                      </label>
+                      <span className="admin-loyalty-rate-equals">=</span>
+                      <label className="admin-loyalty-field">
+                        <span>Điểm</span>
+                        <AdminInput
+                          type="number"
+                          min="1"
+                          value={tier.pointPerUnit}
+                          onChange={(event) => updateTier(setCrmSnapshot, index, {
+                            pointPerUnit: Math.max(1, Number(event.target.value || 1))
+                          })}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <label className="admin-loyalty-field admin-loyalty-tier-voucher">
+                    <span>Voucher tự tặng khi chạm mốc</span>
+                    <AdminSelect
+                      value={tier.milestoneVoucherId}
                       onChange={(event) => updateTier(setCrmSnapshot, index, {
-                        pointPerUnit: Math.max(1, Number(event.target.value || 1))
+                        milestoneVoucherId: event.target.value
                       })}
-                    />
+                    >
+                      <option value="">Chưa gán voucher</option>
+                      {loyaltyCoupons.map((voucher) => (
+                        <option key={voucher.id || voucher.code} value={voucher.id || voucher.code}>
+                          {voucher.code || "Không có mã"} - {voucher.name || voucher.title || "Voucher loyalty"}{voucher.active === false ? " (đang tắt)" : ""}
+                        </option>
+                      ))}
+                    </AdminSelect>
                   </label>
                 </div>
-                <div className="admin-loyalty-percent">
-                  <strong>{formatPercent(earnPercent)}%</strong>
-                  <small>{tier.currencyPerPoint.toLocaleString("vi-VN")}đ = {tier.pointPerUnit.toLocaleString("vi-VN")} điểm</small>
-                </div>
-                <label className="admin-loyalty-field">
-                  <span>Voucher tự tặng</span>
-                  <AdminSelect
-                    value={tier.milestoneVoucherId}
-                    onChange={(event) => updateTier(setCrmSnapshot, index, {
-                      milestoneVoucherId: event.target.value
-                    })}
-                  >
-                    <option value="">Chưa gán voucher</option>
-                    {loyaltyCoupons.map((voucher) => (
-                      <option key={voucher.id || voucher.code} value={voucher.id || voucher.code}>
-                        {voucher.code || "Không có mã"} - {voucher.name || voucher.title || "Voucher loyalty"}{voucher.active === false ? " (đang tắt)" : ""}
-                      </option>
-                    ))}
-                  </AdminSelect>
-                </label>
-              </div>
+              </article>
             );
           })}
         </div>
         <p className="admin-loyalty-note">
-          Đơn tiền lẻ được tính bằng công thức làm tròn xuống. Không gán voucher vẫn thăng hạng bình thường.
+          Đơn tiền lẻ được tính theo công thức làm tròn xuống. Không gán voucher thì khách vẫn thăng hạng bình thường.
         </p>
       </AdminPanel>
 
       <AdminPanel
-        title="Checklist voucher tự tặng"
-        description="Anh chỉ cần tạo bộ voucher loyalty mẫu trong Khuyến mãi, rồi quay lại đây để gán theo hạng."
+        title="Voucher tự tặng theo mốc"
+        description="Thiết kế gọn nhất là tạo sẵn bộ voucher loyalty mẫu trong trang Khuyến mãi, rồi quay lại đây để gán đúng từng hạng."
         className="admin-loyalty-card"
       >
+        <div className="admin-loyalty-quick-steps">
+          <span><strong>1.</strong> Tạo bộ voucher loyalty mẫu</span>
+          <span><strong>2.</strong> Gán từng voucher vào đúng hạng</span>
+          <span><strong>3.</strong> Lưu lại để auto-tặng đúng mốc</span>
+        </div>
+
+        <div className="admin-loyalty-checklist-summary">
+          <article>
+            <span>Đã gắn voucher</span>
+            <strong>{assignedVoucherCount}/{config.tiers.length} hạng</strong>
+          </article>
+          <article>
+            <span>Voucher loyalty đang bật</span>
+            <strong>{activeVoucherCount}</strong>
+          </article>
+          <article>
+            <span>Bộ voucher gợi ý</span>
+            <strong>{LOYALTY_VOUCHER_PRESETS.length} mẫu</strong>
+          </article>
+        </div>
+
         <div className="admin-loyalty-checklist">
           {voucherChecklist.map(({ tier, preset, assignedCoupon, status }) => (
             <article className="admin-loyalty-checklist-row" key={tier.id}>
@@ -292,11 +410,15 @@ export default function LoyaltySettings({
           ))}
         </div>
         <p className="admin-loyalty-note">
-          Bộ mẫu gợi ý hiện có {LOYALTY_VOUCHER_PRESETS.length} voucher. Hạng Chớm Ghiền nên để quà chào sân hoặc tặng tay trong CRM, không bắt buộc auto-grant.
+          Hạng {config.tiers[0]?.name || "đầu tiên"} có thể để như quà chào sân hoặc tặng tay trong CRM, không bắt buộc auto-grant.
         </p>
       </AdminPanel>
 
-      <AdminPanel title="Điểm danh" className="admin-loyalty-card">
+      <AdminPanel
+        title="Điểm danh"
+        description="Nếu đang chạy chương trình ghé Gánh mỗi ngày, anh chỉ cần chốt điểm mỗi ngày và ba mốc thưởng thêm."
+        className="admin-loyalty-card"
+      >
         <div className="admin-loyalty-checkin-head">
           <label className="admin-loyalty-toggle">
             <input
@@ -304,8 +426,12 @@ export default function LoyaltySettings({
               checked={config.checkinEnabled}
               onChange={(event) => updateLoyaltyConfig(setCrmSnapshot, { checkinEnabled: event.target.checked })}
             />
-            <span>Bật chương trình điểm danh</span>
+            <span>{config.checkinEnabled ? "Đang bật chương trình điểm danh" : "Đang tắt chương trình điểm danh"}</span>
           </label>
+          <div className="admin-loyalty-checkin-badges">
+            <span>Mỗi ngày: {config.checkinDailyPoints.toLocaleString("vi-VN")} điểm</span>
+            <span>Chuỗi 7 / 14 / 30 ngày</span>
+          </div>
         </div>
         <div className="admin-loyalty-checkin-grid">
           <label className="admin-loyalty-field">
@@ -335,7 +461,18 @@ export default function LoyaltySettings({
         </div>
       </AdminPanel>
 
-      <LoyaltyOpsPanel onRefresh={refreshCrm} />
+      <details className="admin-loyalty-advanced">
+        <summary>
+          <div>
+            <strong>Đối soát loyalty nâng cao</strong>
+            <small>Chỉ mở khi cần quét backlog, tách nhóm safe hoặc bù điểm hàng loạt.</small>
+          </div>
+          <span>Tùy chọn nâng cao</span>
+        </summary>
+        <div className="admin-loyalty-advanced-body">
+          <LoyaltyOpsPanel embedded onRefresh={refreshCrm} />
+        </div>
+      </details>
     </section>
   );
 }
