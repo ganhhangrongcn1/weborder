@@ -1604,244 +1604,49 @@ async function getCustomerOrderPointStatuses(phone = "", { limit = 200 } = {}) {
   return Array.isArray(data) ? data : [];
 }
 
-async function applyLoyaltyEvent({
-  phone = "",
-  entryType = "OTHER",
-  points = 0,
-  orderId = "",
-  amount = 0,
-  title = "",
-  note = "",
-  metadata = {},
-  createdAt = new Date().toISOString()
-} = {}) {
-  if (!isSupabaseReady()) return null;
-  const client = await getSupabaseClientAsync();
-  if (!client) return null;
-  const key = normalizePhone(phone);
-  if (!key) return null;
-  await ensureProfileExistsByPhone(client, key);
-  const normalizedEntryType = String(entryType || "OTHER").trim().toUpperCase();
-  const normalizedOrderId = String(orderId || "").trim();
-
-  // Guard against duplicate order-scoped events (ORDER_EARN / ORDER_SPEND).
-  if (normalizedOrderId && (normalizedEntryType === "ORDER_EARN" || normalizedEntryType === "ORDER_SPEND")) {
-    try {
-      const { data: existingRows, error: existingError } = await client
-        .from("loyalty_ledger")
-        .select("id")
-        .eq("customer_phone", key)
-        .eq("entry_type", normalizedEntryType)
-        .eq("order_id", normalizedOrderId)
-        .limit(1);
-      if (existingError) throw existingError;
-      if (Array.isArray(existingRows) && existingRows.length) {
-        return readLoyaltyForPhoneFromTable(key);
-      }
-    } catch (error) {
-      // The SECURITY DEFINER RPC below performs the same idempotency check.
-      // Staff may not have direct select policy on loyalty_ledger, and that is OK.
-      console.warn("[coreSupabaseRepository] skip client loyalty duplicate check", {
-        code: error?.code || "",
-        message: error?.message || String(error || "")
-      });
-    }
-  }
-
-  const payload = {
-    p_customer_phone: key,
-    p_entry_type: normalizedEntryType,
-    p_points: Number(points || 0),
-    p_order_id: normalizedOrderId || null,
-    p_amount: Number(amount || 0),
-    p_title: String(title || ""),
-    p_note: String(note || ""),
-    p_metadata: metadata && typeof metadata === "object" ? metadata : {},
-    p_created_at: createdAt || new Date().toISOString()
-  };
-
-  const { error } = await client.rpc("apply_loyalty_event", payload);
-  if (error) throw error;
-  return readLoyaltyForPhoneFromTable(key);
-}
-
-async function writeLoyaltyByPhoneToTable(loyaltyByPhone = {}) {
-  if (!isSupabaseReady()) return loyaltyByPhone;
-  const client = await getSupabaseClientAsync();
-  if (!client) return loyaltyByPhone;
-  const phones = Object.keys(loyaltyByPhone || {});
-  if (!phones.length) return loyaltyByPhone;
-
-  const { data: existingCustomers, error: existingCustomersError } = await client
-    .from(PROFILE_TABLE)
-    .select("phone")
-    .in("phone", phones.map((phone) => normalizePhone(phone)));
-  if (existingCustomersError) throw existingCustomersError;
-  const existingPhones = new Set((existingCustomers || []).map((item) => normalizePhone(item.phone)));
-  const missingCustomerPhones = phones
-    .map((phone) => normalizePhone(phone))
-    .filter((phone) => phone && !existingPhones.has(phone));
-  if (missingCustomerPhones.length) {
-    await ensureProfilesExistByPhones(
-      client,
-      missingCustomerPhones,
-      missingCustomerPhones.reduce((map, phone) => {
-        map[phone] = { phone, source: "loyalty" };
-        return map;
-      }, {})
-    );
-  }
-
-  const accountRows = phones.map((phone) => {
-    const item = loyaltyByPhone[phone] || {};
-    return {
-      customer_phone: normalizePhone(phone),
-      total_points: Number(item.totalPoints || 0),
-      checkin_streak: Number(item.checkinStreak || 0),
-      last_checkin_date: item.lastCheckinDate || null,
-      last_missed_streak: Number(item.lastMissedStreak || 0),
-      comeback_used_date: item.comebackUsedDate || null,
-      vouchers: Array.isArray(item.voucherHistory) ? item.voucherHistory : Array.isArray(item.vouchers) ? item.vouchers : [],
-      metadata: item
-    };
-  });
-
-  const { error: accountError } = await client.from("loyalty_accounts").upsert(accountRows, { onConflict: "customer_phone" });
-  if (accountError) throw accountError;
-
-  const ledgerRows = phones.flatMap((phone) => {
-    const item = loyaltyByPhone[phone] || {};
-    return (item.pointHistory || []).map((entry) => ({
-      id: String(entry.id || `point-${Date.now()}-${Math.random()}`),
-      customer_phone: normalizePhone(phone),
-      entry_type: String(entry.type || "ORDER_EARN"),
-      order_id: entry.orderId || null,
-      points: Number(entry.points || 0),
-      amount: Number(entry.amount || 0),
-      title: String(entry.title || ""),
-      note: String(entry.note || ""),
-      created_at: entry.createdAt || new Date().toISOString(),
-      metadata: entry
-    }));
-  });
-
-  if (phones.length) {
-    const { error: deleteLedgerError } = await client.from("loyalty_ledger").delete().in("customer_phone", phones);
-    if (deleteLedgerError) throw deleteLedgerError;
-  }
-  if (ledgerRows.length) {
-    const { error: insertLedgerError } = await client.from("loyalty_ledger").insert(ledgerRows);
-    if (insertLedgerError) throw insertLedgerError;
-  }
-  return loyaltyByPhone;
-}
-
-async function writeLoyaltyPhoneToTable(phone, loyalty = {}) {
-  const key = normalizePhone(phone);
-  if (!key) return loyalty;
-  await writeLoyaltyByPhoneToTable({
-    [key]: {
-      ...(loyalty || {}),
-      phone: key
-    }
-  });
-  return loyalty;
-}
-
-function normalizeLoyaltyEntryId(entry = {}) {
-  const explicitId = String(entry?.id || "").trim();
-  if (explicitId) return explicitId;
-  const orderId = String(entry?.orderId || "").trim();
-  if (orderId) return `point-${orderId}`;
-  return `point-${Date.now()}-${Math.random()}`;
-}
-
-function toLoyaltyLedgerRow(phone, entry = {}) {
-  const key = normalizePhone(phone);
-  if (!key) return null;
-  return {
-    id: normalizeLoyaltyEntryId(entry),
-    customer_phone: key,
-    entry_type: String(entry.type || "ORDER_EARN"),
-    order_id: entry.orderId || null,
-    points: Number(entry.points || 0),
-    amount: Number(entry.amount || 0),
-    title: String(entry.title || ""),
-    note: String(entry.note || ""),
-    created_at: entry.createdAt || new Date().toISOString(),
-    metadata: entry
-  };
-}
-
 async function upsertLoyaltyAccountByPhone(phone, loyalty = {}) {
   if (!isSupabaseReady()) return loyalty;
   const client = await getSupabaseClientAsync();
   if (!client) return loyalty;
   const key = normalizePhone(phone);
   if (!key) return loyalty;
-
-  const { data: existingCustomer, error: existingCustomerError } = await client
-    .from(PROFILE_TABLE)
-    .select("phone")
-    .eq("phone", key)
-    .maybeSingle();
-  if (existingCustomerError) throw existingCustomerError;
-  if (!existingCustomer?.phone) {
-    await ensureProfileExistsByPhone(client, key, { source: "loyalty" });
-  }
-
-  const pointHistory = Array.isArray(loyalty.pointHistory) ? loyalty.pointHistory : [];
-  const totalFromHistory = pointHistory.reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
-  const checkinStats = buildCheckinStatsFromLedger(pointHistory);
-
-  let ledgerTotal = totalFromHistory;
-  let ledgerCheckinStats = checkinStats;
-  try {
-    const { data: ledgerRows, error: ledgerError } = await client
-      .from("loyalty_ledger")
-      .select("points, entry_type, created_at")
-      .eq("customer_phone", key)
-      .order("created_at", { ascending: false });
-    if (ledgerError) throw ledgerError;
-    if (Array.isArray(ledgerRows) && ledgerRows.length) {
-      ledgerTotal = ledgerRows.reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
-      ledgerCheckinStats = buildCheckinStatsFromLedger(
-        ledgerRows.map((entry) => ({
-          type: entry?.entry_type || "",
-          points: Number(entry?.points || 0),
-          createdAt: entry?.created_at || ""
-        }))
-      );
-    }
-  } catch {
-  }
-
-  const row = {
-    customer_phone: key,
-    total_points: Math.max(0, Number(ledgerTotal || loyalty.totalPoints || 0)),
-    checkin_streak: Number(ledgerCheckinStats.checkinStreak || loyalty.checkinStreak || 0),
-    last_checkin_date: ledgerCheckinStats.lastCheckinDate || loyalty.lastCheckinDate || null,
-    last_missed_streak: Number(loyalty.lastMissedStreak || 0),
-    comeback_used_date: loyalty.comebackUsedDate || null,
-    vouchers: Array.isArray(loyalty.voucherHistory) ? loyalty.voucherHistory : Array.isArray(loyalty.vouchers) ? loyalty.vouchers : [],
-    metadata: loyalty
-  };
-
-  const { error } = await client.from("loyalty_accounts").upsert(row, { onConflict: "customer_phone" });
+  const { error } = await client.rpc("sync_loyalty_account_metadata", {
+    p_customer_phone: key,
+    p_vouchers: Array.isArray(loyalty.voucherHistory)
+      ? loyalty.voucherHistory
+      : Array.isArray(loyalty.vouchers)
+        ? loyalty.vouchers
+        : [],
+    p_metadata: loyalty && typeof loyalty === "object" ? loyalty : {}
+  });
   if (error) throw error;
   return loyalty;
 }
 
-async function upsertLoyaltyEntryByPhone(phone, entry = {}) {
-  if (!isSupabaseReady()) return entry;
+async function setLoyaltyVoucherUsage({
+  phone = "",
+  voucherId = "",
+  voucherCode = "",
+  orderId = "",
+  usedAt = "",
+  used = true
+} = {}) {
+  if (!isSupabaseReady()) return false;
   const client = await getSupabaseClientAsync();
-  if (!client) return entry;
-  await ensureProfileExistsByPhone(client, phone);
-  const row = toLoyaltyLedgerRow(phone, entry);
-  if (!row) return entry;
-  const { error } = await client.from("loyalty_ledger").upsert(row, { onConflict: "id" });
+  if (!client) return false;
+  const key = normalizePhone(phone);
+  if (!key) return false;
+
+  const { data, error } = await client.rpc("set_loyalty_voucher_usage", {
+    p_customer_phone: key,
+    p_voucher_id: String(voucherId || "").trim(),
+    p_voucher_code: String(voucherCode || "").trim().toUpperCase(),
+    p_order_id: String(orderId || "").trim(),
+    p_used_at: usedAt || new Date().toISOString(),
+    p_used: used !== false
+  });
   if (error) throw error;
-  return entry;
+  return data === true;
 }
 
 function subscribeCoreDomainRealtime({ tables = [], onChange }) {
@@ -1964,11 +1769,8 @@ export const coreSupabaseRepository = {
   auditLoyaltyReconcilePlan,
   reconcileLoyaltyBacklogSafe,
   getCustomerOrderPointStatuses,
-  applyLoyaltyEvent,
-  writeLoyaltyByPhoneToTable,
-  writeLoyaltyPhoneToTable,
   upsertLoyaltyAccountByPhone,
-  upsertLoyaltyEntryByPhone,
+  setLoyaltyVoucherUsage,
   subscribeProfilesRealtime,
   subscribeCustomersRealtime,
   subscribeCustomerAddressesRealtime,

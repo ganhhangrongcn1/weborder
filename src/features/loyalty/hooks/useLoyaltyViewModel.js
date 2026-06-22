@@ -237,7 +237,7 @@ export default function useLoyaltyViewModel({
         const normalizedRemote = normalizeLoyaltyData(
           await loyaltyRepository.processCheckinByPhoneAsync(
             currentPhone,
-            { idempotencyKey: buildCheckinIdempotencyKey(today) },
+            { idempotencyKey: buildCheckinIdempotencyKey(today, currentPhone) },
             defaultResetLoyalty(),
             { throwOnError: true }
           )

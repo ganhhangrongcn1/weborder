@@ -180,9 +180,7 @@ export const loyaltyRepository = {
           repository.set(STORAGE_KEYS.loyaltyByPhone, mergedAll);
           loyaltyRemoteCache = { value: mergedAll, cachedAt: Date.now() };
           notifyLoyaltyChanged();
-          // Security-first: client should not bulk rewrite loyalty_ledger (DELETE/INSERT).
-          // Event entries are written through RPC apply_loyalty_event in appendEventByPhoneAsync.
-          // Here we only upsert account snapshot metadata.
+          // Point balances stay database-owned; this RPC only accepts staff-managed metadata.
           return coreSupabaseRepository.upsertLoyaltyAccountByPhone(key, mergedForWrite);
         })
         .catch((error) => {
@@ -369,7 +367,14 @@ export const loyaltyRepository = {
 
     if (shouldWriteDomainToSupabase("loyalty")) {
       try {
-        await coreSupabaseRepository.upsertLoyaltyAccountByPhone(key, nextRecord);
+        await coreSupabaseRepository.setLoyaltyVoucherUsage({
+          phone: key,
+          voucherId: normalizedVoucherId,
+          voucherCode: upperCode,
+          orderId,
+          usedAt: nowIso,
+          used: true
+        });
       } catch (error) {
         logSupabaseError("mark voucher used write loyalty account", error, { phone: key, voucherId: normalizedVoucherId, voucherCode: upperCode, orderId });
       }
@@ -451,40 +456,6 @@ export const loyaltyRepository = {
       return remoteOnly;
     } catch (error) {
       logSupabaseError("process loyalty v2 checkin", error, { phone: key });
-      if (options?.throwOnError) throw error;
-      return this.getByPhoneAsync(key, fallback);
-    }
-  },
-  async appendEventByPhoneAsync(phone, event = {}, fallback = {}, options = {}) {
-    const key = getCustomerKey(phone);
-    if (!key) return { ...(fallback || {}), phone: key };
-    if (!shouldWriteDomainToSupabase("loyalty")) {
-      if (options?.throwOnError) {
-        throw new Error("Chức năng ghi điểm Supabase đang bị tắt.");
-      }
-      return this.getByPhoneAsync(key, fallback);
-    }
-    try {
-      const remote = await coreSupabaseRepository.applyLoyaltyEvent({
-        phone: key,
-        entryType: event.entryType || event.type || "OTHER",
-        points: Number(event.points || 0),
-        orderId: event.orderId || "",
-        amount: Number(event.amount || 0),
-        title: event.title || "",
-        note: event.note || "",
-        metadata: event.metadata || {},
-        createdAt: event.createdAt || new Date().toISOString()
-      });
-      const localAll = normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}));
-      const remoteOnly = normalizeLoyaltyByPhoneMap({ [key]: remote || {} })[key] || { ...(fallback || {}), phone: key };
-      const nextAll = normalizeLoyaltyByPhoneMap({ ...localAll, [key]: remoteOnly });
-      await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, nextAll);
-      loyaltyRemoteCache = { value: nextAll, cachedAt: Date.now() };
-      notifyLoyaltyChanged();
-      return remoteOnly;
-    } catch (error) {
-      logSupabaseError("append loyalty event", error, { phone: key, eventType: event.entryType || event.type || "OTHER" });
       if (options?.throwOnError) throw error;
       return this.getByPhoneAsync(key, fallback);
     }

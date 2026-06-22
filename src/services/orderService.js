@@ -4,8 +4,6 @@ import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js
 import { composeMemberLoyaltySnapshot } from "./memberLoyaltySnapshotService.js";
 import { applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 
-const DONE_ORDER_STATUSES = new Set(["done", "completed", "hoan tat"]);
-
 function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
   const branchId = String(
     branchInfo?.id ||
@@ -34,16 +32,6 @@ function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
 
 function getOrderPhoneForLoyalty(order = {}) {
   return order.phone || order.customerPhone || order.customerPhoneKey || order.rawCustomerPhone || "";
-}
-
-function normalizeOrderStatus(value = "") {
-  return String(value || "").trim().toLowerCase();
-}
-
-function didOrderBecomeDone(previousOrder = null, nextOrder = null) {
-  const prevStatus = normalizeOrderStatus(previousOrder?.status);
-  const nextStatus = normalizeOrderStatus(nextOrder?.status);
-  return !DONE_ORDER_STATUSES.has(prevStatus) && DONE_ORDER_STATUSES.has(nextStatus);
 }
 
 function getOrderPointsBaseAmount(order = {}) {
@@ -135,11 +123,8 @@ export const orderStorage = {
   },
   updateOrder(orderId, patch) {
     const allByPhone = this.getAllByPhone();
-    const { nextByPhone, updatedOrder, previousOrder } = patchOrderInPhoneMap(allByPhone, orderId, patch);
+    const { nextByPhone, updatedOrder } = patchOrderInPhoneMap(allByPhone, orderId, patch);
     this.saveAll(nextByPhone);
-    if (updatedOrder && didOrderBecomeDone(previousOrder, updatedOrder)) {
-      applyOrderLoyalty(buildOrderLoyaltyPayload(updatedOrder));
-    }
     return updatedOrder;
   },
   async updateOrderAsync(orderId, patch) {

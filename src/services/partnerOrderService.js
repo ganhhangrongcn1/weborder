@@ -6,6 +6,8 @@ import {
   resolveOrderBranch
 } from "./branchIdentityService.js";
 import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
+import { buildOrderLoyaltyIdempotencyKey } from "./loyaltyRuntimeService.js";
+import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
 
 const SOURCE_BADGES = {
   website: {
@@ -489,36 +491,42 @@ export async function claimPartnerOrderPoints({ orderId = null, orderCode = "", 
   if (!phoneKey) {
     return { ok: false, message: "Số điện thoại không hợp lệ." };
   }
-
-  const client = getSupabaseRuntimeClient() || await initSupabaseRuntimeClient();
-  if (!client) {
-    return { ok: false, message: "Chưa kết nối được Supabase." };
+  if (!orderId) {
+    return { ok: false, message: "Không tìm thấy đơn đối tác để cộng điểm." };
   }
 
-  const { data, error } = await client.rpc("claim_partner_order_points", {
-    p_order_id: orderId || null,
-    p_order_code: orderCode || "",
-    p_customer_phone: phoneKey
-  });
-
-  if (error) {
+  try {
+    const result = await coreSupabaseRepository.processOrderLoyalty({
+      sourceType: "PARTNER_ORDER",
+      sourceOrderId: orderId,
+      action: "CLAIM_PARTNER_EARN",
+      idempotencyKey: buildOrderLoyaltyIdempotencyKey({
+        sourceType: "PARTNER_ORDER",
+        sourceOrderId: orderId,
+        action: "CLAIM_PARTNER_EARN"
+      })
+    });
+    const points = Math.max(0, toNumber(result?.points_delta));
+    const alreadyClaimed = result?.applied === false;
+    return {
+      ok: Boolean(result?.ok),
+      alreadyClaimed,
+      pointStatus: result?.ok ? "claimed" : "",
+      message: result?.message || (alreadyClaimed
+        ? "Điểm của đơn này đã được ghi nhận trước đó."
+        : "Cộng điểm thành công."),
+      partnerOrderId: orderId,
+      partnerOrderCode: orderCode,
+      points,
+      totalPoints: Math.max(0, toNumber(result?.balance_after))
+    };
+  } catch (error) {
     if (import.meta?.env?.DEV) {
       console.warn("[partnerOrderService] claimPartnerOrderPoints failed", error);
     }
-    return { ok: false, message: error.message || "Không thể cộng điểm lúc này." };
+    return {
+      ok: false,
+      message: error?.message || "Chưa thể cộng điểm lúc này. Bạn thử lại sau một chút nhé."
+    };
   }
-
-  const result = Array.isArray(data) ? data[0] : data;
-  const message = result?.message || "";
-  const alreadyClaimed = /đã|da|already/i.test(message) && /cộng|cong|claim|claimed|trước|truoc/i.test(message);
-  return {
-    ok: Boolean(result?.ok),
-    alreadyClaimed,
-    pointStatus: result?.ok || alreadyClaimed ? "claimed" : "",
-    message: message || (result?.ok ? "Cộng điểm thành công." : "Không thể cộng điểm."),
-    partnerOrderId: result?.partner_order_id || orderId || null,
-    partnerOrderCode: result?.partner_order_code || orderCode || "",
-    points: toNumber(result?.points),
-    totalPoints: toNumber(result?.total_points)
-  };
 }

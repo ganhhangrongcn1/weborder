@@ -720,7 +720,6 @@ export async function cancelPosOrderAsync(order = {}, { cashierName = "", reason
   }
 
   const metadata = getObject(order.metadata);
-  const usesLoyaltyDiscount = Number(order.pointsDiscount || metadata.pointsDiscount || 0) > 0;
   const usesLoyaltyVoucher = toText(order.promoSource || metadata.promoSource).toLowerCase() === "loyalty";
   const normalizedPhone = getCustomerKey(
     order.customerPhone ||
@@ -755,35 +754,6 @@ export async function cancelPosOrderAsync(order = {}, { cashierName = "", reason
 
   if (usesLoyaltyVoucher && normalizedPhone) {
     try {
-      if (false && usesLoyaltyDiscount) {
-        const refundPoints = Math.max(
-          0,
-          Math.floor(Number(order.pointsDiscount || metadata.pointsDiscount || metadata.pointsSpent || 0))
-        );
-        if (refundPoints > 0) {
-          await loyaltyRepository.appendEventByPhoneAsync(
-            normalizedPhone,
-            {
-              entryType: "ORDER_SPEND",
-              points: refundPoints,
-              orderId: `${orderId}-cancel-loyalty`,
-              amount: Number(order.totalAmount || order.total || 0),
-              title: `Hoan diem don ${orderId}`,
-              note: "Hoan diem khi huy don POS",
-              createdAt: cancelledAt,
-              metadata: {
-                source: "pos_cancel_refund",
-                orderId,
-                orderCode: toText(order.orderCode || order.displayOrderCode || orderId),
-                cancelledAt,
-                cancelledBy: toText(cashierName) || "POS"
-              }
-            },
-            { totalPoints: 0, voucherHistory: [], pointHistory: [] }
-          );
-        }
-      }
-
       if (usesLoyaltyVoucher) {
         const currentLoyalty = await loyaltyRepository.getByPhoneAsync(normalizedPhone, { voucherHistory: [], pointHistory: [] });
         const voucherId = toText(order.promoVoucherId || metadata.promoVoucherId);
@@ -1105,48 +1075,10 @@ export async function markPosQrOrderPaidAsync(
     return { ok: false, message: "Không cập nhật được đơn QR chờ thanh toán." };
   }
 
-  const phone = getCustomerKey(
-    updatedOrder.customerPhone ||
-    updatedOrder.customerPhoneKey ||
-    updatedOrder.phone ||
-    updatedOrder.rawCustomerPhone
-  );
-  const metadata = getObject(updatedOrder.metadata);
-  const spendPoints = Math.max(
-    0,
-    Math.floor(
-      toNumber(
-        updatedOrder.pointsSpent ??
-        metadata.pointsSpent ??
-        metadata.pointsDiscount ??
-        0
-      )
-    )
-  );
-
-  let loyaltyWarning = "";
-  if (false && spendPoints > 0 && phone && phone !== WALK_IN_PHONE) {
-    try {
-      await applyOrderLoyaltyAsync({
-        phone,
-        orderId: updatedOrder.orderCode || updatedOrder.id,
-        amount: toNumber(updatedOrder.totalAmount ?? updatedOrder.total, 0),
-        createdAt: updatedOrder.createdAt || normalizedPaidAt,
-        promoSource: toText(updatedOrder.promoSource || metadata.promoSource),
-        promoVoucherId: toText(updatedOrder.promoVoucherId || metadata.promoVoucherId),
-        promoCode: toText(updatedOrder.promoCode || metadata.promoCode),
-        pointsDiscount: spendPoints,
-        orderStatus: updatedOrder.status || "pending_zalo"
-      });
-    } catch (error) {
-      loyaltyWarning = ` Đơn đã gửi bếp nhưng chưa trừ được điểm: ${error?.message || "kiểm tra policy loyalty."}`;
-    }
-  }
-
   return {
     ok: true,
     order: updatedOrder,
-    message: `Đã nhận tiền và gửi đơn ${toText(updatedOrder.displayOrderCode || updatedOrder.orderCode || updatedOrder.id)} xuống bếp.${loyaltyWarning}`
+    message: `Đã nhận tiền và gửi đơn ${toText(updatedOrder.displayOrderCode || updatedOrder.orderCode || updatedOrder.id)} xuống bếp.`
   };
 }
 

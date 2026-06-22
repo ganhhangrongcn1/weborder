@@ -37,9 +37,10 @@ export function buildOrderLoyaltyIdempotencyKey({
   return `loyalty-v2:${safeSourceType}:${safeOrderId}:${safeAction}:v1`.slice(0, 200);
 }
 
-export function buildCheckinIdempotencyKey(dateKey = "") {
+export function buildCheckinIdempotencyKey(dateKey = "", phone = "") {
   const safeDateKey = toText(dateKey) || new Date().toISOString().slice(0, 10);
-  return `loyalty-v2:checkin:${safeDateKey}`.slice(0, 200);
+  const safePhone = toText(phone).replace(/\D/g, "").slice(-15) || "member";
+  return `loyalty-v2:checkin:${safePhone}:${safeDateKey}`.slice(0, 200);
 }
 
 export function planOrderLoyaltyActions({
