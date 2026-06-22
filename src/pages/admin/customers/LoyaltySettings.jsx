@@ -1,11 +1,16 @@
 import { useMemo, useState } from "react";
 import {
+  buildLoyaltyVoucherChecklist,
+  LOYALTY_VOUCHER_PRESETS
+} from "../../../services/loyaltyVoucherPresetService.js";
+import {
   getLoyaltyEarnPercent,
   getLoyaltyTierIconSymbol,
   LOYALTY_TIER_ICON_OPTIONS,
   normalizeLoyaltyProgramConfig
 } from "../../../services/loyaltyProgramConfigService.js";
 import { AdminButton, AdminInput, AdminPanel, AdminSelect } from "../ui/index.js";
+import LoyaltyOpsPanel from "./LoyaltyOpsPanel.jsx";
 
 function formatPercent(value) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(value);
@@ -50,20 +55,47 @@ function updateStreakReward(setCrmSnapshot, day, value) {
   }));
 }
 
+function getChecklistLabel(status = "") {
+  const labels = {
+    ready: "Sẵn sàng",
+    missing: "Chưa gán",
+    inactive: "Đang tắt",
+    expired: "Hết hạn",
+    optional: "Tùy chọn"
+  };
+  return labels[status] || "Cần kiểm tra";
+}
+
+function getChecklistTone(status = "") {
+  const tones = {
+    ready: "claimed",
+    missing: "pending",
+    inactive: "blocked",
+    expired: "blocked",
+    optional: "unknown"
+  };
+  return tones[status] || "pending";
+}
+
 export default function LoyaltySettings({
   crmSnapshot,
   setCrmSnapshot,
   onSave,
-  coupons = []
+  coupons = [],
+  refreshCrm
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const config = normalizeLoyaltyProgramConfig(crmSnapshot?.loyaltyConfig || {});
-  const loyaltyVouchers = useMemo(() => (
+  const loyaltyCoupons = useMemo(() => (
     (coupons || [])
-      .filter((coupon) => coupon?.active !== false && String(coupon?.voucherType || "checkout") === "loyalty")
+      .filter((coupon) => String(coupon?.voucherType || "checkout") === "loyalty")
       .sort((a, b) => String(a?.code || "").localeCompare(String(b?.code || "")))
   ), [coupons]);
+  const voucherChecklist = useMemo(
+    () => buildLoyaltyVoucherChecklist(config.tiers, loyaltyCoupons),
+    [config.tiers, loyaltyCoupons]
+  );
 
   const handleSave = async () => {
     if (isSaving) return;
@@ -77,9 +109,11 @@ export default function LoyaltySettings({
       setSaveMessage("Đã lưu và kích hoạt phiên bản cấu hình loyalty mới.");
     } catch (error) {
       const detail = String(error?.message || "").trim();
-      setSaveMessage(detail
-        ? `Không thể lưu cấu hình: ${detail}`
-        : "Không thể lưu cấu hình loyalty.");
+      setSaveMessage(
+        detail
+          ? `Không thể lưu cấu hình: ${detail}`
+          : "Không thể lưu cấu hình loyalty."
+      );
     } finally {
       setIsSaving(false);
     }
@@ -89,6 +123,7 @@ export default function LoyaltySettings({
     <section className="admin-stack admin-loyalty-settings">
       <AdminPanel
         title="Trung tâm Loyalty"
+        description="Giữ một nguồn cấu hình chung cho website, QR, POS và đơn đối tác."
         action={(
           <AdminButton onClick={handleSave} disabled={isSaving}>
             {isSaving ? "Đang lưu..." : "Lưu và kích hoạt"}
@@ -110,7 +145,11 @@ export default function LoyaltySettings({
       <AdminPanel title="5 hạng thành viên" className="admin-loyalty-card">
         <div className="admin-loyalty-tier-list">
           <div className="admin-loyalty-tier-header" aria-hidden="true">
-            <span>Tên và icon</span><span>Mốc chi tiêu năm</span><span>Tích điểm</span><span>Tỷ lệ</span><span>Quà đạt mốc</span>
+            <span>Tên và icon</span>
+            <span>Mốc chi tiêu năm</span>
+            <span>Tích điểm</span>
+            <span>Tỷ lệ</span>
+            <span>Quà đạt mốc</span>
           </div>
           {config.tiers.map((tier, index) => {
             const earnPercent = getLoyaltyEarnPercent(tier.currencyPerPoint, tier.pointPerUnit);
@@ -202,9 +241,9 @@ export default function LoyaltySettings({
                     })}
                   >
                     <option value="">Chưa gán voucher</option>
-                    {loyaltyVouchers.map((voucher) => (
+                    {loyaltyCoupons.map((voucher) => (
                       <option key={voucher.id || voucher.code} value={voucher.id || voucher.code}>
-                        {voucher.code || "Không có mã"} - {voucher.title || voucher.name || "Voucher loyalty"}
+                        {voucher.code || "Không có mã"} - {voucher.name || voucher.title || "Voucher loyalty"}{voucher.active === false ? " (đang tắt)" : ""}
                       </option>
                     ))}
                   </AdminSelect>
@@ -215,6 +254,45 @@ export default function LoyaltySettings({
         </div>
         <p className="admin-loyalty-note">
           Đơn tiền lẻ được tính bằng công thức làm tròn xuống. Không gán voucher vẫn thăng hạng bình thường.
+        </p>
+      </AdminPanel>
+
+      <AdminPanel
+        title="Checklist voucher tự tặng"
+        description="Anh chỉ cần tạo bộ voucher loyalty mẫu trong Khuyến mãi, rồi quay lại đây để gán theo hạng."
+        className="admin-loyalty-card"
+      >
+        <div className="admin-loyalty-checklist">
+          {voucherChecklist.map(({ tier, preset, assignedCoupon, status }) => (
+            <article className="admin-loyalty-checklist-row" key={tier.id}>
+              <div className="admin-loyalty-checklist-main">
+                <span className="admin-loyalty-tier-symbol" aria-hidden="true">
+                  {getLoyaltyTierIconSymbol(tier.iconKey)}
+                </span>
+                <div>
+                  <strong>{tier.name}</strong>
+                  <small>
+                    {assignedCoupon
+                      ? `${assignedCoupon.code || "Không có mã"} · ${assignedCoupon.name || assignedCoupon.title || "Voucher loyalty"}`
+                      : preset
+                        ? `Gợi ý mã: ${preset.code}`
+                        : "Chưa có gợi ý"}
+                  </small>
+                </div>
+              </div>
+              <div className="admin-loyalty-checklist-meta">
+                <span className={`crm-point-status crm-point-status--${getChecklistTone(status)}`}>
+                  {getChecklistLabel(status)}
+                </span>
+                <small>
+                  {preset?.note || "Anh có thể đổi quà bất cứ lúc nào rồi lưu lại phiên bản mới."}
+                </small>
+              </div>
+            </article>
+          ))}
+        </div>
+        <p className="admin-loyalty-note">
+          Bộ mẫu gợi ý hiện có {LOYALTY_VOUCHER_PRESETS.length} voucher. Hạng Chớm Ghiền nên để quà chào sân hoặc tặng tay trong CRM, không bắt buộc auto-grant.
         </p>
       </AdminPanel>
 
@@ -256,6 +334,8 @@ export default function LoyaltySettings({
           ))}
         </div>
       </AdminPanel>
+
+      <LoyaltyOpsPanel onRefresh={refreshCrm} />
     </section>
   );
 }

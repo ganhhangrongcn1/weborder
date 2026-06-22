@@ -59,6 +59,7 @@ export default function AdminCustomerSection({
           setCrmSnapshot={setCrmSnapshot}
           onSave={handleSaveLoyaltyRatio}
           coupons={coupons}
+          refreshCrm={refreshCrm}
         />
       )}
     </div>

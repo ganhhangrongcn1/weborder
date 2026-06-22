@@ -79,8 +79,15 @@ export default function AdminOrdersCrmSection({
   };
 
   const saveLoyaltyConfig = async (nextConfig) => {
-    await Promise.resolve(onSaveLoyaltyConfig?.(nextConfig || crmSnapshot?.loyaltyConfig || {}));
-    return await refreshCrm({ forceSupportRefresh: true });
+    const savedResult = await Promise.resolve(
+      onSaveLoyaltyConfig?.(nextConfig || crmSnapshot?.loyaltyConfig || {})
+    );
+    const savedConfig = savedResult?.config || nextConfig || crmSnapshot?.loyaltyConfig || {};
+    setCrmSnapshot((current) => ({
+      ...(current || {}),
+      loyaltyConfig: savedConfig
+    }));
+    return savedConfig;
   };
 
   const updateOrderStatus = async (orderId, nextStatus) => {

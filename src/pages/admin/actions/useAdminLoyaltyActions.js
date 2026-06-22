@@ -16,10 +16,11 @@ export default function useAdminLoyaltyActions({ orderStorage } = {}) {
   };
 
   const handleSaveLoyaltyConfig = async (payload) => {
-    await saveLoyaltyConfigAsync(payload);
+    const result = await saveLoyaltyConfigAsync(payload);
     if (getDataSource() !== "supabase") {
       recalculateAllLoyaltyFromOrders(orderStorage);
     }
+    return result;
   };
 
   return {

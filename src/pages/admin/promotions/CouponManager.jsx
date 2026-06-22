@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  applyLoyaltyVoucherPresets,
+  LOYALTY_VOUCHER_PRESETS
+} from "../../../services/loyaltyVoucherPresetService.js";
 
 const VOUCHER_TYPES = [
   { value: "checkout", label: "Voucher thanh toán" },
@@ -90,8 +94,12 @@ function FieldLabel({ label, children }) {
 export default function CouponManager({ coupons = [], setCoupons }) {
   const safeCoupons = useMemo(() => coupons.map((coupon) => normalizeCoupon(coupon)), [coupons]);
   const [voucherTypeFilter, setVoucherTypeFilter] = useState("checkout");
-  const visibleCoupons = safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === voucherTypeFilter);
   const [selectedCouponId, setSelectedCouponId] = useState("");
+  const [presetMessage, setPresetMessage] = useState("");
+  const visibleCoupons = safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === voucherTypeFilter);
+  const loyaltyCoupons = safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === "loyalty");
+  const loyaltyCodes = new Set(loyaltyCoupons.map((coupon) => String(coupon.code || "").toUpperCase()).filter(Boolean));
+  const loyaltyPresetReadyCount = LOYALTY_VOUCHER_PRESETS.filter((preset) => loyaltyCodes.has(preset.code)).length;
 
   useEffect(() => {
     if (!visibleCoupons.length) {
@@ -132,6 +140,18 @@ export default function CouponManager({ coupons = [], setCoupons }) {
     setSelectedCouponId(seed.id);
   };
 
+  const addLoyaltyPresetPack = () => {
+    const result = applyLoyaltyVoucherPresets(coupons);
+    setCoupons(result.coupons);
+    if (result.created[0]?.id) setSelectedCouponId(result.created[0].id);
+    setVoucherTypeFilter("loyalty");
+    setPresetMessage(
+      result.createdCount > 0
+        ? `Đã tạo ${result.createdCount} voucher loyalty mẫu. Anh chỉnh lại giá trị rồi bấm Lưu khuyến mãi là xong.`
+        : "Bộ voucher loyalty mẫu đã có sẵn. Anh chỉ cần chỉnh lại mức giảm và hạn dùng."
+    );
+  };
+
   const removeCoupon = (couponId) => {
     setCoupons((current) => (current || []).filter((item) => getCouponId(item) !== couponId));
   };
@@ -156,6 +176,41 @@ export default function CouponManager({ coupons = [], setCoupons }) {
             </button>
           ))}
         </div>
+
+        {voucherTypeFilter === "loyalty" ? (
+          <div className="mb-3 rounded-[14px] border border-amber-200 bg-amber-50 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wide text-amber-700">Setup nhanh loyalty</p>
+                <strong className="mt-1 block text-sm font-black text-slate-900">
+                  Có {loyaltyPresetReadyCount}/{LOYALTY_VOUCHER_PRESETS.length} voucher mẫu
+                </strong>
+                <p className="mt-1 text-xs font-semibold text-slate-600">
+                  Tạo một lần để dùng cho auto-tặng theo hạng, sau đó chỉ cần sửa lại số tiền hoặc hạn dùng.
+                </p>
+              </div>
+              <button type="button" className="admin-cta" onClick={addLoyaltyPresetPack}>
+                Tạo bộ mẫu
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {LOYALTY_VOUCHER_PRESETS.map((preset) => {
+                const ready = loyaltyCodes.has(String(preset.code || "").toUpperCase());
+                return (
+                  <span
+                    key={preset.code}
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold ${ready ? "bg-emerald-100 text-emerald-700" : "bg-white text-slate-500"}`}
+                  >
+                    {preset.code}
+                  </span>
+                );
+              })}
+            </div>
+            {presetMessage ? (
+              <p className="mt-3 text-xs font-semibold text-amber-800">{presetMessage}</p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
           {visibleCoupons.map((coupon) => {
