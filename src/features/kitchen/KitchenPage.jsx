@@ -295,8 +295,16 @@ function KitchenRequestAuditBadge({ audit, onReset }) {
     order_items: "order_items",
     partner_orders: "partner_orders",
     partner_order_items: "partner_order_items",
+    print_jobs: "in bill",
     profiles: "khách hàng",
     monthly_customer_gifts: "quà tháng",
+    "read recent print jobs": "in: job gần đây",
+    "read pending print jobs": "in: job chờ",
+    "create customer bill print job": "in: tạo lệnh",
+    "claim print job": "in: nhận lệnh",
+    "mark print job printed": "in: in xong",
+    "mark print job failed": "in: in lỗi",
+    "mark print job auto expired": "in: tự hết hạn",
     "read website orders": "đơn web/QR",
     "read website items": "món web/QR",
     "read partner orders": "đơn app",
@@ -566,20 +574,21 @@ export default function KitchenPage() {
   } = useKitchenNewOrderAlert(orders, Boolean(session && profile));
 
   useEffect(() => {
-    if (!session || !profile) return undefined;
+    if (!session || !profile || !orders.length) return undefined;
 
     let stopped = false;
     let unsubscribe = () => {};
     const branchUuid = profile?.branchUuid || "";
     const printerKey = DEFAULT_PRINTER_KEY;
     const deviceId = getPrintDeviceId();
+    const printJobLimit = Math.min(Math.max(orders.length * 2, 20), 120);
 
     async function startPrintJobStatusSync() {
       const recentJobs = await readRecentPrintJobs({
         branchUuid,
         printerKey,
         jobType: CUSTOMER_BILL_JOB_TYPE,
-        limit: 120
+        limit: printJobLimit
       });
 
       if (!stopped && recentJobs.length) {
@@ -605,7 +614,7 @@ export default function KitchenPage() {
       stopped = true;
       unsubscribe();
     };
-  }, [profile, session]);
+  }, [orders.length, profile, session]);
 
   useEffect(() => {
     const canAutoPrintWithAndroid = hasAndroidPrinterBridge();

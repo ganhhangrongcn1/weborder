@@ -1,4 +1,5 @@
 import { buildPrintJobPayload } from "./printerService.js";
+import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 import {
   getSupabaseAdminAuthClient,
   getSupabaseKitchenAuthClient,
@@ -48,6 +49,13 @@ const PRINT_JOB_COLUMNS = [
   PRINT_JOB_STATUS_COLUMNS,
   "payload"
 ].join(",");
+
+function recordKitchenPrintJobRequest(scope = "unknown", type = "read") {
+  if (typeof window === "undefined") return;
+  const pathname = String(window.location.pathname || "").toLowerCase();
+  if (!pathname.startsWith("/kitchen")) return;
+  recordKitchenRequest(scope, "print_jobs", type);
+}
 
 function toText(value = "") {
   return String(value || "").trim();
@@ -334,6 +342,7 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
     .insert(row)
     .select(PRINT_JOB_STATUS_COLUMNS)
     .maybeSingle();
+  recordKitchenPrintJobRequest("create customer bill print job", "write");
   if (error) {
     return {
       ok: false,
@@ -588,6 +597,7 @@ export async function readRecentPrintJobs(options = {}) {
   if (branchUuid) query = query.eq("branch_uuid", branchUuid);
 
   const { data, error } = await query;
+  recordKitchenPrintJobRequest("read recent print jobs");
   if (error) {
     console.warn("[printJobService] read recent print jobs failed", error);
     return [];
@@ -620,6 +630,7 @@ export async function readPendingPrintJobs(options = {}) {
   if (branchUuid) query = query.eq("branch_uuid", branchUuid);
 
   const { data, error } = await query;
+  recordKitchenPrintJobRequest("read pending print jobs");
   if (error) {
     console.warn("[printJobService] read pending print jobs failed", error);
     return [];
@@ -651,6 +662,7 @@ export async function claimPrintJob(job = {}, options = {}) {
     .gte("created_at", getAutoPrintCutoffIso())
     .select(PRINT_JOB_COLUMNS)
     .maybeSingle();
+  recordKitchenPrintJobRequest("claim print job", "write");
 
   if (error) {
     console.warn("[printJobService] claim print job failed", error);
@@ -675,6 +687,7 @@ export async function markPrintJobPrinted(job = {}) {
       updated_at: now
     })
     .eq("id", job.id);
+  recordKitchenPrintJobRequest("mark print job printed", "write");
 
   if (error) console.warn("[printJobService] mark printed failed", error);
 }
@@ -695,6 +708,7 @@ export async function markPrintJobFailed(job = {}, message = "") {
       updated_at: now
     })
     .eq("id", job.id);
+  recordKitchenPrintJobRequest("mark print job failed", "write");
 
   if (error) console.warn("[printJobService] mark failed failed", error);
 }
@@ -714,6 +728,7 @@ export async function markPrintJobAutoExpired(job = {}) {
     })
     .eq("id", job.id)
     .eq("status", PRINT_JOB_STATUS.pending);
+  recordKitchenPrintJobRequest("mark print job auto expired", "write");
 
   if (error) console.warn("[printJobService] mark auto-expired failed", error);
 }

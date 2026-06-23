@@ -92,9 +92,20 @@ function getOrderTimeValue(order = {}) {
 
 function selectGiftEnrichmentOrders(orders = [], maxOrders = DEFAULT_GIFT_ENRICHMENT_LIMIT) {
   const limit = Math.max(1, toNumber(maxOrders, DEFAULT_GIFT_ENRICHMENT_LIMIT));
-  return (Array.isArray(orders) ? orders : [])
+  const prioritized = [];
+  const fallback = [];
+
+  (Array.isArray(orders) ? orders : [])
     .sort((left, right) => getOrderTimeValue(right) - getOrderTimeValue(left))
-    .slice(0, limit);
+    .forEach((order) => {
+      if (isGiftEnrichmentCandidate(order)) {
+        prioritized.push(order);
+        return;
+      }
+      fallback.push(order);
+    });
+
+  return [...prioritized, ...fallback].slice(0, limit);
 }
 
 function getMonthKey(value = "") {

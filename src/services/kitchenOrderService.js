@@ -556,6 +556,31 @@ function matchesBranch(order = {}, { branchUuid = "", branchId = "", branchName 
   });
 }
 
+function buildWebsiteBranchMatchCandidate(row = {}) {
+  const metadata = getObject(row.metadata);
+  return {
+    branchUuid: toText(row.branch_uuid || metadata.branchUuid || metadata.branch_uuid),
+    pickupBranchUuid: toText(row.pickup_branch_uuid || metadata.pickupBranchUuid || metadata.pickup_branch_uuid),
+    deliveryBranchUuid: toText(row.delivery_branch_uuid || metadata.deliveryBranchUuid || metadata.delivery_branch_uuid),
+    branchId: toText(row.branch_id || metadata.branchId || metadata.branch_id),
+    pickupBranchId: toText(row.pickup_branch_id || metadata.pickupBranchId || metadata.pickup_branch_id),
+    deliveryBranchId: toText(row.delivery_branch_id || metadata.deliveryBranchId || metadata.delivery_branch_id),
+    branchName: toText(row.branch_name || metadata.branchName || metadata.branch_name),
+    pickupBranchName: toText(row.pickup_branch_name || metadata.pickupBranchName || metadata.pickup_branch_name),
+    deliveryBranchName: toText(row.delivery_branch_name || metadata.deliveryBranchName || metadata.delivery_branch_name),
+    rawData: metadata
+  };
+}
+
+function buildPartnerBranchMatchCandidate(row = {}) {
+  return {
+    branchUuid: toText(row.branch_uuid),
+    branchId: toText(row.branch_id),
+    branchName: toText(row.branch_name || row.nexpos_site_name || row.nexpos_hub_name),
+    rawData: getObject(row.raw_data)
+  };
+}
+
 function flattenOptionLabels(value) {
   const result = [];
 
@@ -1071,13 +1096,12 @@ export async function getWebsiteKitchenOrders(options = {}) {
   recordKitchenRequest("read website orders", "orders");
   if (error) throw error;
 
-  const orderRows = getArray(data);
+  const orderRows = getArray(data).filter((row) => matchesBranch(buildWebsiteBranchMatchCandidate(row), options));
   const orderIds = orderRows.map((row) => row.id).filter(Boolean);
   const itemsByOrderId = await readOrderItems(client, orderIds);
 
   return orderRows
     .map((row) => mapWebsiteKitchenOrder(row, itemsByOrderId))
-    .filter((order) => matchesBranch(order, options))
     .filter((order) => !shouldHideWebsiteOrderUntilPaid(order));
 }
 
@@ -1101,13 +1125,13 @@ export async function getPartnerKitchenOrders(options = {}) {
   recordKitchenRequest("read partner orders", "partner_orders");
   if (error) throw error;
 
-  const orderRows = await stampPartnerKitchenDoneAt(client, getArray(data));
+  const branchScopedRows = getArray(data).filter((row) => matchesBranch(buildPartnerBranchMatchCandidate(row), options));
+  const orderRows = await stampPartnerKitchenDoneAt(client, branchScopedRows);
   const orderIds = orderRows.map((row) => row.id).filter(Boolean);
   const itemsByOrderId = await readPartnerOrderItems(client, orderIds);
 
   return orderRows
-    .map((row) => mapPartnerKitchenOrder(row, itemsByOrderId))
-    .filter((order) => matchesBranch(order, options));
+    .map((row) => mapPartnerKitchenOrder(row, itemsByOrderId));
 }
 
 export async function getKitchenOrders(options = {}) {
