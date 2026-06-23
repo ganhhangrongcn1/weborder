@@ -658,19 +658,99 @@ function flattenSelectedOptionLabels(value) {
   return result;
 }
 
+function getSelectedWebsiteToppings(row = {}, metadata = {}, nestedMetadata = {}) {
+  const candidates = [row.toppings, metadata.toppings, nestedMetadata.toppings];
+  return candidates.find((value) => Array.isArray(value) && value.length) || [];
+}
+
+function isSelectedOnlyOptionGroup(group = {}) {
+  return !(
+    Object.prototype.hasOwnProperty.call(group, "required") ||
+    Object.prototype.hasOwnProperty.call(group, "maxSelect") ||
+    Object.prototype.hasOwnProperty.call(group, "max_select") ||
+    Object.prototype.hasOwnProperty.call(group, "sourcePresetId") ||
+    Object.prototype.hasOwnProperty.call(group, "source_preset_id")
+  );
+}
+
+function normalizeSelectedWebsiteOptionGroups(toppings = [], groupSources = []) {
+  const groupedToppings = (Array.isArray(toppings) ? toppings : []).reduce((map, topping) => {
+    if (!topping || typeof topping !== "object" || Array.isArray(topping)) return map;
+    const groupId = toText(topping.groupId || topping.group_id);
+    const groupName = toText(topping.groupName || topping.group_name || topping.group);
+    const optionName = toText(topping.name || topping.label || topping.value);
+    const key = groupId || groupName;
+    if (!key || !optionName) return map;
+
+    const current = map.get(key) || {
+      id: groupId,
+      name: groupName,
+      type: toText(topping.type),
+      options: []
+    };
+    current.options.push({
+      id: toText(topping.id || topping.optionId || topping.option_id),
+      name: optionName,
+      price: toNumber(topping.price, 0),
+      quantity: Math.max(1, toNumber(topping.quantity, 1))
+    });
+    map.set(key, current);
+    return map;
+  }, new Map());
+
+  if (groupedToppings.size) return [...groupedToppings.values()];
+
+  return groupSources.flatMap((source) => (Array.isArray(source) ? source : []))
+    .map((group) => {
+      if (!group || typeof group !== "object" || Array.isArray(group)) return null;
+      const selectedOptions = Array.isArray(group.selectedOptions)
+        ? group.selectedOptions
+        : Array.isArray(group.selected)
+          ? group.selected
+          : isSelectedOnlyOptionGroup(group) && Array.isArray(group.options)
+            ? group.options
+            : [];
+      if (!selectedOptions.length) return null;
+      return {
+        id: toText(group.id || group.groupId || group.group_id),
+        name: toText(group.name || group.groupName || group.group_name),
+        type: toText(group.type),
+        options: selectedOptions
+          .map((option) => ({
+            id: toText(option?.id || option?.optionId || option?.option_id),
+            name: toText(option?.name || option?.label || option?.value),
+            price: toNumber(option?.price, 0),
+            quantity: Math.max(1, toNumber(option?.quantity, 1))
+          }))
+          .filter((option) => option.name)
+      };
+    })
+    .filter((group) => group?.options?.length);
+}
+
+function flattenSelectedOptionGroups(groups = []) {
+  return (Array.isArray(groups) ? groups : []).flatMap((group) => (
+    (Array.isArray(group?.options) ? group.options : []).map((option) => {
+      const groupName = toText(group?.name || group?.groupName || group?.group_name);
+      const optionName = toText(option?.name || option?.label || option?.value);
+      return groupName && optionName ? `${groupName}: ${optionName}` : optionName;
+    }).filter(Boolean)
+  ));
+}
+
 function buildWebsiteOptionLabels(row = {}, metadata = {}) {
   const nestedMetadata = getObject(metadata.metadata);
+  const toppings = getSelectedWebsiteToppings(row, metadata, nestedMetadata);
+  const selectedOptionGroups = normalizeSelectedWebsiteOptionGroups(toppings, [
+    row.option_groups,
+    metadata.optionGroups,
+    nestedMetadata.optionGroups
+  ]);
   const selectedOptions = [
-    ...flattenSelectedOptionLabels(row.toppings),
-    ...flattenSelectedOptionLabels(metadata.toppings),
-    ...flattenSelectedOptionLabels(nestedMetadata.toppings),
-    ...flattenSelectedOptionLabels(row.option_groups),
-    ...flattenSelectedOptionLabels(metadata.optionGroups),
-    ...flattenSelectedOptionLabels(nestedMetadata.optionGroups),
+    ...flattenSelectedOptionLabels(toppings),
+    ...flattenSelectedOptionGroups(selectedOptionGroups),
     ...flattenSelectedOptionLabels(metadata.selectedOptions),
-    ...flattenSelectedOptionLabels(nestedMetadata.selectedOptions),
-    ...flattenSelectedOptionLabels(metadata.options),
-    ...flattenSelectedOptionLabels(nestedMetadata.options)
+    ...flattenSelectedOptionLabels(nestedMetadata.selectedOptions)
   ];
   const seen = new Set();
   const options = [];
@@ -687,26 +767,18 @@ function buildWebsiteOptionLabels(row = {}, metadata = {}) {
   return options;
 }
 
-function mapWebsiteKitchenItem(row = {}) {
+export function mapWebsiteKitchenItem(row = {}) {
   const metadata = getObject(row.metadata);
   const nestedMetadata = getObject(metadata.metadata);
   const quantity = toNumber(row.quantity ?? metadata.quantity, 1) || 1;
   const status = normalizeKitchenStatus(row.kitchen_item_status, metadata.kitchenStatus);
   const options = buildWebsiteOptionLabels(row, metadata);
-  const toppings = Array.isArray(row.toppings)
-    ? row.toppings
-    : Array.isArray(metadata.toppings)
-      ? metadata.toppings
-      : Array.isArray(nestedMetadata.toppings)
-        ? nestedMetadata.toppings
-        : [];
-  const optionGroups = Array.isArray(row.option_groups)
-    ? row.option_groups
-    : Array.isArray(metadata.optionGroups)
-      ? metadata.optionGroups
-      : Array.isArray(nestedMetadata.optionGroups)
-        ? nestedMetadata.optionGroups
-        : [];
+  const toppings = getSelectedWebsiteToppings(row, metadata, nestedMetadata);
+  const optionGroups = normalizeSelectedWebsiteOptionGroups(toppings, [
+    row.option_groups,
+    metadata.optionGroups,
+    nestedMetadata.optionGroups
+  ]);
 
   return {
     id: toText(row.id || row.product_id || metadata.id || metadata.cartId),
@@ -748,10 +820,19 @@ function buildWebsiteOrderItemRepairRow(orderRow = {}, item = {}, index = 0) {
   const unitPrice = toNumber(item.unitTotal ?? item.unitPrice ?? item.price, 0);
   const lineTotal = toNumber(item.lineTotal, quantity * unitPrice);
   const productId = toText(item.productId || item.product_id || item.id || `item-${index}`);
+  const toppings = Array.isArray(item.toppings) ? item.toppings : [];
+  const optionGroups = normalizeSelectedWebsiteOptionGroups(toppings, [item.optionGroups]);
+  const options = buildWebsiteOptionLabels(
+    { toppings, option_groups: optionGroups, spice: item.spice },
+    { ...item, optionGroups, options: [] }
+  );
   const metadata = {
     ...item,
     productId,
     product_id: productId,
+    options,
+    toppings,
+    optionGroups,
     ghrOrderIndex: Number(item.ghrOrderIndex ?? index)
   };
 
@@ -765,8 +846,8 @@ function buildWebsiteOrderItemRepairRow(orderRow = {}, item = {}, index = 0) {
     line_total: lineTotal,
     spice: toText(item.spice),
     note: toText(item.note),
-    toppings: Array.isArray(item.toppings) ? item.toppings : [],
-    option_groups: Array.isArray(item.optionGroups) ? item.optionGroups : [],
+    toppings,
+    option_groups: optionGroups,
     kitchen_item_status: normalizeKitchenStatus(item.kitchenItemStatus || item.kitchen_item_status || item.status),
     metadata
   };
