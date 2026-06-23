@@ -49,7 +49,13 @@ function runBranchIdentitySmoke() {
   const kitchenOrderService = read("src/services/kitchenOrderService.js");
   const qrOrderEntryPage = read("src/pages/customer/qr/QrOrderEntryPage.jsx");
   const printJobService = read("src/services/printJobService.js");
+  const adminOrderCrmState = read("src/pages/admin/state/useAdminOrderCrmState.js");
+  const adminDashboardService = read("src/services/adminDashboardService.js");
+  const adminBusinessAnalyticsService = read("src/services/adminBusinessAnalyticsService.js");
+  const adminCakesPage = read("src/pages/admin/pages/AdminCakesPage.jsx");
+  const cakeCustomerPage = read("src/pages/BanhKemBanhTrangPage.jsx");
   const migration = read("supabase/migrations/20260622235452_branch_identity_contract.sql");
+  const adminBranchMigration = read("supabase/migrations/20260623011644_admin_branch_uuid_filters.sql");
 
   assertIncludes(checkoutDomain, "branchUuid: branch.branchUuid || branch.branch_uuid || branch.uuid", "Pickup branch flow must preserve branch UUID");
   assertIncludes(checkoutDomain, "branch_uuid: branch.branch_uuid || branch.branchUuid || branch.uuid", "Pickup branch flow must preserve snake_case branch UUID");
@@ -58,7 +64,14 @@ function runBranchIdentitySmoke() {
   assertIncludes(kitchenOrderService, "options.strictBranchUuidQuery", "Kitchen website order read must keep legacy fallback by default");
   assertIncludes(qrOrderEntryPage, "branch?.branch_uuid || branch?.branchUuid || branch?.uuid || branch?.id", "QR counter flow must prefer branch UUID");
   assertIncludes(printJobService, "branch?.branch_uuid || branch?.branchUuid || branch?.uuid || options.branchUuid || branch?.id", "POS QR print job must prefer branch UUID");
+  assertIncludes(adminOrderCrmState, "branchUuid: selectedBranchUuid", "Admin dashboard RPC calls must carry branch UUID");
+  assertIncludes(adminDashboardService, "params.p_branch_uuid = branchUuid || null", "Dashboard RPC service must send branch UUID when available");
+  assertIncludes(adminBusinessAnalyticsService, "params.p_branch_uuid = branchUuid || null", "Business analytics RPC service must send branch UUID when available");
+  assertIncludes(adminCakesPage, "branch?.branch_uuid || branch?.branchUuid || branch?.uuid", "Cake admin source branch must prefer branch UUID");
+  assertIncludes(cakeCustomerPage, "branch.branchUuid || branch.branch_uuid || branch.uuid || branch.id", "Cake customer pickup matching must prefer branch UUID");
   assertIncludes(migration, "alter column branch_uuid set default gen_random_uuid()", "Branch migration must default branch_uuid");
+  assertIncludes(adminBranchMigration, "public.admin_branch_filter_matches", "Admin branch RPC migration must keep UUID/name fallback matching");
+  assertIncludes(adminBranchMigration, "p_branch_uuid text default null", "Admin branch RPC migration must accept branch UUID");
 }
 
 function run() {

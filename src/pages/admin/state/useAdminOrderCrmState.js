@@ -151,6 +151,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const [customerAdminTab, setCustomerAdminTab] = useState("crm");
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState("");
   const selectedBranchOption = getSelectedBranchOption(branches, selectedBranchFilter);
+  const selectedBranchUuid = selectedBranchOption?.value || "";
   const selectedBranchName = selectedBranchOption?.label || "";
 
   const loadActiveOrdersSnapshot = async ({ force = false } = {}) => {
@@ -175,7 +176,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
         const nextSummary = await getAdminDashboardSummaryRpc({
           ...dateRange,
-          branchFilter: selectedBranchName
+          branchFilter: selectedBranchName,
+          branchUuid: selectedBranchUuid,
+          branchName: selectedBranchName
         });
         if (disposed) return;
         setDashboardSummary(nextSummary);
@@ -194,7 +197,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardDateFrom, dashboardDateTo, ordersSnapshot, selectedBranchName]);
+  }, [section, dashboardDateFrom, dashboardDateTo, ordersSnapshot, selectedBranchName, selectedBranchUuid]);
 
   useEffect(() => {
     let disposed = false;
@@ -205,7 +208,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
         const nextAnalytics = await getAdminBusinessAnalyticsRpc({
           ...dateRange,
-          branchFilter: selectedBranchName
+          branchFilter: selectedBranchName,
+          branchUuid: selectedBranchUuid,
+          branchName: selectedBranchName
         });
         if (disposed) return;
         setBusinessAnalytics(nextAnalytics);
@@ -224,7 +229,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardDateFrom, dashboardDateTo, ordersSnapshot, selectedBranchName]);
+  }, [section, dashboardDateFrom, dashboardDateTo, ordersSnapshot, selectedBranchName, selectedBranchUuid]);
 
   useEffect(() => {
     let disposed = false;

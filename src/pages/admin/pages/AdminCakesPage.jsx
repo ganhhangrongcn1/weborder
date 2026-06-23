@@ -73,6 +73,10 @@ function isCakeBranch304(branch) {
   return text.includes("30/4") || text.includes("30 thang 4") || text.includes("duong 30");
 }
 
+function getCakeBranchRuntimeId(branch) {
+  return String(branch?.branch_uuid || branch?.branchUuid || branch?.uuid || branch?.id || branch?.dbId || "").trim();
+}
+
 function formatCakeOrderPickupTime(order) {
   const localValue = String(order?.pickupTimeLocal || order?.metadata?.pickupTimeLocal || "").trim();
   if (localValue) {
@@ -162,9 +166,9 @@ export default function AdminCakesPage({ branches = [] }) {
     [branches]
   );
   const cakeBranch304 = branchOptions[0] || null;
-  const cakeBranch304Id = String(cakeBranch304?.id || cakeBranch304?.dbId || "").trim();
+  const cakeBranch304Id = getCakeBranchRuntimeId(cakeBranch304);
   const savedDeliverySourceBranchId = String(cakeFulfillment.deliverySourceBranchId || settings.shippingConfig?.sourceBranchId || "").trim();
-  const selectedDeliverySourceBranchId = branchOptions.some((branch) => String(branch.id || branch.dbId || "") === savedDeliverySourceBranchId)
+  const selectedDeliverySourceBranchId = branchOptions.some((branch) => getCakeBranchRuntimeId(branch) === savedDeliverySourceBranchId)
     ? savedDeliverySourceBranchId
     : cakeBranch304Id;
 
@@ -290,7 +294,7 @@ export default function AdminCakesPage({ branches = [] }) {
 
   const togglePickupBranch = (branchId, checked) => {
     const savedIds = Array.isArray(cakeFulfillment.pickupBranchIds) ? cakeFulfillment.pickupBranchIds : [];
-    const currentIds = savedIds.length ? savedIds : branchOptions.map((branch) => branch.id);
+    const currentIds = savedIds.length ? savedIds : branchOptions.map(getCakeBranchRuntimeId).filter(Boolean);
     const nextIds = checked
       ? Array.from(new Set([...currentIds, branchId]))
       : currentIds.filter((id) => id !== branchId);
@@ -441,13 +445,14 @@ export default function AdminCakesPage({ branches = [] }) {
                 {branchOptions.length ? (
                   <div className="admin-cake-option-stack">
                     {branchOptions.map((branch) => {
-                      const checked = !cakeFulfillment.pickupBranchIds?.length || cakeFulfillment.pickupBranchIds.includes(branch.id);
+                      const branchId = getCakeBranchRuntimeId(branch);
+                      const checked = !cakeFulfillment.pickupBranchIds?.length || cakeFulfillment.pickupBranchIds.includes(branchId);
                       return (
-                        <label key={branch.id} className="admin-cake-toggle">
+                        <label key={branchId || branch.id} className="admin-cake-toggle">
                           <input
                             type="checkbox"
                             checked={checked}
-                            onChange={(event) => togglePickupBranch(branch.id, event.target.checked)}
+                            onChange={(event) => togglePickupBranch(branchId, event.target.checked)}
                           />
                           <span>{branch.name}</span>
                         </label>
@@ -479,7 +484,7 @@ export default function AdminCakesPage({ branches = [] }) {
                   >
                     {!branchOptions.length ? <option value="">Chưa có chi nhánh Đường 30/4 trên Supabase</option> : null}
                     {branchOptions.map((branch) => (
-                      <option key={branch.id || branch.dbId} value={branch.id || branch.dbId}>{branch.name}</option>
+                      <option key={getCakeBranchRuntimeId(branch) || branch.id || branch.dbId} value={getCakeBranchRuntimeId(branch)}>{branch.name}</option>
                     ))}
                   </select>
                 </label>

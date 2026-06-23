@@ -9,6 +9,9 @@
 -- - public.app_configs value for id = 'ghr_cake_settings'
 -- - value.shippingConfig.sourceBranchId
 -- - value.cakeFulfillment.deliverySourceBranchId
+-- Branch identity:
+-- - Prefer public.branches.branch_uuid as the saved source id.
+-- - Keep legacy id/code fallback only for older schemas.
 
 do $$
 declare
@@ -18,6 +21,7 @@ declare
 begin
   select
     coalesce(
+      nullif(b.branch_uuid::text, ''),
       nullif(b.data->>'id', ''),
       nullif(b.legacy_id::text, ''),
       nullif(b.branch_code, ''),
@@ -64,7 +68,7 @@ begin
     raise exception 'Khong tim thay app_configs id ghr_cake_settings.';
   end if;
 
-  raise notice 'Cake delivery source set to branch_id=%, name=%, address=%', v_branch_id, v_branch_name, v_branch_address;
+  raise notice 'Cake delivery source set to branch_uuid=%, name=%, address=%', v_branch_id, v_branch_name, v_branch_address;
 end $$;
 
 select
@@ -78,6 +82,6 @@ select
   b.data as matched_branch_data
 from public.app_configs c
 left join public.branches b
-  on coalesce(nullif(b.data->>'id', ''), nullif(b.legacy_id::text, ''), nullif(b.branch_code, ''), b.id::text)
+  on coalesce(nullif(b.branch_uuid::text, ''), nullif(b.data->>'id', ''), nullif(b.legacy_id::text, ''), nullif(b.branch_code, ''), b.id::text)
      = c.value #>> '{cakeFulfillment,deliverySourceBranchId}'
 where c.id = 'ghr_cake_settings';

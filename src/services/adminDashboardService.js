@@ -42,17 +42,32 @@ function mapSummary(row = {}) {
   };
 }
 
+async function callDashboardSummaryRpc(client, dateRange = {}, { includeBranchUuid = true } = {}) {
+  const branchName = String(dateRange.branchName || dateRange.branchFilter || "").trim();
+  const branchUuid = String(dateRange.branchUuid || "").trim();
+  const params = {
+    p_date_from: dateRange.dateFrom,
+    p_date_to: dateRange.dateTo,
+    p_branch_name: branchName || null,
+  };
+  if (includeBranchUuid) {
+    params.p_branch_uuid = branchUuid || null;
+  }
+  return client.rpc(DASHBOARD_SUMMARY_RPC, params);
+}
+
 export async function getAdminDashboardSummaryRpc(dateRange = {}) {
   const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
 
-  const branchFilter = String(dateRange.branchFilter || "").trim();
-
-  const { data, error } = await client.rpc(DASHBOARD_SUMMARY_RPC, {
-    p_date_from: dateRange.dateFrom,
-    p_date_to: dateRange.dateTo,
-    p_branch_name: branchFilter || null,
+  let { data, error } = await callDashboardSummaryRpc(client, dateRange, {
+    includeBranchUuid: true,
   });
+  if (error && MISSING_RPC_CODES.has(String(error.code || ""))) {
+    ({ data, error } = await callDashboardSummaryRpc(client, dateRange, {
+      includeBranchUuid: false,
+    }));
+  }
 
   if (error) {
     if (MISSING_RPC_CODES.has(String(error.code || ""))) return null;

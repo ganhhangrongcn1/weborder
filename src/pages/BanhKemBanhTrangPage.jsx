@@ -119,6 +119,22 @@ function getCakeAddonMode(product) {
   return product?.addonMode || (product?.useSharedAddons === false ? CAKE_ADDON_MODES.none : CAKE_ADDON_MODES.paid);
 }
 
+function getBranchRuntimeId(branch = {}) {
+  return String(branch.branchUuid || branch.branch_uuid || branch.uuid || branch.id || "").trim();
+}
+
+function branchMatchesRuntimeId(branch = {}, value = "") {
+  const target = String(value || "").trim();
+  if (!target) return false;
+  return [
+    getBranchRuntimeId(branch),
+    branch.id,
+    branch.branchUuid,
+    branch.branch_uuid,
+    branch.uuid
+  ].some((candidate) => String(candidate || "").trim() === target);
+}
+
 export default function BanhKemBanhTrangPage({ branches = [] }) {
   const { products, settings, loading, error } = useCakeProducts();
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -170,7 +186,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     if (cakeFulfillment.pickupEnabled === false) return [];
     const allowedIds = Array.isArray(cakeFulfillment.pickupBranchIds) ? cakeFulfillment.pickupBranchIds : [];
     if (!allowedIds.length) return allPickupBranches;
-    return allPickupBranches.filter((branch) => allowedIds.includes(branch.id));
+    return allPickupBranches.filter((branch) => allowedIds.some((id) => branchMatchesRuntimeId(branch, id)));
   }, [allPickupBranches, cakeFulfillment.pickupBranchIds, cakeFulfillment.pickupEnabled]);
   const deliveryContext = useMemo(() => resolveDeliveryContext({
     branches,
@@ -184,7 +200,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   const defaultFulfillmentType = pickupEnabled ? "pickup" : (deliveryEnabled ? "delivery" : "pickup");
   const selectedPickupBranch = useMemo(() => {
     if (form.pickupBranchId) {
-      return pickupBranches.find((branch) => branch.id === form.pickupBranchId) || pickupBranches[0] || null;
+      return pickupBranches.find((branch) => branchMatchesRuntimeId(branch, form.pickupBranchId)) || pickupBranches[0] || null;
     }
     return pickupBranches[0] || null;
   }, [form.pickupBranchId, pickupBranches]);
@@ -228,7 +244,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     setSelectedProduct(null);
     setForm((current) => ({
       ...EMPTY_FORM,
-      pickupBranchId: current.pickupBranchId || pickupBranches[0]?.id || "",
+      pickupBranchId: current.pickupBranchId || getBranchRuntimeId(pickupBranches[0]) || "",
       pickupTime: minPickupTimeValue,
       fulfillmentType: defaultFulfillmentType,
       decorationSelected: productDecorationIncluded,
@@ -644,24 +660,28 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             ) : (
               <div className="cake-pickup-branches">
                 <p className="cake-pickup-title">Chọn chi nhánh ghé lấy</p>
-                {(pickupBranches.length ? pickupBranches : [{ id: "default", name: settings.pickupAddress, address: "", time: "" }]).map((branch) => (
-                  <button
-                    key={branch.id}
-                    type="button"
-                    className={`branch-card ${selectedPickupBranch?.id === branch.id ? "branch-card-active" : ""}`}
-                    onClick={() => updateForm("pickupBranchId", branch.id)}
-                  >
-                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                      <Icon name="home" size={18} />
-                    </span>
-                    <span className="min-w-0 flex-1 text-left">
-                      <strong>{branch.name}</strong>
-                      {branch.address ? <small>{branch.address}</small> : null}
-                      {branch.time ? <em>{branch.time}</em> : null}
-                    </span>
-                    <span className="branch-radio">{selectedPickupBranch?.id === branch.id ? "✓" : ""}</span>
-                  </button>
-                ))}
+                {(pickupBranches.length ? pickupBranches : [{ id: "default", name: settings.pickupAddress, address: "", time: "" }]).map((branch) => {
+                  const branchId = getBranchRuntimeId(branch) || branch.id;
+                  const isSelected = branchMatchesRuntimeId(selectedPickupBranch, branchId);
+                  return (
+                    <button
+                      key={branchId}
+                      type="button"
+                      className={`branch-card ${isSelected ? "branch-card-active" : ""}`}
+                      onClick={() => updateForm("pickupBranchId", branchId)}
+                    >
+                      <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
+                        <Icon name="home" size={18} />
+                      </span>
+                      <span className="min-w-0 flex-1 text-left">
+                        <strong>{branch.name}</strong>
+                        {branch.address ? <small>{branch.address}</small> : null}
+                        {branch.time ? <em>{branch.time}</em> : null}
+                      </span>
+                      <span className="branch-radio">{isSelected ? "✓" : ""}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 

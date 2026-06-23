@@ -41,6 +41,7 @@ function mapSummary(row = {}) {
       netRevenue: toNumber(item.net_revenue),
     })),
     branches: (row.branch_performance || []).map((item) => ({
+      branchUuid: String(item.branch_uuid || ""),
       branchName: String(item.branch_name || "Chưa xác định"),
       totalOrders: toNumber(item.total_orders),
       grossRevenue: toNumber(item.gross_revenue),
@@ -50,17 +51,32 @@ function mapSummary(row = {}) {
   };
 }
 
+async function callBusinessAnalyticsRpc(client, dateRange = {}, { includeBranchUuid = true } = {}) {
+  const branchName = String(dateRange.branchName || dateRange.branchFilter || "").trim();
+  const branchUuid = String(dateRange.branchUuid || "").trim();
+  const params = {
+    p_date_from: dateRange.dateFrom,
+    p_date_to: dateRange.dateTo,
+    p_branch_name: branchName || null,
+  };
+  if (includeBranchUuid) {
+    params.p_branch_uuid = branchUuid || null;
+  }
+  return client.rpc(BUSINESS_ANALYTICS_RPC, params);
+}
+
 export async function getAdminBusinessAnalyticsRpc(dateRange = {}) {
   const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
 
-  const branchFilter = String(dateRange.branchFilter || "").trim();
-
-  const { data, error } = await client.rpc(BUSINESS_ANALYTICS_RPC, {
-    p_date_from: dateRange.dateFrom,
-    p_date_to: dateRange.dateTo,
-    p_branch_name: branchFilter || null,
+  let { data, error } = await callBusinessAnalyticsRpc(client, dateRange, {
+    includeBranchUuid: true,
   });
+  if (error && MISSING_RPC_CODES.has(String(error.code || ""))) {
+    ({ data, error } = await callBusinessAnalyticsRpc(client, dateRange, {
+      includeBranchUuid: false,
+    }));
+  }
 
   if (error) {
     if (MISSING_RPC_CODES.has(String(error.code || ""))) return null;
