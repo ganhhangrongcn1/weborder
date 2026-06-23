@@ -10,7 +10,8 @@ export default function AdminMenuPage({
   editingProduct,
   setEditingProduct,
   optionGroupPresets,
-  setOptionGroupPresets
+  setOptionGroupPresets,
+  branches
 }) {
   return (
     <AdminMenuSection
@@ -25,6 +26,7 @@ export default function AdminMenuPage({
       setEditingProduct={setEditingProduct}
       optionGroupPresets={optionGroupPresets}
       setOptionGroupPresets={setOptionGroupPresets}
+      branches={branches}
     />
   );
 }

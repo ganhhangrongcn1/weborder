@@ -1,4 +1,4 @@
-﻿import { useCallback, useState } from "react";
+﻿import { useCallback, useMemo, useState } from "react";
 import CheckoutContainer from "../customer/checkout/CheckoutContainer.jsx";
 import Checkout from "../checkout/CheckoutView.jsx";
 import Success from "../orders/OrderSuccessView.jsx";
@@ -29,6 +29,8 @@ import { customerPathToState } from "../../app/routeState.js";
 import useStoreAvailability from "../../hooks/useStoreAvailability.js";
 import useCustomerSession from "../../hooks/useCustomerSession.js";
 import useCart from "../../hooks/useCart.js";
+import { resolveBranchFromCandidates } from "../../services/branchIdentityService.js";
+import { filterProductsForAvailability } from "../../services/productAvailabilityService.js";
 
 const userStorage = createUserStorage({
   getCustomerKey,
@@ -37,6 +39,23 @@ const userStorage = createUserStorage({
 
 export function getUserStorage() {
   return userStorage;
+}
+
+function getCheckoutBranchValue(checkoutPreset = {}) {
+  const fulfillmentType = String(checkoutPreset?.fulfillmentType || "").toLowerCase();
+  if (fulfillmentType === "delivery") {
+    return checkoutPreset?.selectedDeliveryBranch || checkoutPreset?.selectedBranch || "";
+  }
+  return checkoutPreset?.selectedBranch || checkoutPreset?.selectedDeliveryBranch || "";
+}
+
+function getMenuChannel(checkoutPreset = {}) {
+  const sourceText = String(
+    checkoutPreset?.orderSource ||
+      checkoutPreset?.source ||
+      (typeof window !== "undefined" ? window.location.pathname : "")
+  ).toLowerCase();
+  return sourceText.includes("qr") ? "qr" : "web";
 }
 
 export default function useCustomerRuntimeState({ domainState, demoData, onRouteChange, sessionEnabled = true }) {
@@ -65,6 +84,29 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     buildOutOfHoursNotice
   } = useStoreAvailability(productState.branches);
 
+  const selectedMenuBranchValue = getCheckoutBranchValue(coreState.checkoutPreset);
+  const selectedMenuBranch = useMemo(
+    () => resolveBranchFromCandidates([selectedMenuBranchValue], productState.branches),
+    [selectedMenuBranchValue, productState.branches]
+  );
+  const menuChannel = getMenuChannel(coreState.checkoutPreset);
+  const availableCustomerProducts = useMemo(
+    () =>
+      filterProductsForAvailability(productState.customerProducts, {
+        branch: selectedMenuBranch,
+        branchValue: selectedMenuBranchValue,
+        channel: menuChannel
+      }),
+    [menuChannel, productState.customerProducts, selectedMenuBranch, selectedMenuBranchValue]
+  );
+  const availableFilteredProducts = useMemo(() => {
+    const allCategory = productState.customerCategories[0] || "";
+    if (!uiState.activeCategory || uiState.activeCategory === allCategory) return availableCustomerProducts;
+    return availableCustomerProducts.filter(
+      (product) => product.category === uiState.activeCategory || product.badge === uiState.activeCategory
+    );
+  }, [availableCustomerProducts, productState.customerCategories, uiState.activeCategory]);
+
   const {
     navigate,
     openProduct,
@@ -83,7 +125,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     setEditingCartId: uiState.setEditingCartId,
     setNote: uiState.setNote,
     setIsOptionModalOpen: uiState.setIsOptionModalOpen,
-    storeProducts: productState.customerProducts,
+    storeProducts: availableCustomerProducts,
     spiceLevels,
     storeToppings: productState.storeToppings,
     getDefaultOrderChoices,
@@ -197,8 +239,8 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     activeCategory: uiState.activeCategory,
     setActiveCategory: uiState.setActiveCategory,
     customerCategories: productState.customerCategories,
-    filteredProducts: productState.filteredProducts,
-    customerProducts: productState.customerProducts,
+    filteredProducts: availableFilteredProducts,
+    customerProducts: availableCustomerProducts,
     storeToppings: productState.storeToppings,
     customerPromoCards: productState.customerPromoCards,
     adminCoupons: productState.adminCoupons,

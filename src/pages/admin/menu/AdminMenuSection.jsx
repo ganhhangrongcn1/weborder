@@ -12,7 +12,8 @@ export default function AdminMenuSection({
   optionGroupPresets,
   setOptionGroupPresets,
   editingProduct,
-  setEditingProduct
+  setEditingProduct,
+  branches = []
 }) {
   if (section !== "menu") return null;
 
@@ -32,6 +33,7 @@ export default function AdminMenuSection({
       {editingProduct && (
         <AdminProductModal
           product={editingProduct}
+          branches={branches}
           categories={adminCategories.length ? adminCategories : ["Danh mục mặc định"]}
           optionGroupPresets={optionGroupPresets}
           onClose={() => setEditingProduct(null)}

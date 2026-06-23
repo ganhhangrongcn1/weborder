@@ -1,6 +1,12 @@
 ﻿import { useMemo, useState } from "react";
 import { processUploadImage } from "../../../utils/imageUpload.js";
 import { uploadImageToMenuBucket } from "../../../services/supabase/storageService.js";
+import {
+  PRODUCT_SALES_CHANNELS,
+  buildProductAvailabilityPatch,
+  getBranchAvailabilityValue,
+  normalizeProductAvailability
+} from "../../../services/productAvailabilityService.js";
 import { AdminSwitch } from "../ui/AdminCommon.jsx";
 import { AdminButton, AdminIconButton, AdminInput, AdminSelect } from "../ui/index.js";
 
@@ -55,7 +61,7 @@ function resolveValidCategory(value, categories) {
   return matched || validCategories[0] || cleaned;
 }
 
-export default function AdminProductModal({ product, categories, optionGroupPresets = [], onSave, onClose, onDelete }) {
+export default function AdminProductModal({ product, categories, branches = [], optionGroupPresets = [], onSave, onClose, onDelete }) {
   const isNewProduct = Boolean(product?.__isNew);
   const initialPresetIds = getPresetIdsFromProduct(product, optionGroupPresets);
   const [selectedPresetIds, setSelectedPresetIds] = useState(initialPresetIds);
@@ -78,8 +84,35 @@ export default function AdminProductModal({ product, categories, optionGroupPres
     if (!query) return optionGroupPresets;
     return optionGroupPresets.filter((preset) => String(preset.name || "").toLowerCase().includes(query));
   }, [groupSearch, optionGroupPresets]);
+  const branchOptions = useMemo(
+    () => (Array.isArray(branches) ? branches : []).map((branch, index) => ({
+      id: getBranchAvailabilityValue(branch, index),
+      name: branch?.name || `Chi nhánh ${index + 1}`
+    })).filter((branch) => branch.id),
+    [branches]
+  );
+  const availability = normalizeProductAvailability(draft);
 
   const patch = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
+  const patchAvailability = (field, value) => {
+    setDraft((current) => ({
+      ...current,
+      availability: buildProductAvailabilityPatch({
+        ...normalizeProductAvailability(current),
+        [field]: value
+      })
+    }));
+  };
+
+  const toggleAvailabilityItem = ({ field, value, checked, allValues }) => {
+    const currentValues = normalizeProductAvailability(draft)[field] || [];
+    const baseValues = currentValues.length ? currentValues : allValues;
+    if (!checked && baseValues.length <= 1) return;
+    const nextValues = checked
+      ? Array.from(new Set([...baseValues, value]))
+      : baseValues.filter((item) => item !== value);
+    patchAvailability(field, nextValues.length === allValues.length ? [] : nextValues);
+  };
 
   const togglePreset = (presetId) => {
     setPickerSelectedIds((current) => {
@@ -212,6 +245,71 @@ export default function AdminProductModal({ product, categories, optionGroupPres
             <AdminSwitch checked={draft.visible !== false} onChange={(checked) => patch("visible", checked)} />
           </label>
 
+          <div className="admin-availability-section">
+            <div className="admin-option-head">
+              <div>
+                <h3>PHẠM VI BÁN</h3>
+                <p>Bỏ chọn chi nhánh hoặc kênh nào không bán món này.</p>
+              </div>
+            </div>
+
+            <div className="admin-availability-grid">
+              <div className="admin-availability-group">
+                <strong>Chi nhánh</strong>
+                {branchOptions.length ? (
+                  branchOptions.map((branch) => {
+                    const allBranchIds = branchOptions.map((item) => item.id);
+                    const checked = availability.branchIds.length ? availability.branchIds.includes(branch.id) : true;
+                    return (
+                      <label key={branch.id} className="admin-availability-check">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) =>
+                            toggleAvailabilityItem({
+                              field: "branchIds",
+                              value: branch.id,
+                              checked: event.target.checked,
+                              allValues: allBranchIds
+                            })
+                          }
+                        />
+                        <span>{branch.name}</span>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <p className="admin-help-text">Chưa có danh sách chi nhánh.</p>
+                )}
+              </div>
+
+              <div className="admin-availability-group">
+                <strong>Kênh bán</strong>
+                {PRODUCT_SALES_CHANNELS.map((channel) => {
+                  const allChannelIds = PRODUCT_SALES_CHANNELS.map((item) => item.id);
+                  const checked = availability.channels.length ? availability.channels.includes(channel.id) : true;
+                  return (
+                    <label key={channel.id} className="admin-availability-check">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(event) =>
+                          toggleAvailabilityItem({
+                            field: "channels",
+                            value: channel.id,
+                            checked: event.target.checked,
+                            allValues: allChannelIds
+                          })
+                        }
+                      />
+                      <span>{channel.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className="admin-option-section menu-item-option-section">
             <div className="admin-option-head">
               <div>
@@ -321,6 +419,7 @@ export default function AdminProductModal({ product, categories, optionGroupPres
               payload.badge = String(payload.badge || "").trim();
               payload.category = resolveValidCategory(payload.category, categories);
               payload.optionGroups = buildOptionGroupsFromPresets(selectedPresetIds, optionGroupPresets);
+              payload.availability = buildProductAvailabilityPatch(normalizeProductAvailability(payload));
               onSave(payload);
             }}
           >

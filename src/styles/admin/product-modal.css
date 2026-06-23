@@ -148,6 +148,69 @@
   padding: 14px;
 }
 
+.admin-availability-section {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  border: 1px solid #d8e1ef;
+  border-radius: 18px;
+  background: #f8fafc;
+  padding: 16px;
+}
+
+.admin-availability-section .admin-option-head h3 {
+  margin-top: 0;
+  color: #172033;
+  font-size: 18px;
+}
+
+.admin-availability-section .admin-option-head p {
+  color: #64748b;
+}
+
+.admin-availability-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
+  gap: 12px;
+}
+
+.admin-availability-group {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: white;
+  padding: 12px;
+}
+
+.admin-availability-group > strong {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.admin-availability-check {
+  display: flex !important;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  color: #334155 !important;
+  font-size: 13px !important;
+  font-weight: 850 !important;
+  text-transform: none !important;
+}
+
+.admin-availability-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: #f97316;
+}
+
 .admin-option-section {
   display: grid;
   grid-column: 1 / -1;
@@ -157,6 +220,12 @@
   border-radius: 18px;
   background: #fffdf8;
   padding: 16px;
+}
+
+@media (max-width: 720px) {
+  .admin-availability-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-option-head {

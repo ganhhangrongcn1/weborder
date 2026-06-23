@@ -16,6 +16,7 @@ import usePosCustomerLookup from "../hooks/usePosCustomerLookup.js";
 import { lookupPosCustomerByPhone } from "../services/posCustomerService.js";
 import { createPosQrPrintJob, createPosShiftClosePrintJob } from "../services/printJobService.js";
 import { startPosAutoPrint } from "../services/posAutomationService.js";
+import { filterProductsForAvailability } from "../services/productAvailabilityService.js";
 import {
   readPosCatalogCache,
   savePosCatalogCache,
@@ -357,8 +358,20 @@ export default function PosPage({ products = [], categories = [], branches = [],
     : posCatalogCache.categories;
   const effectiveBranches = hasLiveBranches ? branches : posCatalogCache.branches;
   const usingCachedCatalog = !hasLiveProducts && posCatalogCache.products.length > 0;
+  const selectedBranch = (Array.isArray(effectiveBranches) ? effectiveBranches : []).find((branch, index) => getBranchValue(branch, index) === posSession?.branchValue) || null;
+  const branchLabel = selectedBranch ? getBranchLabel(selectedBranch) : posSession?.branchName || "";
+  const selectedBranchUuid = selectedBranch ? getBranchUuid(selectedBranch, getBranchValue) : posSession?.branchValue || "";
+  const effectivePosProducts = useMemo(
+    () =>
+      filterProductsForAvailability(effectiveProducts, {
+        branch: selectedBranch,
+        branchValue: posSession?.branchValue || selectedBranchUuid,
+        channel: "pos"
+      }),
+    [effectiveProducts, posSession?.branchValue, selectedBranch, selectedBranchUuid]
+  );
 
-  const { activeCategory, setActiveCategory, categories: posCategories, visibleProducts } = usePosCatalog({ products: effectiveProducts, categories: effectiveCategories });
+  const { activeCategory, setActiveCategory, categories: posCategories, visibleProducts } = usePosCatalog({ products: effectivePosProducts, categories: effectiveCategories });
   const { cart, totals, addProduct, updateQuantity, removeItem, syncGiftItems, restoreCart, clearCart } = usePosCart();
   const customerLookup = usePosCustomerLookup(customerPhone);
   const loyaltyBenefit = useMemo(
@@ -384,8 +397,8 @@ export default function PosPage({ products = [], categories = [], branches = [],
     toNumber(loyaltyBenefit.pointsDiscount, 0) > 0
   );
   const promotionHints = useMemo(
-    () => buildPromotionHints(smartPromotions, effectiveProducts, totals.subtotal),
-    [effectiveProducts, smartPromotions, totals.subtotal]
+    () => buildPromotionHints(smartPromotions, effectivePosProducts, totals.subtotal),
+    [effectivePosProducts, smartPromotions, totals.subtotal]
   );
   const billPaymentKey = useMemo(() => JSON.stringify({
     items: cart.map((item) => ({
@@ -409,9 +422,6 @@ export default function PosPage({ products = [], categories = [], branches = [],
     posTotals.voucherDiscount
   ]);
 
-  const selectedBranch = (Array.isArray(effectiveBranches) ? effectiveBranches : []).find((branch, index) => getBranchValue(branch, index) === posSession?.branchValue) || null;
-  const branchLabel = selectedBranch ? getBranchLabel(selectedBranch) : posSession?.branchName || "";
-  const selectedBranchUuid = selectedBranch ? getBranchUuid(selectedBranch, getBranchValue) : posSession?.branchValue || "";
   const syncStatusLabel = pendingOfflineOrderCount > 0
     ? `${pendingOfflineOrderCount} đơn chờ đồng bộ`
     : "Đã đồng bộ";
