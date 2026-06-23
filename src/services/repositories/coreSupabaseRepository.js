@@ -8,6 +8,7 @@ import {
 import { isSupabaseConfigSyncEnabled } from "../supabase/runtimeFlags.js";
 import { buildBranchLookupMap, normalizeBranchKey } from "../branchIdentityService.js";
 import { isCheckinLikeEntryType } from "../loyaltyLedgerUtils.js";
+import { buildOrderItemStableId } from "../orderItemIdentityService.js";
 
 let ordersWriteQueue = Promise.resolve();
 let branchLookupCache = { value: null, cachedAt: 0 };
@@ -270,8 +271,8 @@ function buildOrderItemRow(item = {}, orderId = "", index = 0) {
   const quantity = Math.max(1, toFiniteNumber(item.quantity, 1));
   const unitPrice = toFiniteNumber(item.unitTotal ?? item.unitPrice ?? item.price, 0);
   const lineTotal = toFiniteNumber(item.lineTotal, quantity * unitPrice);
-  const sourceItemId = toNullableUuid(item.sourceItemId || item.source_item_id || item.rowId);
   const row = {
+    id: buildOrderItemStableId(orderId, item, index),
     order_id: orderId,
     product_id: productId,
     product_name: String(item.name || item.productName || item.product_name || ""),
@@ -285,7 +286,6 @@ function buildOrderItemRow(item = {}, orderId = "", index = 0) {
     kitchen_item_status: normalizeKitchenItemStatus(item.kitchenItemStatus || item.kitchen_item_status || item.status),
     metadata: buildOrderItemMetadata(item, index)
   };
-  if (sourceItemId) row.id = sourceItemId;
   return row;
 }
 
@@ -1177,6 +1177,46 @@ async function insertOrderItemRowsWithSchemaFallback(client, itemRows = []) {
   throw new Error("order_items_insert_failed_after_schema_fallback");
 }
 
+function getOrderItemRowIndex(row = {}) {
+  const metadata = getObject(row.metadata);
+  const value = Number(metadata.ghrOrderIndex);
+  return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+async function ensureOrderItemRows(client, mappedOrders = []) {
+  const candidates = mappedOrders.filter((item) => item?.orderRow?.id && item?.itemRows?.length);
+  if (!candidates.length) return;
+
+  const orderIds = candidates.map((item) => item.orderRow.id);
+  const { data: existingRows, error } = await client
+    .from("order_items")
+    .select("order_id,metadata")
+    .in("order_id", orderIds);
+  if (error) throw error;
+
+  const existingByOrderId = (existingRows || []).reduce((map, row) => {
+    const orderId = String(row.order_id || "").trim();
+    if (!orderId) return map;
+    const list = map.get(orderId) || [];
+    list.push(row);
+    map.set(orderId, list);
+    return map;
+  }, new Map());
+
+  const missingRows = candidates.flatMap(({ orderRow, itemRows }) => {
+    const existing = existingByOrderId.get(orderRow.id) || [];
+    if (!existing.length) return itemRows;
+
+    const existingIndexes = new Set(existing.map(getOrderItemRowIndex).filter((value) => value !== null));
+    if (!existingIndexes.size) return [];
+    return itemRows.filter((row) => !existingIndexes.has(getOrderItemRowIndex(row)));
+  });
+
+  if (missingRows.length) {
+    await insertOrderItemRowsWithSchemaFallback(client, missingRows);
+  }
+}
+
 async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
   const runWrite = async () => {
     if (!isSupabaseReady()) return ordersByPhone;
@@ -1186,8 +1226,6 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
     if (!orderList.length) return ordersByPhone;
     const mapped = orderList.map(toOrderRows).filter(Boolean);
     const orderRows = mapped.map((item) => item.orderRow);
-    const itemRows = mapped.flatMap((item) => item.itemRows);
-
     const customerRowsRaw = Array.from(
       new Map(
         orderRows.filter((row) => row.customer_phone).map((row) => [
@@ -1214,14 +1252,7 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
       await upsertOrderRowWithSchemaFallback(client, row);
     }
 
-    const orderIds = orderRows.map((row) => row.id);
-    if (orderIds.length) {
-      const { error: deleteItemsError } = await client.from("order_items").delete().in("order_id", orderIds);
-      if (deleteItemsError) throw deleteItemsError;
-    }
-    if (itemRows.length) {
-      await insertOrderItemRowsWithSchemaFallback(client, itemRows);
-    }
+    await ensureOrderItemRows(client, mapped);
     return ordersByPhone;
   };
 
@@ -1236,7 +1267,7 @@ async function upsertOrderToTable(order = {}) {
   const normalizedOrder = await enrichOrderBranchUuids(order);
   const mapped = toOrderRows(normalizedOrder);
   if (!mapped) return order;
-  const { orderRow, itemRows } = mapped;
+  const { orderRow } = mapped;
 
   const customerPhone = normalizePhone(orderRow.customer_phone);
   if (customerPhone) {
@@ -1248,11 +1279,7 @@ async function upsertOrderToTable(order = {}) {
 
   await upsertOrderRowWithSchemaFallback(client, orderRow);
 
-  const { error: deleteItemsError } = await client.from("order_items").delete().eq("order_id", orderRow.id);
-  if (deleteItemsError) throw deleteItemsError;
-  if (itemRows.length) {
-    await insertOrderItemRowsWithSchemaFallback(client, itemRows);
-  }
+  await ensureOrderItemRows(client, [mapped]);
   return order;
 }
 

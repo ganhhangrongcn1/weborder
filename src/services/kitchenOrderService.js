@@ -8,6 +8,7 @@ import { normalizePartnerSource, resolveOrderSourceKey } from "./partnerOrderSer
 import { completeWebsiteOrderWithLoyaltyAsync } from "./loyaltyService.js";
 import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
+import { buildOrderItemStableId } from "./orderItemIdentityService.js";
 
 const KITCHEN_SOURCE = {
   website: "website",
@@ -730,6 +731,60 @@ function mapWebsiteKitchenItem(row = {}) {
   };
 }
 
+function getWebsiteMetadataItems(row = {}) {
+  const metadata = getObject(row.metadata);
+  const nestedMetadata = getObject(metadata.metadata);
+  const items = Array.isArray(metadata.items)
+    ? metadata.items
+    : Array.isArray(nestedMetadata.items)
+      ? nestedMetadata.items
+      : [];
+  return items.filter((item) => item && typeof item === "object" && !Array.isArray(item));
+}
+
+function buildWebsiteOrderItemRepairRow(orderRow = {}, item = {}, index = 0) {
+  const orderId = toText(orderRow.id || orderRow.order_code);
+  const quantity = Math.max(1, toNumber(item.quantity, 1));
+  const unitPrice = toNumber(item.unitTotal ?? item.unitPrice ?? item.price, 0);
+  const lineTotal = toNumber(item.lineTotal, quantity * unitPrice);
+  const productId = toText(item.productId || item.product_id || item.id || `item-${index}`);
+  const metadata = {
+    ...item,
+    productId,
+    product_id: productId,
+    ghrOrderIndex: Number(item.ghrOrderIndex ?? index)
+  };
+
+  return {
+    id: buildOrderItemStableId(orderId, metadata, index),
+    order_id: orderId,
+    product_id: productId,
+    product_name: toText(item.name || item.productName || item.product_name),
+    quantity,
+    unit_price: unitPrice,
+    line_total: lineTotal,
+    spice: toText(item.spice),
+    note: toText(item.note),
+    toppings: Array.isArray(item.toppings) ? item.toppings : [],
+    option_groups: Array.isArray(item.optionGroups) ? item.optionGroups : [],
+    kitchen_item_status: normalizeKitchenStatus(item.kitchenItemStatus || item.kitchen_item_status || item.status),
+    metadata
+  };
+}
+
+function mapWebsiteMetadataItemsToKitchenItems(row = {}) {
+  return getWebsiteMetadataItems(row).map((item, index) => mapWebsiteKitchenItem({
+    ...buildWebsiteOrderItemRepairRow(row, item, index),
+    __metadataFallback: true
+  }));
+}
+
+export function resolveWebsiteKitchenItems(row = {}, itemsByOrderId = new Map()) {
+  const orderId = toText(row.id || row.order_code);
+  const storedItems = itemsByOrderId.get(orderId) || [];
+  return storedItems.length ? storedItems : mapWebsiteMetadataItemsToKitchenItems(row);
+}
+
 function mapPartnerKitchenItem(row = {}) {
   const quantity = toNumber(row.quantity, 1) || 1;
   const options = flattenOptionLabels(row.options);
@@ -864,7 +919,7 @@ function mapWebsiteKitchenOrder(row = {}, itemsByOrderId = new Map()) {
     totalAmount: toNumber(row.total_amount ?? metadata.totalAmount ?? metadata.total, 0),
     createdAt: toText(row.created_at || metadata.createdAt),
     updatedAt: toText(row.updated_at || metadata.updatedAt),
-    items: itemsByOrderId.get(id) || [],
+    items: resolveWebsiteKitchenItems(row, itemsByOrderId),
     raw: row
   };
 }
@@ -975,6 +1030,33 @@ async function readOrderItems(client, orderIds = []) {
   }, new Map());
 }
 
+async function repairMissingWebsiteOrderItems(client, orderRows = [], itemsByOrderId = new Map()) {
+  const missingOrders = orderRows.filter((row) => {
+    const orderId = toText(row.id || row.order_code);
+    return orderId && !(itemsByOrderId.get(orderId) || []).length && getWebsiteMetadataItems(row).length;
+  });
+  if (!missingOrders.length) return itemsByOrderId;
+
+  const repairRows = missingOrders.flatMap((row) => (
+    getWebsiteMetadataItems(row).map((item, index) => buildWebsiteOrderItemRepairRow(row, item, index))
+  ));
+  const { error } = await client
+    .from("order_items")
+    .upsert(repairRows, { onConflict: "id", ignoreDuplicates: true });
+  recordKitchenRequest("repair website items", "order_items", "write");
+
+  if (error) {
+    console.warn("[kitchenOrderService] Cannot repair missing website items; using order metadata fallback.", error);
+    return itemsByOrderId;
+  }
+
+  const repairedItems = await readOrderItems(
+    client,
+    missingOrders.map((row) => row.id || row.order_code).filter(Boolean)
+  );
+  return new Map([...itemsByOrderId, ...repairedItems]);
+}
+
 async function readPartnerOrderItems(client, orderIds = []) {
   if (!orderIds.length) return new Map();
 
@@ -1073,7 +1155,8 @@ export async function getWebsiteKitchenOrders(options = {}) {
 
   const orderRows = getArray(data);
   const orderIds = orderRows.map((row) => row.id).filter(Boolean);
-  const itemsByOrderId = await readOrderItems(client, orderIds);
+  let itemsByOrderId = await readOrderItems(client, orderIds);
+  itemsByOrderId = await repairMissingWebsiteOrderItems(client, orderRows, itemsByOrderId);
 
   return orderRows
     .map((row) => mapWebsiteKitchenOrder(row, itemsByOrderId))
@@ -1297,6 +1380,21 @@ export async function updateKitchenOrderItemStatus(order = {}, item = {}, nextSt
     .eq("order_id", orderId);
 
   const rawItem = getObject(item.raw);
+  if (rawItem.__metadataFallback) {
+    const repairRow = { ...rawItem };
+    delete repairRow.__metadataFallback;
+    const { error: repairError } = await client
+      .from("order_items")
+      .upsert(repairRow, { onConflict: "id", ignoreDuplicates: true });
+    recordKitchenRequest("repair website item", "order_items", "write");
+    if (repairError) {
+      return {
+        ok: false,
+        message: repairError.message || "Không thể khôi phục dữ liệu món website."
+      };
+    }
+  }
+
   if (rawItem.id) {
     query = query.eq("id", rawItem.id);
   } else if (rawItem.product_id) {
@@ -1305,13 +1403,20 @@ export async function updateKitchenOrderItemStatus(order = {}, item = {}, nextSt
     query = query.eq("product_name", item.name || "");
   }
 
-  const { error } = await query;
+  const { data: updatedRows, error } = await query.select("id");
   recordKitchenRequest("update website item", "order_items", "write");
 
   if (error) {
     return {
       ok: false,
       message: error.message || "Không cập nhật được món website."
+    };
+  }
+
+  if (!updatedRows?.length) {
+    return {
+      ok: false,
+      message: "Không tìm thấy món website để cập nhật."
     };
   }
 

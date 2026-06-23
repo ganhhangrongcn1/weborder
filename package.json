@@ -15,7 +15,8 @@
         "smoke:supabase-config": "node scripts/smoke-supabase-config.mjs",
         "smoke:supabase-core": "node scripts/smoke-supabase-core.mjs",
         "smoke:supabase-catalog": "node scripts/smoke-supabase-catalog.mjs",
-        "smoke:supabase-health": "node scripts/smoke-supabase-health.mjs"
+        "smoke:supabase-health": "node scripts/smoke-supabase-health.mjs",
+        "smoke:kitchen": "node scripts/smoke-kitchen-order-items.mjs"
     },
     "dependencies": {
         "@supabase/supabase-js": "^2.105.3",
