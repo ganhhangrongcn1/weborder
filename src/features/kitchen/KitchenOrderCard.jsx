@@ -125,6 +125,36 @@ function buildPaidToppingOptionKeys(paidToppings = []) {
   );
 }
 
+function getKitchenItemProgressKey(order = {}, item = {}) {
+  return `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`;
+}
+
+function getKitchenItemRequestKey(order = {}, item = {}) {
+  return `${String(order?.id || "").trim()}:${String(item?.sourceItemId || item?.id || "").trim()}`;
+}
+
+function getUnitProgressState(progress = {}, itemKey = "", unitIndex = 0, sourceDone = false) {
+  const unitKey = `${itemKey}-${unitIndex}`;
+  if (sourceDone) {
+    if (Object.prototype.hasOwnProperty.call(progress, unitKey)) {
+      return progress[unitKey] !== false;
+    }
+    return true;
+  }
+
+  return Boolean(progress[unitKey]);
+}
+
+function getToppingProgressState(progress = {}, itemKey = "", unitIndex = 0, option = {}) {
+  return Boolean(progress[`${itemKey}-${unitIndex}-${option.label}`]);
+}
+
+function areUnitToppingsDone(progress = {}, itemKey = "", unitIndex = 0, paidToppings = []) {
+  return (Array.isArray(paidToppings) ? paidToppings : []).every((option) => (
+    getToppingProgressState(progress, itemKey, unitIndex, option)
+  ));
+}
+
 function isPaidToppingDisplayOption(option = "", paidToppingKeys = new Set()) {
   const parsed = parseKitchenOptionLabel(option);
   if (isKitchenPaidToppingGroup(parsed.group)) return true;
@@ -844,15 +874,17 @@ export default function KitchenOrderCard({
   }, [items]);
   const totalItems = displayItems.length;
   const doneItems = displayItems.filter(({ item, unitIndex }) => {
-    if (item.status === "done") return true;
-    const itemKey = `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`;
-    return Boolean(unitProgress[`${itemKey}-${unitIndex}`]);
+    const itemKey = getKitchenItemProgressKey(order, item);
+    const sourceDone = item.status === "done";
+    const paidToppings = getPaidToppings(item);
+    const unitChecked = getUnitProgressState(unitProgress, itemKey, unitIndex, sourceDone);
+    return sourceDone || (unitChecked && areUnitToppingsDone(toppingProgress, itemKey, unitIndex, paidToppings));
   }).length;
   const totalToppings = displayItems.reduce((total, { item }) => total + getPaidToppings(item).length, 0);
   const doneToppings = displayItems.reduce((total, { item, unitIndex }) => {
-    const itemKey = `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`;
+    const itemKey = getKitchenItemProgressKey(order, item);
     return total + getPaidToppings(item).filter((option) => (
-      Boolean(toppingProgress[`${itemKey}-${unitIndex}-${option.label}`])
+      getToppingProgressState(toppingProgress, itemKey, unitIndex, option)
     )).length;
   }, 0);
   const allItemsChecked = totalItems > 0 && doneItems === totalItems;
@@ -928,7 +960,7 @@ export default function KitchenOrderCard({
       const nextProgress = { ...currentProgress };
 
       items.forEach((item) => {
-        const itemKey = `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`;
+        const itemKey = getKitchenItemProgressKey(order, item);
         const quantity = getItemQuantity(item);
         Array.from({ length: quantity }).forEach((_, unitIndex) => {
           const unitKey = `${itemKey}-${unitIndex}`;
@@ -945,6 +977,33 @@ export default function KitchenOrderCard({
   }, [items, order.id, order.sourceType]);
 
   useEffect(() => {
+    setToppingProgress((currentProgress) => {
+      let changed = false;
+      const nextProgress = { ...currentProgress };
+
+      items.forEach((item) => {
+        if (item.status !== "done") return;
+        const itemKey = getKitchenItemProgressKey(order, item);
+        const quantity = getItemQuantity(item);
+        const paidToppings = getPaidToppings(item);
+
+        Array.from({ length: quantity }).forEach((_, unitIndex) => {
+          paidToppings.forEach((option) => {
+            const toppingKey = `${itemKey}-${unitIndex}-${option.label}`;
+            if (!nextProgress[toppingKey]) {
+              nextProgress[toppingKey] = true;
+              changed = true;
+            }
+          });
+        });
+      });
+
+      if (changed) saveProgress(TOPPING_PROGRESS_STORAGE_KEY, nextProgress);
+      return changed ? nextProgress : currentProgress;
+    });
+  }, [items, order.id, order.sourceType]);
+
+  useEffect(() => {
     if (!isScheduledPickupOrder) return undefined;
     const timer = window.setInterval(() => {
       setPickupCountdownTick(Date.now());
@@ -952,39 +1011,47 @@ export default function KitchenOrderCard({
     return () => window.clearInterval(timer);
   }, [isScheduledPickupOrder]);
 
+  function syncItemDoneState(item, nextUnitProgress = unitProgress, nextToppingProgress = toppingProgress) {
+    const itemKey = getKitchenItemProgressKey(order, item);
+    const sourceDone = item.status === "done";
+    const quantity = getItemQuantity(item);
+    const paidToppings = getPaidToppings(item);
+    const allUnitsDone = Array.from({ length: quantity }).every((_, index) => (
+      getUnitProgressState(nextUnitProgress, itemKey, index, sourceDone)
+    ));
+    const allToppingsDone = Array.from({ length: quantity }).every((_, index) => (
+      areUnitToppingsDone(nextToppingProgress, itemKey, index, paidToppings)
+    ));
+    const fullyDone = allUnitsDone && allToppingsDone;
+
+    if (fullyDone !== sourceDone) {
+      onToggleItemDone?.(order, item);
+    }
+  }
+
   function handleToggleUnit(event, item, unitIndex) {
     event.stopPropagation();
     if (!canToggleItems) return;
-    if (updatingItemKey) return;
+    if (updatingItemKey === getKitchenItemRequestKey(order, item)) return;
     onFocusOrder?.(`${order.sourceType || "order"}-${order.id || ""}`);
 
-    const itemKey = `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`;
-    const quantity = getItemQuantity(item);
+    const itemKey = getKitchenItemProgressKey(order, item);
     const unitKey = `${itemKey}-${unitIndex}`;
     const sourceDone = item.status === "done";
-    const nextProgress = { ...unitProgress, [unitKey]: sourceDone ? false : !unitProgress[unitKey] };
-
-    if (sourceDone) {
-      Array.from({ length: quantity }).forEach((_, index) => {
-        const key = `${itemKey}-${index}`;
-        if (index !== unitIndex) nextProgress[key] = true;
-      });
-    }
+    const currentChecked = getUnitProgressState(unitProgress, itemKey, unitIndex, sourceDone);
+    const nextProgress = { ...unitProgress, [unitKey]: !currentChecked };
 
     setUnitProgress(nextProgress);
     saveProgress(UNIT_PROGRESS_STORAGE_KEY, nextProgress);
-
-    const allUnitsDone = Array.from({ length: quantity }).every((_, index) => Boolean(nextProgress[`${itemKey}-${index}`]));
-    if (allUnitsDone !== sourceDone) {
-      onToggleItemDone?.(order, item);
-    }
+    syncItemDoneState(item, nextProgress, toppingProgress);
   }
 
   function handleToggleTopping(event, item, unitIndex, option) {
     event.stopPropagation();
     if (!canToggleItems) return;
+    if (updatingItemKey === getKitchenItemRequestKey(order, item)) return;
     onFocusOrder?.(`${order.sourceType || "order"}-${order.id || ""}`);
-    const itemKey = `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`;
+    const itemKey = getKitchenItemProgressKey(order, item);
     const toppingKey = `${itemKey}-${unitIndex}-${option.label}`;
     const nextProgress = {
       ...toppingProgress,
@@ -993,13 +1060,14 @@ export default function KitchenOrderCard({
 
     setToppingProgress(nextProgress);
     saveProgress(TOPPING_PROGRESS_STORAGE_KEY, nextProgress);
+    syncItemDoneState(item, unitProgress, nextProgress);
   }
 
   function handleResetProgress(event) {
     event.stopPropagation();
     onFocusOrder?.(`${order.sourceType || "order"}-${order.id || ""}`);
 
-    const itemKeys = items.map((item) => `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`);
+    const itemKeys = items.map((item) => getKitchenItemProgressKey(order, item));
 
     setUnitProgress((currentProgress) => {
       const nextProgress = { ...currentProgress };
@@ -1323,11 +1391,14 @@ export default function KitchenOrderCard({
         {displayItems.length ? (
           displayItems.map(({ item, itemNumber, unitIndex }) => {
             const itemHighlighted = typeof isItemHighlighted === "function" && isItemHighlighted(item);
-            const itemKey = `${order.sourceType}-${order.id}-${item.sourceItemId || item.id}`;
-            const unitKey = `${itemKey}-${unitIndex}`;
-            const itemDone = item.status === "done" || Boolean(unitProgress[unitKey]);
-            const itemUpdating = updatingItemKey === itemKey;
+            const itemKey = getKitchenItemProgressKey(order, item);
+            const itemRequestKey = getKitchenItemRequestKey(order, item);
+            const sourceDone = item.status === "done";
+            const unitChecked = getUnitProgressState(unitProgress, itemKey, unitIndex, sourceDone);
             const paidToppings = getPaidToppings(item);
+            const unitToppingsDone = areUnitToppingsDone(toppingProgress, itemKey, unitIndex, paidToppings);
+            const itemDone = sourceDone || (unitChecked && unitToppingsDone);
+            const itemUpdating = updatingItemKey === itemRequestKey;
             const normalizedRecipeOptions = getKitchenRecipeOptions(item.options);
             const paidToppingKeys = buildPaidToppingOptionKeys(paidToppings);
             const displayOptions = compactKitchenDisplayOptions(normalizedRecipeOptions
@@ -1341,14 +1412,14 @@ export default function KitchenOrderCard({
               <button
                 key={`${item.id || itemKey}-unit-${unitIndex}`}
                 type="button"
-                disabled={!canToggleItems || Boolean(updatingItemKey)}
+                disabled={!canToggleItems || itemUpdating}
                 onClick={(event) => handleToggleUnit(event, item, unitIndex)}
                 style={{
                   minHeight: item.note || paidToppings.length ? 220 : tabletCompact ? 88 : 122,
                   height: "auto",
                   textAlign: "left",
                   border: itemHighlighted ? "2px solid #8b5cf6" : "1px solid #dbe3ef",
-                  background: itemHighlighted ? "#faf5ff" : itemDone ? "#f0fdf4" : "rgba(255,255,255,0.88)",
+                  background: itemHighlighted ? "#faf5ff" : itemDone ? "#f0fdf4" : unitChecked ? "#fffbeb" : "rgba(255,255,255,0.88)",
                   borderRadius: 12,
                   padding: 12,
                   display: "grid",
@@ -1357,8 +1428,8 @@ export default function KitchenOrderCard({
                   alignContent: "start",
                   alignItems: "start",
                   overflow: "visible",
-                  cursor: !canToggleItems || updatingItemKey ? "not-allowed" : "pointer",
-                  opacity: updatingItemKey && !itemUpdating ? 0.65 : 1
+                  cursor: !canToggleItems || itemUpdating ? "not-allowed" : "pointer",
+                  opacity: itemUpdating ? 0.72 : 1
                 }}
               >
                 <span
@@ -1367,10 +1438,10 @@ export default function KitchenOrderCard({
                     width: 18,
                     height: 18,
                     borderRadius: 3,
-                    border: itemDone ? "1px solid #16a34a" : "1px solid #94a3b8",
-                    background: itemDone ? "#16a34a" : "#ffffff",
+                    border: itemDone ? "1px solid #16a34a" : unitChecked ? "1px solid #f59e0b" : "1px solid #94a3b8",
+                    background: itemDone ? "#16a34a" : unitChecked ? "#f59e0b" : "#ffffff",
                     marginTop: 2,
-                    boxShadow: itemDone ? "inset 0 0 0 3px #ffffff" : "none"
+                    boxShadow: itemDone || unitChecked ? "inset 0 0 0 3px #ffffff" : "none"
                   }}
                 />
                 <span style={{ minWidth: 0, display: "grid", gap: 7 }}>
