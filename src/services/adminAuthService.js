@@ -1,10 +1,4 @@
-import {
-  clearScopedSupabaseAuth,
-  getSupabaseAdminAuthClient,
-  initSupabaseAdminAuthClient,
-  isSupabaseAuthSessionInvalidError,
-  syncScopedSessionToRuntime
-} from "./supabase/supabaseRuntimeClient.js";
+import { getSupabaseAdminAuthClient, initSupabaseAdminAuthClient, syncScopedSessionToRuntime } from "./supabase/supabaseRuntimeClient.js";
 
 const ADMIN_AUTH_TIMEOUT_MS = 6000;
 const PROFILE_TABLE = "profiles";
@@ -171,9 +165,6 @@ export async function getAdminSession() {
   try {
     const { data, error } = await withTimeout(() => client.auth.getSession());
     if (error) {
-      if (isSupabaseAuthSessionInvalidError(error)) {
-        await clearScopedSupabaseAuth("admin", { includeRuntime: true }).catch(() => {});
-      }
       return {
         session: null,
         rawSession: null,
@@ -185,9 +176,6 @@ export async function getAdminSession() {
     }
     return await resolveAdminAccessFromSession(client, data?.session || null);
   } catch (error) {
-    if (isSupabaseAuthSessionInvalidError(error)) {
-      await clearScopedSupabaseAuth("admin", { includeRuntime: true }).catch(() => {});
-    }
     return {
       session: null,
       rawSession: null,
@@ -265,9 +253,6 @@ export async function subscribeAdminAuth(onChange) {
       const access = await resolveAdminAccessFromSession(client, session || null);
       onChange(access);
     } catch (error) {
-      if (isSupabaseAuthSessionInvalidError(error)) {
-        await clearScopedSupabaseAuth("admin", { includeRuntime: true }).catch(() => {});
-      }
       const isTransientError = Boolean(session) && isTransientAdminAuthError(error);
       onChange({
         session: isTransientError ? session : null,

@@ -9,9 +9,7 @@ import useCustomerRuntimeState, { getUserStorage } from "./useCustomerRuntimeSta
 
 export default function useAppProviders() {
   const userStorage = getUserStorage();
-  const pathname = typeof window !== "undefined" ? String(window.location.pathname || "") : "";
-  const isAdminPath = pathname.startsWith("/admin");
-  const isKitchenPath = pathname.startsWith("/kitchen");
+  const isAdminPath = typeof window !== "undefined" && String(window.location.pathname || "").startsWith("/admin");
 
   const demoData = useMemo(
     () =>
@@ -34,7 +32,7 @@ export default function useAppProviders() {
   const { customerRouteProps } = useCustomerRuntimeState({
     domainState,
     demoData,
-    sessionEnabled: !isAdminPath && !isKitchenPath
+    sessionEnabled: !isAdminPath
   });
 
   return {

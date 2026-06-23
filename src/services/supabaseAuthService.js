@@ -1,10 +1,8 @@
 ﻿import { getCustomerKey } from "./storageService.js";
 import { isSupabaseRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
 import {
-  clearScopedSupabaseAuth,
   getSupabaseCustomerAuthClient,
   initSupabaseCustomerAuthClient,
-  isSupabaseAuthSessionInvalidError,
   syncScopedSessionToRuntime
 } from "./supabase/supabaseRuntimeClient.js";
 
@@ -63,12 +61,7 @@ export async function getSupabaseCustomerSessionSnapshot() {
   if (!client) return { ok: false, reason: "client_unavailable" };
   try {
     const { data: sessionData, error: sessionError } = await client.auth.getSession();
-    if (sessionError) {
-      if (isSupabaseAuthSessionInvalidError(sessionError)) {
-        await clearScopedSupabaseAuth("customer", { includeRuntime: true }).catch(() => {});
-      }
-      return { ok: false, reason: "session_error", error: sessionError };
-    }
+    if (sessionError) return { ok: false, reason: "session_error", error: sessionError };
     const session = sessionData?.session || null;
     await syncScopedSessionToRuntime("customer", session).catch(() => {});
     if (!session?.user) return { ok: false, reason: "no_session" };
@@ -283,9 +276,6 @@ export async function syncCustomerProfileToSupabase({ phone, name = "", email = 
     }
     return { ok: true };
   } catch (error) {
-    if (isSupabaseAuthSessionInvalidError(error)) {
-      await clearScopedSupabaseAuth("customer", { includeRuntime: true }).catch(() => {});
-    }
     return { ok: false, message: normalizeAuthError(error, "Lỗi đồng bộ hồ sơ Supabase.") };
   }
 }
@@ -310,12 +300,7 @@ export async function syncAuthProfileToCustomerRow() {
 
   try {
     const { data: authData, error: authReadError } = await client.auth.getUser();
-    if (authReadError) {
-      if (isSupabaseAuthSessionInvalidError(authReadError)) {
-        await clearScopedSupabaseAuth("customer", { includeRuntime: true }).catch(() => {});
-      }
-      return { ok: false, message: normalizeAuthError(authReadError, "Không đọc được auth user.") };
-    }
+    if (authReadError) return { ok: false, message: normalizeAuthError(authReadError, "Không đọc được auth user.") };
     const user = authData?.user;
     if (!user) return { ok: false, message: "Chưa có phiên đăng nhập Supabase." };
 
@@ -341,9 +326,6 @@ export async function syncAuthProfileToCustomerRow() {
       authUserId: user.id
     });
   } catch (error) {
-    if (isSupabaseAuthSessionInvalidError(error)) {
-      await clearScopedSupabaseAuth("customer", { includeRuntime: true }).catch(() => {});
-    }
     return { ok: false, message: normalizeAuthError(error, "Lỗi đồng bộ auth -> profiles.") };
   }
 }

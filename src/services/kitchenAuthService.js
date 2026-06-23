@@ -1,7 +1,5 @@
 import {
-  clearScopedSupabaseAuth,
   getSupabaseKitchenAuthClient,
-  isSupabaseAuthSessionInvalidError,
   initSupabaseKitchenAuthClient,
   syncScopedSessionToRuntime
 } from "./supabase/supabaseRuntimeClient.js";
@@ -196,16 +194,10 @@ export async function getKitchenSession() {
   try {
     const { data, error } = await withTimeout(() => client.auth.getSession());
     if (error) {
-      if (isSupabaseAuthSessionInvalidError(error)) {
-        await clearScopedSupabaseAuth("kitchen", { includeRuntime: true }).catch(() => {});
-      }
       return { session: null, rawSession: null, profile: null, unauthorized: false, message: "", error };
     }
     return await resolveKitchenAccessFromSession(client, data?.session || null);
   } catch (error) {
-    if (isSupabaseAuthSessionInvalidError(error)) {
-      await clearScopedSupabaseAuth("kitchen", { includeRuntime: true }).catch(() => {});
-    }
     return { session: null, rawSession: null, profile: null, unauthorized: false, message: "", error };
   }
 }
@@ -271,9 +263,6 @@ export async function subscribeKitchenAuth(onChange) {
       const access = await resolveKitchenAccessFromSession(client, session || null);
       onChange(access);
     } catch (error) {
-      if (isSupabaseAuthSessionInvalidError(error)) {
-        await clearScopedSupabaseAuth("kitchen", { includeRuntime: true }).catch(() => {});
-      }
       const transientAuthError = Boolean(session) && isTransientAuthError(error);
       onChange({
         session: transientAuthError ? session : null,
