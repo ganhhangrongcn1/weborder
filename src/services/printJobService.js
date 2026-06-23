@@ -23,6 +23,8 @@ const DEFAULT_KITCHEN_PRINTER_KEY = "kitchen-80mm";
 const POS_SHIFT_CLOSE_SOURCE_TYPE = "pos_shift_close";
 const POS_PAYMENT_QR_SOURCE_TYPE = "pos_payment_qr";
 const AUTO_PRINT_WINDOW_MINUTES = 5;
+const RECENT_PRINT_JOBS_CACHE_TTL_MS = 15 * 1000;
+const recentPrintJobsCache = new Map();
 const AUTO_PRINT_EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
 const PRINT_JOB_STATUS_COLUMNS = [
   "id",
@@ -55,6 +57,47 @@ function toText(value = "") {
 
 function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function buildRecentPrintJobsCacheKey(options = {}) {
+  const branchUuid = toText(options.branchUuid || "*");
+  const printerKey = toText(options.printerKey || DEFAULT_PRINTER_KEY);
+  const jobType = toText(options.jobType || CUSTOMER_BILL_JOB_TYPE);
+  const limit = Math.max(1, Math.min(Number(options.limit || 80), 200));
+  return [branchUuid, printerKey, jobType, limit].join("|");
+}
+
+function getFreshRecentPrintJobsCache(options = {}) {
+  const cacheKey = buildRecentPrintJobsCacheKey(options);
+  const cached = recentPrintJobsCache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() - Number(cached.cachedAt || 0) > RECENT_PRINT_JOBS_CACHE_TTL_MS) {
+    recentPrintJobsCache.delete(cacheKey);
+    return null;
+  }
+
+  return Array.isArray(cached.jobs) ? cached.jobs : null;
+}
+
+function setRecentPrintJobsCache(options = {}, jobs = []) {
+  recentPrintJobsCache.set(buildRecentPrintJobsCacheKey(options), {
+    cachedAt: Date.now(),
+    jobs: Array.isArray(jobs) ? jobs : []
+  });
+}
+
+function invalidateRecentPrintJobsCache(options = {}) {
+  const branchUuid = toText(options.branchUuid);
+  const printerKey = toText(options.printerKey);
+  const jobType = toText(options.jobType);
+
+  [...recentPrintJobsCache.keys()].forEach((cacheKey) => {
+    const [cachedBranchUuid, cachedPrinterKey, cachedJobType] = cacheKey.split("|");
+    if (branchUuid && cachedBranchUuid !== branchUuid) return;
+    if (printerKey && cachedPrinterKey !== printerKey) return;
+    if (jobType && cachedJobType !== jobType) return;
+    recentPrintJobsCache.delete(cacheKey);
+  });
 }
 
 function getOrderBranchUuid(order = {}, fallbackBranchUuid = "") {
@@ -322,6 +365,11 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
 
   const existingJob = await findExistingCustomerBillPrintJob(client, row);
   if (existingJob) {
+    invalidateRecentPrintJobsCache({
+      branchUuid: row.branch_uuid,
+      printerKey: row.printer_key,
+      jobType: row.job_type
+    });
     return {
       ok: true,
       job: existingJob,
@@ -340,6 +388,12 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
       message: error.message || "Không tạo được lệnh in bill."
     };
   }
+
+  invalidateRecentPrintJobsCache({
+    branchUuid: row.branch_uuid,
+    printerKey: row.printer_key,
+    jobType: row.job_type
+  });
 
   return {
     ok: true,
@@ -481,6 +535,12 @@ export async function createPosShiftClosePrintJob({
     };
   }
 
+  invalidateRecentPrintJobsCache({
+    branchUuid: row.branch_uuid,
+    printerKey: row.printer_key,
+    jobType: row.job_type
+  });
+
   return {
     ok: true,
     job: data || null,
@@ -565,6 +625,12 @@ export async function createPosQrPrintJob({
     };
   }
 
+  invalidateRecentPrintJobsCache({
+    branchUuid: row.branch_uuid,
+    printerKey: row.printer_key,
+    jobType: row.job_type
+  });
+
   return {
     ok: true,
     job: data || null,
@@ -573,6 +639,9 @@ export async function createPosQrPrintJob({
 }
 
 export async function readRecentPrintJobs(options = {}) {
+  const cachedJobs = getFreshRecentPrintJobsCache(options);
+  if (cachedJobs) return cachedJobs;
+
   const client = await getClient();
   if (!client) return [];
 
@@ -593,7 +662,9 @@ export async function readRecentPrintJobs(options = {}) {
     return [];
   }
 
-  return Array.isArray(data) ? data : [];
+  const jobs = Array.isArray(data) ? data : [];
+  setRecentPrintJobsCache(options, jobs);
+  return jobs;
 }
 
 export async function readPendingPrintJobs(options = {}) {
@@ -657,6 +728,12 @@ export async function claimPrintJob(job = {}, options = {}) {
     return null;
   }
 
+  invalidateRecentPrintJobsCache({
+    branchUuid: data?.branch_uuid || job.branch_uuid,
+    printerKey: data?.printer_key || job.printer_key,
+    jobType: data?.job_type || job.job_type
+  });
+
   return data || null;
 }
 
@@ -677,6 +754,13 @@ export async function markPrintJobPrinted(job = {}) {
     .eq("id", job.id);
 
   if (error) console.warn("[printJobService] mark printed failed", error);
+  else {
+    invalidateRecentPrintJobsCache({
+      branchUuid: job.branch_uuid,
+      printerKey: job.printer_key,
+      jobType: job.job_type
+    });
+  }
 }
 
 export async function markPrintJobFailed(job = {}, message = "") {
@@ -697,6 +781,13 @@ export async function markPrintJobFailed(job = {}, message = "") {
     .eq("id", job.id);
 
   if (error) console.warn("[printJobService] mark failed failed", error);
+  else {
+    invalidateRecentPrintJobsCache({
+      branchUuid: job.branch_uuid,
+      printerKey: job.printer_key,
+      jobType: job.job_type
+    });
+  }
 }
 
 export async function markPrintJobAutoExpired(job = {}) {
@@ -716,6 +807,13 @@ export async function markPrintJobAutoExpired(job = {}) {
     .eq("status", PRINT_JOB_STATUS.pending);
 
   if (error) console.warn("[printJobService] mark auto-expired failed", error);
+  else {
+    invalidateRecentPrintJobsCache({
+      branchUuid: job.branch_uuid,
+      printerKey: job.printer_key,
+      jobType: job.job_type
+    });
+  }
 }
 
 export async function markExpiredPendingPrintJobs(options = {}) {
@@ -741,6 +839,7 @@ export async function markExpiredPendingPrintJobs(options = {}) {
 
   const { error } = await query;
   if (error) console.warn("[printJobService] mark expired pending jobs failed", error);
+  else invalidateRecentPrintJobsCache(options);
 }
 
 export async function subscribePrintJobs(options = {}) {

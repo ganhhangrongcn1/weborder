@@ -7,9 +7,28 @@ import { defaultUserDemo } from "../../data/defaultData.js";
 import useAppDomainState from "./useAppDomainState.js";
 import useCustomerRuntimeState, { getUserStorage } from "./useCustomerRuntimeState.js";
 
+function isCustomerRuntimePath(pathname = "") {
+  const path = String(pathname || "").trim().toLowerCase();
+  if (!path) return true;
+
+  return (
+    path === "/" ||
+    path === "/home" ||
+    path === "/menu" ||
+    path === "/cart" ||
+    path === "/checkout" ||
+    path === "/success" ||
+    path === "/profile" ||
+    path === "/orders" ||
+    path === "/loyalty" ||
+    path.startsWith("/qr/")
+  );
+}
+
 export default function useAppProviders() {
   const userStorage = getUserStorage();
-  const isAdminPath = typeof window !== "undefined" && String(window.location.pathname || "").startsWith("/admin");
+  const currentPathname = typeof window !== "undefined" ? String(window.location.pathname || "") : "/";
+  const customerRuntimeEnabled = isCustomerRuntimePath(currentPathname);
 
   const demoData = useMemo(
     () =>
@@ -32,7 +51,7 @@ export default function useAppProviders() {
   const { customerRouteProps } = useCustomerRuntimeState({
     domainState,
     demoData,
-    sessionEnabled: !isAdminPath
+    sessionEnabled: customerRuntimeEnabled
   });
 
   return {

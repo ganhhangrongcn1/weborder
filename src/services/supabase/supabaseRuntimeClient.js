@@ -43,6 +43,17 @@ function setScopedClient(scope = "runtime", client) {
   return client;
 }
 
+function buildScopeAuthConfig(scope = "runtime") {
+  const config = resolveScope(scope);
+  const shouldPersistSession = scope !== "runtime";
+
+  return {
+    persistSession: shouldPersistSession,
+    autoRefreshToken: true,
+    ...(shouldPersistSession ? { storageKey: config.storageKey } : {})
+  };
+}
+
 function createSupabaseClientForScope(scope = "runtime") {
   const { url, anonKey } = getSupabaseEnvConfig();
   if (!url || !anonKey) {
@@ -59,13 +70,8 @@ function createSupabaseClientForScope(scope = "runtime") {
   if (existing) return existing;
 
   try {
-    const config = resolveScope(scope);
     const client = createClient(url, anonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        storageKey: config.storageKey
-      }
+      auth: buildScopeAuthConfig(scope)
     });
     return setScopedClient(scope, client);
   } catch (error) {
