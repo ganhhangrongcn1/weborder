@@ -42,10 +42,26 @@ function runAdminFlowSmoke() {
   assertIncludes(adminApp, "navGroups", "Admin flow missing nav groups");
 }
 
+function runBranchIdentitySmoke() {
+  const checkoutDomain = read("src/features/checkout/checkoutDomain.js");
+  const branchSettings = read("src/pages/admin/store/BranchSettings.jsx");
+  const catalogRepository = read("src/services/repositories/catalogSupabaseRepository.js");
+  const kitchenOrderService = read("src/services/kitchenOrderService.js");
+  const migration = read("supabase/migrations/20260622235452_branch_identity_contract.sql");
+
+  assertIncludes(checkoutDomain, "branchUuid: branch.branchUuid || branch.branch_uuid || branch.uuid", "Pickup branch flow must preserve branch UUID");
+  assertIncludes(checkoutDomain, "branch_uuid: branch.branch_uuid || branch.branchUuid || branch.uuid", "Pickup branch flow must preserve snake_case branch UUID");
+  assertIncludes(branchSettings, "branch_uuid: createStableBranchUuid()", "Admin new branch must create a stable branch UUID");
+  assertIncludes(catalogRepository, "matched?.branch_uuid || createStableBranchUuid()", "Branch repository must fill UUID for new branches");
+  assertIncludes(kitchenOrderService, "options.strictBranchUuidQuery", "Kitchen website order read must keep legacy fallback by default");
+  assertIncludes(migration, "alter column branch_uuid set default gen_random_uuid()", "Branch migration must default branch_uuid");
+}
+
 function run() {
   runCustomerFlowSmoke();
   runAdminFlowSmoke();
-  console.log("Main flow smoke test passed (customer + admin).");
+  runBranchIdentitySmoke();
+  console.log("Main flow smoke test passed (customer + admin + branch identity).");
 }
 
 try {

@@ -3,6 +3,7 @@ import { goongAutocomplete, goongPlaceDetail, hasGoongApiKey } from "../../../se
 import { buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/posPaymentService.js";
 import { DEFAULT_SHIPPING_CONFIG } from "../../../services/shippingService.js";
 import { syncBranchesToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
+import { createStableBranchUuid } from "../../../services/branchIdentityService.js";
 import { AdminButton, AdminCard, AdminInput } from "../ui/index.js";
 
 const BANK_OPTIONS = [
@@ -334,6 +335,7 @@ export default function BranchSettings({
                   {
                     id: `branch-${Date.now()}`,
                     branch_code: getNextBranchCode(),
+                    branch_uuid: createStableBranchUuid(),
                     name: "Chi nhánh mới",
                     address: "",
                     phone: "",

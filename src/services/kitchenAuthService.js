@@ -28,6 +28,35 @@ function normalizeProfile(profile = null) {
   };
 }
 
+function buildBranchAlias(branch = {}) {
+  return [
+    branch.branch_code,
+    branch.slug,
+    branch.legacy_id,
+    branch.name
+  ].map((value) => String(value || "").trim()).filter(Boolean).join(" ");
+}
+
+async function enrichProfileBranch(client, profile = null) {
+  const normalized = normalizeProfile(profile);
+  if (!normalized?.branchUuid || normalized.branchName) return normalized;
+
+  const { data, error } = await withTimeout(() =>
+    client
+      .from("branches")
+      .select("branch_uuid,name,branch_code,slug,legacy_id")
+      .eq("branch_uuid", normalized.branchUuid)
+      .maybeSingle()
+  );
+  if (error || !data) return normalized;
+
+  return {
+    ...normalized,
+    branchName: normalized.branchName || String(data.name || "").trim(),
+    branchAlias: normalized.branchAlias || buildBranchAlias(data)
+  };
+}
+
 function canAccessKitchen(profile = null) {
   const normalized = normalizeProfile(profile);
   if (!normalized) return false;
@@ -100,7 +129,7 @@ async function readKitchenProfile(client, session) {
         .maybeSingle()
     );
     if (error) throw error;
-    if (data) return normalizeProfile(data);
+    if (data) return enrichProfileBranch(client, data);
   }
 
   if (!email) return null;
@@ -112,7 +141,7 @@ async function readKitchenProfile(client, session) {
       .maybeSingle()
   );
   if (error) throw error;
-  return normalizeProfile(data || null);
+  return enrichProfileBranch(client, data || null);
 }
 
 async function resolveKitchenAccessFromSession(client, session) {

@@ -1,5 +1,7 @@
 ﻿import { getRepositoryRuntimeInfo, getRuntimeSupabaseClient } from "./repositoryRuntime.js";
 
+import { createStableBranchUuid } from "../branchIdentityService.js";
+
 const CATALOG_TABLE_BY_KEY = {
   ghr_products: "products",
   ghr_categories: "categories",
@@ -736,7 +738,7 @@ async function writeStructuredBranches(value) {
 
   const { data: existingRows, error: existingError } = await client
     .from("branches")
-    .select("id,name,slug,branch_code,legacy_id,data");
+    .select("id,name,slug,branch_code,branch_uuid,legacy_id,data");
   if (existingError) throw existingError;
   const existing = Array.isArray(existingRows) ? existingRows : [];
 
@@ -764,23 +766,27 @@ async function writeStructuredBranches(value) {
       null;
 
     const dbId = matched?.id ?? (rawDbId && /^\d+$/.test(rawDbId) ? Number(rawDbId) : null);
-    if (dbId == null) continue;
+    const rawBranchUuid = source?.branch_uuid || source?.branchUuid;
+    const branchUuid = isUuidLike(rawBranchUuid)
+      ? String(rawBranchUuid)
+      : (matched?.branch_uuid || createStableBranchUuid());
 
     const payload = {
-      id: dbId,
       name: rawName || matched?.name || "",
       slug: rawSlug || matched?.slug || null,
       branch_code: rawBranchCode || matched?.branch_code || null,
       legacy_id: rawLegacyId || matched?.legacy_id || null,
-      branch_uuid: isUuidLike(source?.branch_uuid || source?.branchUuid) ? String(source?.branch_uuid || source?.branchUuid) : (matched?.branch_uuid || null),
+      branch_uuid: branchUuid,
       data: {
         ...(matched?.data && typeof matched.data === "object" ? matched.data : {}),
         ...source,
         id: rawLegacyId || String(source?.id || ""),
         branch_code: rawBranchCode || String(source?.branch_code || ""),
+        branch_uuid: branchUuid,
         slug: rawSlug || String(source?.slug || "")
       }
     };
+    if (dbId != null) payload.id = dbId;
 
     await upsertBranchRowWithSchemaFallback(client, payload);
   }

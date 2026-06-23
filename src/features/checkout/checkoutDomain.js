@@ -32,6 +32,9 @@ function branchMatchesId(branch, value) {
   return [
     branch.id,
     branch.dbId,
+    branch.branch_uuid,
+    branch.branchUuid,
+    branch.uuid,
     branch.branch_code,
     branch.branchCode,
     branch.legacy_id,
@@ -101,9 +104,15 @@ export function resolvePickupBranches(branches = []) {
     ? branches
       .filter((branch) => branch?.pickupEnabled !== false)
       .map((branch) => ({
+        ...branch,
         id: branch.id,
         name: branch.name,
         address: branch.address,
+        branchUuid: branch.branchUuid || branch.branch_uuid || branch.uuid || "",
+        branch_uuid: branch.branch_uuid || branch.branchUuid || branch.uuid || "",
+        branchCode: branch.branchCode || branch.branch_code || "",
+        branch_code: branch.branch_code || branch.branchCode || "",
+        legacy_id: branch.legacy_id || branch.legacyId || "",
         time: branch.time || "Đang mở"
       }))
     : defaultPickupBranches;

@@ -10,6 +10,9 @@ function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
       branchInfo?.branchId ||
       branchInfo?.legacyId ||
       branchInfo?.legacy_id ||
+      branchInfo?.branch_code ||
+      branchInfo?.branchCode ||
+      branchInfo?.slug ||
       ""
   );
   const branchUuid = String(

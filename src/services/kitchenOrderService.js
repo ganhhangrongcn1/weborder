@@ -1060,7 +1060,9 @@ export async function getWebsiteKitchenOrders(options = {}) {
 
   if (dateFrom) query = query.gte("created_at", dateFrom);
   if (dateTo) query = query.lt("created_at", dateTo);
-  query = applyWebsiteBranchFilter(query, options.branchUuid);
+  if (options.strictBranchUuidQuery) {
+    query = applyWebsiteBranchFilter(query, options.branchUuid);
+  }
   if (shouldLimitDone) {
     query = applyWebsiteDoneFilter(query).limit(doneLimit);
   }
