@@ -513,7 +513,7 @@ export async function createPosQrPrintJob({
   }
 
   const now = new Date().toISOString();
-  const branchUuid = toText(branch?.id || branch?.branch_uuid || options.branchUuid);
+  const branchUuid = toText(branch?.branch_uuid || branch?.branchUuid || branch?.uuid || options.branchUuid || branch?.id);
   const branchName = toText(branch?.name || branch?.branchName || options.branchName);
   const safeOrderCode = toText(orderCode || transferContent || `QR-${Date.now()}`);
   const row = {

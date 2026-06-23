@@ -36,6 +36,10 @@ function matchBranchByQrKey(branch = {}, key = "") {
   return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === normalizedKey);
 }
 
+function getBranchRuntimeId(branch = {}) {
+  return String(branch?.branch_uuid || branch?.branchUuid || branch?.uuid || branch?.id || "").trim();
+}
+
 export default function QrOrderEntryPage({
   branches = [],
   checkoutPreset,
@@ -66,7 +70,7 @@ export default function QrOrderEntryPage({
     setCheckoutPreset?.((current) => ({
       ...(current || {}),
       fulfillmentType: "pickup",
-      selectedBranch: branch.id,
+      selectedBranch: getBranchRuntimeId(branch),
       pickupMode: "soon",
       orderSource: "qr_counter",
       source: "qr_counter",
