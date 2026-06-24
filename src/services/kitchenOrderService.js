@@ -4,6 +4,7 @@ import {
   initSupabaseKitchenAuthClient,
   initSupabaseRuntimeClient
 } from "./supabase/supabaseRuntimeClient.js";
+import { getCustomerKey } from "./storageService.js";
 import { normalizePartnerSource, resolveOrderSourceKey } from "./partnerOrderService.js";
 import { completeWebsiteOrderWithLoyaltyAsync } from "./loyaltyService.js";
 import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
@@ -423,6 +424,49 @@ function isLegacyWebsiteKitchenDone(order = {}) {
   return order.sourceType === KITCHEN_SOURCE.website &&
     kitchenStatus === "done" &&
     !["ready_for_pickup", "ready_for_delivery", "delivering", "done", "completed"].includes(status);
+}
+
+function hasValidOrderPhoneForLoyalty(order = {}) {
+  const metadata = getObject(order.raw?.metadata);
+  return Boolean(getCustomerKey(
+    order.customerPhone ||
+      order.raw?.customer_phone ||
+      metadata.customerPhone ||
+      metadata.phone
+  ));
+}
+
+function getWebsiteKitchenActionSuccessMessage(action = null) {
+  if (action?.type === "pickup_completed") return "Đơn đã hoàn thành.";
+  if (action?.type === "ready_for_pickup") return "Đơn đã chuyển sang chờ khách lấy.";
+  if (action?.type === "ready_for_delivery") return "Đơn đã chuyển sang chờ shipper.";
+  if (action?.type === "handoff_shipper") return "Đơn đã chuyển sang đang giao.";
+  return "Đã cập nhật trạng thái đơn.";
+}
+
+async function settleWebsiteOrderWithoutLoyalty(client, id, action, updatedAt) {
+  const { error } = await client
+    .from("orders")
+    .update({
+      status: action?.nextStatus,
+      kitchen_status: action?.nextKitchenStatus,
+      kitchen_done_at: ["ready", "done"].includes(action?.nextKitchenStatus) ? updatedAt : null,
+      updated_at: updatedAt
+    })
+    .eq("id", id);
+  recordKitchenRequest("settle website order without loyalty", "orders", "write");
+
+  if (error) {
+    return {
+      ok: false,
+      message: error.message || "Không cập nhật được đơn website."
+    };
+  }
+
+  return {
+    ok: true,
+    message: getWebsiteKitchenActionSuccessMessage(action)
+  };
 }
 
 export function getNextKitchenOrderAction(order = {}) {
@@ -1357,6 +1401,10 @@ export async function markKitchenOrderDone(order = {}) {
   }
 
   if (action.settleOrder) {
+    if (!hasValidOrderPhoneForLoyalty(order)) {
+      return settleWebsiteOrderWithoutLoyalty(client, id, action, updatedAt);
+    }
+
     try {
       const loyaltyResult = await completeWebsiteOrderWithLoyaltyAsync({
         orderId: id,
@@ -1369,10 +1417,20 @@ export async function markKitchenOrderDone(order = {}) {
         message: "Đơn đã hoàn thành và điểm khách hàng đã được cập nhật."
       };
     } catch (error) {
+      const fallbackResult = await settleWebsiteOrderWithoutLoyalty(client, id, action, updatedAt);
+      if (!fallbackResult.ok) {
+        return {
+          ok: false,
+          loyaltyUpdated: false,
+          message: error?.message || fallbackResult.message || "Không thể hoàn tất đơn và cộng điểm."
+        };
+      }
+
       return {
-        ok: false,
+        ok: true,
         loyaltyUpdated: false,
-        message: error?.message || "Không thể hoàn tất đơn và cộng điểm."
+        warning: `Đơn đã hoàn thành nhưng loyalty chưa cập nhật: ${error?.message || "vui lòng kiểm tra lại RPC loyalty."}`,
+        message: fallbackResult.message
       };
     }
   }
