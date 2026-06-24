@@ -949,11 +949,12 @@ function getPartnerRawDishEntries(row = {}) {
 function getPartnerRawDishBaseKey(row = {}) {
   const rawData = getObject(row.raw_data);
   return toText(
-    row.nexpos_order_id ||
+    row.order_code ||
+      rawData.order_id ||
+      row.display_order_code ||
+      row.nexpos_order_id ||
       rawData.nexpos_order_id ||
       rawData.id ||
-      row.order_code ||
-      row.display_order_code ||
       row.id
   );
 }
@@ -966,10 +967,96 @@ function buildPartnerRawDishItemKey(row = {}, dish = {}, index = 0) {
   return baseKey ? `${baseKey}-${index}` : `raw-dish-${index}`;
 }
 
-function getPartnerKitchenStoredItemKeys(items = []) {
-  return new Set(getArray(items).map((item) => (
-    toText(item.raw?.item_key || item.itemKey || item.cartId || item.productId || item.id)
-  )).filter(Boolean));
+function getPartnerRawDishItemKeyCandidates(row = {}, dish = {}, index = 0) {
+  const rawData = getObject(row.raw_data);
+  const explicitKeys = [
+    dish.item_key,
+    dish.key,
+    dish.line_key
+  ].map(toText).filter(Boolean);
+  const bases = [
+    getPartnerRawDishBaseKey(row),
+    row.order_code,
+    rawData.order_id,
+    row.display_order_code,
+    row.nexpos_order_id,
+    rawData.nexpos_order_id,
+    rawData.id,
+    row.id
+  ].map(toText).filter(Boolean);
+
+  return [...new Set([
+    ...explicitKeys,
+    ...bases.map((base) => `${base}-${index}`)
+  ])];
+}
+
+function getPartnerKitchenItemFingerprint({
+  name = "",
+  quantity = 1,
+  note = "",
+  options = []
+} = {}) {
+  const optionText = flattenOptionLabels(options).map(normalizeSearchText).sort().join("|");
+  return [
+    normalizeSearchText(name),
+    String(Math.max(1, toNumber(quantity, 1))),
+    normalizeSearchText(note),
+    optionText
+  ].join("::");
+}
+
+function getPartnerRawDishFingerprint(dish = {}) {
+  return getPartnerKitchenItemFingerprint({
+    name: dish.name,
+    quantity: dish.quantity,
+    note: dish.note || dish.description,
+    options: dish.options
+  });
+}
+
+function getPartnerStoredItemFingerprint(item = {}) {
+  return getPartnerKitchenItemFingerprint({
+    name: item.name,
+    quantity: item.quantity,
+    note: item.note,
+    options: item.options
+  });
+}
+
+function getPartnerStoredItemKey(item = {}) {
+  return toText(item.raw?.item_key || item.itemKey || item.cartId || item.productId || item.id);
+}
+
+function findPartnerStoredItemIndexForRawDish(row = {}, dish = {}, index = 0, candidates = []) {
+  const keyCandidates = new Set(getPartnerRawDishItemKeyCandidates(row, dish, index));
+  let matchIndex = candidates.findIndex((candidate) => keyCandidates.has(getPartnerStoredItemKey(candidate.item)));
+  if (matchIndex >= 0) return matchIndex;
+
+  const fingerprint = getPartnerRawDishFingerprint(dish);
+  matchIndex = candidates.findIndex((candidate) => getPartnerStoredItemFingerprint(candidate.item) === fingerprint);
+  return matchIndex;
+}
+
+function getMissingPartnerRawDishEntries(row = {}, storedItems = []) {
+  const availableItems = getArray(storedItems).map((item) => ({ item }));
+  return getPartnerRawDishEntries(row).filter(({ dish, index }) => {
+    const matchedIndex = findPartnerStoredItemIndexForRawDish(row, dish, index, availableItems);
+    if (matchedIndex < 0) return true;
+    availableItems.splice(matchedIndex, 1);
+    return false;
+  });
+}
+
+function resolvePartnerStoredItemsAgainstRawDishes(row = {}, storedItems = []) {
+  const availableItems = getArray(storedItems).map((item) => ({ item }));
+  return getPartnerRawDishEntries(row).map(({ dish, index }) => {
+    const matchedIndex = findPartnerStoredItemIndexForRawDish(row, dish, index, availableItems);
+    if (matchedIndex < 0) return mapPartnerRawDishToKitchenItem(dish, row, index);
+
+    const [matched] = availableItems.splice(matchedIndex, 1);
+    return matched.item;
+  });
 }
 
 function mapPartnerRawDishToKitchenItem(dish = {}, order = {}, index = 0) {
@@ -1012,12 +1099,7 @@ function resolvePartnerKitchenItems(row = {}, itemsByOrderId = new Map()) {
   if (!storedItems.length) return rawEntries.map(({ dish, index }) => mapPartnerRawDishToKitchenItem(dish, row, index));
   if (!rawEntries.length) return storedItems;
 
-  const storedKeys = getPartnerKitchenStoredItemKeys(storedItems);
-  const missingItems = rawEntries
-    .filter(({ dish, index }) => !storedKeys.has(buildPartnerRawDishItemKey(row, dish, index)))
-    .map(({ dish, index }) => mapPartnerRawDishToKitchenItem(dish, row, index));
-
-  return missingItems.length ? [...storedItems, ...missingItems] : storedItems;
+  return resolvePartnerStoredItemsAgainstRawDishes(row, storedItems);
 }
 
 function buildPartnerOrderItemRepairRow(orderRow = {}, dish = {}, index = 0) {
@@ -1320,10 +1402,8 @@ async function repairMissingPartnerOrderItems(client, orderRows = [], itemsByOrd
   const repairRows = getArray(orderRows).flatMap((row) => {
     const orderId = toText(row.id || row.order_code);
     const storedItems = itemsByOrderId.get(orderId) || [];
-    const storedKeys = getPartnerKitchenStoredItemKeys(storedItems);
 
-    return getPartnerRawDishEntries(row)
-      .filter(({ dish, index }) => !storedKeys.has(buildPartnerRawDishItemKey(row, dish, index)))
+    return getMissingPartnerRawDishEntries(row, storedItems)
       .map(({ dish, index }) => buildPartnerOrderItemRepairRow(row, dish, index))
       .filter((item) => item.partner_order_id && item.item_key && item.partner_item_name);
   });
