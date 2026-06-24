@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -104,8 +103,9 @@ export default function ProductOptionsModal({
     });
   };
 
+  if (!product) return null;
+
   return (
-    <Modal visible={Boolean(product)} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.layer}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={[styles.sheet, { width: dialogWidth }, width >= 680 && styles.sheetDesktop]}>
@@ -221,16 +221,17 @@ export default function ProductOptionsModal({
           </Pressable>
         </View>
       </View>
-    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   layer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    padding: 18
+    padding: 18,
+    zIndex: 500,
+    elevation: 12
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

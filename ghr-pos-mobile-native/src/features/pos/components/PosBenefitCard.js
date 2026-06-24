@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { buildVoucherSelectionKey } from "../../../shared/pos/posLoyalty";
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
@@ -58,10 +58,14 @@ export default function PosBenefitCard({
   selectedVoucherId,
   setSelectedVoucherId,
   promotionHints,
-  disabled = false
+  disabled = false,
+  modalOpen: controlledModalOpen,
+  setModalOpen: setControlledModalOpen,
+  renderTrigger = true,
+  renderOverlay = true
 }) {
   const { width } = useWindowDimensions();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [internalModalOpen, setInternalModalOpen] = useState(false);
   const checkoutVouchers = loyaltyBenefit?.checkoutVouchers || [];
   const selectedVoucher = loyaltyBenefit?.selectedVoucher?.source === "checkout"
     ? loyaltyBenefit.selectedVoucher
@@ -71,6 +75,8 @@ export default function PosBenefitCard({
     [loyaltyBenefit, promotionHints, selectedVoucher]
   );
   const dialogWidth = getPosDialogWidth(width, 640);
+  const modalOpen = typeof controlledModalOpen === "boolean" ? controlledModalOpen : internalModalOpen;
+  const setModalOpen = typeof setControlledModalOpen === "function" ? setControlledModalOpen : setInternalModalOpen;
 
   const handleToggleVoucher = (voucher) => {
     const voucherKey = buildVoucherSelectionKey(voucher);
@@ -79,35 +85,37 @@ export default function PosBenefitCard({
 
   return (
     <>
-      <Pressable
-        style={[styles.triggerCard, disabled && styles.triggerCardDisabled]}
-        onPress={() => setModalOpen(true)}
-      >
-        <View style={styles.triggerIcon}>
-          <PosIcon name="voucher" size={16} color={POS_COLORS.primaryDark} />
-        </View>
-
-        <View style={styles.triggerCopy}>
-          <Text style={styles.triggerEyebrow}>Ưu đãi & tư vấn</Text>
-          <Text style={styles.triggerTitle} numberOfLines={1}>
-            {benefitCopy.title}
-          </Text>
-          <Text style={styles.triggerSubtitle} numberOfLines={1}>
-            {benefitCopy.subtitle}
-          </Text>
-        </View>
-
-        <View style={styles.triggerActions}>
-          {!!selectedVoucher && Number(loyaltyBenefit?.voucherDiscount || 0) > 0 ? (
-            <Text style={styles.discountText}>-{formatMoney(loyaltyBenefit.voucherDiscount || 0)}</Text>
-          ) : null}
-          <View style={styles.triggerButton}>
-            <PosIcon name="voucher" size={14} color="#6366f1" />
+      {renderTrigger ? (
+        <Pressable
+          style={[styles.triggerCard, disabled && styles.triggerCardDisabled]}
+          onPress={() => setModalOpen(true)}
+        >
+          <View style={styles.triggerIcon}>
+            <PosIcon name="voucher" size={16} color={POS_COLORS.primaryDark} />
           </View>
-        </View>
-      </Pressable>
 
-      <Modal visible={modalOpen} transparent animationType="fade" onRequestClose={() => setModalOpen(false)}>
+          <View style={styles.triggerCopy}>
+            <Text style={styles.triggerEyebrow}>Ưu đãi & tư vấn</Text>
+            <Text style={styles.triggerTitle} numberOfLines={1}>
+              {benefitCopy.title}
+            </Text>
+            <Text style={styles.triggerSubtitle} numberOfLines={1}>
+              {benefitCopy.subtitle}
+            </Text>
+          </View>
+
+          <View style={styles.triggerActions}>
+            {!!selectedVoucher && Number(loyaltyBenefit?.voucherDiscount || 0) > 0 ? (
+              <Text style={styles.discountText}>-{formatMoney(loyaltyBenefit.voucherDiscount || 0)}</Text>
+            ) : null}
+            <View style={styles.triggerButton}>
+              <PosIcon name="voucher" size={14} color="#6366f1" />
+            </View>
+          </View>
+        </Pressable>
+      ) : null}
+
+      {renderOverlay && modalOpen ? (
         <View style={styles.layer}>
           <Pressable style={styles.backdrop} onPress={() => setModalOpen(false)} />
           <View style={[styles.sheet, { width: dialogWidth }]}>
@@ -188,7 +196,7 @@ export default function PosBenefitCard({
             </ScrollView>
           </View>
         </View>
-      </Modal>
+      ) : null}
     </>
   );
 }
@@ -259,10 +267,12 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   layer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    padding: 18
+    padding: 18,
+    zIndex: 500,
+    elevation: 12
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

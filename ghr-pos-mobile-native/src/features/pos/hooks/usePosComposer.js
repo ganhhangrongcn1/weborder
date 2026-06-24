@@ -25,6 +25,12 @@ import {
   readPosOrderDetail,
   readPosOrderForPrint
 } from "../../../services/pos/posOrderQueryService";
+import {
+  getPosPickupHistoryOrders,
+  getPosPickupOrders,
+  markPickupOrderPaidCash,
+  markPickupOrderPaidQr
+} from "../../../services/pos/posPickupOrderService";
 import { buildPosPaymentReference, buildPosQrImageUrl } from "../../../services/pos/posPaymentService";
 import {
   cancelPosPaymentSession,
@@ -98,15 +104,24 @@ export default function usePosComposer() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(null);
   const [busyPagers, setBusyPagers] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
+  const [pickupOrders, setPickupOrders] = useState([]);
   const [pendingPaymentSessions, setPendingPaymentSessions] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [pickupOrdersLoading, setPickupOrdersLoading] = useState(false);
+  const [pickupOrdersError, setPickupOrdersError] = useState("");
   const [qrSession, setQrSession] = useState(null);
   const [qrPreviewIdentity, setQrPreviewIdentity] = useState(null);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState("");
   const [qrPrintBusy, setQrPrintBusy] = useState(false);
+  const [pickupQrSession, setPickupQrSession] = useState(null);
+  const [pickupQrOrder, setPickupQrOrder] = useState(null);
+  const [pickupQrModalOpen, setPickupQrModalOpen] = useState(false);
+  const [pickupQrLoading, setPickupQrLoading] = useState(false);
+  const [pickupQrError, setPickupQrError] = useState("");
+  const [pickupQrPrintBusy, setPickupQrPrintBusy] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState({
     checking: false,
     online: null,
@@ -171,6 +186,67 @@ export default function usePosComposer() {
     [baseTotals.subtotal, catalog.products, rawSmartPromotions]
   );
 
+  const buildPickupOrderIdentity = (order = {}) => ({
+    orderCode: String(order.orderCode || order.id || "").trim(),
+    displayOrderCode: String(order.displayOrderCode || order.orderCode || order.id || "").trim()
+  });
+
+  const mergeRecentHistoryOrders = (posOrders = [], pickupHistoryOrders = [], limit = 16) => {
+    const merged = [
+      ...(Array.isArray(posOrders) ? posOrders : []),
+      ...(Array.isArray(pickupHistoryOrders) ? pickupHistoryOrders : [])
+    ];
+
+    return merged
+      .sort((first, second) => {
+        const firstTime = new Date(first?.createdAt || 0).getTime();
+        const secondTime = new Date(second?.createdAt || 0).getTime();
+        return secondTime - firstTime;
+      })
+      .slice(0, Math.max(1, Math.floor(Number(limit || 16))));
+  };
+
+  const printPickupCustomerBill = async ({ order = {}, paymentConfirmed = null } = {}) => {
+    if (!order?.id) {
+      return { ok: false, message: " Thiếu mã đơn để in bill." };
+    }
+
+    const result = await readPosOrderForPrint(order.id);
+    if (!result.ok || !result.printableOrder) {
+      return {
+        ok: false,
+        message: ` Chưa in được bill: ${result.message || "không đọc được dữ liệu đơn."}`
+      };
+    }
+
+    const printableOrder = result.printableOrder;
+    const receiptText = buildPosCustomerBillText({
+      order: printableOrder,
+      cart: printableOrder.cart,
+      totals: printableOrder.totals,
+      customerName: printableOrder.customerName || order.customerName,
+      customerPhone: printableOrder.customerPhone || order.customerPhone,
+      pagerNumber: printableOrder.pagerNumber,
+      branchName: printableOrder.branchName || order.pickupBranchName || profile?.branchName,
+      cashierName: profile?.name || profile?.email || "Thu ngân",
+      orderNote: printableOrder.orderNote,
+      paymentConfirmed
+    });
+
+    try {
+      await printLocalReceipt({
+        text: receiptText,
+        sourceType: "customer_bill"
+      });
+      return { ok: true, message: " Đã in bill tại máy POS." };
+    } catch (error) {
+      return {
+        ok: false,
+        message: ` Chưa in được bill: ${error?.message || "lỗi máy in."}`
+      };
+    }
+  };
+
   const cleanupExpiredPaymentSessions = async (branchUuid = "", sessions = []) => {
     const safeBranchUuid = String(branchUuid || "").trim();
     const currentSessions = Array.isArray(sessions) ? sessions : [];
@@ -196,11 +272,25 @@ export default function usePosComposer() {
     if (includeRecentOrders) {
       setHistoryLoading(true);
       setHistoryError("");
+      setPickupOrdersLoading(true);
+      setPickupOrdersError("");
     }
     try {
-      const [nextBusyPagers, nextRecentOrders, nextPaymentSessions] = await Promise.all([
+      const [nextBusyPagers, nextRecentOrders, nextPickupOrders, nextPickupHistoryOrders, nextPaymentSessions] = await Promise.all([
         getBusyPosPagerNumbers({ branchUuid }),
         includeRecentOrders ? getPosRecentOrders({ branchUuid, limit: 8 }) : Promise.resolve(null),
+        includeRecentOrders
+          ? getPosPickupOrders({ branchUuid, limit: 80 }).catch((error) => {
+              setPickupOrdersError(error?.message || "Không tải được đơn hẹn lấy.");
+              return [];
+            })
+          : Promise.resolve(null),
+        includeRecentOrders
+          ? getPosPickupHistoryOrders({ branchUuid, limit: 20 }).catch((error) => {
+              setHistoryError(error?.message || "Khong tai duoc lich su don hen lay.");
+              return [];
+            })
+          : Promise.resolve(null),
         listPosPaymentSessions(branchUuid).catch((error) => {
           setHistoryError(error?.message || "Không tải được phiên QR đang chờ.");
           return [];
@@ -209,13 +299,17 @@ export default function usePosComposer() {
       const activePaymentSessions = await cleanupExpiredPaymentSessions(branchUuid, nextPaymentSessions);
       setBusyPagers(nextBusyPagers);
       if (includeRecentOrders && Array.isArray(nextRecentOrders)) {
-        setRecentOrders(nextRecentOrders);
+        setRecentOrders(mergeRecentHistoryOrders(nextRecentOrders, nextPickupHistoryOrders, 16));
+      }
+      if (includeRecentOrders && Array.isArray(nextPickupOrders)) {
+        setPickupOrders(nextPickupOrders);
       }
       setPendingPaymentSessions(activePaymentSessions);
     } catch (error) {
       setHistoryError(error?.message || "Không tải được lịch sử POS.");
     } finally {
       setHistoryLoading(false);
+      setPickupOrdersLoading(false);
     }
   };
 
@@ -762,6 +856,55 @@ export default function usePosComposer() {
   }, [qrSession?.id, qrSession?.isPaymentSession]);
 
   useEffect(() => {
+    if (!pickupQrSession?.id || !pickupQrSession.isPaymentSession) return undefined;
+
+    let active = true;
+    let finalizing = false;
+    const handleSession = async (session) => {
+      if (!active || !session || finalizing) return;
+      if (isPosPaymentSessionExpired(session)) {
+        await cancelPosPaymentSession(session.id, "POS mobile tự đóng QR đơn hẹn lấy đã hết hạn");
+        if (!active) return;
+        setPickupQrSession(null);
+        setPickupQrOrder(null);
+        setPickupQrModalOpen(false);
+        setPickupQrError("");
+        setShiftMessage("Mã QR của đơn hẹn lấy đã hết hạn.");
+        return;
+      }
+      if (isPosPaymentSessionTerminal(session)) {
+        setPickupQrSession(null);
+        setPickupQrModalOpen(false);
+        setPickupQrError("");
+        return;
+      }
+      if (isPosPaymentSessionPaid(session)) {
+        finalizing = true;
+        const completed = await finalizePickupQrPayment(session);
+        if (!completed) finalizing = false;
+        return;
+      }
+      setPickupQrSession(session);
+    };
+
+    const checkPaymentSession = async () => {
+      try {
+        const session = await readPosPaymentSession(pickupQrSession.id);
+        await handleSession(session);
+      } catch (error) {
+        setPickupQrError(error?.message || "Không kiểm tra được phiên QR đơn hẹn lấy.");
+      }
+    };
+
+    checkPaymentSession();
+    const timer = globalThis.setInterval(checkPaymentSession, 12000);
+    return () => {
+      active = false;
+      globalThis.clearInterval(timer);
+    };
+  }, [pickupQrSession?.id, pickupQrSession?.isPaymentSession, pickupQrOrder?.id]);
+
+  useEffect(() => {
     if (!profile?.branchUuid || !shift?.id) return undefined;
 
     const timer = globalThis.setInterval(() => {
@@ -990,8 +1133,14 @@ export default function usePosComposer() {
     setShiftMessage("");
     setBusyPagers([]);
     setRecentOrders([]);
+    setPickupOrders([]);
     setPendingPaymentSessions([]);
     setHistoryError("");
+    setPickupOrdersError("");
+    setPickupQrSession(null);
+    setPickupQrOrder(null);
+    setPickupQrModalOpen(false);
+    setPickupQrError("");
     setCustomerPhone("");
     setCustomerLookup({ loading: false, result: null, error: "" });
     await clearCart();
@@ -1321,6 +1470,254 @@ export default function usePosComposer() {
     await refreshShiftSummary(shift);
   };
 
+  const confirmPickupOrderCashPayment = async (order = {}, cashReceived = "") => {
+    if (!order?.id) return false;
+    if (!shift?.id) {
+      setPickupOrdersError("Cần mở ca POS trước khi thu tiền đơn hẹn lấy.");
+      return false;
+    }
+
+    const amount = Number(order.totalAmount || order.paymentAmount || 0);
+    const normalizedReceived = normalizeCashReceived(cashReceived);
+    if (normalizedReceived < amount) {
+      setPickupOrdersError("Tiền khách đưa chưa đủ để xác nhận thanh toán.");
+      return false;
+    }
+
+    const cashChange = calculateCashChange(amount, normalizedReceived);
+
+    setPickupOrdersLoading(true);
+    setPickupOrdersError("");
+    const result = await markPickupOrderPaidCash({
+      order,
+      shift,
+      cashierName: profile?.name || profile?.email || "POS mobile",
+      cashReceived: normalizedReceived,
+      cashChange,
+      paymentReference: `CASH-PICKUP-${Date.now()}`
+    });
+    setPickupOrdersLoading(false);
+
+    if (!result.ok) {
+      setPickupOrdersError(result.message || "Không cập nhật được thanh toán đơn hẹn lấy.");
+      return false;
+    }
+
+    const printResult = await printPickupCustomerBill({
+      order: result.order || order,
+      paymentConfirmed: {
+        method: "cash",
+        amount,
+        received: normalizedReceived,
+        change: cashChange,
+        reference: result.order?.paymentReference || `CASH-PICKUP-${Date.now()}`,
+        paidAt: result.order?.paidAt || new Date().toISOString()
+      }
+    });
+
+    let drawerMessage = "";
+    try {
+      await openLocalCashDrawer();
+      drawerMessage = " Đã gửi lệnh mở két tiền.";
+    } catch (error) {
+      drawerMessage = ` Chưa mở được két: ${error?.message || "kiểm tra máy in/két tiền."}`;
+    }
+
+    setShiftMessage(`${result.message || "Đã thu tiền đơn hẹn lấy."}${printResult.message || ""}${drawerMessage}`.trim());
+    if (profile?.branchUuid) {
+      await refreshPosRuntime(profile.branchUuid);
+    }
+    await refreshShiftSummary(shift);
+    return true;
+  };
+
+  const openPickupOrderQrPayment = async (order = {}) => {
+    if (!order?.id) return false;
+    if (!profile?.branchUuid || !shift?.id) {
+      setPickupOrdersError("Cần đăng nhập và mở ca trước khi tạo QR.");
+      return false;
+    }
+
+    setPickupQrModalOpen(true);
+    setPickupQrLoading(true);
+    setPickupQrError("");
+    setPickupQrOrder(order);
+
+    const orderIdentity = buildPickupOrderIdentity(order);
+    const paymentReference = `${orderIdentity.displayOrderCode || orderIdentity.orderCode || "GHR"}-QR-${Date.now().toString().slice(-6)}`.toUpperCase();
+    const result = await createPosPaymentSession({
+      source: "web",
+      orderId: order.id,
+      paymentReference,
+      branchUuid: profile.branchUuid,
+      posShiftId: shift.id,
+      branchName: profile.branchName,
+      cashierName: profile?.name || profile?.email || "POS mobile",
+      customerName: order.customerName,
+      customerPhone: normalizeCustomerPhone(order.customerPhone),
+      amountExpected: order.totalAmount,
+      cart: [],
+      checkout: {
+        orderIdentity,
+        existingOrderId: order.id,
+        pickupOrderId: order.id,
+        posShiftId: shift.id,
+        sourceType: "website_pickup"
+      }
+    });
+    setPickupQrLoading(false);
+
+    if (!result.ok || !result.session?.id) {
+      setPickupQrError(result.message || "Không tạo được phiên thanh toán QR cho đơn hẹn lấy.");
+      setPickupOrdersError(result.message || "Không tạo được phiên thanh toán QR cho đơn hẹn lấy.");
+      return false;
+    }
+
+    setPickupOrdersError("");
+    setPickupQrSession(result.session);
+    setPickupQrOrder(order);
+    setPickupQrModalOpen(true);
+    setShiftMessage(result.reused
+      ? "Đã mở lại QR đang chờ thanh toán cho đơn hẹn lấy."
+      : "Đã tạo QR cho đơn hẹn lấy, đang chờ khách chuyển khoản.");
+    return true;
+  };
+
+  const finalizePickupQrPayment = async (session = {}) => {
+    if (!session?.id || !pickupQrOrder?.id) return false;
+
+    setPickupQrLoading(true);
+    setPickupQrError("");
+    const result = await markPickupOrderPaidQr({
+      order: pickupQrOrder,
+      shift,
+      cashierName: profile?.name || profile?.email || "POS mobile",
+      paymentReference: session.paymentReference,
+      paidAt: session.paidAt || new Date().toISOString(),
+      paymentAmount: session.amountPaid || session.amountExpected || pickupQrOrder.totalAmount
+    });
+    setPickupQrLoading(false);
+
+    if (!result.ok) {
+      setPickupQrError(result.message || "Đã nhận QR nhưng chưa cập nhật được đơn hẹn lấy.");
+      return false;
+    }
+
+    await markPosPaymentSessionConverted(session.id, pickupQrOrder.id);
+    const printResult = await printPickupCustomerBill({
+      order: result.order || pickupQrOrder,
+      paymentConfirmed: {
+        method: "bank_qr",
+        amount: session.amountPaid || session.amountExpected || pickupQrOrder.totalAmount,
+        reference: session.paymentReference,
+        paidAt: session.paidAt || result.order?.paidAt || new Date().toISOString()
+      }
+    });
+    setPickupQrSession(null);
+    setPickupQrOrder(null);
+    setPickupQrModalOpen(false);
+    setPickupQrError("");
+    setShiftMessage(`${result.message || "Đã nhận thanh toán QR đơn hẹn lấy."}${printResult.message || ""}`.trim());
+    if (profile?.branchUuid) {
+      await refreshPosRuntime(profile.branchUuid);
+    }
+    await refreshShiftSummary(shift);
+    return true;
+  };
+
+  const cancelPickupOrderQrPayment = async (session = null) => {
+    const activeSession = session?.id ? session : pickupQrSession;
+    if (!activeSession?.id) {
+      setPickupQrSession(null);
+      setPickupQrOrder(null);
+      setPickupQrModalOpen(false);
+      setPickupQrError("");
+      return;
+    }
+
+    setPickupQrLoading(true);
+    setPickupQrError("");
+    const result = await cancelPosPaymentSession(activeSession.id, "POS mobile hủy QR đơn hẹn lấy");
+    setPickupQrLoading(false);
+    if (!result.ok) {
+      setPickupQrError(result.message || "Không hủy được QR đơn hẹn lấy.");
+      return;
+    }
+
+    setPickupQrSession(null);
+    setPickupQrOrder(null);
+    setPickupQrModalOpen(false);
+    setPickupQrError("");
+    setShiftMessage("Đã hủy QR của đơn hẹn lấy.");
+  };
+
+  const confirmPickupQrPaidManually = async () => {
+    if (!pickupQrSession?.id) return;
+    if (isPosPaymentSessionPaid(pickupQrSession)) {
+      await finalizePickupQrPayment(pickupQrSession);
+      return;
+    }
+
+    setPickupQrLoading(true);
+    setPickupQrError("");
+    const result = await confirmPosPaymentSessionManually(pickupQrSession.id);
+    setPickupQrLoading(false);
+    if (!result.ok) {
+      setPickupQrError(result.message || "Không xác nhận được thanh toán QR.");
+      return;
+    }
+
+    setPickupQrSession(result.session);
+    if (isPosPaymentSessionPaid(result.session)) {
+      await finalizePickupQrPayment(result.session);
+    }
+  };
+
+  const printPickupQrReceiptNow = async () => {
+    if (!pickupQrSession && !pickupQrOrder) {
+      setPickupQrError("Chưa có phiên QR để in.");
+      return;
+    }
+
+    const identity = pickupQrSession?.orderIdentity || buildPickupOrderIdentity(pickupQrOrder || {});
+    const amount = pickupQrSession?.amountExpected || pickupQrOrder?.totalAmount || 0;
+    const qrUrl = buildPosQrImageUrl({
+      branch,
+      amount,
+      orderIdentity: {
+        ...identity,
+        paymentReference: pickupQrSession?.paymentReference
+      }
+    });
+    if (!qrUrl) {
+      setPickupQrError("Chưa tạo được mã QR để in. Kiểm tra cấu hình ngân hàng của chi nhánh.");
+      return;
+    }
+
+    const receiptText = buildPosQrReceiptText({
+      branchName: profile?.branchName,
+      amount,
+      transferContent: pickupQrSession?.paymentReference || buildPosPaymentReference(identity, branch),
+      orderCode: identity.displayOrderCode || identity.orderCode || pickupQrSession?.paymentReference,
+      customerName: pickupQrOrder?.customerName || pickupQrSession?.customerName || ""
+    });
+
+    setPickupQrPrintBusy(true);
+    setPickupQrError("");
+    try {
+      await printLocalReceipt({
+        text: receiptText,
+        qrUrl,
+        sourceType: "pickup_order_payment_qr"
+      });
+      setShiftMessage("Đã in phiếu QR cho đơn hẹn lấy.");
+    } catch (error) {
+      setPickupQrError(error?.message || "Không in được phiếu QR.");
+    } finally {
+      setPickupQrPrintBusy(false);
+    }
+  };
+
   const reprintRecentOrder = async (order = {}) => {
     if (!order?.id) return;
 
@@ -1467,6 +1864,11 @@ export default function usePosComposer() {
     setBusyPagers([]);
     setPendingPaymentSessions([]);
     setRecentOrders([]);
+    setPickupOrders([]);
+    setPickupQrSession(null);
+    setPickupQrOrder(null);
+    setPickupQrModalOpen(false);
+    setPickupQrError("");
     setShiftMessage(`${result.message || ""}${closePrintMessage}`.trim());
     return true;
   };
@@ -1655,12 +2057,22 @@ export default function usePosComposer() {
     qrLoading,
     qrError,
     qrPrintBusy,
+    pickupQrSession,
+    pickupQrOrder,
+    pickupQrModalOpen,
+    setPickupQrModalOpen,
+    pickupQrLoading,
+    pickupQrError,
+    pickupQrPrintBusy,
     branch,
     busyPagers,
     recentOrders,
+    pickupOrders,
     pendingPaymentSessions,
     historyLoading,
     historyError,
+    pickupOrdersLoading,
+    pickupOrdersError,
     connectionStatus,
     printStationStatus,
     offlineOrderCount,
@@ -1675,6 +2087,11 @@ export default function usePosComposer() {
     openPaymentSessionFromHistory,
     cancelPaymentSessionFromHistory,
     cancelRecentOrder,
+    confirmPickupOrderCashPayment,
+    openPickupOrderQrPayment,
+    cancelPickupOrderQrPayment,
+    confirmPickupQrPaidManually,
+    printPickupQrReceiptNow,
     reprintRecentOrder,
     openRecentOrderDetail,
     refreshCurrentPosRuntime,

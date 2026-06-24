@@ -12,10 +12,10 @@ import PosHistoryPanel from "../features/pos/components/PosHistoryPanel";
 import PosIcon from "../features/pos/components/PosIcon";
 import PosMenuPanel from "../features/pos/components/PosMenuPanel";
 import PosPagerModal from "../features/pos/components/PosPagerModal";
+import PosPickupOrdersPanel from "../features/pos/components/PosPickupOrdersPanel";
 import PosShiftCloseModal from "../features/pos/components/PosShiftCloseModal";
 import ProductOptionsModal from "../features/pos/components/ProductOptionsModal";
 import QrPaymentModal from "../features/pos/components/QrPaymentModal";
-import UsbPrinterPickerModal from "../features/pos/components/UsbPrinterPickerModal";
 import usePosComposer from "../features/pos/hooks/usePosComposer";
 import {
   getLocalPrinterConfig,
@@ -33,6 +33,7 @@ import { formatMoney } from "../utils/format";
 
 const POS_TABS = [
   { key: "sale", label: "Bán hàng", icon: "sale" },
+  { key: "pickup", label: "Đơn hẹn lấy", icon: "order" },
   { key: "history", label: "Lịch sử", icon: "history" },
   { key: "shift", label: "Tổng quan ca", icon: "shift" },
   { key: "settings", label: "Thiết lập", icon: "settings" }
@@ -43,18 +44,21 @@ export default function PosHomeScreen() {
   const [editingCartItem, setEditingCartItem] = useState(null);
   const [pendingPagerProduct, setPendingPagerProduct] = useState(null);
   const [pagerPickerOpen, setPagerPickerOpen] = useState(false);
+  const [benefitModalOpen, setBenefitModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("sale");
   const [cashPaymentOpen, setCashPaymentOpen] = useState(false);
+  const [pickupCashPaymentOpen, setPickupCashPaymentOpen] = useState(false);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
   const [openingCashCounterOpen, setOpeningCashCounterOpen] = useState(false);
   const [openingCashBreakdown, setOpeningCashBreakdown] = useState(null);
   const [cashReceived, setCashReceived] = useState("");
+  const [pickupCashReceived, setPickupCashReceived] = useState("");
+  const [selectedPickupOrder, setSelectedPickupOrder] = useState(null);
   const [printerConfig, setPrinterConfig] = useState(null);
   const [lanHost, setLanHost] = useState("");
   const [lanPort, setLanPort] = useState("9100");
   const [usbDevices, setUsbDevices] = useState([]);
-  const [usbPickerOpen, setUsbPickerOpen] = useState(false);
   const [printerBusy, setPrinterBusy] = useState(false);
   const [printerMessage, setPrinterMessage] = useState("");
   const { width } = useWindowDimensions();
@@ -108,12 +112,22 @@ export default function PosHomeScreen() {
     qrLoading,
     qrError,
     qrPrintBusy,
+    pickupQrSession,
+    pickupQrOrder,
+    pickupQrModalOpen,
+    setPickupQrModalOpen,
+    pickupQrLoading,
+    pickupQrError,
+    pickupQrPrintBusy,
     branch,
     busyPagers,
     recentOrders,
+    pickupOrders,
     pendingPaymentSessions,
     historyLoading,
     historyError,
+    pickupOrdersLoading,
+    pickupOrdersError,
     connectionStatus,
     printStationStatus,
     offlineOrderCount,
@@ -128,6 +142,11 @@ export default function PosHomeScreen() {
     openPaymentSessionFromHistory,
     cancelPaymentSessionFromHistory,
     cancelRecentOrder,
+    confirmPickupOrderCashPayment,
+    openPickupOrderQrPayment,
+    cancelPickupOrderQrPayment,
+    confirmPickupQrPaidManually,
+    printPickupQrReceiptNow,
     reprintRecentOrder,
     openRecentOrderDetail,
     refreshCurrentPosRuntime,
@@ -204,7 +223,27 @@ export default function PosHomeScreen() {
     setCashPaymentOpen(false);
   };
 
+  const handleOpenPickupCashModal = (order) => {
+    if (!order?.id) return;
+    setSelectedPickupOrder(order);
+    setPickupCashReceived(String(order.totalAmount || order.paymentAmount || ""));
+    setPickupCashPaymentOpen(true);
+  };
+
+  const handleConfirmPickupCashPayment = async () => {
+    if (!selectedPickupOrder?.id) return;
+    const ok = await confirmPickupOrderCashPayment(selectedPickupOrder, pickupCashReceived);
+    if (!ok) return;
+    setPickupCashPaymentOpen(false);
+    setSelectedPickupOrder(null);
+    setPickupCashReceived("");
+  };
+
   const openingCashAmount = Number(openingCash || 0);
+  const pickupUnpaidCount = useMemo(
+    () => (Array.isArray(pickupOrders) ? pickupOrders : []).filter((order) => order.paymentStatus !== "paid").length,
+    [pickupOrders]
+  );
 
   useEffect(() => {
     let active = true;
@@ -302,7 +341,6 @@ export default function PosHomeScreen() {
       }
       await refreshPrinterState();
       setPrinterMessage("Đã chọn máy in USB.");
-      setUsbPickerOpen(false);
     } catch (error) {
       setPrinterMessage(error?.message || "Không chọn được máy in USB.");
     } finally {
@@ -539,6 +577,9 @@ export default function PosHomeScreen() {
               setSelectedVoucherId={setSelectedVoucherId}
               promotionHints={promotionHints}
               disabled={busy || Boolean(paymentConfirmed)}
+              modalOpen={benefitModalOpen}
+              setModalOpen={setBenefitModalOpen}
+              renderOverlay={false}
             />
 
             {!!menuMessage && <Text style={styles.noticeBox}>{menuMessage}</Text>}
@@ -689,6 +730,7 @@ export default function PosHomeScreen() {
         : connectionStatus.online
           ? "Online"
           : "Offline";
+    const visibleUsbDevices = Array.isArray(usbDevices) ? usbDevices : [];
 
     return (
       <ScrollView
@@ -775,19 +817,75 @@ export default function PosHomeScreen() {
                 </Pressable>
               </View>
             ) : (
-              <View style={styles.printerPickerCard}>
-                <View style={styles.flexOne}>
-                  <Text style={styles.printerStatusTitle}>Máy in USB đang chọn</Text>
-                  <Text style={styles.placeholderText} numberOfLines={1}>{selectedUsbLabel}</Text>
-                  <Text style={styles.noticeText}>{usbDevices.length} máy in được tìm thấy • Chế độ {printerModeText}</Text>
+              <View style={styles.usbSetupPanel}>
+                <View style={styles.printerPickerCard}>
+                  <View style={styles.flexOne}>
+                    <Text style={styles.printerStatusTitle}>Máy in USB đang chọn</Text>
+                    <Text style={styles.placeholderText} numberOfLines={1}>{selectedUsbLabel}</Text>
+                    <Text style={styles.noticeText}>{visibleUsbDevices.length} máy in được tìm thấy • Chế độ {printerModeText}</Text>
+                  </View>
+                  <Pressable
+                    style={styles.pickPrinterButton}
+                    onPress={handleRefreshPrinterState}
+                    disabled={printerBusy}
+                  >
+                    <Text style={styles.pickPrinterText}>{printerBusy ? "Đang quét" : "Quét máy in"}</Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  style={styles.pickPrinterButton}
-                  onPress={() => setUsbPickerOpen(true)}
-                  disabled={printerBusy}
-                >
-                  <Text style={styles.pickPrinterText}>Chọn máy in</Text>
-                </Pressable>
+
+                {visibleUsbDevices.length ? (
+                  <View style={styles.usbDeviceList}>
+                    {visibleUsbDevices.map((device) => {
+                      const selected = Boolean(device.selected);
+                      const ready = Boolean(device.hasPermission);
+                      const actionLabel = selected
+                        ? (ready ? "Đang dùng" : "Cấp quyền")
+                        : (ready ? "Dùng máy này" : "Chọn & cấp quyền");
+
+                      return (
+                        <Pressable
+                          key={`${device.vendorId}-${device.productId}`}
+                          style={[styles.usbDeviceCard, selected && styles.usbDeviceCardActive]}
+                          onPress={() => handleSelectUsbPrinter(device)}
+                          disabled={printerBusy}
+                        >
+                          <View style={styles.flexOne}>
+                            <Text style={[styles.usbDeviceName, selected && styles.usbDeviceNameActive]} numberOfLines={1}>
+                              {device.label || "Máy in USB"}
+                            </Text>
+                            <Text style={styles.usbDeviceMeta} numberOfLines={1}>
+                              Vendor {device.vendorId || "--"} · Product {device.productId || "--"}
+                            </Text>
+                          </View>
+
+                          <View style={styles.usbDeviceSide}>
+                            <View style={[
+                              styles.printerBadge,
+                              selected || ready ? styles.printerBadgeReady : styles.printerBadgeIdle
+                            ]}>
+                              <Text style={[
+                                styles.printerBadgeText,
+                                selected || ready ? styles.printerBadgeTextReady : styles.printerBadgeTextIdle
+                              ]}>
+                                {selected ? "Đang chọn" : ready ? "Sẵn sàng" : "Chưa cấp quyền"}
+                              </Text>
+                            </View>
+                            <Text style={[styles.usbDeviceAction, selected && styles.usbDeviceActionActive]}>
+                              {actionLabel}
+                            </Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={styles.usbEmptyBox}>
+                    <Text style={styles.usbEmptyTitle}>Chưa thấy máy in USB</Text>
+                    <Text style={styles.usbEmptyText}>
+                      Cắm cáp OTG/USB rồi bấm Quét máy in. Khi thấy thiết bị, bấm trực tiếp vào dòng máy in để dùng.
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -902,6 +1000,16 @@ export default function PosHomeScreen() {
       <View style={styles.shell}>
         <View style={styles.workspaceFrame}>
           {activeTab === "sale" && renderSaleWorkspace()}
+          {activeTab === "pickup" && (
+            <PosPickupOrdersPanel
+              orders={pickupOrders}
+              loading={pickupOrdersLoading}
+              error={pickupOrdersError}
+              onRefresh={refreshCurrentPosRuntime}
+              onPayCash={handleOpenPickupCashModal}
+              onPayQr={openPickupOrderQrPayment}
+            />
+          )}
           {activeTab === "history" && (
             <PosHistoryPanel
               recentOrders={recentOrders}
@@ -928,6 +1036,7 @@ export default function PosHomeScreen() {
           {POS_TABS.map((tab) => {
             const active = tab.key === activeTab;
             const showHistoryBadge = tab.key === "history" && pendingPaymentSessions.length > 0;
+            const showPickupBadge = tab.key === "pickup" && pickupUnpaidCount > 0;
             return (
               <Pressable
                 key={tab.key}
@@ -944,9 +1053,11 @@ export default function PosHomeScreen() {
                 <Text style={[styles.navLabel, active && styles.navLabelActive]} numberOfLines={1}>
                   {tab.label}
                 </Text>
-                {showHistoryBadge && (
+                {(showHistoryBadge || showPickupBadge) && (
                   <View style={styles.navBadge}>
-                    <Text style={styles.navBadgeText}>{pendingPaymentSessions.length}</Text>
+                    <Text style={styles.navBadgeText}>
+                      {showPickupBadge ? pickupUnpaidCount : pendingPaymentSessions.length}
+                    </Text>
                   </View>
                 )}
               </Pressable>
@@ -970,6 +1081,16 @@ export default function PosHomeScreen() {
           setEditingCartItem(null);
         }}
         onSubmit={handleSubmitOptions}
+      />
+      <PosBenefitCard
+        loyaltyBenefit={loyaltyBenefit}
+        selectedVoucherId={selectedVoucherId}
+        setSelectedVoucherId={setSelectedVoucherId}
+        promotionHints={promotionHints}
+        disabled={busy || Boolean(paymentConfirmed)}
+        modalOpen={benefitModalOpen}
+        setModalOpen={setBenefitModalOpen}
+        renderTrigger={false}
       />
       <PosCustomerModal
         visible={customerModalOpen}
@@ -1024,6 +1145,27 @@ export default function PosHomeScreen() {
         onClose={() => setCashPaymentOpen(false)}
         onConfirm={handleConfirmCashPayment}
       />
+      <CashPaymentModal
+        key={selectedPickupOrder?.id || "pickup-cash-modal"}
+        visible={pickupCashPaymentOpen}
+        amount={Number(selectedPickupOrder?.totalAmount || selectedPickupOrder?.paymentAmount || 0)}
+        cashReceived={pickupCashReceived}
+        setCashReceived={setPickupCashReceived}
+        processing={pickupOrdersLoading}
+        eyebrow="Đơn hẹn lấy"
+        title={`Thu tiền ${selectedPickupOrder?.displayOrderCode || selectedPickupOrder?.orderCode || ""}`.trim()}
+        subtitle={[
+          selectedPickupOrder?.customerName || "",
+          selectedPickupOrder?.customerPhone || ""
+        ].filter(Boolean).join(" · ")}
+        useSystemModal={false}
+        onClose={() => {
+          setPickupCashPaymentOpen(false);
+          setSelectedPickupOrder(null);
+          setPickupCashReceived("");
+        }}
+        onConfirm={handleConfirmPickupCashPayment}
+      />
       <QrPaymentModal
         visible={qrModalOpen}
         branch={branch}
@@ -1039,13 +1181,24 @@ export default function PosHomeScreen() {
         onConfirmPaid={confirmQrPaidManually}
         onPrint={printQrReceiptNow}
       />
-      <UsbPrinterPickerModal
-        visible={usbPickerOpen}
-        devices={usbDevices}
-        busy={printerBusy}
-        onClose={() => setUsbPickerOpen(false)}
-        onRefresh={handleRefreshPrinterState}
-        onSelect={handleSelectUsbPrinter}
+      <QrPaymentModal
+        visible={pickupQrModalOpen}
+        branch={branch}
+        amount={pickupQrSession?.amountExpected || pickupQrOrder?.totalAmount || 0}
+        draftSession={pickupQrSession}
+        previewIdentity={pickupQrOrder ? {
+          orderCode: pickupQrOrder.orderCode || pickupQrOrder.id,
+          displayOrderCode: pickupQrOrder.displayOrderCode || pickupQrOrder.orderCode || pickupQrOrder.id
+        } : null}
+        loading={pickupQrLoading}
+        processing={pickupQrLoading}
+        printBusy={pickupQrPrintBusy}
+        errorMessage={pickupQrError}
+        useSystemModal={false}
+        onClose={() => setPickupQrModalOpen(false)}
+        onCancel={() => cancelPickupOrderQrPayment(pickupQrSession)}
+        onConfirmPaid={confirmPickupQrPaidManually}
+        onPrint={printPickupQrReceiptNow}
       />
     </View>
   );
@@ -1251,6 +1404,9 @@ const styles = StyleSheet.create({
     borderRadius: POS_RADIUS.md,
     padding: 12
   },
+  usbSetupPanel: {
+    gap: 8
+  },
   pickPrinterButton: {
     minHeight: 50,
     borderWidth: 1,
@@ -1265,6 +1421,71 @@ const styles = StyleSheet.create({
     color: POS_COLORS.surface,
     fontSize: 13,
     fontWeight: "900"
+  },
+  usbDeviceList: {
+    gap: 8
+  },
+  usbDeviceCard: {
+    minHeight: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  usbDeviceCardActive: {
+    borderColor: "#9fd5ae",
+    backgroundColor: POS_COLORS.primarySoft
+  },
+  usbDeviceName: {
+    color: POS_COLORS.heading,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  usbDeviceNameActive: {
+    color: POS_COLORS.primaryDark
+  },
+  usbDeviceMeta: {
+    marginTop: 4,
+    color: POS_COLORS.muted,
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  usbDeviceSide: {
+    alignItems: "flex-end",
+    gap: 6
+  },
+  usbDeviceAction: {
+    color: POS_COLORS.slate,
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  usbDeviceActionActive: {
+    color: POS_COLORS.primaryDark
+  },
+  usbEmptyBox: {
+    gap: 5,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.subtleSurface,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  usbEmptyTitle: {
+    color: POS_COLORS.heading,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  usbEmptyText: {
+    color: POS_COLORS.muted,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700"
   },
   printerBadge: {
     borderWidth: 1,

@@ -16,6 +16,7 @@ export default function QrPaymentModal({
   processing,
   printBusy = false,
   errorMessage,
+  useSystemModal = false,
   onClose,
   onCancel,
   onConfirmPaid,
@@ -38,111 +39,119 @@ export default function QrPaymentModal({
       ? "Chốt lại đơn"
       : "Xác nhận tay";
 
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.layer}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { width: dialogWidth }]}>
-          <View style={styles.header}>
-            <View style={styles.flexOne}>
-              <Text style={styles.eyebrow}>Chuyển khoản QR</Text>
-              <Text style={styles.title}>Quét mã thanh toán</Text>
-            </View>
-            <View style={styles.headerActions}>
-              {config.ready ? (
-                <Pressable style={styles.ghostButton} onPress={onPrint} disabled={printBusy}>
-                  <Text style={styles.ghostText}>{printBusy ? "Đang in..." : "In QR"}</Text>
-                </Pressable>
-              ) : null}
-              <Pressable style={styles.closeButton} onPress={onClose}>
-                <Text style={styles.closeText}>Đóng</Text>
-              </Pressable>
-            </View>
+  const content = (
+    <View style={styles.layer}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={[styles.sheet, { width: dialogWidth }]}>
+        <View style={styles.header}>
+          <View style={styles.flexOne}>
+            <Text style={styles.eyebrow}>Chuyển khoản QR</Text>
+            <Text style={styles.title}>Quét mã thanh toán</Text>
           </View>
+          <View style={styles.headerActions}>
+            {config.ready ? (
+              <Pressable style={styles.ghostButton} onPress={onPrint} disabled={printBusy}>
+                <Text style={styles.ghostText}>{printBusy ? "Đang in..." : "In QR"}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable style={styles.closeButton} onPress={onClose}>
+              <Text style={styles.closeText}>Đóng</Text>
+            </Pressable>
+          </View>
+        </View>
 
-          {config.ready ? (
-            <View style={styles.body}>
-              <View style={styles.qrBox}>
-                {qrUrl ? (
-                  <Image source={{ uri: qrUrl }} style={{ width: qrSize, height: qrSize }} resizeMode="contain" />
+        {config.ready ? (
+          <View style={styles.body}>
+            <View style={styles.qrBox}>
+              {qrUrl ? (
+                <Image source={{ uri: qrUrl }} style={{ width: qrSize, height: qrSize }} resizeMode="contain" />
+              ) : (
+                <Text style={styles.qrFallback}>Chưa tạo được QR</Text>
+              )}
+            </View>
+
+            <View style={styles.summaryBox}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Số tiền</Text>
+                <Text style={styles.summaryValue}>{formatMoney(amount)}</Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Nội dung</Text>
+                <Text style={styles.summaryValue} numberOfLines={2}>
+                  {transferContent}
+                </Text>
+              </View>
+            </View>
+
+            {draftSession ? (
+              <View style={styles.statusBox}>
+                <Text style={styles.statusLabel}>
+                  {sessionPaid ? "Đã nhận chuyển khoản" : "Đang chờ thanh toán"}
+                </Text>
+                <Text style={styles.statusValue} numberOfLines={1}>
+                  {draftSession.displayOrderCode || draftSession.orderCode || draftSession.paymentReference}
+                </Text>
+                <Text style={styles.statusMeta}>Trạng thái: {draftSession.status}</Text>
+              </View>
+            ) : null}
+
+            {loading ? <Text style={styles.notice}>Đang tạo phiên thanh toán...</Text> : null}
+            {!!errorMessage && <Text style={styles.errorBox}>{errorMessage}</Text>}
+
+            {draftSession ? (
+              <View style={styles.actions}>
+                <Pressable
+                  style={[styles.cancelButton, processing && styles.disabledButton]}
+                  disabled={processing}
+                  onPress={onCancel}
+                >
+                  <Text style={styles.cancelText}>Hủy QR</Text>
+                </Pressable>
+                {sessionPaid && !canRetryFinalize ? (
+                  <View style={[styles.primaryButton, styles.primaryWaiting]}>
+                    <Text style={styles.primaryWaitingText}>Đang chốt đơn...</Text>
+                  </View>
                 ) : (
-                  <Text style={styles.qrFallback}>Chưa tạo được QR</Text>
+                  <Pressable
+                    style={[styles.primaryButton, processing && styles.disabledPrimary]}
+                    disabled={processing}
+                    onPress={onConfirmPaid}
+                  >
+                    <Text style={[styles.primaryText, processing && styles.disabledText]}>
+                      {primaryLabel}
+                    </Text>
+                  </Pressable>
                 )}
               </View>
-
-              <View style={styles.summaryBox}>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Số tiền</Text>
-                  <Text style={styles.summaryValue}>{formatMoney(amount)}</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Nội dung</Text>
-                  <Text style={styles.summaryValue} numberOfLines={2}>
-                    {transferContent}
-                  </Text>
-                </View>
-              </View>
-
-              {draftSession ? (
-                <View style={styles.statusBox}>
-                  <Text style={styles.statusLabel}>
-                    {sessionPaid ? "Đã nhận chuyển khoản" : "Đang chờ thanh toán"}
-                  </Text>
-                  <Text style={styles.statusValue} numberOfLines={1}>
-                    {draftSession.displayOrderCode || draftSession.orderCode || draftSession.paymentReference}
-                  </Text>
-                  <Text style={styles.statusMeta}>Trạng thái: {draftSession.status}</Text>
-                </View>
-              ) : null}
-
-              {loading ? <Text style={styles.notice}>Đang tạo phiên thanh toán...</Text> : null}
-              {!!errorMessage && <Text style={styles.errorBox}>{errorMessage}</Text>}
-
-              {draftSession ? (
-                <View style={styles.actions}>
-                  <Pressable
-                    style={[styles.cancelButton, processing && styles.disabledButton]}
-                    disabled={processing}
-                    onPress={onCancel}
-                  >
-                    <Text style={styles.cancelText}>Hủy QR</Text>
-                  </Pressable>
-                  {sessionPaid && !canRetryFinalize ? (
-                    <View style={[styles.primaryButton, styles.primaryWaiting]}>
-                      <Text style={styles.primaryWaitingText}>Đang chốt đơn...</Text>
-                    </View>
-                  ) : (
-                    <Pressable
-                      style={[styles.primaryButton, processing && styles.disabledPrimary]}
-                      disabled={processing}
-                      onPress={onConfirmPaid}
-                    >
-                      <Text style={[styles.primaryText, processing && styles.disabledText]}>
-                        {primaryLabel}
-                      </Text>
-                    </Pressable>
-                  )}
-                </View>
-              ) : null}
-            </View>
-          ) : (
-            <Text style={styles.errorBox}>
-              Chi nhánh này chưa cấu hình thông tin ngân hàng để tạo QR thanh toán.
-            </Text>
-          )}
-        </View>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={styles.errorBox}>
+            Chi nhánh này chưa cấu hình thông tin ngân hàng để tạo QR thanh toán.
+          </Text>
+        )}
       </View>
+    </View>
+  );
+
+  if (!visible) return null;
+  if (!useSystemModal) return content;
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      {content}
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   layer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    padding: 16
+    padding: 16,
+    zIndex: 500
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

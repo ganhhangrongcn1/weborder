@@ -64,6 +64,11 @@ function addReferenceCandidate(candidates: Set<string>, value: unknown = "") {
   if (compactGhrMatch) {
     candidates.add(`GHR-${compactGhrMatch[1]}`);
   }
+
+  const compactPickupQrMatch = compact.match(/GHR(\d{4,})QR(\d{4,})/);
+  if (compactPickupQrMatch) {
+    candidates.add(`GHR-${compactPickupQrMatch[1]}-QR-${compactPickupQrMatch[2]}`);
+  }
 }
 
 function extractCandidateReferences(payload: JsonRecord) {
@@ -84,6 +89,12 @@ function extractCandidateReferences(payload: JsonRecord) {
     const compactShortMatches = value.match(/GHR\d{4,}/gi) || [];
     compactShortMatches.forEach((match) => addReferenceCandidate(candidates, match));
 
+    const pickupMatches = value.match(/GHR-\d{4,}-QR-\d{4,}/gi) || [];
+    pickupMatches.forEach((match) => addReferenceCandidate(candidates, match));
+
+    const compactPickupMatches = value.match(/GHR\d{4,}QR\d{4,}/gi) || [];
+    compactPickupMatches.forEach((match) => addReferenceCandidate(candidates, match));
+
     const fullMatches = value.match(/POS-\d{8}-\d{6}/gi) || [];
     fullMatches.forEach((match) => addReferenceCandidate(candidates, match));
 
@@ -92,6 +103,34 @@ function extractCandidateReferences(payload: JsonRecord) {
   });
 
   return Array.from(candidates).filter(Boolean);
+}
+
+function matchesPaymentSessionReference(session: JsonRecord, reference: string) {
+  const checkoutSnapshot = getObject(session.checkout_snapshot);
+  const orderIdentity = getObject(checkoutSnapshot.orderIdentity);
+  const safeReference = toText(reference).toUpperCase();
+  const safeReferenceKey = normalizeReferenceKey(reference);
+
+  const directCandidates = [
+    toText(session.payment_reference),
+    toText(session.order_id),
+    toText(orderIdentity.orderCode),
+    toText(orderIdentity.displayOrderCode),
+    toText(orderIdentity.paymentReference),
+    toText(orderIdentity.payment_reference)
+  ]
+    .filter(Boolean)
+    .map((value) => value.toUpperCase());
+
+  if (directCandidates.some((candidate) => candidate === safeReference)) {
+    return true;
+  }
+
+  const normalizedCandidates = directCandidates
+    .map((candidate) => normalizeReferenceKey(candidate))
+    .filter(Boolean);
+
+  return normalizedCandidates.some((candidate) => candidate === safeReferenceKey);
 }
 
 function isPosQrOrder(order: JsonRecord) {
@@ -273,7 +312,27 @@ async function findPaymentSessionByReference(
     return null;
   }
 
-  return data || null;
+  if (data) return data;
+
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: fallbackRows, error: fallbackError } = await supabase
+    .from("pos_payment_sessions")
+    .select(PAYMENT_SESSION_COLUMNS)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (fallbackError || !Array.isArray(fallbackRows)) {
+    return null;
+  }
+
+  const safeReferenceKey = normalizeReferenceKey(safeReference);
+  return fallbackRows.find((row) => {
+    if (normalizeReferenceKey(toText(row.payment_reference)) === safeReferenceKey) {
+      return true;
+    }
+    return matchesPaymentSessionReference(row, safeReference);
+  }) || null;
 }
 
 function isPayablePaymentSession(session: JsonRecord) {

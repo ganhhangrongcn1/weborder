@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import {
   formatCashBreakdownSummary,
@@ -72,9 +72,10 @@ export default function PosShiftCloseModal({
   const hasCountedCash = Boolean(cashBreakdown);
   const differenceState = getDifferenceState(hasCountedCash, difference);
 
+  if (!visible) return null;
+
   return (
     <>
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
         <View style={styles.layer}>
           <Pressable style={styles.backdrop} onPress={onClose} />
           <View style={[styles.sheet, { width: dialogWidth }]}>
@@ -200,7 +201,6 @@ export default function PosShiftCloseModal({
             </Pressable>
           </View>
         </View>
-      </Modal>
 
       <PosCashCountModal
         visible={cashCounterOpen}
@@ -219,10 +219,12 @@ export default function PosShiftCloseModal({
 
 const styles = StyleSheet.create({
   layer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    padding: 18
+    padding: 18,
+    zIndex: 500,
+    elevation: 12
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

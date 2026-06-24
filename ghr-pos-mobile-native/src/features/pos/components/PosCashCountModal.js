@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import {
   CASH_DENOMINATIONS,
@@ -120,8 +120,9 @@ export default function PosCashCountModal({
     );
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.layer}>
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={[styles.sheet, { width: dialogWidth }]}>
@@ -205,16 +206,17 @@ export default function PosCashCountModal({
           </Pressable>
         </View>
       </View>
-    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   layer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    padding: 18
+    padding: 18,
+    zIndex: 500,
+    elevation: 12
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

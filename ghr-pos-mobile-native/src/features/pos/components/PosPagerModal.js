@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 
@@ -27,8 +27,9 @@ export default function PosPagerModal({
   );
   const sheetWidth = Math.min(Math.max(width - 24, 0), 560);
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.layer}>
         <Pressable style={styles.backdrop} onPress={onClose} />
 
@@ -83,17 +84,18 @@ export default function PosPagerModal({
           </View>
         </View>
       </View>
-    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   layer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
-    paddingVertical: 28
+    paddingVertical: 28,
+    zIndex: 500,
+    elevation: 12
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

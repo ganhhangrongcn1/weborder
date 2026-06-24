@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 
@@ -15,8 +15,9 @@ export default function UsbPrinterPickerModal({
   const sheetWidth = Math.min(Math.max(width - 24, 0), 620);
   const safeDevices = Array.isArray(devices) ? devices : [];
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.layer}>
         <Pressable style={styles.backdrop} onPress={onClose} />
 
@@ -78,17 +79,18 @@ export default function UsbPrinterPickerModal({
           </View>
         </View>
       </View>
-    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   layer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
-    paddingVertical: 24
+    paddingVertical: 24,
+    zIndex: 500,
+    elevation: 12
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,

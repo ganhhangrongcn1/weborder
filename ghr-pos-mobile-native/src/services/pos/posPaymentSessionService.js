@@ -148,6 +148,7 @@ async function invokeSessionAction(body = {}) {
 export async function createPosPaymentSession(input = {}) {
   const orderIdentity = input.orderIdentity || createPosOrderIdentity(new Date());
   const paymentReference = toText(input.paymentReference || orderIdentity.orderCode).toUpperCase();
+  const source = toText(input.source).toLowerCase() || "pos";
   if (!paymentReference) {
     return { ok: false, message: "Thiếu mã tham chiếu thanh toán." };
   }
@@ -158,7 +159,7 @@ export async function createPosPaymentSession(input = {}) {
       payment_reference: paymentReference,
       request_key: toText(input.requestKey) || null,
       provider: toText(input.provider).toLowerCase() || "sepay",
-      source: "pos",
+      source,
       status: POS_PAYMENT_SESSION_STATUSES.PENDING_PAYMENT,
       branch_uuid: toText(input.branchUuid) || null,
       pos_shift_id: toText(input.posShiftId) || null,
@@ -171,6 +172,7 @@ export async function createPosPaymentSession(input = {}) {
       amount_expected: toMoney(input.amountExpected),
       amount_paid: 0,
       cart_snapshot: Array.isArray(input.cart) ? input.cart : [],
+      order_id: toText(input.orderId) || null,
       checkout_snapshot: input.checkout && typeof input.checkout === "object"
         ? input.checkout
         : { orderIdentity },

@@ -70,6 +70,10 @@ function isUuid(value: unknown = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(toText(value));
 }
 
+function isSupportedSource(value: string) {
+  return ["pos", "web", "qr_order"].includes(value);
+}
+
 function response(body: JsonRecord, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -204,21 +208,27 @@ async function createSession(
 ) {
   const paymentReference = toText(body.payment_reference).toUpperCase();
   const requestKey = toText(body.request_key);
+  const source = toText(body.source).toLowerCase() || "pos";
   const branchUuid = toText(body.branch_uuid);
   const posShiftId = toText(body.pos_shift_id);
   const pagerNumber = toText(body.pager_number);
   const amountExpected = toMoney(body.amount_expected);
   const cartSnapshot = Array.isArray(body.cart_snapshot) ? body.cart_snapshot : [];
   const checkoutSnapshot = getObject(body.checkout_snapshot);
+  const orderId = toText(body.order_id);
+  const isPosSource = source === "pos";
 
-  if (!paymentReference || !requestKey) {
+  if (!paymentReference) {
     return response({ ok: false, message: "Thiếu mã thanh toán hoặc khóa yêu cầu." }, 400);
   }
-  if (
-    !/^[A-Z0-9-]{6,80}$/.test(paymentReference) ||
-    !/^[A-Za-z0-9:_-]{6,120}$/.test(requestKey)
-  ) {
+  if (!isSupportedSource(source)) {
+    return response({ ok: false, message: "Nguồn thanh toán không hợp lệ." }, 400);
+  }
+  if (!/^[A-Z0-9-]{6,80}$/.test(paymentReference)) {
     return response({ ok: false, message: "Mã thanh toán không hợp lệ." }, 400);
+  }
+  if (requestKey && !/^[A-Za-z0-9:_-]{6,120}$/.test(requestKey)) {
+    return response({ ok: false, message: "Khóa yêu cầu không hợp lệ." }, 400);
   }
   if (!isUuid(branchUuid) || !canAccessBranch(profile, branchUuid)) {
     return response({ ok: false, message: "Tài khoản không có quyền tại chi nhánh này." }, 403);
@@ -239,40 +249,76 @@ async function createSession(
       return response({ ok: false, message: "Ca POS không còn mở hoặc không thuộc chi nhánh này." }, 409);
     }
   }
-  if (!pagerNumber || !amountExpected || !cartSnapshot.length) {
+  if (isPosSource && (!requestKey || !pagerNumber || !amountExpected || !cartSnapshot.length)) {
     return response({ ok: false, message: "Bill chưa đủ món, thẻ rung hoặc số tiền." }, 400);
   }
+  if (!isPosSource && (!amountExpected || !orderId)) {
+    return response({ ok: false, message: "Đơn pickup chưa đủ mã đơn hoặc số tiền để tạo QR." }, 400);
+  }
 
-  const { data: existing } = await serviceClient
+  if (!isPosSource) {
+    const { data: existingOrderSession } = await serviceClient
+      .from("pos_payment_sessions")
+      .select(SESSION_COLUMNS)
+      .eq("branch_uuid", branchUuid)
+      .eq("source", source)
+      .eq("order_id", orderId)
+      .in("status", ["draft", "pending_payment", "paid", "converting"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingOrderSession) {
+      return response({ ok: true, session: existingOrderSession, reused: true });
+    }
+  }
+
+  if (requestKey) {
+    const { data: existing } = await serviceClient
+      .from("pos_payment_sessions")
+      .select(SESSION_COLUMNS)
+      .or(`request_key.eq.${requestKey},payment_reference.eq.${paymentReference}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      const sameBill =
+        toText(existing.branch_uuid) === branchUuid &&
+        toMoney(existing.amount_expected) === amountExpected;
+      if (sameBill && ["draft", "pending_payment", "paid", "converting"].includes(toText(existing.status))) {
+        return response({ ok: true, session: existing, reused: true });
+      }
+      return response({ ok: false, message: "Mã thanh toán đã được dùng cho bill khác." }, 409);
+    }
+  }
+
+  const { data: referenceSession } = await serviceClient
     .from("pos_payment_sessions")
     .select(SESSION_COLUMNS)
-    .or(`request_key.eq.${requestKey},payment_reference.eq.${paymentReference}`)
+    .eq("payment_reference", paymentReference)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (existing) {
-    const sameBill =
-      toText(existing.branch_uuid) === branchUuid &&
-      toMoney(existing.amount_expected) === amountExpected;
-    if (sameBill && ["draft", "pending_payment", "paid", "converting"].includes(toText(existing.status))) {
-      return response({ ok: true, session: existing, reused: true });
-    }
+  if (referenceSession) {
     return response({ ok: false, message: "Mã thanh toán đã được dùng cho bill khác." }, 409);
   }
 
-  const { data: pagerSession } = await serviceClient
-    .from("pos_payment_sessions")
-    .select("id,payment_reference,status,pager_number")
-    .eq("branch_uuid", branchUuid)
-    .eq("pager_number", pagerNumber)
-    .in("status", ["draft", "pending_payment", "paid", "converting"])
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const { data: pagerSession } = isPosSource
+    ? await serviceClient
+        .from("pos_payment_sessions")
+        .select("id,payment_reference,status,pager_number")
+        .eq("branch_uuid", branchUuid)
+        .eq("pager_number", pagerNumber)
+        .in("status", ["draft", "pending_payment", "paid", "converting"])
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
 
-  if (pagerSession) {
+  if (isPosSource && pagerSession) {
     return response({
       ok: false,
       code: "pager_in_use",
@@ -286,9 +332,9 @@ async function createSession(
     .from("pos_payment_sessions")
     .insert({
       payment_reference: paymentReference,
-      request_key: requestKey,
+      request_key: requestKey || null,
       provider: toText(body.provider).toLowerCase() || "sepay",
-      source: "pos",
+      source,
       status: "pending_payment",
       branch_uuid: branchUuid,
       pos_shift_id: posShiftId || null,
@@ -303,6 +349,7 @@ async function createSession(
       cart_snapshot: cartSnapshot,
       checkout_snapshot: checkoutSnapshot,
       provider_payload: {},
+      order_id: orderId || null,
       expires_at: expiresAt,
       created_at: now.toISOString(),
       updated_at: now.toISOString()

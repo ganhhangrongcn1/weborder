@@ -55,6 +55,10 @@ export default function CashPaymentModal({
   cashReceived = "",
   setCashReceived,
   processing = false,
+  eyebrow = "Tiền mặt",
+  title = "Xác nhận thanh toán",
+  subtitle = "",
+  useSystemModal = false,
   onClose,
   onConfirm
 }) {
@@ -81,97 +85,106 @@ export default function CashPaymentModal({
     paddedQuickItems.push({ key: `empty-${paddedQuickItems.length}`, empty: true });
   }
 
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.layer}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <View style={[styles.sheet, { width: dialogWidth }]}>
-          <View style={styles.header}>
-            <View style={styles.flexOne}>
-              <Text style={styles.eyebrow}>Tiền mặt</Text>
-              <Text style={styles.title}>Xác nhận thanh toán</Text>
-            </View>
-            <Pressable style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeText}>Đóng</Text>
-            </Pressable>
+  const content = (
+    <View style={styles.layer}>
+      <Pressable style={styles.backdrop} onPress={onClose} />
+      <View style={[styles.sheet, { width: dialogWidth }]}>
+        <View style={styles.header}>
+          <View style={styles.flexOne}>
+            <Text style={styles.eyebrow}>{eyebrow}</Text>
+            <Text style={styles.title}>{title}</Text>
+            {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
           </View>
-
-          <View style={styles.amountRow}>
-            <Text style={styles.amountLabel}>Cần thu</Text>
-            <Text style={styles.amountValue}>{formatMoney(amount)}</Text>
-          </View>
-
-          <View style={styles.quickGrid}>
-            {paddedQuickItems.map((item) => {
-              if (item.empty) {
-                return <View key={item.key} style={{ width: quickButtonWidth }} />;
-              }
-
-              return (
-                <Pressable
-                  key={item.key}
-                  style={[
-                    styles.quickButton,
-                    { width: quickButtonWidth },
-                    item.selected && styles.quickButtonActive,
-                    item.key === "exact" && styles.quickButtonExact
-                  ]}
-                  onPress={() => setCashReceived?.(String(item.value))}
-                >
-                  <Text style={[styles.quickText, item.selected && styles.quickTextActive]}>{item.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Tiền khách đưa</Text>
-            <TextInput
-              value={formatCashInput(cashReceived)}
-              onChangeText={(value) => setCashReceived?.(String(value || "").replace(/[^\d]/g, ""))}
-              placeholder="Nhập số tiền"
-              placeholderTextColor="#94a3b8"
-              keyboardType="number-pad"
-              autoFocus
-              style={[styles.input, paidEnough && styles.inputPaid]}
-            />
-          </View>
-
-          <View style={[styles.resultCard, paidEnough ? styles.resultPaid : styles.resultMissing]}>
-            <View style={styles.resultCol}>
-              <Text style={styles.resultLabel}>Khách đưa</Text>
-              <Text style={styles.resultValue}>{formatMoney(normalized)}</Text>
-            </View>
-            <View style={styles.resultDivider} />
-            <View style={styles.resultColRight}>
-              <Text style={styles.resultLabel}>{paidEnough ? "Tiền thối" : "Còn thiếu"}</Text>
-              <Text style={[styles.resultValue, paidEnough ? styles.resultValuePaid : styles.resultValueMissing]}>
-                {formatMoney(paidEnough ? change : missing)}
-              </Text>
-            </View>
-          </View>
-
-          <Pressable
-            style={[styles.primaryButton, (!paidEnough || processing) && styles.primaryDisabled]}
-            disabled={!paidEnough || processing}
-            onPress={onConfirm}
-          >
-            <Text style={[styles.primaryText, (!paidEnough || processing) && styles.disabledText]}>
-              {processing ? "Đang xử lý..." : "Xác nhận đã thanh toán"}
-            </Text>
+          <Pressable style={styles.closeButton} onPress={onClose}>
+            <Text style={styles.closeText}>Đóng</Text>
           </Pressable>
         </View>
+
+        <View style={styles.amountRow}>
+          <Text style={styles.amountLabel}>Cần thu</Text>
+          <Text style={styles.amountValue}>{formatMoney(amount)}</Text>
+        </View>
+
+        <View style={styles.quickGrid}>
+          {paddedQuickItems.map((item) => {
+            if (item.empty) {
+              return <View key={item.key} style={{ width: quickButtonWidth }} />;
+            }
+
+            return (
+              <Pressable
+                key={item.key}
+                style={[
+                  styles.quickButton,
+                  { width: quickButtonWidth },
+                  item.selected && styles.quickButtonActive,
+                  item.key === "exact" && styles.quickButtonExact
+                ]}
+                onPress={() => setCashReceived?.(String(item.value))}
+              >
+                <Text style={[styles.quickText, item.selected && styles.quickTextActive]}>{item.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Tiền khách đưa</Text>
+          <TextInput
+            value={formatCashInput(cashReceived)}
+            onChangeText={(value) => setCashReceived?.(String(value || "").replace(/[^\d]/g, ""))}
+            placeholder="Nhập số tiền"
+            placeholderTextColor="#94a3b8"
+            keyboardType="number-pad"
+            autoFocus
+            style={[styles.input, paidEnough && styles.inputPaid]}
+          />
+        </View>
+
+        <View style={[styles.resultCard, paidEnough ? styles.resultPaid : styles.resultMissing]}>
+          <View style={styles.resultCol}>
+            <Text style={styles.resultLabel}>Khách đưa</Text>
+            <Text style={styles.resultValue}>{formatMoney(normalized)}</Text>
+          </View>
+          <View style={styles.resultDivider} />
+          <View style={styles.resultColRight}>
+            <Text style={styles.resultLabel}>{paidEnough ? "Tiền thối" : "Còn thiếu"}</Text>
+            <Text style={[styles.resultValue, paidEnough ? styles.resultValuePaid : styles.resultValueMissing]}>
+              {formatMoney(paidEnough ? change : missing)}
+            </Text>
+          </View>
+        </View>
+
+        <Pressable
+          style={[styles.primaryButton, (!paidEnough || processing) && styles.primaryDisabled]}
+          disabled={!paidEnough || processing}
+          onPress={onConfirm}
+        >
+          <Text style={[styles.primaryText, (!paidEnough || processing) && styles.disabledText]}>
+            {processing ? "Đang xử lý..." : "Xác nhận đã thanh toán"}
+          </Text>
+        </Pressable>
       </View>
+    </View>
+  );
+
+  if (!visible) return null;
+  if (!useSystemModal) return content;
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      {content}
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   layer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    padding: 16
+    padding: 16,
+    zIndex: 500
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -207,6 +220,13 @@ const styles = StyleSheet.create({
     fontSize: POS_MODAL.titleSize,
     lineHeight: POS_MODAL.titleLineHeight,
     fontWeight: "900"
+  },
+  subtitle: {
+    marginTop: 4,
+    color: POS_COLORS.slate,
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "700"
   },
   closeButton: {
     minHeight: POS_MODAL.closeButtonHeight,
