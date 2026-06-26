@@ -117,6 +117,7 @@ const PARTNER_ITEM_COLUMNS = [
   "id",
   "partner_order_id",
   "item_key",
+  "line_index",
   "web_product_id",
   "partner_item_id",
   "web_product_name",
@@ -192,6 +193,9 @@ function getStableItemSortValue(row = {}, fallbackIndex = 0) {
   const metadata = getObject(row.metadata);
   const index = toNumber(metadata.ghrOrderIndex, Number.NaN);
   if (Number.isFinite(index)) return index;
+
+  const lineIndex = toNumber(row.line_index, Number.NaN);
+  if (Number.isFinite(lineIndex)) return lineIndex;
 
   const rawKey = toText(metadata.cartId || row.item_key || row.id || row.product_id);
   if (!rawKey) return fallbackIndex + 100000;
@@ -1082,6 +1086,7 @@ function mapPartnerRawDishToKitchenItem(dish = {}, order = {}, index = 0) {
     raw: {
       ...dish,
       item_key: itemKey,
+      line_index: index,
       __rawPartnerDishFallback: true
     }
   };
@@ -1123,6 +1128,7 @@ function buildPartnerOrderItemRepairRow(orderRow = {}, dish = {}, index = 0) {
   return {
     partner_order_id: toText(orderRow.id),
     item_key: buildPartnerRawDishItemKey(orderRow, dish, index),
+    line_index: index,
     order_code: toText(orderRow.order_code || rawData.order_id),
     partner_source: normalizePartnerSource(orderRow.partner_source || rawData.source || ""),
     branch_id: toText(orderRow.branch_id || rawData.site_id),
@@ -1152,6 +1158,7 @@ function buildMinimalPartnerOrderItemRepairRow(row = {}) {
     partner_source: row.partner_source,
     branch_id: row.branch_id,
     item_key: row.item_key,
+    line_index: row.line_index,
     partner_item_id: row.partner_item_id,
     web_product_id: row.web_product_id,
     partner_item_name: row.partner_item_name,
