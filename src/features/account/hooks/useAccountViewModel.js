@@ -17,9 +17,9 @@ import { addAddress, updateAddress, deleteAddress, setDefaultAddress } from "../
 import { orderStorage } from "../../../services/orderService.js";
 import { getPartnerOrdersByPhone, mergeCustomerLookupOrders } from "../../../services/partnerOrderService.js";
 import { getMemberRank } from "../../../utils/profile.js";
-import { getOrderStats } from "../../../utils/pureHelpers.js";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
 import { defaultUserDemo } from "../../../data/defaultData.js";
+import useAccountOverview from "./useAccountOverview.js";
 
 const userStorage = createUserStorage({
   getCustomerKey,
@@ -124,7 +124,8 @@ export default function useAccountViewModel({
   loginOrRegisterByPhone,
   demoAddresses,
   setDemoAddresses,
-  demoOrders
+  demoOrders,
+  demoLoyalty
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [addressModal, setAddressModal] = useState(null);
@@ -152,21 +153,30 @@ export default function useAccountViewModel({
   const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [lookupUser, setLookupUser] = useState(null);
   const [authNotice, setAuthNotice] = useState("");
-  const [accountNotice, setAccountNotice] = useState(null);
   const [showAllAddresses, setShowAllAddresses] = useState(false);
   const [remoteUser, setRemoteUser] = useState(null);
   const [authSessionUser, setAuthSessionUser] = useState(null);
-  const [accountPartnerOrders, setAccountPartnerOrders] = useState([]);
   const remoteUserRequestRef = useRef(0);
   const shouldUseSupabaseAuth = getDataSource() === "supabase";
   const accountUser = remoteUser || demoUser || {};
 
   const addresses = demoAddresses || [];
-  const visibleAddresses = showAllAddresses ? addresses : addresses.slice(0, 3);
-  const accountOrders = currentPhone
-    ? mergeCustomerLookupOrders(demoOrders || [], accountPartnerOrders)
-    : demoOrders || [];
-  const stats = getOrderStats(accountOrders);
+  const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0] || null;
+  const visibleAddresses = showAllAddresses
+    ? addresses
+    : defaultAddress
+      ? [defaultAddress]
+      : [];
+  const accountOverview = useAccountOverview({
+    currentPhone,
+    fallbackOrders: demoOrders || [],
+    fallbackLoyalty: demoLoyalty || {}
+  });
+  const stats = {
+    totalOrders: accountOverview.summary.totalOrders,
+    totalSpent: accountOverview.summary.totalSpent,
+    latestOrder: accountOverview.latestOrder
+  };
   const rank = getMemberRank(stats.totalSpent);
   const showCustomerTier = rewardFeatureFlags.enableCustomerTier;
   const displayName = pickCustomerDisplayName(accountUser, authSessionUser);
@@ -251,29 +261,6 @@ export default function useAccountViewModel({
     };
   }, [currentPhone, shouldUseSupabaseAuth]);
 
-  useEffect(() => {
-    let disposed = false;
-
-    async function loadAccountPartnerOrders() {
-      if (!currentPhone) {
-        setAccountPartnerOrders([]);
-        return;
-      }
-
-      try {
-        const nextOrders = await getPartnerOrdersByPhone(currentPhone);
-        if (!disposed) setAccountPartnerOrders(nextOrders);
-      } catch {
-        if (!disposed) setAccountPartnerOrders([]);
-      }
-    }
-
-    loadAccountPartnerOrders();
-    return () => {
-      disposed = true;
-    };
-  }, [currentPhone]);
-
   async function resolveFreshUserAfterLogin(phone, fallbackUser = null) {
     const key = getCustomerKey(phone);
     if (!key) return fallbackUser;
@@ -303,14 +290,6 @@ export default function useAccountViewModel({
       return Boolean(authUserId || email.endsWith("@phone.ghr.vn"));
     }
     return false;
-  }
-
-  function showWrongOrderCodeNotice() {
-    setAccountNotice({
-      title: "Mã đơn chưa đúng",
-      message: "Để xác minh đúng bạn là chủ số điện thoại này và tránh người khác dùng nhầm số của bạn, app cần mã đơn gần nhất. Bạn kiểm tra lại tin nhắn Zalo mới nhất giúp mình nhé.",
-      icon: "warning"
-    });
   }
 
   async function handleSaveUser(patch) {
@@ -398,6 +377,9 @@ export default function useAccountViewModel({
   function handleDeleteAddress(addressId) {
     if (addresses.length <= 1) {
       alert("Cần giữ ít nhất 1 địa chỉ");
+      return;
+    }
+    if (typeof window !== "undefined" && !window.confirm("Bạn có chắc muốn xóa địa chỉ này?")) {
       return;
     }
     setDemoAddresses(deleteAddress(addresses, addressId));
@@ -587,14 +569,6 @@ export default function useAccountViewModel({
     navigateAfterLogin();
   }
 
-  function handleVerifyResetPassword() {
-    alert("Mật khẩu hiện được quản lý bằng Supabase Auth. Vui lòng liên hệ cửa hàng để đặt lại mật khẩu.");
-  }
-
-  function handleUpdatePasswordFromOrder() {
-    alert("Mật khẩu hiện được quản lý bằng Supabase Auth. Vui lòng liên hệ cửa hàng để đặt lại mật khẩu.");
-  }
-
   async function handleForgotPassword() {
     const result = await requestCustomerPasswordResetEmailAuth({
       email: forgotEmail
@@ -756,13 +730,13 @@ export default function useAccountViewModel({
     setLookupUser,
     authNotice,
     setAuthNotice,
-    accountNotice,
-    setAccountNotice,
     showAllAddresses,
     setShowAllAddresses,
     addresses,
+    defaultAddress,
     visibleAddresses,
     stats,
+    accountOverview,
     rank,
     showCustomerTier,
     accountUser,

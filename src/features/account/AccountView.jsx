@@ -1,32 +1,49 @@
 ﻿import Icon from "../../components/Icon.jsx";
-import AccountPanel from "../../pages/customer/account/AccountPanel.jsx";
-import AddressCard from "../../pages/customer/account/AddressCard.jsx";
-import SettingsToggle from "../../pages/customer/account/SettingsToggle.jsx";
 import ProfileModal from "../../pages/customer/account/ProfileModal.jsx";
 import AccountAddressModal from "../../pages/customer/account/AccountAddressModal.jsx";
 import AppHeader from "../../components/app/Header.jsx";
-import AppEmptyState from "../../components/app/EmptyState.jsx";
-import { formatMoney } from "../../utils/format.js";
-import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../services/partnerOrderService.js";
 import useAccountViewModel from "./hooks/useAccountViewModel.js";
-import AccountNoticeModal from "./components/AccountNoticeModal.jsx";
+import AccountDashboard from "./components/AccountDashboard.jsx";
 
-function SourceBadge({ order }) {
-  const badge = getOrderSourceBadge(order);
+function AuthField({ label, helper = "", ...inputProps }) {
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[11px] font-black ${badge.className}`}>
-      {badge.label}
-    </span>
+    <label className="account-auth-field">
+      <span>{label}</span>
+      <input
+        {...inputProps}
+        className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none transition-[border-color,box-shadow] focus-visible:border-orange-400 focus-visible:ring-2 focus-visible:ring-orange-200"
+      />
+      {helper ? <small>{helper}</small> : null}
+    </label>
   );
 }
 
-function getAccountOrderCode(order = {}) {
-  if (order.sourceType === "partner") return order.displayOrderCode || order.orderCode || "FoodApp";
-  return order.orderCode || "GHR-****";
-}
-
-function getAccountOrderBranchName(order = {}, branches = []) {
-  return getCanonicalOrderBranchName(order, branches);
+function AccountPageLoading() {
+  return (
+    <section>
+      <AppHeader title="Tài khoản" subtitle="Đang khôi phục phiên đăng nhập" />
+      <div className="account-page-content space-y-4 px-4" aria-busy="true">
+        <div className="account-hero account-hero--loading">
+          <span className="account-skeleton account-skeleton--avatar" />
+          <div className="flex-1 space-y-3">
+            <span className="account-skeleton account-skeleton--medium" />
+            <span className="account-skeleton account-skeleton--wide" />
+          </div>
+        </div>
+        <div className="account-overview">
+          <span className="account-skeleton account-skeleton--medium" />
+          <div className="account-overview-grid mt-5">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="account-overview-metric">
+                <span className="account-skeleton account-skeleton--label" />
+                <span className="account-skeleton account-skeleton--value" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function Account({
@@ -40,32 +57,72 @@ export default function Account({
   setDemoAddresses,
   demoLoyalty,
   demoOrders,
-  branches = []
+  branches = [],
+  hasCustomerAuthSession = false,
+  requiresCustomerAuthSession = false,
+  isSessionRestoring = false,
+  isSessionBootstrapping = false
 }) {
+  const isProtectedSessionPending = Boolean(
+    requiresCustomerAuthSession &&
+    (isSessionRestoring || isSessionBootstrapping)
+  );
+  const canAccessAccount = Boolean(
+    currentPhone &&
+    (!requiresCustomerAuthSession || hasCustomerAuthSession)
+  );
   const vm = useAccountViewModel({
     navigate,
     demoUser,
     setDemoUser,
-    currentPhone,
+    currentPhone: canAccessAccount ? currentPhone : "",
     loginOrRegisterByPhone,
     demoAddresses,
     setDemoAddresses,
-    demoOrders
+    demoOrders,
+    demoLoyalty
   });
 
-  if (!currentPhone) {
+  if (isProtectedSessionPending) {
+    return <AccountPageLoading />;
+  }
+
+  if (!canAccessAccount) {
     return (
       <section>
-        <AppHeader title="Tài khoản" subtitle="Thông tin, điểm thưởng và địa chỉ" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
+        <AppHeader title="Tài khoản" subtitle="Đăng nhập để xem dữ liệu thành viên" />
         <div className="account-page-content space-y-4 px-4">
+          {vm.authNotice ? (
+            <div className="account-auth-notice" role="status" aria-live="polite">
+              {vm.authNotice}
+            </div>
+          ) : null}
           <div className="rounded-[28px] bg-white p-4 shadow-soft">
             {vm.accountEntryTab === "login" || vm.accountEntryTab === "lookup" ? (
               <div>
+                <span className="account-auth-icon"><Icon name="user" size={21} /></span>
                 <h2 className="text-base font-black text-brown">Đăng nhập tài khoản</h2>
                 <p className="mt-1 text-sm text-brown/60">Nhập số điện thoại và mật khẩu để xem hồ sơ và dữ liệu khách hàng.</p>
                 <div className="mt-3 space-y-3">
-                  <input value={vm.loginDraft.phone} onChange={(event) => vm.setLoginDraft((draft) => ({ ...draft, phone: event.target.value }))} placeholder="Số điện thoại" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                  <input type="password" value={vm.loginDraft.password} onChange={(event) => vm.setLoginDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                  <AuthField
+                    label="Số điện thoại"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={vm.loginDraft.phone}
+                    onChange={(event) => vm.setLoginDraft((draft) => ({ ...draft, phone: event.target.value }))}
+                    placeholder="Ví dụ: 0901234567"
+                  />
+                  <AuthField
+                    label="Mật khẩu"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={vm.loginDraft.password}
+                    onChange={(event) => vm.setLoginDraft((draft) => ({ ...draft, password: event.target.value }))}
+                    placeholder="Nhập mật khẩu"
+                  />
                   <button onClick={vm.handleDirectLogin} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Đăng nhập</button>
                 </div>
                 <button
@@ -103,14 +160,53 @@ export default function Account({
                 <h2 className="text-base font-black text-brown">Tạo tài khoản</h2>
                 <p className="mt-1 text-sm text-brown/60">Nhập số điện thoại để tạo tài khoản và liên kết lịch sử đơn hàng theo số này.</p>
                 <div className="mt-3 space-y-3">
-                  <input value={vm.authPhone} onChange={(event) => vm.setAuthPhone(event.target.value)} placeholder="Số điện thoại" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                  <input value={vm.registerDraft.name} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, name: event.target.value }))} placeholder="Tên hiển thị" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                  <div>
-                    <input type="email" value={vm.registerDraft.email} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, email: event.target.value }))} placeholder="Email" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                    <p className="mt-1 px-1 text-xs font-bold text-brown/45">Email dùng để lấy lại mật khẩu khi quên.</p>
-                  </div>
-                  <input type="password" value={vm.registerDraft.password} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu (ít nhất 6 ký tự)" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                  <input type="password" value={vm.registerDraft.confirmPassword} onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))} placeholder="Nhập lại mật khẩu" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                  <AuthField
+                    label="Số điện thoại"
+                    name="register-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={vm.authPhone}
+                    onChange={(event) => vm.setAuthPhone(event.target.value)}
+                    placeholder="Ví dụ: 0901234567"
+                  />
+                  <AuthField
+                    label="Tên hiển thị"
+                    name="name"
+                    autoComplete="name"
+                    value={vm.registerDraft.name}
+                    onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, name: event.target.value }))}
+                    placeholder="Nhập họ và tên"
+                  />
+                  <AuthField
+                    label="Email"
+                    helper="Email dùng để lấy lại mật khẩu khi cần."
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    spellCheck={false}
+                    value={vm.registerDraft.email}
+                    onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, email: event.target.value }))}
+                    placeholder="Ví dụ: ban@gmail.com"
+                  />
+                  <AuthField
+                    label="Mật khẩu"
+                    name="new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={vm.registerDraft.password}
+                    onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, password: event.target.value }))}
+                    placeholder="Tối thiểu 6 ký tự"
+                  />
+                  <AuthField
+                    label="Nhập lại mật khẩu"
+                    name="confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={vm.registerDraft.confirmPassword}
+                    onChange={(event) => vm.setRegisterDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))}
+                    placeholder="Nhập lại mật khẩu"
+                  />
                   <button onClick={vm.handleRegister} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Tạo tài khoản</button>
                   <button onClick={() => vm.setAccountEntryTab("login")} className="w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55">Đã có tài khoản? Đăng nhập</button>
                 </div>
@@ -120,7 +216,16 @@ export default function Account({
                 <h2 className="text-base font-black text-brown">Quên mật khẩu</h2>
                 <p className="mt-1 text-sm text-brown/60">Nhập email đã đăng ký. Supabase sẽ gửi link đặt lại mật khẩu vào email này.</p>
                 <div className="mt-3 space-y-3">
-                  <input type="email" value={vm.forgotEmail} onChange={(event) => vm.setForgotEmail(event.target.value)} placeholder="Email đã đăng ký" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                  <AuthField
+                    label="Email đã đăng ký"
+                    name="recovery-email"
+                    type="email"
+                    autoComplete="email"
+                    spellCheck={false}
+                    value={vm.forgotEmail}
+                    onChange={(event) => vm.setForgotEmail(event.target.value)}
+                    placeholder="Ví dụ: ban@gmail.com"
+                  />
                   <button onClick={vm.handleForgotPassword} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Gửi link đặt lại mật khẩu</button>
                   <button onClick={() => vm.setAccountEntryTab("login")} className="w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55">Quay lại đăng nhập</button>
                 </div>
@@ -130,8 +235,24 @@ export default function Account({
                 <h2 className="text-base font-black text-brown">Đặt mật khẩu mới</h2>
                 <p className="mt-1 text-sm text-brown/60">Nhập mật khẩu mới cho tài khoản của bạn.</p>
                 <div className="mt-3 space-y-3">
-                  <input type="password" value={vm.resetPasswordDraft.password} onChange={(event) => vm.setResetPasswordDraft((draft) => ({ ...draft, password: event.target.value }))} placeholder="Mật khẩu mới" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
-                  <input type="password" value={vm.resetPasswordDraft.confirmPassword} onChange={(event) => vm.setResetPasswordDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))} placeholder="Nhập lại mật khẩu mới" className="w-full rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none" />
+                  <AuthField
+                    label="Mật khẩu mới"
+                    name="recovery-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={vm.resetPasswordDraft.password}
+                    onChange={(event) => vm.setResetPasswordDraft((draft) => ({ ...draft, password: event.target.value }))}
+                    placeholder="Tối thiểu 6 ký tự"
+                  />
+                  <AuthField
+                    label="Nhập lại mật khẩu mới"
+                    name="recovery-confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={vm.resetPasswordDraft.confirmPassword}
+                    onChange={(event) => vm.setResetPasswordDraft((draft) => ({ ...draft, confirmPassword: event.target.value }))}
+                    placeholder="Nhập lại mật khẩu"
+                  />
                   <button onClick={vm.handleRecoveryPasswordUpdate} className="w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Cập nhật mật khẩu</button>
                 </div>
               </div>
@@ -144,95 +265,20 @@ export default function Account({
             )}
           </div>
         </div>
-        <AccountNoticeModal notice={vm.accountNotice} onClose={() => vm.setAccountNotice(null)} />
       </section>
     );
   }
 
   return (
     <section>
-      <AppHeader title="Tài khoản" subtitle="Thông tin, điểm thưởng và địa chỉ" right={<button className="top-icon"><Icon name="bell" size={18} /></button>} />
-      <div className="account-page-content space-y-4 px-4">
-        {vm.authNotice ? <div className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-bold text-green-700">{vm.authNotice}</div> : null}
-        <div className="account-hero">
-          <div className="flex items-center gap-4">
-            {vm.accountUser.avatarUrl ? (
-              <img src={vm.accountUser.avatarUrl} alt={vm.displayName} className="h-20 w-20 rounded-full border-4 border-white/70 object-cover shadow-soft" />
-            ) : (
-              <span className="grid h-20 w-20 place-items-center rounded-full border-4 border-white/70 bg-white text-orange-600 shadow-soft"><Icon name="star" size={28} /></span>
-            )}
-            <div className="min-w-0 flex-1">
-              <h2 className="text-xl font-black text-white">{vm.displayName}</h2>
-              <p className="mt-1 text-sm font-bold text-white/82">{vm.accountUser.phone}</p>
-              {vm.showCustomerTier ? <p className="mt-1 text-sm font-bold text-white/82">{vm.rank}</p> : null}
-            </div>
-          </div>
-          <button onClick={() => vm.setProfileOpen(true)} className="mt-5 w-full rounded-[20px] bg-white px-4 py-4 text-sm font-black text-orange-600 shadow-soft">Chỉnh sửa hồ sơ</button>
-        </div>
-
-        <AccountPanel
-          title="Địa chỉ giao hàng"
-          action="Thêm địa chỉ mới"
-          onAction={() => vm.setAddressModal({ receiverName: vm.displayName, phone: currentPhone, isDefault: vm.addresses.length === 0 })}
-        >
-          <div className="space-y-3">
-            {vm.visibleAddresses.map((address) => (
-              <AddressCard
-                key={address.id}
-                address={address}
-                onEdit={() => vm.setAddressModal(address)}
-                onDelete={() => vm.handleDeleteAddress(address.id)}
-                onSetDefault={() => vm.handleSetDefaultAddress(address.id)}
-              />
-            ))}
-            {!vm.addresses.length ? <AppEmptyState icon={null} message="Bạn chưa có địa chỉ giao hàng" className="rounded-[22px] border border-orange-100 bg-cream/50 p-3 text-sm text-brown/55" /> : null}
-          </div>
-        </AccountPanel>
-
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => vm.navigateToTab("orders")} className="account-metric">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-orange-50 text-orange-600"><Icon name="bag" size={19} /></span>
-            <strong>Lịch sử đơn hàng</strong>
-            <small>{vm.stats.totalOrders ? `${vm.stats.totalOrders} đơn · ${formatMoney(vm.stats.totalSpent)}` : "Chưa có đơn hàng"}</small>
-          </button>
-          <button onClick={() => vm.navigateToTab("rewards")} className="account-metric">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-orange-50 text-orange-600"><Icon name="star" size={19} /></span>
-            <strong>{vm.showCustomerTier ? "Điểm thưởng & Hạng" : "Điểm thưởng"}</strong>
-            <small>{demoLoyalty.totalPoints || 0} điểm{vm.showCustomerTier ? ` · ${vm.rank}` : ""}</small>
-          </button>
-        </div>
-
-        <AccountPanel title="Đơn gần nhất">
-          {vm.stats.latestOrder ? (
-            <div className="rounded-[22px] border border-orange-100 bg-cream/50 p-3 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <strong>{getAccountOrderCode(vm.stats.latestOrder)}</strong>
-                <SourceBadge order={vm.stats.latestOrder} />
-              </div>
-              <p className="mt-1 text-brown/60">{new Date(vm.stats.latestOrder.createdAt).toLocaleString("vi-VN")} · {formatMoney(vm.stats.latestOrder.totalAmount || vm.stats.latestOrder.total || 0)}</p>
-              {getAccountOrderBranchName(vm.stats.latestOrder, branches) ? (
-                <p className="mt-1 truncate text-xs font-semibold text-brown/45">{getAccountOrderBranchName(vm.stats.latestOrder, branches)}</p>
-              ) : null}
-              <button onClick={() => vm.navigateToTab("orders")} className="mt-3 rounded-2xl bg-orange-50 px-4 py-2 text-xs font-black text-orange-600">Xem lịch sử đơn</button>
-            </div>
-          ) : (
-            <AppEmptyState icon={null} message="Chưa có đơn hàng" className="rounded-[22px] border border-orange-100 bg-cream/50 p-3 text-sm text-brown/55" />
-          )}
-        </AccountPanel>
-
-        <AccountPanel title="Cài đặt thông báo">
-          <div className="space-y-3">
-            <SettingsToggle label="Cập nhật đơn hàng" checked />
-            <SettingsToggle label="Khuyến mãi & Ưu đãi" checked />
-            <SettingsToggle label="Tin tức mới" />
-          </div>
-        </AccountPanel>
-
-        <button onClick={logoutDemoUser} className="w-full rounded-[24px] bg-red-50 py-4 text-sm font-black text-red-600 shadow-soft">Đăng xuất</button>
-      </div>
+      <AppHeader title="Tài khoản" subtitle="Hồ sơ, đơn hàng và điểm thưởng" />
+      <AccountDashboard
+        vm={vm}
+        branches={branches}
+        logoutDemoUser={logoutDemoUser}
+      />
       {vm.profileOpen ? <ProfileModal user={vm.accountUser} onClose={() => vm.setProfileOpen(false)} onSave={vm.handleSaveUser} onChangePassword={vm.handleChangePassword} /> : null}
       {vm.addressModal ? <AccountAddressModal address={vm.addressModal} onClose={() => vm.setAddressModal(null)} onSave={vm.handleSaveAddress} /> : null}
-      <AccountNoticeModal notice={vm.accountNotice} onClose={() => vm.setAccountNotice(null)} />
     </section>
   );
 }

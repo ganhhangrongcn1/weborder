@@ -426,6 +426,36 @@ export const customerRepository = {
   async getUserByPhoneAsync(phone) {
     const key = getCustomerKey(phone);
     if (!key) return null;
+    try {
+      const remoteUser = await coreSupabaseRepository.readProfileForPhoneFromTable(key);
+      if (remoteUser) {
+        const allowLocalFallback = shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN);
+        const localUsers = allowLocalFallback
+          ? normalizeUsersMap(await repository.getAsync(STORAGE_KEYS.users, {}))
+          : {};
+        const nextUsers = normalizeUsersMap({
+          ...localUsers,
+          [key]: remoteUser
+        });
+        if (allowLocalFallback) {
+          await repository.setAsync(STORAGE_KEYS.users, nextUsers);
+        }
+        if (allowLocalFallback || usersRemoteCache.value) {
+          usersRemoteCache = {
+            value: normalizeUsersMap({
+              ...(usersRemoteCache.value || {}),
+              ...nextUsers
+            }),
+            cachedAt: Date.now()
+          };
+        }
+        return remoteUser;
+      }
+      if (!shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN)) return null;
+    } catch (error) {
+      logSupabaseError("read profile by phone", error, { phone: key });
+    }
+
     const users = await this.getUsersAsync();
     return users[key] || null;
   },

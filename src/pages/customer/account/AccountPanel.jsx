@@ -9,7 +9,7 @@ export default function AccountPanel({
   return (
     <CustomerCard>
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-black uppercase tracking-wide text-brown">{title}</h2>
+        <h2 className="text-base font-black text-brown">{title}</h2>
         {action && (
           <CustomerButton variant="soft" size="sm" onClick={onAction}>
             {action}

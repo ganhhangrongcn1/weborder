@@ -747,6 +747,20 @@ async function readProfilesMapFromTable() {
   }, {});
 }
 
+async function readProfileForPhoneFromTable(phone = "") {
+  if (!isSupabaseReady()) return null;
+  const client = await getSupabaseClientAsync();
+  if (!client) return null;
+  const key = normalizePhone(phone);
+  if (!key) return null;
+
+  const { data, error } = await selectProfileRows(client, "*")
+    .eq("phone", key)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? fromCustomerRow(data) : null;
+}
+
 async function readCustomerProfileCountFromTable() {
   if (!isSupabaseReady()) return null;
   const client = await getSupabaseClientAsync();
@@ -1787,6 +1801,7 @@ const subscribeCustomersRealtime = subscribeProfilesRealtime;
 
 export const coreSupabaseRepository = {
   readProfilesMapFromTable,
+  readProfileForPhoneFromTable,
   readCustomerProfileCountFromTable,
   readCustomersMapFromTable,
   writeProfilesMapToTable,

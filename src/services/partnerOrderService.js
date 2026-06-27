@@ -416,6 +416,7 @@ export async function getPartnerOrdersByPhone(phone, options = {}) {
     if (import.meta?.env?.DEV) {
       console.warn("[partnerOrderService] getPartnerOrdersByPhone failed", error);
     }
+    if (options?.throwOnError) throw error;
     return [];
   }
 
@@ -437,6 +438,7 @@ export async function getPartnerOrdersByPhone(phone, options = {}) {
     if (import.meta?.env?.DEV) {
       console.warn("[partnerOrderService] partner_order_items read failed", itemError);
     }
+    if (options?.throwOnError) throw itemError;
     return partnerOrders;
   }
 
