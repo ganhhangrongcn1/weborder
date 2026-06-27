@@ -226,17 +226,6 @@ function formatClaimedGiftTime(value = "") {
   });
 }
 
-function getMonthlyGiftBadgeText(gift = null, monthlyOrderCount = 0) {
-  const threshold = Number(gift?.threshold || 3);
-  const count = Number(monthlyOrderCount || 0);
-
-  if (gift?.claimed) return "Quà tháng: đã tặng";
-  if (count >= threshold) return "Quà tháng: đủ điều kiện";
-
-  const missing = Math.max(0, threshold - count);
-  return `Quà tháng: còn ${missing} đơn`;
-}
-
 function getStatusTone(status = "") {
   if (["done", "ready"].includes(status)) {
     return { background: "#f1f5f9", border: "#cbd5e1", color: "#334155" };
@@ -433,32 +422,6 @@ function isKitchenOrderPaid(order = {}) {
   ).trim();
 
   return paymentStatus === "paid" || Boolean(paidAt);
-}
-
-function getMemberTierTone(memberTier = "") {
-  const value = String(memberTier || "").toLowerCase();
-
-  if (value.includes("kim")) return { background: "#f0fdff", border: "#a5f3fc", color: "#0e7490" };
-  if (value.includes("vàng") || value.includes("vang")) return { background: "#fffaf0", border: "#fde68a", color: "#b45309" };
-  if (value.includes("bạc") || value.includes("bac")) return { background: "#f8fafc", border: "#e2e8f0", color: "#475569" };
-
-  return { background: "#fff7ed", border: "#fed7aa", color: "#c2410c" };
-}
-
-function getMonthlyCountTone(count = 0) {
-  const safeCount = Number(count || 0);
-  if (safeCount >= 3) return { background: "#f0fdf4", border: "#bbf7d0", color: "#15803d" };
-  if (safeCount === 2) return { background: "#fffbeb", border: "#fde68a", color: "#b45309" };
-  return { background: "#fff7ed", border: "#fed7aa", color: "#c2410c" };
-}
-
-function getGiftBadgeTone(gift = null, monthlyOrderCount = 0) {
-  if (gift?.claimed) return { background: "#f0fdf4", border: "#bbf7d0", color: "#15803d" };
-  if (Number(monthlyOrderCount || 0) >= Number(gift?.threshold || 3)) {
-    return { background: "#fffbeb", border: "#fde68a", color: "#b45309" };
-  }
-
-  return { background: "#f5f3ff", border: "#ddd6fe", color: "#6d28d9" };
 }
 
 function KitchenIcon({ name, size = 14 }) {
@@ -709,11 +672,11 @@ function ToppingCheck({ checked, label, onClick }) {
         border: checked ? "1px solid #f59e0b" : "1px solid #fcd34d",
         background: checked ? "#f59e0b" : "#fffbeb",
         color: checked ? "#ffffff" : "#92400e",
-        borderRadius: 10,
-        padding: "7px 9px",
+        borderRadius: 8,
+        padding: "6px 8px",
         display: "grid",
-        gridTemplateColumns: "16px minmax(0, 1fr)",
-        gap: 7,
+        gridTemplateColumns: "15px minmax(0, 1fr)",
+        gap: 6,
         alignItems: "center",
         cursor: "pointer",
         fontSize: 12,
@@ -732,12 +695,7 @@ function ToppingCheck({ checked, label, onClick }) {
           boxShadow: checked ? "inset 0 0 0 3px #f59e0b" : "none"
         }}
       />
-      <span style={{ minWidth: 0 }}>
-        <span style={{ display: "block", color: checked ? "#fffbeb" : "#b45309", fontSize: 10 }}>
-          Thêm kèm
-        </span>
-        <strong style={{ display: "block", overflowWrap: "anywhere" }}>{label}</strong>
-      </span>
+      <strong style={{ display: "block", minWidth: 0, overflowWrap: "anywhere" }}>{label}</strong>
     </span>
   );
 }
@@ -755,7 +713,7 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
           background: "#f0fdf4",
           color: "#166534",
           borderRadius: 999,
-          padding: "5px 9px",
+          padding: "4px 8px",
           display: "inline-flex",
           alignItems: "center",
           justifySelf: "end",
@@ -767,7 +725,7 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
           whiteSpace: "nowrap"
         }}
       >
-        Đã nhận quà
+        Đã tặng quà
       </span>
     );
   }
@@ -778,11 +736,11 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
         border: "1px solid #fbbf24",
         background: "#fffbeb",
         color: "#92400e",
-        borderRadius: 10,
-        padding: "6px 10px",
+        borderRadius: 9,
+        padding: "5px 8px",
         display: "inline-grid",
         gridTemplateColumns: "minmax(0, 1fr) auto",
-        gap: 8,
+        gap: 7,
         alignItems: "center",
         width: "fit-content",
         maxWidth: "100%",
@@ -790,10 +748,10 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
       }}
     >
       <div style={{ minWidth: 0, display: "grid", gap: 1 }}>
-        <strong style={{ fontSize: 12, fontWeight: 900, lineHeight: 1.2 }}>
-          Đủ điều kiện tặng quà
+        <strong style={{ fontSize: 12, fontWeight: 900, lineHeight: 1.15 }}>
+          Đủ quà
         </strong>
-        <span style={{ fontSize: 11, fontWeight: 800, color: "#a16207", lineHeight: 1.2 }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: "#a16207", lineHeight: 1.15 }}>
           Tháng này: {gift.monthlyOrderCount || 0} đơn
         </span>
       </div>
@@ -810,7 +768,7 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
           background: "#f59e0b",
           color: "#ffffff",
           borderRadius: 8,
-          padding: "6px 9px",
+          padding: "6px 8px",
           fontSize: 11,
           fontWeight: 900,
           cursor: claiming ? "not-allowed" : "pointer",
@@ -818,7 +776,7 @@ function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
           whiteSpace: "nowrap"
         }}
       >
-        {claiming ? "Đang lưu..." : "Đã tặng quà"}
+        {claiming ? "Đang lưu..." : "Đã tặng"}
       </button>
     </div>
   );
@@ -903,9 +861,6 @@ export default function KitchenOrderCard({
       }
     : getPrintButtonConfig(printBillState, printingBill);
   const monthlyGift = order.monthlyGift || null;
-  const monthlyOrderCount = Number(monthlyGift?.monthlyOrderCount || 0);
-  const totalOrderCount = Number(monthlyGift?.totalOrderCount || monthlyOrderCount || 0);
-  const monthlyGiftBadgeText = getMonthlyGiftBadgeText(monthlyGift, monthlyOrderCount);
   const driverName = String(order.driverName || order.rawData?.driver_name || order.raw?.raw_data?.driver_name || "").trim();
   const driverPhone = String(order.driverPhone || order.rawData?.driver_phone || order.raw?.raw_data?.driver_phone || "").trim();
   const deliveryTime = formatDeliveryTime(order.deliveryTime || order.rawData?.delivery_time || order.raw?.raw_data?.delivery_time);
@@ -944,15 +899,14 @@ export default function KitchenOrderCard({
     ""
   ).trim();
   const shortOrderCode = getKitchenShortOrderCode(order);
+  const fullOrderCode = String(order.displayOrderCode || order.orderCode || order.id || "").trim();
 
   const isNarrowLayout = compact || tabletCompact;
   const itemGridColumns = compact
     ? "1fr"
     : displayItems.length <= 1
       ? "1fr"
-      : tabletCompact
-        ? "repeat(auto-fit, minmax(170px, 1fr))"
-        : "repeat(auto-fit, minmax(190px, 1fr))";
+      : "repeat(2, minmax(0, 1fr))";
 
   useEffect(() => {
     setUnitProgress((currentProgress) => {
@@ -1182,7 +1136,7 @@ export default function KitchenOrderCard({
           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
             {active ? (
               <Badge tone={{ background: theme.border, border: theme.border, color: "#ffffff" }} icon="badge">
-                ĐANG CHỌN
+                Đang chọn
               </Badge>
             ) : null}
             <Badge tone={{ background: platformTone.background, border: platformTone.border, color: platformTone.color }} icon="shop">
@@ -1198,37 +1152,39 @@ export default function KitchenOrderCard({
             </Badge>
             {isPaid ? (
               <Badge tone={{ background: "#dcfce7", border: "#86efac", color: "#166534" }} icon="cash">
-                Đã thanh toán
+                Đã trả
               </Badge>
             ) : null}
             {shouldShowCollectBadge ? (
               <Badge tone={{ background: "#fefce8", border: "#fde047", color: "#a16207" }} icon="cash">
-                Cần thu {formatKitchenMoney(collectAmount)}
+                Thu {formatKitchenMoney(collectAmount)}
               </Badge>
             ) : null}
             {isScheduledPickupOrder ? (
               <Badge tone={scheduledPickupTheme} icon="timer">
-                Hẹn lấy {pickupSchedule.clock}
+                Lấy {pickupSchedule.clock}
               </Badge>
             ) : null}
           </div>
-          <strong
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              color: theme.code,
-              fontSize: isNarrowLayout ? 16 : 18,
-              fontWeight: 760,
-              lineHeight: 1.15,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap"
-            }}
-          >
-            <KitchenIcon name="badge" size={15} />
-            {pagerNumber ? `Thẻ rung ${pagerNumber}` : (order.displayOrderCode || order.orderCode || order.id)}
-          </strong>
+          {pagerNumber || (fullOrderCode && fullOrderCode !== shortOrderCode) ? (
+            <strong
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                color: theme.code,
+                fontSize: isNarrowLayout ? 14 : 15,
+                fontWeight: 760,
+                lineHeight: 1.15,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap"
+              }}
+            >
+              <KitchenIcon name="badge" size={14} />
+              {pagerNumber ? `Thẻ rung ${pagerNumber}` : fullOrderCode}
+            </strong>
+          ) : null}
           <InfoLine icon="clock" color={theme.text}>
             {formatTime(order.createdAt)}
           </InfoLine>
@@ -1287,17 +1243,6 @@ export default function KitchenOrderCard({
               ) : null}
             </div>
           ) : null}
-          <div style={{ display: "flex", gap: isNarrowLayout ? 5 : 7, flexWrap: "wrap" }}>
-            <Badge tone={getMemberTierTone(monthlyGift?.memberTier || "Đồng")} icon="trophy">
-              {monthlyGift?.memberTier || "Đồng"} · {totalOrderCount} đơn
-            </Badge>
-            <Badge tone={getMonthlyCountTone(monthlyOrderCount)} icon="repeat">
-              Lần {monthlyOrderCount || 1} tháng này
-            </Badge>
-            <Badge tone={getGiftBadgeTone(monthlyGift, monthlyOrderCount)} icon="gift">
-              {monthlyGiftBadgeText}
-            </Badge>
-          </div>
           <InfoLine icon="timer" color={isKitchenOrderDone(order) ? "#334155" : "#059669"} strong>
             {formatOrderTiming(order)}
           </InfoLine>
@@ -1407,6 +1352,15 @@ export default function KitchenOrderCard({
                 if (recipeOnlyLabel) return [recipeOnlyLabel];
                 return isPaidToppingDisplayOption(option.label, paidToppingKeys) ? [] : [option.label];
               }));
+            const itemMinHeight = item.note && paidToppings.length
+              ? 178
+              : item.note
+                ? 158
+                : paidToppings.length
+                  ? 130
+                  : tabletCompact
+                    ? 96
+                    : 112;
 
             return (
               <button
@@ -1415,16 +1369,16 @@ export default function KitchenOrderCard({
                 disabled={!canToggleItems || itemUpdating}
                 onClick={(event) => handleToggleUnit(event, item, unitIndex)}
                 style={{
-                  minHeight: item.note || paidToppings.length ? 220 : tabletCompact ? 88 : 122,
+                  minHeight: itemMinHeight,
                   height: "auto",
                   textAlign: "left",
                   border: itemHighlighted ? "2px solid #8b5cf6" : "1px solid #dbe3ef",
                   background: itemHighlighted ? "#faf5ff" : itemDone ? "#f0fdf4" : unitChecked ? "#fffbeb" : "rgba(255,255,255,0.88)",
                   borderRadius: 12,
-                  padding: 12,
+                  padding: 11,
                   display: "grid",
-                  gridTemplateColumns: "24px minmax(0, 1fr)",
-                  gap: 10,
+                  gridTemplateColumns: "22px minmax(0, 1fr)",
+                  gap: 9,
                   alignContent: "start",
                   alignItems: "start",
                   overflow: "visible",
@@ -1444,12 +1398,12 @@ export default function KitchenOrderCard({
                     boxShadow: itemDone || unitChecked ? "inset 0 0 0 3px #ffffff" : "none"
                   }}
                 />
-                <span style={{ minWidth: 0, display: "grid", gap: 7 }}>
+                <span style={{ minWidth: 0, display: "grid", gap: 9 }}>
                   <strong
                     style={{
                       color: itemDone ? "#64748b" : "#111827",
                       fontSize: 15,
-                      lineHeight: 1.15,
+                      lineHeight: 1.24,
                       fontWeight: 760,
                       overflowWrap: "anywhere",
                       textDecoration: itemDone ? "line-through" : "none"

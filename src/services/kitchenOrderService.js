@@ -1052,17 +1052,6 @@ function getMissingPartnerRawDishEntries(row = {}, storedItems = []) {
   });
 }
 
-function resolvePartnerStoredItemsAgainstRawDishes(row = {}, storedItems = []) {
-  const availableItems = getArray(storedItems).map((item) => ({ item }));
-  return getPartnerRawDishEntries(row).map(({ dish, index }) => {
-    const matchedIndex = findPartnerStoredItemIndexForRawDish(row, dish, index, availableItems);
-    if (matchedIndex < 0) return mapPartnerRawDishToKitchenItem(dish, row, index);
-
-    const [matched] = availableItems.splice(matchedIndex, 1);
-    return matched.item;
-  });
-}
-
 function mapPartnerRawDishToKitchenItem(dish = {}, order = {}, index = 0) {
   const rawData = getObject(order.raw_data);
   const orderId = toText(order.id || order.order_code || rawData.order_id || rawData.id);
@@ -1099,12 +1088,7 @@ function mapPartnerRawDishesToKitchenItems(row = {}) {
 
 function resolvePartnerKitchenItems(row = {}, itemsByOrderId = new Map()) {
   const id = toText(row.id || row.order_code);
-  const storedItems = itemsByOrderId.get(id) || [];
-  const rawEntries = getPartnerRawDishEntries(row);
-  if (!storedItems.length) return rawEntries.map(({ dish, index }) => mapPartnerRawDishToKitchenItem(dish, row, index));
-  if (!rawEntries.length) return storedItems;
-
-  return resolvePartnerStoredItemsAgainstRawDishes(row, storedItems);
+  return itemsByOrderId.get(id) || [];
 }
 
 function buildPartnerOrderItemRepairRow(orderRow = {}, dish = {}, index = 0) {
@@ -1447,6 +1431,19 @@ async function repairMissingPartnerOrderItems(client, orderRows = [], itemsByOrd
   return new Map([...itemsByOrderId, ...repairedItems]);
 }
 
+function warnPartnerOrdersMissingStoredItems(orderRows = [], itemsByOrderId = new Map()) {
+  const missingRows = getArray(orderRows).filter((row) => {
+    const orderId = toText(row.id || row.order_code);
+    return orderId && getPartnerRawDishEntries(row).length && !(itemsByOrderId.get(orderId) || []).length;
+  });
+  if (!missingRows.length) return;
+
+  console.warn("[kitchenOrderService] Partner orders still missing partner_order_items after repair; raw_data will not be rendered.", {
+    count: missingRows.length,
+    orderCodes: missingRows.slice(0, 10).map((row) => toText(row.display_order_code || row.order_code || row.id))
+  });
+}
+
 function shouldStampPartnerKitchenDoneAt(row = {}) {
   if (toText(row.kitchen_done_at)) return false;
 
@@ -1559,6 +1556,7 @@ export async function getPartnerKitchenOrders(options = {}) {
   const orderIds = orderRows.map((row) => row.id).filter(Boolean);
   let itemsByOrderId = await readPartnerOrderItems(client, orderIds);
   itemsByOrderId = await repairMissingPartnerOrderItems(client, orderRows, itemsByOrderId);
+  warnPartnerOrdersMissingStoredItems(orderRows, itemsByOrderId);
 
   return orderRows
     .map((row) => mapPartnerKitchenOrder(row, itemsByOrderId))

@@ -73,7 +73,7 @@ function FilterButton({ active, children, onClick }) {
         background: active ? "#111827" : "#ffffff",
         color: active ? "#ffffff" : "#374151",
         borderRadius: 8,
-        padding: "10px 12px",
+        padding: "9px 11px",
         fontSize: 13,
         fontWeight: 800,
         cursor: "pointer",
@@ -105,8 +105,8 @@ function SourceFilterSelect({ value, onChange }) {
         position: "relative",
         display: "inline-flex",
         alignItems: "center",
-        minWidth: 172,
-        height: 42
+        minWidth: 156,
+        height: 40
       }}
     >
       <select
@@ -120,10 +120,10 @@ function SourceFilterSelect({ value, onChange }) {
           background: "#ffffff",
           color: "#374151",
           borderRadius: 8,
-          padding: "0 34px 0 12px",
+          padding: "0 32px 0 11px",
           fontSize: 13,
           fontWeight: 800,
-          lineHeight: "42px",
+          lineHeight: "40px",
           cursor: "pointer",
           boxShadow: "0 1px 0 rgba(15, 23, 42, 0.03)",
           outline: "none"
@@ -825,15 +825,16 @@ export default function KitchenPage() {
   }
 
   function handleSelectDish(dishKey = "") {
-    setActiveDishKey((currentKey) => {
-      const nextKey = currentKey === dishKey ? "" : dishKey;
-      if (nextKey) {
-        const firstMatchedOrder = filteredOrders.find((order) => orderContainsKitchenItemGroup(order, nextKey));
-        if (firstMatchedOrder) scrollToOrder(getKitchenOrderKey(firstMatchedOrder));
-      }
-      return nextKey;
-    });
-    setActiveOrderKey("");
+    const firstMatchedOrder = filteredOrders.find((order) => orderContainsKitchenItemGroup(order, dishKey));
+    if (!firstMatchedOrder) {
+      clearActiveSelection();
+      return;
+    }
+
+    const orderKey = getKitchenOrderKey(firstMatchedOrder);
+    setActiveDishKey("");
+    setActiveOrderKey((currentKey) => (currentKey === orderKey ? "" : orderKey));
+    scrollToOrder(orderKey);
   }
 
   function getPrinterRuntimeOptions() {
@@ -898,8 +899,8 @@ export default function KitchenPage() {
   const boardColumns = isMobile
     ? "1fr"
     : isTabletBoard
-      ? "minmax(0, 1fr) minmax(360px, 0.55fr)"
-      : "minmax(0, 1fr) minmax(390px, 0.58fr)";
+      ? "minmax(0, 1fr) minmax(320px, 0.48fr)"
+      : "minmax(0, 1fr) minmax(340px, 0.44fr)";
 
   return (
     <main
@@ -928,7 +929,7 @@ export default function KitchenPage() {
         <header
           style={{
             display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "320px minmax(0, 1fr)",
+            gridTemplateColumns: isMobile ? "1fr" : "260px minmax(0, 1fr)",
             alignItems: "start",
             gap: isMobile ? 10 : "10px 16px",
             border: "1px solid #e5e7eb",
@@ -958,7 +959,7 @@ export default function KitchenPage() {
                 lineHeight: 1.15
               }}
             >
-              Xử lý đơn chi nhánh
+              Bếp chi nhánh
             </h1>
           </div>
 
@@ -972,11 +973,11 @@ export default function KitchenPage() {
                 gridTemplateColumns: "16px minmax(0, 1fr)",
                 alignItems: "center",
                 gap: 8,
-                width: isMobile ? "min(100%, 240px)" : 250,
+                width: isMobile ? "min(100%, 240px)" : 220,
                 border: "1px solid #cbd5e1",
                 borderRadius: 10,
                 padding: "0 12px",
-                height: 42,
+                height: 40,
                 boxSizing: "border-box",
                 color: "#64748b"
               }}
@@ -985,7 +986,7 @@ export default function KitchenPage() {
               <input
                 value={search}
                 onChange={(event) => handleSearchChange(event.target.value)}
-                placeholder="Tìm mã đơn, khách, món..."
+                placeholder="Tìm đơn, khách, món"
                 style={{
                   width: "100%",
                   border: "none",
@@ -1002,11 +1003,11 @@ export default function KitchenPage() {
                 gridTemplateColumns: "16px minmax(0, 1fr)",
                 alignItems: "center",
                 gap: 8,
-                width: isMobile ? "min(100%, 170px)" : 176,
+                width: isMobile ? "min(100%, 170px)" : 158,
                 border: "1px solid #cbd5e1",
                 borderRadius: 10,
                 padding: "0 12px",
-                height: 42,
+                height: 40,
                 boxSizing: "border-box",
                 color: "#64748b"
               }}
@@ -1038,7 +1039,7 @@ export default function KitchenPage() {
                 background: "#16a34a",
                 color: "#ffffff",
                 borderRadius: 8,
-                padding: "10px 13px",
+                padding: "9px 12px",
                 fontSize: 13,
                 fontWeight: 900,
                 cursor: refreshing ? "not-allowed" : "pointer",
@@ -1059,7 +1060,7 @@ export default function KitchenPage() {
                 background: soundEnabled ? "#dcfce7" : "#ffffff",
                 color: soundEnabled ? "#166534" : "#374151",
                 borderRadius: 8,
-                padding: "10px 13px",
+                padding: "9px 12px",
                 fontSize: 13,
                 fontWeight: 900,
                 cursor: "pointer"
@@ -1067,7 +1068,7 @@ export default function KitchenPage() {
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <ToolbarIcon name="bellOff" />
-                {soundEnabled ? "Chuông bật" : "Bật chuông"}
+                {soundEnabled ? "Chuông bật" : "Chuông"}
               </span>
             </button>
             <button
@@ -1079,7 +1080,7 @@ export default function KitchenPage() {
                 background: "#ffffff",
                 color: "#374151",
                 borderRadius: 8,
-                padding: "10px 13px",
+                padding: "9px 12px",
                 fontSize: 13,
                 fontWeight: 900,
                 cursor: submitting ? "not-allowed" : "pointer"
@@ -1104,7 +1105,7 @@ export default function KitchenPage() {
               Đã hủy
             </FilterButton>
             <FilterButton active={statusFilter === "all"} onClick={() => handleStatusFilterChange("all")}>
-              Tất cả trạng thái
+              Tất cả
             </FilterButton>
             {false ? <KitchenRequestAuditBadge audit={requestAudit} onReset={resetRequestAudit} /> : null}
           </div>

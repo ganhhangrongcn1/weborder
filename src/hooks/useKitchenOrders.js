@@ -295,7 +295,7 @@ function itemRealtimeHasImportantChange(change = {}) {
   const newRow = change?.payload?.new || {};
   const fields = change?.table === "order_items"
     ? ["product_id", "product_name", "quantity", "note", "toppings", "spice", "kitchen_item_status", "metadata"]
-    : ["item_key", "web_product_id", "partner_item_id", "web_product_name", "partner_item_name", "quantity", "note", "options", "kitchen_item_status"];
+    : ["item_key", "line_index", "web_product_id", "partner_item_id", "web_product_name", "partner_item_name", "quantity", "note", "options", "kitchen_item_status"];
 
   const oldHasComparableFields = fields.some((field) => Object.prototype.hasOwnProperty.call(oldRow, field));
   if (!oldHasComparableFields) {

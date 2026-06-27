@@ -184,12 +184,6 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
   const relatedOrders = Array.isArray(group.orders) ? group.orders : [];
   const selectedOrderQuantity = hasSelectedOrder ? group.activeOrderPendingQuantity : group.totalQuantity;
   const otherOrdersQuantity = hasSelectedOrder ? group.otherOrdersPendingQuantity : group.pendingQuantity;
-  const helperText = hasSelectedOrder
-    ? hasActiveOrder
-      ? `Đơn đang chọn có ${group.activeOrderPendingQuantity} phần món này.`
-      : "Món này không thuộc đơn đang chọn."
-    : "Hiển thị tổng số phần của món này trong bếp.";
-
   return (
     <button
       type="button"
@@ -197,42 +191,31 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
       style={{
         width: "100%",
         textAlign: "left",
-        border: active ? "2px solid #111827" : hasActiveOrder ? "2px solid #8b5cf6" : "1px solid #dbe3ef",
-        background: active ? "#eef2ff" : hasActiveOrder ? "#f5f3ff" : "#f8fafc",
+        border: hasActiveOrder ? "2px solid #8b5cf6" : "1px solid #dbe3ef",
+        background: hasActiveOrder ? "#f5f3ff" : "#f8fafc",
         borderRadius: 14,
-        padding: 12,
+        padding: 10,
         display: "grid",
-        gap: 10,
+        gap: 7,
         cursor: "pointer",
-        boxShadow: active ? "0 10px 24px rgba(15, 23, 42, 0.10)" : hasActiveOrder ? "0 10px 24px rgba(139, 92, 246, 0.12)" : "none"
+        boxShadow: hasActiveOrder ? "0 10px 24px rgba(139, 92, 246, 0.12)" : "none"
       }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 58px", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "start" }}>
         <div style={{ minWidth: 0 }}>
-          <strong style={{ display: "block", color: "#000000", fontSize: 17, lineHeight: 1.2 }}>
+          <strong style={{ display: "block", color: "#000000", fontSize: 15, lineHeight: 1.15 }}>
             {group.name}
           </strong>
-          <span
-            style={{
-              display: "inline-flex",
-              marginTop: 7,
-              background: "#e8eef6",
-              color: "#0f172a",
-              borderRadius: 999,
-              padding: "5px 10px",
-              fontSize: 12,
-              fontWeight: 900
-            }}
-          >
-            Chờ lâu nhất: {formatWaitingMinutes(group.oldestPendingTimeValue)}
-          </span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+            <SmallBadge>Chờ {formatWaitingMinutes(group.oldestPendingTimeValue)}</SmallBadge>
+          </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ color: "#000000", fontSize: 31, fontWeight: 950, lineHeight: 0.95 }}>
+          <div style={{ color: "#000000", fontSize: 26, fontWeight: 950, lineHeight: 0.95 }}>
             {group.pendingQuantity}
           </div>
           <div style={{ color: "#64748b", fontSize: 12, lineHeight: 1.05 }}>
-            cần làm
+            cần
           </div>
         </div>
       </div>
@@ -255,23 +238,13 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
       ) : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-        <StatBox label={hasSelectedOrder ? "Trong đơn này" : "Tổng SL"} value={selectedOrderQuantity} />
-        <StatBox label={hasSelectedOrder ? "Đơn khác" : "Chưa xong"} tone="#d97706" value={otherOrdersQuantity} />
+        <StatBox label={hasSelectedOrder ? "Đơn này" : "Tổng"} value={selectedOrderQuantity} />
+        <StatBox label={hasSelectedOrder ? "Đơn khác" : "Chờ"} tone="#d97706" value={otherOrdersQuantity} />
         <StatBox
-          label={hasSelectedOrder ? "Tổng cần làm" : "Đã xong"}
+          label={hasSelectedOrder ? "Cần làm" : "Xong"}
           tone="#047857"
           value={hasSelectedOrder ? group.pendingQuantity : group.doneQuantity}
         />
-      </div>
-
-      <div
-        style={{
-          color: hasActiveOrder ? "#4f46e5" : "#64748b",
-          fontSize: 12,
-          fontWeight: hasActiveOrder ? 800 : 600
-        }}
-      >
-        {helperText}
       </div>
 
       {visibleNotes.length ? (
@@ -291,7 +264,7 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
           }}
         >
           <strong style={{ color: "#92400e", fontSize: 12 }}>
-            {activeNotes.length ? "Ghi chú liên quan" : "Có ghi chú"}
+            {activeNotes.length ? "Ghi chú" : "Có ghi chú"}
           </strong>
           {visibleNotes.map((note) => (
             <div
@@ -325,8 +298,8 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
           alignItems: "end"
         }}
       >
-        <div style={{ color: "#64748b", fontSize: 12 }}>
-          {active ? "Đang highlight các đơn chứa món này" : "Bấm để highlight các đơn chứa món này"}
+        <div style={{ color: hasActiveOrder ? "#4f46e5" : "#64748b", fontSize: 12, fontWeight: hasActiveOrder ? 800 : 600 }}>
+          {hasActiveOrder ? "Đơn đang chọn" : ""}
         </div>
         {relatedOrders.length ? (
           <div
@@ -382,12 +355,9 @@ export default function KitchenDishSummaryPanel({
         }}
       >
         <div>
-          <h2 style={{ margin: 0, color: "#000000", fontSize: 23, lineHeight: 1.15 }}>
-            Tổng hợp món đang làm
+          <h2 style={{ margin: 0, color: "#000000", fontSize: 22, lineHeight: 1.15 }}>
+            Tổng món
           </h2>
-          <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 13 }}>
-            Gom món giống nhau để bếp dễ làm theo lô.
-          </p>
         </div>
         <div style={{ display: "grid", gap: 10, overflow: "auto", minHeight: 0, paddingRight: 4 }}>
           {groups.length ? (
