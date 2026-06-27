@@ -4,7 +4,6 @@ import AppCustomerRoutes from "../features/app/AppCustomerRoutes.jsx";
 import KitchenPage from "../features/kitchen/KitchenPage.jsx";
 import DownloadPage from "../pages/DownloadPage.jsx";
 import BanhKemBanhTrangPage from "../pages/BanhKemBanhTrangPage.jsx";
-import PosPage from "../pages/PosPage.jsx";
 import QrCodeToolPage from "../pages/QrCodeToolPage.jsx";
 
 export default function AppRoutes({ adminAppProps, customerRouteProps }) {
@@ -29,19 +28,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
 
       <Route path="/kitchen" element={<KitchenPage />} />
       <Route path="/download" element={<DownloadPage />} />
-      <Route
-        path="/pos"
-        element={
-          <PosPage
-            products={adminAppProps?.products || []}
-            categories={adminAppProps?.adminCategories || []}
-            branches={adminAppProps?.branches || []}
-            coupons={adminAppProps?.coupons || []}
-            smartPromotions={adminAppProps?.smartPromotions || []}
-            toppings={adminAppProps?.toppings || []}
-          />
-        }
-      />
+      <Route path="/pos" element={<Navigate to="/download" replace />} />
       <Route path="/qrcode" element={<QrCodeToolPage />} />
       <Route path="/banhkembanhtrang" element={<BanhKemBanhTrangPage branches={adminAppProps?.branches || []} />} />
 
