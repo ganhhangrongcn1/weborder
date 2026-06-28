@@ -101,7 +101,7 @@ export function getScheduledPickupTone(value = "", now = new Date()) {
   const pickup = parsePickupTimeText(value);
   if (!pickup.scheduled) return "none";
   const diffMinutes = Math.ceil((pickup.dateTime.getTime() - now.getTime()) / 60000);
-  if (diffMinutes > 25) return "waiting";
+  if (diffMinutes > 20) return "waiting";
   if (diffMinutes > 0) return "soon";
   return "due";
 }

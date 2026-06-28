@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isKitchenOrderScheduledForLater } from "../features/kitchen/kitchenOrderGrouping.js";
 import tingSound from "../assets/ting.mp3";
 
 const STORAGE_KEY = "ghr_kitchen_sound_enabled";
@@ -167,7 +168,8 @@ export default function useKitchenNewOrderAlert(orders = [], enabled = true) {
 
     const activeOrders = orders.filter((order) => {
       const status = String(order?.kitchenStatus || "").toLowerCase();
-      return !["done", "ready", "cancelled", "preorder"].includes(status);
+      return !["done", "ready", "cancelled", "preorder"].includes(status) &&
+        !isKitchenOrderScheduledForLater(order);
     });
     const currentIds = activeOrders.map(getOrderKey).filter(Boolean);
 

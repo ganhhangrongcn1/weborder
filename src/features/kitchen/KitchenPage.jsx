@@ -27,11 +27,13 @@ import {
 import {
   getKitchenItemGroupKey,
   getKitchenOrderKey,
+  isKitchenOrderScheduledForLater,
   orderContainsKitchenItemGroup
 } from "./kitchenOrderGrouping.js";
 
 const STAT_CARDS = [
   { id: "active", label: "Đang xử lý" },
+  { id: "scheduled", label: "Đơn đặt trước" },
   { id: "done", label: "Đã xong" },
   { id: "cancelled", label: "Đã hủy" },
   { id: "website", label: "Website" },
@@ -63,7 +65,7 @@ function formatUpdatedTime(value = "") {
   });
 }
 
-function FilterButton({ active, children, onClick }) {
+function FilterButton({ active, badgeCount = 0, children, onClick }) {
   return (
     <button
       type="button"
@@ -80,7 +82,30 @@ function FilterButton({ active, children, onClick }) {
         whiteSpace: "nowrap"
       }}
     >
-      {children}
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+        {children}
+        {badgeCount > 0 ? (
+          <span
+            style={{
+              minWidth: 18,
+              height: 18,
+              borderRadius: 999,
+              display: "inline-grid",
+              placeItems: "center",
+              padding: "0 6px",
+              background: active ? "#f97316" : "#ffedd5",
+              color: active ? "#ffffff" : "#c2410c",
+              border: active ? "1px solid #fb923c" : "1px solid #fdba74",
+              fontSize: 11,
+              fontWeight: 950,
+              lineHeight: 1,
+              boxSizing: "border-box"
+            }}
+          >
+            {badgeCount}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 }
@@ -247,6 +272,7 @@ function isAutoPrintableOrder(order = {}) {
   if (sourceText.includes("pos") || sourceText.includes("pos_mobile")) return false;
   if (["done", "completed", "ready", "cancelled", "canceled", "preorder"].includes(kitchenStatus)) return false;
   if (["done", "completed", "cancelled", "canceled", "preorder"].includes(orderStatus)) return false;
+  if (isKitchenOrderScheduledForLater(order)) return false;
   return true;
 }
 
@@ -1098,6 +1124,13 @@ export default function KitchenPage() {
             <FilterButton active={statusFilter === "active"} onClick={() => handleStatusFilterChange("active")}>
               Đang xử lý
             </FilterButton>
+            <FilterButton
+              active={statusFilter === "scheduled"}
+              badgeCount={stats.scheduled || 0}
+              onClick={() => handleStatusFilterChange("scheduled")}
+            >
+              Đơn đặt trước
+            </FilterButton>
             <FilterButton active={statusFilter === "done"} onClick={() => handleStatusFilterChange("done")}>
               Hoàn thành
             </FilterButton>
@@ -1188,6 +1221,13 @@ export default function KitchenPage() {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <FilterButton active={statusFilter === "active"} onClick={() => handleStatusFilterChange("active")}>
               Đang xử lý
+            </FilterButton>
+            <FilterButton
+              active={statusFilter === "scheduled"}
+              badgeCount={stats.scheduled || 0}
+              onClick={() => handleStatusFilterChange("scheduled")}
+            >
+              Đơn đặt trước
             </FilterButton>
             <FilterButton active={statusFilter === "done"} onClick={() => handleStatusFilterChange("done")}>
               Đã xong

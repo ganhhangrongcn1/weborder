@@ -11,6 +11,7 @@ import {
   enrichKitchenOrdersWithMonthlyGifts
 } from "../services/kitchenCustomerRewardService.js";
 import {
+  isKitchenOrderScheduledForLater,
   sortKitchenDoneOrders,
   sortKitchenOrdersForBoard
 } from "../features/kitchen/kitchenOrderGrouping.js";
@@ -26,6 +27,7 @@ const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
 const DONE_ORDER_PAGE_SIZE = 20;
 const CLAIM_GIFT_TIMEOUT_MS = 12000;
+const KITCHEN_SCHEDULE_STATUS_TICK_MS = 30000;
 const KITCHEN_SOURCE_WEBSITE = "website";
 const KITCHEN_SOURCE_PARTNER = "partner";
 
@@ -81,23 +83,32 @@ function isAcknowledgedCancelledOrder(order = {}) {
   ].some((value) => normalizeText(value) === "cancelled");
 }
 
-function orderMatchesStatus(order = {}, statusFilter = "active") {
+function orderMatchesStatus(order = {}, statusFilter = "active", now = Date.now()) {
   const status = normalizeText(order.kitchenStatus || order.status);
   const orderStatus = normalizeText(order.status);
   const isAcknowledgedCancelled = isAcknowledgedCancelledOrder(order);
   const isWebsite = order.sourceType === "website";
   const isWebsiteHandoff = ["ready_for_pickup", "ready_for_delivery", "delivering"].includes(orderStatus);
   const isLegacyWebsiteDone = isWebsite && ["done", "completed"].includes(status) && !isWebsiteHandoff;
+  const isScheduledForLater = isKitchenOrderScheduledForLater(order, now);
 
   if (statusFilter === "all") return true;
   if (statusFilter === "done") return ["done", "completed"].includes(orderStatus) || isLegacyWebsiteDone || (order.sourceType === "partner" && ["done", "completed"].includes(status));
   if (statusFilter === "cancelled") return isAcknowledgedCancelled;
+  if (statusFilter === "scheduled") {
+    if (isLegacyWebsiteDone || isAcknowledgedCancelled) return false;
+    if (["done", "completed", "cancelled"].includes(orderStatus)) return false;
+    if (order.sourceType === "partner" && ["done", "completed", "cancelled"].includes(status)) return false;
+    return isScheduledForLater;
+  }
   if (isLegacyWebsiteDone) return false;
   if (isAcknowledgedCancelled) return false;
   const closedOrderStatuses = order.sourceType === "partner"
     ? ["done", "completed", "preorder"]
     : ["done", "completed", "cancelled", "preorder"];
-  return !closedOrderStatuses.includes(orderStatus) && !(order.sourceType === "partner" && ["done", "completed", "cancelled", "preorder"].includes(status));
+  return !isScheduledForLater &&
+    !closedOrderStatuses.includes(orderStatus) &&
+    !(order.sourceType === "partner" && ["done", "completed", "cancelled", "preorder"].includes(status));
 }
 
 function normalizeSourceKey(value = "") {
@@ -568,6 +579,7 @@ export default function useKitchenOrders(options = null) {
   const [doneOrderLimit, setDoneOrderLimit] = useState(DONE_ORDER_PAGE_SIZE);
   const [search, setSearch] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
+  const [scheduleStatusTick, setScheduleStatusTick] = useState(() => Date.now());
   const [requestAudit, setRequestAudit] = useState(() => getKitchenRequestAuditSnapshot());
   const [updatingOrderId, setUpdatingOrderId] = useState("");
   const [updatingItemKey, setUpdatingItemKey] = useState("");
@@ -696,6 +708,15 @@ export default function useKitchenOrders(options = null) {
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return undefined;
     const timer = window.setInterval(() => {
+      setScheduleStatusTick(Date.now());
+    }, KITCHEN_SCHEDULE_STATUS_TICK_MS);
+
+    return () => window.clearInterval(timer);
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled || typeof window === "undefined") return undefined;
+    const timer = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       loadOrders({ silent: true });
     }, KITCHEN_BACKGROUND_REFRESH_MS);
@@ -742,7 +763,7 @@ export default function useKitchenOrders(options = null) {
   const filteredOrders = useMemo(() => {
     const matchedOrders = orders.filter((order) => {
       if (!orderMatchesSource(order, sourceFilter)) return false;
-      if (!orderMatchesStatus(order, statusFilter)) return false;
+      if (!orderMatchesStatus(order, statusFilter, scheduleStatusTick)) return false;
       if (!orderMatchesSearch(order, search)) return false;
       return true;
     });
@@ -752,18 +773,18 @@ export default function useKitchenOrders(options = null) {
     }
 
     return sortKitchenOrdersForBoard(matchedOrders);
-  }, [doneOrderLimit, orders, search, sourceFilter, statusFilter]);
+  }, [doneOrderLimit, orders, scheduleStatusTick, search, sourceFilter, statusFilter]);
 
   const canLoadMoreDoneOrders = useMemo(() => {
     if (statusFilter !== "done") return false;
     const doneMatches = orders.filter((order) => {
       if (!orderMatchesSource(order, sourceFilter)) return false;
-      if (!orderMatchesStatus(order, "done")) return false;
+      if (!orderMatchesStatus(order, "done", scheduleStatusTick)) return false;
       if (!orderMatchesSearch(order, search)) return false;
       return true;
     });
     return doneMatches.length > doneOrderLimit;
-  }, [doneOrderLimit, orders, search, sourceFilter, statusFilter]);
+  }, [doneOrderLimit, orders, scheduleStatusTick, search, sourceFilter, statusFilter]);
 
   const loadMoreDoneOrders = useCallback(() => {
     setDoneOrderLimit((limit) => limit + DONE_ORDER_PAGE_SIZE);
@@ -775,21 +796,23 @@ export default function useKitchenOrders(options = null) {
   }, []);
 
   const stats = useMemo(() => {
-    const activeOrders = orders.filter((order) => orderMatchesStatus(order, "active"));
-    const doneOrders = orders.filter((order) => orderMatchesStatus(order, "done"));
-    const cancelledOrders = orders.filter((order) => orderMatchesStatus(order, "cancelled"));
+    const activeOrders = orders.filter((order) => orderMatchesStatus(order, "active", scheduleStatusTick));
+    const scheduledOrders = orders.filter((order) => orderMatchesStatus(order, "scheduled", scheduleStatusTick));
+    const doneOrders = orders.filter((order) => orderMatchesStatus(order, "done", scheduleStatusTick));
+    const cancelledOrders = orders.filter((order) => orderMatchesStatus(order, "cancelled", scheduleStatusTick));
     const partnerOrders = orders.filter((order) => order.sourceType === "partner");
     const websiteOrders = orders.filter((order) => order.sourceType === "website");
 
     return {
       total: orders.length,
       active: activeOrders.length,
+      scheduled: scheduledOrders.length,
       done: doneOrders.length,
       cancelled: cancelledOrders.length,
       partner: partnerOrders.length,
       website: websiteOrders.length
     };
-  }, [orders]);
+  }, [orders, scheduleStatusTick]);
 
   const markDone = useCallback(async (order) => {
     const orderId = String(order?.id || "").trim();

@@ -1,6 +1,8 @@
 import { getKitchenRecipeOptions } from "./kitchenOptionDisplay.js";
 import { parsePickupTimeText } from "../../utils/dateTimeDefaults.js";
 
+export const KITCHEN_SCHEDULED_PICKUP_ACTIVE_WINDOW_MINUTES = 20;
+
 function toText(value = "") {
   return String(value || "").trim();
 }
@@ -34,6 +36,29 @@ function getRawValue(source = {}, key = "") {
   return source?.raw && typeof source.raw === "object" ? source.raw[key] : "";
 }
 
+function normalizeStatusText(value = "") {
+  return toText(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function isPreorderStatus(value = "") {
+  return ["preorder", "pre_order", "preordered", "scheduled", "dat_truoc", "dattruoc"].includes(
+    normalizeStatusText(value)
+  );
+}
+
+function getPickupScheduleSource(order = {}) {
+  return order.pickupTimeText ||
+    order.raw?.pickup_time_text ||
+    order.raw?.metadata?.pickupTimeText ||
+    order.raw?.metadata?.pickup_time_text;
+}
+
 export function getKitchenOrderKey(order = {}) {
   return `${order.sourceType || "order"}-${order.id || ""}`;
 }
@@ -58,25 +83,73 @@ export function isKitchenOrderDone(order = {}) {
   return order.sourceType === "partner" && ["done", "cancelled"].includes(kitchenStatus);
 }
 
-function getScheduledPickupSortInfo(order = {}, now = Date.now()) {
+export function getKitchenScheduledOrderInfo(order = {}, now = Date.now()) {
+  const isPreorder = [
+    order.kitchenStatus,
+    order.kitchenWorkStatus,
+    order.status,
+    order.orderStatus,
+    order.raw?.kitchen_status,
+    order.raw?.kitchen_work_status,
+    order.raw?.order_status,
+    order.raw?.nexpos_status
+  ].some(isPreorderStatus);
+
+  if (isPreorder) {
+    return {
+      scheduled: true,
+      reason: "preorder",
+      activeWindowMinutes: KITCHEN_SCHEDULED_PICKUP_ACTIVE_WINDOW_MINUTES,
+      minutesUntilPickup: Number.POSITIVE_INFINITY,
+      timeValue: Number.POSITIVE_INFINITY,
+      shouldShowInActive: false
+    };
+  }
+
   const isWebsitePickup =
     toText(order.sourceType).toLowerCase() === "website" &&
     toText(order.fulfillmentType).toLowerCase() === "pickup";
   if (!isWebsitePickup) {
     return {
       scheduled: false,
-      priority: 1,
+      shouldShowInActive: true,
       timeValue: getKitchenOrderTimeValue(order) || Number.POSITIVE_INFINITY
     };
   }
 
-  const pickup = parsePickupTimeText(
-    order.pickupTimeText ||
-      order.raw?.pickup_time_text ||
-      order.raw?.metadata?.pickupTimeText ||
-      order.raw?.metadata?.pickup_time_text
-  );
+  const pickup = parsePickupTimeText(getPickupScheduleSource(order));
   if (!pickup.scheduled) {
+    return {
+      scheduled: false,
+      shouldShowInActive: true,
+      timeValue: getKitchenOrderTimeValue(order) || Number.POSITIVE_INFINITY
+    };
+  }
+
+  const pickupTimeValue = pickup.dateTime.getTime();
+  const minutesUntilPickup = Math.ceil((pickupTimeValue - now) / 60000);
+  const shouldShowInActive = minutesUntilPickup <= KITCHEN_SCHEDULED_PICKUP_ACTIVE_WINDOW_MINUTES;
+
+  return {
+    scheduled: true,
+    reason: "pickup",
+    clock: pickup.clock,
+    date: pickup.date,
+    activeWindowMinutes: KITCHEN_SCHEDULED_PICKUP_ACTIVE_WINDOW_MINUTES,
+    minutesUntilPickup,
+    timeValue: pickupTimeValue,
+    shouldShowInActive
+  };
+}
+
+export function isKitchenOrderScheduledForLater(order = {}, now = Date.now()) {
+  const info = getKitchenScheduledOrderInfo(order, now);
+  return Boolean(info.scheduled && !info.shouldShowInActive);
+}
+
+function getScheduledPickupSortInfo(order = {}, now = Date.now()) {
+  const scheduledInfo = getKitchenScheduledOrderInfo(order, now);
+  if (!scheduledInfo.scheduled) {
     return {
       scheduled: false,
       priority: 1,
@@ -84,29 +157,34 @@ function getScheduledPickupSortInfo(order = {}, now = Date.now()) {
     };
   }
 
-  const pickupTimeValue = pickup.dateTime.getTime();
-  const minutesUntilPickup = Math.ceil((pickupTimeValue - now) / 60000);
-
-  if (minutesUntilPickup <= 0) {
+  if (scheduledInfo.reason === "preorder") {
     return {
       scheduled: true,
-      priority: 0,
-      timeValue: pickupTimeValue
+      priority: 3,
+      timeValue: Number.POSITIVE_INFINITY
     };
   }
 
-  if (minutesUntilPickup <= 25) {
+  if (scheduledInfo.minutesUntilPickup <= 0) {
+    return {
+      scheduled: true,
+      priority: 0,
+      timeValue: scheduledInfo.timeValue
+    };
+  }
+
+  if (scheduledInfo.shouldShowInActive) {
     return {
       scheduled: true,
       priority: 2,
-      timeValue: pickupTimeValue
+      timeValue: scheduledInfo.timeValue
     };
   }
 
   return {
     scheduled: true,
     priority: 3,
-    timeValue: pickupTimeValue
+    timeValue: scheduledInfo.timeValue
   };
 }
 
