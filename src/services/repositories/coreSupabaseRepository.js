@@ -3,7 +3,8 @@ import { getCustomerKey } from "../storageService.js";
 import {
   getSupabaseAdminAuthClient,
   initSupabaseAdminAuthClient,
-  initSupabaseRuntimeClient
+  initSupabaseRuntimeClient,
+  isSupabaseRealtimeReady
 } from "../supabase/supabaseRuntimeClient.js";
 import { isSupabaseConfigSyncEnabled } from "../supabase/runtimeFlags.js";
 import { buildBranchLookupMap, normalizeBranchKey } from "../branchIdentityService.js";
@@ -1711,6 +1712,7 @@ async function setLoyaltyVoucherUsage({
 function subscribeCoreDomainRealtime({ tables = [], onChange }) {
   const client = getRuntimeSupabaseClient();
   if (!client || typeof onChange !== "function") return () => {};
+  if (!isSupabaseRealtimeReady(client)) return () => {};
   const normalizedTables = Array.from(new Set((tables || []).map((item) => String(item || "").trim()).filter(Boolean)));
   if (!normalizedTables.length) return () => {};
   if (typeof window !== "undefined") {

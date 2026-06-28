@@ -1,4 +1,5 @@
 import {
+  ensureSupabaseRealtimeReady,
   getSupabaseKitchenAuthClient,
   getSupabaseRuntimeClient,
   initSupabaseKitchenAuthClient,
@@ -1813,6 +1814,7 @@ export async function updateKitchenOrderItemStatus(order = {}, item = {}, nextSt
 export async function subscribeKitchenOrderChanges(onChange) {
   const client = await getClient();
   if (!client || typeof onChange !== "function") return () => {};
+  if (!(await ensureSupabaseRealtimeReady(client))) return () => {};
 
   const channel = client
     .channel(`kitchen-order-feed-${Date.now()}`)

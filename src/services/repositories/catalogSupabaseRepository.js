@@ -1,6 +1,7 @@
 ﻿import { getRepositoryRuntimeInfo, getRuntimeSupabaseClient } from "./repositoryRuntime.js";
 
 import { createStableBranchUuid } from "../branchIdentityService.js";
+import { isSupabaseRealtimeReady } from "../supabase/supabaseRuntimeClient.js";
 
 const CATALOG_TABLE_BY_KEY = {
   ghr_products: "products",
@@ -935,6 +936,7 @@ export function subscribeCatalogRealtime(key, onChange) {
   const tableName = CATALOG_TABLE_BY_KEY[key];
   const client = getRuntimeSupabaseClient();
   if (!tableName || !client || typeof onChange !== "function") return () => {};
+  if (!isSupabaseRealtimeReady(client)) return () => {};
 
   const channelName = `ghr-catalog-${tableName}-${Date.now()}`;
   const channel = client

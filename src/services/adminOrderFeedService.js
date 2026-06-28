@@ -1,4 +1,8 @@
-import { initSupabaseRuntimeClient, getSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
+import {
+  ensureSupabaseRealtimeReady,
+  initSupabaseRuntimeClient,
+  getSupabaseRuntimeClient
+} from "./supabase/supabaseRuntimeClient.js";
 import {
   getPartnerOrderIdentityKey,
   normalizePartnerSource,
@@ -340,6 +344,7 @@ export async function readCustomerPartnerOrdersForAdmin(phone = "", { limit = 10
 export async function subscribeAdminOrderChanges(onChange) {
   const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
   if (!client || typeof onChange !== "function") return () => {};
+  if (!(await ensureSupabaseRealtimeReady(client))) return () => {};
 
   const channel = client
     .channel(`admin-order-feed-${Date.now()}`)

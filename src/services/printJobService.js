@@ -1,5 +1,6 @@
 import { buildPrintJobPayload } from "./printerService.js";
 import {
+  ensureSupabaseRealtimeReady,
   getSupabaseAdminAuthClient,
   getSupabaseKitchenAuthClient,
   getSupabaseRuntimeClient,
@@ -845,6 +846,7 @@ export async function markExpiredPendingPrintJobs(options = {}) {
 export async function subscribePrintJobs(options = {}) {
   const client = await getClient();
   if (!client || typeof options.onPendingJob !== "function") return () => {};
+  if (!(await ensureSupabaseRealtimeReady(client))) return () => {};
 
   const channel = client
     .channel(`print-jobs-${toText(options.deviceId || getPrintDeviceId())}-${Date.now()}`)
@@ -877,6 +879,7 @@ export async function subscribePrintJobs(options = {}) {
 export async function subscribePrintJobChanges(options = {}) {
   const client = await getClient();
   if (!client || typeof options.onJobChange !== "function") return () => {};
+  if (!(await ensureSupabaseRealtimeReady(client))) return () => {};
 
   const channel = client
     .channel(`print-job-status-${toText(options.deviceId || getPrintDeviceId())}-${Date.now()}`)
