@@ -192,6 +192,86 @@ async function readProfile(phoneVariants = [], preferredPhone = "") {
   return pickBestProfile(data, preferredPhone);
 }
 
+async function readProfileByPhone(phone = "") {
+  const normalizedPhone = normalizeCustomerPhone(phone);
+  if (!/^0\d{9}$/.test(normalizedPhone)) return null;
+  return readProfile(buildPhoneVariants(normalizedPhone), normalizedPhone);
+}
+
+async function createDirectGuestProfile({
+  phone = "",
+  name = "",
+  source = "pos_mobile",
+  sourceRef = ""
+} = {}) {
+  const normalizedPhone = normalizeCustomerPhone(phone);
+  if (!supabase || !/^0\d{9}$/.test(normalizedPhone)) {
+    return { ok: false, message: "Số điện thoại không hợp lệ." };
+  }
+
+  const existingProfile = await readProfileByPhone(normalizedPhone);
+  if (existingProfile?.phone) {
+    return {
+      ok: true,
+      existing: true,
+      phone: toText(existingProfile.phone || normalizedPhone),
+      registered: Boolean(existingProfile.registered),
+      hydratedName: toText(existingProfile.name || name),
+      message: "Đã có hồ sơ khách trên Supabase."
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("profiles")
+    .insert({
+      phone: normalizedPhone,
+      name: toText(name) || null,
+      role: "customer",
+      status: "active",
+      registered: false,
+      metadata: {
+        customer_stub: true,
+        customer_source_first: toText(source) || "pos_mobile",
+        customer_source_latest: toText(source) || "pos_mobile",
+        customer_source_ref_latest: toText(sourceRef) || null,
+        customer_stub_last_synced_at: nowIso
+      },
+      updated_at: nowIso
+    })
+    .select("phone,name,registered")
+    .maybeSingle();
+
+  if (error) {
+    const profileAfterInsert = await readProfileByPhone(normalizedPhone);
+    if (profileAfterInsert?.phone) {
+      return {
+        ok: true,
+        existing: true,
+        phone: toText(profileAfterInsert.phone || normalizedPhone),
+        registered: Boolean(profileAfterInsert.registered),
+        hydratedName: toText(profileAfterInsert.name || name),
+        message: "Đã có hồ sơ khách trên Supabase."
+      };
+    }
+
+    return {
+      ok: false,
+      phone: normalizedPhone,
+      message: error.message || "Không tạo được hồ sơ khách vãng lai."
+    };
+  }
+
+  return {
+    ok: true,
+    createdNew: true,
+    phone: toText(data?.phone || normalizedPhone),
+    registered: Boolean(data?.registered),
+    hydratedName: toText(data?.name || name),
+    message: "Đã tạo hồ sơ khách vãng lai."
+  };
+}
+
 async function readLoyalty(phone = "") {
   if (!supabase) return normalizeLoyaltyData(null, phone);
 
@@ -447,7 +527,69 @@ export async function lookupPosCustomerByPhone(rawPhone = "") {
   };
 }
 
-export async function ensurePosGuestProfile({
+export async function ensurePosGuestProfile(input = {}) {
+  const normalizedPhone = normalizeCustomerPhone(input.phone);
+  if (!supabase || !/^0\d{9}$/.test(normalizedPhone)) {
+    return { ok: true, skipped: true };
+  }
+
+  const result = await ensurePosGuestProfileLegacy({
+    ...input,
+    phone: normalizedPhone
+  });
+
+  if (!result?.ok) {
+    const directResult = await createDirectGuestProfile({
+      ...input,
+      phone: normalizedPhone
+    });
+    if (directResult.ok) return directResult;
+
+    const existingProfile = await readProfileByPhone(normalizedPhone);
+    if (existingProfile?.phone) {
+      return {
+        ok: true,
+        existing: true,
+        phone: toText(existingProfile.phone || normalizedPhone),
+        registered: Boolean(existingProfile.registered),
+        hydratedName: toText(existingProfile.name || input.name),
+        message: "Đã có hồ sơ khách trên Supabase."
+      };
+    }
+
+    return {
+      ok: false,
+      phone: normalizedPhone,
+      message: result?.message || directResult.message || "Không tạo được hồ sơ khách vãng lai."
+    };
+  }
+
+  const confirmedProfile = await readProfileByPhone(result.phone || normalizedPhone);
+  if (!confirmedProfile?.phone) {
+    const directResult = await createDirectGuestProfile({
+      ...input,
+      phone: normalizedPhone
+    });
+    if (directResult.ok) return directResult;
+
+    return {
+      ok: false,
+      phone: normalizedPhone,
+      message: directResult.message || "Đã gọi tạo hồ sơ khách nhưng chưa thấy trong bảng profiles."
+    };
+  }
+
+  return {
+    ...result,
+    ok: true,
+    phone: toText(confirmedProfile.phone || result.phone || normalizedPhone),
+    registered: Boolean(result.registered || confirmedProfile.registered),
+    hydratedName: toText(result.hydratedName || confirmedProfile.name || input.name),
+    message: result.message || "Đã đồng bộ hồ sơ khách vãng lai."
+  };
+}
+
+async function ensurePosGuestProfileLegacy({
   phone = "",
   name = "",
   source = "pos_mobile",
@@ -458,12 +600,21 @@ export async function ensurePosGuestProfile({
     return { ok: true, skipped: true };
   }
 
-  const { data, error } = await supabase.rpc("upsert_customer_stub_profile", {
-    p_phone: normalizedPhone,
-    p_name: toText(name) || null,
-    p_source: toText(source) || "pos_mobile",
-    p_source_ref: toText(sourceRef) || null
-  });
+  let data = null;
+  let error = null;
+
+  try {
+    const result = await supabase.rpc("upsert_customer_stub_profile", {
+      p_phone: normalizedPhone,
+      p_name: toText(name) || null,
+      p_source: toText(source) || "pos_mobile",
+      p_source_ref: toText(sourceRef) || null
+    });
+    data = result.data;
+    error = result.error;
+  } catch (rpcError) {
+    error = rpcError;
+  }
 
   if (error) {
     return {

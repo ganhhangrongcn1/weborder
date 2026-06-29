@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
-import { calculateCashChange, normalizeCashReceived } from "../../../shared/pos/posPayment";
+import { calculateCashChange, getCashPaymentSummary, normalizeCashReceived } from "../../../shared/pos/posPayment";
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
 import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
@@ -63,16 +63,20 @@ export default function CashPaymentModal({
   onConfirm
 }) {
   const { width } = useWindowDimensions();
+  const cashSummary = getCashPaymentSummary(amount);
+  const amountDue = cashSummary.paymentAmount;
+  const hasCashRounding = cashSummary.cashRoundingDiscount > 0;
   const normalized = normalizeCashReceived(cashReceived);
-  const change = calculateCashChange(amount, normalized);
-  const missing = Math.max(0, amount - normalized);
-  const paidEnough = normalized >= amount;
-  const suggestions = useMemo(() => buildSmartSuggestions(amount), [amount]);
+  const shouldAutoFocusInput = !normalized;
+  const change = calculateCashChange(amountDue, normalized);
+  const missing = Math.max(0, amountDue - normalized);
+  const paidEnough = normalized >= amountDue;
+  const suggestions = useMemo(() => buildSmartSuggestions(amountDue), [amountDue]);
   const dialogWidth = getPosDialogWidth(width, 500);
   const quickColumns = 3;
   const quickButtonWidth = "31.8%";
   const quickItems = [
-    { key: "exact", label: "Đủ tiền", value: amount, selected: normalized === amount },
+    { key: "exact", label: "Đủ tiền", value: amountDue, selected: normalized === amountDue },
     ...suggestions.map((value) => ({
       key: String(value),
       label: formatMoney(value),
@@ -102,7 +106,14 @@ export default function CashPaymentModal({
 
         <View style={styles.amountRow}>
           <Text style={styles.amountLabel}>Cần thu</Text>
-          <Text style={styles.amountValue}>{formatMoney(amount)}</Text>
+          <View style={styles.amountValueGroup}>
+            <Text style={styles.amountValue}>{formatMoney(amountDue)}</Text>
+            {hasCashRounding ? (
+              <Text style={styles.amountHint}>
+                Gốc {formatMoney(cashSummary.originalAmount)} · làm tròn xuống {formatMoney(cashSummary.cashRoundingDiscount)}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.quickGrid}>
@@ -136,7 +147,7 @@ export default function CashPaymentModal({
             placeholder="Nhập số tiền"
             placeholderTextColor="#94a3b8"
             keyboardType="number-pad"
-            autoFocus
+            autoFocus={shouldAutoFocusInput}
             style={[styles.input, paidEnough && styles.inputPaid]}
           />
         </View>
@@ -261,6 +272,17 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 27,
     fontWeight: "900"
+  },
+  amountValueGroup: {
+    flex: 1,
+    alignItems: "flex-end",
+    gap: 3
+  },
+  amountHint: {
+    color: POS_COLORS.muted,
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "right"
   },
   quickGrid: {
     flexDirection: "row",

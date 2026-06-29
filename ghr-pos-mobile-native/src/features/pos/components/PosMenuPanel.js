@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8
   },
   productCard: {
-    minHeight: 210,
+    minHeight: 188,
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
   },
   imageSlot: {
     width: "100%",
-    aspectRatio: 1,
+    aspectRatio: 1.32,
     backgroundColor: "#edf7ef",
     alignItems: "center",
     justifyContent: "center"
@@ -256,11 +256,11 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   productBody: {
-    minHeight: 78,
+    minHeight: 72,
     flexGrow: 1,
     paddingHorizontal: 10,
-    paddingTop: 9,
-    paddingBottom: 11,
+    paddingTop: 8,
+    paddingBottom: 10,
     justifyContent: "space-between"
   },
   productCopy: {

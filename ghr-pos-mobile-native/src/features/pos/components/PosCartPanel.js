@@ -151,10 +151,10 @@ const styles = StyleSheet.create({
   itemRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     borderBottomWidth: 1,
     borderBottomColor: POS_COLORS.softBorder,
-    paddingVertical: 7
+    paddingVertical: 8
   },
   itemMain: {
     flex: 1,
@@ -169,19 +169,19 @@ const styles = StyleSheet.create({
   itemName: {
     flex: 1,
     color: POS_COLORS.heading,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "900"
   },
   itemPrice: {
     color: POS_COLORS.heading,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "900"
   },
   optionText: {
     color: POS_COLORS.slate,
-    fontSize: 10,
-    lineHeight: 13,
+    fontSize: 11,
+    lineHeight: 15,
     fontWeight: "700"
   },
   controls: {
@@ -190,8 +190,8 @@ const styles = StyleSheet.create({
     gap: 4
   },
   qtyButton: {
-    width: 28,
-    height: 28,
+    width: 31,
+    height: 31,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
@@ -205,15 +205,15 @@ const styles = StyleSheet.create({
   },
   qtyButtonText: {
     color: POS_COLORS.slate,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "900"
   },
   qtyButtonPrimaryText: {
     color: POS_COLORS.primaryDark
   },
   qtyValueBox: {
-    minWidth: 22,
-    height: 28,
+    minWidth: 24,
+    height: 31,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
   qtyText: {
     color: POS_COLORS.heading,
     textAlign: "center",
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "900"
   },
   giftBadge: {

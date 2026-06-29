@@ -27,20 +27,33 @@ export function buildPosCatalog({ products = [], categories = [] } = {}) {
     }))
     .filter((product) => product.id && product.name && product.active && product.visible);
 
-  const categorySet = new Set(
-    (Array.isArray(categories) ? categories : [])
-      .map(toText)
-      .filter(Boolean)
-      .filter((category) => category !== ALL_CATEGORY)
-  );
+  const productCategorySet = new Set();
+  normalizedProducts.forEach((product) => {
+    if (product.category) productCategorySet.add(product.category);
+  });
+
+  const orderedCategories = [];
+  const seenCategories = new Set();
+
+  (Array.isArray(categories) ? categories : [])
+    .map(toText)
+    .filter(Boolean)
+    .filter((category) => category !== ALL_CATEGORY)
+    .forEach((category) => {
+      if (!productCategorySet.has(category) || seenCategories.has(category)) return;
+      orderedCategories.push(category);
+      seenCategories.add(category);
+    });
 
   normalizedProducts.forEach((product) => {
-    if (product.category) categorySet.add(product.category);
+    if (!product.category || seenCategories.has(product.category)) return;
+    orderedCategories.push(product.category);
+    seenCategories.add(product.category);
   });
 
   return {
     products: normalizedProducts,
-    categories: [...Array.from(categorySet), ALL_CATEGORY]
+    categories: [...orderedCategories, ALL_CATEGORY]
   };
 }
 

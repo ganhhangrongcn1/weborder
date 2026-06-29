@@ -17,6 +17,8 @@ export default function PaymentBar({
   totals = {},
   paymentConfirmed,
   disabled = false,
+  hasBenefitSignal = false,
+  onOpenBenefit,
   onConfirmCash,
   onOpenQrPayment,
   onCreateOrder
@@ -47,6 +49,18 @@ export default function PaymentBar({
       </View>
 
       <View style={styles.actions}>
+        <Pressable
+          style={[styles.benefitButton, hasBenefitSignal && styles.benefitButtonReady]}
+          onPress={onOpenBenefit}
+        >
+          <PosIcon
+            name="voucher"
+            size={18}
+            color={hasBenefitSignal ? POS_COLORS.primaryDark : "#6366f1"}
+          />
+          {hasBenefitSignal ? <View style={styles.benefitDot} /> : null}
+        </Pressable>
+
         <Pressable
           style={[styles.secondary, disabled && styles.disabledButton]}
           onPress={onConfirmCash}
@@ -119,35 +133,59 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   summaryValue: {
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "900"
   },
   totalLabel: {
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase"
   },
   totalValue: {
     color: "#166534",
-    fontSize: 20,
-    lineHeight: 24,
+    fontSize: 22,
+    lineHeight: 26,
     fontWeight: "900"
   },
   status: {
     color: POS_COLORS.slate,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700"
   },
   actions: {
     flexDirection: "row",
     gap: 8
+  },
+  benefitButton: {
+    width: 46,
+    minHeight: 42,
+    borderRadius: POS_RADIUS.md,
+    borderWidth: 1,
+    borderColor: "#c7d2fe",
+    backgroundColor: "#f8fafc",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative"
+  },
+  benefitButtonReady: {
+    borderColor: "#86efac",
+    backgroundColor: POS_COLORS.primarySoft
+  },
+  benefitDot: {
+    position: "absolute",
+    top: 7,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: POS_COLORS.primaryDark
   },
   buttonRow: {
     flexDirection: "row",
@@ -183,10 +221,12 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     color: POS_COLORS.slate,
+    fontSize: 13,
     fontWeight: "900"
   },
   primaryText: {
     color: POS_COLORS.surface,
+    fontSize: 13,
     fontWeight: "900"
   },
   disabledText: {

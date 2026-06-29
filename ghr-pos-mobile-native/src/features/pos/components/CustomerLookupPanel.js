@@ -57,6 +57,7 @@ const CustomerLookupPanel = memo(function CustomerLookupPanel({
   const visibleVouchers = vouchers.slice(0, 2);
   const pointSuggestions = (loyaltyBenefit?.pointSuggestions || []).slice(0, 3);
   const availablePoints = Number(loyaltyBenefit?.availablePoints || 0);
+  const currentPoints = Math.max(0, Math.floor(Number(customer?.loyalty?.totalPoints ?? availablePoints ?? 0)));
   const usablePoints = Number(loyaltyBenefit?.usablePoints || 0);
   const pointSpendStep = Math.max(1, Number(loyaltyBenefit?.pointSpendStep || 1000));
   const discountTotal = Number(loyaltyBenefit?.voucherDiscount || 0) + Number(loyaltyBenefit?.pointsDiscount || 0);
@@ -116,7 +117,7 @@ const CustomerLookupPanel = memo(function CustomerLookupPanel({
           </View>
           <View style={styles.statsGrid}>
             <StatCell label="Tổng mua" value={formatMoney(stats.totalSpent || 0)} />
-            <StatCell label="Đã tích" value={`${Number(stats.claimedPoints || 0).toLocaleString("vi-VN")} điểm`} />
+            <StatCell label="Điểm hiện có" value={`${currentPoints.toLocaleString("vi-VN")} điểm`} />
             <StatCell label="Chờ tích" value={`${Number(stats.pendingPoints || 0).toLocaleString("vi-VN")} điểm`} />
           </View>
           {!!customerDetail && <Text style={styles.customerDetail} numberOfLines={1}>{customerDetail}</Text>}

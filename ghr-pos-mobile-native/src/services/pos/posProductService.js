@@ -53,6 +53,22 @@ function normalizeCategoryMap(rows = []) {
   return map;
 }
 
+function normalizeCategoryData(rows = []) {
+  const categoryRows = (Array.isArray(rows) ? rows : []).filter((row) => row?.active !== false);
+  const map = normalizeCategoryMap(categoryRows);
+  const categories = [];
+  const seen = new Set();
+
+  categoryRows.forEach((row) => {
+    const name = toText(row?.name || row?.id);
+    if (!name || seen.has(name)) return;
+    categories.push(name);
+    seen.add(name);
+  });
+
+  return { categoryMap: map, categories };
+}
+
 function normalizeProduct(row = {}, index = 0, categoryMap = new Map(), optionGroupMap = new Map()) {
   const metadata = getObject(row.metadata);
   const id = toText(row.id || row.product_id || metadata.id || `product-${index + 1}`);
@@ -82,13 +98,13 @@ function normalizeProduct(row = {}, index = 0, categoryMap = new Map(), optionGr
 }
 
 async function readCategories() {
-  if (!supabase) return new Map();
+  if (!supabase) return { categoryMap: new Map(), categories: [] };
   const { data, error } = await supabase
     .from("categories")
     .select("id,name,sort_order,active")
     .order("sort_order", { ascending: true });
-  if (error) return new Map();
-  return normalizeCategoryMap((data || []).filter((row) => row?.active !== false));
+  if (error) return { categoryMap: new Map(), categories: [] };
+  return normalizeCategoryData(data || []);
 }
 
 async function readOptionGroups() {
@@ -198,20 +214,25 @@ export async function fetchPosProducts() {
     return {
       ok: true,
       products: mockProducts,
+      categories: mockProducts.map((product) => product.category).filter(Boolean),
       message: "Đang dùng menu demo vì chưa có cấu hình Supabase."
     };
   }
 
-  const [categoryMap, optionGroupMap] = await Promise.all([
+  const [categoryData, optionGroupMap] = await Promise.all([
     readCategories(),
     readOptionGroups()
   ]);
-  const { products, error } = await readProducts({ categoryMap, optionGroupMap });
+  const { products, error } = await readProducts({
+    categoryMap: categoryData.categoryMap,
+    optionGroupMap
+  });
 
   if (products.length) {
     return {
       ok: true,
       products,
+      categories: categoryData.categories,
       message: ""
     };
   }
@@ -219,6 +240,7 @@ export async function fetchPosProducts() {
   return {
     ok: true,
     products: mockProducts,
+    categories: mockProducts.map((product) => product.category).filter(Boolean),
     message: error?.message || "Chưa tải được menu Supabase, đang dùng menu demo."
   };
 }

@@ -15,7 +15,8 @@ export default function PosCustomerSummaryCard({
   setCustomerPhone,
   lookup,
   onOpen,
-  onClear
+  onClear,
+  rightAction = null
 }) {
   const customer = lookup?.result;
   const statusDetail = customer?.customerStatusDetail || "";
@@ -36,8 +37,11 @@ export default function PosCustomerSummaryCard({
   return (
     <View style={styles.panel}>
       <View style={styles.headRow}>
-        <Text style={styles.label}>Tên khách</Text>
-        <Text style={styles.label}>SĐT</Text>
+        <View style={styles.headLabels}>
+          <Text style={styles.label}>Tên khách</Text>
+          <Text style={styles.label}>SĐT</Text>
+        </View>
+        {rightAction ? <View style={styles.headAction}>{rightAction}</View> : null}
       </View>
 
       <View style={styles.inputRow}>
@@ -96,7 +100,17 @@ const styles = StyleSheet.create({
   },
   headRow: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 8
+  },
+  headLabels: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 8
+  },
+  headAction: {
+    width: 38,
+    alignItems: "center"
   },
   label: {
     flex: 1,
@@ -121,7 +135,7 @@ const styles = StyleSheet.create({
     borderRadius: POS_RADIUS.md,
     paddingHorizontal: 10,
     color: POS_COLORS.heading,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "800"
   },
   openButton: {
@@ -137,7 +151,7 @@ const styles = StyleSheet.create({
   },
   openText: {
     color: "#6366f1",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "900"
   },
   actionRow: {
@@ -157,7 +171,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: POS_COLORS.muted,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "800"
   },
   statusReadyText: {

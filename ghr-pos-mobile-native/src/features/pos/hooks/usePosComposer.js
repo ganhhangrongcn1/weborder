@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   restorePosSession,
   signInPosOperator,
-  signOutPosOperator
+  signOutPosOperator,
+  subscribePosAuthState
 } from "../../../services/auth/posAuthService";
 import { lookupPosCustomerByPhone, normalizeCustomerPhone } from "../../../services/pos/posCustomerService";
 import { createPosTakeawayOrderMobile } from "../../../services/pos/posOrderService";
@@ -26,8 +27,8 @@ import {
   readPosOrderForPrint
 } from "../../../services/pos/posOrderQueryService";
 import {
-  getPosPickupHistoryOrders,
-  getPosPickupOrders,
+  getPosWebsiteHistoryOrders,
+  getPosWebsiteOrders,
   markPickupOrderPaidCash,
   markPickupOrderPaidQr
 } from "../../../services/pos/posPickupOrderService";
@@ -66,11 +67,12 @@ import {
   updatePosCartItemQuantity
 } from "../../../shared/pos/posCart";
 import { buildPosLoyaltyBenefit, buildVoucherSelectionKey } from "../../../shared/pos/posLoyalty";
-import { calculateCashChange, normalizeCashReceived } from "../../../shared/pos/posPayment";
+import { calculateCashChange, getCashPaymentSummary, normalizeCashReceived } from "../../../shared/pos/posPayment";
 import { buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
 
 export default function usePosComposer() {
   const announcedQrPaymentIdsRef = useRef(new Set());
+  const runtimeRefreshInFlightRef = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState(null);
@@ -97,6 +99,7 @@ export default function usePosComposer() {
   const [pointsInput, setPointsInput] = useState("");
   const [orderNote, setOrderNote] = useState("");
   const [rawProducts, setRawProducts] = useState([]);
+  const [rawCategories, setRawCategories] = useState([]);
   const [rawCoupons, setRawCoupons] = useState([]);
   const [rawSmartPromotions, setRawSmartPromotions] = useState([]);
   const [activeCategory, setActiveCategory] = useState("");
@@ -105,6 +108,7 @@ export default function usePosComposer() {
   const [busyPagers, setBusyPagers] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [pickupOrders, setPickupOrders] = useState([]);
+  const [deliveryOrders, setDeliveryOrders] = useState([]);
   const [pendingPaymentSessions, setPendingPaymentSessions] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -137,8 +141,8 @@ export default function usePosComposer() {
   });
 
   const catalog = useMemo(
-    () => buildPosCatalog({ products: rawProducts }),
-    [rawProducts]
+    () => buildPosCatalog({ products: rawProducts, categories: rawCategories }),
+    [rawCategories, rawProducts]
   );
 
   const defaultCategory = useMemo(
@@ -190,6 +194,18 @@ export default function usePosComposer() {
     orderCode: String(order.orderCode || order.id || "").trim(),
     displayOrderCode: String(order.displayOrderCode || order.orderCode || order.id || "").trim()
   });
+
+  const getWebsiteOrderSourceType = (order = {}) => (
+    order?.fulfillmentType === "delivery" ? "website_delivery" : "website_pickup"
+  );
+
+  const getWebsiteOrderAmount = (order = {}) => (
+    Number(order?.collectAmount || order?.totalAmount || order?.paymentAmount || 0)
+  );
+
+  const getWebsiteOrderQrSourceType = (order = {}) => (
+    order?.fulfillmentType === "delivery" ? "delivery_order_payment_qr" : "pickup_order_payment_qr"
+  );
 
   const mergeRecentHistoryOrders = (posOrders = [], pickupHistoryOrders = [], limit = 16) => {
     const merged = [
@@ -267,26 +283,28 @@ export default function usePosComposer() {
     return currentSessions.filter((session) => !isPosPaymentSessionTerminal(session));
   };
 
-  const refreshPosRuntime = async (branchUuid = "", { includeRecentOrders = true } = {}) => {
+  const refreshPosRuntime = async (branchUuid = "", { includeRecentOrders = true, silent = false } = {}) => {
     if (!branchUuid) return;
-    if (includeRecentOrders) {
+    if (runtimeRefreshInFlightRef.current) return;
+    runtimeRefreshInFlightRef.current = true;
+    if (includeRecentOrders && !silent) {
       setHistoryLoading(true);
       setHistoryError("");
       setPickupOrdersLoading(true);
       setPickupOrdersError("");
     }
     try {
-      const [nextBusyPagers, nextRecentOrders, nextPickupOrders, nextPickupHistoryOrders, nextPaymentSessions] = await Promise.all([
+      const [nextBusyPagers, nextRecentOrders, nextWebsiteOrders, nextWebsiteHistoryOrders, nextPaymentSessions] = await Promise.all([
         getBusyPosPagerNumbers({ branchUuid }),
         includeRecentOrders ? getPosRecentOrders({ branchUuid, limit: 8 }) : Promise.resolve(null),
         includeRecentOrders
-          ? getPosPickupOrders({ branchUuid, limit: 80 }).catch((error) => {
+          ? getPosWebsiteOrders({ branchUuid, limit: 80 }).catch((error) => {
               setPickupOrdersError(error?.message || "Không tải được đơn hẹn lấy.");
               return [];
             })
           : Promise.resolve(null),
         includeRecentOrders
-          ? getPosPickupHistoryOrders({ branchUuid, limit: 20 }).catch((error) => {
+          ? getPosWebsiteHistoryOrders({ branchUuid, limit: 20 }).catch((error) => {
               setHistoryError(error?.message || "Khong tai duoc lich su don hen lay.");
               return [];
             })
@@ -299,17 +317,26 @@ export default function usePosComposer() {
       const activePaymentSessions = await cleanupExpiredPaymentSessions(branchUuid, nextPaymentSessions);
       setBusyPagers(nextBusyPagers);
       if (includeRecentOrders && Array.isArray(nextRecentOrders)) {
-        setRecentOrders(mergeRecentHistoryOrders(nextRecentOrders, nextPickupHistoryOrders, 16));
+        setRecentOrders(mergeRecentHistoryOrders(nextRecentOrders, nextWebsiteHistoryOrders, 16));
       }
-      if (includeRecentOrders && Array.isArray(nextPickupOrders)) {
-        setPickupOrders(nextPickupOrders);
+      if (includeRecentOrders && nextWebsiteOrders && typeof nextWebsiteOrders === "object") {
+        if (Array.isArray(nextWebsiteOrders)) {
+          setPickupOrders(nextWebsiteOrders);
+          setDeliveryOrders([]);
+        } else {
+          setPickupOrders(Array.isArray(nextWebsiteOrders.pickupOrders) ? nextWebsiteOrders.pickupOrders : []);
+          setDeliveryOrders(Array.isArray(nextWebsiteOrders.deliveryOrders) ? nextWebsiteOrders.deliveryOrders : []);
+        }
       }
       setPendingPaymentSessions(activePaymentSessions);
     } catch (error) {
       setHistoryError(error?.message || "Không tải được lịch sử POS.");
     } finally {
-      setHistoryLoading(false);
-      setPickupOrdersLoading(false);
+      runtimeRefreshInFlightRef.current = false;
+      if (!silent) {
+        setHistoryLoading(false);
+        setPickupOrdersLoading(false);
+      }
     }
   };
 
@@ -597,6 +624,7 @@ export default function usePosComposer() {
       if (active) {
         if (productResult.ok) {
           setRawProducts(productResult.products);
+          setRawCategories(Array.isArray(productResult.categories) ? productResult.categories : []);
           setMenuMessage(productResult.message || "");
           if (catalogConfigResult.ok) {
             setRawCoupons(Array.isArray(catalogConfigResult.coupons) ? catalogConfigResult.coupons : []);
@@ -664,6 +692,58 @@ export default function usePosComposer() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    return subscribePosAuthState(({ event, session: nextSession }) => {
+      if (event === "SIGNED_OUT") {
+        runtimeRefreshInFlightRef.current = false;
+        setSession(null);
+        setProfile(null);
+        setShift(null);
+        setShiftSummary(null);
+        setShiftSummaryError("");
+        setClosingCash("");
+        setClosingNote("");
+        setOpeningCash("");
+        setBusy(false);
+        setBusyPagers([]);
+        setRecentOrders([]);
+        setPickupOrders([]);
+        setDeliveryOrders([]);
+        setPendingPaymentSessions([]);
+        setHistoryLoading(false);
+        setHistoryError("");
+        setPickupOrdersLoading(false);
+        setPickupOrdersError("");
+        setCart([]);
+        setPaymentConfirmed(null);
+        setQrSession(null);
+        setQrPreviewIdentity(null);
+        setQrModalOpen(false);
+        setQrLoading(false);
+        setQrError("");
+        setPickupQrSession(null);
+        setPickupQrOrder(null);
+        setPickupQrModalOpen(false);
+        setPickupQrLoading(false);
+        setPickupQrError("");
+        setCustomerName("");
+        setCustomerPhone("");
+        setCustomerLookup({ loading: false, result: null, error: "" });
+        setSelectedVoucherId("");
+        setPointsInput("");
+        setOrderNote("");
+        setPagerNumber("");
+        setShiftMessage("");
+        setAuthMessage("Phiên đăng nhập POS đã hết hạn. Vui lòng đăng nhập lại.");
+        return;
+      }
+
+      if (nextSession?.user?.id) {
+        setSession(nextSession);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -908,7 +988,7 @@ export default function usePosComposer() {
     if (!profile?.branchUuid || !shift?.id) return undefined;
 
     const timer = globalThis.setInterval(() => {
-      refreshPosRuntime(profile.branchUuid, { includeRecentOrders: false });
+      refreshPosRuntime(profile.branchUuid, { includeRecentOrders: true, silent: true });
       refreshShiftSummary(shift);
     }, 15000);
 
@@ -1134,6 +1214,7 @@ export default function usePosComposer() {
     setBusyPagers([]);
     setRecentOrders([]);
     setPickupOrders([]);
+    setDeliveryOrders([]);
     setPendingPaymentSessions([]);
     setHistoryError("");
     setPickupOrdersError("");
@@ -1202,17 +1283,21 @@ export default function usePosComposer() {
       return false;
     }
 
+    const cashSummary = getCashPaymentSummary(totals.total);
     const normalizedReceived = normalizeCashReceived(cashReceived);
-    if (normalizedReceived < totals.total) {
+    if (normalizedReceived < cashSummary.paymentAmount) {
       setShiftMessage("Tiền khách đưa chưa đủ để xác nhận thanh toán.");
       return false;
     }
 
     setPaymentConfirmed({
       method: "cash",
-      amount: totals.total,
+      amount: cashSummary.paymentAmount,
+      originalAmount: cashSummary.originalAmount,
+      cashRoundingDiscount: cashSummary.cashRoundingDiscount,
+      cashRoundingUnit: cashSummary.cashRoundingUnit,
       received: normalizedReceived,
-      change: calculateCashChange(totals.total, normalizedReceived),
+      change: calculateCashChange(cashSummary.paymentAmount, normalizedReceived),
       reference: `CASH-${Date.now()}`
     });
     setShiftMessage("Đã xác nhận thanh toán tiền mặt. Đang mở két tiền...");
@@ -1477,14 +1562,15 @@ export default function usePosComposer() {
       return false;
     }
 
-    const amount = Number(order.totalAmount || order.paymentAmount || 0);
+    const amount = getWebsiteOrderAmount(order);
+    const cashSummary = getCashPaymentSummary(amount);
     const normalizedReceived = normalizeCashReceived(cashReceived);
-    if (normalizedReceived < amount) {
+    if (normalizedReceived < cashSummary.paymentAmount) {
       setPickupOrdersError("Tiền khách đưa chưa đủ để xác nhận thanh toán.");
       return false;
     }
 
-    const cashChange = calculateCashChange(amount, normalizedReceived);
+    const cashChange = calculateCashChange(cashSummary.paymentAmount, normalizedReceived);
 
     setPickupOrdersLoading(true);
     setPickupOrdersError("");
@@ -1492,9 +1578,12 @@ export default function usePosComposer() {
       order,
       shift,
       cashierName: profile?.name || profile?.email || "POS mobile",
+      paymentAmount: cashSummary.paymentAmount,
+      cashRoundingDiscount: cashSummary.cashRoundingDiscount,
+      cashRoundingUnit: cashSummary.cashRoundingUnit,
       cashReceived: normalizedReceived,
       cashChange,
-      paymentReference: `CASH-PICKUP-${Date.now()}`
+      paymentReference: `${order?.fulfillmentType === "delivery" ? "CASH-DELIVERY" : "CASH-PICKUP"}-${Date.now()}`
     });
     setPickupOrdersLoading(false);
 
@@ -1507,10 +1596,13 @@ export default function usePosComposer() {
       order: result.order || order,
       paymentConfirmed: {
         method: "cash",
-        amount,
+        amount: cashSummary.paymentAmount,
+        originalAmount: cashSummary.originalAmount,
+        cashRoundingDiscount: cashSummary.cashRoundingDiscount,
+        cashRoundingUnit: cashSummary.cashRoundingUnit,
         received: normalizedReceived,
         change: cashChange,
-        reference: result.order?.paymentReference || `CASH-PICKUP-${Date.now()}`,
+        reference: result.order?.paymentReference || `${order?.fulfillmentType === "delivery" ? "CASH-DELIVERY" : "CASH-PICKUP"}-${Date.now()}`,
         paidAt: result.order?.paidAt || new Date().toISOString()
       }
     });
@@ -1555,14 +1647,16 @@ export default function usePosComposer() {
       cashierName: profile?.name || profile?.email || "POS mobile",
       customerName: order.customerName,
       customerPhone: normalizeCustomerPhone(order.customerPhone),
-      amountExpected: order.totalAmount,
+      amountExpected: getWebsiteOrderAmount(order),
       cart: [],
       checkout: {
         orderIdentity,
         existingOrderId: order.id,
-        pickupOrderId: order.id,
+        pickupOrderId: order.fulfillmentType === "pickup" ? order.id : "",
+        deliveryOrderId: order.fulfillmentType === "delivery" ? order.id : "",
+        websiteOrderId: order.id,
         posShiftId: shift.id,
-        sourceType: "website_pickup"
+        sourceType: getWebsiteOrderSourceType(order)
       }
     });
     setPickupQrLoading(false);
@@ -1594,7 +1688,7 @@ export default function usePosComposer() {
       cashierName: profile?.name || profile?.email || "POS mobile",
       paymentReference: session.paymentReference,
       paidAt: session.paidAt || new Date().toISOString(),
-      paymentAmount: session.amountPaid || session.amountExpected || pickupQrOrder.totalAmount
+      paymentAmount: session.amountPaid || session.amountExpected || getWebsiteOrderAmount(pickupQrOrder)
     });
     setPickupQrLoading(false);
 
@@ -1608,7 +1702,7 @@ export default function usePosComposer() {
       order: result.order || pickupQrOrder,
       paymentConfirmed: {
         method: "bank_qr",
-        amount: session.amountPaid || session.amountExpected || pickupQrOrder.totalAmount,
+        amount: session.amountPaid || session.amountExpected || getWebsiteOrderAmount(pickupQrOrder),
         reference: session.paymentReference,
         paidAt: session.paidAt || result.order?.paidAt || new Date().toISOString()
       }
@@ -1680,7 +1774,7 @@ export default function usePosComposer() {
     }
 
     const identity = pickupQrSession?.orderIdentity || buildPickupOrderIdentity(pickupQrOrder || {});
-    const amount = pickupQrSession?.amountExpected || pickupQrOrder?.totalAmount || 0;
+    const amount = pickupQrSession?.amountExpected || getWebsiteOrderAmount(pickupQrOrder) || 0;
     const qrUrl = buildPosQrImageUrl({
       branch,
       amount,
@@ -1708,7 +1802,7 @@ export default function usePosComposer() {
       await printLocalReceipt({
         text: receiptText,
         qrUrl,
-        sourceType: "pickup_order_payment_qr"
+        sourceType: getWebsiteOrderQrSourceType(pickupQrOrder)
       });
       setShiftMessage("Đã in phiếu QR cho đơn hẹn lấy.");
     } catch (error) {
@@ -1865,6 +1959,7 @@ export default function usePosComposer() {
     setPendingPaymentSessions([]);
     setRecentOrders([]);
     setPickupOrders([]);
+    setDeliveryOrders([]);
     setPickupQrSession(null);
     setPickupQrOrder(null);
     setPickupQrModalOpen(false);
@@ -1940,9 +2035,12 @@ export default function usePosComposer() {
       paymentReference: paymentConfirmed.reference,
       paidAt: paymentConfirmed.paidAt || new Date().toISOString(),
       posShiftId: shift.id,
-      paymentMeta: paymentConfirmed.paymentSessionId
-        ? { provider: "sepay", paymentSessionId: paymentConfirmed.paymentSessionId }
-        : {},
+      paymentMeta: {
+        ...(paymentConfirmed.paymentSessionId ? { provider: "sepay", paymentSessionId: paymentConfirmed.paymentSessionId } : {}),
+        originalAmount: paymentConfirmed.originalAmount || paymentConfirmed.amount,
+        cashRoundingDiscount: paymentConfirmed.cashRoundingDiscount || 0,
+        cashRoundingUnit: paymentConfirmed.cashRoundingUnit || 0
+      },
       orderIdentity: paymentConfirmed.orderIdentity || null
     });
     setBusy(false);
@@ -2068,6 +2166,7 @@ export default function usePosComposer() {
     busyPagers,
     recentOrders,
     pickupOrders,
+    deliveryOrders,
     pendingPaymentSessions,
     historyLoading,
     historyError,

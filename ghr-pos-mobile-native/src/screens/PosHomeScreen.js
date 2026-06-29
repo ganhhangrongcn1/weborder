@@ -28,12 +28,13 @@ import {
   setLocalPrinterMode
 } from "../services/pos/posPrinterService";
 import { formatCashBreakdownSummary } from "../services/pos/posCashBreakdownService";
+import { getCashPaymentSummary } from "../shared/pos/posPayment";
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../styles/posTheme";
 import { formatMoney } from "../utils/format";
 
 const POS_TABS = [
   { key: "sale", label: "Bán hàng", icon: "sale" },
-  { key: "pickup", label: "Đơn hẹn lấy", icon: "order" },
+  { key: "pickup", label: "Đơn website", icon: "order" },
   { key: "history", label: "Lịch sử", icon: "history" },
   { key: "shift", label: "Tổng quan ca", icon: "shift" },
   { key: "settings", label: "Thiết lập", icon: "settings" }
@@ -63,7 +64,9 @@ export default function PosHomeScreen() {
   const [printerMessage, setPrinterMessage] = useState("");
   const { width } = useWindowDimensions();
   const isWide = width >= 820;
-  const productColumns = width >= 1180 ? 3 : 2;
+  const orderColumnWidth = isWide ? Math.min(480, Math.max(420, Math.round(width * 0.36))) : "100%";
+  const estimatedMenuWidth = isWide && typeof orderColumnWidth === "number" ? width - orderColumnWidth - 42 : width;
+  const productColumns = estimatedMenuWidth >= 760 ? 3 : 2;
   const {
     email,
     setEmail,
@@ -123,6 +126,7 @@ export default function PosHomeScreen() {
     busyPagers,
     recentOrders,
     pickupOrders,
+    deliveryOrders,
     pendingPaymentSessions,
     historyLoading,
     historyError,
@@ -161,6 +165,12 @@ export default function PosHomeScreen() {
     closeShiftNow,
     hasOpenShift
   } = usePosComposer();
+  const hasBenefitSignal = Boolean(
+    (Array.isArray(promotionHints) && promotionHints.length) ||
+      (loyaltyBenefit?.checkoutVouchers || []).length ||
+      loyaltyBenefit?.selectedVoucher ||
+      Number(loyaltyBenefit?.voucherDiscount || 0) > 0
+  );
 
   const continueAddProduct = (product) => {
     if (!product) return;
@@ -214,7 +224,7 @@ export default function PosHomeScreen() {
   };
 
   const handleOpenCashModal = () => {
-    setCashReceived(String(totals.total || ""));
+    setCashReceived(String(getCashPaymentSummary(totals.total).paymentAmount || ""));
     setCashPaymentOpen(true);
   };
 
@@ -226,7 +236,7 @@ export default function PosHomeScreen() {
   const handleOpenPickupCashModal = (order) => {
     if (!order?.id) return;
     setSelectedPickupOrder(order);
-    setPickupCashReceived(String(order.totalAmount || order.paymentAmount || ""));
+    setPickupCashReceived(String(getCashPaymentSummary(order.collectAmount || order.totalAmount || order.paymentAmount || 0).paymentAmount || ""));
     setPickupCashPaymentOpen(true);
   };
 
@@ -244,6 +254,11 @@ export default function PosHomeScreen() {
     () => (Array.isArray(pickupOrders) ? pickupOrders : []).filter((order) => order.paymentStatus !== "paid").length,
     [pickupOrders]
   );
+  const deliveryUnpaidCount = useMemo(
+    () => (Array.isArray(deliveryOrders) ? deliveryOrders : []).filter((order) => order.paymentStatus !== "paid").length,
+    [deliveryOrders]
+  );
+  const websiteUnpaidCount = pickupUnpaidCount + deliveryUnpaidCount;
 
   useEffect(() => {
     let active = true;
@@ -554,32 +569,21 @@ export default function PosHomeScreen() {
         />
       </View>
 
-        <View style={[styles.orderColumn, !isWide && styles.orderColumnStack]}>
+        <View style={[styles.orderColumn, isWide && { width: orderColumnWidth }, !isWide && styles.orderColumnStack]}>
           <View style={styles.orderTop}>
             <PosCustomerSummaryCard
-            customerName={customerName}
-            customerPhone={customerPhone}
-            setCustomerName={setCustomerName}
-            setCustomerPhone={setCustomerPhone}
-            lookup={customerLookup}
-            onOpen={() => setCustomerModalOpen(true)}
-            onClear={() => {
-              setCustomerName("");
-              setCustomerPhone("");
-              setSelectedVoucherId("");
-              setPointsInput("");
-            }}
-            />
-
-            <PosBenefitCard
-              loyaltyBenefit={loyaltyBenefit}
-              selectedVoucherId={selectedVoucherId}
-              setSelectedVoucherId={setSelectedVoucherId}
-              promotionHints={promotionHints}
-              disabled={busy || Boolean(paymentConfirmed)}
-              modalOpen={benefitModalOpen}
-              setModalOpen={setBenefitModalOpen}
-              renderOverlay={false}
+              customerName={customerName}
+              customerPhone={customerPhone}
+              setCustomerName={setCustomerName}
+              setCustomerPhone={setCustomerPhone}
+              lookup={customerLookup}
+              onOpen={() => setCustomerModalOpen(true)}
+              onClear={() => {
+                setCustomerName("");
+                setCustomerPhone("");
+                setSelectedVoucherId("");
+                setPointsInput("");
+              }}
             />
 
             {!!menuMessage && <Text style={styles.noticeBox}>{menuMessage}</Text>}
@@ -602,6 +606,8 @@ export default function PosHomeScreen() {
             totals={totals}
             paymentConfirmed={paymentConfirmed}
             disabled={busy}
+            hasBenefitSignal={hasBenefitSignal}
+            onOpenBenefit={() => setBenefitModalOpen(true)}
             onConfirmCash={handleOpenCashModal}
             onOpenQrPayment={openQrPayment}
             onCreateOrder={createCashOrder}
@@ -620,6 +626,8 @@ export default function PosHomeScreen() {
 
   const renderShiftWorkspaceV2 = () => {
     const expectedCash = Number(shiftSummary?.expectedCash || shift?.openingCash || 0);
+    const cashRoundingTotal = Number(shiftSummary?.cashRoundingTotal || 0);
+    const hasCashRounding = cashRoundingTotal > 0;
     const openedAtText = formatShiftMetaTime(shift?.openedAt);
     const shiftCode = shift?.id ? String(shift.id).slice(0, 8).toUpperCase() : "--";
 
@@ -684,6 +692,9 @@ export default function PosHomeScreen() {
             <View style={styles.summaryCell}>
               <Text style={styles.summaryLabel}>Tiền mặt dự kiến</Text>
               <Text style={styles.summaryValue}>{formatMoney(expectedCash)}</Text>
+              {hasCashRounding ? (
+                <Text style={styles.summaryHint}>Giảm làm tròn {formatMoney(cashRoundingTotal)}</Text>
+              ) : null}
             </View>
             <View style={styles.summaryCell}>
               <Text style={styles.summaryLabel}>CK chưa xử lý</Text>
@@ -1002,7 +1013,8 @@ export default function PosHomeScreen() {
           {activeTab === "sale" && renderSaleWorkspace()}
           {activeTab === "pickup" && (
             <PosPickupOrdersPanel
-              orders={pickupOrders}
+              pickupOrders={pickupOrders}
+              deliveryOrders={deliveryOrders}
               loading={pickupOrdersLoading}
               error={pickupOrdersError}
               onRefresh={refreshCurrentPosRuntime}
@@ -1036,7 +1048,7 @@ export default function PosHomeScreen() {
           {POS_TABS.map((tab) => {
             const active = tab.key === activeTab;
             const showHistoryBadge = tab.key === "history" && pendingPaymentSessions.length > 0;
-            const showPickupBadge = tab.key === "pickup" && pickupUnpaidCount > 0;
+            const showPickupBadge = tab.key === "pickup" && websiteUnpaidCount > 0;
             return (
               <Pressable
                 key={tab.key}
@@ -1056,7 +1068,7 @@ export default function PosHomeScreen() {
                 {(showHistoryBadge || showPickupBadge) && (
                   <View style={styles.navBadge}>
                     <Text style={styles.navBadgeText}>
-                      {showPickupBadge ? pickupUnpaidCount : pendingPaymentSessions.length}
+                      {showPickupBadge ? websiteUnpaidCount : pendingPaymentSessions.length}
                     </Text>
                   </View>
                 )}
@@ -1148,15 +1160,16 @@ export default function PosHomeScreen() {
       <CashPaymentModal
         key={selectedPickupOrder?.id || "pickup-cash-modal"}
         visible={pickupCashPaymentOpen}
-        amount={Number(selectedPickupOrder?.totalAmount || selectedPickupOrder?.paymentAmount || 0)}
+        amount={Number(selectedPickupOrder?.collectAmount || selectedPickupOrder?.totalAmount || selectedPickupOrder?.paymentAmount || 0)}
         cashReceived={pickupCashReceived}
         setCashReceived={setPickupCashReceived}
         processing={pickupOrdersLoading}
-        eyebrow="Đơn hẹn lấy"
+        eyebrow={selectedPickupOrder?.fulfillmentType === "delivery" ? "Đơn giao hàng" : "Đơn hẹn lấy"}
         title={`Thu tiền ${selectedPickupOrder?.displayOrderCode || selectedPickupOrder?.orderCode || ""}`.trim()}
         subtitle={[
           selectedPickupOrder?.customerName || "",
-          selectedPickupOrder?.customerPhone || ""
+          selectedPickupOrder?.customerPhone || "",
+          selectedPickupOrder?.fulfillmentType === "delivery" ? selectedPickupOrder?.deliveryAddress || "" : ""
         ].filter(Boolean).join(" · ")}
         useSystemModal={false}
         onClose={() => {
@@ -1184,7 +1197,7 @@ export default function PosHomeScreen() {
       <QrPaymentModal
         visible={pickupQrModalOpen}
         branch={branch}
-        amount={pickupQrSession?.amountExpected || pickupQrOrder?.totalAmount || 0}
+        amount={pickupQrSession?.amountExpected || pickupQrOrder?.collectAmount || pickupQrOrder?.totalAmount || 0}
         draftSession={pickupQrSession}
         previewIdentity={pickupQrOrder ? {
           orderCode: pickupQrOrder.orderCode || pickupQrOrder.id,
@@ -1222,19 +1235,19 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     flexDirection: "row",
-    gap: 6
+    gap: 8
   },
   workspaceStack: {
     flexDirection: "column"
   },
   menuColumn: {
-    flex: 1.08,
+    flex: 1,
     minWidth: 0,
     minHeight: 0,
     overflow: "hidden"
   },
   orderColumn: {
-    width: 372,
+    width: 440,
     flexShrink: 0,
     minHeight: 0,
     overflow: "hidden",
@@ -1783,6 +1796,11 @@ const styles = StyleSheet.create({
     color: POS_COLORS.text,
     fontSize: 14,
     fontWeight: "900"
+  },
+  summaryHint: {
+    color: POS_COLORS.muted,
+    fontSize: 11,
+    fontWeight: "800"
   },
   field: {
     gap: 7

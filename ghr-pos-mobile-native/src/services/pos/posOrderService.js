@@ -232,6 +232,12 @@ export async function createPosTakeawayOrderMobile({
   const branchInfo = normalizeBranchForOrder(branch || {});
   const shiftId = toText(posShiftId || shift?.id);
   const safePaymentMeta = paymentMeta && typeof paymentMeta === "object" ? paymentMeta : {};
+  const cashRoundingDiscount = paymentMethod === "cash"
+    ? Math.max(0, toNumber(safePaymentMeta.cashRoundingDiscount, 0))
+    : 0;
+  const originalPaymentAmount = paymentMethod === "cash"
+    ? Math.max(0, toNumber(safePaymentMeta.originalAmount || totalAmount, totalAmount))
+    : totalAmount;
   const safeCustomerLookup = customerLookup && typeof customerLookup === "object" ? customerLookup : null;
   const safeRedeemRule = pointRedeemRule && typeof pointRedeemRule === "object" ? pointRedeemRule : null;
   const requestKey = toText(
@@ -286,6 +292,9 @@ export async function createPosTakeawayOrderMobile({
       paymentMethod,
       paymentStatus,
       paymentAmount: Math.max(0, toNumber(paymentAmount || totalAmount)),
+      originalPaymentAmount,
+      cashRoundingDiscount,
+      cashRoundingUnit: Math.max(0, toNumber(safePaymentMeta.cashRoundingUnit, 0)),
       paymentReference: toText(paymentReference),
       paidAt: toText(paidAt) || createdAt,
       subtotal,
@@ -312,6 +321,7 @@ export async function createPosTakeawayOrderMobile({
 
   if (supabase) {
     let profileWarning = "";
+    let customerProfileReady = !displayCustomerPhone;
     const metadata = {
       source: "pos_mobile",
       channel: "pos_mobile",
@@ -327,6 +337,9 @@ export async function createPosTakeawayOrderMobile({
       paymentStatus,
       paymentMethod,
       paymentAmount: Math.max(0, toNumber(paymentAmount || totalAmount)),
+      originalPaymentAmount,
+      cashRoundingDiscount,
+      cashRoundingUnit: Math.max(0, toNumber(safePaymentMeta.cashRoundingUnit, 0)),
       paymentReference: toText(paymentReference),
       paidAt: toText(paidAt) || createdAt,
       cashierName: toText(cashierName),
@@ -382,7 +395,9 @@ export async function createPosTakeawayOrderMobile({
         source: "pos_mobile",
         sourceRef: orderIdentity.orderCode
       });
-      if (!profileResult.ok) {
+      if (profileResult.ok) {
+        customerProfileReady = true;
+      } else {
         profileWarning = ` Chưa tạo được hồ sơ khách vãng lai: ${profileResult.message || "kiểm tra RPC upsert_customer_stub_profile."}`;
       }
     }
@@ -402,6 +417,21 @@ export async function createPosTakeawayOrderMobile({
         return queueOfflineOrder(orderError.message || "Mất kết nối khi tạo đơn POS.");
       }
       return { ok: false, message: orderError.message || "Không tạo được đơn POS." };
+    }
+
+    if (displayCustomerPhone && !customerProfileReady) {
+      const profileRetryResult = await ensurePosGuestProfile({
+        phone: displayCustomerPhone,
+        name: customerName || safeCustomerLookup?.customerName || displayCustomerName,
+        source: "pos_mobile_order",
+        sourceRef: orderIdentity.orderCode
+      });
+      if (profileRetryResult.ok) {
+        customerProfileReady = true;
+        profileWarning = "";
+      } else {
+        profileWarning = ` Đơn đã tạo nhưng chưa tạo được hồ sơ khách vãng lai: ${profileRetryResult.message || "kiểm tra RPC upsert_customer_stub_profile."}`;
+      }
     }
 
     const itemRows = items.map((item, index) => {
@@ -448,21 +478,25 @@ export async function createPosTakeawayOrderMobile({
     }
 
     let loyaltyWarning = "";
-    try {
-      await applyPosOrderLoyaltyMobile({
-        phone: displayCustomerPhone,
-        orderId: orderIdentity.orderCode,
-        amount: totalAmount,
-        createdAt,
-        orderStatus: normalizedOrderStatus,
-        pointsDiscount: pointsSpent,
-        promoSource,
-        promoVoucherId,
-        promoCode,
-        loyaltyRule: safeRedeemRule
-      });
-    } catch (error) {
-      loyaltyWarning = ` Đơn đã tạo nhưng chưa đồng bộ được điểm loyalty: ${error?.message || "kiểm tra RPC apply_loyalty_event."}`;
+    if (displayCustomerPhone && !customerProfileReady) {
+      loyaltyWarning = " Đơn đã tạo nhưng chưa đồng bộ loyalty vì chưa xác nhận được hồ sơ khách trên Supabase.";
+    } else {
+      try {
+        await applyPosOrderLoyaltyMobile({
+          phone: displayCustomerPhone,
+          orderId: orderIdentity.orderCode,
+          amount: totalAmount,
+          createdAt,
+          orderStatus: normalizedOrderStatus,
+          pointsDiscount: pointsSpent,
+          promoSource,
+          promoVoucherId,
+          promoCode,
+          loyaltyRule: safeRedeemRule
+        });
+      } catch (error) {
+        loyaltyWarning = ` Đơn đã tạo nhưng chưa đồng bộ được điểm loyalty: ${error?.message || "kiểm tra RPC apply_loyalty_event."}`;
+      }
     }
 
     return {
