@@ -1,6 +1,6 @@
 ﻿import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.jsx";
-import { resolveOrderSourceKey } from "../../../services/partnerOrderService.js";
+import { resolveSalesChannelKey } from "../../../services/partnerOrderService.js";
 import {
   branchOptionMatchesOrder,
   buildBranchFilterOptions
@@ -35,24 +35,20 @@ function formatOrderTime(value) {
   return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 }
 
+function formatNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  return new Intl.NumberFormat("vi-VN").format(numeric);
+}
+
 function getOrderBranch(order) {
   return [order.deliveryBranchName, order.pickupBranchName, order.branchName, order.branch_name, order.nexposSiteName, order.nexposHubName]
     .map((value) => String(value || "").trim())
     .find(Boolean) || "--";
 }
 
-function getOrderCustomerKey(order = {}) {
-  return String(
-    order.customerPhoneKey ||
-    order.customerPhone ||
-    order.phone ||
-    order.orderCustomerPhone ||
-    ""
-  ).trim();
-}
-
 function getOrderChannel(order) {
-  return resolveOrderSourceKey(order);
+  return resolveSalesChannelKey(order);
 }
 
 function getOrderSourceMeta(order) {
@@ -62,6 +58,7 @@ function getOrderSourceMeta(order) {
   if (normalized.includes("grab")) return { label: "Grab", tone: "success", className: "is-grab" };
   if (normalized.includes("shopee")) return { label: "Shopee", tone: "warning", className: "is-shopee" };
   if (normalized.includes("xanh")) return { label: "Xanh Ngon", tone: "info", className: "is-xanh-ngon" };
+  if (normalized === "pos" || normalized.includes("pos")) return { label: "POS", tone: "neutral", className: "is-pos" };
   if (normalized.includes("website")) return { label: "Website", tone: "brand", className: "is-website" };
   if (normalized.includes("pickup") || normalized.includes("đến lấy") || normalized.includes("den lay")) {
     return { label: "Đến lấy", tone: "brand", className: "is-pickup" };
@@ -69,6 +66,8 @@ function getOrderSourceMeta(order) {
   if (normalized.includes("ship") || normalized.includes("delivery") || normalized.includes("giao")) {
     return { label: "Ship", tone: "info", className: "is-ship" };
   }
+  if (normalized === "unknown") return { label: "Chưa xác định", tone: "warning", className: "is-unknown" };
+  if (normalized === "other") return { label: "Khác", tone: "neutral", className: "is-other" };
   if (rawSource) return { label: rawSource, tone: "neutral", className: "is-other" };
 
   const fulfillmentType = String(order.fulfillmentType || "").toLowerCase();
@@ -78,44 +77,24 @@ function getOrderSourceMeta(order) {
   return { label: "Chưa rõ", tone: "neutral", className: "is-unknown" };
 }
 
-function buildTopProducts(orders = []) {
-  const map = new Map();
-  orders.forEach((order) => {
-    (order.items || []).forEach((item) => {
-      const key = String(item.id || item.name || "").trim();
-      if (!key) return;
-      const current = map.get(key) || { id: key, name: item.name || "Món", image: item.image || item.thumbnail || "", quantity: 0 };
-      current.quantity += Number(item.quantity || 1);
-      map.set(key, current);
-    });
-  });
-  return [...map.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 5);
-}
-
-function buildChannels(orders = []) {
-  const map = new Map();
-  orders.forEach((order) => {
-    const channel = getOrderSourceMeta(order).label;
-    if (!channel) return;
-    map.set(channel, (map.get(channel) || 0) + 1);
-  });
-  return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-}
-
 function getChannelLabel(channel = "") {
   const normalized = String(channel || "").toLowerCase();
   if (normalized === "grabfood") return "Grab";
   if (normalized === "shopeefood") return "ShopeeFood";
   if (normalized === "xanhngon") return "Xanh Ngon";
   if (normalized === "qr_counter") return "QR";
+  if (normalized === "pos" || normalized === "posmobile" || normalized === "pos_mobile") return "POS";
   if (normalized === "website") return "Web";
-  return channel || "Khác";
+  if (normalized === "unknown") return "Chưa xác định";
+  if (normalized === "other") return "Khác";
+  return channel || "Chưa xác định";
 }
 
 function buildRpcChannels(channels = []) {
   return channels.map((channel) => ({
     name: getChannelLabel(channel.channel),
     count: Number(channel.totalOrders || 0),
+    revenueOrderCount: Number(channel.revenueOrderCount || 0),
     revenue: Number(channel.netRevenue || 0)
   }));
 }
@@ -128,14 +107,49 @@ function formatComparison(currentValue = 0, previousValue = 0) {
   return `${percent > 0 ? "+" : ""}${percent}%`;
 }
 
+function getDashboardPresetLabel(preset = "today") {
+  if (preset === "yesterday") return "Hôm qua";
+  if (preset === "week") return "Tuần này";
+  if (preset === "month") return "Tháng này";
+  if (preset === "custom") return "Tùy chỉnh";
+  return "Hôm nay";
+}
+
+function formatDateLabel(value = "") {
+  if (!value) return "";
+  const date = new Date(`${value}T12:00:00+07:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+}
+
+function buildDashboardPeriodLabel(preset = "today", dateFrom = "", dateTo = "") {
+  const presetLabel = getDashboardPresetLabel(preset);
+  const fromLabel = formatDateLabel(dateFrom);
+  const toLabel = formatDateLabel(dateTo);
+  if (!fromLabel && !toLabel) return presetLabel;
+  if (fromLabel && toLabel && fromLabel !== toLabel) return `${presetLabel}: ${fromLabel} - ${toLabel}`;
+  return `${presetLabel}: ${fromLabel || toLabel}`;
+}
+
+function buildSiteTrafficSubtitle(siteTrafficSummary = null) {
+  if (!siteTrafficSummary) return "Chưa có dữ liệu tracking";
+  const uniqueVisitors = formatNumber(siteTrafficSummary.uniqueVisitors || 0);
+  const averageViews = Number(siteTrafficSummary.averagePageViewsPerVisitor || 0);
+  const averageLabel = averageViews ? `${averageViews} trang/khách` : "0 trang/khách";
+  return `${uniqueVisitors} khách · ${averageLabel}`;
+}
+
 function getChannelColor(name = "") {
   const normalized = String(name || "").toLowerCase();
   if (normalized.includes("grab")) return "#16a34a";
   if (normalized.includes("shopee")) return "#f97316";
   if (normalized.includes("xanh")) return "#0f766e";
-  if (normalized.includes("website")) return "#2563eb";
+  if (normalized.includes("pos")) return "#334155";
+  if (normalized === "web" || normalized.includes("website")) return "#2563eb";
   if (normalized.includes("qr")) return "#7c3aed";
   if (normalized.includes("lấy") || normalized.includes("pickup")) return "#d97706";
+  if (normalized.includes("chưa xác định")) return "#dc2626";
+  if (normalized === "khác") return "#94a3b8";
   return "#64748b";
 }
 
@@ -152,27 +166,6 @@ function buildDonutSegments(channels = [], total = 0) {
     offset += value;
     return segment;
   });
-}
-
-function formatChartDate(date) {
-  return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
-}
-
-function buildRevenueSeries(orders = []) {
-  const dayMap = new Map();
-  orders.forEach((order) => {
-    const createdAt = new Date(order.createdAt);
-    if (Number.isNaN(createdAt.getTime())) return;
-    const key = toVietnamDateInputValue(createdAt);
-    if (!dayMap.has(key)) {
-      dayMap.set(key, { key, label: formatChartDate(createdAt), value: 0, date: new Date(createdAt) });
-    }
-    dayMap.get(key).value += getDashboardOrderRevenue(order);
-  });
-
-  return [...dayMap.values()]
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .map((item) => ({ key: item.key, label: item.label, value: item.value }));
 }
 
 function getDashboardOrderRevenue(order = {}) {
@@ -212,10 +205,12 @@ function buildRevenueChart(series = []) {
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
   const step = safeSeries.length > 1 ? plotWidth / (safeSeries.length - 1) : plotWidth;
+  const labelStep = Math.max(1, Math.ceil(safeSeries.length / 7));
   const points = safeSeries.map((item, index) => ({
     ...item,
     x: padding.left + index * step,
-    y: padding.top + (1 - item.value / maxValue) * plotHeight
+    y: padding.top + (1 - item.value / maxValue) * plotHeight,
+    showLabel: index % labelStep === 0 || index === safeSeries.length - 1
   }));
   const linePath = buildSmoothRevenuePath(points);
   const areaPath = points.length
@@ -226,6 +221,54 @@ function buildRevenueChart(series = []) {
     value: Math.round(maxValue * (1 - ratio))
   }));
   return { width, height, padding, points, linePath, areaPath, gridLines };
+}
+
+function formatUpdatedTime(value = "") {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+function getBranchShortLabel(label = "") {
+  return String(label || "")
+    .replace(/^Gánh Hàng Rong\s*[-–]\s*/i, "")
+    .trim();
+}
+
+function getDashboardTrustMeta(statusMap = {}) {
+  const requiredKeys = ["summary", "analytics", "revenue", "orders"];
+  const states = requiredKeys.map((key) => statusMap?.[key]?.status || "idle");
+  const hasError = states.includes("error");
+  const isLoading = states.some((status) => status === "loading" || status === "idle");
+  const updatedTimes = requiredKeys
+    .map((key) => statusMap?.[key]?.updatedAt)
+    .filter(Boolean)
+    .map((value) => new Date(value).getTime())
+    .filter(Number.isFinite);
+
+  if (hasError) {
+    return {
+      tone: "danger",
+      label: "Dữ liệu Supabase chưa đầy đủ",
+      updatedAt: updatedTimes.length ? new Date(Math.min(...updatedTimes)).toISOString() : ""
+    };
+  }
+  if (isLoading) {
+    return {
+      tone: "warning",
+      label: "Đang tải dữ liệu Supabase",
+      updatedAt: ""
+    };
+  }
+  return {
+    tone: "success",
+    label: "Dữ liệu trực tiếp từ Supabase",
+    updatedAt: updatedTimes.length ? new Date(Math.min(...updatedTimes)).toISOString() : ""
+  };
 }
 
 export default function AdminDashboardSection({
@@ -244,14 +287,17 @@ export default function AdminDashboardSection({
   ordersDoing,
   todayRevenue,
   totalCustomers,
+  periodCustomers,
   filteredRecentOrders,
-  ordersSnapshot = [],
-  chartOrdersSnapshot = [],
   dashboardChartPreset,
   setDashboardChartPreset,
   dashboardSummary,
+  dashboardRevenueSeries,
   businessAnalytics,
+  siteTrafficSummary,
+  dashboardDataStatus = {},
   selectedBranchFilter = "all",
+  setSelectedBranchFilter,
   branches = []
 }) {
   const branchOptions = buildBranchFilterOptions(branches);
@@ -266,75 +312,90 @@ export default function AdminDashboardSection({
     ) === String(selectedBranchFilter));
     return rawBranch ? branch.label === rawBranch.name : false;
   }) || null;
-  const branchScopedOrders = selectedBranchOption
-    ? ordersSnapshot.filter((order) => branchOptionMatchesOrder(order, selectedBranchOption))
-    : ordersSnapshot;
-  const branchScopedChartOrders = selectedBranchOption
-    ? chartOrdersSnapshot.filter((order) => branchOptionMatchesOrder(order, selectedBranchOption))
-    : chartOrdersSnapshot;
   const branchScopedRecentOrders = selectedBranchOption
     ? filteredRecentOrders.filter((order) => branchOptionMatchesOrder(order, selectedBranchOption))
     : filteredRecentOrders;
-  const branchScopedCustomers = new Set(branchScopedOrders.map((order) => getOrderCustomerKey(order)).filter(Boolean)).size;
-  const branchScopedOrdersTotal = branchScopedOrders.length;
-  const branchScopedOrdersNew = branchScopedOrders.filter((order) => {
-    const status = String(order.status || "").toLowerCase();
-    return status === "pending_zalo" || status === "pending" || status === "new";
-  }).length;
-  const branchScopedPreparingOrders = branchScopedOrders.filter((order) => {
-    const status = String(order.status || "").toLowerCase();
-    return status === "confirmed" || status === "preparing";
-  }).length;
-  const branchScopedDeliveringOrders = branchScopedOrders.filter((order) => {
-    const status = String(order.status || "").toLowerCase();
-    return status === "delivering" || status === "shipping";
-  }).length;
-  const branchScopedCompletedOrders = branchScopedOrders.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
-  const branchScopedCancelledOrders = branchScopedOrders.filter((order) => ["cancel", "cancelled", "canceled", "huy"].includes(String(order.status || "").toLowerCase())).length;
-  const branchScopedRevenue = branchScopedOrders.reduce((sum, order) => sum + getDashboardOrderRevenue(order), 0);
-  const rpcMetrics = dashboardSummary?.source === "rpc" && !selectedBranchOption ? dashboardSummary.current : null;
-  const displayedOrdersTotal = rpcMetrics?.totalOrders ?? (selectedBranchOption ? branchScopedOrdersTotal : ordersTotal);
-  const displayedOrdersNew = rpcMetrics?.pendingOrders ?? (selectedBranchOption ? branchScopedOrdersNew : ordersNew);
-  const displayedRevenue = rpcMetrics?.netRevenue ?? (selectedBranchOption ? branchScopedRevenue : todayRevenue);
-  const displayedCustomers = selectedBranchOption
-    ? branchScopedCustomers
-    : dashboardSummary?.source === "rpc"
-      ? dashboardSummary.totalCustomers
-      : totalCustomers;
-  const topProducts = buildTopProducts(branchScopedOrders);
+  const rpcMetrics = dashboardSummary?.source === "rpc" ? dashboardSummary.current : null;
+  const displayedOrdersTotal = rpcMetrics ? ordersTotal : null;
+  const displayedOrdersNew = rpcMetrics ? ordersNew : null;
+  const displayedRevenue = rpcMetrics ? todayRevenue : null;
+  const displayedCustomers = rpcMetrics ? totalCustomers : null;
+  const displayedPeriodCustomers = rpcMetrics ? periodCustomers : null;
+  const topProducts = businessAnalytics?.source === "rpc"
+    ? businessAnalytics.topByQuantity.slice(0, 5).map((item, index) => ({
+        id: `${item.name}-${index}`,
+        name: item.name,
+        quantity: Number(item.quantity || 0)
+      }))
+    : [];
   const topProductMax = Math.max(...topProducts.map((item) => item.quantity), 1);
-  const channels = dashboardSummary?.source === "rpc" && !selectedBranchOption
+  const channels = dashboardSummary?.source === "rpc"
     ? buildRpcChannels(dashboardSummary.channels)
-    : buildChannels(branchScopedOrders);
+    : [];
   const channelTotal = channels.reduce((sum, channel) => sum + channel.count, 0);
+  const channelRevenueTotal = channels.reduce((sum, channel) => sum + channel.revenue, 0);
   const channelSegments = buildDonutSegments(channels, channelTotal);
-  const averageOrder = rpcMetrics?.averageOrderValue ?? (displayedOrdersTotal ? Math.round(displayedRevenue / displayedOrdersTotal) : 0);
-  const completionCount = rpcMetrics?.completedOrders ?? branchScopedCompletedOrders;
-  const completionRate = displayedOrdersTotal ? Math.round((completionCount / displayedOrdersTotal) * 100) : 0;
+  const posChannel = channels.find((channel) => channel.name === "POS") || {
+    count: 0,
+    revenueOrderCount: 0,
+    revenue: 0
+  };
+  const unknownChannel = channels.find((channel) => channel.name === "Chưa xác định") || {
+    count: 0,
+    revenue: 0
+  };
+  const posAverageOrder = posChannel.revenueOrderCount
+    ? Math.round(posChannel.revenue / posChannel.revenueOrderCount)
+    : 0;
+  const posRevenueShare = channelRevenueTotal
+    ? Math.round((posChannel.revenue / channelRevenueTotal) * 1000) / 10
+    : 0;
+  const averageOrder = rpcMetrics?.averageOrderValue ?? null;
+  const completionCount = rpcMetrics?.completedOrders ?? null;
+  const completionRate = rpcMetrics && displayedOrdersTotal
+    ? Math.round((completionCount / displayedOrdersTotal) * 100)
+    : rpcMetrics
+      ? 0
+      : null;
   const pendingOrders = rpcMetrics?.pendingOrders ?? displayedOrdersNew;
-  const preparingOrders = rpcMetrics?.preparingOrders ?? (selectedBranchOption ? branchScopedPreparingOrders : ordersDoing);
-  const deliveringOrders = rpcMetrics?.deliveringOrders ?? branchScopedDeliveringOrders;
-  const cancelledOrders = rpcMetrics?.cancelledOrders ?? branchScopedCancelledOrders;
-  const cancelRate = rpcMetrics
-    ? Math.round(Number(rpcMetrics?.cancelRate || 0) * 100)
-    : displayedOrdersTotal
-      ? Math.round((cancelledOrders / displayedOrdersTotal) * 100)
-      : 0;
+  const preparingOrders = rpcMetrics ? rpcMetrics.preparingOrders : ordersDoing;
+  const deliveringOrders = rpcMetrics?.deliveringOrders ?? null;
+  const cancelledOrders = rpcMetrics?.cancelledOrders ?? null;
+  const cancelRate = rpcMetrics ? Math.round(Number(rpcMetrics.cancelRate || 0) * 100) : null;
+  const reportPeriodLabel = buildDashboardPeriodLabel(dashboardDatePreset || "today", dashboardDateFrom, dashboardDateTo);
+  const displayedSitePageViews = siteTrafficSummary ? formatNumber(siteTrafficSummary.pageViews || 0) : "--";
+  const siteTrafficSubtitle = dashboardDataStatus?.traffic?.status === "error"
+    ? "Không thể tải dữ liệu Supabase"
+    : buildSiteTrafficSubtitle(siteTrafficSummary);
+  const operationalStats = [
+    { label: "Đơn mới", value: pendingOrders ?? "--", detail: "chờ xác nhận", tone: pendingOrders ? "warning" : "success" },
+    { label: "Đang làm", value: preparingOrders ?? "--", detail: "bếp xử lý", tone: "brand" },
+    { label: "Đang giao", value: deliveringOrders ?? "--", detail: "trên đường", tone: "info" },
+    { label: "Đơn hủy", value: cancelledOrders ?? "--", detail: cancelRate === null ? "chưa có dữ liệu" : `${cancelRate}% tổng đơn`, tone: cancelRate >= 10 ? "warning" : "neutral" }
+  ];
 
-  const chartOrdersTotal = branchScopedChartOrders.length;
-  const chartRevenueTotal = branchScopedChartOrders.reduce((sum, order) => sum + getDashboardOrderRevenue(order), 0);
-  const chartAverageOrder = chartOrdersTotal ? Math.round(chartRevenueTotal / chartOrdersTotal) : 0;
-  const chartCompletionCount = branchScopedChartOrders.filter((order) => ["done", "completed"].includes(String(order.status || "").toLowerCase())).length;
-  const chartOrdersNew = branchScopedChartOrders.filter((order) => {
-    const status = String(order.status || "").toLowerCase();
-    return status === "pending_zalo" || status === "pending" || status === "new";
-  }).length;
-  const chartOrdersDoing = branchScopedChartOrders.filter((order) => {
-    const status = String(order.status || "").toLowerCase();
-    return status === "confirmed" || status === "delivering";
-  }).length;
-  const revenueSeries = buildRevenueSeries(branchScopedChartOrders);
+  const chartMetrics = dashboardRevenueSeries?.source === "rpc" ? dashboardRevenueSeries.metrics : null;
+  const chartOrdersTotal = chartMetrics?.totalOrders ?? null;
+  const chartRevenueTotal = chartMetrics?.netRevenue ?? null;
+  const chartAverageOrder = chartMetrics?.averageOrderValue ?? null;
+  const chartCompletionCount = chartMetrics?.completedOrders ?? null;
+  const chartOrdersNew = chartMetrics?.pendingOrders ?? null;
+  const chartOrdersDoing = chartMetrics
+    ? chartMetrics.preparingOrders + chartMetrics.deliveringOrders
+    : null;
+  const revenueSeries = dashboardRevenueSeries?.source === "rpc"
+    ? dashboardRevenueSeries.dailyRevenue.map((item) => ({
+        key: item.date,
+        label: formatDateLabel(item.date),
+        value: item.netRevenue
+      }))
+    : [];
   const revenueChart = buildRevenueChart(revenueSeries);
+  const trustMeta = getDashboardTrustMeta(dashboardDataStatus);
+  const trustUpdatedLabel = formatUpdatedTime(trustMeta.updatedAt);
+  const dashboardErrors = Object.values(dashboardDataStatus)
+    .filter((item) => item?.status === "error" && item?.error)
+    .map((item) => item.error);
   const todayText = toVietnamDateInputValue();
 
   const applyPreset = (preset) => {
@@ -362,80 +423,160 @@ export default function AdminDashboardSection({
 
   return (
     <div className="admin-dashboard-page">
-      <section className="admin-dashboard-hero">
-        <div>
-          <AdminBadge tone="warning">Chi nhánh mở: {openBranches}/{totalBranches}</AdminBadge>
-          <AdminBadge tone={dashboardSummary?.source === "rpc" && !selectedBranchOption ? "success" : "warning"}>
-            {dashboardSummary?.source === "rpc" && !selectedBranchOption ? "Nguồn KPI: Supabase RPC" : "Nguồn KPI: feed theo chi nhánh"}
-          </AdminBadge>
-          {selectedBranchOption ? <AdminBadge tone="brand">Đang xem: {selectedBranchOption.label}</AdminBadge> : null}
-          <h2>Chào mừng quay trở lại!</h2>
-          <p>Tổng quan hoạt động kinh doanh và vận hành đơn hàng hôm nay.</p>
+      <header className="admin-dashboard-compact-head">
+        <div className="admin-dashboard-compact-title">
+          <div>
+            <span>Dashboard</span>
+            <h1>Tổng quan vận hành</h1>
+          </div>
+          <div className="admin-dashboard-compact-badges">
+            <AdminBadge tone={trustMeta.tone}>{trustMeta.label}</AdminBadge>
+            <AdminBadge tone={openBranches === totalBranches ? "success" : "warning"}>
+              {openBranches}/{totalBranches} chi nhánh mở
+            </AdminBadge>
+          </div>
+        </div>
+        <div className="admin-dashboard-compact-meta">
+          <strong>{reportPeriodLabel}</strong>
+          <span>{selectedBranchOption ? selectedBranchOption.label : "Tất cả chi nhánh"}</span>
+          <small>{trustUpdatedLabel ? `Cập nhật ${trustUpdatedLabel}` : "Đang đồng bộ dữ liệu"}</small>
+        </div>
+      </header>
+
+      <section className="admin-dashboard-scope-bar" aria-label="Phạm vi dashboard">
+        <div className="admin-dashboard-branch-switcher">
+          <span>Chi nhánh</span>
+          <div role="group" aria-label="Chọn chi nhánh">
+            <button
+              type="button"
+              className={selectedBranchFilter === "all" ? "is-active" : ""}
+              aria-pressed={selectedBranchFilter === "all"}
+              onClick={() => setSelectedBranchFilter?.("all")}
+            >
+              Tất cả
+            </button>
+            {branchOptions.map((branch) => (
+              <button
+                type="button"
+                key={branch.value}
+                className={branch.value === selectedBranchFilter ? "is-active" : ""}
+                aria-pressed={branch.value === selectedBranchFilter}
+                onClick={() => setSelectedBranchFilter?.(branch.value)}
+                title={branch.label}
+              >
+                {getBranchShortLabel(branch.label)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="admin-dashboard-period-controls">
+          <label className="admin-dashboard-period-select">
+            <Icon name="clock" size={16} />
+            <AdminSelect
+              value={dashboardDatePreset || "today"}
+              onChange={(event) => {
+                const nextPreset = event.target.value;
+                if (nextPreset === "custom") {
+                  setDashboardDatePreset("custom");
+                  return;
+                }
+                applyPreset(nextPreset);
+              }}
+              options={[
+                { value: "today", label: "Hôm nay" },
+                { value: "yesterday", label: "Hôm qua" },
+                { value: "week", label: "Tuần này" },
+                { value: "month", label: "Tháng này" },
+                { value: "custom", label: "Tùy chỉnh..." }
+              ]}
+            />
+          </label>
+          {dashboardDatePreset === "custom" ? (
+            <>
+              <label className="admin-dashboard-period-date">
+                <span>Từ</span>
+                <AdminInput type="date" value={dashboardDateFrom || ""} max={dashboardDateTo || todayText} onChange={(event) => { setDashboardDateFrom(event.target.value); setDashboardDatePreset("custom"); }} />
+              </label>
+              <label className="admin-dashboard-period-date">
+                <span>Đến</span>
+                <AdminInput type="date" value={dashboardDateTo || ""} min={dashboardDateFrom || ""} max={todayText} onChange={(event) => { setDashboardDateTo(event.target.value); setDashboardDatePreset("custom"); }} />
+              </label>
+            </>
+          ) : null}
         </div>
       </section>
 
-      <div className="admin-dashboard-toolbar">
-        <label className="admin-dashboard-search">
-          <span>⌕</span>
-          <AdminInput
-            value={dashboardSearch}
-            onChange={(event) => setDashboardSearch(event.target.value)}
-            placeholder="Tìm mã đơn, tên khách, số điện thoại..."
-          />
-        </label>
-        <label className="admin-dashboard-search admin-dashboard-preset">
-          <span>🗂</span>
-          <AdminSelect
-            value={dashboardDatePreset || "today"}
-            onChange={(event) => {
-              const nextPreset = event.target.value;
-              if (nextPreset === "custom") {
-                setDashboardDatePreset("custom");
-                return;
-              }
-              applyPreset(nextPreset);
-            }}
-            options={[
-              { value: "today", label: "Hôm nay" },
-              { value: "yesterday", label: "Hôm qua" },
-              { value: "week", label: "Tuần này" },
-              { value: "month", label: "Tháng này" },
-              { value: "custom", label: "Tùy chỉnh..." }
-            ]}
-          />
-        </label>
-        {dashboardDatePreset === "custom" ? (
-          <>
-            <label className="admin-dashboard-search">
-              <span>📅</span>
-              <AdminInput type="date" value={dashboardDateFrom || ""} max={dashboardDateTo || todayText} onChange={(event) => { setDashboardDateFrom(event.target.value); setDashboardDatePreset("custom"); }} placeholder="Từ ngày" />
-            </label>
-            <label className="admin-dashboard-search">
-              <span>📅</span>
-              <AdminInput type="date" value={dashboardDateTo || ""} min={dashboardDateFrom || ""} max={todayText} onChange={(event) => { setDashboardDateTo(event.target.value); setDashboardDatePreset("custom"); }} placeholder="Đến ngày" />
-            </label>
-          </>
-        ) : null}
-      </div>
+      {dashboardErrors.length ? (
+        <div className="admin-dashboard-data-alert" role="alert">
+          <Icon name="warning" size={17} />
+          <span>{dashboardErrors.join(" ")}</span>
+        </div>
+      ) : null}
 
       <div className="admin-dashboard-stat-grid">
-        <AdminStatCard title="Doanh thu thực nhận" value={formatMoney(displayedRevenue)} subtitle="Web: trừ ship · FoodApp: ưu tiên số đối soát" icon={<Icon name="tag" size={22} />} tone="green" />
-        <AdminStatCard title="Tổng đơn" value={displayedOrdersTotal} subtitle={`${displayedOrdersNew} đơn mới`} icon={<Icon name="bag" size={22} />} tone="brand" />
-        <AdminStatCard title="Khách hàng" value={displayedCustomers ?? "--"} subtitle={selectedBranchOption ? "Khách có đơn trong chi nhánh đã chọn" : "Tổng hồ sơ lifetime từ Supabase"} icon={<Icon name="user" size={22} />} tone="blue" />
-        <AdminStatCard title="Đơn trung bình" value={formatMoney(averageOrder)} subtitle={`${completionRate}% hoàn tất`} icon={<Icon name="star" size={22} />} tone="amber" />
+        <AdminStatCard title="Doanh thu thực nhận" value={displayedRevenue === null ? "--" : formatMoney(displayedRevenue)} subtitle="Không tính đơn hủy/đặt trước · Web trừ phí ship" icon={<Icon name="tag" size={22} />} tone="green" />
+        <AdminStatCard title="Tổng đơn" value={displayedOrdersTotal ?? "--"} subtitle={displayedOrdersNew === null ? "Chưa có dữ liệu Supabase" : `${displayedOrdersNew} đơn mới`} icon={<Icon name="bag" size={22} />} tone="brand" />
+        <AdminStatCard title="Khách mua trong kỳ" value={displayedPeriodCustomers ?? "--"} subtitle="Số điện thoại duy nhất có đơn trong kỳ" icon={<Icon name="user" size={22} />} tone="blue" />
+        <AdminStatCard title="Tổng hồ sơ khách" value={displayedCustomers ?? "--"} subtitle="Toàn bộ hồ sơ khách hàng trên Supabase" icon={<Icon name="user" size={22} />} tone="slate" />
+        <AdminStatCard title="Đơn trung bình" value={averageOrder === null ? "--" : formatMoney(averageOrder)} subtitle={completionRate === null ? "Chưa có dữ liệu Supabase" : `${completionRate}% hoàn tất`} icon={<Icon name="star" size={22} />} tone="amber" />
+        <AdminStatCard title="Lượt truy cập" value={displayedSitePageViews} subtitle={siteTrafficSubtitle} icon={<Icon name="eye" size={22} />} tone="slate" />
       </div>
 
-      <div className="admin-dashboard-stat-grid">
-        <AdminStatCard title="Đơn mới chờ xử lý" value={pendingOrders} subtitle="Cần xác nhận sớm" icon={<Icon name="star" size={22} />} tone="amber" />
-        <AdminStatCard title="Đang làm" value={preparingOrders} subtitle="Bếp đang xử lý" icon={<Icon name="bag" size={22} />} tone="brand" />
-        <AdminStatCard title="Đang giao" value={deliveringOrders} subtitle="Đang trên đường giao khách" icon={<Icon name="user" size={22} />} tone="blue" />
-        <AdminStatCard title="Đơn hủy" value={cancelledOrders} subtitle={`${cancelRate}% tổng đơn`} icon={<Icon name="tag" size={22} />} tone="red" />
-      </div>
+      <section className="admin-dashboard-ops-strip" aria-label="Trạng thái vận hành">
+        <div className="admin-dashboard-ops-title">
+          <div>
+            <span>Vận hành</span>
+            <strong>Trạng thái đơn</strong>
+          </div>
+        </div>
+        <div className="admin-dashboard-ops-items">
+          {operationalStats.map((item) => (
+            <article key={item.label} className={`admin-dashboard-ops-item is-${item.tone}`}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <small>{item.detail}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="admin-dashboard-pos-strip" aria-label="Hiệu quả bán tại quầy POS">
+        <div className="admin-dashboard-pos-heading">
+          <div>
+            <span>Bán trực tiếp</span>
+            <strong>POS tại quầy</strong>
+          </div>
+          {unknownChannel.count ? (
+            <AdminBadge tone="warning">{unknownChannel.count} đơn chưa xác định nguồn</AdminBadge>
+          ) : (
+            <AdminBadge tone="success">Nguồn đơn đã phân loại đầy đủ</AdminBadge>
+          )}
+        </div>
+        <div className="admin-dashboard-pos-metrics">
+          <article>
+            <span>Doanh thu POS</span>
+            <strong>{formatMoney(posChannel.revenue)}</strong>
+          </article>
+          <article>
+            <span>Số đơn POS</span>
+            <strong>{formatNumber(posChannel.count)}</strong>
+          </article>
+          <article>
+            <span>Đơn trung bình POS</span>
+            <strong>{formatMoney(posAverageOrder)}</strong>
+          </article>
+          <article>
+            <span>Tỷ trọng doanh thu</span>
+            <strong>{posRevenueShare}%</strong>
+          </article>
+        </div>
+      </section>
 
       <div className="admin-dashboard-main-grid">
         <AdminPanel
           title="Doanh thu thực nhận"
-          description="Web: tổng thanh toán trừ phí ship. FoodApp: ưu tiên số thực nhận từ dữ liệu đối soát; nếu thiếu sẽ dùng số doanh thu gần nhất có sẵn."
+          description="Web: tổng thanh toán trừ phí ship. FoodApp: ưu tiên số thực nhận từ dữ liệu đối soát. Không tính đơn hủy và đơn đặt trước."
           className="admin-dashboard-revenue-card"
           action={
             <AdminSelect
@@ -449,48 +590,58 @@ export default function AdminDashboardSection({
             />
           }
         >
-          <div className="admin-dashboard-revenue-visual">
-            <strong>{formatMoney(chartRevenueTotal)}</strong>
-            <span>{chartOrdersTotal} đơn · {formatMoney(chartAverageOrder)} / đơn</span>
-            <div className="admin-dashboard-revenue-chart">
-              <svg viewBox={`0 0 ${revenueChart.width} ${revenueChart.height}`} role="img" aria-label="Revenue chart">
-                <defs>
-                  <linearGradient id="adminRevenueArea" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#fb923c" stopOpacity="0.28" />
-                    <stop offset="100%" stopColor="#fb923c" stopOpacity="0.03" />
-                  </linearGradient>
-                </defs>
-                {revenueChart.gridLines.map((line) => (
-                  <g key={line.y}>
-                    <line x1={revenueChart.padding.left} x2={revenueChart.width - revenueChart.padding.right} y1={line.y} y2={line.y} />
-                    <text x="10" y={line.y + 4}>{formatMoney(line.value)}</text>
-                  </g>
-                ))}
-                <path className="admin-dashboard-revenue-area" d={revenueChart.areaPath} />
-                <path className="admin-dashboard-revenue-line" d={revenueChart.linePath} />
-                {revenueChart.points.map((point) => <circle key={point.key} cx={point.x} cy={point.y} r="5" />)}
-                {revenueChart.points.map((point) => (
-                  <text key={`${point.key}-label`} className="admin-dashboard-revenue-date" x={point.x} y={revenueChart.height - 10}>{point.label}</text>
-                ))}
-              </svg>
+          {chartMetrics ? (
+            <>
+              <div className="admin-dashboard-revenue-visual">
+                <strong>{formatMoney(chartRevenueTotal)}</strong>
+                <span>{chartOrdersTotal} đơn · {formatMoney(chartAverageOrder)} / đơn</span>
+                <div className="admin-dashboard-revenue-chart">
+                  <svg viewBox={`0 0 ${revenueChart.width} ${revenueChart.height}`} role="img" aria-label="Biểu đồ doanh thu thực nhận">
+                    <defs>
+                      <linearGradient id="adminRevenueArea" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#fb923c" stopOpacity="0.28" />
+                        <stop offset="100%" stopColor="#fb923c" stopOpacity="0.03" />
+                      </linearGradient>
+                    </defs>
+                    {revenueChart.gridLines.map((line) => (
+                      <g key={line.y}>
+                        <line x1={revenueChart.padding.left} x2={revenueChart.width - revenueChart.padding.right} y1={line.y} y2={line.y} />
+                        <text x="10" y={line.y + 4}>{formatMoney(line.value)}</text>
+                      </g>
+                    ))}
+                    <path className="admin-dashboard-revenue-area" d={revenueChart.areaPath} />
+                    <path className="admin-dashboard-revenue-line" d={revenueChart.linePath} />
+                    {revenueChart.points.map((point) => <circle key={point.key} cx={point.x} cy={point.y} r="5" />)}
+                    {revenueChart.points.filter((point) => point.showLabel).map((point) => (
+                      <text key={`${point.key}-label`} className="admin-dashboard-revenue-date" x={point.x} y={revenueChart.height - 10}>{point.label}</text>
+                    ))}
+                  </svg>
+                </div>
+              </div>
+              <div className="admin-dashboard-mini-metrics">
+                <span><b>{chartOrdersNew}</b> đơn mới</span>
+                <span><b>{chartOrdersDoing}</b> đang xử lý</span>
+                <span><b>{chartCompletionCount}</b> hoàn tất</span>
+                {dashboardSummary?.source === "rpc" ? (
+                  <>
+                    <span><b>{formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.previous.netRevenue)}</b> so với kỳ trước</span>
+                    <span><b>{formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.week.netRevenue)}</b> so với cùng kỳ tuần trước</span>
+                    <span><b>{formatComparison(dashboardSummary.current.totalOrders, dashboardSummary.previous.totalOrders)}</b> số đơn so với kỳ trước</span>
+                    <span><b>{formatComparison(dashboardSummary.current.totalOrders, dashboardSummary.week.totalOrders)}</b> số đơn so với cùng kỳ tuần trước</span>
+                  </>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <div className="admin-dashboard-empty-note">
+              {dashboardDataStatus?.revenue?.status === "error"
+                ? "Không thể tải biểu đồ doanh thu từ Supabase."
+                : "Đang tải biểu đồ doanh thu..."}
             </div>
-          </div>
-          <div className="admin-dashboard-mini-metrics">
-            <span><b>{chartOrdersNew}</b> đơn mới</span>
-            <span><b>{chartOrdersDoing}</b> đang xử lý</span>
-            <span><b>{chartCompletionCount}</b> hoàn tất</span>
-            {dashboardSummary?.source === "rpc" && !selectedBranchOption ? (
-              <>
-                <span><b>{formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.previous.netRevenue)}</b> so với kỳ trước</span>
-                <span><b>{formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.week.netRevenue)}</b> so với cùng kỳ tuần trước</span>
-                <span><b>{formatComparison(dashboardSummary.current.totalOrders, dashboardSummary.previous.totalOrders)}</b> số đơn so với kỳ trước</span>
-                <span><b>{formatComparison(dashboardSummary.current.totalOrders, dashboardSummary.week.totalOrders)}</b> số đơn so với cùng kỳ tuần trước</span>
-              </>
-            ) : null}
-          </div>
+          )}
         </AdminPanel>
 
-        <AdminPanel title="Đơn hàng theo kênh" description="Chỉ hiển thị khi đơn có dữ liệu kênh/source." className="admin-dashboard-channel-card">
+        <AdminPanel title="Đơn hàng theo kênh" description="Đơn thiếu source được giữ riêng ở Chưa xác định, không tự gộp vào Web." className="admin-dashboard-channel-card">
           {channels.length ? (
             <div className="admin-dashboard-channel-donut-wrap">
               <div className="admin-dashboard-channel-donut">
@@ -528,15 +679,21 @@ export default function AdminDashboardSection({
               })}
               </div>
             </div>
-          ) : <div className="admin-dashboard-empty-note">Chưa có dữ liệu kênh bán hàng trong đơn.</div>}
+          ) : (
+            <div className="admin-dashboard-empty-note">
+              {dashboardDataStatus?.summary?.status === "error"
+                ? "Không thể tải dữ liệu kênh bán từ Supabase."
+                : "Chưa có đơn theo kênh trong kỳ đã chọn."}
+            </div>
+          )}
         </AdminPanel>
 
-        <AdminPanel title="Top món bán chạy" description="Tính từ món trong các đơn hiện có." className="admin-dashboard-top-products">
+        <AdminPanel title="Top món bán chạy" description="Tổng hợp trực tiếp từ món trong đơn Supabase của kỳ đã chọn." className="admin-dashboard-top-products">
           {topProducts.length ? (
             <div className="admin-dashboard-product-list">
               {topProducts.map((item, index) => (
                 <article key={item.id} className="admin-dashboard-product-row">
-                  <span>{item.image ? <img src={item.image} alt="" /> : index + 1}</span>
+                  <span>{index + 1}</span>
                   <div>
                     <strong>{item.name}</strong>
                     <em><i style={{ width: `${Math.max(8, (item.quantity / topProductMax) * 100)}%` }} /></em>
@@ -545,15 +702,33 @@ export default function AdminDashboardSection({
                 </article>
               ))}
             </div>
-          ) : <div className="admin-dashboard-empty-note">Chưa có món nào trong đơn hàng.</div>}
+          ) : (
+            <div className="admin-dashboard-empty-note">
+              {dashboardDataStatus?.analytics?.status === "error"
+                ? "Không thể tải dữ liệu món bán từ Supabase."
+                : "Chưa có món bán trong kỳ đã chọn."}
+            </div>
+          )}
         </AdminPanel>
       </div>
 
       <div className="admin-dashboard-bottom-grid">
         <AdminPanel
           title="Đơn hàng gần đây"
-          description="Danh sách compact theo bộ lọc tìm kiếm hiện tại."
-          action={<AdminBadge tone="neutral">{branchScopedRecentOrders.length} đơn</AdminBadge>}
+          description="Đọc trực tiếp từ bảng đơn hàng Supabase theo bộ lọc hiện tại."
+          action={(
+            <div className="admin-dashboard-recent-actions">
+              <label className="admin-dashboard-recent-search">
+                <Icon name="search" size={15} />
+                <AdminInput
+                  value={dashboardSearch}
+                  onChange={(event) => setDashboardSearch(event.target.value)}
+                  placeholder="Tìm mã đơn, tên khách, số điện thoại..."
+                />
+              </label>
+              <AdminBadge tone="neutral">{branchScopedRecentOrders.length} đơn</AdminBadge>
+            </div>
+          )}
           className="admin-dashboard-recent-card"
         >
           {branchScopedRecentOrders.length ? (
@@ -581,12 +756,23 @@ export default function AdminDashboardSection({
               </AdminTableBody>
             </AdminTable>
           ) : (
-            <div className="admin-order-empty"><strong>Không tìm thấy đơn phù hợp.</strong></div>
+            <div className="admin-order-empty">
+              <strong>
+                {dashboardDataStatus?.orders?.status === "error"
+                  ? "Không thể tải danh sách đơn từ Supabase."
+                  : dashboardDataStatus?.orders?.status === "loading"
+                    ? "Đang tải danh sách đơn..."
+                    : "Không tìm thấy đơn phù hợp."}
+              </strong>
+            </div>
           )}
         </AdminPanel>
       </div>
 
-      <AdminBusinessAnalyticsSection analytics={businessAnalytics} />
+      <AdminBusinessAnalyticsSection
+        analytics={businessAnalytics}
+        status={dashboardDataStatus?.analytics?.status}
+      />
     </div>
   );
 }

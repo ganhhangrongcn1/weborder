@@ -167,6 +167,27 @@ function normalizeOrdersByPhoneForRead(ordersByPhone = {}) {
   }, {});
 }
 
+function filterOrdersByDateRange(ordersByPhone = {}, dateFrom = "", dateTo = "") {
+  const fromTime = dateFrom ? new Date(dateFrom).getTime() : 0;
+  const toTime = dateTo ? new Date(dateTo).getTime() : 0;
+  const hasFrom = Number.isFinite(fromTime) && fromTime > 0;
+  const hasTo = Number.isFinite(toTime) && toTime > 0;
+  if (!hasFrom && !hasTo) return ordersByPhone;
+
+  return Object.entries(ordersByPhone || {}).reduce((acc, [phone, orders]) => {
+    const filtered = (Array.isArray(orders) ? orders : []).filter((order) => {
+      const createdAt = order?.createdAt || order?.created_at || order?.orderTime || order?.order_time || "";
+      const time = new Date(createdAt || 0).getTime();
+      if (!Number.isFinite(time)) return false;
+      if (hasFrom && time < fromTime) return false;
+      if (hasTo && time >= toTime) return false;
+      return true;
+    });
+    if (filtered.length) acc[phone] = filtered;
+    return acc;
+  }, {});
+}
+
 function canWriteOrdersToSupabase() {
   return shouldWriteDomainToSupabase("orders");
 }
@@ -343,16 +364,17 @@ export const orderRepository = {
   async getAllByPhoneAsync(options = {}) {
     const dateFrom = String(options?.dateFrom || "").trim();
     const dateTo = String(options?.dateTo || "").trim();
+    const requireRemote = options?.requireRemote === true;
     const hasDateFilter = Boolean(dateFrom || dateTo);
     const now = Date.now();
-    if (!hasDateFilter && ordersRemoteCache.value && now - ordersRemoteCache.cachedAt < REMOTE_CACHE_TTL_MS) {
+    if (!requireRemote && !hasDateFilter && ordersRemoteCache.value && now - ordersRemoteCache.cachedAt < REMOTE_CACHE_TTL_MS) {
       return normalizeOrdersByPhoneForRead(normalizeOrdersByPhoneMap(ordersRemoteCache.value || {}));
     }
-    if (!hasDateFilter && ordersReadInFlight) {
+    if (!requireRemote && !hasDateFilter && ordersReadInFlight) {
       return ordersReadInFlight;
     }
     const readTask = (async () => {
-    const allowLocalFallback = shouldAllowLocalFallbackForDomain("orders");
+    const allowLocalFallback = !requireRemote && shouldAllowLocalFallbackForDomain("orders");
     const fallback = allowLocalFallback ? await repository.getAsync(STORAGE_KEYS.ordersByPhone, {}) : {};
     try {
       const remote = await coreSupabaseRepository.readOrdersByPhoneFromTable(
@@ -366,10 +388,17 @@ export const orderRepository = {
         }
         return normalizeOrdersByPhoneForRead(remoteOnly);
       }
+      if (requireRemote) {
+        throw new Error("Không thể kết nối nguồn đơn hàng Supabase.");
+      }
     } catch (error) {
       console.warn("[orderRepository] read orders tables failed", error);
+      if (requireRemote) throw error;
     }
-      const normalizedFallback = normalizeOrdersByPhoneMap(fallback);
+      let normalizedFallback = normalizeOrdersByPhoneMap(fallback);
+      if (hasDateFilter) {
+        normalizedFallback = filterOrdersByDateRange(normalizedFallback, dateFrom, dateTo);
+      }
       if (!hasDateFilter) {
         ordersRemoteCache = { value: normalizedFallback, cachedAt: Date.now() };
       }

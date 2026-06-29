@@ -67,15 +67,20 @@ function BranchList({ rows = [] }) {
   );
 }
 
-export default function AdminBusinessAnalyticsSection({ analytics }) {
+export default function AdminBusinessAnalyticsSection({ analytics, status = "idle" }) {
   if (!analytics) {
+    const isError = status === "error";
     return (
       <AdminPanel
         title="Hiệu quả kinh doanh"
-        description="Chạy file SQL Phase 3 trên Supabase để mở báo cáo món bán, khung giờ và chi nhánh."
+        description="Báo cáo món bán, khung giờ và chi nhánh lấy trực tiếp từ Supabase."
         className="admin-business-deploy-note"
       >
-        <div className="admin-dashboard-empty-note">Chưa có RPC `get_admin_business_analytics` trên Supabase.</div>
+        <div className="admin-dashboard-empty-note">
+          {isError
+            ? "Không thể tải báo cáo hiệu quả kinh doanh từ Supabase."
+            : "Đang tải báo cáo hiệu quả kinh doanh..."}
+        </div>
       </AdminPanel>
     );
   }

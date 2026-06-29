@@ -36,21 +36,37 @@ as $$
       then 'shopeefood'
     when public.normalize_order_counting_status(p_source) in ('xanh', 'xanhngon')
       then 'xanhngon'
+    when public.normalize_order_counting_status(p_source) in ('pos', 'posmobile', 'posapp', 'posmobileorder', 'taiquay')
+      then 'pos'
     when public.normalize_order_counting_status(p_source) in ('qr', 'qrcounter', 'counter')
       then 'qr_counter'
     when public.normalize_order_counting_status(p_fulfillment_type) in ('qr', 'qrcounter', 'counter')
       then 'qr_counter'
-    else 'website'
+    when public.normalize_order_counting_status(p_source) in (
+      'web',
+      'website',
+      'weborder',
+      'online',
+      'ecommerce'
+    ) then 'website'
+    when coalesce(trim(p_source), '') = ''
+      then 'unknown'
+    else 'other'
   end;
 $$;
+
+drop function if exists public.get_admin_dashboard_summary(timestamptz, timestamptz, text);
+drop function if exists public.get_admin_dashboard_summary(timestamptz, timestamptz, text, text);
 
 create or replace function public.get_admin_dashboard_summary(
   p_date_from timestamptz,
   p_date_to timestamptz,
-  p_branch_name text default null
+  p_branch_name text default null,
+  p_branch_uuid text default null
 )
 returns table(
   total_customers bigint,
+  period_customers bigint,
   current_metrics jsonb,
   previous_metrics jsonb,
   week_metrics jsonb,
@@ -82,18 +98,22 @@ periods as (
 web_orders as (
   select
     o.created_at as order_time,
+    public.normalize_vietnam_phone(o.customer_phone) as customer_key,
     coalesce(
       nullif(trim(o.delivery_branch_name), ''),
       nullif(trim(o.pickup_branch_name), ''),
       nullif(trim(o.branch_name), ''),
       'Chưa xác định'
     ) as branch_name,
+    coalesce(o.delivery_branch_uuid, o.pickup_branch_uuid, o.branch_uuid)::text as branch_uuid,
     public.normalize_dashboard_channel(
       coalesce(
-        o.metadata ->> 'orderSource',
-        o.metadata ->> 'source',
-        o.metadata ->> 'channel',
-        'website'
+        nullif(trim(o.metadata ->> 'orderSource'), ''),
+        nullif(trim(o.metadata ->> 'source'), ''),
+        nullif(trim(o.metadata ->> 'channel'), ''),
+        nullif(trim(o.metadata ->> 'sourceType'), ''),
+        nullif(trim(o.metadata ->> 'platform'), ''),
+        ''
       ),
       o.fulfillment_type
     ) as channel_key,
@@ -116,7 +136,11 @@ web_orders as (
   where o.created_at >= least(b.previous_from, b.week_from)
     and o.created_at < b.current_to
     and (
-      coalesce(trim(p_branch_name), '') = ''
+      (coalesce(trim(p_branch_name), '') = '' and coalesce(trim(p_branch_uuid), '') = '')
+      or (
+        coalesce(trim(p_branch_uuid), '') <> ''
+        and coalesce(o.delivery_branch_uuid, o.pickup_branch_uuid, o.branch_uuid)::text = trim(p_branch_uuid)
+      )
       or public.normalize_order_counting_status(
         coalesce(
           nullif(trim(o.delivery_branch_name), ''),
@@ -130,12 +154,16 @@ web_orders as (
 partner_orders as (
   select
     coalesce(po.order_time, po.created_at) as order_time,
+    public.normalize_vietnam_phone(
+      coalesce(nullif(trim(po.customer_phone_key), ''), po.customer_phone)
+    ) as customer_key,
     coalesce(
       nullif(trim(po.branch_name), ''),
       nullif(trim(po.nexpos_site_name), ''),
       nullif(trim(po.nexpos_hub_name), ''),
       'Chưa xác định'
     ) as branch_name,
+    po.branch_uuid::text as branch_uuid,
     public.normalize_dashboard_channel(po.partner_source) as channel_key,
     case
       when public.normalize_order_counting_status(po.order_status) in ('cancel', 'canceled', 'cancelled', 'huy', 'dahuy', 'refunded')
@@ -172,7 +200,11 @@ partner_orders as (
   where coalesce(po.order_time, po.created_at) >= least(b.previous_from, b.week_from)
     and coalesce(po.order_time, po.created_at) < b.current_to
     and (
-      coalesce(trim(p_branch_name), '') = ''
+      (coalesce(trim(p_branch_name), '') = '' and coalesce(trim(p_branch_uuid), '') = '')
+      or (
+        coalesce(trim(p_branch_uuid), '') <> ''
+        and po.branch_uuid::text = trim(p_branch_uuid)
+      )
       or public.normalize_order_counting_status(
         coalesce(
           nullif(trim(po.branch_name), ''),
@@ -225,6 +257,7 @@ channels as (
   select
     u.channel_key,
     count(*) filter (where u.status_group <> 'preorder')::integer as total_orders,
+    count(*) filter (where u.status_group not in ('cancelled', 'preorder'))::integer as revenue_order_count,
     coalesce(sum(u.net_revenue) filter (where u.status_group not in ('cancelled', 'preorder')), 0)::numeric as net_revenue
   from unified_orders u
   cross join bounds b
@@ -238,6 +271,15 @@ select
     from public.profiles p
     where p.role = 'customer'
   ) as total_customers,
+  (
+    select count(distinct u.customer_key)::bigint
+    from unified_orders u
+    cross join bounds b
+    where u.order_time >= b.current_from
+      and u.order_time < b.current_to
+      and u.status_group not in ('cancelled', 'preorder')
+      and coalesce(u.customer_key, '') <> ''
+  ) as period_customers,
   coalesce((select metrics from metric_json where period_key = 'current'), '{}'::jsonb) as current_metrics,
   coalesce((select metrics from metric_json where period_key = 'previous'), '{}'::jsonb) as previous_metrics,
   coalesce((select metrics from metric_json where period_key = 'week'), '{}'::jsonb) as week_metrics,
@@ -247,6 +289,7 @@ select
         jsonb_build_object(
           'channel', channel_key,
           'total_orders', total_orders,
+          'revenue_order_count', revenue_order_count,
           'net_revenue', net_revenue
         )
         order by total_orders desc, channel_key
@@ -259,12 +302,15 @@ $$;
 
 grant execute on function public.dashboard_to_numeric(text) to anon, authenticated;
 grant execute on function public.normalize_dashboard_channel(text, text) to anon, authenticated;
-grant execute on function public.get_admin_dashboard_summary(timestamptz, timestamptz, text) to anon, authenticated;
+grant execute on function public.get_admin_dashboard_summary(timestamptz, timestamptz, text, text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
 
 -- Verification query: Vietnam-local current day.
 select *
 from public.get_admin_dashboard_summary(
   date_trunc('day', now() at time zone 'Asia/Ho_Chi_Minh') at time zone 'Asia/Ho_Chi_Minh',
   (date_trunc('day', now() at time zone 'Asia/Ho_Chi_Minh') + interval '1 day') at time zone 'Asia/Ho_Chi_Minh',
+  null,
   null
 );

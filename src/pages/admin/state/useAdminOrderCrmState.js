@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { buildCustomersFromOrderListAsync } from "../../../services/crmService.js";
 import { getAdminDashboardSummaryRpc } from "../../../services/adminDashboardService.js";
+import { getAdminDashboardRevenueSeriesRpc } from "../../../services/adminDashboardRevenueService.js";
 import { getAdminBusinessAnalyticsRpc } from "../../../services/adminBusinessAnalyticsService.js";
+import { getSiteVisitDailyStats } from "../../../services/siteVisitTrackingService.js";
 import {
   branchOptionMatchesOrder,
   buildBranchFilterOptions
@@ -28,6 +30,29 @@ const ADMIN_REALTIME_NOTICE_DELAY_MS = 2000;
 const ADMIN_ORDER_REFRESH_DEBOUNCE_MS = 250;
 const ordersSnapshotCache = new Map();
 const ordersSnapshotInFlight = new Map();
+const DASHBOARD_DATA_KEYS = ["summary", "analytics", "revenue", "orders", "traffic"];
+
+function createDashboardDataStatus() {
+  return DASHBOARD_DATA_KEYS.reduce((status, key) => ({
+    ...status,
+    [key]: {
+      status: "idle",
+      updatedAt: "",
+      error: ""
+    }
+  }), {});
+}
+
+function updateDashboardDataStatus(setStatus, key, status, error = "") {
+  setStatus((current) => ({
+    ...current,
+    [key]: {
+      status,
+      updatedAt: status === "ready" ? new Date().toISOString() : "",
+      error
+    }
+  }));
+}
 
 function buildChartRangeFromPreset(preset = "7d") {
   const end = toVietnamDateInputValue();
@@ -38,8 +63,8 @@ function buildChartRangeFromPreset(preset = "7d") {
   return buildVietnamDateRange(addDaysToVietnamDateInput(end, -(days - 1)), end);
 }
 
-async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartnerOrders = false } = {}) {
-  const cacheKey = buildOrdersSnapshotCacheKey(dateRange, includePartnerOrders);
+async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartnerOrders = false, requireRemote = false } = {}) {
+  const cacheKey = buildOrdersSnapshotCacheKey(dateRange, includePartnerOrders, requireRemote);
   const cached = ordersSnapshotCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < SNAPSHOT_CACHE_TTL_MS) {
     return cached.value;
@@ -48,14 +73,14 @@ async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartner
     return ordersSnapshotInFlight.get(cacheKey);
   }
 
-  const request = loadOrdersSnapshotUncached(orderStorage, dateRange, { includePartnerOrders })
+  const request = loadOrdersSnapshotUncached(orderStorage, dateRange, { includePartnerOrders, requireRemote })
     .then((value) => {
       ordersSnapshotCache.set(cacheKey, {
         cachedAt: Date.now(),
         value
       });
       if (includePartnerOrders) {
-        ordersSnapshotCache.set(buildOrdersSnapshotCacheKey(dateRange, false), {
+        ordersSnapshotCache.set(buildOrdersSnapshotCacheKey(dateRange, false, requireRemote), {
           cachedAt: Date.now(),
           value: getWebOrdersOnly(value)
         });
@@ -70,18 +95,25 @@ async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartner
   return request;
 }
 
-async function loadOrdersSnapshotUncached(orderStorage, dateRange = {}, { includePartnerOrders = false } = {}) {
-  const webOrders = await orderStorage?.getAllAsync?.(dateRange);
+async function loadOrdersSnapshotUncached(orderStorage, dateRange = {}, { includePartnerOrders = false, requireRemote = false } = {}) {
+  const webOrdersPromise = orderStorage?.getAllAsync?.({
+    ...dateRange,
+    requireRemote
+  });
+  const partnerOrdersPromise = includePartnerOrders
+    ? readPartnerOrdersForAdmin(dateRange)
+    : Promise.resolve([]);
+  const [webOrders, partnerOrders] = await Promise.all([webOrdersPromise, partnerOrdersPromise]);
   recordAdminRequest("read web orders snapshot", "orders");
   const safeWebOrders = Array.isArray(webOrders) ? webOrders : [];
   if (!includePartnerOrders) return safeWebOrders;
-  const partnerOrders = await readPartnerOrdersForAdmin(dateRange);
   return buildAdminOrderFeed(safeWebOrders, partnerOrders);
 }
 
-function buildOrdersSnapshotCacheKey(dateRange = {}, includePartnerOrders = false) {
+function buildOrdersSnapshotCacheKey(dateRange = {}, includePartnerOrders = false, requireRemote = false) {
   return [
     includePartnerOrders ? "with-partner" : "web-only",
+    requireRemote ? "remote-only" : "fallback-allowed",
     String(dateRange?.dateFrom || ""),
     String(dateRange?.dateTo || "")
   ].join("|");
@@ -141,9 +173,12 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     branches = []
   } = options || {};
   const [ordersSnapshot, setOrdersSnapshot] = useState([]);
-  const [chartOrdersSnapshot, setChartOrdersSnapshot] = useState([]);
   const [dashboardSummary, setDashboardSummary] = useState(null);
+  const [dashboardRevenueSeries, setDashboardRevenueSeries] = useState(null);
   const [businessAnalytics, setBusinessAnalytics] = useState(null);
+  const [siteTrafficSummary, setSiteTrafficSummary] = useState(null);
+  const [dashboardDataStatus, setDashboardDataStatus] = useState(createDashboardDataStatus);
+  const [dashboardRefreshVersion, setDashboardRefreshVersion] = useState(0);
   const [crmSnapshot, setCrmSnapshot] = useState({ customers: [], loyaltyConfig: {} });
   const [adminRequestAudit, setAdminRequestAudit] = useState(() => getAdminRequestAuditSnapshot());
   const [adminOrdersRealtimePending, setAdminOrdersRealtimePending] = useState(false);
@@ -172,6 +207,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
     const refreshDashboardSummary = async () => {
       if (section !== "dashboard") return;
+      setDashboardSummary(null);
+      updateDashboardDataStatus(setDashboardDataStatus, "summary", "loading");
       try {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
         const nextSummary = await getAdminDashboardSummaryRpc({
@@ -181,15 +218,23 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
           branchName: selectedBranchName
         });
         if (disposed) return;
-        setDashboardSummary(nextSummary);
-        if (nextSummary) {
-          recordAdminRequest("read admin dashboard summary rpc", "rpc:get_admin_dashboard_summary");
-          setAdminRequestAudit(getAdminRequestAuditSnapshot());
+        if (!nextSummary) {
+          throw new Error("RPC tổng quan dashboard chưa sẵn sàng.");
         }
+        setDashboardSummary(nextSummary);
+        updateDashboardDataStatus(setDashboardDataStatus, "summary", "ready");
+        recordAdminRequest("read admin dashboard summary rpc", "rpc:get_admin_dashboard_summary");
+        setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
         console.error("[admin][dashboard-summary] failed to load rpc", error);
         setDashboardSummary(null);
+        updateDashboardDataStatus(
+          setDashboardDataStatus,
+          "summary",
+          "error",
+          "Không thể tải KPI từ Supabase."
+        );
       }
     };
 
@@ -197,13 +242,54 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardDateFrom, dashboardDateTo, ordersSnapshot, selectedBranchName, selectedBranchUuid]);
+  }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid, dashboardRefreshVersion]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const refreshSiteTrafficSummary = async () => {
+      if (section !== "dashboard") return;
+      setSiteTrafficSummary(null);
+      updateDashboardDataStatus(setDashboardDataStatus, "traffic", "loading");
+      try {
+        const nextTraffic = await getSiteVisitDailyStats({
+          dateFrom: dashboardDateFrom,
+          dateTo: dashboardDateTo
+        });
+        if (disposed) return;
+        if (!nextTraffic) {
+          throw new Error("RPC lượt truy cập chưa sẵn sàng.");
+        }
+        setSiteTrafficSummary(nextTraffic);
+        updateDashboardDataStatus(setDashboardDataStatus, "traffic", "ready");
+        recordAdminRequest("read site visit daily stats rpc", "rpc:get_site_visit_daily_stats");
+        setAdminRequestAudit(getAdminRequestAuditSnapshot());
+      } catch (error) {
+        if (disposed) return;
+        console.error("[admin][site-traffic] failed to load rpc", error);
+        setSiteTrafficSummary(null);
+        updateDashboardDataStatus(
+          setDashboardDataStatus,
+          "traffic",
+          "error",
+          "Không thể tải lượt truy cập từ Supabase."
+        );
+      }
+    };
+
+    refreshSiteTrafficSummary();
+    return () => {
+      disposed = true;
+    };
+  }, [section, dashboardDateFrom, dashboardDateTo]);
 
   useEffect(() => {
     let disposed = false;
 
     const refreshBusinessAnalytics = async () => {
       if (section !== "dashboard") return;
+      setBusinessAnalytics(null);
+      updateDashboardDataStatus(setDashboardDataStatus, "analytics", "loading");
       try {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
         const nextAnalytics = await getAdminBusinessAnalyticsRpc({
@@ -213,15 +299,23 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
           branchName: selectedBranchName
         });
         if (disposed) return;
-        setBusinessAnalytics(nextAnalytics);
-        if (nextAnalytics) {
-          recordAdminRequest("read admin business analytics rpc", "rpc:get_admin_business_analytics");
-          setAdminRequestAudit(getAdminRequestAuditSnapshot());
+        if (!nextAnalytics) {
+          throw new Error("RPC phân tích kinh doanh chưa sẵn sàng.");
         }
+        setBusinessAnalytics(nextAnalytics);
+        updateDashboardDataStatus(setDashboardDataStatus, "analytics", "ready");
+        recordAdminRequest("read admin business analytics rpc", "rpc:get_admin_business_analytics");
+        setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
         console.error("[admin][business-analytics] failed to load rpc", error);
         setBusinessAnalytics(null);
+        updateDashboardDataStatus(
+          setDashboardDataStatus,
+          "analytics",
+          "error",
+          "Không thể tải phân tích kinh doanh từ Supabase."
+        );
       }
     };
 
@@ -229,7 +323,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardDateFrom, dashboardDateTo, ordersSnapshot, selectedBranchName, selectedBranchUuid]);
+  }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid, dashboardRefreshVersion]);
 
   useEffect(() => {
     let disposed = false;
@@ -237,21 +331,37 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
 
     const refreshOrdersOnly = async () => {
-      if (section === "customers") return;
+      if (section !== "dashboard" && section !== "orders") return;
 
       const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
+      if (section === "dashboard") {
+        setOrdersSnapshot([]);
+        updateDashboardDataStatus(setDashboardDataStatus, "orders", "loading");
+      }
       try {
         const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
-          includePartnerOrders: section === "dashboard" || section === "orders"
+          includePartnerOrders: section === "dashboard" || section === "orders",
+          requireRemote: section === "dashboard"
         });
         if (disposed) return;
         const safeOrders = Array.isArray(nextOrders) ? nextOrders : [];
         setOrdersSnapshot(section === "dashboard" ? filterOrdersByBranch(safeOrders, selectedBranchOption) : safeOrders);
+        if (section === "dashboard") {
+          updateDashboardDataStatus(setDashboardDataStatus, "orders", "ready");
+        }
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
         console.error("[admin][orders] failed to load snapshot", error);
         setOrdersSnapshot([]);
+        if (section === "dashboard") {
+          updateDashboardDataStatus(
+            setDashboardDataStatus,
+            "orders",
+            "error",
+            "Không thể tải danh sách đơn trực tiếp từ Supabase."
+          );
+        }
       }
     };
 
@@ -259,7 +369,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches]);
+  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches, dashboardRefreshVersion]);
 
   useEffect(() => {
     if (section !== "orders") {
@@ -300,33 +410,86 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   }, [ordersDateFrom, ordersDateTo, section]);
 
   useEffect(() => {
+    if (section !== "dashboard") return undefined;
+
+    let alive = true;
+    let refreshTimer = null;
+    let unsubscribe = () => {};
+
+    async function startDashboardRealtime() {
+      unsubscribe = await subscribeAdminOrderChanges(() => {
+        if (!alive) return;
+        if (refreshTimer) window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+          refreshTimer = null;
+          clearOrdersSnapshotCache();
+          setDashboardRefreshVersion((version) => version + 1);
+        }, ADMIN_ORDER_REFRESH_DEBOUNCE_MS);
+      });
+    }
+
+    startDashboardRealtime();
+
+    return () => {
+      alive = false;
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      unsubscribe?.();
+    };
+  }, [section]);
+
+  useEffect(() => {
     let disposed = false;
-    const refreshChartOrders = async () => {
+    const refreshDashboardRevenue = async () => {
+      if (section !== "dashboard") return;
       const dateRange = buildChartRangeFromPreset(dashboardChartPreset);
+      setDashboardRevenueSeries(null);
+      updateDashboardDataStatus(setDashboardDataStatus, "revenue", "loading");
       try {
-        const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
-          includePartnerOrders: true
+        const nextRevenueSeries = await getAdminDashboardRevenueSeriesRpc({
+          ...dateRange,
+          branchFilter: selectedBranchName,
+          branchUuid: selectedBranchUuid,
+          branchName: selectedBranchName
         });
         if (disposed) return;
-        setChartOrdersSnapshot(filterOrdersByBranch(nextOrders, selectedBranchOption));
+        if (!nextRevenueSeries) {
+          throw new Error("RPC biểu đồ doanh thu chưa sẵn sàng.");
+        }
+        setDashboardRevenueSeries(nextRevenueSeries);
+        updateDashboardDataStatus(setDashboardDataStatus, "revenue", "ready");
+        recordAdminRequest("read admin dashboard revenue rpc", "rpc:get_admin_dashboard_revenue_series");
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
-        console.error("[admin][chart-orders] failed to load snapshot", error);
-        setChartOrdersSnapshot([]);
+        console.error("[admin][dashboard-revenue] failed to load rpc", error);
+        setDashboardRevenueSeries(null);
+        updateDashboardDataStatus(
+          setDashboardDataStatus,
+          "revenue",
+          "error",
+          "Không thể tải biểu đồ doanh thu từ Supabase."
+        );
       }
     };
-    refreshChartOrders();
+    refreshDashboardRevenue();
     return () => {
       disposed = true;
     };
-  }, [orderStorage, dashboardChartPreset, selectedBranchFilter, branches]);
+  }, [section, dashboardChartPreset, selectedBranchName, selectedBranchUuid, dashboardRefreshVersion]);
 
   useEffect(() => {
+    if (section !== "dashboard" && section !== "orders" && section !== "customers") {
+      return undefined;
+    }
+
     let disposed = false;
     let refreshTimer = null;
 
     const refreshCrmOnly = async () => {
+      if (section !== "customers") return;
       try {
         const activeDateFrom = section === "customers" ? customersDateFrom : dashboardDateFrom;
         const activeDateTo = section === "customers" ? customersDateTo : dashboardDateTo;
@@ -346,6 +509,11 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     };
 
     const refreshAll = async () => {
+      if (section === "dashboard") {
+        clearOrdersSnapshotCache();
+        setDashboardRefreshVersion((version) => version + 1);
+        return;
+      }
       const activeDateFrom = section === "orders" ? ordersDateFrom : section === "customers" ? customersDateFrom : dashboardDateFrom;
       const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
       const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
@@ -358,7 +526,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       if (disposed) return;
       const combinedOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
       const scopedCombinedOrders = section === "dashboard" ? filterOrdersByBranch(combinedOrders, selectedBranchOption) : combinedOrders;
-      const shouldRefreshCrm = section !== "orders";
+      const shouldRefreshCrm = section === "customers";
       const crmResult = shouldRefreshCrm && ordersResult.status === "fulfilled"
         ? await buildCustomersFromOrderListAsync(scopedCombinedOrders, orderStorage, { dateRange })
             .then((value) => ({ status: "fulfilled", value }))
@@ -393,7 +561,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
     window.addEventListener("ghr:orders-changed", scheduleRefreshAll);
     window.addEventListener("storage", handleStorageChange);
-    if (section !== "orders") {
+    if (section === "customers") {
       refreshCrmOnly();
     }
 
@@ -431,10 +599,11 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   return {
     ordersSnapshot,
     setOrdersSnapshot,
-    chartOrdersSnapshot,
-    setChartOrdersSnapshot,
     dashboardSummary,
+    dashboardRevenueSeries,
     businessAnalytics,
+    siteTrafficSummary,
+    dashboardDataStatus,
     crmSnapshot,
     setCrmSnapshot,
     adminRequestAudit,

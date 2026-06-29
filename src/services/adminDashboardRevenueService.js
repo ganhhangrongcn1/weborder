@@ -1,6 +1,6 @@
 import { getAdminSupabaseClient } from "./supabase/adminSupabaseClient.js";
 
-const DASHBOARD_SUMMARY_RPC = "get_admin_dashboard_summary";
+const DASHBOARD_REVENUE_RPC = "get_admin_dashboard_revenue_series";
 const MISSING_RPC_CODES = new Set(["42883", "PGRST202"]);
 
 function toNumber(value) {
@@ -18,30 +18,22 @@ function mapMetrics(metrics = {}) {
     deliveringOrders: toNumber(metrics.delivering_orders),
     cancelledOrders: toNumber(metrics.cancelled_orders),
     completedOrders: toNumber(metrics.completed_orders),
-    cancelRate: toNumber(metrics.cancel_rate),
   };
 }
 
-function mapSummary(row = {}) {
+function mapRevenueSeries(row = {}) {
   return {
     source: "rpc",
-    totalCustomers: toNumber(row.total_customers),
-    periodCustomers: toNumber(row.period_customers),
-    current: mapMetrics(row.current_metrics),
-    previous: mapMetrics(row.previous_metrics),
-    week: mapMetrics(row.week_metrics),
-    channels: Array.isArray(row.channel_breakdown)
-      ? row.channel_breakdown.map((item) => ({
-          channel: String(item.channel || "website"),
-          totalOrders: toNumber(item.total_orders),
-          revenueOrderCount: toNumber(item.revenue_order_count),
-          netRevenue: toNumber(item.net_revenue),
-        }))
-      : [],
+    metrics: mapMetrics(row.metrics),
+    dailyRevenue: (row.daily_revenue || []).map((item) => ({
+      date: String(item.date || ""),
+      totalOrders: toNumber(item.total_orders),
+      netRevenue: toNumber(item.net_revenue),
+    })),
   };
 }
 
-async function callDashboardSummaryRpc(client, dateRange = {}, { includeBranchUuid = true } = {}) {
+async function callRevenueRpc(client, dateRange = {}, { includeBranchUuid = true } = {}) {
   const branchName = String(dateRange.branchName || dateRange.branchFilter || "").trim();
   const branchUuid = String(dateRange.branchUuid || "").trim();
   const params = {
@@ -52,14 +44,14 @@ async function callDashboardSummaryRpc(client, dateRange = {}, { includeBranchUu
   if (includeBranchUuid) {
     params.p_branch_uuid = branchUuid || null;
   }
-  return client.rpc(DASHBOARD_SUMMARY_RPC, params);
+  return client.rpc(DASHBOARD_REVENUE_RPC, params);
 }
 
-export async function getAdminDashboardSummaryRpc(dateRange = {}) {
+export async function getAdminDashboardRevenueSeriesRpc(dateRange = {}) {
   const client = await getAdminSupabaseClient();
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
 
-  const { data, error } = await callDashboardSummaryRpc(client, dateRange, {
+  const { data, error } = await callRevenueRpc(client, dateRange, {
     includeBranchUuid: true,
   });
 
@@ -69,9 +61,9 @@ export async function getAdminDashboardSummaryRpc(dateRange = {}) {
   }
 
   const row = Array.isArray(data) ? data[0] : data;
-  return row ? mapSummary(row) : null;
+  return row ? mapRevenueSeries(row) : null;
 }
 
 export default {
-  getAdminDashboardSummaryRpc,
+  getAdminDashboardRevenueSeriesRpc,
 };

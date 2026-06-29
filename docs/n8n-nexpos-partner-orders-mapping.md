@@ -51,10 +51,43 @@ Recommended n8n/Supabase flow:
 2. Read/return the inserted partner_orders.id.
 3. Delete existing partner_order_items where partner_order_id = returned id.
 4. Insert the current dishes again with that partner_order_id.
+5. Best-effort hydrate customer profile by calling RPC upsert_customer_stub_profile.
 ```
 
 When the incoming `nexpos_order_id` is different, even if `order_code` is the same,
 it must create a new `partner_orders` row.
+
+## Customer profile hydration
+
+Partner order ingest must not write directly to `profiles`, and must not rely on a
+`partner_orders` trigger to write `profiles`.
+
+After `partner_orders` and `partner_order_items` are synced, call this RPC as a
+separate best-effort n8n step:
+
+```txt
+POST /rest/v1/rpc/upsert_customer_stub_profile
+```
+
+Body:
+
+```json
+{
+  "p_phone": "{{ customer_phone_key || customer_phone }}",
+  "p_name": "{{ customer_name }}",
+  "p_source": "{{ partner_source }}",
+  "p_source_ref": "{{ partner_order_id || nexpos_order_id }}"
+}
+```
+
+Rules:
+
+```txt
+- Continue the order ingest even if this RPC fails.
+- Never set registered = true from n8n.
+- Never write auth_user_id, role, or operational profile fields from n8n.
+- Use docs/supabase-sql/partner-order-profile-ingest-contract.sql to remove the old profile auto-sync trigger.
+```
 
 ## Item fields
 

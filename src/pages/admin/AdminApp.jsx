@@ -11,7 +11,7 @@ import useAdminConfigSyncEffect from "./useAdminConfigSyncEffect.js";
 import { getRepositoryRuntimeInfo } from "../../services/repositories/repositoryRuntime.js";
 import { adminNavToPath } from "../../app/routeState.js";
 import AdminPageContent from "./pages/AdminPageContent.jsx";
-import { AdminButton, AdminPageHeader } from "./ui/AdminCommon.jsx";
+import { AdminButton, AdminCard, AdminInput, AdminPageHeader } from "./ui/AdminCommon.jsx";
 import { getAdminSession, loginAdminWithPassword, logoutAdmin, subscribeAdminAuth } from "../../services/adminAuthService.js";
 
 export default function AdminApp({
@@ -60,9 +60,11 @@ export default function AdminApp({
     editingProduct,
     setEditingProduct,
     ordersSnapshot,
-    chartOrdersSnapshot,
     dashboardSummary,
+    dashboardRevenueSeries,
     businessAnalytics,
+    siteTrafficSummary,
+    dashboardDataStatus,
     setOrdersSnapshot,
     zaloConfig,
     setZaloConfig,
@@ -123,10 +125,11 @@ export default function AdminApp({
     ordersDoing,
     todayRevenue,
     totalCustomers,
+    periodCustomers,
     openBranches,
     totalBranches,
     toppingsCount
-  } = computeAdminDashboardMetrics({ products, ordersSnapshot, crmSnapshot, branches, toppings });
+  } = computeAdminDashboardMetrics({ products, dashboardSummary, branches, toppings });
 
   const {
     saveOptionGroupPresetsState,
@@ -266,6 +269,11 @@ export default function AdminApp({
       <div className="admin-app admin-shell admin-layout">
         <main className="admin-main admin-content">
           <AdminPageHeader title="Đang kiểm tra phiên đăng nhập" description="Vui lòng chờ..." />
+          <AdminCard variant="elevated" className="admin-auth-card admin-auth-card--status">
+            <div className="admin-auth-card-body">
+              <p className="admin-auth-note">Hệ thống đang xác thực quyền truy cập admin trên Supabase.</p>
+            </div>
+          </AdminCard>
         </main>
       </div>
     );
@@ -279,15 +287,23 @@ export default function AdminApp({
             title="Không có quyền truy cập admin"
             description="Tài khoản hiện tại đã đăng nhập nhưng chưa có role phù hợp trong bảng profiles."
           />
-          <section className="admin-card" style={{ maxWidth: 520, padding: 16, display: "grid", gap: 12 }}>
-            <p style={{ margin: 0 }}>
-              Đang dùng tài khoản: <strong>{blockedAdminSession?.user?.email || "Không xác định"}</strong>
-            </p>
-            {loginMessage ? <p style={{ color: "#b42318", margin: 0 }}>{loginMessage}</p> : null}
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <AdminButton onClick={handleAdminLogout}>Đăng xuất tài khoản hiện tại</AdminButton>
+          <AdminCard variant="elevated" className="admin-auth-card admin-auth-card--blocked">
+            <div className="admin-auth-card-body">
+              <p className="admin-auth-note">
+                Đang dùng tài khoản:
+                {" "}
+                <strong className="admin-auth-account">
+                  {blockedAdminSession?.user?.email || "Không xác định"}
+                </strong>
+              </p>
+              {loginMessage ? <p className="admin-auth-message">{loginMessage}</p> : null}
+              <div className="admin-auth-actions">
+                <AdminButton variant="secondary" onClick={handleAdminLogout}>
+                  Đăng xuất tài khoản hiện tại
+                </AdminButton>
+              </div>
             </div>
-          </section>
+          </AdminCard>
         </main>
       </div>
     );
@@ -301,34 +317,34 @@ export default function AdminApp({
             title="Đăng nhập Admin"
             description="Bạn cần đăng nhập Supabase Auth bằng tài khoản đã được gán role admin hoặc staff."
           />
-          <section className="admin-card" style={{ maxWidth: 420, padding: 16 }}>
-            <form onSubmit={handleAdminLogin} style={{ display: "grid", gap: 12 }}>
-              <label style={{ display: "grid", gap: 6 }}>
+          <AdminCard variant="elevated" className="admin-auth-card">
+            <form onSubmit={handleAdminLogin} className="admin-auth-form">
+              <label className="admin-auth-field">
                 <span>Email</span>
-                <input
+                <AdminInput
                   type="email"
                   value={loginEmail}
-                  onChange={(event) => setLoginEmail(event.target.value)}
+                  onValueChange={setLoginEmail}
                   placeholder="admin@yourdomain.com"
                   required
                 />
               </label>
-              <label style={{ display: "grid", gap: 6 }}>
+              <label className="admin-auth-field">
                 <span>Mật khẩu</span>
-                <input
+                <AdminInput
                   type="password"
                   value={loginPassword}
-                  onChange={(event) => setLoginPassword(event.target.value)}
-                  placeholder="••••••••"
+                  onValueChange={setLoginPassword}
+                  placeholder="Nhập mật khẩu"
                   required
                 />
               </label>
-              {loginMessage ? <p style={{ color: "#b42318", margin: 0 }}>{loginMessage}</p> : null}
+              {loginMessage ? <p className="admin-auth-message">{loginMessage}</p> : null}
               <AdminButton type="submit" disabled={loginSubmitting}>
                 {loginSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
               </AdminButton>
             </form>
-          </section>
+          </AdminCard>
         </main>
       </div>
     );
@@ -353,13 +369,16 @@ export default function AdminApp({
           syncStatusLabel={syncStatusLabel}
           adminEmail={adminProfile?.email || adminSession?.user?.email || ""}
           onLogout={isSupabaseAdminMode ? handleAdminLogout : null}
+          compact={section === "dashboard"}
         />
 
-        <AdminPageHeader
-          title={getAdminPageTitle(section)}
-          description="Quản trị vận hành cửa hàng, dữ liệu vận hành lưu trên Supabase."
-          action={isAppearancePage ? <AdminButton onClick={() => setUiDirty(false)}>Lưu thay đổi</AdminButton> : null}
-        />
+        {section !== "dashboard" ? (
+          <AdminPageHeader
+            title={getAdminPageTitle(section)}
+            description="Quản trị vận hành cửa hàng, dữ liệu vận hành lưu trên Supabase."
+            action={isAppearancePage ? <AdminButton onClick={() => setUiDirty(false)}>Lưu thay đổi</AdminButton> : null}
+          />
+        ) : null}
 
         <AdminPageContent
           section={section}
@@ -393,6 +412,7 @@ export default function AdminApp({
           ordersDoing={ordersDoing}
           todayRevenue={todayRevenue}
           totalCustomers={totalCustomers}
+          periodCustomers={periodCustomers}
           activeProducts={activeProducts}
           toppingsCount={toppingsCount}
           dashboardQuickActions={dashboardQuickActions}
@@ -402,10 +422,13 @@ export default function AdminApp({
           customerAdminTab={customerAdminTab}
           setCustomerAdminTab={setCustomerAdminTab}
           ordersSnapshot={ordersSnapshot}
-          chartOrdersSnapshot={chartOrdersSnapshot}
           dashboardSummary={dashboardSummary}
+          dashboardRevenueSeries={dashboardRevenueSeries}
           businessAnalytics={businessAnalytics}
+          siteTrafficSummary={siteTrafficSummary}
+          dashboardDataStatus={dashboardDataStatus}
           selectedBranchFilter={selectedBranchFilter}
+          setSelectedBranchFilter={setSelectedBranchFilter}
           setOrdersSnapshot={setOrdersSnapshot}
           onOrderUpdated={handleOrderUpdated}
           crmSnapshot={crmSnapshot}

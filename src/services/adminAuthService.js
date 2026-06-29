@@ -174,7 +174,9 @@ export async function getAdminSession() {
         error
       };
     }
-    return await resolveAdminAccessFromSession(client, data?.session || null);
+    const access = await resolveAdminAccessFromSession(client, data?.session || null);
+    await syncScopedSessionToRuntime("admin", access.session || null).catch(() => {});
+    return access;
   } catch (error) {
     return {
       session: null,

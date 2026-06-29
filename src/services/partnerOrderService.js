@@ -22,6 +22,10 @@ const SOURCE_BADGES = {
     label: "QR Tại Quầy",
     className: "border-violet-100 bg-violet-50 text-violet-700"
   },
+  pos: {
+    label: "POS",
+    className: "border-slate-100 bg-slate-50 text-slate-700"
+  },
   grabfood: {
     label: "Grab",
     className: "border-green-100 bg-green-50 text-green-700"
@@ -54,6 +58,10 @@ export function normalizePartnerSource(source = "") {
   return value || "partner";
 }
 
+function isPosSource(source = "") {
+  return ["pos", "pos_mobile", "posmobile", "pos_app", "posapp", "tai_quay", "taiquay"].includes(String(source || "").trim().toLowerCase());
+}
+
 export function getPartnerSourceBadge(source = "") {
   const key = resolveOrderSourceKey(source);
   return SOURCE_BADGES[key] || {
@@ -64,27 +72,85 @@ export function getPartnerSourceBadge(source = "") {
 
 export function resolveOrderSourceKey(orderOrSource = "") {
   if (orderOrSource && typeof orderOrSource === "object") {
-    const source = normalizePartnerSource(
-      orderOrSource.partnerSource ||
-        orderOrSource.source ||
-        orderOrSource.orderSource ||
-        orderOrSource.channel ||
-        orderOrSource.platform ||
-        orderOrSource.sourceType ||
-        ""
-    );
-    if (["grabfood", "shopeefood", "xanhngon"].includes(source)) return source;
-    if (source === "qr_counter") return "qr_counter";
+    const metadata = orderOrSource.metadata && typeof orderOrSource.metadata === "object" ? orderOrSource.metadata : {};
+    const sources = [
+      orderOrSource.partnerSource,
+      orderOrSource.source,
+      orderOrSource.orderSource,
+      orderOrSource.channel,
+      orderOrSource.platform,
+      orderOrSource.sourceType,
+      metadata.partnerSource,
+      metadata.source,
+      metadata.orderSource,
+      metadata.channel,
+      metadata.platform,
+      metadata.sourceType
+    ].map(normalizePartnerSource);
+    const partnerSource = sources.find((source) => ["grabfood", "shopeefood", "xanhngon"].includes(source));
+    if (partnerSource) return partnerSource;
+    if (sources.some(isPosSource)) return "pos";
+    if (sources.some((source) => ["qr", "qr_counter", "qrcounter", "counter"].includes(source))) return "qr_counter";
     if (String(orderOrSource.fulfillmentType || "").toLowerCase() === "pickup") return "pickup";
     return "website";
   }
 
   const source = normalizePartnerSource(orderOrSource);
   if (["grabfood", "shopeefood", "xanhngon"].includes(source)) return source;
+  if (isPosSource(source)) return "pos";
   if (["qr", "qr_counter", "counter"].includes(source)) return "qr_counter";
   if (["pickup", "takeaway", "self_pickup"].includes(source)) return "pickup";
   if (["web", "website", "weborder", "online"].includes(source)) return "website";
   return source || "website";
+}
+
+export function resolveSalesChannelKey(orderOrSource = "") {
+  const rawSources = orderOrSource && typeof orderOrSource === "object"
+    ? (() => {
+        const metadata = orderOrSource.metadata && typeof orderOrSource.metadata === "object"
+          ? orderOrSource.metadata
+          : {};
+        return [
+          orderOrSource.partnerSource,
+          orderOrSource.source,
+          orderOrSource.orderSource,
+          orderOrSource.channel,
+          orderOrSource.platform,
+          orderOrSource.sourceType,
+          metadata.partnerSource,
+          metadata.source,
+          metadata.orderSource,
+          metadata.channel,
+          metadata.platform,
+          metadata.sourceType
+        ];
+      })()
+    : [orderOrSource];
+  const sources = rawSources
+    .map((source) => String(source || "").trim())
+    .filter(Boolean)
+    .map(normalizePartnerSource);
+
+  if (sources.some((source) => ["grabfood", "shopeefood", "xanhngon"].includes(source))) {
+    return sources.find((source) => ["grabfood", "shopeefood", "xanhngon"].includes(source));
+  }
+  if (sources.some(isPosSource)) return "pos";
+  if (sources.some((source) => ["qr", "qr_counter", "qrcounter", "counter"].includes(source))) {
+    return "qr_counter";
+  }
+  if (sources.some((source) => ["web", "website", "weborder", "online", "ecommerce"].includes(source))) {
+    return "website";
+  }
+  if (
+    orderOrSource &&
+    typeof orderOrSource === "object" &&
+    ["qr", "qr_counter", "qrcounter", "counter"].includes(
+      String(orderOrSource.fulfillmentType || "").trim().toLowerCase()
+    )
+  ) {
+    return "qr_counter";
+  }
+  return sources.length ? "other" : "unknown";
 }
 
 export function getOrderSourceBadge(orderOrSource = "") {

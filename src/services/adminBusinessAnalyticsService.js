@@ -1,7 +1,4 @@
-import {
-  getSupabaseRuntimeClient,
-  initSupabaseRuntimeClient,
-} from "./supabase/supabaseRuntimeClient.js";
+import { getAdminSupabaseClient } from "./supabase/adminSupabaseClient.js";
 
 const BUSINESS_ANALYTICS_RPC = "get_admin_business_analytics";
 const MISSING_RPC_CODES = new Set(["42883", "PGRST202"]);
@@ -66,17 +63,12 @@ async function callBusinessAnalyticsRpc(client, dateRange = {}, { includeBranchU
 }
 
 export async function getAdminBusinessAnalyticsRpc(dateRange = {}) {
-  const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
+  const client = await getAdminSupabaseClient();
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
 
-  let { data, error } = await callBusinessAnalyticsRpc(client, dateRange, {
+  const { data, error } = await callBusinessAnalyticsRpc(client, dateRange, {
     includeBranchUuid: true,
   });
-  if (error && MISSING_RPC_CODES.has(String(error.code || ""))) {
-    ({ data, error } = await callBusinessAnalyticsRpc(client, dateRange, {
-      includeBranchUuid: false,
-    }));
-  }
 
   if (error) {
     if (MISSING_RPC_CODES.has(String(error.code || ""))) return null;

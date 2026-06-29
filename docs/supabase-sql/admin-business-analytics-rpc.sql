@@ -7,10 +7,39 @@
 -- Safe to run multiple times.
 -- Prerequisite: docs/admin-dashboard-summary-rpc.sql
 
+create or replace function public.admin_branch_filter_matches(
+  p_branch_uuid text default null,
+  p_branch_name text default null,
+  p_order_branch_uuid text default null,
+  p_order_branch_name text default null
+)
+returns boolean
+language sql
+stable
+as $$
+  select case
+    when coalesce(trim(p_branch_uuid), '') = ''
+      and coalesce(trim(p_branch_name), '') = ''
+      then true
+    when coalesce(trim(p_branch_uuid), '') <> ''
+      and coalesce(trim(p_order_branch_uuid), '') = coalesce(trim(p_branch_uuid), '')
+      then true
+    when coalesce(trim(p_branch_name), '') <> ''
+      and public.normalize_order_counting_status(p_order_branch_name)
+        = public.normalize_order_counting_status(p_branch_name)
+      then true
+    else false
+  end;
+$$;
+
+drop function if exists public.get_admin_business_analytics(timestamptz, timestamptz);
+drop function if exists public.get_admin_business_analytics(timestamptz, timestamptz, text);
+
 create or replace function public.get_admin_business_analytics(
   p_date_from timestamptz,
   p_date_to timestamptz,
-  p_branch_name text default null
+  p_branch_name text default null,
+  p_branch_uuid text default null
 )
 returns table(
   finance_summary jsonb,
@@ -34,6 +63,7 @@ web_orders as (
   select
     o.id::text as order_id,
     o.created_at as order_time,
+    coalesce(o.delivery_branch_uuid::text, o.pickup_branch_uuid::text, o.branch_uuid::text, '') as branch_uuid,
     coalesce(
       nullif(trim(o.delivery_branch_name), ''),
       nullif(trim(o.pickup_branch_name), ''),
@@ -54,22 +84,23 @@ web_orders as (
   cross join bounds b
   where o.created_at >= least(b.date_from, b.slow_from)
     and o.created_at < b.date_to
-    and (
-      coalesce(trim(p_branch_name), '') = ''
-      or public.normalize_order_counting_status(
-        coalesce(
-          nullif(trim(o.delivery_branch_name), ''),
-          nullif(trim(o.pickup_branch_name), ''),
-          nullif(trim(o.branch_name), ''),
-          'Chưa xác định'
-        )
-      ) = public.normalize_order_counting_status(p_branch_name)
+    and public.admin_branch_filter_matches(
+      p_branch_uuid,
+      p_branch_name,
+      coalesce(o.delivery_branch_uuid::text, o.pickup_branch_uuid::text, o.branch_uuid::text, ''),
+      coalesce(
+        nullif(trim(o.delivery_branch_name), ''),
+        nullif(trim(o.pickup_branch_name), ''),
+        nullif(trim(o.branch_name), ''),
+        'Chưa xác định'
+      )
     )
 ),
 partner_orders as (
   select
     po.id::text as order_id,
     coalesce(po.order_time, po.created_at) as order_time,
+    coalesce(po.branch_uuid::text, po.raw_data ->> 'branch_uuid', '') as branch_uuid,
     coalesce(
       nullif(trim(po.branch_name), ''),
       nullif(trim(po.nexpos_site_name), ''),
@@ -128,16 +159,16 @@ partner_orders as (
   cross join bounds b
   where coalesce(po.order_time, po.created_at) >= least(b.date_from, b.slow_from)
     and coalesce(po.order_time, po.created_at) < b.date_to
-    and (
-      coalesce(trim(p_branch_name), '') = ''
-      or public.normalize_order_counting_status(
-        coalesce(
-          nullif(trim(po.branch_name), ''),
-          nullif(trim(po.nexpos_site_name), ''),
-          nullif(trim(po.nexpos_hub_name), ''),
-          'Chưa xác định'
-        )
-      ) = public.normalize_order_counting_status(p_branch_name)
+    and public.admin_branch_filter_matches(
+      p_branch_uuid,
+      p_branch_name,
+      coalesce(po.branch_uuid::text, po.raw_data ->> 'branch_uuid', ''),
+      coalesce(
+        nullif(trim(po.branch_name), ''),
+        nullif(trim(po.nexpos_site_name), ''),
+        nullif(trim(po.nexpos_hub_name), ''),
+        'Chưa xác định'
+      )
     )
 ),
 all_orders as (
@@ -223,13 +254,14 @@ hourly as (
 ),
 branches as (
   select
+    branch_uuid,
     branch_name,
     count(*)::integer as total_orders,
     coalesce(sum(gross_revenue), 0)::numeric as gross_revenue,
     coalesce(sum(net_revenue), 0)::numeric as net_revenue,
     case when count(*) > 0 then coalesce(sum(net_revenue), 0)::numeric / count(*) else 0 end as average_order_value
   from current_orders
-  group by branch_name
+  group by branch_uuid, branch_name
 )
 select
   jsonb_build_object(
@@ -273,6 +305,7 @@ select
     (
       select jsonb_agg(
         jsonb_build_object(
+          'branch_uuid', branch_uuid,
           'branch_name', branch_name,
           'total_orders', total_orders,
           'gross_revenue', gross_revenue,
@@ -288,12 +321,16 @@ select
 from current_orders;
 $$;
 
-grant execute on function public.get_admin_business_analytics(timestamptz, timestamptz, text) to anon, authenticated;
+grant execute on function public.admin_branch_filter_matches(text, text, text, text) to anon, authenticated;
+grant execute on function public.get_admin_business_analytics(timestamptz, timestamptz, text, text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
 
 -- Verification query: Vietnam-local current month.
 select *
 from public.get_admin_business_analytics(
   date_trunc('month', now() at time zone 'Asia/Ho_Chi_Minh') at time zone 'Asia/Ho_Chi_Minh',
   (date_trunc('day', now() at time zone 'Asia/Ho_Chi_Minh') + interval '1 day') at time zone 'Asia/Ho_Chi_Minh',
+  null,
   null
 );

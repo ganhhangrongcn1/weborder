@@ -9,35 +9,40 @@ export default function AdminTopHeader({
   branches,
   syncStatusLabel,
   adminEmail = "",
-  onLogout = null
+  onLogout = null,
+  compact = false
 }) {
   const branchOptions = buildBranchFilterOptions(branches);
 
   return (
-    <header className="admin-top-header">
-      <div className="admin-top-header-left">
-        <label className="admin-top-search">
-          <Icon name="search" size={16} />
-          <input
-            value={adminGlobalSearch}
-            onChange={(event) => setAdminGlobalSearch(event.target.value)}
-            placeholder={"Tìm nhanh đơn hàng, khách hàng, món..."}
-          />
-        </label>
-      </div>
+    <header className={`admin-top-header ${compact ? "is-dashboard-compact" : ""}`.trim()}>
+      {!compact ? (
+        <div className="admin-top-header-left">
+          <label className="admin-top-search">
+            <Icon name="search" size={16} />
+            <input
+              value={adminGlobalSearch}
+              onChange={(event) => setAdminGlobalSearch(event.target.value)}
+              placeholder={"Tìm nhanh đơn hàng, khách hàng, món..."}
+            />
+          </label>
+        </div>
+      ) : null}
 
       <div className="admin-top-header-right">
         <span className="admin-top-sync-badge">{syncStatusLabel}</span>
-        <select
-          className="admin-top-branch"
-          value={selectedBranchFilter}
-          onChange={(event) => setSelectedBranchFilter(event.target.value)}
-        >
-          <option value="all">{"Tất cả chi nhánh"}</option>
-          {branchOptions.map((branch) => (
-            <option key={branch.value} value={branch.value}>{branch.label}</option>
-          ))}
-        </select>
+        {!compact ? (
+          <select
+            className="admin-top-branch"
+            value={selectedBranchFilter}
+            onChange={(event) => setSelectedBranchFilter(event.target.value)}
+          >
+            <option value="all">{"Tất cả chi nhánh"}</option>
+            {branchOptions.map((branch) => (
+              <option key={branch.value} value={branch.value}>{branch.label}</option>
+            ))}
+          </select>
+        ) : null}
 
         <button type="button" className="admin-top-icon-btn" aria-label={"Thông báo"}>
           <Icon name="bell" size={17} />

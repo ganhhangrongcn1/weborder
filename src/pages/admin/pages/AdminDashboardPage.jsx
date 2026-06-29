@@ -18,6 +18,7 @@ export default function AdminDashboardPage({
   ordersDoing,
   todayRevenue,
   totalCustomers,
+  periodCustomers,
   activeProducts,
   toppingsCount,
   dashboardQuickActions,
@@ -25,10 +26,13 @@ export default function AdminDashboardPage({
   flatAdminNav,
   filteredRecentOrders,
   ordersSnapshot,
-  chartOrdersSnapshot,
   dashboardSummary,
+  dashboardRevenueSeries,
   businessAnalytics,
+  siteTrafficSummary,
+  dashboardDataStatus,
   selectedBranchFilter,
+  setSelectedBranchFilter,
   branches
 }) {
   return (
@@ -50,6 +54,7 @@ export default function AdminDashboardPage({
       ordersDoing={ordersDoing}
       todayRevenue={todayRevenue}
       totalCustomers={totalCustomers}
+      periodCustomers={periodCustomers}
       activeProducts={activeProducts}
       toppingsCount={toppingsCount}
       dashboardQuickActions={dashboardQuickActions}
@@ -57,10 +62,13 @@ export default function AdminDashboardPage({
       flatAdminNav={flatAdminNav}
       filteredRecentOrders={filteredRecentOrders}
       ordersSnapshot={ordersSnapshot}
-      chartOrdersSnapshot={chartOrdersSnapshot}
       dashboardSummary={dashboardSummary}
+      dashboardRevenueSeries={dashboardRevenueSeries}
       businessAnalytics={businessAnalytics}
+      siteTrafficSummary={siteTrafficSummary}
+      dashboardDataStatus={dashboardDataStatus}
       selectedBranchFilter={selectedBranchFilter}
+      setSelectedBranchFilter={setSelectedBranchFilter}
       branches={branches}
     />
   );

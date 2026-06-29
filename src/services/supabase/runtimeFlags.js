@@ -14,6 +14,7 @@ function logRuntimeFlagsSnapshot() {
     mode: env.MODE,
     viteDataSource: String(env.VITE_DATA_SOURCE ?? ""),
     viteEnableSupabaseRuntimeWrites: String(env.VITE_ENABLE_SUPABASE_RUNTIME_WRITES ?? ""),
+    viteEnableSiteVisitTracking: String(env.VITE_ENABLE_SITE_VISIT_TRACKING ?? ""),
     viteSupabaseStrictMode: String(env.VITE_SUPABASE_STRICT_MODE ?? ""),
     viteSupabaseUrlExists: Boolean(String(env.VITE_SUPABASE_URL ?? "").trim()),
     viteSupabaseAnonKeyExists: Boolean(String(env.VITE_SUPABASE_ANON_KEY ?? "").trim())
@@ -35,6 +36,13 @@ export function isSupabaseSeedMigrationEnabled() {
 export function isSupabaseRuntimeWriteEnabled() {
   logRuntimeFlagsSnapshot();
   return readBooleanEnv(import.meta.env?.VITE_ENABLE_SUPABASE_RUNTIME_WRITES, false);
+}
+
+export function isSiteVisitTrackingEnabled() {
+  return readBooleanEnv(
+    import.meta.env?.VITE_ENABLE_SITE_VISIT_TRACKING,
+    isSupabaseRuntimeWriteEnabled()
+  );
 }
 
 export function isSupabaseStrictModeEnabled() {
