@@ -76,6 +76,7 @@ export default function AdminApp({
     resetAdminRequestAudit,
     adminOrdersRealtimePending,
     adminOrdersRealtimeCount,
+    adminOrdersLoadError,
     refreshAdminOrdersFromRealtime,
     customerAdminTab,
     setCustomerAdminTab,
@@ -369,10 +370,10 @@ export default function AdminApp({
           syncStatusLabel={syncStatusLabel}
           adminEmail={adminProfile?.email || adminSession?.user?.email || ""}
           onLogout={isSupabaseAdminMode ? handleAdminLogout : null}
-          compact={section === "dashboard"}
+          compact={section === "dashboard" || section === "orders"}
         />
 
-        {section !== "dashboard" ? (
+        {section !== "dashboard" && section !== "orders" && section !== "customers" ? (
           <AdminPageHeader
             title={getAdminPageTitle(section)}
             description="Quản trị vận hành cửa hàng, dữ liệu vận hành lưu trên Supabase."
@@ -437,6 +438,7 @@ export default function AdminApp({
           resetAdminRequestAudit={resetAdminRequestAudit}
           adminOrdersRealtimePending={adminOrdersRealtimePending}
           adminOrdersRealtimeCount={adminOrdersRealtimeCount}
+          adminOrdersLoadError={adminOrdersLoadError}
           refreshAdminOrdersFromRealtime={refreshAdminOrdersFromRealtime}
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}

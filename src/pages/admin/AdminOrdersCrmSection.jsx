@@ -1,10 +1,18 @@
 ﻿import OrderManager from "./orders/OrderManager.jsx";
 import AdminCustomerSection from "./customers/AdminCustomerSection.jsx";
-import { buildCustomersFromOrderListAsync, getCustomerTier } from "../../services/crmService.js";
+import {
+  buildCustomersFromCrmAnalyticsAsync,
+  buildCustomersFromOrderListAsync,
+  getCustomerTier
+} from "../../services/crmService.js";
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../services/adminOrderFeedService.js";
 import { recordAdminRequest } from "../../services/adminRequestAuditService.js";
 import { customerRepository } from "../../services/repositories/customerRepository.js";
-import { buildVietnamDateRange } from "../../utils/adminDateRange.js";
+import { buildVietnamDateRange, hasDateRange } from "../../utils/adminDateRange.js";
+import {
+  branchOptionMatchesOrder,
+  buildBranchFilterOptions
+} from "../../services/branchIdentityService.js";
 
 function mapAdminStatusToOrderStatus(nextStatus) {
   if (nextStatus === "new") return "pending_zalo";
@@ -14,8 +22,19 @@ function mapAdminStatusToOrderStatus(nextStatus) {
   return "pending_zalo";
 }
 
+function getSelectedBranchOption(branches = [], selectedBranchFilter = "all") {
+  if (!selectedBranchFilter || selectedBranchFilter === "all") return null;
+  return buildBranchFilterOptions(branches).find((branch) => branch.value === selectedBranchFilter) || null;
+}
+
+function filterOrdersByBranch(orders = [], branchOption = null) {
+  if (!branchOption) return Array.isArray(orders) ? orders : [];
+  return (Array.isArray(orders) ? orders : []).filter((order) => branchOptionMatchesOrder(order, branchOption));
+}
+
 export default function AdminOrdersCrmSection({
   section,
+  customerControls,
   customerAdminTab,
   setCustomerAdminTab,
   ordersSnapshot,
@@ -30,6 +49,7 @@ export default function AdminOrdersCrmSection({
   onSaveLoyaltyConfig,
   orderStorage,
   branches = [],
+  selectedBranchFilter = "all",
   coupons = [],
   ordersDateFrom,
   setOrdersDateFrom,
@@ -47,17 +67,38 @@ export default function AdminOrdersCrmSection({
   const activeDateRange = section === "customers"
     ? buildVietnamDateRange(customersDateFrom, customersDateTo)
     : buildVietnamDateRange(ordersDateFrom, ordersDateTo);
+  const selectedBranchOption = getSelectedBranchOption(branches, selectedBranchFilter);
 
   const refreshCrm = async ({ forceSupportRefresh = false } = {}) => {
+    const canUseFastCrmSnapshot = section === "customers" && !hasDateRange(activeDateRange) && !selectedBranchOption;
+    if (canUseFastCrmSnapshot) {
+      try {
+        const fastSnapshot = await buildCustomersFromCrmAnalyticsAsync({ forceSupportRefresh });
+        if (fastSnapshot?.crmAnalytics?.source === "rpc") {
+          setCrmSnapshot(fastSnapshot);
+          return fastSnapshot;
+        }
+      } catch (error) {
+        console.warn("[admin][crm] manual fast refresh failed, falling back to order snapshot", error);
+      }
+    }
+
     const [ordersResult, partnerOrdersResult] = await Promise.allSettled([
-      orderStorage?.getAllAsync?.(activeDateRange),
-      readPartnerOrdersForAdmin(activeDateRange)
+      orderStorage?.getAllAsync?.({
+        ...activeDateRange,
+        requireRemote: section === "orders",
+        includeItems: section !== "customers"
+      }),
+      readPartnerOrdersForAdmin({ ...activeDateRange, includeItems: section !== "customers" })
     ]);
     const nextOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
     recordAdminRequest("manual refresh web orders", "orders");
     const partnerOrders = partnerOrdersResult.status === "fulfilled" ? partnerOrdersResult.value : [];
     const combinedOrders = buildAdminOrderFeed(nextOrders, partnerOrders);
-    const crmResult = await buildCustomersFromOrderListAsync(combinedOrders, orderStorage, {
+    const scopedCrmOrders = section === "customers"
+      ? filterOrdersByBranch(combinedOrders, selectedBranchOption)
+      : combinedOrders;
+    const crmResult = await buildCustomersFromOrderListAsync(scopedCrmOrders, orderStorage, {
       dateRange: activeDateRange,
       forceSupportRefresh
     })
@@ -113,6 +154,7 @@ export default function AdminOrdersCrmSection({
           updateOrderStatus={updateOrderStatus}
           onOpenDetail={() => {}}
           branches={branches}
+          selectedBranchFilter={selectedBranchFilter}
           registeredCustomersByPhone={customerRepository.getUsers()}
           ordersDateFrom={ordersDateFrom}
           setOrdersDateFrom={setOrdersDateFrom}
@@ -125,6 +167,7 @@ export default function AdminOrdersCrmSection({
 
       {section === "customers" && (
         <AdminCustomerSection
+          customerControls={customerControls}
           customerAdminTab={customerAdminTab}
           setCustomerAdminTab={setCustomerAdminTab}
           crmSnapshot={crmSnapshot}

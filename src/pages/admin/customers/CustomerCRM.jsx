@@ -17,12 +17,200 @@ import { formatMoney } from "../../../utils/format.js";
 const INITIAL_DETAIL_ORDER_LIMIT = 3;
 const DETAIL_ORDER_PAGE_SIZE = 10;
 const DETAIL_ORDER_FETCH_LIMIT = 100;
+const CUSTOMER_PAGE_SIZE = 12;
+
+function getCompactPageItems(page, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const items = [1];
+  const start = Math.max(2, page - 1);
+  const end = Math.min(totalPages - 1, page + 1);
+
+  if (start > 2) items.push("start-ellipsis");
+
+  for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
+    items.push(pageNumber);
+  }
+
+  if (end < totalPages - 1) items.push("end-ellipsis");
+
+  items.push(totalPages);
+  return items;
+}
+
+function CrmCompactPagination({ page, totalPages, totalItems, pageSize, onChange }) {
+  const [draftPage, setDraftPage] = useState(String(page));
+  const pageItems = useMemo(() => getCompactPageItems(page, totalPages), [page, totalPages]);
+  const firstItem = totalItems > 0 ? ((page - 1) * pageSize) + 1 : 0;
+  const lastItem = Math.min(totalItems, page * pageSize);
+
+  useEffect(() => {
+    setDraftPage(String(page));
+  }, [page]);
+
+  const goToPage = (value) => {
+    const nextPage = Math.min(totalPages, Math.max(1, Number(value) || 1));
+    onChange(nextPage);
+    setDraftPage(String(nextPage));
+  };
+
+  return (
+    <div className="crm-pagination-row crm-pagination-row--compact">
+      <div className="crm-pagination-summary">
+        <strong>Trang {page}/{totalPages}</strong>
+        <span>{firstItem}-{lastItem} trong {totalItems.toLocaleString("vi-VN")} khách</span>
+      </div>
+
+      <div className="crm-pagination-controls" aria-label="Phân trang khách hàng">
+        <button type="button" className="crm-page-btn" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
+          Trước
+        </button>
+        <div className="crm-pagination-pages">
+          {pageItems.map((item) => (
+            typeof item === "number" ? (
+              <button
+                type="button"
+                key={item}
+                className={`crm-page-btn ${item === page ? "is-active" : ""}`}
+                onClick={() => goToPage(item)}
+                aria-current={item === page ? "page" : undefined}
+              >
+                {item}
+              </button>
+            ) : (
+              <span key={item} className="crm-page-ellipsis">...</span>
+            )
+          ))}
+        </div>
+        <button type="button" className="crm-page-btn" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+          Sau
+        </button>
+      </div>
+
+      <form className="crm-pagination-jump" onSubmit={(event) => {
+        event.preventDefault();
+        goToPage(draftPage);
+      }}>
+        <span>Đến trang</span>
+        <input
+          type="number"
+          min="1"
+          max={totalPages}
+          value={draftPage}
+          onChange={(event) => setDraftPage(event.target.value)}
+          onBlur={() => goToPage(draftPage)}
+          aria-label="Nhập số trang"
+        />
+      </form>
+    </div>
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "--";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "--";
   return date.toLocaleString("vi-VN");
+}
+
+function formatListDateTime(value) {
+  if (!value) return "Chưa mua";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa mua";
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function getCustomerInsight(customer = {}) {
+  const days = Number(customer.daysSinceLastOrder);
+  const totalOrders = Number(customer.totalOrders || 0);
+  if (totalOrders <= 0) return "Chưa có đơn";
+  if (!Number.isFinite(days)) return "Có lịch sử mua";
+  if (days === 0) return "Mua gần nhất hôm nay";
+  if (days < 7) return `Mua lại ${days} ngày trước`;
+  if (days >= 30) return `Chưa quay lại ${days} ngày`;
+  return `${days} ngày chưa mua`;
+}
+
+function getCustomerActionLabel(customer = {}) {
+  if (isVipCustomer(customer)) return "Chăm sóc VIP";
+  if (needsCare(customer)) return "Gửi ưu đãi";
+  const days = Number(customer.daysSinceLastOrder);
+  if (Number.isFinite(days) && days >= 7) return "Gọi lại";
+  if (Number(customer.totalOrders || 0) <= 0) return "Tạo đơn đầu";
+  return "Xem chi tiết";
+}
+
+function getCustomerReturnLabel(customer = {}) {
+  const totalOrders = Number(customer.totalOrders || 0);
+  const days = Number(customer.daysSinceLastOrder);
+  if (totalOrders <= 0) return "Chưa có đơn";
+  if (!Number.isFinite(days)) return "--";
+  if (days <= 0) return "Mua hôm nay";
+  return `${days} ngày`;
+}
+
+function getCustomerCarePlan(customer = {}) {
+  const days = Number(customer.daysSinceLastOrder);
+  const totalOrders = Number(customer.totalOrders || 0);
+
+  if (totalOrders <= 0) {
+    return {
+      tone: "new",
+      label: "Khách mới",
+      title: "Chưa có đơn",
+      actionLabel: "Tặng voucher đơn đầu"
+    };
+  }
+
+  if (isVipCustomer(customer)) {
+    return {
+      tone: "vip",
+      label: "Ưu tiên cao",
+      title: "Khách VIP",
+      actionLabel: "Tặng voucher VIP"
+    };
+  }
+
+  if (needsCare(customer) || (Number.isFinite(days) && days >= 30)) {
+    return {
+      tone: "care",
+      label: "Cần kéo lại",
+      title: Number.isFinite(days) ? `Chưa quay lại ${days} ngày` : "Đã lâu chưa mua",
+      actionLabel: "Tặng voucher kéo lại"
+    };
+  }
+
+  if (Number.isFinite(days) && days >= 7) {
+    return {
+      tone: "follow",
+      label: "Theo dõi",
+      title: `${days} ngày chưa mua`,
+      actionLabel: "Tặng voucher"
+    };
+  }
+
+  if (Number.isFinite(days) && days <= 0) {
+    return {
+      tone: "ok",
+      label: "Ổn định",
+      title: "Mua hôm nay",
+      actionLabel: "Tặng voucher"
+    };
+  }
+
+  return {
+    tone: "ok",
+    label: "Ổn định",
+    title: "Đang hoạt động",
+    actionLabel: "Tặng voucher"
+  };
 }
 
 function getOrderStatusLabel(status) {
@@ -38,7 +226,7 @@ function getOrderPointStatus(order = {}, statusMap = new Map(), loyaltyLookup = 
   const status = rpcStatus || resolveOrderPointStatus(order, loyaltyLookup);
   if (status === "claimed") return { key: "claimed", label: "Đã tích điểm" };
   if (status === "blocked") return { key: "blocked", label: "Không tích điểm" };
-  if (status === "pending") return { key: "pending", label: "Chưa tích điểm" };
+  if (status === "pending") return { key: "pending", label: "Chờ tích điểm" };
   return { key: "unknown", label: "Chưa rõ" };
 }
 
@@ -76,14 +264,6 @@ function needsCare(customer) {
   return Number(customer.totalOrders || 0) > 0 &&
     Number.isFinite(daysSinceLastOrder) &&
     daysSinceLastOrder >= 30;
-}
-
-function getTierTone(tier) {
-  const normalized = String(tier || "").toLowerCase();
-  if (normalized.includes("kim")) return "diamond";
-  if (normalized.includes("vàng")) return "gold";
-  if (normalized.includes("bạc")) return "silver";
-  return "bronze";
 }
 
 function isGuestCustomer(customer) {
@@ -143,6 +323,17 @@ function getVoucherSegmentLabel(segment = "") {
   return labels[segment] || segment;
 }
 
+function getDateScopeLabel(preset = "", dateFrom = "", dateTo = "") {
+  if (preset === "today") return "Hôm nay";
+  if (preset === "yesterday") return "Hôm qua";
+  if (preset === "week") return "Tuần này";
+  if (preset === "month") return "Tháng này";
+  if (dateFrom || dateTo) {
+    return [dateFrom || "...", dateTo || "..."].join(" -> ");
+  }
+  return "Theo bộ lọc";
+}
+
 function isVisibleBranchOption(branch = "") {
   const normalized = String(branch || "")
     .normalize("NFD")
@@ -152,12 +343,15 @@ function isVisibleBranchOption(branch = "") {
   return normalized && normalized !== "chuaxacdinh" && normalized !== "chinhanhtest" && normalized !== "test";
 }
 
-function CrmStatCard({ icon, title, value, subtitle, tone }) {
+function CrmStatCard({ icon, title, value, subtitle, tone, scope }) {
   return (
     <article className={`crm-stat-card crm-stat-card--${tone}`}>
       <span className="crm-stat-icon"><Icon name={icon} size={20} /></span>
       <div>
-        <small>{title}</small>
+        <small>
+          {title}
+          {scope ? <span>{scope}</span> : null}
+        </small>
         <strong>{value}</strong>
         <em>{subtitle}</em>
       </div>
@@ -165,13 +359,77 @@ function CrmStatCard({ icon, title, value, subtitle, tone }) {
   );
 }
 
-function CustomerIdentity({ customer, compact = false }) {
+function CrmDataPill({ label, value, tone = "neutral" }) {
+  return (
+    <span className={`crm-data-pill crm-data-pill--${tone}`}>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
+function formatCompactDate(value = "") {
+  const [year, month, day] = String(value || "").slice(0, 10).split("-");
+  if (!year || !month || !day) return "--";
+  return `${day}/${month}`;
+}
+
+function formatSignedNumber(value = 0) {
+  const number = Number(value || 0);
+  if (number > 0) return `+${number.toLocaleString("vi-VN")}`;
+  return number.toLocaleString("vi-VN");
+}
+
+function formatSignedPercent(value = 0) {
+  const number = Number(value || 0);
+  if (number > 0) return `+${number}%`;
+  return `${number}%`;
+}
+
+function CrmMemberRegistrationCard({ comparison = null }) {
+  const todayCount = Number(comparison?.todayCount || 0);
+  const yesterdayCount = Number(comparison?.yesterdayCount || 0);
+  const delta = Number(comparison?.delta || 0);
+  const trend = comparison?.trend || "flat";
+  const todayWeight = Number(comparison?.todayWeight || 0);
+  return (
+    <section className="crm-ops-card crm-member-card">
+      <div className="crm-ops-head">
+        <div>
+          <h3>Đăng ký thành viên</h3>
+          <p>Đếm hồ sơ customer đã đăng ký theo ngày tạo trên profiles.</p>
+        </div>
+        <span>{formatCompactDate(comparison?.todayDate)}</span>
+      </div>
+      <div className="crm-member-kpi">
+        <strong>{todayCount.toLocaleString("vi-VN")}</strong>
+        <em className={`crm-member-change crm-member-change--${trend}`}>
+          {formatSignedNumber(delta)} khách · {formatSignedPercent(comparison?.changePercent)}
+        </em>
+      </div>
+      <div className="crm-member-table">
+        <span>Ngày</span>
+        <span>Số đăng ký</span>
+        <span>Trọng số</span>
+        <strong>Hôm nay</strong>
+        <b>{todayCount.toLocaleString("vi-VN")}</b>
+        <em>{todayWeight}%</em>
+        <strong>Hôm qua</strong>
+        <b>{yesterdayCount.toLocaleString("vi-VN")}</b>
+        <em>{Math.max(0, 100 - todayWeight)}%</em>
+      </div>
+    </section>
+  );
+}
+
+function CustomerIdentity({ customer, compact = false, insight = "" }) {
   return (
     <div className={`crm-customer-identity ${compact ? "crm-customer-identity--compact" : ""}`}>
       <span className="crm-avatar">{getInitials(customer.name, customer.phone)}</span>
       <div>
         <strong>{customer.name || "Khách hàng"}</strong>
         <small>{customer.phone || "--"}</small>
+        {insight && !compact ? <em>{insight}</em> : null}
       </div>
     </div>
   );
@@ -184,7 +442,6 @@ export default function CustomerCRM({
   refreshCrm,
   giftVoucherToCustomer,
   cancelCustomerVoucher,
-  showCustomerTier,
   coupons = [],
   customersDateFrom,
   setCustomersDateFrom,
@@ -204,7 +461,15 @@ export default function CustomerCRM({
   const [loyaltyDetailByPhone, setLoyaltyDetailByPhone] = useState({});
   const [orderPointStatusRowsByPhone, setOrderPointStatusRowsByPhone] = useState({});
   const [isLoyaltyDetailLoading, setIsLoyaltyDetailLoading] = useState(false);
+  const [detailLoadingByPhone, setDetailLoadingByPhone] = useState({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [topCustomerMode, setTopCustomerMode] = useState("spent");
   const crmAnalytics = crmSnapshot.crmAnalytics?.source === "rpc" ? crmSnapshot.crmAnalytics : null;
+  const dataHealth = crmSnapshot.dataHealth || {};
+  const transactionSummary = crmSnapshot.transactionSummary || {};
+  const transactionAudit = crmSnapshot.transactionAudit || {};
+  const activeDateScope = getDateScopeLabel(customersDatePreset, customersDateFrom, customersDateTo);
 
   const filteredCustomers = useMemo(() => {
     const q = keyword.trim().toLowerCase();
@@ -233,7 +498,16 @@ export default function CustomerCRM({
     return next;
   }, [crmSnapshot.customers, keyword, customerFilter, branchFilter, channelFilter, sortBy]);
 
-  const visibleCustomers = useMemo(() => filteredCustomers.slice(0, 5), [filteredCustomers]);
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / CUSTOMER_PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const visibleCustomers = useMemo(() => {
+    const start = (safeCurrentPage - 1) * CUSTOMER_PAGE_SIZE;
+    return filteredCustomers.slice(start, start + CUSTOMER_PAGE_SIZE);
+  }, [filteredCustomers, safeCurrentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [keyword, customerFilter, sortBy, branchFilter, channelFilter]);
 
   const summary = useMemo(() => {
     const customers = crmSnapshot.customers || [];
@@ -259,6 +533,93 @@ export default function CustomerCRM({
       careCount: rpcSummary?.inactive30Days ?? customers.filter(needsCare).length
     };
   }, [crmSnapshot.customers, crmSnapshot.supabaseProfileCount, crmAnalytics]);
+
+  const dataHealthAlerts = useMemo(() => {
+    const alerts = [];
+    const missingProfiles = Number(dataHealth.missingProfileFromOrdersCount || 0);
+    const missingLoyaltyProfiles = Number(dataHealth.missingProfileFromLoyaltyCount || 0);
+    const fallbackCustomers = Number(transactionSummary.fallbackCustomerCount || dataHealth.transactionFallbackCustomerCount || 0);
+    const mismatchCustomers = Number(transactionAudit.mismatchCustomerCount || 0);
+    if (fallbackCustomers > 0) alerts.push(`${fallbackCustomers.toLocaleString("vi-VN")} khách đang dùng tổng hợp fallback`);
+    if (missingProfiles > 0) alerts.push(`${missingProfiles.toLocaleString("vi-VN")} khách có đơn nhưng thiếu hồ sơ`);
+    if (missingLoyaltyProfiles > 0) alerts.push(`${missingLoyaltyProfiles.toLocaleString("vi-VN")} số có điểm nhưng thiếu hồ sơ`);
+    if (mismatchCustomers > 0) alerts.push(`${mismatchCustomers.toLocaleString("vi-VN")} khách lệch tổng đơn khi đối chiếu RPC`);
+    return alerts;
+  }, [dataHealth, transactionAudit, transactionSummary]);
+
+  const dataHealthPills = useMemo(() => {
+    const transactionSource = transactionSummary.source === "rpc"
+      ? "RPC"
+      : transactionSummary.source === "mixed"
+        ? "RPC + fallback"
+        : "Fallback";
+    return [
+      {
+        label: "Hồ sơ",
+        value: Number(dataHealth.profileCustomerCount || 0).toLocaleString("vi-VN"),
+        tone: "profile"
+      },
+      {
+        label: "Có đơn",
+        value: Number(dataHealth.transactionCustomerCount || 0).toLocaleString("vi-VN"),
+        tone: "order"
+      },
+      {
+        label: "Điểm",
+        value: Number(dataHealth.loyaltyCustomerCount || 0).toLocaleString("vi-VN"),
+        tone: "loyalty"
+      },
+      {
+        label: "Tổng đơn",
+        value: transactionSource,
+        tone: transactionSummary.source === "client-fallback" ? "warning" : "ok"
+      }
+    ];
+  }, [dataHealth, transactionSummary]);
+
+  const priorityRows = useMemo(() => {
+    const segments = Array.isArray(crmAnalytics?.voucherSegments) ? crmAnalytics.voucherSegments : [];
+    const segmentRows = segments
+      .filter((item) => Number(item.customerCount || 0) > 0)
+      .slice(0, 3)
+      .map((item) => ({
+        label: getVoucherSegmentLabel(item.segment),
+        value: `${Number(item.customerCount || 0).toLocaleString("vi-VN")} khách`,
+        tone: String(item.segment || "").includes("vip") ? "vip" : "care"
+      }));
+    if (segmentRows.length) return segmentRows;
+    return [
+      {
+        label: "Khách cần chăm sóc",
+        value: `${summary.careCount.toLocaleString("vi-VN")} khách`,
+        tone: "care"
+      },
+      {
+        label: "Khách quay lại 30 ngày",
+        value: `${summary.repeatCustomers30.toLocaleString("vi-VN")} khách`,
+        tone: "returning"
+      },
+      {
+        label: "Khách mới 7 ngày",
+        value: `${Number(summary.newCustomers7 || 0).toLocaleString("vi-VN")} khách`,
+        tone: "new"
+      }
+    ];
+  }, [crmAnalytics, summary]);
+
+  const topCustomers = useMemo(() => {
+    if (crmAnalytics) {
+      return topCustomerMode === "orders"
+        ? crmAnalytics.topByOrders.slice(0, 5)
+        : crmAnalytics.topBySpent.slice(0, 5);
+    }
+    const customers = [...(crmSnapshot.customers || [])];
+    customers.sort((a, b) => topCustomerMode === "orders"
+      ? Number(b.totalOrders || 0) - Number(a.totalOrders || 0)
+      : Number(b.totalSpent || 0) - Number(a.totalSpent || 0)
+    );
+    return customers.slice(0, 5);
+  }, [crmAnalytics, crmSnapshot.customers, topCustomerMode]);
 
   const selectedCustomer = useMemo(
     () => (crmSnapshot.customers || []).find((customer) => customer.phone === selectedCustomerPhone) || null,
@@ -289,6 +650,9 @@ export default function CustomerCRM({
   const visibleDetailOrders = selectedCustomer
     ? selectedOrders.slice(0, selectedDetailOrderLimit)
     : [];
+  const isSelectedDetailLoading = Boolean(
+    selectedCustomerPhoneKey && detailLoadingByPhone[selectedCustomerPhoneKey]
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -301,12 +665,19 @@ export default function CustomerCRM({
       [phone]: current[phone] || INITIAL_DETAIL_ORDER_LIMIT
     }));
     (async () => {
-      const rows = await getCustomerRecentOrdersAsync(phone, { limit: DETAIL_ORDER_FETCH_LIMIT });
-      if (disposed) return;
-      setDetailOrdersByPhone((current) => ({
-        ...current,
-        [phone]: rows
-      }));
+      setDetailLoadingByPhone((current) => ({ ...current, [phone]: true }));
+      try {
+        const rows = await getCustomerRecentOrdersAsync(phone, { limit: DETAIL_ORDER_FETCH_LIMIT });
+        if (disposed) return;
+        setDetailOrdersByPhone((current) => ({
+          ...current,
+          [phone]: rows
+        }));
+      } finally {
+        if (!disposed) {
+          setDetailLoadingByPhone((current) => ({ ...current, [phone]: false }));
+        }
+      }
     })();
     (async () => {
       setIsLoyaltyDetailLoading(true);
@@ -336,7 +707,11 @@ export default function CustomerCRM({
             checkin,
             spend,
             other,
-            totalPoints: Math.max(0, total)
+            accountTotalPoints: result?.accountTotalPoints === null || result?.accountTotalPoints === undefined
+              ? null
+              : Math.max(0, Number(result.accountTotalPoints || 0)),
+            accountUpdatedAt: result?.accountUpdatedAt || "",
+            isLedgerPartial: Number(result?.total || rows.length) > rows.length
           }
         }));
       } finally {
@@ -359,6 +734,9 @@ export default function CustomerCRM({
   const selectedLoyaltyDetail = selectedCustomerPhoneKey
     ? loyaltyDetailByPhone[selectedCustomerPhoneKey] || null
     : null;
+  const selectedCurrentPoints = Number(
+    (selectedLoyaltyDetail?.accountTotalPoints ?? selectedCustomer?.currentPoints) || 0
+  );
   const selectedPointRows = selectedLoyaltyDetail?.rows || selectedCustomer?.pointsHistory || [];
   const selectedPointLookup = useMemo(
     () => buildLoyaltyOrderPointLookup(selectedPointRows),
@@ -373,6 +751,10 @@ export default function CustomerCRM({
   const selectedPointSummary = useMemo(
     () => getOrderPointSummary(selectedOrders, selectedOrderPointStatusMap, selectedPointLookup),
     [selectedOrderPointStatusMap, selectedOrders, selectedPointLookup]
+  );
+  const selectedCarePlan = useMemo(
+    () => getCustomerCarePlan(selectedCustomer || {}),
+    [selectedCustomer]
   );
 
   const sortedSelectedVouchers = useMemo(() => {
@@ -392,66 +774,123 @@ export default function CustomerCRM({
     setSortBy("latest");
   };
 
+  const handleRefreshCrm = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refreshCrm?.({ forceSupportRefresh: true });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <section className="crm-page">
       <div className="crm-page-hero">
         <div>
-          <p>Quản lý khách hàng</p>
-          <h2>Khách hàng / CRM</h2>
-          <span>Theo dõi lịch sử mua hàng, điểm tích lũy và chăm sóc khách quay lại.</span>
+          <p>CRM vận hành</p>
+          <h2>Chăm sóc khách hàng</h2>
+          <span>Tập trung vào nhóm cần gọi lại, khách quay lại và lịch sử mua gần nhất.</span>
         </div>
-        <button type="button" className="crm-refresh-btn" onClick={refreshCrm}>
+        <button
+          type="button"
+          className={`crm-refresh-btn ${isRefreshing ? "is-loading" : ""}`}
+          onClick={handleRefreshCrm}
+          disabled={isRefreshing}
+        >
           <Icon name="back" size={16} />
-          Tải lại dữ liệu
+          {isRefreshing ? "Đang tải..." : "Tải lại dữ liệu"}
         </button>
       </div>
 
       <div className="crm-stat-grid">
-        <CrmStatCard icon="user" tone="orange" title="Tổng khách hàng" value={summary.totalCustomers === null ? "--" : summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Tổng hồ sơ lifetime từ Supabase" />
-        <CrmStatCard icon="cart" tone="green" title="Khách quay lại (30 ngày)" value={summary.repeatCustomers30.toLocaleString("vi-VN")} subtitle="Từ 2 đơn trở lên trong 30 ngày" />
-        <CrmStatCard icon="star" tone="purple" title="Khách VIP" value={summary.vipCount.toLocaleString("vi-VN")} subtitle="Theo ngưỡng hiện tại" />
-        <CrmStatCard icon="heart" tone="blue" title="Cần chăm sóc" value={summary.careCount.toLocaleString("vi-VN")} subtitle="Chưa quay lại từ 30 ngày" />
-        <CrmStatCard icon="star" tone="amber" title="Tỷ lệ quay lại" value={`${summary.repeatRate30}%`} subtitle="Khách có từ 2 đơn trong 30 ngày" />
-        <CrmStatCard icon="user" tone="green" title="Khách mới 7 / 30 ngày" value={`${summary.newCustomers7} / ${summary.newCustomers30}`} subtitle="Theo đơn mua đầu tiên" />
+        <CrmStatCard icon="user" tone="orange" scope="Lifetime" title="Tổng khách hàng" value={summary.totalCustomers === null ? "--" : summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Đếm hồ sơ customer từ profiles" />
+        <CrmStatCard icon="heart" tone="blue" scope="30 ngày" title="Cần chăm sóc" value={summary.careCount.toLocaleString("vi-VN")} subtitle="Có đơn nhưng chưa quay lại" />
+        <CrmStatCard icon="cart" tone="green" scope="30 ngày" title="Khách quay lại" value={summary.repeatCustomers30.toLocaleString("vi-VN")} subtitle="Khách có từ 2 đơn trở lên" />
+        <CrmStatCard icon="user" tone="green" scope="7 / 30 ngày" title="Khách mới" value={`${summary.newCustomers7} / ${summary.newCustomers30}`} subtitle="Theo đơn mua đầu tiên" />
       </div>
 
-      {crmAnalytics ? (
-        <div className="crm-insight-grid">
-          <section className="crm-insight-card">
-            <h3>Gợi ý nhóm voucher</h3>
-            <p>Chỉ là gợi ý phân nhóm, hệ thống chưa tự gửi voucher.</p>
-            <div className="crm-insight-list">
-              {crmAnalytics.voucherSegments.map((item) => (
-                <span key={item.segment}><b>{getVoucherSegmentLabel(item.segment)}</b><em>{item.customerCount.toLocaleString("vi-VN")} khách</em></span>
+      <div className="crm-ops-grid">
+        <section className="crm-ops-card crm-ops-card--priority">
+          <div className="crm-ops-head">
+            <div>
+              <h3>Ưu tiên chăm sóc</h3>
+              <p>Nhóm khách nên xử lý trước theo dữ liệu mua hàng hiện tại.</p>
+            </div>
+            <span>{activeDateScope}</span>
+          </div>
+          <div className="crm-priority-list">
+            {priorityRows.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                className={`crm-priority-row crm-priority-row--${item.tone}`}
+                onClick={() => {
+                  if (item.label.toLowerCase().includes("vip")) setCustomerFilter("vip");
+                  else if (item.label.toLowerCase().includes("30")) setCustomerFilter("inactive30");
+                  else if (item.label.toLowerCase().includes("15")) setCustomerFilter("inactive15");
+                  else if (item.label.toLowerCase().includes("7")) setCustomerFilter("inactive7");
+                  else setCustomerFilter("care");
+                }}
+              >
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </button>
+            ))}
+          </div>
+          <div className="crm-ops-foot">
+            <span>VIP: {summary.vipCount.toLocaleString("vi-VN")} khách</span>
+            <span>Quay lại: {summary.repeatRate30}%</span>
+          </div>
+        </section>
+
+        <CrmMemberRegistrationCard comparison={crmSnapshot.memberRegistrationComparison} />
+
+        <section className="crm-ops-card">
+          <div className="crm-ops-head">
+            <div>
+              <h3>Top khách</h3>
+              <p>Nhìn nhanh khách có giá trị cao để chăm sóc riêng.</p>
+            </div>
+            <div className="crm-inline-tabs">
+              <button type="button" className={topCustomerMode === "spent" ? "active" : ""} onClick={() => setTopCustomerMode("spent")}>Chi tiêu</button>
+              <button type="button" className={topCustomerMode === "orders" ? "active" : ""} onClick={() => setTopCustomerMode("orders")}>Số đơn</button>
+            </div>
+          </div>
+          <div className="crm-insight-list crm-top-customer-list">
+            {topCustomers.map((item) => (
+              <span key={item.phone}>
+                <b>{item.name} · {item.phone}</b>
+                <em>{topCustomerMode === "orders" ? `${Number(item.totalOrders || 0)} đơn` : formatMoney(item.totalSpent)}</em>
+              </span>
+            ))}
+          </div>
+        </section>
+
+        <details className={`crm-data-health ${dataHealthAlerts.length ? "is-warning" : "is-ok"}`}>
+          <summary>
+            <div>
+              <strong>Trạng thái dữ liệu</strong>
+              <span>{dataHealthAlerts.length ? `${dataHealthAlerts.length} cảnh báo cần xem` : "Dữ liệu chính đang ổn"}</span>
+            </div>
+            <div className="crm-data-pills">
+              {dataHealthPills.map((pill) => (
+                <CrmDataPill key={pill.label} {...pill} />
               ))}
             </div>
-          </section>
-          <section className="crm-insight-card">
-            <h3>Tiêu chí VIP</h3>
-            <p>{crmAnalytics.vipCriteria.rule}</p>
-            <div className="crm-insight-list">
-              <span><b>Chi tiêu tối thiểu</b><em>{formatMoney(crmAnalytics.vipCriteria.minTotalSpent)}</em></span>
-              <span><b>Hoặc số đơn tối thiểu</b><em>{crmAnalytics.vipCriteria.minTotalOrders} đơn</em></span>
+          </summary>
+          <div className="crm-data-health-body">
+            <span>Hồ sơ khách, giao dịch và điểm loyalty đang được đối chiếu theo phạm vi: {activeDateScope}.</span>
+            <div className="crm-data-health-alerts">
+              {dataHealthAlerts.length ? (
+                dataHealthAlerts.map((alert) => <em key={alert}>{alert}</em>)
+              ) : (
+                <em>Dữ liệu chính đang khớp nguồn</em>
+              )}
             </div>
-          </section>
-          <section className="crm-insight-card">
-            <h3>Top khách theo chi tiêu</h3>
-            <div className="crm-insight-list">
-              {crmAnalytics.topBySpent.slice(0, 5).map((item) => (
-                <span key={item.phone}><b>{item.name} · {item.phone}</b><em>{formatMoney(item.totalSpent)}</em></span>
-              ))}
-            </div>
-          </section>
-          <section className="crm-insight-card">
-            <h3>Top khách theo số đơn</h3>
-            <div className="crm-insight-list">
-              {crmAnalytics.topByOrders.slice(0, 5).map((item) => (
-                <span key={item.phone}><b>{item.name} · {item.phone}</b><em>{item.totalOrders} đơn</em></span>
-              ))}
-            </div>
-          </section>
-        </div>
-      ) : null}
+          </div>
+        </details>
+      </div>
 
       <div className="crm-workspace">
         <div className="crm-list-panel">
@@ -465,36 +904,31 @@ export default function CustomerCRM({
               <option value="spent">Chi tiêu cao nhất</option>
               <option value="orders">Nhiều đơn nhất</option>
             </select>
-            <select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)}>
-              <option value="all">Tất cả chi nhánh</option>
-              {(crmAnalytics?.filterOptions.branches || []).filter(isVisibleBranchOption).map((branch) => <option key={branch} value={branch}>{branch}</option>)}
-            </select>
             <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}>
               <option value="all">Tất cả kênh mua</option>
               {(crmAnalytics?.filterOptions.channels || []).map((channel) => <option key={channel} value={channel}>{getChannelLabel(channel)}</option>)}
             </select>
-            <div className="crm-filter-tabs">
-              <button type="button" className={customerFilter === "all" ? "active" : ""} onClick={() => setCustomerFilter("all")}>Tất cả</button>
-              <button type="button" className={customerFilter === "vip" ? "active" : ""} onClick={() => setCustomerFilter("vip")}>VIP</button>
-              <button type="button" className={customerFilter === "inactive7" ? "active" : ""} onClick={() => setCustomerFilter("inactive7")}>7 ngày chưa mua</button>
-              <button type="button" className={customerFilter === "inactive15" ? "active" : ""} onClick={() => setCustomerFilter("inactive15")}>15 ngày chưa mua</button>
-              <button type="button" className={customerFilter === "inactive30" ? "active" : ""} onClick={() => setCustomerFilter("inactive30")}>30 ngày chưa mua</button>
-              <button type="button" className={customerFilter === "care" ? "active" : ""} onClick={() => setCustomerFilter("care")}>Cần chăm sóc</button>
-            </div>
+            <select className="crm-segment-select" value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
+              <option value="all">Tất cả nhóm khách</option>
+              <option value="vip">VIP</option>
+              <option value="care">Cần chăm sóc</option>
+              <option value="inactive7">Chưa quay lại 7+ ngày</option>
+              <option value="inactive15">Chưa quay lại 15+ ngày</option>
+              <option value="inactive30">Chưa quay lại 30+ ngày</option>
+            </select>
             <button type="button" className="crm-reset-btn" onClick={resetFilters}>Xóa lọc</button>
           </div>
-          <p style={{ margin: "0 4px 10px", fontSize: 12, color: "#6b778c" }}>
-            Hiển thị {Math.min(5, filteredCustomers.length)} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
+          <p className="crm-result-summary">
+            Hiển thị {visibleCustomers.length} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
           </p>
 
           <div className="crm-table">
             <div className="crm-table-head">
               <span>Khách hàng</span>
-              <span>Nhóm</span>
-              <span>Tổng đơn</span>
-              <span>Tổng chi tiêu</span>
+              <span>Trạng thái</span>
               <span>Lần mua cuối</span>
-              <span>Điểm</span>
+              <span>Giá trị</span>
+              <span>Hành động</span>
             </div>
 
             <div className="crm-table-body">
@@ -507,17 +941,24 @@ export default function CustomerCRM({
                     className={`crm-table-row ${isSelected ? "is-selected" : ""}`}
                     onClick={() => setSelectedCustomerPhone(isSelected ? "" : customer.phone)}
                   >
-                    <CustomerIdentity customer={customer} />
-                    <span>
-                      <span className="crm-badge-stack">
-                        <em className={`crm-soft-badge ${getCustomerTypeClass(customer)}`}>{getCustomerTypeLabel(customer)}</em>
-                        {showCustomerTier ? <em className={`crm-tier-badge crm-tier-badge--${getTierTone(customer.tier)}`}>{customer.tier}</em> : null}
-                      </span>
+                    <CustomerIdentity customer={customer} insight={getCustomerInsight(customer)} />
+                    <span className="crm-badge-stack">
+                      <em className={`crm-soft-badge ${getCustomerTypeClass(customer)}`}>{getCustomerTypeLabel(customer)}</em>
+                      {isVipCustomer(customer) ? <em className="crm-soft-badge crm-soft-badge--vip">VIP</em> : null}
+                      {needsCare(customer) ? <em className="crm-soft-badge crm-soft-badge--care">Cần chăm sóc</em> : null}
                     </span>
-                    <strong>{Number(customer.totalOrders || 0).toLocaleString("vi-VN")}</strong>
-                    <strong>{formatMoney(customer.totalSpent)}</strong>
-                    <small>{formatDateTime(customer.lastOrderAt)}</small>
-                    <strong>{formatCustomerPoints(customer)}</strong>
+                    <span className="crm-row-metric">
+                      <small>Lần mua cuối</small>
+                      <strong>{formatListDateTime(customer.lastOrderAt)}</strong>
+                    </span>
+                    <span className="crm-row-metric">
+                      <small>{Number(customer.totalOrders || 0).toLocaleString("vi-VN")} đơn</small>
+                      <strong>{formatMoney(customer.totalSpent)}</strong>
+                    </span>
+                    <span className="crm-row-action">
+                      <em>{formatCustomerPoints(customer)} điểm</em>
+                      <strong>{getCustomerActionLabel(customer)}</strong>
+                    </span>
                   </button>
                 );
               })}
@@ -530,6 +971,16 @@ export default function CustomerCRM({
               <p>Chưa có khách hàng phù hợp với bộ lọc.</p>
             </div>
           )}
+
+          {filteredCustomers.length > CUSTOMER_PAGE_SIZE ? (
+            <CrmCompactPagination
+              page={safeCurrentPage}
+              totalPages={totalPages}
+              totalItems={filteredCustomers.length}
+              pageSize={CUSTOMER_PAGE_SIZE}
+              onChange={setCurrentPage}
+            />
+          ) : null}
         </div>
 
         <aside className={`crm-detail-panel ${selectedCustomer ? "is-open" : ""}`}>
@@ -539,7 +990,6 @@ export default function CustomerCRM({
                 <button type="button" className="crm-detail-close" onClick={() => setSelectedCustomerPhone("")}>×</button>
                 <CustomerIdentity customer={selectedCustomer} compact />
                 <div className="crm-detail-badges">
-                  {showCustomerTier ? <em className={`crm-tier-badge crm-tier-badge--${getTierTone(selectedCustomer.tier)}`}>{selectedCustomer.tier}</em> : null}
                   <em className={`crm-soft-badge ${getCustomerTypeClass(selectedCustomer)}`}>{getCustomerTypeLabel(selectedCustomer)}</em>
                   {isVipCustomer(selectedCustomer) ? <em className="crm-soft-badge">VIP</em> : null}
                   {needsCare(selectedCustomer) ? <em className="crm-soft-badge crm-soft-badge--care">Cần chăm sóc</em> : null}
@@ -547,11 +997,17 @@ export default function CustomerCRM({
               </div>
 
               <div className="crm-detail-scroll">
+                <section className={`crm-care-plan crm-care-plan--${selectedCarePlan.tone}`}>
+                  <span>{selectedCarePlan.label}</span>
+                  <strong>{selectedCarePlan.title}</strong>
+                  {selectedCarePlan.description ? <p>{selectedCarePlan.description}</p> : null}
+                </section>
+
                 <div className="crm-detail-metrics">
                   <article><small>Tổng đơn hàng</small><strong>{Number(selectedCustomer.totalOrders || 0).toLocaleString("vi-VN")}</strong></article>
                   <article><small>Tổng chi tiêu</small><strong>{formatMoney(selectedCustomer.totalSpent)}</strong></article>
                   <article><small>Lần mua cuối</small><strong>{formatDateTime(selectedCustomer.lastOrderAt)}</strong></article>
-                  <article><small>Chưa quay lại</small><strong>{selectedCustomer.daysSinceLastOrder ?? "--"} ngày</strong></article>
+                  <article><small>Nhịp quay lại</small><strong>{getCustomerReturnLabel(selectedCustomer)}</strong></article>
                 </div>
 
                 <section className="crm-detail-card crm-loyalty-card">
@@ -560,24 +1016,18 @@ export default function CustomerCRM({
                     <h3>Loyalty</h3>
                   </div>
                   {selectedCustomer.registeredCustomerName && selectedCustomer.orderCustomerName ? (
-                    <div className="crm-points-grid">
-                      <span>Tên tài khoản: {selectedCustomer.registeredCustomerName}</span>
-                      <span>Tên đơn gần nhất: {selectedCustomer.orderCustomerName}</span>
+                    <div className="crm-loyalty-names">
+                      <span>Tài khoản: {selectedCustomer.registeredCustomerName}</span>
+                      <span>Đơn gần nhất: {selectedCustomer.orderCustomerName}</span>
                     </div>
                   ) : null}
                   <div className="crm-points-line">
                     <span>Điểm hiện tại</span>
-                    <strong>{Number((selectedLoyaltyDetail?.totalPoints ?? selectedCustomer.currentPoints) || 0).toLocaleString("vi-VN")}</strong>
-                  </div>
-                  <div className="crm-points-grid">
-                    <span>Từ đơn hàng: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.orderEarn ?? 0) || 0).toLocaleString("vi-VN")}</span>
-                    <span>Điểm danh/thưởng: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.checkin ?? selectedCustomer.checkinAndRewardPoints) || 0).toLocaleString("vi-VN")}</span>
-                    <span>Đã dùng điểm: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : `-${Number((selectedLoyaltyDetail?.spend ?? selectedCustomer.spentPoints) || 0).toLocaleString("vi-VN")}`}</span>
-                    <span>Điều chỉnh khác: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.other ?? selectedCustomer.otherAdjustPoints) || 0).toLocaleString("vi-VN")}</span>
+                    <strong>{selectedCurrentPoints.toLocaleString("vi-VN")}</strong>
                   </div>
                   <div className="crm-point-status-grid">
                     <span className="crm-point-status crm-point-status--claimed">Đã tích điểm: {selectedPointSummary.claimed.toLocaleString("vi-VN")} đơn</span>
-                    <span className="crm-point-status crm-point-status--pending">Chưa tích điểm: {selectedPointSummary.pending.toLocaleString("vi-VN")} đơn</span>
+                    <span className="crm-point-status crm-point-status--pending">Chờ tích điểm: {selectedPointSummary.pending.toLocaleString("vi-VN")} đơn</span>
                     {selectedPointSummary.blocked > 0 ? (
                       <span className="crm-point-status crm-point-status--blocked">Không tích điểm: {selectedPointSummary.blocked.toLocaleString("vi-VN")} đơn</span>
                     ) : null}
@@ -585,14 +1035,36 @@ export default function CustomerCRM({
                       <span className="crm-point-status crm-point-status--unknown">Chưa rõ: {selectedPointSummary.unknown.toLocaleString("vi-VN")} đơn</span>
                     ) : null}
                   </div>
+                  <details className="crm-loyalty-breakdown">
+                    <summary>
+                      <span>Chi tiết điểm</span>
+                      <em>{isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : "Mở"}</em>
+                    </summary>
+                    <div className="crm-points-grid">
+                      <span>Từ đơn hàng: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.orderEarn ?? 0) || 0).toLocaleString("vi-VN")}</span>
+                      <span>Điểm danh/thưởng: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.checkin ?? selectedCustomer.checkinAndRewardPoints) || 0).toLocaleString("vi-VN")}</span>
+                      <span>Đã dùng điểm: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : `-${Number((selectedLoyaltyDetail?.spend ?? selectedCustomer.spentPoints) || 0).toLocaleString("vi-VN")}`}</span>
+                      <span>Điều chỉnh khác: {isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : Number((selectedLoyaltyDetail?.other ?? selectedCustomer.otherAdjustPoints) || 0).toLocaleString("vi-VN")}</span>
+                    </div>
+                  </details>
                 </section>
 
                 <section className="crm-detail-card">
                   <div className="crm-card-title">
                     <Icon name="bag" size={17} />
-                    <h3>Lịch sử đơn gần đây</h3>
+                    <div>
+                      <h3>Lịch sử đơn gần đây</h3>
+                      <small>{isSelectedDetailLoading ? "Đang tải đơn mới nhất..." : "Tải riêng khi chọn khách để giữ trang CRM nhẹ."}</small>
+                    </div>
                   </div>
                   <div className="crm-mini-list">
+                    {isSelectedDetailLoading && selectedOrders.length === 0 ? (
+                      <div className="crm-loading-list" aria-label="Đang tải lịch sử đơn">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                    ) : null}
                     {visibleDetailOrders.map((order) => (
                       <article key={order.id || order.orderCode}>
                         <div>
@@ -614,7 +1086,7 @@ export default function CustomerCRM({
                         </div>
                       </article>
                     ))}
-                    {selectedOrders.length === 0 && <p>Chưa có đơn hàng.</p>}
+                    {!isSelectedDetailLoading && selectedOrders.length === 0 && <p>Chưa có đơn hàng.</p>}
                   </div>
                   {selectedOrders.length > visibleDetailOrders.length && (
                     <button
@@ -672,7 +1144,7 @@ export default function CustomerCRM({
               </div>
 
               <div className="crm-detail-actions">
-                <button type="button" onClick={() => setVoucherPickerOpen(true)}>Tặng voucher</button>
+                <button type="button" onClick={() => setVoucherPickerOpen(true)}>{selectedCarePlan.actionLabel}</button>
               </div>
 
               {voucherPickerOpen ? (

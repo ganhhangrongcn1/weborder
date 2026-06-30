@@ -279,7 +279,7 @@ export function buildAdminOrderFeed(webOrders = [], partnerOrders = []) {
   });
 }
 
-export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } = {}) {
+export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "", includeItems = true } = {}) {
   const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
   if (!client) return [];
 
@@ -298,13 +298,13 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "" } =
     return [];
   }
 
-  const orderIds = (orderRows || []).map((row) => row.id).filter(Boolean);
-  const itemsByOrderId = await readPartnerOrderItemsByOrderIds(client, orderIds);
+  const orderIds = includeItems ? (orderRows || []).map((row) => row.id).filter(Boolean) : [];
+  const itemsByOrderId = includeItems ? await readPartnerOrderItemsByOrderIds(client, orderIds) : new Map();
 
   return (orderRows || []).map((order) => mapPartnerOrderRow(order, itemsByOrderId));
 }
 
-export async function readCustomerPartnerOrdersForAdmin(phone = "", { limit = 100 } = {}) {
+export async function readCustomerPartnerOrdersForAdmin(phone = "", { limit = 100, includeItems = true } = {}) {
   const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
   if (!client) return [];
 
@@ -335,8 +335,8 @@ export async function readCustomerPartnerOrdersForAdmin(phone = "", { limit = 10
   const orderRows = dedupeRowsById(rows)
     .sort((a, b) => new Date(b.order_time || b.created_at || 0) - new Date(a.order_time || a.created_at || 0))
     .slice(0, safeLimit);
-  const orderIds = orderRows.map((row) => row.id).filter(Boolean);
-  const itemsByOrderId = await readPartnerOrderItemsByOrderIds(client, orderIds);
+  const orderIds = includeItems ? orderRows.map((row) => row.id).filter(Boolean) : [];
+  const itemsByOrderId = includeItems ? await readPartnerOrderItemsByOrderIds(client, orderIds) : new Map();
 
   return orderRows.map((order) => mapPartnerOrderRow(order, itemsByOrderId));
 }

@@ -238,26 +238,6 @@ function OrderHealthAlerts({ health }) {
   );
 }
 
-function OrderTabs({ activeStatus, statusCounts, onChange }) {
-  const tabs = ["all", "new", "doing", "delivering", "done"].filter((status) => status === "all" || statusCounts[status] > 0);
-
-  return (
-    <div className="admin-order-tabs" role="tablist" aria-label="Lọc trạng thái đơn">
-      {tabs.map((status) => (
-        <button
-          key={status}
-          type="button"
-          className={activeStatus === status ? "active" : ""}
-          onClick={() => onChange(status)}
-        >
-          {getStatusLabel(status)}
-          <span>{statusCounts[status] || 0}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function OrderFilterBar({
   keyword,
   setKeyword,
@@ -1163,7 +1143,6 @@ export default function OrderManager({
           </div>
         </header>
 
-        <OrderTabs activeStatus={statusFilter} statusCounts={statusCounts} onChange={setStatusFilter} />
         <OrderStatsCards stats={orderStats} />
         <OrderHealthAlerts health={dataHealth} />
         <OrderFilterBar

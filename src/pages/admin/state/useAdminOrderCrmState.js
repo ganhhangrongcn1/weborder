@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { buildCustomersFromOrderListAsync } from "../../../services/crmService.js";
+import {
+  buildCustomersFromCrmAnalyticsAsync,
+  buildCustomersFromOrderListAsync
+} from "../../../services/crmService.js";
 import { getAdminDashboardSummaryRpc } from "../../../services/adminDashboardService.js";
 import { getAdminDashboardRevenueSeriesRpc } from "../../../services/adminDashboardRevenueService.js";
 import { getAdminBusinessAnalyticsRpc } from "../../../services/adminBusinessAnalyticsService.js";
@@ -22,6 +25,7 @@ import { STORAGE_KEYS } from "../../../services/repositories/storageKeys.js";
 import {
   addDaysToVietnamDateInput,
   buildVietnamDateRange,
+  hasDateRange,
   toVietnamDateInputValue
 } from "../../../utils/adminDateRange.js";
 
@@ -63,8 +67,8 @@ function buildChartRangeFromPreset(preset = "7d") {
   return buildVietnamDateRange(addDaysToVietnamDateInput(end, -(days - 1)), end);
 }
 
-async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartnerOrders = false, requireRemote = false } = {}) {
-  const cacheKey = buildOrdersSnapshotCacheKey(dateRange, includePartnerOrders, requireRemote);
+async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartnerOrders = false, requireRemote = false, includeOrderItems = true } = {}) {
+  const cacheKey = buildOrdersSnapshotCacheKey(dateRange, includePartnerOrders, requireRemote, includeOrderItems);
   const cached = ordersSnapshotCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < SNAPSHOT_CACHE_TTL_MS) {
     return cached.value;
@@ -73,14 +77,14 @@ async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartner
     return ordersSnapshotInFlight.get(cacheKey);
   }
 
-  const request = loadOrdersSnapshotUncached(orderStorage, dateRange, { includePartnerOrders, requireRemote })
+  const request = loadOrdersSnapshotUncached(orderStorage, dateRange, { includePartnerOrders, requireRemote, includeOrderItems })
     .then((value) => {
       ordersSnapshotCache.set(cacheKey, {
         cachedAt: Date.now(),
         value
       });
       if (includePartnerOrders) {
-        ordersSnapshotCache.set(buildOrdersSnapshotCacheKey(dateRange, false, requireRemote), {
+        ordersSnapshotCache.set(buildOrdersSnapshotCacheKey(dateRange, false, requireRemote, includeOrderItems), {
           cachedAt: Date.now(),
           value: getWebOrdersOnly(value)
         });
@@ -95,13 +99,14 @@ async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartner
   return request;
 }
 
-async function loadOrdersSnapshotUncached(orderStorage, dateRange = {}, { includePartnerOrders = false, requireRemote = false } = {}) {
+async function loadOrdersSnapshotUncached(orderStorage, dateRange = {}, { includePartnerOrders = false, requireRemote = false, includeOrderItems = true } = {}) {
   const webOrdersPromise = orderStorage?.getAllAsync?.({
     ...dateRange,
-    requireRemote
+    requireRemote,
+    includeItems: includeOrderItems
   });
   const partnerOrdersPromise = includePartnerOrders
-    ? readPartnerOrdersForAdmin(dateRange)
+    ? readPartnerOrdersForAdmin({ ...dateRange, includeItems: includeOrderItems })
     : Promise.resolve([]);
   const [webOrders, partnerOrders] = await Promise.all([webOrdersPromise, partnerOrdersPromise]);
   recordAdminRequest("read web orders snapshot", "orders");
@@ -110,10 +115,11 @@ async function loadOrdersSnapshotUncached(orderStorage, dateRange = {}, { includ
   return buildAdminOrderFeed(safeWebOrders, partnerOrders);
 }
 
-function buildOrdersSnapshotCacheKey(dateRange = {}, includePartnerOrders = false, requireRemote = false) {
+function buildOrdersSnapshotCacheKey(dateRange = {}, includePartnerOrders = false, requireRemote = false, includeOrderItems = true) {
   return [
     includePartnerOrders ? "with-partner" : "web-only",
     requireRemote ? "remote-only" : "fallback-allowed",
+    includeOrderItems ? "with-items" : "summary-only",
     String(dateRange?.dateFrom || ""),
     String(dateRange?.dateTo || "")
   ].join("|");
@@ -136,6 +142,32 @@ function filterOrdersByBranch(orders = [], branchOption = null) {
 
 function getWebOrdersOnly(orders = []) {
   return (Array.isArray(orders) ? orders : []).filter((order) => order?.sourceType !== "partner");
+}
+
+async function loadCrmSnapshotFastFirst(orderStorage, dateRange = {}, selectedBranchOption = null, options = {}) {
+  const canUseFastCrmSnapshot = !hasDateRange(dateRange) && !selectedBranchOption;
+  if (canUseFastCrmSnapshot) {
+    try {
+      const fastSnapshot = await buildCustomersFromCrmAnalyticsAsync({
+        forceSupportRefresh: options?.forceSupportRefresh === true
+      });
+      if (fastSnapshot?.crmAnalytics?.source === "rpc") {
+        return fastSnapshot;
+      }
+    } catch (error) {
+      console.warn("[admin][crm] fast rpc snapshot failed, falling back to order snapshot", error);
+    }
+  }
+
+  const crmOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
+    includePartnerOrders: true,
+    includeOrderItems: false
+  });
+  const scopedOrders = selectedBranchOption ? filterOrdersByBranch(crmOrders, selectedBranchOption) : crmOrders;
+  return buildCustomersFromOrderListAsync(scopedOrders, orderStorage, {
+    dateRange,
+    forceSupportRefresh: options?.forceSupportRefresh === true
+  });
 }
 
 function getTimeValue(value = "") {
@@ -513,11 +545,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         const activeDateFrom = section === "customers" ? customersDateFrom : dashboardDateFrom;
         const activeDateTo = section === "customers" ? customersDateTo : dashboardDateTo;
         const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
-        const crmOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
-          includePartnerOrders: true
-        });
-        const scopedOrders = section === "dashboard" ? filterOrdersByBranch(crmOrders, selectedBranchOption) : crmOrders;
-        const nextCrm = await buildCustomersFromOrderListAsync(scopedOrders, orderStorage, { dateRange });
+        const nextCrm = await loadCrmSnapshotFastFirst(orderStorage, dateRange, selectedBranchOption);
         if (disposed) return;
         setCrmSnapshot(nextCrm);
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
@@ -537,21 +565,32 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
       const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
       clearOrdersSnapshotCache();
+      if (section === "customers") {
+        const crmResult = await loadCrmSnapshotFastFirst(orderStorage, dateRange, selectedBranchOption)
+          .then((value) => ({ status: "fulfilled", value }))
+          .catch((reason) => ({ status: "rejected", reason }));
+        if (disposed) return;
+        if (crmResult.status === "rejected") {
+          console.error("[admin][crm] failed to load snapshot", crmResult.reason);
+        } else {
+          setCrmSnapshot(crmResult.value);
+        }
+        setAdminRequestAudit(getAdminRequestAuditSnapshot());
+        return;
+      }
       const ordersResult = await loadOrdersSnapshot(orderStorage, dateRange, {
         includePartnerOrders: true,
-        requireRemote: section === "orders"
+        requireRemote: section === "orders",
+        includeOrderItems: true
       })
         .then((value) => ({ status: "fulfilled", value }))
         .catch((reason) => ({ status: "rejected", reason }));
       if (disposed) return;
       const combinedOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
-      const scopedCombinedOrders = section === "dashboard" ? filterOrdersByBranch(combinedOrders, selectedBranchOption) : combinedOrders;
-      const shouldRefreshCrm = section === "customers";
-      const crmResult = shouldRefreshCrm && ordersResult.status === "fulfilled"
-        ? await buildCustomersFromOrderListAsync(scopedCombinedOrders, orderStorage, { dateRange })
-            .then((value) => ({ status: "fulfilled", value }))
-            .catch((reason) => ({ status: "rejected", reason }))
-        : { status: "skipped", value: null };
+      const shouldScopeCombinedOrders = section === "dashboard";
+      const scopedCombinedOrders = shouldScopeCombinedOrders && selectedBranchOption
+        ? filterOrdersByBranch(combinedOrders, selectedBranchOption)
+        : combinedOrders;
       if (disposed) return;
       const nextOrders = section === "dashboard" || section === "orders" ? scopedCombinedOrders : getWebOrdersOnly(combinedOrders);
       if (ordersResult.status === "rejected") {
@@ -561,12 +600,6 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         }
       } else if (section === "orders") {
         setAdminOrdersLoadError("");
-      }
-      if (crmResult.status === "rejected") {
-        console.error("[admin][crm] failed to load snapshot", crmResult.reason);
-      }
-      if (crmResult.status === "fulfilled") {
-        setCrmSnapshot(crmResult.value);
       }
       setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
       setAdminRequestAudit(getAdminRequestAuditSnapshot());

@@ -31,8 +31,8 @@ export default function useAdminOrderCrmActions({
 
   const refreshCrmSnapshot = async () => {
     const [webOrdersResult, partnerOrdersResult] = await Promise.allSettled([
-      orderStorage?.getAllAsync?.(),
-      readPartnerOrdersForAdmin()
+      orderStorage?.getAllAsync?.({ includeItems: false }),
+      readPartnerOrdersForAdmin({ includeItems: false })
     ]);
     const webOrders = webOrdersResult.status === "fulfilled" ? webOrdersResult.value : [];
     recordAdminRequest("order updated web orders", "orders");

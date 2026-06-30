@@ -2,6 +2,7 @@ import CustomerCRM from "./CustomerCRM.jsx";
 import LoyaltySettings from "./LoyaltySettings.jsx";
 
 export default function AdminCustomerSection({
+  customerControls = null,
   customerAdminTab,
   setCustomerAdminTab,
   crmSnapshot,
@@ -23,16 +24,13 @@ export default function AdminCustomerSection({
 }) {
   return (
     <div className="admin-stack">
-      <section className="admin-panel">
-        <div className="admin-panel-head">
-          <div>
-            <h2>Khách hàng / CRM</h2>
-            <p>Quản lý dữ liệu khách hàng, loyalty và lịch sử mua hàng.</p>
+      <section className="admin-panel admin-customer-switcher">
+        <div className="admin-customer-switcher-row">
+          <div className="admin-menu-tabs">
+            <button type="button" className={customerAdminTab === "crm" ? "active" : ""} onClick={() => setCustomerAdminTab("crm")}>CRM</button>
+            <button type="button" className={customerAdminTab === "loyalty" ? "active" : ""} onClick={() => setCustomerAdminTab("loyalty")}>Quản lý tích điểm</button>
           </div>
-        </div>
-        <div className="admin-menu-tabs">
-          <button type="button" className={customerAdminTab === "crm" ? "active" : ""} onClick={() => setCustomerAdminTab("crm")}>CRM</button>
-          <button type="button" className={customerAdminTab === "loyalty" ? "active" : ""} onClick={() => setCustomerAdminTab("loyalty")}>Quản lý tích điểm</button>
+          {customerControls ? <div className="admin-customer-controls">{customerControls}</div> : null}
         </div>
       </section>
 

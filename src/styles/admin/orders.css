@@ -1741,6 +1741,19 @@
 .admin-orders-dashboard {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 12px;
+  height: min(880px, calc(100dvh - 72px));
+  min-height: 600px;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.admin-orders-main {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding-right: 0;
 }
 
 .admin-orders-hero {
@@ -1805,6 +1818,11 @@
 }
 
 .admin-order-table-card {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
   border-radius: 10px;
   box-shadow: none;
 }
@@ -1815,9 +1833,16 @@
 }
 
 .admin-order-table-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-auto-rows: minmax(88px, max-content);
   gap: 0;
+  align-content: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0;
   background: #fff;
+  scrollbar-gutter: stable;
 }
 
 .admin-order-table-head {
@@ -1826,7 +1851,7 @@
 }
 
 .admin-order-row {
-  min-height: 68px;
+  min-height: 88px;
   border: 0;
   border-top: 1px solid #eef2f7;
   border-radius: 0;
@@ -1862,8 +1887,10 @@
 }
 
 .admin-order-detail-panel {
-  top: 72px;
-  max-height: calc(100vh - 88px);
+  position: static;
+  width: auto;
+  max-height: none;
+  height: 100%;
   min-height: 0;
   border-radius: 10px;
   box-shadow: none;
@@ -1891,12 +1918,30 @@
 @media (max-width: 1180px) {
   .admin-orders-dashboard {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+    align-items: start;
+    overflow: visible;
+  }
+
+  .admin-orders-main {
+    display: grid;
+    height: auto;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .admin-order-table-body {
+    overflow-y: visible;
+    scrollbar-gutter: auto;
   }
 
   .admin-order-detail-panel {
     position: fixed;
     inset: auto 16px 16px;
     z-index: 80;
+    width: auto;
+    height: auto;
     max-height: min(86vh, 760px);
     transform: translateY(calc(100% + 24px));
     transition: transform 0.22s ease;
