@@ -95,6 +95,36 @@ function isWalkInOrder(order = {}) {
   );
 }
 
+function normalizeSourceToken(value = "") {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function isPosLikeOrderRow(order = {}) {
+  const metadata = getObject(order.metadata);
+  const sources = [
+    metadata.orderSource,
+    metadata.source,
+    metadata.channel,
+    metadata.sourceType,
+    metadata.platform,
+    order.pos_shift_id ? "pos" : ""
+  ].map(normalizeSourceToken);
+
+  return sources.some((source) => [
+    "pos",
+    "posmobile",
+    "posapp",
+    "posmobileorder",
+    "taiquay"
+  ].includes(source));
+}
+
 async function getSupabaseClientAsync() {
   const existing = getRuntimeSupabaseClient();
   if (existing) return existing;
@@ -920,9 +950,11 @@ async function readOrdersByPhoneFromTable(options = {}) {
   const map = {};
   (orders || []).forEach((order) => {
     const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : {};
+    const phoneKey = getOrderPhoneKey(order.customer_phone || "");
     const isWalkIn = Boolean(metadata.walkIn || metadata.walk_in);
-    const phone = getOrderPhoneKey(order.customer_phone || "") || (
-      isWalkIn ? String(metadata.customerPhoneKey || metadata.customer_phone_key || `walkin:${order.id || order.order_code}`).trim() : ""
+    const shouldUseWalkInKey = isWalkIn || isPosLikeOrderRow(order);
+    const phone = phoneKey || (
+      shouldUseWalkInKey ? String(metadata.customerPhoneKey || metadata.customer_phone_key || `walkin:${order.id || order.order_code}`).trim() : ""
     );
     if (!phone) return;
     const next = {
@@ -930,7 +962,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
       orderCode: order.order_code || order.id,
       displayOrderCode: order.display_order_code || metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id,
       phone,
-      customerPhone: isWalkIn ? "" : phone,
+      customerPhone: phoneKey || "",
       customerName: order.customer_name || "",
       status: order.status || "pending_zalo",
       kitchenStatus: order.kitchen_status || metadata.kitchenStatus || "",

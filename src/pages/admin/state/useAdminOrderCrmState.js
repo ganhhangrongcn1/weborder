@@ -183,6 +183,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const [adminRequestAudit, setAdminRequestAudit] = useState(() => getAdminRequestAuditSnapshot());
   const [adminOrdersRealtimePending, setAdminOrdersRealtimePending] = useState(false);
   const [adminOrdersRealtimeCount, setAdminOrdersRealtimeCount] = useState(0);
+  const [adminOrdersLoadError, setAdminOrdersLoadError] = useState("");
   const [customerAdminTab, setCustomerAdminTab] = useState("crm");
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState("");
   const selectedBranchOption = getSelectedBranchOption(branches, selectedBranchFilter);
@@ -192,14 +193,23 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const loadActiveOrdersSnapshot = async ({ force = false } = {}) => {
     const dateRange = buildVietnamDateRange(ordersDateFrom, ordersDateTo);
     if (force) clearOrdersSnapshotCache();
-    const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
-      includePartnerOrders: true
-    });
-    setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
-    setAdminOrdersRealtimePending(false);
-    setAdminOrdersRealtimeCount(0);
-    setAdminRequestAudit(getAdminRequestAuditSnapshot());
-    return nextOrders;
+    try {
+      const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
+        includePartnerOrders: true,
+        requireRemote: true
+      });
+      setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
+      setAdminOrdersLoadError("");
+      setAdminOrdersRealtimePending(false);
+      setAdminOrdersRealtimeCount(0);
+      setAdminRequestAudit(getAdminRequestAuditSnapshot());
+      return nextOrders;
+    } catch (error) {
+      console.error("[admin][orders] failed to refresh active snapshot", error);
+      setAdminOrdersLoadError("Không thể tải danh sách đơn hàng từ Supabase.");
+      setOrdersSnapshot([]);
+      throw error;
+    }
   };
 
   useEffect(() => {
@@ -339,9 +349,12 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         updateDashboardDataStatus(setDashboardDataStatus, "orders", "loading");
       }
       try {
+        if (section === "orders") {
+          setAdminOrdersLoadError("");
+        }
         const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
           includePartnerOrders: section === "dashboard" || section === "orders",
-          requireRemote: section === "dashboard"
+          requireRemote: section === "dashboard" || section === "orders"
         });
         if (disposed) return;
         const safeOrders = Array.isArray(nextOrders) ? nextOrders : [];
@@ -349,11 +362,17 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         if (section === "dashboard") {
           updateDashboardDataStatus(setDashboardDataStatus, "orders", "ready");
         }
+        if (section === "orders") {
+          setAdminOrdersLoadError("");
+        }
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
         console.error("[admin][orders] failed to load snapshot", error);
         setOrdersSnapshot([]);
+        if (section === "orders") {
+          setAdminOrdersLoadError("Không thể tải danh sách đơn hàng từ Supabase.");
+        }
         if (section === "dashboard") {
           updateDashboardDataStatus(
             setDashboardDataStatus,
@@ -519,7 +538,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
       clearOrdersSnapshotCache();
       const ordersResult = await loadOrdersSnapshot(orderStorage, dateRange, {
-        includePartnerOrders: true
+        includePartnerOrders: true,
+        requireRemote: section === "orders"
       })
         .then((value) => ({ status: "fulfilled", value }))
         .catch((reason) => ({ status: "rejected", reason }));
@@ -536,6 +556,11 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       const nextOrders = section === "dashboard" || section === "orders" ? scopedCombinedOrders : getWebOrdersOnly(combinedOrders);
       if (ordersResult.status === "rejected") {
         console.error("[admin][orders] failed to load snapshot", ordersResult.reason);
+        if (section === "orders") {
+          setAdminOrdersLoadError("Không thể tải danh sách đơn hàng từ Supabase.");
+        }
+      } else if (section === "orders") {
+        setAdminOrdersLoadError("");
       }
       if (crmResult.status === "rejected") {
         console.error("[admin][crm] failed to load snapshot", crmResult.reason);
@@ -610,7 +635,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     resetAdminRequestAudit: resetAdminAudit,
     adminOrdersRealtimePending,
     adminOrdersRealtimeCount,
-    refreshAdminOrdersFromRealtime: () => loadActiveOrdersSnapshot({ force: true }),
+    adminOrdersLoadError,
+    refreshAdminOrdersFromRealtime: () => loadActiveOrdersSnapshot({ force: true }).catch(() => []),
     customerAdminTab,
     setCustomerAdminTab,
     selectedCustomerPhone,

@@ -4,6 +4,7 @@ import {
 } from "./supabase/supabaseRuntimeClient.js";
 import { getAdminSupabaseClient } from "./supabase/adminSupabaseClient.js";
 import { isSiteVisitTrackingEnabled } from "./supabase/runtimeFlags.js";
+import { addDaysToVietnamDateInput } from "../utils/adminDateRange.js";
 
 const SITE_VISITOR_STORAGE_KEY = "ghr_site_visitor_id";
 const SITE_VISIT_DEDUPE_PREFIX = "ghr_site_visit_sent";
@@ -141,6 +142,37 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getDateInputTime(dateText = "") {
+  const time = new Date(`${String(dateText || "").trim()}T00:00:00+07:00`).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function getInclusiveDayCount(dateFrom = "", dateTo = "") {
+  const fromTime = getDateInputTime(dateFrom);
+  const toTime = getDateInputTime(dateTo);
+  if (!fromTime || !toTime) return 1;
+  return Math.max(1, Math.round((toTime - fromTime) / 86400000) + 1);
+}
+
+function buildPreviousDateRange(dateRange = {}) {
+  const currentFrom = String(dateRange.dateFrom || "").trim();
+  const currentTo = String(dateRange.dateTo || dateRange.dateFrom || "").trim();
+  if (!currentFrom || !currentTo) return null;
+
+  const fromText = currentFrom <= currentTo ? currentFrom : currentTo;
+  const toText = currentFrom <= currentTo ? currentTo : currentFrom;
+  const dayCount = getInclusiveDayCount(fromText, toText);
+  const previousTo = addDaysToVietnamDateInput(fromText, -1);
+  const previousFrom = addDaysToVietnamDateInput(previousTo, -(dayCount - 1));
+  if (!previousFrom || !previousTo) return null;
+
+  return {
+    dateFrom: previousFrom,
+    dateTo: previousTo,
+    dayCount
+  };
+}
+
 function mapDailyStats(rows = []) {
   const daily = (Array.isArray(rows) ? rows : []).map((row) => ({
     date: String(row.visit_date || ""),
@@ -168,6 +200,35 @@ function mapDailyStats(rows = []) {
       ? Math.round((totals.pageViews / totals.uniqueVisitors) * 10) / 10
       : 0,
     peakDay
+  };
+}
+
+function buildComparison(current = {}, previous = {}, previousDateRange = null) {
+  const currentPageViews = toNumber(current.pageViews);
+  const previousPageViews = toNumber(previous.pageViews);
+  const currentUniqueVisitors = toNumber(current.uniqueVisitors);
+  const previousUniqueVisitors = toNumber(previous.uniqueVisitors);
+  const pageViewDelta = currentPageViews - previousPageViews;
+  const pageViewPercent = previousPageViews
+    ? Math.round((pageViewDelta / previousPageViews) * 1000) / 10
+    : currentPageViews
+      ? 100
+      : 0;
+  const uniqueVisitorDelta = currentUniqueVisitors - previousUniqueVisitors;
+  const uniqueVisitorPercent = previousUniqueVisitors
+    ? Math.round((uniqueVisitorDelta / previousUniqueVisitors) * 1000) / 10
+    : currentUniqueVisitors
+      ? 100
+      : 0;
+
+  return {
+    pageViewDelta,
+    pageViewPercent,
+    uniqueVisitorDelta,
+    uniqueVisitorPercent,
+    previousDateFrom: previousDateRange?.dateFrom || "",
+    previousDateTo: previousDateRange?.dateTo || "",
+    dayCount: previousDateRange?.dayCount || 1
   };
 }
 
@@ -204,17 +265,33 @@ export async function getSiteVisitDailyStats(dateRange = {}) {
   const client = await getAdminSupabaseClient();
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
 
-  const { data, error } = await client.rpc(SITE_VISIT_DAILY_STATS_RPC, {
+  const previousDateRange = buildPreviousDateRange(dateRange);
+  const currentRequest = client.rpc(SITE_VISIT_DAILY_STATS_RPC, {
     p_date_from: dateRange.dateFrom,
     p_date_to: dateRange.dateTo
   });
+  const previousRequest = previousDateRange
+    ? client.rpc(SITE_VISIT_DAILY_STATS_RPC, {
+        p_date_from: previousDateRange.dateFrom,
+        p_date_to: previousDateRange.dateTo
+      })
+    : Promise.resolve({ data: [], error: null });
+
+  const [currentResult, previousResult] = await Promise.all([currentRequest, previousRequest]);
+  const error = currentResult.error || previousResult.error;
   if (error) {
     const code = String(error.code || "");
     if (code === "42883" || code === "PGRST202") return null;
     throw error;
   }
 
-  return mapDailyStats(data);
+  const current = mapDailyStats(currentResult.data);
+  const previous = mapDailyStats(previousResult.data);
+  return {
+    ...current,
+    previous,
+    comparison: buildComparison(current, previous, previousDateRange)
+  };
 }
 
 export default {

@@ -1,6 +1,13 @@
 import AdminOrdersCrmSection from "../AdminOrdersCrmSection.jsx";
 import AdminRequestAuditBadge from "../AdminRequestAuditBadge.jsx";
-import { AdminInput, AdminSelect } from "../ui/index.js";
+import { AdminButton, AdminCard, AdminInput, AdminSelect } from "../ui/index.js";
+import { buildBranchFilterOptions } from "../../../services/branchIdentityService.js";
+
+function getBranchShortLabel(label = "") {
+  const text = String(label || "").trim();
+  const match = text.match(/(?:Ganh Hang Rong\s*-\s*)?(.+)/i);
+  return (match?.[1] || text || "Chi nhánh").replace(/\s+/g, " ");
+}
 
 export default function AdminOrdersPage({
   ordersSnapshot,
@@ -12,6 +19,7 @@ export default function AdminOrdersPage({
   resetAdminRequestAudit,
   adminOrdersRealtimePending,
   adminOrdersRealtimeCount,
+  adminOrdersLoadError,
   refreshAdminOrdersFromRealtime,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
@@ -23,9 +31,13 @@ export default function AdminOrdersPage({
   ordersDateTo,
   setOrdersDateTo,
   ordersDatePreset,
-  setOrdersDatePreset
+  setOrdersDatePreset,
+  selectedBranchFilter = "all",
+  setSelectedBranchFilter
 }) {
   const todayText = new Date().toISOString().slice(0, "10");
+  const branchOptions = buildBranchFilterOptions(branches);
+
   const applyPreset = (preset) => {
     const now = new Date();
     const toDateText = (date) => {
@@ -34,6 +46,7 @@ export default function AdminOrdersPage({
       const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     };
+
     if (preset === "today") {
       const value = toDateText(now);
       setOrdersDateFrom(value);
@@ -63,98 +76,122 @@ export default function AdminOrdersPage({
   };
 
   return (
-    <>
-      <div className="admin-dashboard-toolbar" style={{ marginBottom: 12 }}>
-        <label className="admin-dashboard-search admin-dashboard-preset">
-          <span>🗂</span>
-          <AdminSelect
-            value={ordersDatePreset || "today"}
-            onChange={(event) => {
-              const nextPreset = event.target.value;
-              if (nextPreset === "custom") {
-                setOrdersDatePreset("custom");
-                return;
-              }
-              applyPreset(nextPreset);
-            }}
-            options={[
-              { value: "today", label: "Hôm nay" },
-              { value: "yesterday", label: "Hôm qua" },
-              { value: "week", label: "Tuần này" },
-              { value: "month", label: "Tháng này" },
-              { value: "custom", label: "Tùy chỉnh..." }
-            ]}
-          />
-        </label>
-        {ordersDatePreset === "custom" ? (
-          <>
-            <label className="admin-dashboard-search">
-              <span>📅</span>
-              <AdminInput
-                type="date"
-                value={ordersDateFrom || ""}
-                max={ordersDateTo || todayText}
-                onChange={(event) => {
-                  setOrdersDateFrom(event.target.value);
-                  setOrdersDatePreset("custom");
-                }}
-              />
-            </label>
-            <label className="admin-dashboard-search">
-              <span>📅</span>
-              <AdminInput
-                type="date"
-                value={ordersDateTo || ""}
-                min={ordersDateFrom || ""}
-                max={todayText}
-                onChange={(event) => {
-                  setOrdersDateTo(event.target.value);
-                  setOrdersDatePreset("custom");
-                }}
-              />
-            </label>
-          </>
-        ) : null}
-      </div>
+    <div className="admin-orders-page">
+      <header className="admin-orders-compact-head">
+        <div className="admin-orders-compact-title">
+          <span>Vận hành đơn hàng</span>
+          <h1>Quản lý đơn hàng</h1>
+          <p>Danh sách đọc trực tiếp từ Supabase, tách rõ Website, POS và FoodApp.</p>
+        </div>
+        <div className="admin-orders-compact-meta">
+          <strong>{ordersSnapshot?.length || 0}</strong>
+          <span>đơn trong kỳ</span>
+        </div>
+      </header>
 
-      <div style={{ marginBottom: 12 }}>
+      <section className="admin-orders-scope-bar" aria-label="Phạm vi đơn hàng">
+        <div className="admin-orders-branch-switcher">
+          <span>Chi nhánh</span>
+          <div>
+            <button
+              type="button"
+              className={selectedBranchFilter === "all" ? "is-active" : ""}
+              onClick={() => setSelectedBranchFilter?.("all")}
+            >
+              Tất cả
+            </button>
+            {branchOptions.map((branch) => (
+              <button
+                key={branch.value}
+                type="button"
+                className={branch.value === selectedBranchFilter ? "is-active" : ""}
+                onClick={() => setSelectedBranchFilter?.(branch.value)}
+                title={branch.label}
+              >
+                {getBranchShortLabel(branch.label)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="admin-orders-period-controls">
+          <label className="admin-orders-period-select">
+            <span>Ky</span>
+            <AdminSelect
+              value={ordersDatePreset || "today"}
+              onChange={(event) => {
+                const nextPreset = event.target.value;
+                if (nextPreset === "custom") {
+                  setOrdersDatePreset("custom");
+                  return;
+                }
+                applyPreset(nextPreset);
+              }}
+              options={[
+                { value: "today", label: "Hôm nay" },
+                { value: "yesterday", label: "Hôm qua" },
+                { value: "week", label: "Tuần này" },
+                { value: "month", label: "Tháng này" },
+                { value: "custom", label: "Tùy chỉnh..." }
+              ]}
+            />
+          </label>
+          {ordersDatePreset === "custom" ? (
+            <>
+              <label className="admin-orders-period-date">
+                <span>Từ ngày</span>
+                <AdminInput
+                  type="date"
+                  value={ordersDateFrom || ""}
+                  max={ordersDateTo || todayText}
+                  onChange={(event) => {
+                    setOrdersDateFrom(event.target.value);
+                    setOrdersDatePreset("custom");
+                  }}
+                />
+              </label>
+              <label className="admin-orders-period-date">
+                <span>Đến ngày</span>
+                <AdminInput
+                  type="date"
+                  value={ordersDateTo || ""}
+                  min={ordersDateFrom || ""}
+                  max={todayText}
+                  onChange={(event) => {
+                    setOrdersDateTo(event.target.value);
+                    setOrdersDatePreset("custom");
+                  }}
+                />
+              </label>
+            </>
+          ) : null}
+        </div>
+      </section>
+
+      <details className="admin-orders-audit-details">
+        <summary>Kiểm tra request</summary>
         <AdminRequestAuditBadge audit={adminRequestAudit} onReset={resetAdminRequestAudit} />
-      </div>
+      </details>
+
+      {adminOrdersLoadError ? (
+        <AdminCard className="admin-orders-load-error">
+          <strong>{adminOrdersLoadError}</strong>
+          <span>Trang đơn hàng đang đọc trực tiếp từ Supabase để tránh hiển thị dữ liệu cũ.</span>
+          <AdminButton type="button" onClick={refreshAdminOrdersFromRealtime}>
+            Tải lại
+          </AdminButton>
+        </AdminCard>
+      ) : null}
 
       {adminOrdersRealtimePending ? (
-        <div
-          style={{
-            marginBottom: 12,
-            border: "1px solid #fed7aa",
-            background: "#fff7ed",
-            color: "#c2410c",
-            borderRadius: 10,
-            padding: "10px 12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            fontSize: 13,
-            fontWeight: 900
-          }}
-        >
-          <span>Có cập nhật đơn mới ({adminOrdersRealtimeCount}). Bấm để tải danh sách mới.</span>
-          <button
-            type="button"
-            onClick={refreshAdminOrdersFromRealtime}
-            style={{
-              border: "1px solid #f97316",
-              background: "#ffffff",
-              color: "#c2410c",
-              borderRadius: 8,
-              padding: "8px 12px",
-              fontWeight: 900,
-              cursor: "pointer"
-            }}
-          >
-            Cập nhật đơn
-          </button>
-        </div>
+        <AdminCard className="admin-orders-realtime-notice">
+          <div className="admin-orders-realtime-content">
+            <span>Có cập nhật đơn mới ({adminOrdersRealtimeCount}). Bấm để tải danh sách mới.</span>
+            <AdminButton type="button" onClick={refreshAdminOrdersFromRealtime}>
+              Cập nhật đơn
+            </AdminButton>
+          </div>
+        </AdminCard>
       ) : null}
 
       <AdminOrdersCrmSection
@@ -171,6 +208,7 @@ export default function AdminOrdersPage({
         onGiftVoucher={onGiftVoucher}
         orderStorage={orderStorage}
         branches={branches}
+        selectedBranchFilter={selectedBranchFilter}
         ordersDateFrom={ordersDateFrom}
         setOrdersDateFrom={setOrdersDateFrom}
         ordersDateTo={ordersDateTo}
@@ -178,6 +216,6 @@ export default function AdminOrdersPage({
         ordersDatePreset={ordersDatePreset}
         setOrdersDatePreset={setOrdersDatePreset}
       />
-    </>
+    </div>
   );
 }

@@ -6,7 +6,7 @@ import {
 import {
   getPartnerOrderIdentityKey,
   normalizePartnerSource,
-  resolveOrderSourceKey
+  resolveSalesChannelKey
 } from "./partnerOrderService.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { buildOrderCountingPhoneVariants } from "./customerOrderCountingService.js";
@@ -209,7 +209,7 @@ async function readPartnerOrderItemsByOrderIds(client, orderIds = []) {
 
 function normalizeWebOrder(order = {}) {
   const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : {};
-  const source = resolveOrderSourceKey(order);
+  const source = resolveSalesChannelKey(order);
   const orderCode = String(order.orderCode || order.id || "").trim();
   const displayOrderCode = String(
     order.displayOrderCode ||

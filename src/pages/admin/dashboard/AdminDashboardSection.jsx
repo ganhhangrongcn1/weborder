@@ -131,12 +131,14 @@ function buildDashboardPeriodLabel(preset = "today", dateFrom = "", dateTo = "")
   return `${presetLabel}: ${fromLabel || toLabel}`;
 }
 
-function buildSiteTrafficSubtitle(siteTrafficSummary = null) {
-  if (!siteTrafficSummary) return "Chưa có dữ liệu tracking";
-  const uniqueVisitors = formatNumber(siteTrafficSummary.uniqueVisitors || 0);
-  const averageViews = Number(siteTrafficSummary.averagePageViewsPerVisitor || 0);
-  const averageLabel = averageViews ? `${averageViews} trang/khách` : "0 trang/khách";
-  return `${uniqueVisitors} khách · ${averageLabel}`;
+function buildTrafficDailyBars(daily = []) {
+  const items = (Array.isArray(daily) ? daily : []).slice(-7);
+  return items.map((item) => ({
+    date: item.date,
+    label: formatDateLabel(item.date),
+    pageViews: Number(item.pageViews || 0),
+    uniqueVisitors: Number(item.uniqueVisitors || 0)
+  }));
 }
 
 function getChannelColor(name = "") {
@@ -364,9 +366,17 @@ export default function AdminDashboardSection({
   const cancelRate = rpcMetrics ? Math.round(Number(rpcMetrics.cancelRate || 0) * 100) : null;
   const reportPeriodLabel = buildDashboardPeriodLabel(dashboardDatePreset || "today", dashboardDateFrom, dashboardDateTo);
   const displayedSitePageViews = siteTrafficSummary ? formatNumber(siteTrafficSummary.pageViews || 0) : "--";
-  const siteTrafficSubtitle = dashboardDataStatus?.traffic?.status === "error"
-    ? "Không thể tải dữ liệu Supabase"
-    : buildSiteTrafficSubtitle(siteTrafficSummary);
+  const displayedSiteVisitors = siteTrafficSummary ? formatNumber(siteTrafficSummary.uniqueVisitors || 0) : "--";
+  const trafficDailyBars = buildTrafficDailyBars(siteTrafficSummary?.daily || []);
+  const trafficComparison = siteTrafficSummary?.comparison || {};
+  const trafficDelta = Number(trafficComparison.uniqueVisitorDelta || 0);
+  const trafficPeriodLabel = trafficComparison.dayCount > 1 ? "kỳ trước" : "hôm qua";
+  const trafficTrendLabel = siteTrafficSummary
+    ? trafficDelta
+      ? `${trafficDelta > 0 ? "+" : ""}${formatNumber(trafficDelta)} khách so với ${trafficPeriodLabel}`
+      : `Không đổi so với ${trafficPeriodLabel}`
+    : "Đang tải dữ liệu truy cập";
+  const trafficAverageViews = Number(siteTrafficSummary?.averagePageViewsPerVisitor || 0);
   const operationalStats = [
     { label: "Đơn mới", value: pendingOrders ?? "--", detail: "chờ xác nhận", tone: pendingOrders ? "warning" : "success" },
     { label: "Đang làm", value: preparingOrders ?? "--", detail: "bếp xử lý", tone: "brand" },
@@ -520,8 +530,46 @@ export default function AdminDashboardSection({
         <AdminStatCard title="Khách mua trong kỳ" value={displayedPeriodCustomers ?? "--"} subtitle="Số điện thoại duy nhất có đơn trong kỳ" icon={<Icon name="user" size={22} />} tone="blue" />
         <AdminStatCard title="Tổng hồ sơ khách" value={displayedCustomers ?? "--"} subtitle="Toàn bộ hồ sơ khách hàng trên Supabase" icon={<Icon name="user" size={22} />} tone="slate" />
         <AdminStatCard title="Đơn trung bình" value={averageOrder === null ? "--" : formatMoney(averageOrder)} subtitle={completionRate === null ? "Chưa có dữ liệu Supabase" : `${completionRate}% hoàn tất`} icon={<Icon name="star" size={22} />} tone="amber" />
-        <AdminStatCard title="Lượt truy cập" value={displayedSitePageViews} subtitle={siteTrafficSubtitle} icon={<Icon name="eye" size={22} />} tone="slate" />
       </div>
+
+      <section className="admin-dashboard-traffic-strip" aria-label="Khách truy cập website">
+        <div className="admin-dashboard-traffic-heading">
+          <span>Website</span>
+          <strong>{displayedSiteVisitors} khách vào trang</strong>
+          <small>{trafficTrendLabel}</small>
+        </div>
+        {trafficDailyBars.length ? (
+          <div className="admin-dashboard-traffic-inline">
+            <article>
+              <span>Lượt xem trang</span>
+              <strong>{displayedSitePageViews}</strong>
+            </article>
+            <article>
+              <span>Mỗi khách xem</span>
+              <strong>{trafficAverageViews ? `${trafficAverageViews} trang` : "0 trang"}</strong>
+            </article>
+            <article className={trafficDelta > 0 ? "is-up" : trafficDelta < 0 ? "is-down" : ""}>
+              <span>So với {trafficPeriodLabel}</span>
+              <strong>{trafficDelta > 0 ? "+" : ""}{formatNumber(trafficDelta)} khách</strong>
+            </article>
+            <div className="admin-dashboard-traffic-days">
+              {trafficDailyBars.map((item) => (
+                <span key={item.date} title={`${item.label}: ${formatNumber(item.pageViews)} lượt, ${formatNumber(item.uniqueVisitors)} khách`}>
+                  <b>{item.label}</b>
+                  <strong>{formatNumber(item.uniqueVisitors)} khách</strong>
+                  <small>{formatNumber(item.pageViews)} lượt xem</small>
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="admin-dashboard-traffic-empty">
+            {dashboardDataStatus?.traffic?.status === "error"
+              ? "Không thể tải dữ liệu truy cập từ Supabase."
+              : "Chưa có khách truy cập trong kỳ này."}
+          </div>
+        )}
+      </section>
 
       <section className="admin-dashboard-ops-strip" aria-label="Trạng thái vận hành">
         <div className="admin-dashboard-ops-title">
