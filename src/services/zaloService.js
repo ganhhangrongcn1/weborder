@@ -17,6 +17,8 @@ export const DEFAULT_ZALO_TEMPLATE = [
   "{{items}}",
   "",
   "\uD83D\uDE9A Ph\u00ED ship: {{shipping_fee}}",
+  "\uD83C\uDF81 \u01AFu \u0111\u00E3i: -{{promo_discount}}",
+  "\u2B50 D\u00F9ng \u0111i\u1EC3m th\u01B0\u1EDFng: -{{points_discount}}",
   "\u2705 T\u1ED5ng thanh to\u00E1n: {{total}}",
   "\uD83D\uDCDD Ghi ch\u00FA: {{note}}",
   "",
@@ -74,6 +76,8 @@ export function renderZaloTemplate(template, data) {
     distance_km: "",
     subtotal: "",
     shipping_fee: "",
+    promo_discount: "",
+    points_discount: "",
     order_link: ""
   };
   Object.assign(values, data || {});

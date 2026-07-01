@@ -69,6 +69,8 @@ export default function OrderSuccess({
   const orderItems = order?.items?.length ? order.items : [];
   const subtotalValue = Number(order?.subtotal || orderItems.reduce((sum, item) => sum + (Number(item.lineTotal) || 0), 0));
   const shippingFeeValue = Number(order?.shippingFee || order?.deliveryFee || 0);
+  const promoDiscountValue = Number(order?.promoDiscount ?? order?.promo_discount ?? order?.metadata?.promoDiscount ?? 0);
+  const pointsDiscountValue = Number(order?.pointsDiscount ?? order?.points_discount ?? order?.metadata?.pointsDiscount ?? 0);
   const totalValue = Number(order?.totalAmount || order?.total || 0);
   const orderCode = order?.orderCode || "GHR-1028";
   const orderLink = buildOrderLink(orderCode);
@@ -82,6 +84,8 @@ export default function OrderSuccess({
     total: formatMoney(totalValue),
     subtotal: formatMoney(subtotalValue),
     shipping_fee: isPickup ? "Không tính phí giao hàng" : formatMoney(shippingFeeValue),
+    promo_discount: promoDiscountValue > 0 ? formatMoney(promoDiscountValue) : "",
+    points_discount: pointsDiscountValue > 0 ? formatMoney(pointsDiscountValue) : "",
     order_code: orderCode,
     order_time: order?.createdAt ? new Date(order.createdAt).toLocaleString("vi-VN") : new Date().toLocaleString("vi-VN"),
     pickup_time: isPickup ? formatPickupTimeForZalo(order?.pickupTimeText) : "",

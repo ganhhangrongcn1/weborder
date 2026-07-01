@@ -189,7 +189,8 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     total,
     cartCount,
     addToCart,
-    reorderOrder
+    reorderOrder,
+    repriceCartNow
   } = useCart({
     makeCartItem,
     initialCart: [],
@@ -206,7 +207,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     discount,
     reorder,
     navigate,
-    catalogProducts: productState.storeProducts,
+    catalogProducts: availableCustomerProducts,
     smartPromotions: productState.smartPromotions
   });
 
@@ -233,6 +234,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     setCurrentOrder: coreState.setCurrentOrder,
     setOrderStatus: coreState.setOrderStatus,
     setCart,
+    repriceCartNow,
     saveDemoOrders,
     demoOrders,
     navigate,

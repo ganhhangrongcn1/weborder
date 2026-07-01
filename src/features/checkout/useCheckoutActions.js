@@ -20,7 +20,8 @@ export default function useCheckoutActions({
   pickupTimeText,
   orderSource = "online",
   navigate,
-  onNotice
+  onNotice,
+  repriceCartNow
 }) {
   const updateQty = (cartId, delta) => setCart((items) => items.map((item) => {
     if (item.cartId !== cartId) return item;
@@ -37,6 +38,22 @@ export default function useCheckoutActions({
   }));
 
   const handlePlaceOrder = async () => {
+    const priceRefresh = typeof repriceCartNow === "function"
+      ? repriceCartNow()
+      : { changed: false };
+    if (priceRefresh.changed) {
+      if (typeof onNotice === "function") {
+        onNotice({
+          title: "Giá món đã được cập nhật",
+          message: "Giỏ hàng vừa được đồng bộ theo giá hiện tại. Anh/chị kiểm tra lại tổng tiền rồi bấm đặt món lần nữa.",
+          icon: "warning"
+        });
+      } else {
+        alert("Giỏ hàng vừa được cập nhật theo giá hiện tại. Vui lòng kiểm tra lại tổng tiền rồi đặt món lần nữa.");
+      }
+      return;
+    }
+
     console.info("[checkout-debug] handlePlaceOrder:start", {
       hasDeliveryName: Boolean(deliveryInfo?.name),
       hasDeliveryPhone: Boolean(deliveryInfo?.phone),

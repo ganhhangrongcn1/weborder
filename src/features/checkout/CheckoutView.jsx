@@ -48,6 +48,7 @@ export default function Checkout({
   openOptionModal,
   openCartItemEditor,
   createOrderFromCheckout,
+  repriceCartNow,
   userProfile,
   isRegisteredCustomer,
   currentPhone,
@@ -141,6 +142,8 @@ export default function Checkout({
     configSupportLimit,
     promoDiscount,
     earnedPreviewPoints,
+    maxRedemptionPercent,
+    maxPointDiscount,
     pointsSpent,
     pointsDiscount,
     checkoutTotal
@@ -201,6 +204,7 @@ export default function Checkout({
   const { updateQty, handlePlaceOrder } = useCheckoutActions({
     setCart,
     createOrderFromCheckout,
+    repriceCartNow,
     checkoutTotal,
     subtotal,
     checkoutShip,
@@ -467,6 +471,8 @@ export default function Checkout({
           usePoints={usePoints}
           setUsePoints={setUsePoints}
           pointsDiscount={pointsDiscount}
+          maxRedemptionPercent={maxRedemptionPercent}
+          maxPointDiscount={maxPointDiscount}
           earnedPreviewPoints={earnedPreviewPoints}
           originalSubtotal={originalSubtotal}
           giftSavingAmount={giftSavingAmount}

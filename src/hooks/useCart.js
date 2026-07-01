@@ -1,9 +1,63 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { orderRepository } from "../services/repositories/orderRepository.js";
-import { isFlashSaleActiveNow } from "../services/flashSaleService.js";
+import { getActiveFlashSalePromotions } from "../services/flashSaleService.js";
+
+function normalizeLookupText(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function toIdList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function applyRoundMode(value, mode) {
+  if (mode === "round_1000") return Math.round(value / 1000) * 1000;
+  if (mode === "round_5000") return Math.round(value / 5000) * 5000;
+  return value;
+}
+
+function canApplyFlashPromoToProduct(promo = {}, product = {}) {
+  const scope = promo?.condition?.applyScope || "product";
+  if (scope === "all") return true;
+  if (scope === "category") {
+    return toIdList(promo?.condition?.categoryIds).includes(String(product?.category || ""));
+  }
+  return toIdList(promo?.condition?.productIds).includes(String(product?.id || product?.productId || product?.product_id || ""));
+}
+
+function isFixedPricePromo(promo = {}) {
+  return promo?.reward?.type === "fixed_price" ||
+    promo?.reward?.priceMode === "fixed_price" ||
+    promo?.condition?.priceMode === "fixed_price";
+}
+
+function calculateFlashSalePrice(basePrice, promo = {}) {
+  const rewardType = isFixedPricePromo(promo) ? "fixed_price" : promo?.reward?.type;
+  const rewardValue = Number(promo?.reward?.value || 0);
+  const rawPrice = rewardType === "fixed_price"
+    ? rewardValue
+    : basePrice - (rewardType === "percent_discount" ? (basePrice * rewardValue) / 100 : rewardValue);
+  return Math.max(applyRoundMode(rawPrice, promo?.reward?.roundMode), 0);
+}
+
+function getToppingTotal(toppings = []) {
+  return (Array.isArray(toppings) ? toppings : []).reduce(
+    (sum, topping) => sum + Number(topping?.price || 0) * Number(topping?.quantity || 1),
+    0
+  );
+}
 
 export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate, catalogProducts = [], smartPromotions = [] }) {
   const [cart, setCartState] = useState(() => orderRepository.getCartDraft(initialCart));
+  const cartRef = useRef(cart);
 
   function getToppingsSignature(toppings = []) {
     return [...(toppings || [])]
@@ -43,6 +97,7 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
     setCartState((current) => {
       const next = typeof value === "function" ? value(current) : value;
       if (next === current) return current;
+      cartRef.current = next;
       orderRepository.saveCartDraft(next);
       return next;
     });
@@ -53,26 +108,117 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
   const total = Math.max(subtotal - discount + ship, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  function resolvePurchasableProduct(product = {}) {
-    if (!product?.flashPromoId) return product;
+  function findCatalogProduct(product = {}) {
+    const safeProducts = Array.isArray(catalogProducts) ? catalogProducts : [];
+    const rawId = String(product?.id || product?.productId || product?.product_id || "").trim();
+    const normalizedName = normalizeLookupText(product?.name || product?.productName || product?.product_name || "");
+    return safeProducts.find((item) => String(item?.id || "").trim() === rawId) ||
+      safeProducts.find((item) => normalizeLookupText(item?.name || "") === normalizedName) ||
+      null;
+  }
 
-    const matchedPromo = smartPromotions.find((promo) => String(promo?.id || "") === String(product.flashPromoId));
-    if (matchedPromo && isFlashSaleActiveNow(matchedPromo)) return product;
+  function applyCurrentFlashSale(product = {}) {
+    const activeFlashPromos = getActiveFlashSalePromotions(smartPromotions);
+    const matchedPromo = activeFlashPromos.find((promo) => canApplyFlashPromoToProduct(promo, product));
+    if (!matchedPromo) {
+      return {
+        ...product,
+        flashPromoId: undefined,
+        salePrice: undefined
+      };
+    }
 
-    const baseProduct = catalogProducts.find((item) => String(item?.id || "") === String(product.id)) || {};
-    const basePrice = Number(baseProduct.price || product.originalPrice || product.price || 0);
+    const basePrice = Number(product?.originalPrice || product?.price || 0);
+    const salePrice = calculateFlashSalePrice(basePrice, matchedPromo);
+    if (salePrice <= 0 || salePrice >= basePrice) {
+      return {
+        ...product,
+        flashPromoId: undefined,
+        salePrice: undefined
+      };
+    }
 
     return {
       ...product,
-      ...baseProduct,
-      price: basePrice,
-      originalPrice: undefined,
-      salePrice: undefined,
-      discountPercent: undefined,
-      discountValue: undefined,
-      flashPromoId: undefined
+      price: salePrice,
+      originalPrice: basePrice,
+      salePrice,
+      discountPercent: Math.round(((basePrice - salePrice) / basePrice) * 100),
+      discountValue: basePrice - salePrice,
+      flashPromoId: matchedPromo.id
     };
   }
+
+  function resolvePurchasableProduct(product = {}) {
+    const catalogProduct = findCatalogProduct(product);
+    const baseProduct = catalogProduct
+      ? {
+          ...product,
+          ...catalogProduct,
+          id: catalogProduct.id || product.id,
+          name: catalogProduct.name || product.name,
+          image: catalogProduct.image || product.image,
+          price: Number(catalogProduct.price ?? product.price ?? 0),
+          originalPrice: catalogProduct.originalPrice,
+          salePrice: catalogProduct.salePrice,
+          discountPercent: catalogProduct.discountPercent,
+          discountValue: catalogProduct.discountValue,
+          flashPromoId: catalogProduct.flashPromoId
+        }
+      : product;
+
+    return applyCurrentFlashSale(baseProduct);
+  }
+
+  function repriceCartItem(item = {}) {
+    if (item.autoGiftByPromo) return item;
+    const product = resolvePurchasableProduct(item);
+    const quantityValue = Math.max(1, Number(item.quantity || 1));
+    const toppingTotal = getToppingTotal(item.toppings);
+    const unitPrice = Number(product.price || 0);
+    const originalUnitPrice = Number(product.originalPrice || product.price || 0);
+    const unitTotal = unitPrice + toppingTotal;
+    const originalUnitTotal = originalUnitPrice + toppingTotal;
+    const hasDiscountPrice = originalUnitTotal > unitTotal;
+
+    return {
+      ...item,
+      ...product,
+      cartId: item.cartId,
+      spice: item.spice,
+      toppings: item.toppings || [],
+      note: item.note || "",
+      quantity: quantityValue,
+      unitTotal,
+      lineTotal: unitTotal * quantityValue,
+      originalUnitTotal: hasDiscountPrice ? originalUnitTotal : undefined,
+      originalLineTotal: hasDiscountPrice ? originalUnitTotal * quantityValue : undefined
+    };
+  }
+
+  function repriceCartItems(items = []) {
+    return (Array.isArray(items) ? items : []).map((item) => repriceCartItem(item));
+  }
+
+  function hasCartChanged(current = [], next = []) {
+    return JSON.stringify(current || []) !== JSON.stringify(next || []);
+  }
+
+  function repriceCartNow() {
+    const current = Array.isArray(cartRef.current) ? cartRef.current : [];
+    const next = repriceCartItems(current);
+    const changed = hasCartChanged(current, next);
+    if (changed) {
+      cartRef.current = next;
+      orderRepository.saveCartDraft(next);
+      setCartState(next);
+    }
+    return { changed, cart: changed ? next : current };
+  }
+
+  useEffect(() => {
+    repriceCartNow();
+  }, [catalogProducts, smartPromotions]);
 
   function addToCart(configOrProduct = selectedProduct, spice = selectedSpice, chosenToppings = selectedToppings, qty = quantity, itemNote = "") {
     const config = configOrProduct?.product
@@ -116,7 +262,7 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
   }
 
   function reorderOrder(order) {
-    const items = reorder(order, catalogProducts);
+    const items = repriceCartItems(reorder(order, catalogProducts));
     if (!items.length) return;
     setCart(items);
     navigate("checkout", "orders");
@@ -130,6 +276,7 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
     total,
     cartCount,
     addToCart,
-    reorderOrder
+    reorderOrder,
+    repriceCartNow
   };
 }
