@@ -80,11 +80,20 @@ export function isFlashSaleTimeActive(promo = {}, now = new Date()) {
   return currentMinutes >= startMinutes || currentMinutes <= endMinutes;
 }
 
+export function isFlashSaleWeekdayActive(promo = {}, now = new Date()) {
+  const weekdays = Array.isArray(promo?.condition?.weekdays)
+    ? promo.condition.weekdays.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    : [];
+  if (!weekdays.length) return true;
+  return weekdays.includes(now.getDay());
+}
+
 export function isFlashSaleActiveNow(promo = {}, now = new Date()) {
   if (promo?.type !== "flash_sale") return false;
   if (promo?.active === false) return false;
   if (!hasFlashSaleSlots(promo)) return false;
   if (!isFlashSaleDateActive(promo, now)) return false;
+  if (!isFlashSaleWeekdayActive(promo, now)) return false;
   return isFlashSaleTimeActive(promo, now);
 }
 

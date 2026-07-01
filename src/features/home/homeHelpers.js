@@ -94,11 +94,34 @@ export function applyRoundMode(value, mode) {
   return value;
 }
 
+function normalizeVietnameseSearch(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase();
+}
+
+export function isFixedPricePromotion(promo = {}) {
+  if (promo?.reward?.type === "fixed_price") return true;
+  if (promo?.reward?.priceMode === "fixed_price") return true;
+  if (promo?.condition?.priceMode === "fixed_price") return true;
+
+  const intentText = normalizeVietnameseSearch([
+    promo?.name,
+    promo?.title,
+    promo?.text
+  ].filter(Boolean).join(" "));
+  return intentText.includes("dong gia");
+}
+
 export function calculateSalePrice(price, promo) {
-  const rewardType = promo?.reward?.type;
+  const rewardType = isFixedPricePromotion(promo) ? "fixed_price" : promo?.reward?.type;
   const rewardValue = Number(promo?.reward?.value || 0);
-  const discountAmount = rewardType === "percent_discount" ? (price * rewardValue) / 100 : rewardValue;
-  const rawPrice = Math.max(price - discountAmount, 0);
+  const rawPrice = rewardType === "fixed_price"
+    ? rewardValue
+    : price - (rewardType === "percent_discount" ? (price * rewardValue) / 100 : rewardValue);
   const rounded = Math.max(applyRoundMode(rawPrice, promo?.reward?.roundMode), 0);
   return rounded;
 }

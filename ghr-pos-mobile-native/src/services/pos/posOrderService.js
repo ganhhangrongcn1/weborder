@@ -31,7 +31,8 @@ function normalizeCartForOrder(cart = []) {
         lineTotal: toNumber(item.lineTotal, quantity * unitTotal),
         note: toText(item.note),
         toppings: Array.isArray(item.toppings) ? item.toppings : [],
-        selectedOptions: Array.isArray(item.selectedOptions) ? item.selectedOptions : []
+        selectedOptions: Array.isArray(item.selectedOptions) ? item.selectedOptions : [],
+        metadata: item.metadata && typeof item.metadata === "object" ? item.metadata : {}
       };
     })
     .filter((item) => item.id && item.name);
@@ -455,6 +456,7 @@ export async function createPosTakeawayOrderMobile({
           sourceType: "pos",
           requestKey,
           lineKey: buildOrderItemLineKey(item, index),
+          ...(item.metadata && typeof item.metadata === "object" ? item.metadata : {}),
           selectedOptions: item.selectedOptions,
           optionGroups
         }
@@ -495,7 +497,7 @@ export async function createPosTakeawayOrderMobile({
           loyaltyRule: safeRedeemRule
         });
       } catch (error) {
-        loyaltyWarning = ` Đơn đã tạo nhưng chưa đồng bộ được điểm loyalty: ${error?.message || "kiểm tra RPC apply_loyalty_event."}`;
+        loyaltyWarning = ` Đơn đã tạo nhưng chưa đồng bộ được điểm loyalty: ${error?.message || "kiểm tra RPC process_order_loyalty."}`;
       }
     }
 

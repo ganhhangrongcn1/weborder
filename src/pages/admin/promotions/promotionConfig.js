@@ -74,6 +74,7 @@ export const promoDefaults = {
       useTimeWindow: true,
       startTime: "10:00",
       endTime: "13:00",
+      weekdays: [],
       totalSlots: 50,
       soldCount: 0,
       maxPerCustomer: 2,

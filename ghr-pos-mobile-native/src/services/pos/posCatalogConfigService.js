@@ -22,6 +22,13 @@ function normalizeBoolean(value, fallback = true) {
   return fallback;
 }
 
+function normalizeWeekdays(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((day) => Number(day))
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+}
+
 function normalizeCoupon(row = {}) {
   const data = getObject(row.data);
   return {
@@ -74,12 +81,22 @@ function normalizeSmartPromotion(row = {}) {
       minSubtotal: toNumber(condition.minSubtotal ?? condition.min_subtotal, 0),
       customerType: toText(condition.customerType || condition.customer_type || "all").toLowerCase(),
       productIds: toText(condition.productIds || condition.product_ids),
-      categoryIds: toText(condition.categoryIds || condition.category_ids)
+      categoryIds: toText(condition.categoryIds || condition.category_ids),
+      applyScope: toText(condition.applyScope || condition.apply_scope || "product").toLowerCase(),
+      useTimeWindow: normalizeBoolean(condition.useTimeWindow ?? condition.use_time_window, true),
+      startTime: toText(condition.startTime || condition.start_time || "00:00"),
+      endTime: toText(condition.endTime || condition.end_time || "23:59"),
+      weekdays: normalizeWeekdays(condition.weekdays),
+      totalSlots: toNumber(condition.totalSlots ?? condition.total_slots, 0),
+      soldCount: toNumber(condition.soldCount ?? condition.sold_count, 0),
+      maxPerCustomer: Math.max(1, toNumber(condition.maxPerCustomer ?? condition.max_per_customer, 1)),
+      noStackWithOtherPromotions: normalizeBoolean(condition.noStackWithOtherPromotions ?? condition.no_stack_with_other_promotions, false)
     },
     reward: {
       type: toText(reward.type || "gift").toLowerCase(),
       productId: toText(reward.productId || reward.product_id),
-      value: toText(reward.value),
+      value: toNumber(reward.value, 0),
+      roundMode: toText(reward.roundMode || reward.round_mode || "none"),
       name: toText(reward.name || reward.title || reward.value)
     },
     startAt: toText(data.startAt || row.start_at),

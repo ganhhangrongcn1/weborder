@@ -105,7 +105,10 @@ export function updatePosCartItemConfig(item = {}, product = {}, config = {}) {
     selectedOptions,
     options,
     note,
-    metadata: item.metadata && typeof item.metadata === "object" ? item.metadata : {}
+    metadata: {
+      ...(item.metadata && typeof item.metadata === "object" ? item.metadata : {}),
+      ...(config.metadata && typeof config.metadata === "object" ? config.metadata : {})
+    }
   };
 }
 

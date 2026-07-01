@@ -6,7 +6,18 @@
 
 export const DISCOUNT_TYPE_OPTIONS = [
   { value: "percent_discount", label: "Giảm theo %" },
-  { value: "fixed_discount", label: "Giảm số tiền cố định" }
+  { value: "fixed_discount", label: "Giảm số tiền cố định" },
+  { value: "fixed_price", label: "Đồng giá / giá bán cuối" }
+];
+
+export const WEEKDAY_OPTIONS = [
+  { value: 1, label: "T2" },
+  { value: 2, label: "T3" },
+  { value: 3, label: "T4" },
+  { value: 4, label: "T5" },
+  { value: 5, label: "T6" },
+  { value: 6, label: "T7" },
+  { value: 0, label: "CN" }
 ];
 
 export const ROUND_MODE_OPTIONS = [
@@ -21,6 +32,23 @@ export const FLASH_APPLY_SCOPE_OPTIONS = [
   { value: "category", label: "Theo danh mục" },
   { value: "product", label: "Theo món cụ thể" }
 ];
+
+function normalizeVietnameseSearch(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase();
+}
+
+function isFixedPriceIntent(promo = {}) {
+  if (promo?.reward?.type === "fixed_price") return true;
+  if (promo?.reward?.priceMode === "fixed_price") return true;
+  if (promo?.condition?.priceMode === "fixed_price") return true;
+  const intentText = normalizeVietnameseSearch([promo?.name, promo?.title, promo?.text].filter(Boolean).join(" "));
+  return intentText.includes("dong gia");
+}
 
 export function formatDateShort(value) {
   if (!value) return "--/--/----";
@@ -47,6 +75,10 @@ export function getStrikeStatus(promo) {
 }
 
 export function normalizeStrikePromo(promo, fallback) {
+  const rewardType = ["percent_discount", "fixed_discount", "fixed_price"].includes(promo?.reward?.type)
+    ? promo.reward.type
+    : "percent_discount";
+
   return {
     ...promo,
     name: promo?.name || fallback.name,
@@ -72,7 +104,7 @@ export function normalizeStrikePromo(promo, fallback) {
     reward: {
       ...fallback.reward,
       ...(promo?.reward || {}),
-      type: promo?.reward?.type === "fixed_discount" ? "fixed_discount" : "percent_discount",
+      type: rewardType,
       value: Number(promo?.reward?.value ?? fallback.reward.value),
       roundMode: promo?.reward?.roundMode || fallback.reward.roundMode
     }
@@ -87,10 +119,16 @@ function applyRoundMode(value, mode) {
 
 export function calcPreviewPrice(promo, fallback, sampleOriginal = 35000) {
   const normalized = normalizeStrikePromo(promo, fallback);
-  const rawDiscount = normalized.reward.type === "percent_discount"
-    ? (sampleOriginal * Number(normalized.reward.value || 0)) / 100
-    : Number(normalized.reward.value || 0);
-  const rawFinal = Math.max(sampleOriginal - rawDiscount, 0);
+  const rawFinal = normalized.reward.type === "fixed_price"
+    ? Math.max(Number(normalized.reward.value || 0), 0)
+    : Math.max(
+        sampleOriginal - (
+          normalized.reward.type === "percent_discount"
+            ? (sampleOriginal * Number(normalized.reward.value || 0)) / 100
+            : Number(normalized.reward.value || 0)
+        ),
+        0
+      );
   const roundedFinal = Math.max(applyRoundMode(rawFinal, normalized.reward.roundMode), 0);
   const finalPrice = Math.max(roundedFinal, Number(normalized.condition.minFinalPrice || 0));
   const percentDiscount = sampleOriginal > 0 ? ((sampleOriginal - finalPrice) / sampleOriginal) * 100 : 0;
@@ -110,6 +148,15 @@ export function mergeDateAndTime(dateValue, timeValue, endOfDay = false) {
 }
 
 export function normalizeFlashPromo(promo, fallback) {
+  const rewardType = isFixedPriceIntent(promo)
+    ? "fixed_price"
+    : ["percent_discount", "fixed_discount", "fixed_price"].includes(promo?.reward?.type)
+    ? promo.reward.type
+    : "percent_discount";
+  const weekdays = Array.isArray(promo?.condition?.weekdays)
+    ? promo.condition.weekdays.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    : [];
+
   return {
     ...promo,
     name: promo?.name || fallback.name,
@@ -131,16 +178,32 @@ export function normalizeFlashPromo(promo, fallback) {
       totalSlots: Math.max(0, Number(promo?.condition?.totalSlots ?? fallback.condition.totalSlots)),
       soldCount: Math.max(0, Number(promo?.condition?.soldCount ?? 0)),
       maxPerCustomer: Math.max(1, Number(promo?.condition?.maxPerCustomer ?? fallback.condition.maxPerCustomer)),
-      noStackWithOtherPromotions: Boolean(promo?.condition?.noStackWithOtherPromotions)
+      noStackWithOtherPromotions: Boolean(promo?.condition?.noStackWithOtherPromotions),
+      weekdays
     },
     reward: {
       ...fallback.reward,
       ...(promo?.reward || {}),
-      type: promo?.reward?.type === "fixed_discount" ? "fixed_discount" : "percent_discount",
+      type: rewardType,
       value: Number(promo?.reward?.value ?? fallback.reward.value),
       roundMode: promo?.reward?.roundMode || fallback.reward.roundMode
     }
   };
+}
+
+export function isWeekdayActive(promo, now = new Date()) {
+  const weekdays = Array.isArray(promo?.condition?.weekdays) ? promo.condition.weekdays : [];
+  if (!weekdays.length) return true;
+  return weekdays.map((day) => Number(day)).includes(now.getDay());
+}
+
+export function formatWeekdaySummary(weekdays = []) {
+  const selected = Array.isArray(weekdays)
+    ? weekdays.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    : [];
+  if (!selected.length) return "Mọi ngày";
+  const labelByValue = WEEKDAY_OPTIONS.reduce((map, item) => ({ ...map, [item.value]: item.label }), {});
+  return selected.map((day) => labelByValue[day]).filter(Boolean).join(", ");
 }
 
 export function getFlashStatus(promo, now = new Date()) {
@@ -160,7 +223,16 @@ export function getFlashStatus(promo, now = new Date()) {
   if (endDate && now.getTime() > endDate.getTime()) {
     return { code: "expired", label: "Hết hạn", className: "bg-slate-100 text-slate-600" };
   }
+  if (!isWeekdayActive(promo, now)) {
+    return { code: "waiting_weekday", label: "Chưa tới ngày chạy", className: "bg-sky-100 text-sky-700" };
+  }
   return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
+}
+
+export function formatRewardValue(reward = {}) {
+  if (reward.type === "percent_discount") return `-${Number(reward.value || 0)}%`;
+  if (reward.type === "fixed_price") return `Đồng giá ${formatMoney(reward.value || 0)}`;
+  return `-${formatMoney(reward.value || 0)}`;
 }
 
 export function formatCountdownFromMs(ms) {

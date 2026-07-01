@@ -68,7 +68,7 @@ import {
 } from "../../../shared/pos/posCart";
 import { buildPosLoyaltyBenefit, buildVoucherSelectionKey } from "../../../shared/pos/posLoyalty";
 import { calculateCashChange, getCashPaymentSummary, normalizeCashReceived } from "../../../shared/pos/posPayment";
-import { buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
+import { applyPosFlashSaleToProduct, buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
 
 export default function usePosComposer() {
   const announcedQrPaymentIdsRef = useRef(new Set());
@@ -134,6 +134,7 @@ export default function usePosComposer() {
   });
   const [offlineOrderCount, setOfflineOrderCount] = useState(0);
   const [offlineSyncBusy, setOfflineSyncBusy] = useState(false);
+  const [promotionNowTick, setPromotionNowTick] = useState(() => Date.now());
   const [printStationStatus, setPrintStationStatus] = useState({
     running: false,
     tone: "idle",
@@ -152,9 +153,14 @@ export default function usePosComposer() {
 
   const effectiveCategory = catalog.categories.includes(activeCategory) ? activeCategory : defaultCategory;
 
+  const pricedProducts = useMemo(
+    () => catalog.products.map((product) => applyPosFlashSaleToProduct(product, rawSmartPromotions, new Date(promotionNowTick))),
+    [catalog.products, promotionNowTick, rawSmartPromotions]
+  );
+
   const visibleProducts = useMemo(
-    () => filterPosProducts(catalog.products, { category: effectiveCategory }),
-    [catalog.products, effectiveCategory]
+    () => filterPosProducts(pricedProducts, { category: effectiveCategory }),
+    [effectiveCategory, pricedProducts]
   );
 
   const baseTotals = useMemo(() => calculatePosCartTotals(cart), [cart]);
@@ -184,11 +190,18 @@ export default function usePosComposer() {
   const promotionHints = useMemo(
     () => buildPosPromotionHints({
       smartPromotions: rawSmartPromotions,
-      products: catalog.products,
+      products: pricedProducts,
       subtotal: baseTotals.subtotal
     }),
-    [baseTotals.subtotal, catalog.products, rawSmartPromotions]
+    [baseTotals.subtotal, pricedProducts, rawSmartPromotions]
   );
+
+  useEffect(() => {
+    const timer = globalThis.setInterval(() => setPromotionNowTick(Date.now()), 60000);
+    return () => {
+      globalThis.clearInterval(timer);
+    };
+  }, []);
 
   const buildPickupOrderIdentity = (order = {}) => ({
     orderCode: String(order.orderCode || order.id || "").trim(),
@@ -206,6 +219,26 @@ export default function usePosComposer() {
   const getWebsiteOrderQrSourceType = (order = {}) => (
     order?.fulfillmentType === "delivery" ? "delivery_order_payment_qr" : "pickup_order_payment_qr"
   );
+
+  const findPendingWebsiteQrSession = (order = {}) => {
+    const orderId = String(order?.id || "").trim();
+    if (!orderId) return null;
+
+    return [pickupQrSession, ...pendingPaymentSessions].find((paymentSession) => {
+      const source = String(paymentSession?.source || "").trim().toLowerCase();
+      const status = String(paymentSession?.status || "").trim().toLowerCase();
+      const sessionOrderId = String(
+        paymentSession?.orderId ||
+        paymentSession?.checkoutSnapshot?.websiteOrderId ||
+        paymentSession?.checkoutSnapshot?.existingOrderId ||
+        ""
+      ).trim();
+
+      return ["web", "qr_order"].includes(source)
+        && ["draft", "pending_payment"].includes(status)
+        && sessionOrderId === orderId;
+    }) || null;
+  };
 
   const mergeRecentHistoryOrders = (posOrders = [], pickupHistoryOrders = [], limit = 16) => {
     const merged = [
@@ -1018,6 +1051,35 @@ export default function usePosComposer() {
     return true;
   };
 
+  const getPromotionPricedProduct = (product = {}) => {
+    const matched = pricedProducts.find((item) => item.id === product.id);
+    return matched || applyPosFlashSaleToProduct(product, rawSmartPromotions, new Date(promotionNowTick));
+  };
+
+  const buildPromotedCartConfig = (product = {}, config = {}) => {
+    const metadata = {
+      ...(config.metadata && typeof config.metadata === "object" ? config.metadata : {}),
+      ...(product.metadata && typeof product.metadata === "object" ? product.metadata : {})
+    };
+
+    if (config.unitPrice != null) {
+      return { ...config, metadata };
+    }
+
+    if (!product.flashPromoId) {
+      return { ...config, metadata };
+    }
+
+    return {
+      ...config,
+      unitPrice: Number(product.price || 0),
+      metadata: {
+        ...metadata,
+        flashPromoApplied: true
+      }
+    };
+  };
+
   const addProduct = async (product, config = {}) => {
     if (!product?.id) return;
     if (qrSession?.id) {
@@ -1025,11 +1087,18 @@ export default function usePosComposer() {
       if (!cancelled) return;
     }
 
+    const promotedProduct = getPromotionPricedProduct(product);
+    const promotedConfig = buildPromotedCartConfig(promotedProduct, config);
+
     setCart((currentCart) => {
-      const canMerge = !config.note && !config.spice && !(config.toppings || []).length && !(config.selectedOptions || []).length;
+      const targetUnitPrice = Number(promotedConfig.unitPrice ?? promotedProduct.price ?? 0);
+      const targetPromoId = String(promotedConfig.metadata?.flashPromoId || "");
+      const canMerge = !promotedConfig.note && !promotedConfig.spice && !(promotedConfig.toppings || []).length && !(promotedConfig.selectedOptions || []).length;
       const existing = canMerge
         ? currentCart.find((item) =>
-            item.productId === product.id &&
+            item.productId === promotedProduct.id &&
+            Number(item.price || 0) === targetUnitPrice &&
+            String(item.metadata?.flashPromoId || "") === targetPromoId &&
             !item.note &&
             !(item.toppings || []).length &&
             !(item.selectedOptions || []).length &&
@@ -1045,7 +1114,7 @@ export default function usePosComposer() {
         );
       }
 
-      return [createPosCartItem(product, config), ...currentCart];
+      return [createPosCartItem(promotedProduct, promotedConfig), ...currentCart];
     });
     setPaymentConfirmed(null);
     setShiftMessage("");
@@ -1076,10 +1145,13 @@ export default function usePosComposer() {
       if (!cancelled) return;
     }
 
+    const promotedProduct = getPromotionPricedProduct(product || {});
+    const promotedConfig = buildPromotedCartConfig(promotedProduct, config);
+
     setCart((current) =>
       current.map((item) => (
         item.cartId === cartId
-          ? updatePosCartItemConfig(item, product || item, config)
+          ? updatePosCartItemConfig(item, promotedProduct || item, promotedConfig)
           : item
       ))
     );
@@ -1480,16 +1552,33 @@ export default function usePosComposer() {
       setQrModalOpen(false);
       setPaymentConfirmed(null);
     }
+    if (pickupQrSession?.id === session.id) {
+      setPickupQrSession(null);
+      setPickupQrOrder(null);
+      setPickupQrModalOpen(false);
+      setPickupQrError("");
+    }
     if (profile?.branchUuid) {
       await forgetPosPaymentSession(profile.branchUuid);
       await refreshPosRuntime(profile.branchUuid);
     }
-    setShiftMessage("Đã hủy phiên QR đang chờ.");
+    await refreshShiftSummary(shift);
+    const source = String(session?.source || "").trim().toLowerCase();
+    setShiftMessage(
+      ["web", "qr_order"].includes(source)
+        ? "Đã hủy QR của đơn website."
+        : "Đã hủy phiên QR đang chờ."
+    );
   };
 
   const refreshCurrentPosRuntime = async () => {
     await checkConnectionNow();
     await syncOfflineOrdersNow({ silent: true });
+    const catalogConfigResult = await fetchPosCatalogConfig();
+    if (catalogConfigResult.ok) {
+      setRawCoupons(Array.isArray(catalogConfigResult.coupons) ? catalogConfigResult.coupons : []);
+      setRawSmartPromotions(Array.isArray(catalogConfigResult.smartPromotions) ? catalogConfigResult.smartPromotions : []);
+    }
     await refreshPosRuntime(profile?.branchUuid);
     await refreshShiftSummary(shift);
   };
@@ -1574,6 +1663,33 @@ export default function usePosComposer() {
 
     setPickupOrdersLoading(true);
     setPickupOrdersError("");
+    const pendingWebsiteQrSession = findPendingWebsiteQrSession(order);
+    if (pendingWebsiteQrSession?.id) {
+      const cancelResult = await cancelPosPaymentSession(
+        pendingWebsiteQrSession.id,
+        "POS mobile tự hủy QR đơn website khi chuyển sang thu tiền mặt"
+      );
+
+      if (!cancelResult.ok) {
+        setPickupOrdersLoading(false);
+        setPickupOrdersError(
+          cancelResult.message ||
+          "Chưa hủy được QR đang chờ của đơn website. Vui lòng hủy QR trước khi thu tiền mặt."
+        );
+        return false;
+      }
+
+      setPendingPaymentSessions((currentSessions) => (
+        currentSessions.filter((paymentSession) => paymentSession?.id !== pendingWebsiteQrSession.id)
+      ));
+      if (pickupQrSession?.id === pendingWebsiteQrSession.id) {
+        setPickupQrSession(null);
+        setPickupQrOrder(null);
+        setPickupQrModalOpen(false);
+        setPickupQrError("");
+      }
+    }
+
     const result = await markPickupOrderPaidCash({
       order,
       shift,
@@ -2141,7 +2257,7 @@ export default function usePosComposer() {
     orderNote,
     setOrderNote,
     products: visibleProducts,
-    allProducts: catalog.products,
+    allProducts: pricedProducts,
     categories: catalog.categories,
     activeCategory: effectiveCategory,
     setActiveCategory,
