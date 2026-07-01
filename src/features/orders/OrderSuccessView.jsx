@@ -6,7 +6,7 @@ import { formatMoney } from "../../utils/format.js";
 import { getOrderItemOptionLabels } from "../../utils/orderItemDisplay.js";
 import { getTodayInputDate, parsePickupTimeText } from "../../utils/dateTimeDefaults.js";
 
-const SUCCESS_PREPARING_MS = 4000;
+const SUCCESS_PREPARING_MS = 2000;
 
 function buildOrderItemsText(orderItems) {
   return orderItems.map((item, index) => {
