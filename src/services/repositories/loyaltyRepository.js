@@ -315,6 +315,7 @@ export const loyaltyRepository = {
           phone: key,
           vouchers: Array.isArray(mergedForWrite?.voucherHistory) ? mergedForWrite.voucherHistory.length : 0
         });
+        throw error;
       }
     }
     return mergedForWrite;

@@ -188,9 +188,9 @@ export default function LoyaltySettings({
             <small>Giữ cảm giác dễ mua từ hạng đầu và đủ hấp dẫn ở hạng cao nhất.</small>
           </article>
           <article>
-            <span>Voucher tự tặng</span>
+            <span>Voucher hạng theo tháng</span>
             <strong>{assignedVoucherCount}/{config.tiers.length} hạng đã gắn</strong>
-            <small>{activeVoucherCount} voucher loyalty đang hoạt động để dùng cho auto-grant.</small>
+            <small>{activeVoucherCount} voucher loyalty đang hoạt động. Mỗi hạng tặng tối đa 1 lần/tháng, hạn dùng 7 ngày.</small>
           </article>
           <article>
             <span>Điểm danh</span>
@@ -329,7 +329,7 @@ export default function LoyaltySettings({
                   </div>
 
                   <label className="admin-loyalty-field admin-loyalty-tier-voucher">
-                    <span>Voucher tự tặng khi chạm mốc</span>
+                    <span>Voucher hạng mỗi tháng</span>
                     <AdminSelect
                       value={tier.milestoneVoucherId}
                       onChange={(event) => updateTier(setCrmSnapshot, index, {
@@ -355,14 +355,14 @@ export default function LoyaltySettings({
       </AdminPanel>
 
       <AdminPanel
-        title="Voucher tự tặng theo mốc"
-        description="Thiết kế gọn nhất là tạo sẵn bộ voucher loyalty mẫu trong trang Khuyến mãi, rồi quay lại đây để gán đúng từng hạng."
+        title="Voucher hạng theo tháng"
+        description="Mỗi tháng khách nhận tối đa 1 voucher theo hạng hiện tại. Nếu trong tháng đó khách lên hạng mới, hệ thống tặng thêm voucher của hạng mới."
         className="admin-loyalty-card"
       >
         <div className="admin-loyalty-quick-steps">
           <span><strong>1.</strong> Tạo bộ voucher loyalty mẫu</span>
           <span><strong>2.</strong> Gán từng voucher vào đúng hạng</span>
-          <span><strong>3.</strong> Lưu lại để auto-tặng đúng mốc</span>
+          <span><strong>3.</strong> Lưu lại để tự tặng mỗi tháng, hạn dùng 7 ngày</span>
         </div>
 
         <div className="admin-loyalty-checklist-summary">

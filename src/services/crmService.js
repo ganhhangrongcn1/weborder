@@ -470,6 +470,9 @@ export async function getCustomerLoyaltyDetailAsync(phone, { limit = 50, offset 
       rows: Array.isArray(ledger.rows) ? ledger.rows : [],
       total: Number(ledger.total || 0),
       accountTotalPoints: account ? Number(account.totalPoints || 0) : null,
+      accountVouchers: Array.isArray(account?.voucherHistory)
+        ? account.voucherHistory.map(normalizeCrmVoucher)
+        : [],
       accountUpdatedAt: account?.updatedAt || ""
     };
   } catch {
@@ -885,19 +888,21 @@ export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 
   const key = getCustomerKey(phone);
   if (!key) return null;
   const sourceVoucher = typeof voucherTitle === "object" && voucherTitle ? voucherTitle : null;
-  const allByPhone = loyaltyRepository.getAllByPhone();
   const current = normalizeLoyaltyData({
     ...defaultLoyaltyData,
-    ...(allByPhone[key] || {})
+    ...(await loyaltyRepository.getByPhoneAsync(key, {
+      ...defaultLoyaltyData,
+      phone: key
+    }))
   });
   const today = getDateKey(new Date());
   const nextVoucher = normalizeCrmVoucher({
     id: `crm-voucher-${Date.now()}`,
     type: "CRM_GIFT",
     couponId: sourceVoucher?.id || "",
-    code: sourceVoucher?.code || "",
-    discountType: sourceVoucher?.discountType || "",
-    value: sourceVoucher?.value ?? "",
+    code: String(sourceVoucher?.code || "").trim().toUpperCase(),
+    discountType: sourceVoucher?.discountType || "fixed",
+    value: sourceVoucher?.value ?? 0,
     maxDiscount: sourceVoucher?.maxDiscount ?? 0,
     minOrder: sourceVoucher?.minOrder ?? 0,
     title: sourceVoucher?.name || sourceVoucher?.title || voucherTitle,

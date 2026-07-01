@@ -139,7 +139,6 @@ function getCustomerInsight(customer = {}) {
 }
 
 function getCustomerActionLabel(customer = {}) {
-  if (isVipCustomer(customer)) return "Chăm sóc VIP";
   if (needsCare(customer)) return "Gửi ưu đãi";
   const days = Number(customer.daysSinceLastOrder);
   if (Number.isFinite(days) && days >= 7) return "Gọi lại";
@@ -159,6 +158,7 @@ function getCustomerReturnLabel(customer = {}) {
 function getCustomerCarePlan(customer = {}) {
   const days = Number(customer.daysSinceLastOrder);
   const totalOrders = Number(customer.totalOrders || 0);
+  const tierName = getCustomerTierName(customer);
 
   if (totalOrders <= 0) {
     return {
@@ -169,12 +169,12 @@ function getCustomerCarePlan(customer = {}) {
     };
   }
 
-  if (isVipCustomer(customer)) {
+  if (tierName) {
     return {
-      tone: "vip",
-      label: "Ưu tiên cao",
-      title: "Khách VIP",
-      actionLabel: "Tặng voucher VIP"
+      tone: "tier",
+      label: "Hạng thành viên",
+      title: tierName,
+      actionLabel: "Tặng voucher loyalty"
     };
   }
 
@@ -255,10 +255,6 @@ function getInitials(name, phone) {
     .toUpperCase();
 }
 
-function isVipCustomer(customer) {
-  return Number(customer.totalSpent || 0) >= 1000000 || Number(customer.totalOrders || 0) >= 10;
-}
-
 function needsCare(customer) {
   const daysSinceLastOrder = Number(customer.daysSinceLastOrder);
   return Number(customer.totalOrders || 0) > 0 &&
@@ -278,9 +274,39 @@ function getCustomerTypeClass(customer) {
   return isGuestCustomer(customer) ? "crm-soft-badge--guest" : "crm-soft-badge--registered";
 }
 
+function normalizeTierText(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getCustomerTierName(customer = {}) {
+  const rawTier = customer?.tier;
+  if (rawTier && typeof rawTier === "object") {
+    return String(rawTier.name || rawTier.label || "").trim();
+  }
+  return String(rawTier || customer?.tierName || "").trim();
+}
+
+function getCustomerTierBadgeClass(customer = {}, tierOptions = []) {
+  const tierName = normalizeTierText(getCustomerTierName(customer));
+  const tierIndex = tierOptions.findIndex((tier) => normalizeTierText(tier.label) === tierName);
+  if (tierIndex >= 4) return "crm-tier-badge--diamond";
+  if (tierIndex >= 3) return "crm-tier-badge--gold";
+  if (tierIndex >= 2) return "crm-tier-badge--silver";
+  return "crm-tier-badge--bronze";
+}
+
 function formatVoucherDiscount(voucher) {
   if (voucher.discountType === "percent") return `${Number(voucher.value || 0)}%`;
   return formatMoney(Number(voucher.value || 0));
+}
+
+function getGiftableVoucherTypeLabel(voucher) {
+  return String(voucher?.voucherType || "checkout") === "loyalty" ? "Loyalty" : "Mã giảm giá";
 }
 
 function getVoucherStatus(voucher) {
@@ -293,6 +319,27 @@ function getVoucherSortWeight(voucher) {
   if (voucher?.canceled) return 2;
   if (voucher?.used) return 1;
   return 0;
+}
+
+function getVoucherKey(voucher) {
+  return String(
+    voucher?.id ||
+    `${voucher?.code || ""}-${voucher?.createdAt || ""}-${voucher?.title || ""}`
+  ).trim();
+}
+
+function mergeVoucherLists(...lists) {
+  const merged = new Map();
+  lists.flat().forEach((voucher) => {
+    if (!voucher) return;
+    const key = getVoucherKey(voucher);
+    if (!key) return;
+    merged.set(key, {
+      ...(merged.get(key) || {}),
+      ...voucher
+    });
+  });
+  return Array.from(merged.values());
 }
 
 function formatCustomerPoints(customer) {
@@ -315,7 +362,7 @@ function getVoucherSegmentLabel(segment = "") {
     winback_30: "Quay lại sau 30 ngày",
     winback_15: "Nhắc quay lại sau 15 ngày",
     winback_7: "Gợi ý mua lại sau 7 ngày",
-    vip_thank_you: "Tri ân khách VIP",
+    vip_thank_you: "Tri ân hạng cao",
     repeat_reward: "Thưởng khách quay lại",
     first_order_offer: "Khách chưa từng đặt đơn",
     excluded_order_only: "Chỉ có đơn hủy / đặt trước"
@@ -470,18 +517,38 @@ export default function CustomerCRM({
   const transactionSummary = crmSnapshot.transactionSummary || {};
   const transactionAudit = crmSnapshot.transactionAudit || {};
   const activeDateScope = getDateScopeLabel(customersDatePreset, customersDateFrom, customersDateTo);
+  const tierFilterOptions = useMemo(() => {
+    const configTiers = Array.isArray(crmSnapshot.loyaltyConfig?.tiers)
+      ? crmSnapshot.loyaltyConfig.tiers
+      : [];
+    const activeTiers = configTiers
+      .filter((tier) => tier?.enabled !== false && String(tier?.name || "").trim())
+      .map((tier) => ({
+        id: String(tier.id || tier.name || "").trim(),
+        label: String(tier.name || "").trim()
+      }));
+    if (activeTiers.length) return activeTiers;
+    return Array.from(new Set(
+      (crmSnapshot.customers || [])
+        .map(getCustomerTierName)
+        .filter(Boolean)
+    )).map((label) => ({ id: label, label }));
+  }, [crmSnapshot.customers, crmSnapshot.loyaltyConfig]);
 
   const filteredCustomers = useMemo(() => {
     const q = keyword.trim().toLowerCase();
     const phoneKey = getCustomerKey(q);
     const all = crmSnapshot.customers || [];
+    const tierFilterName = customerFilter.startsWith("tier:")
+      ? normalizeTierText(tierFilterOptions.find((tier) => `tier:${tier.id}` === customerFilter)?.label || "")
+      : "";
     const next = all.filter((customer) => {
       const name = String(`${customer.name || ""} ${customer.registeredCustomerName || ""} ${customer.orderCustomerName || ""}`).toLowerCase();
       const phone = String(customer.phone || "").toLowerCase();
       const matchKeyword = !q || name.includes(q) || phone.includes(q) || (phoneKey && phone.includes(phoneKey));
       const matchFilter =
         customerFilter === "all" ||
-        (customerFilter === "vip" && isVipCustomer(customer)) ||
+        (tierFilterName && normalizeTierText(getCustomerTierName(customer)) === tierFilterName) ||
         (customerFilter === "care" && needsCare(customer)) ||
         (customerFilter === "inactive7" && Number(customer.daysSinceLastOrder || 0) >= 7) ||
         (customerFilter === "inactive15" && Number(customer.daysSinceLastOrder || 0) >= 15) ||
@@ -496,7 +563,7 @@ export default function CustomerCRM({
       return new Date(b.lastOrderAt || 0).getTime() - new Date(a.lastOrderAt || 0).getTime();
     });
     return next;
-  }, [crmSnapshot.customers, keyword, customerFilter, branchFilter, channelFilter, sortBy]);
+  }, [crmSnapshot.customers, keyword, customerFilter, branchFilter, channelFilter, sortBy, tierFilterOptions]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / CUSTOMER_PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -529,7 +596,6 @@ export default function CustomerCRM({
       repeatRate30: rpcSummary ? Math.round(rpcSummary.repeatRate30Days * 100) : 0,
       newCustomers7: rpcSummary?.newCustomers7Days ?? 0,
       newCustomers30: rpcSummary?.newCustomers30Days ?? 0,
-      vipCount: rpcSummary?.vipCustomers ?? customers.filter(isVipCustomer).length,
       careCount: rpcSummary?.inactive30Days ?? customers.filter(needsCare).length
     };
   }, [crmSnapshot.customers, crmSnapshot.supabaseProfileCount, crmAnalytics]);
@@ -626,10 +692,12 @@ export default function CustomerCRM({
     [crmSnapshot.customers, selectedCustomerPhone]
   );
 
-  const loyaltyVouchers = useMemo(() => {
+  const giftableVouchers = useMemo(() => {
     return (coupons || [])
-      .filter((coupon) => coupon.active !== false && String(coupon.voucherType || "checkout") === "loyalty")
-      .sort((a, b) => String(a.code || "").localeCompare(String(b.code || "")));
+      .filter((coupon) => coupon.active !== false && String(coupon?.voucherType || "") === "loyalty")
+      .sort((a, b) => {
+        return String(a.code || "").localeCompare(String(b.code || ""));
+      });
   }, [coupons]);
 
   const selectedCustomerPhoneKey = selectedCustomer?.phone ? getCustomerKey(selectedCustomer.phone) : "";
@@ -710,6 +778,7 @@ export default function CustomerCRM({
             accountTotalPoints: result?.accountTotalPoints === null || result?.accountTotalPoints === undefined
               ? null
               : Math.max(0, Number(result.accountTotalPoints || 0)),
+            accountVouchers: Array.isArray(result?.accountVouchers) ? result.accountVouchers : [],
             accountUpdatedAt: result?.accountUpdatedAt || "",
             isLedgerPartial: Number(result?.total || rows.length) > rows.length
           }
@@ -758,13 +827,16 @@ export default function CustomerCRM({
   );
 
   const sortedSelectedVouchers = useMemo(() => {
-    const vouchers = Array.isArray(selectedCustomer?.vouchers) ? selectedCustomer.vouchers : [];
+    const vouchers = mergeVoucherLists(
+      Array.isArray(selectedCustomer?.vouchers) ? selectedCustomer.vouchers : [],
+      Array.isArray(selectedLoyaltyDetail?.accountVouchers) ? selectedLoyaltyDetail.accountVouchers : []
+    );
     return [...vouchers].sort((a, b) => {
       const weightDiff = getVoucherSortWeight(a) - getVoucherSortWeight(b);
       if (weightDiff !== 0) return weightDiff;
       return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     });
-  }, [selectedCustomer?.vouchers]);
+  }, [selectedCustomer?.vouchers, selectedLoyaltyDetail?.accountVouchers]);
 
   const resetFilters = () => {
     setKeyword("");
@@ -826,8 +898,7 @@ export default function CustomerCRM({
                 type="button"
                 className={`crm-priority-row crm-priority-row--${item.tone}`}
                 onClick={() => {
-                  if (item.label.toLowerCase().includes("vip")) setCustomerFilter("vip");
-                  else if (item.label.toLowerCase().includes("30")) setCustomerFilter("inactive30");
+                  if (item.label.toLowerCase().includes("30")) setCustomerFilter("inactive30");
                   else if (item.label.toLowerCase().includes("15")) setCustomerFilter("inactive15");
                   else if (item.label.toLowerCase().includes("7")) setCustomerFilter("inactive7");
                   else setCustomerFilter("care");
@@ -839,7 +910,7 @@ export default function CustomerCRM({
             ))}
           </div>
           <div className="crm-ops-foot">
-            <span>VIP: {summary.vipCount.toLocaleString("vi-VN")} khách</span>
+            <span>{tierFilterOptions.length.toLocaleString("vi-VN")} hạng thành viên</span>
             <span>Quay lại: {summary.repeatRate30}%</span>
           </div>
         </section>
@@ -910,7 +981,9 @@ export default function CustomerCRM({
             </select>
             <select className="crm-segment-select" value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
               <option value="all">Tất cả nhóm khách</option>
-              <option value="vip">VIP</option>
+              {tierFilterOptions.map((tier) => (
+                <option key={tier.id} value={`tier:${tier.id}`}>{tier.label}</option>
+              ))}
               <option value="care">Cần chăm sóc</option>
               <option value="inactive7">Chưa quay lại 7+ ngày</option>
               <option value="inactive15">Chưa quay lại 15+ ngày</option>
@@ -944,7 +1017,11 @@ export default function CustomerCRM({
                     <CustomerIdentity customer={customer} insight={getCustomerInsight(customer)} />
                     <span className="crm-badge-stack">
                       <em className={`crm-soft-badge ${getCustomerTypeClass(customer)}`}>{getCustomerTypeLabel(customer)}</em>
-                      {isVipCustomer(customer) ? <em className="crm-soft-badge crm-soft-badge--vip">VIP</em> : null}
+                      {getCustomerTierName(customer) ? (
+                        <em className={`crm-tier-badge ${getCustomerTierBadgeClass(customer, tierFilterOptions)}`}>
+                          {getCustomerTierName(customer)}
+                        </em>
+                      ) : null}
                       {needsCare(customer) ? <em className="crm-soft-badge crm-soft-badge--care">Cần chăm sóc</em> : null}
                     </span>
                     <span className="crm-row-metric">
@@ -991,7 +1068,11 @@ export default function CustomerCRM({
                 <CustomerIdentity customer={selectedCustomer} compact />
                 <div className="crm-detail-badges">
                   <em className={`crm-soft-badge ${getCustomerTypeClass(selectedCustomer)}`}>{getCustomerTypeLabel(selectedCustomer)}</em>
-                  {isVipCustomer(selectedCustomer) ? <em className="crm-soft-badge">VIP</em> : null}
+                  {getCustomerTierName(selectedCustomer) ? (
+                    <em className={`crm-tier-badge ${getCustomerTierBadgeClass(selectedCustomer, tierFilterOptions)}`}>
+                      {getCustomerTierName(selectedCustomer)}
+                    </em>
+                  ) : null}
                   {needsCare(selectedCustomer) ? <em className="crm-soft-badge crm-soft-badge--care">Cần chăm sóc</em> : null}
                 </div>
               </div>
@@ -1128,7 +1209,12 @@ export default function CustomerCRM({
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  await cancelCustomerVoucher?.(selectedCustomer.phone, voucher);
+                                  try {
+                                    await cancelCustomerVoucher?.(selectedCustomer.phone, voucher);
+                                  } catch (error) {
+                                    console.error("[crm] cancel voucher failed", error);
+                                    window.alert("Hủy voucher thất bại. Anh kiểm tra quyền Supabase/RPC loyalty giúp em.");
+                                  }
                                 }}
                               >
                                 Hủy
@@ -1149,33 +1235,38 @@ export default function CustomerCRM({
 
               {voucherPickerOpen ? (
                 <div className="crm-voucher-picker-backdrop" role="presentation" onClick={() => setVoucherPickerOpen(false)}>
-                  <section className="crm-voucher-picker" role="dialog" aria-modal="true" aria-label="Chọn voucher loyalty" onClick={(event) => event.stopPropagation()}>
+                  <section className="crm-voucher-picker" role="dialog" aria-modal="true" aria-label="Chọn voucher CRM" onClick={(event) => event.stopPropagation()}>
                     <div className="crm-voucher-picker-head">
                       <div>
-                        <h3>Chọn voucher loyalty</h3>
-                        <p>Tặng voucher đã tạo trong Khuyến mãi / Mã giảm giá.</p>
+                        <h3>Chọn voucher CRM</h3>
+                        <p>Chỉ hiển thị voucher loyalty đang bật.</p>
                       </div>
                       <button type="button" onClick={() => setVoucherPickerOpen(false)}>×</button>
                     </div>
                     <div className="crm-voucher-picker-list">
-                      {loyaltyVouchers.map((voucher) => (
+                      {giftableVouchers.map((voucher) => (
                         <button
                           key={voucher.id || voucher.code}
                           type="button"
                           onClick={async () => {
-                            await giftVoucherToCustomer(selectedCustomer.phone, voucher);
-                            setVoucherPickerOpen(false);
+                            try {
+                              await giftVoucherToCustomer(selectedCustomer.phone, voucher);
+                              setVoucherPickerOpen(false);
+                            } catch (error) {
+                              console.error("[crm] gift voucher failed", error);
+                              window.alert("Tặng voucher thất bại. Anh kiểm tra quyền Supabase/RPC loyalty giúp em.");
+                            }
                           }}
                         >
                           <span>
                             <strong>{voucher.code}</strong>
-                            <small>{voucher.name || "Voucher loyalty"}</small>
+                            <small>{getGiftableVoucherTypeLabel(voucher)} · {voucher.name || "Voucher CRM"}</small>
                           </span>
                           <em>{formatVoucherDiscount(voucher)}</em>
                         </button>
                       ))}
-                      {!loyaltyVouchers.length ? (
-                        <p>Chưa có voucher loyalty. Bạn tạo trong Khuyến mãi / Mã giảm giá / Voucher loyalty trước nhé.</p>
+                      {!giftableVouchers.length ? (
+                        <p>Chưa có voucher loyalty đang bật. Anh tạo hoặc bật voucher loyalty trước nhé.</p>
                       ) : null}
                     </div>
                   </section>
