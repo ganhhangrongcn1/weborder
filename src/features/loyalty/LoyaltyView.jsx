@@ -60,6 +60,7 @@ export default function Loyalty(props) {
       navigate={navigate}
       loyaltyRule={vm.loyaltyRule}
       loyalty={vm.loyalty}
+      isLoyaltyReady={vm.isLoyaltyReady}
       tierJourney={vm.tierJourney}
       currentPhone={currentPhone}
       userProfile={userProfile}

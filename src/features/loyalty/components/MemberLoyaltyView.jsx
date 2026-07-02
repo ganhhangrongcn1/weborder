@@ -2,14 +2,17 @@ import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
 import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
+import LoyaltyVoucherPopup from "../../../components/customer/LoyaltyVoucherPopup.jsx";
 import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
 import CouponList from "../../../pages/customer/loyalty/CouponList.jsx";
 import { isVoucherExpired } from "../../../utils/pureHelpers.js";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
+import useLoyaltyEntryPopup from "../hooks/useLoyaltyEntryPopup.js";
 import useTierUpgradeCelebration from "../hooks/useTierUpgradeCelebration.js";
 import LuckyVoucherModal from "./LuckyVoucherModal.jsx";
 import CheckinCard from "./CheckinCard.jsx";
 import LoyaltyDetailSheet from "./LoyaltyDetailSheet.jsx";
+import LoyaltyPointsPopup from "./LoyaltyPointsPopup.jsx";
 import TierUpgradeModal from "./TierUpgradeModal.jsx";
 
 function formatCustomerDate(value) {
@@ -39,6 +42,7 @@ export default function MemberLoyaltyView({
   currentPhone,
   loyaltyRule,
   loyalty,
+  isLoyaltyReady,
   tierJourney,
   userProfile,
   luckyVoucher,
@@ -105,7 +109,21 @@ export default function MemberLoyaltyView({
     customerPhone: currentPhone,
     journey: tierJourney
   });
+  const { popup: entryPopup, closePopup: closeEntryPopup } = useLoyaltyEntryPopup({
+    customerPhone: currentPhone,
+    isReady: isLoyaltyReady,
+    vouchers: safeVoucherHistory,
+    blocked: Boolean(celebratedTier || luckyVoucher || activeSheet)
+  });
   const handleUseVoucher = () => navigate("menu", "menu");
+  const handleEntryVoucherAction = () => {
+    closeEntryPopup();
+    handleUseVoucher();
+  };
+  const handleEntryPointsAction = () => {
+    closeEntryPopup();
+    setActiveSheet("rules");
+  };
 
   return (
     <section className="loyalty-page loyalty-page--member pb-6">
@@ -201,6 +219,22 @@ export default function MemberLoyaltyView({
       />
 
       <TierUpgradeModal tier={celebratedTier} onClose={closeTierCelebration} />
+
+      <LoyaltyVoucherPopup
+        open={entryPopup?.type === "voucher"}
+        voucher={entryPopup?.voucher}
+        voucherCount={entryPopup?.voucherCount}
+        onClose={closeEntryPopup}
+        onPrimaryAction={handleEntryVoucherAction}
+      />
+
+      <LoyaltyPointsPopup
+        open={entryPopup?.type === "points"}
+        points={loyalty.totalPoints}
+        journey={tierJourney}
+        onClose={closeEntryPopup}
+        onPrimaryAction={handleEntryPointsAction}
+      />
 
       {rewardFeatureFlags.enableLuckyDraw ? (
         <LuckyVoucherModal luckyVoucher={luckyVoucher} onClose={() => setLuckyVoucher(null)} />

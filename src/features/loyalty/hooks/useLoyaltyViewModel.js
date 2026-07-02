@@ -95,6 +95,7 @@ export default function useLoyaltyViewModel({
       checkinStreak: userProfile.checkinStreak || 0
     });
   });
+  const [hydratedPhone, setHydratedPhone] = useState("");
   const [luckyVoucher, setLuckyVoucher] = useState(null);
 
   useEffect(() => {
@@ -125,25 +126,37 @@ export default function useLoyaltyViewModel({
   useEffect(() => {
     let active = true;
     const requestId = ++hydrateRequestIdRef.current;
+    const phoneKey = String(currentPhone || "").trim();
 
     async function hydrateLoyaltyFromSource() {
-      if (!currentPhone) return;
-      const remoteFirst = await loyaltyRepository.getByPhoneAsync(currentPhone, {
-        ...normalizeLoyaltyData(defaultResetLoyalty()),
-        totalPoints: Number(userProfile?.points || 0),
-        checkinStreak: Number(userProfile?.checkinStreak || 0)
-      });
-      if (!active || requestId !== hydrateRequestIdRef.current) return;
-      const normalized = normalizeLoyaltyData(remoteFirst);
-      setLoyalty(normalized);
-      if (setDemoLoyaltyRef.current) setDemoLoyaltyRef.current(normalized);
-      if (setUserProfileRef.current) {
-        setUserProfileRef.current((profile) => ({
-          ...profile,
-          points: Number(normalized.totalPoints || 0),
-          checkinStreak: Number(normalized.checkinStreak || 0),
-          pointHistory: Array.isArray(normalized.pointHistory) ? normalized.pointHistory : profile.pointHistory
-        }));
+      if (!phoneKey) {
+        setHydratedPhone("");
+        return;
+      }
+      try {
+        const remoteFirst = await loyaltyRepository.getByPhoneAsync(phoneKey, {
+          ...normalizeLoyaltyData(defaultResetLoyalty()),
+          totalPoints: Number(userProfile?.points || 0),
+          checkinStreak: Number(userProfile?.checkinStreak || 0)
+        });
+        if (!active || requestId !== hydrateRequestIdRef.current) return;
+        const normalized = normalizeLoyaltyData(remoteFirst);
+        setLoyalty(normalized);
+        if (setDemoLoyaltyRef.current) setDemoLoyaltyRef.current(normalized);
+        if (setUserProfileRef.current) {
+          setUserProfileRef.current((profile) => ({
+            ...profile,
+            points: Number(normalized.totalPoints || 0),
+            checkinStreak: Number(normalized.checkinStreak || 0),
+            pointHistory: Array.isArray(normalized.pointHistory) ? normalized.pointHistory : profile.pointHistory
+          }));
+        }
+      } catch (error) {
+        console.error("[loyalty] hydrate loyalty failed", error);
+      } finally {
+        if (active && requestId === hydrateRequestIdRef.current) {
+          setHydratedPhone(phoneKey);
+        }
       }
     }
 
@@ -300,6 +313,7 @@ export default function useLoyaltyViewModel({
     currencyPerPoint,
     pointPerUnit,
     loyalty,
+    isLoyaltyReady: Boolean(currentPhone) && hydratedPhone === String(currentPhone || "").trim(),
     tierJourney,
     luckyVoucher,
     setLuckyVoucher,

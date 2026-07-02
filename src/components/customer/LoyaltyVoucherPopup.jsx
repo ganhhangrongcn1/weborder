@@ -41,6 +41,7 @@ function buildGuide(voucher, coupon) {
 export default function LoyaltyVoucherPopup({
   open,
   voucher,
+  voucherCount = 1,
   coupon,
   onClose,
   onPrimaryAction
@@ -51,6 +52,7 @@ export default function LoyaltyVoucherPopup({
   const voucherCode = String(voucher?.code || coupon?.code || "--").trim();
   const title = String(voucher?.title || voucher?.name || "").trim() || "Tặng bạn voucher mới";
   const supportText = String(coupon?.description || coupon?.note || "").trim();
+  const safeVoucherCount = Math.max(1, Number(voucherCount || 1));
 
   if (!open || !voucher) return null;
 
@@ -75,6 +77,9 @@ export default function LoyaltyVoucherPopup({
         <div className="loyalty-voucher-hero">
           <p className="loyalty-voucher-pill">Quà tặng dành riêng cho bạn</p>
           <h2>{title}</h2>
+          {safeVoucherCount > 1 ? (
+            <p className="loyalty-voucher-count">Bạn còn {safeVoucherCount} voucher đang dùng được</p>
+          ) : null}
           {valueText ? <p className="loyalty-voucher-value">{valueText}</p> : null}
           <p className="loyalty-voucher-subtitle">Dùng ngay khi đặt món hôm nay để không bỏ lỡ ưu đãi này.</p>
         </div>

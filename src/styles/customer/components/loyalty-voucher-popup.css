@@ -85,6 +85,17 @@
   line-height: 1;
 }
 
+.loyalty-voucher-count {
+  width: fit-content;
+  border-radius: 999px;
+  background: #ecfdf3;
+  padding: 6px 10px;
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
 .loyalty-voucher-subtitle {
   color: rgba(58, 31, 20, 0.58);
   font-size: 13px;
@@ -184,6 +195,71 @@
   box-shadow: 0 14px 30px rgba(255, 90, 31, 0.24);
 }
 
+.loyalty-points-popup__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  color: #ff6a00;
+  font-size: 34px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.loyalty-points-popup__value span {
+  color: #7c2d12;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.loyalty-points-popup__progress {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(21, 128, 61, 0.16);
+  border-radius: 18px;
+  background: #f0fdf4;
+  padding: 14px;
+}
+
+.loyalty-points-popup__progress > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.loyalty-points-popup__progress span,
+.loyalty-points-popup__progress p {
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.loyalty-points-popup__progress strong {
+  color: #166534;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.loyalty-points-popup__track {
+  height: 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  overflow: hidden;
+}
+
+.loyalty-points-popup__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #22c55e;
+}
+
+.loyalty-points-popup__progress p {
+  margin: 0;
+  line-height: 1.45;
+}
+
 @media (max-width: 380px) {
   .loyalty-voucher-sheet {
     border-radius: 24px;
@@ -205,6 +281,10 @@
 
   .loyalty-voucher-value {
     font-size: 24px;
+  }
+
+  .loyalty-points-popup__value {
+    font-size: 30px;
   }
 
   .loyalty-voucher-subtitle,
