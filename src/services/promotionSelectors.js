@@ -1,3 +1,5 @@
+import { isPromotionAllowedForChannel } from "./promotionChannelService.js";
+
 function toArray(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -19,24 +21,30 @@ function hasDisplayPlace(promotion, place) {
   return list.includes(place);
 }
 
-function normalizeCoupons(coupons = []) {
-  return toArray(coupons).filter((coupon) => coupon && coupon.active !== false);
+function normalizeCoupons(coupons = [], channel = "web") {
+  return toArray(coupons).filter(
+    (coupon) => coupon && coupon.active !== false && isPromotionAllowedForChannel(coupon, channel)
+  );
 }
 
-function normalizeSmartPromotions(smartPromotions = []) {
-  return sortByPriority(toArray(smartPromotions).filter((item) => item && item.active !== false));
+function normalizeSmartPromotions(smartPromotions = [], channel = "web") {
+  return sortByPriority(
+    toArray(smartPromotions).filter(
+      (item) => item && item.active !== false && isPromotionAllowedForChannel(item, channel)
+    )
+  );
 }
 
-export function selectHomeCoupons(coupons = []) {
-  return normalizeCoupons(coupons);
+export function selectHomeCoupons(coupons = [], channel = "web") {
+  return normalizeCoupons(coupons, channel);
 }
 
-export function selectCheckoutCoupons(coupons = []) {
-  return normalizeCoupons(coupons);
+export function selectCheckoutCoupons(coupons = [], channel = "web") {
+  return normalizeCoupons(coupons, channel);
 }
 
-export function selectHomeSmartPromotions(smartPromotions = []) {
-  return normalizeSmartPromotions(smartPromotions).filter(
+export function selectHomeSmartPromotions(smartPromotions = [], channel = "web") {
+  return normalizeSmartPromotions(smartPromotions, channel).filter(
     (promotion) =>
       promotion?.type === "gift_threshold" ||
       hasDisplayPlace(promotion, "home") ||
@@ -44,6 +52,6 @@ export function selectHomeSmartPromotions(smartPromotions = []) {
   );
 }
 
-export function selectCheckoutSmartPromotions(smartPromotions = []) {
-  return normalizeSmartPromotions(smartPromotions).filter((promotion) => hasDisplayPlace(promotion, "checkout") || hasDisplayPlace(promotion, "menu") || hasDisplayPlace(promotion, "home"));
+export function selectCheckoutSmartPromotions(smartPromotions = [], channel = "web") {
+  return normalizeSmartPromotions(smartPromotions, channel).filter((promotion) => hasDisplayPlace(promotion, "checkout") || hasDisplayPlace(promotion, "menu") || hasDisplayPlace(promotion, "home"));
 }

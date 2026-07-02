@@ -1,3 +1,5 @@
+import { ALL_PROMOTION_SALES_CHANNELS, normalizeSalesChannels } from "../services/promotionChannelService.js";
+
 export function calculateShippingFee(distanceKm, subtotal, freeshipMinSubtotal, deliveryFee) {
   if (subtotal >= freeshipMinSubtotal) return 0;
   return calculateBaseShippingFee(distanceKm, deliveryFee);
@@ -10,10 +12,11 @@ export function calculateBaseShippingFee(distanceKm, deliveryFee) {
 }
 
 export function normalizeSmartPromotion(promotion = {}) {
+  const normalizedType = promotion.type || "coupon_hint";
   return {
     id: promotion.id || `promo-${Date.now()}`,
     name: promotion.name || "Chương trình mới",
-    type: promotion.type || "coupon_hint",
+    type: normalizedType,
     title: promotion.title || promotion.name || "Ưu đãi mới",
     text: promotion.text || "Mô tả ngắn hiển thị cho khách",
     icon: promotion.icon || "sale",
@@ -34,14 +37,37 @@ export function normalizeSmartPromotion(promotion = {}) {
     },
     startAt: promotion.startAt || "",
     endAt: promotion.endAt || "",
-    priority: Number(promotion.priority || 99)
+    priority: Number(promotion.priority || 99),
+    salesChannels: normalizedType === "free_shipping"
+      ? ["web"]
+      : normalizeSalesChannels(promotion.salesChannels, ALL_PROMOTION_SALES_CHANNELS)
   };
+}
+
+function isDateInRange(startAt, endAt, now = new Date()) {
+  const startText = String(startAt || "").trim();
+  const endText = String(endAt || "").trim();
+  const nowTime = now.getTime();
+
+  if (startText) {
+    const start = new Date(`${startText.slice(0, 10)}T00:00:00`);
+    if (!Number.isNaN(start.getTime()) && nowTime < start.getTime()) return false;
+  }
+
+  if (endText) {
+    const end = new Date(`${endText.slice(0, 10)}T23:59:59`);
+    if (!Number.isNaN(end.getTime()) && nowTime > end.getTime()) return false;
+  }
+
+  return true;
 }
 
 export function getActivePromotions(promotions = [], place) {
   return promotions
     .map(normalizeSmartPromotion)
-    .filter((promotion) => promotion.active && (!place || promotion.displayPlaces.includes(place)))
+    .filter((promotion) => promotion.active)
+    .filter((promotion) => isDateInRange(promotion.startAt, promotion.endAt))
+    .filter((promotion) => !place || promotion.displayPlaces.includes(place))
     .sort((first, second) => first.priority - second.priority);
 }
 

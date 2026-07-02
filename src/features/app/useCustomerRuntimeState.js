@@ -31,6 +31,7 @@ import useCustomerSession from "../../hooks/useCustomerSession.js";
 import useCart from "../../hooks/useCart.js";
 import { resolveBranchFromCandidates } from "../../services/branchIdentityService.js";
 import { filterProductsForAvailability } from "../../services/productAvailabilityService.js";
+import { isPromotionAllowedForChannel } from "../../services/promotionChannelService.js";
 
 const userStorage = createUserStorage({
   getCustomerKey,
@@ -90,6 +91,10 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     [selectedMenuBranchValue, productState.branches]
   );
   const menuChannel = getMenuChannel(coreState.checkoutPreset);
+  const customerSmartPromotionsForChannel = useMemo(
+    () => productState.smartPromotions.filter((promotion) => isPromotionAllowedForChannel(promotion, menuChannel)),
+    [menuChannel, productState.smartPromotions]
+  );
   const availableCustomerProducts = useMemo(
     () =>
       filterProductsForAvailability(productState.customerProducts, {
@@ -208,7 +213,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     reorder,
     navigate,
     catalogProducts: availableCustomerProducts,
-    smartPromotions: productState.smartPromotions
+    smartPromotions: customerSmartPromotionsForChannel
   });
 
   const effectiveDeliveryZones = productState.deliveryZones.some((zone) => zone.includes("49.000") || zone.includes("3-6km"))
@@ -246,7 +251,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     storeToppings: productState.storeToppings,
     customerPromoCards: productState.customerPromoCards,
     adminCoupons: productState.adminCoupons,
-    smartPromotions: productState.smartPromotions,
+    smartPromotions: customerSmartPromotionsForChannel,
     homeContent: productState.homeContent,
     openProduct,
     addToCart,

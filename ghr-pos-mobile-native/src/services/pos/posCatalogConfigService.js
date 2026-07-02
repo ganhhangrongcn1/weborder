@@ -29,8 +29,18 @@ function normalizeWeekdays(value) {
     .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
 }
 
+function normalizeSalesChannels(value) {
+  if (!Array.isArray(value)) return undefined;
+  const allowed = new Set(["web", "qr", "pos"]);
+  const normalized = value
+    .map((item) => toText(item).toLowerCase())
+    .filter((item) => allowed.has(item));
+  return normalized.length ? Array.from(new Set(normalized)) : [];
+}
+
 function normalizeCoupon(row = {}) {
   const data = getObject(row.data);
+  const salesChannels = normalizeSalesChannels(data.salesChannels || data.sales_channels || row.sales_channels);
   return {
     ...data,
     id: toText(data.id || row.id || row.code),
@@ -51,6 +61,7 @@ function normalizeCoupon(row = {}) {
     fulfillmentType: toText(data.fulfillmentType || row.fulfillment_type || "all").toLowerCase(),
     scopeType: toText(data.scopeType || row.scope_type || "all").toLowerCase(),
     scopeValues: toText(data.scopeValues || row.scope_values),
+    ...(salesChannels ? { salesChannels } : {}),
     stackable: Boolean(data.stackable ?? row.stackable),
     active: normalizeBoolean(data.active ?? row.active, true)
   };
@@ -65,6 +76,7 @@ function normalizeSmartPromotion(row = {}) {
     : Array.isArray(row.display_places)
       ? row.display_places
       : [];
+  const salesChannels = normalizeSalesChannels(data.salesChannels || data.sales_channels || row.sales_channels);
 
   return {
     ...data,
@@ -101,6 +113,7 @@ function normalizeSmartPromotion(row = {}) {
     },
     startAt: toText(data.startAt || row.start_at),
     endAt: toText(data.endAt || row.end_at),
+    ...(salesChannels ? { salesChannels } : {}),
     priority: toNumber(data.priority ?? row.priority, 99)
   };
 }
@@ -108,19 +121,33 @@ function normalizeSmartPromotion(row = {}) {
 async function readCoupons() {
   if (!supabase) return [];
 
-  const { data, error } = await supabase
-    .from("coupons")
-    .select("id,data,code,name,discount_type,value,max_discount,min_order,start_at,end_at,customer_type,usage_limit,per_user_limit,total_used,voucher_type,fulfillment_type,scope_type,scope_values,stackable,active,updated_at")
-    .order("updated_at", { ascending: false });
+  const selectCandidates = [
+    "id,data,code,name,discount_type,value,max_discount,min_order,start_at,end_at,customer_type,usage_limit,per_user_limit,total_used,voucher_type,fulfillment_type,scope_type,scope_values,sales_channels,stackable,active,updated_at",
+    "id,data,code,name,discount_type,value,max_discount,min_order,start_at,end_at,customer_type,usage_limit,per_user_limit,total_used,voucher_type,fulfillment_type,scope_type,scope_values,stackable,active,updated_at",
+    "id,data,updated_at",
+    "id,data"
+  ];
 
-  if (error || !Array.isArray(data)) return [];
-  return data.map(normalizeCoupon).filter((coupon) => coupon.id || coupon.code);
+  for (const columns of selectCandidates) {
+    const { data, error } = await supabase
+      .from("coupons")
+      .select(columns)
+      .order("updated_at", { ascending: false });
+
+    if (error) continue;
+    return (Array.isArray(data) ? data : [])
+      .map(normalizeCoupon)
+      .filter((coupon) => coupon.id || coupon.code);
+  }
+
+  return [];
 }
 
 async function readSmartPromotions() {
   if (!supabase) return [];
 
   const selectCandidates = [
+    "id,data,name,title,text,type,icon,condition,reward,display_places,sales_channels,start_at,end_at,priority,active,updated_at",
     "id,data,name,title,text,type,icon,condition,reward,display_places,start_at,end_at,priority,active,updated_at",
     "id,data,name,type,condition,reward,display_places,start_at,end_at,priority,active,updated_at",
     "id,data,updated_at",

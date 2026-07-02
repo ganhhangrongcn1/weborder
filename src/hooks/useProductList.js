@@ -21,6 +21,7 @@ import {
   loadMenuSchema,
   saveMenuSchemaFromLegacy
 } from "../services/menuSchemaService.js";
+import { isPromotionAllowedForChannel } from "../services/promotionChannelService.js";
 
 function parseIdCsv(value) {
   return String(value || "")
@@ -174,6 +175,12 @@ function getActiveRealtimeKeys(currentPage, pathname = "/") {
     ];
   }
   return [];
+}
+
+function getCustomerRuntimeSalesChannel() {
+  if (typeof window === "undefined") return "web";
+  const path = String(window.location.pathname || "").toLowerCase();
+  return path.startsWith("/qr/") ? "qr" : "web";
 }
 
 export default function useProductList({
@@ -485,8 +492,10 @@ export default function useProductList({
   }, [currentPage, lazyLoadedKeys, defaultDeliveryZones, defaultCampaigns, supabaseConfigSyncEnabled, isStrictSupabaseMode]);
 
   const customerProducts = useMemo(() => {
+    const runtimeSalesChannel = getCustomerRuntimeSalesChannel();
     const activeStrikePromotions = [...smartPromotions]
       .filter((item) => item?.type === "strike_price" && item?.active !== false)
+      .filter((item) => isPromotionAllowedForChannel(item, runtimeSalesChannel))
       .filter((item) => isDateInRange(item?.startAt, item?.endAt))
       .filter((item) => isTimeWindowActive(item))
       .sort((first, second) => Number(first?.priority || 99) - Number(second?.priority || 99));
@@ -533,7 +542,7 @@ export default function useProductList({
         strikePromotionId: matchedPromotion.id
       };
     });
-  }, [smartPromotions, storeProducts]);
+  }, [currentPage, smartPromotions, storeProducts]);
 
   const filteredProducts = useMemo(() => {
     if (activeCategory === categories[0]) return customerProducts.filter((product) => product.visible !== false);

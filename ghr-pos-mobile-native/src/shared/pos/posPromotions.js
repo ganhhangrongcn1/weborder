@@ -18,6 +18,26 @@ function toNumber(value = 0) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeSalesChannels(value) {
+  if (!Array.isArray(value)) return [];
+  const allowed = new Set(["web", "qr", "pos"]);
+  return Array.from(new Set(
+    value
+      .map((item) => toText(item).toLowerCase())
+      .filter((item) => allowed.has(item))
+  ));
+}
+
+function isPromotionAllowedForPos(promotion = {}) {
+  const source = Array.isArray(promotion.salesChannels)
+    ? promotion.salesChannels
+    : Array.isArray(promotion.sales_channels)
+      ? promotion.sales_channels
+      : null;
+  if (!source) return true;
+  return normalizeSalesChannels(source).includes("pos");
+}
+
 function isDateActive(startAt = "", endAt = "", now = new Date()) {
   const start = toText(startAt);
   const end = toText(endAt);
@@ -89,6 +109,7 @@ function hasFlashSaleSlots(promotion = {}) {
 function isFlashSaleActive(promotion = {}, now = new Date()) {
   if (promotion?.type !== "flash_sale") return false;
   if (promotion?.active === false) return false;
+  if (!isPromotionAllowedForPos(promotion)) return false;
   if (!hasDisplayPlace(promotion, "pos")) return false;
   if (!isDateActive(promotion.startAt, promotion.endAt, now)) return false;
   if (!isWeekdayActive(promotion, now)) return false;
@@ -172,6 +193,7 @@ export function applyPosFlashSaleToProduct(product = {}, smartPromotions = [], n
 export function selectCheckoutSmartPromotions(smartPromotions = []) {
   return [...(Array.isArray(smartPromotions) ? smartPromotions : [])]
     .filter((promotion) => promotion?.active !== false)
+    .filter((promotion) => isPromotionAllowedForPos(promotion))
     .filter((promotion) => hasDisplayPlace(promotion, "checkout"))
     .sort((first, second) => Number(first?.priority || 99) - Number(second?.priority || 99));
 }

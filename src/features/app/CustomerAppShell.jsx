@@ -10,6 +10,15 @@ import {
   selectHomeSmartPromotions
 } from "../../services/promotionSelectors.js";
 
+function getCustomerSalesChannel(checkoutPreset = {}) {
+  const sourceText = String(
+    checkoutPreset?.orderSource ||
+      checkoutPreset?.source ||
+      (typeof window !== "undefined" ? window.location.pathname : "")
+  ).toLowerCase();
+  return sourceText.includes("qr") ? "qr" : "web";
+}
+
 export default function CustomerAppShell({
   cart,
   userProfile,
@@ -143,10 +152,11 @@ export default function CustomerAppShell({
   });
 
   const effectiveSmartPromotions = rewardFeatureFlags.enableMilestoneReward ? smartPromotions : [];
-  const homeCoupons = selectHomeCoupons(adminCoupons);
-  const checkoutCoupons = selectCheckoutCoupons(adminCoupons);
-  const homeSmartPromotions = selectHomeSmartPromotions(effectiveSmartPromotions);
-  const checkoutSmartPromotions = selectCheckoutSmartPromotions(effectiveSmartPromotions);
+  const customerSalesChannel = getCustomerSalesChannel(checkoutPreset);
+  const homeCoupons = selectHomeCoupons(adminCoupons, "web");
+  const checkoutCoupons = selectCheckoutCoupons(adminCoupons, customerSalesChannel);
+  const homeSmartPromotions = selectHomeSmartPromotions(effectiveSmartPromotions, "web");
+  const checkoutSmartPromotions = selectCheckoutSmartPromotions(effectiveSmartPromotions, customerSalesChannel);
 
   const pageProps = createCustomerPageProps({
     navigate,

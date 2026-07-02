@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   DISCOUNT_TYPE_OPTIONS,
   FLASH_APPLY_SCOPE_OPTIONS,
@@ -11,6 +12,62 @@ import {
   toIdList,
   toggleCsvId
 } from "./promotionTabUtils.js";
+import PromotionFormSection from "./PromotionFormSection.jsx";
+import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
+import {
+  PromotionSetupWarnings,
+  PromotionSummaryPills,
+  formatSalesChannelSummary
+} from "./PromotionSetupFeedback.jsx";
+
+const STATUS_FILTERS = [
+  { value: "all", label: "Tất cả" },
+  { value: "running", label: "Đang chạy" },
+  { value: "upcoming", label: "Sắp chạy" },
+  { value: "waiting_weekday", label: "Chưa tới ngày" },
+  { value: "sold_out", label: "Hết suất" },
+  { value: "expired", label: "Hết hạn" },
+  { value: "off", label: "Đã tắt" }
+];
+
+function normalizeSearch(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim();
+}
+
+function getEmptyFilterMessage(statusFilter) {
+  if (statusFilter === "running") return "Chưa có flash sale đang chạy.";
+  if (statusFilter === "upcoming") return "Chưa có flash sale sắp chạy.";
+  if (statusFilter === "waiting_weekday") return "Chưa có flash sale chờ đúng ngày.";
+  if (statusFilter === "sold_out") return "Chưa có flash sale hết suất.";
+  if (statusFilter === "expired") return "Chưa có flash sale hết hạn.";
+  if (statusFilter === "off") return "Chưa có flash sale đang tắt.";
+  return "Không tìm thấy flash sale phù hợp.";
+}
+
+function getScopeSummary(promo) {
+  const scope = promo?.condition?.applyScope || "product";
+  if (scope === "category") return `Theo ${toIdList(promo?.condition?.categoryIds).length} danh mục`;
+  return `Theo ${toIdList(promo?.condition?.productIds).length} món`;
+}
+
+function buildFlashWarnings(promo, nowTick) {
+  const warnings = [];
+  const scope = promo?.condition?.applyScope || "product";
+  const status = getFlashStatus(promo, new Date(nowTick));
+  if (Number(promo?.reward?.value || 0) <= 0) warnings.push("Giá trị flash sale đang bằng 0.");
+  if (scope === "category" && !toIdList(promo?.condition?.categoryIds).length) warnings.push("Đang chọn theo danh mục nhưng chưa tick danh mục nào.");
+  if (scope !== "category" && !toIdList(promo?.condition?.productIds).length) warnings.push("Đang chọn theo món nhưng chưa tick món nào.");
+  if (promo?.startAt && promo?.endAt && String(promo.startAt) > String(promo.endAt)) warnings.push("Ngày kết thúc đang trước ngày bắt đầu.");
+  if (status.code === "sold_out") warnings.push("Flash sale đã hết suất.");
+  if (status.code === "expired") warnings.push("Flash sale đã hết hạn.");
+  return warnings;
+}
 
 export default function FlashSaleTab({
   flashSalePromos,
@@ -24,6 +81,37 @@ export default function FlashSaleTab({
   setSmartPromotions,
   smartPromotions
 }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("running");
+  const filteredFlashPromos = useMemo(
+    () => {
+      const searchValue = normalizeSearch(searchTerm);
+      return flashSalePromos.filter((promo) => {
+        const status = getFlashStatus(promo, new Date(nowTick));
+        const searchKey = normalizeSearch(`${promo.title} ${promo.name} ${promo.text} ${promo.condition?.startTime} ${promo.condition?.endTime}`);
+        const matchesStatus = statusFilter === "all" || status.code === statusFilter;
+        const matchesSearch = !searchValue || searchKey.includes(searchValue);
+        return matchesStatus && matchesSearch;
+      });
+    },
+    [flashSalePromos, nowTick, searchTerm, statusFilter]
+  );
+
+  useEffect(() => {
+    if (!filteredFlashPromos.length) {
+      setSelectedFlashPromoId("");
+      return;
+    }
+    if (!selectedFlashPromo || !filteredFlashPromos.some((promo) => promo.id === selectedFlashPromo.id)) {
+      setSelectedFlashPromoId(filteredFlashPromos[0].id);
+    }
+  }, [filteredFlashPromos, selectedFlashPromo, setSelectedFlashPromoId]);
+
+  const visibleSelectedFlashPromo = filteredFlashPromos.some((promo) => promo.id === selectedFlashPromo?.id)
+    ? selectedFlashPromo
+    : null;
+  const flashWarnings = visibleSelectedFlashPromo ? buildFlashWarnings(visibleSelectedFlashPromo, nowTick) : [];
+
   return flashSalePromos.length ? (
     <div className="admin-promo-split grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
       <aside className="admin-promo-side rounded-[14px] border border-slate-200 bg-white p-3 shadow-sm">
@@ -31,8 +119,30 @@ export default function FlashSaleTab({
           <strong className="text-sm font-black text-slate-800">Danh sách Flash Sale</strong>
           <button type="button" className="admin-cta" onClick={() => createPromotion("flash_sale")}>+ Tạo mới</button>
         </div>
+        <div className="admin-promo-list-tools">
+          <label>
+            <span>Tìm flash sale</span>
+            <input
+              className="admin-input"
+              type="search"
+              name="promo_flash_search"
+              autoComplete="off"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Tên hoặc khung giờ…"
+            />
+          </label>
+          <label>
+            <span>Trạng thái</span>
+            <select className="admin-input" name="promo_flash_status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {STATUS_FILTERS.map((filter) => (
+                <option key={filter.value} value={filter.value}>{filter.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
-          {flashSalePromos.map((promo) => {
+          {filteredFlashPromos.map((promo) => {
             const status = getFlashStatus(promo, new Date(nowTick));
             const isSelected = selectedFlashPromo?.id === promo.id;
             const totalSlots = Number(promo.condition?.totalSlots || 0);
@@ -57,32 +167,35 @@ export default function FlashSaleTab({
               </button>
             );
           })}
+          {!filteredFlashPromos.length ? (
+            <p className="admin-promo-empty-note">{getEmptyFilterMessage(statusFilter)}</p>
+          ) : null}
         </div>
       </aside>
 
       <div className="admin-promo-editor rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm">
-        {selectedFlashPromo ? (
+        {visibleSelectedFlashPromo ? (
           <>
             {(() => {
-              const status = getFlashStatus(selectedFlashPromo, new Date(nowTick));
-              const totalSlots = Math.max(0, Number(selectedFlashPromo.condition?.totalSlots || 0));
-              const soldCount = Math.max(0, Math.min(Number(selectedFlashPromo.condition?.soldCount || 0), totalSlots || Number.MAX_SAFE_INTEGER));
+              const status = getFlashStatus(visibleSelectedFlashPromo, new Date(nowTick));
+              const totalSlots = Math.max(0, Number(visibleSelectedFlashPromo.condition?.totalSlots || 0));
+              const soldCount = Math.max(0, Math.min(Number(visibleSelectedFlashPromo.condition?.soldCount || 0), totalSlots || Number.MAX_SAFE_INTEGER));
               const remaining = Math.max(totalSlots - soldCount, 0);
               const progress = totalSlots > 0 ? Math.min((soldCount / totalSlots) * 100, 100) : 0;
-              const endDateTime = mergeDateAndTime(selectedFlashPromo.endAt, selectedFlashPromo.condition?.endTime || "23:59", true);
+              const endDateTime = mergeDateAndTime(visibleSelectedFlashPromo.endAt, visibleSelectedFlashPromo.condition?.endTime || "23:59", true);
               const countdown = status.code === "running" && endDateTime
                 ? formatCountdownFromMs(endDateTime.getTime() - nowTick)
                 : "";
               return (
-                <div className={`admin-promo-preview-card ${selectedFlashPromo.active ? "" : "is-muted"}`}>
+                <div className={`admin-promo-preview-card ${visibleSelectedFlashPromo.active ? "" : "is-muted"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">⚡ {selectedFlashPromo.title || "FLASH SALE"}</p>
+                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">⚡ {visibleSelectedFlashPromo.title || "FLASH SALE"}</p>
                       <p className="mt-1 text-2xl font-black text-orange-600">
-                        {formatRewardValue(selectedFlashPromo.reward)}
+                        {formatRewardValue(visibleSelectedFlashPromo.reward)}
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-700">{selectedFlashPromo.condition?.startTime || "00:00"} - {selectedFlashPromo.condition?.endTime || "23:59"}</p>
-                      <p className="mt-1 text-xs font-bold text-slate-500">{formatWeekdaySummary(selectedFlashPromo.condition?.weekdays)}</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">{visibleSelectedFlashPromo.condition?.startTime || "00:00"} - {visibleSelectedFlashPromo.condition?.endTime || "23:59"}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">{formatWeekdaySummary(visibleSelectedFlashPromo.condition?.weekdays)}</p>
                     </div>
                     <span className={`h-fit rounded-full px-2 py-1 text-[10px] font-bold ${status.className}`}>{status.label}</span>
                   </div>
@@ -95,16 +208,30 @@ export default function FlashSaleTab({
               );
             })()}
 
-            <div className="space-y-4">
-              <div className="admin-promo-form-card">
-                <h4 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-700">1. Chọn món chạy Flash Sale</h4>
+            <div className="admin-promo-form-flow">
+              <PromotionSummaryPills
+                items={[
+                  getFlashStatus(visibleSelectedFlashPromo, new Date(nowTick)).label,
+                  formatSalesChannelSummary(visibleSelectedFlashPromo),
+                  getScopeSummary(visibleSelectedFlashPromo),
+                  `${visibleSelectedFlashPromo.condition?.startTime || "00:00"} - ${visibleSelectedFlashPromo.condition?.endTime || "23:59"}`,
+                  formatRewardValue(visibleSelectedFlashPromo.reward)
+                ]}
+              />
+              <PromotionSetupWarnings warnings={flashWarnings} />
+
+              <PromotionFormSection
+                step="1"
+                title="Món chạy flash sale"
+                note="Chọn danh mục hoặc từng món để tránh giảm nhầm toàn menu."
+              >
                 {(() => {
                   const selectedScope = selectedFlashPromo.condition.applyScope || "product";
                   const selectedCategoryIds = toIdList(selectedFlashPromo.condition.categoryIds || "");
                   const selectedProductIds = toIdList(selectedFlashPromo.condition.productIds || "");
                   return (
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <label className="text-[12px] font-semibold text-slate-500 md:col-span-2">
+                    <div className="admin-promo-form-grid">
+                      <label className="admin-promo-form-span-2 text-[12px] font-semibold text-slate-500">
                         Áp dụng cho
                         <select className="admin-input mt-1" value={selectedScope} onChange={(event) => updatePromotion(selectedFlashPromo.id, { condition: { ...selectedFlashPromo.condition, applyScope: event.target.value } })}>
                           {FLASH_APPLY_SCOPE_OPTIONS.map((item) => (
@@ -113,7 +240,7 @@ export default function FlashSaleTab({
                         </select>
                       </label>
                       {selectedScope === "category" ? (
-                        <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="admin-promo-form-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                           <p className="mb-2 text-[12px] font-semibold text-slate-600">Chọn danh mục áp dụng</p>
                           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                             {activeCategories.map((categoryName) => (
@@ -137,7 +264,7 @@ export default function FlashSaleTab({
                         </div>
                       ) : null}
                       {selectedScope === "product" ? (
-                        <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="admin-promo-form-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                           <p className="mb-2 text-[12px] font-semibold text-slate-600">Chọn món áp dụng</p>
                           <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                             {activeProducts.map((product) => (
@@ -163,11 +290,14 @@ export default function FlashSaleTab({
                     </div>
                   );
                 })()}
-              </div>
+              </PromotionFormSection>
 
-              <div className="admin-promo-form-card">
-                <h4 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-700">2. Giảm bao nhiêu?</h4>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <PromotionFormSection
+                step="2"
+                title="Giá flash sale"
+                note="Chọn kiểu giảm hoặc giá đồng giá cho món đang chạy."
+              >
+                <div className="admin-promo-form-grid">
                   <label className="text-[12px] font-semibold text-slate-500">
                     Kiểu giảm
                     <select className="admin-input mt-1" value={selectedFlashPromo.reward.type} onChange={(event) => updatePromotion(selectedFlashPromo.id, { reward: { ...selectedFlashPromo.reward, type: event.target.value } })}>
@@ -183,14 +313,17 @@ export default function FlashSaleTab({
                 </div>
                 {selectedFlashPromo.reward.type === "fixed_price" ? (
                   <p className="mt-2 rounded-xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
-                    POS sẽ bán đúng giá này cho món/danh mục được chọn khi chương trình đang chạy.
+                    Kênh được bật sẽ bán đúng giá này cho món/danh mục được chọn khi chương trình đang chạy.
                   </p>
                 ) : null}
-              </div>
+              </PromotionFormSection>
 
-              <div className="admin-promo-form-card">
-                <h4 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-700">3. Chạy khi nào?</h4>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <PromotionFormSection
+                step="3"
+                title="Thời gian chạy"
+                note="Đặt ngày, khung giờ và ngày lặp trong tuần."
+              >
+                <div className="admin-promo-form-grid">
                   <label className="text-[12px] font-semibold text-slate-500">
                     Ngày bắt đầu
                     <input className="admin-input mt-1" type="date" value={selectedFlashPromo.startAt || ""} onChange={(event) => updatePromotion(selectedFlashPromo.id, { startAt: event.target.value })} />
@@ -207,6 +340,13 @@ export default function FlashSaleTab({
                     Giờ kết thúc
                     <input className="admin-input mt-1" type="time" value={selectedFlashPromo.condition.endTime || "13:00"} onChange={(event) => updatePromotion(selectedFlashPromo.id, { condition: { ...selectedFlashPromo.condition, endTime: event.target.value } })} />
                   </label>
+                  <div className="admin-promo-form-span-2 text-[12px] font-semibold text-slate-500">
+                    Kênh áp dụng
+                    <PromotionSalesChannelField
+                      value={selectedFlashPromo.salesChannels}
+                      onChange={(nextChannels) => updatePromotion(selectedFlashPromo.id, { salesChannels: nextChannels })}
+                    />
+                  </div>
                 </div>
                 <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -243,11 +383,14 @@ export default function FlashSaleTab({
                     Ví dụ flashsale Thứ 4: chỉ tick T4. Không tick ngày nào nghĩa là chạy mọi ngày trong khoảng ngày bắt đầu/kết thúc.
                   </p>
                 </div>
-              </div>
+              </PromotionFormSection>
 
-              <div className="admin-promo-form-card">
-                <h4 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-700">4. Giới hạn suất</h4>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <PromotionFormSection
+                step="4"
+                title="Số suất"
+                note="Giới hạn tổng lượt bán và số lượng mỗi khách được mua."
+              >
+                <div className="admin-promo-form-grid">
                   <label className="text-[12px] font-semibold text-slate-500">
                     Tổng số suất flash sale
                     <input className="admin-input mt-1" type="number" min="0" value={Number(selectedFlashPromo.condition.totalSlots || 0)} onChange={(event) => updatePromotion(selectedFlashPromo.id, { condition: { ...selectedFlashPromo.condition, totalSlots: Number(event.target.value || 0) } })} />
@@ -257,11 +400,14 @@ export default function FlashSaleTab({
                     <input className="admin-input mt-1" type="number" min="1" value={Number(selectedFlashPromo.condition.maxPerCustomer || 1)} onChange={(event) => updatePromotion(selectedFlashPromo.id, { condition: { ...selectedFlashPromo.condition, maxPerCustomer: Number(event.target.value || 1) } })} />
                   </label>
                 </div>
-              </div>
+              </PromotionFormSection>
 
-              <div className="admin-promo-form-card">
-                <h4 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-700">5. Tên hiển thị</h4>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <PromotionFormSection
+                step="5"
+                title="Tên khách thấy"
+                note="Nội dung dùng để hiển thị trên menu và quản lý nội bộ."
+              >
+                <div className="admin-promo-form-grid">
                   <label className="text-[12px] font-semibold text-slate-500">
                     Tên chương trình
                     <input className="admin-input mt-1" value={selectedFlashPromo.title || ""} onChange={(event) => updatePromotion(selectedFlashPromo.id, { title: event.target.value })} />
@@ -270,18 +416,18 @@ export default function FlashSaleTab({
                     Tên nội bộ
                     <input className="admin-input mt-1" value={selectedFlashPromo.name || ""} onChange={(event) => updatePromotion(selectedFlashPromo.id, { name: event.target.value })} />
                   </label>
-                  <label className="text-[12px] font-semibold text-slate-500 md:col-span-2">
+                  <label className="admin-promo-form-span-2 text-[12px] font-semibold text-slate-500">
                     Mô tả ngắn
                     <input className="admin-input mt-1" value={selectedFlashPromo.text || ""} onChange={(event) => updatePromotion(selectedFlashPromo.id, { text: event.target.value })} />
                   </label>
                 </div>
-              </div>
+              </PromotionFormSection>
 
               <details className="admin-promo-form-card">
-                <summary className="cursor-pointer text-[13px] font-black uppercase tracking-wide text-slate-700">
-                  Tùy chọn nâng cao
+                <summary className="admin-promo-details-summary">
+                  6. Nâng cao: ưu tiên & số đã bán
                 </summary>
-                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="admin-promo-form-grid mt-4">
                   <label className="text-[12px] font-semibold text-slate-500">
                     Làm tròn giá sau giảm
                     <select className="admin-input mt-1" value={selectedFlashPromo.reward.roundMode || "none"} onChange={(event) => updatePromotion(selectedFlashPromo.id, { reward: { ...selectedFlashPromo.reward, roundMode: event.target.value } })}>
@@ -325,7 +471,9 @@ export default function FlashSaleTab({
             </div>
           </>
         ) : (
-          <p className="admin-promo-empty-note">Chọn chương trình Flash Sale để chỉnh sửa.</p>
+          <p className="admin-promo-empty-note">
+            {filteredFlashPromos.length ? "Chọn chương trình Flash Sale để chỉnh sửa." : getEmptyFilterMessage(statusFilter)}
+          </p>
         )}
       </div>
     </div>

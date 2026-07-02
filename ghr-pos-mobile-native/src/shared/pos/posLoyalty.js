@@ -6,6 +6,26 @@ function toNumber(value = 0) {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
+function normalizeSalesChannels(value) {
+  if (!Array.isArray(value)) return [];
+  const allowed = new Set(["web", "qr", "pos"]);
+  return Array.from(new Set(
+    value
+      .map((item) => toText(item).toLowerCase())
+      .filter((item) => allowed.has(item))
+  ));
+}
+
+function isVoucherAllowedForPos(voucher = {}) {
+  const source = Array.isArray(voucher.salesChannels)
+    ? voucher.salesChannels
+    : Array.isArray(voucher.sales_channels)
+      ? voucher.sales_channels
+      : null;
+  if (!source) return true;
+  return normalizeSalesChannels(source).includes("pos");
+}
+
 
 function greatestCommonDivisor(a = 1, b = 1) {
   let x = Math.abs(Math.floor(toNumber(a, 1))) || 1;
@@ -143,6 +163,8 @@ function normalizeLoyaltyVoucher(voucher = {}) {
 function normalizeCheckoutVoucher(voucher = {}) {
   const code = toText(voucher.code).toUpperCase();
   const minOrder = toNumber(voucher.minOrder ?? voucher.min_order, 0);
+  const salesChannels = normalizeSalesChannels(voucher.salesChannels || voucher.sales_channels);
+
 
   return {
     ...voucher,
@@ -161,6 +183,8 @@ function normalizeCheckoutVoucher(voucher = {}) {
     startAt: toText(voucher.startAt || voucher.start_at),
     endAt: toText(voucher.endAt || voucher.expiry || voucher.end_at),
     expiry: toText(voucher.endAt || voucher.expiry || voucher.end_at),
+    ...(salesChannels.length ? { salesChannels } : {}),
+
     active: voucher.active !== false,
     conditionText: minOrder > 0
       ? `Đơn từ ${new Intl.NumberFormat("vi-VN").format(minOrder)}đ`
@@ -171,6 +195,8 @@ function normalizeCheckoutVoucher(voucher = {}) {
 function canUseCheckoutVoucher(voucher = {}, customer = null, now = new Date()) {
   if (!voucher || voucher.active === false) return false;
   if (toText(voucher.voucherType).toLowerCase() === "loyalty") return false;
+  if (!isVoucherAllowedForPos(voucher)) return false;
+
   if (!isDateActive(voucher.startAt, voucher.endAt || voucher.expiry, now)) return false;
 
   const fulfillmentType = toText(voucher.fulfillmentType).toLowerCase();

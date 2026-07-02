@@ -3,11 +3,37 @@ import {
   applyLoyaltyVoucherPresets,
   LOYALTY_VOUCHER_PRESETS
 } from "../../../services/loyaltyVoucherPresetService.js";
+import { ALL_PROMOTION_SALES_CHANNELS, normalizeSalesChannels } from "../../../services/promotionChannelService.js";
+import PromotionFormSection from "./PromotionFormSection.jsx";
+import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
+import {
+  PromotionSetupWarnings,
+  PromotionSummaryPills,
+  formatSalesChannelSummary
+} from "./PromotionSetupFeedback.jsx";
 
 const VOUCHER_TYPES = [
   { value: "checkout", label: "Voucher thanh toán" },
   { value: "loyalty", label: "Voucher loyalty" }
 ];
+
+const STATUS_FILTERS = [
+  { value: "all", label: "Tất cả" },
+  { value: "running", label: "Đang chạy" },
+  { value: "expiring", label: "Sắp hết hạn" },
+  { value: "expired", label: "Hết hạn" },
+  { value: "off", label: "Đang tắt" }
+];
+
+function normalizeSearch(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .trim();
+}
 
 function getCouponId(coupon = {}) {
   return String(coupon.id || coupon.code || `coupon-${Date.now()}`);
@@ -18,7 +44,7 @@ function normalizeCoupon(coupon = {}) {
   return {
     id: getCouponId(coupon),
     code: String(coupon.code || "SALE10").toUpperCase(),
-    name: String(coupon.name || "Mã giảm giá mới"),
+    name: String(coupon.name || "Voucher mới"),
     discountType: coupon.discountType === "percent" ? "percent" : "fixed",
     value: Number(coupon.value || 0),
     maxDiscount: Number(coupon.maxDiscount || 0),
@@ -33,6 +59,7 @@ function normalizeCoupon(coupon = {}) {
     fulfillmentType: String(coupon.fulfillmentType || "all"),
     scopeType: String(coupon.scopeType || "all"),
     scopeValues: String(coupon.scopeValues || ""),
+    salesChannels: normalizeSalesChannels(coupon.salesChannels, ALL_PROMOTION_SALES_CHANNELS),
     stackable: Boolean(coupon.stackable),
     active: coupon.active !== false,
     expiry: endAt
@@ -52,17 +79,17 @@ function formatDateShort(dateText) {
 }
 
 function getCouponStatus(coupon) {
-  if (!coupon.active) return { label: "Tạm tắt", className: "bg-slate-100 text-slate-600" };
-  if (!coupon.endAt) return { label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
+  if (!coupon.active) return { code: "off", label: "Tạm tắt", className: "bg-slate-100 text-slate-600" };
+  if (!coupon.endAt) return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
 
   const now = new Date();
   const endDate = new Date(`${coupon.endAt}T23:59:59`);
-  if (Number.isNaN(endDate.getTime())) return { label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
-  if (endDate.getTime() < now.getTime()) return { label: "Hết hạn", className: "bg-slate-100 text-slate-600" };
+  if (Number.isNaN(endDate.getTime())) return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
+  if (endDate.getTime() < now.getTime()) return { code: "expired", label: "Hết hạn", className: "bg-slate-100 text-slate-600" };
 
   const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-  if (daysLeft <= 3) return { label: "Sắp hết hạn", className: "bg-orange-100 text-orange-700" };
-  return { label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
+  if (daysLeft <= 3) return { code: "expiring", label: "Sắp hết hạn", className: "bg-orange-100 text-orange-700" };
+  return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
 }
 
 function buildPreviewLines(coupon) {
@@ -76,15 +103,48 @@ function buildPreviewLines(coupon) {
   return { main, condition, expiry };
 }
 
+function buildCouponWarnings(coupon) {
+  const warnings = [];
+  if (!String(coupon?.code || "").trim()) warnings.push("Chưa nhập mã voucher.");
+  if (!String(coupon?.name || "").trim()) warnings.push("Chưa nhập tên hiển thị cho khách.");
+  if (Number(coupon?.value || 0) <= 0) warnings.push("Giá trị giảm đang bằng 0 nên khách sẽ không được giảm.");
+  if (coupon?.discountType === "percent" && Number(coupon?.value || 0) > 100) warnings.push("Giảm theo % đang lớn hơn 100%.");
+  if (coupon?.endAt) {
+    const endDate = new Date(`${coupon.endAt}T23:59:59`);
+    if (!Number.isNaN(endDate.getTime()) && endDate.getTime() < Date.now()) warnings.push("Voucher đã hết hạn, checkout sẽ không áp dụng.");
+  }
+  if (Number(coupon?.usageLimit || 0) > 0 && Number(coupon?.totalUsed || 0) >= Number(coupon?.usageLimit || 0)) {
+    warnings.push("Voucher đã chạm giới hạn lượt dùng.");
+  }
+  return warnings;
+}
+
+function buildCouponSummary(coupon) {
+  const status = getCouponStatus(coupon).label;
+  const minOrder = Number(coupon?.minOrder || 0) > 0
+    ? `Đơn từ ${Number(coupon.minOrder || 0).toLocaleString("vi-VN")}đ`
+    : "Mọi đơn";
+  const usageLimit = Number(coupon?.usageLimit || 0) > 0
+    ? `Còn ${Math.max(Number(coupon.usageLimit || 0) - Number(coupon.totalUsed || 0), 0)} lượt`
+    : "Không giới hạn lượt";
+  return [
+    status,
+    coupon?.voucherType === "loyalty" ? "Loyalty / CRM" : "Checkout",
+    formatSalesChannelSummary(coupon),
+    minOrder,
+    usageLimit
+  ];
+}
+
 function inputClassName(isImportant = false) {
-  const baseClass = "admin-input mt-1 w-full rounded-xl border border-slate-200 bg-white outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100";
-  const sizeClass = isImportant ? "px-4 py-3 text-base font-semibold text-slate-900" : "px-3 py-2.5 text-sm font-medium text-slate-800";
+  const baseClass = "admin-input admin-promo-field-input";
+  const sizeClass = isImportant ? "admin-promo-field-input--strong" : "";
   return `${baseClass} ${sizeClass}`;
 }
 
 function FieldLabel({ label, children }) {
   return (
-    <label className="text-[12px] font-semibold text-slate-500">
+    <label className="admin-promo-field-label">
       {label}
       {children}
     </label>
@@ -94,24 +154,55 @@ function FieldLabel({ label, children }) {
 export default function CouponManager({ coupons = [], setCoupons }) {
   const safeCoupons = useMemo(() => coupons.map((coupon) => normalizeCoupon(coupon)), [coupons]);
   const [voucherTypeFilter, setVoucherTypeFilter] = useState("checkout");
+  const [statusFilter, setStatusFilter] = useState("running");
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedCouponId, setSelectedCouponId] = useState("");
   const [presetMessage, setPresetMessage] = useState("");
-  const visibleCoupons = safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === voucherTypeFilter);
+  const visibleCoupons = useMemo(
+    () => safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === voucherTypeFilter),
+    [safeCoupons, voucherTypeFilter]
+  );
+  const filteredCoupons = useMemo(
+    () => {
+      const searchValue = normalizeSearch(searchTerm);
+      return visibleCoupons.filter((coupon) => {
+        const status = getCouponStatus(coupon);
+        const searchKey = normalizeSearch(`${coupon.code} ${coupon.name}`);
+        const matchesStatus = statusFilter === "all" || status.code === statusFilter;
+        const matchesSearch = !searchValue || searchKey.includes(searchValue);
+        return matchesStatus && matchesSearch;
+      });
+    },
+    [visibleCoupons, searchTerm, statusFilter]
+  );
+  const visibleStats = useMemo(
+    () => visibleCoupons.reduce(
+      (total, coupon) => {
+        const code = getCouponStatus(coupon).code;
+        total[code] = (total[code] || 0) + 1;
+        return total;
+      },
+      { running: 0, expiring: 0, expired: 0, off: 0 }
+    ),
+    [visibleCoupons]
+  );
   const loyaltyCoupons = safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === "loyalty");
   const loyaltyCodes = new Set(loyaltyCoupons.map((coupon) => String(coupon.code || "").toUpperCase()).filter(Boolean));
   const loyaltyPresetReadyCount = LOYALTY_VOUCHER_PRESETS.filter((preset) => loyaltyCodes.has(preset.code)).length;
 
   useEffect(() => {
-    if (!visibleCoupons.length) {
+    if (!filteredCoupons.length) {
       setSelectedCouponId("");
       return;
     }
-    const selectedStillVisible = visibleCoupons.some((coupon) => coupon.id === selectedCouponId);
-    if (!selectedStillVisible) setSelectedCouponId(visibleCoupons[0].id);
-  }, [selectedCouponId, visibleCoupons]);
+    const selectedStillVisible = filteredCoupons.some((coupon) => coupon.id === selectedCouponId);
+    if (!selectedStillVisible) setSelectedCouponId(filteredCoupons[0].id);
+  }, [selectedCouponId, filteredCoupons]);
 
-  const selectedCoupon = visibleCoupons.find((item) => item.id === selectedCouponId) || null;
+  const selectedCoupon = filteredCoupons.find((item) => item.id === selectedCouponId) || null;
   const preview = selectedCoupon ? buildPreviewLines(selectedCoupon) : null;
+  const couponWarnings = selectedCoupon ? buildCouponWarnings(selectedCoupon) : [];
+  const couponSummary = selectedCoupon ? buildCouponSummary(selectedCoupon) : [];
 
   const patchCoupon = (couponId, patch) => {
     setCoupons((current) =>
@@ -128,12 +219,13 @@ export default function CouponManager({ coupons = [], setCoupons }) {
     const seed = normalizeCoupon({
       id: `coupon-${Date.now()}`,
       code: voucherTypeFilter === "loyalty" ? "LOYAL10" : "NEW10",
-      name: voucherTypeFilter === "loyalty" ? "Voucher loyalty mới" : "Mã giảm giá mới",
+      name: voucherTypeFilter === "loyalty" ? "Voucher loyalty mới" : "Voucher mới",
       discountType: "fixed",
       value: 10000,
       minOrder: 0,
       endAt: "",
       voucherType: voucherTypeFilter,
+      salesChannels: ["web", "qr"],
       active: true
     });
     setCoupons((current) => [seed, ...(current || [])]);
@@ -177,6 +269,36 @@ export default function CouponManager({ coupons = [], setCoupons }) {
           ))}
         </div>
 
+        <div className="admin-promo-list-tools">
+          <label>
+            <span>Tìm voucher</span>
+            <input
+              className="admin-input"
+              type="search"
+              name="promo_coupon_search"
+              autoComplete="off"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Nhập mã hoặc tên…"
+            />
+          </label>
+          <label>
+            <span>Trạng thái</span>
+            <select className="admin-input" name="promo_coupon_status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {STATUS_FILTERS.map((filter) => (
+                <option key={filter.value} value={filter.value}>{filter.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="admin-promo-mini-stats">
+          <span><b>{visibleStats.running}</b> đang chạy</span>
+          <span><b>{visibleStats.expiring}</b> sắp hết hạn</span>
+          <span><b>{visibleStats.expired}</b> hết hạn</span>
+          <span><b>{visibleStats.off}</b> đang tắt</span>
+        </div>
+
         {voucherTypeFilter === "loyalty" ? (
           <div className="mb-3 rounded-[14px] border border-amber-200 bg-amber-50 p-3">
             <div className="flex items-start justify-between gap-3">
@@ -213,7 +335,7 @@ export default function CouponManager({ coupons = [], setCoupons }) {
         ) : null}
 
         <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
-          {visibleCoupons.map((coupon) => {
+          {filteredCoupons.map((coupon) => {
             const status = getCouponStatus(coupon);
             const isSelected = selectedCoupon?.id === coupon.id;
             return (
@@ -221,7 +343,7 @@ export default function CouponManager({ coupons = [], setCoupons }) {
                 key={coupon.id}
                 type="button"
                 onClick={() => setSelectedCouponId(coupon.id)}
-                className={`w-full rounded-[14px] border bg-white p-3 text-left shadow-sm transition hover:-translate-y-[1px] hover:shadow-md active:scale-[0.995] ${isSelected ? "border-orange-300 ring-2 ring-orange-200" : "border-slate-200"}`}
+                className={`admin-promo-list-card ${isSelected ? "is-active" : ""}`}
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <p className="text-lg font-black tracking-wide text-slate-900">{coupon.code || "---"}</p>
@@ -236,27 +358,38 @@ export default function CouponManager({ coupons = [], setCoupons }) {
             );
           })}
 
-          {!visibleCoupons.length ? (
-            <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">Chưa có voucher</p>
+          {!filteredCoupons.length ? (
+            <p className="admin-promo-empty-note">Không tìm thấy voucher phù hợp.</p>
           ) : null}
         </div>
       </aside>
 
       <div className="admin-promo-editor rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm">
         {!selectedCoupon ? (
-          <p className="py-8 text-center text-sm text-slate-500">Chọn voucher để chỉnh sửa.</p>
+          <p className="admin-promo-empty-note">Chọn voucher để chỉnh sửa.</p>
         ) : (
           <>
-            <div className="mb-4 rounded-[14px] border border-orange-200 bg-orange-50 px-4 py-3">
+            <div className="admin-promo-preview-card">
               <p className="text-2xl font-black leading-tight text-orange-600">{preview?.main}</p>
               <p className="mt-1 text-sm font-semibold text-slate-700">{preview?.condition}</p>
               <p className="mt-1 text-xs text-slate-500">{preview?.expiry}</p>
+              <div className="admin-promo-preview-meta">
+                <span>Hiển thị: {selectedCoupon.voucherType === "loyalty" ? "Loyalty / CRM" : "Checkout"}</span>
+                <span>Giới hạn: {Number(selectedCoupon.usageLimit || 0) > 0 ? `${selectedCoupon.totalUsed}/${selectedCoupon.usageLimit} lượt` : "Không giới hạn"}</span>
+                <span>Mỗi khách: {Number(selectedCoupon.perUserLimit || 1)} lượt</span>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm">
-                <h4 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-700">1. Thông tin chính</h4>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="admin-promo-form-flow">
+              <PromotionSummaryPills items={couponSummary} />
+              <PromotionSetupWarnings warnings={couponWarnings} />
+
+              <PromotionFormSection
+                step="1"
+                title="Khách thấy gì?"
+                note="Mã, tên và nơi hiển thị của voucher."
+              >
+                <div className="admin-promo-form-grid">
                   <FieldLabel label="Mã voucher">
                     <input className={inputClassName(true)} value={selectedCoupon.code} onChange={(event) => patchCoupon(selectedCoupon.id, { code: String(event.target.value || "").toUpperCase().replace(/\s+/g, "") })} />
                   </FieldLabel>
@@ -273,12 +406,22 @@ export default function CouponManager({ coupons = [], setCoupons }) {
                   <FieldLabel label="Ngày hết hạn">
                     <input className={inputClassName()} type="date" value={selectedCoupon.endAt} onChange={(event) => patchCoupon(selectedCoupon.id, { endAt: event.target.value, expiry: event.target.value })} />
                   </FieldLabel>
+                  <div className="admin-promo-form-span-2 text-[12px] font-semibold text-slate-500">
+                    Kênh áp dụng
+                    <PromotionSalesChannelField
+                      value={selectedCoupon.salesChannels}
+                      onChange={(nextChannels) => patchCoupon(selectedCoupon.id, { salesChannels: nextChannels })}
+                    />
+                  </div>
                 </div>
-              </div>
+              </PromotionFormSection>
 
-              <div className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm">
-                <h4 className="mb-3 text-[13px] font-black uppercase tracking-wide text-slate-700">2. Giá trị & điều kiện</h4>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <PromotionFormSection
+                step="2"
+                title="Giảm bao nhiêu?"
+                note="Chọn kiểu giảm, giá trị giảm và mốc đơn tối thiểu."
+              >
+                <div className="admin-promo-form-grid">
                   <FieldLabel label="Loại giảm">
                     <select className={inputClassName(true)} value={selectedCoupon.discountType} onChange={(event) => patchCoupon(selectedCoupon.id, { discountType: event.target.value, maxDiscount: event.target.value === "percent" ? selectedCoupon.maxDiscount : 0 })}>
                       <option value="fixed">Giảm số tiền</option>
@@ -297,12 +440,12 @@ export default function CouponManager({ coupons = [], setCoupons }) {
                     <input className={inputClassName()} type="number" min="0" value={selectedCoupon.minOrder} onChange={(event) => patchCoupon(selectedCoupon.id, { minOrder: Number(event.target.value || 0) })} />
                   </FieldLabel>
                 </div>
-              </div>
+              </PromotionFormSection>
 
-              <details className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm">
-                <summary className="cursor-pointer text-[13px] font-black uppercase tracking-wide text-slate-700">Tùy chọn nâng cao</summary>
+              <details className="admin-promo-form-card">
+                <summary className="admin-promo-details-summary">3. Giới hạn sử dụng</summary>
                 <div className="mt-4 space-y-4">
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="admin-promo-form-grid">
                     <FieldLabel label="Giới hạn dùng toàn bộ">
                       <input className={inputClassName()} type="number" min="0" value={selectedCoupon.usageLimit} onChange={(event) => patchCoupon(selectedCoupon.id, { usageLimit: Number(event.target.value || 0) })} />
                     </FieldLabel>
@@ -313,10 +456,10 @@ export default function CouponManager({ coupons = [], setCoupons }) {
                       <input className={inputClassName()} type="number" min="0" value={selectedCoupon.totalUsed} onChange={(event) => patchCoupon(selectedCoupon.id, { totalUsed: Number(event.target.value || 0) })} />
                     </FieldLabel>
                   </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
+                  <div className="admin-promo-active-row admin-promo-form-span-2">
                     <div>
-                      <strong className="block text-sm font-black text-slate-800">Bật voucher</strong>
-                      <span className="text-xs font-semibold text-slate-500">Tắt để ẩn khỏi checkout/CRM nhưng vẫn giữ dữ liệu.</span>
+                      <strong>Bật voucher</strong>
+                      <span>Tắt để ẩn khỏi checkout/CRM nhưng vẫn giữ dữ liệu.</span>
                     </div>
                     <label className="admin-switch">
                       <input type="checkbox" checked={selectedCoupon.active} onChange={(event) => patchCoupon(selectedCoupon.id, { active: event.target.checked })} />

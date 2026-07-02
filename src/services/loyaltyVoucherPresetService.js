@@ -108,6 +108,7 @@ export function buildLoyaltyPresetCoupon(preset, now = new Date()) {
     fulfillmentType: "all",
     scopeType: "all",
     scopeValues: "",
+    salesChannels: ["web", "qr"],
     stackable: false,
     active: true,
     expiry: addDays(today, safePreset.validDays || 30)

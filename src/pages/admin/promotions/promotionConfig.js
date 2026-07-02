@@ -1,19 +1,40 @@
 export const promoTabs = [
-  { id: "coupon", label: "Mã giảm giá" },
-  { id: "free_shipping", label: "Freeship" },
-  { id: "strike_price", label: "Gạch giá món ăn" },
-  { id: "flash_sale", label: "Flashsale" },
-  { id: "gift_threshold", label: "Chương trình tặng món" }
+  {
+    id: "coupon",
+    label: "Voucher",
+    description: "Mã nhập ở checkout / loyalty"
+  },
+  {
+    id: "free_shipping",
+    label: "Hỗ trợ ship",
+    description: "Hỗ trợ phí ship theo mốc đơn"
+  },
+  {
+    id: "strike_price",
+    label: "Giảm giá món",
+    description: "Giá ưu đãi hiển thị trên menu"
+  },
+  {
+    id: "flash_sale",
+    label: "Flash sale",
+    description: "Giảm sâu theo khung giờ và số suất"
+  },
+  {
+    id: "gift_threshold",
+    label: "Tặng món",
+    description: "Đủ mốc đơn sẽ gợi ý quà tặng"
+  }
 ];
 
 export const promoDefaults = {
   free_shipping: {
-    name: "Freeship đơn theo chương trình",
-    title: "Freeship",
+    name: "Hỗ trợ ship theo mốc đơn",
+    title: "Hỗ trợ ship",
     text: "Hỗ trợ phí ship theo mốc đơn",
     icon: "bike",
     active: true,
     displayPlaces: ["home", "checkout"],
+    salesChannels: ["web"],
     condition: {
       minSubtotal: 150000,
       customerType: "all",
@@ -30,12 +51,13 @@ export const promoDefaults = {
     priority: 10
   },
   strike_price: {
-    name: "Gạch giá món ăn",
-    title: "Giá sốc",
-    text: "Hiển thị giá gạch trên món",
+    name: "Giảm giá món ăn",
+    title: "Giá ưu đãi",
+    text: "Hiển thị giá ưu đãi trên menu",
     icon: "sale",
     active: true,
     displayPlaces: ["home", "menu"],
+    salesChannels: ["web", "qr"],
     condition: {
       minSubtotal: 0,
       customerType: "all",
@@ -65,6 +87,7 @@ export const promoDefaults = {
     icon: "sale",
     active: true,
     displayPlaces: ["home", "menu"],
+    salesChannels: ["web", "qr"],
     condition: {
       minSubtotal: 0,
       customerType: "all",
@@ -92,6 +115,7 @@ export const promoDefaults = {
     icon: "gift",
     active: true,
     displayPlaces: ["checkout", "home"],
+    salesChannels: ["web", "qr"],
     condition: { minSubtotal: 99000, customerType: "all", productIds: "", categoryIds: "" },
     reward: { type: "gift", value: "", productId: "" },
     startAt: "2026-05-01",
