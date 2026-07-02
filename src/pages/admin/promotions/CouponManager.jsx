@@ -44,7 +44,7 @@ function normalizeCoupon(coupon = {}) {
   return {
     id: getCouponId(coupon),
     code: String(coupon.code || "SALE10").toUpperCase(),
-    name: String(coupon.name || "Voucher mới"),
+    name: coupon.name == null ? "Voucher mới" : String(coupon.name),
     discountType: coupon.discountType === "percent" ? "percent" : "fixed",
     value: Number(coupon.value || 0),
     maxDiscount: Number(coupon.maxDiscount || 0),
@@ -93,6 +93,7 @@ function getCouponStatus(coupon) {
 }
 
 function buildPreviewLines(coupon) {
+  const title = String(coupon.name || "").trim() || String(coupon.code || "Voucher").trim() || "Voucher";
   const main = coupon.discountType === "percent"
     ? `Giảm ${Number(coupon.value || 0)}%`
     : `Giảm ${Number(coupon.value || 0).toLocaleString("vi-VN")}đ`;
@@ -100,7 +101,7 @@ function buildPreviewLines(coupon) {
     ? `Đơn từ ${Number(coupon.minOrder || 0).toLocaleString("vi-VN")}đ`
     : "Áp dụng mọi đơn";
   const expiry = `Hết hạn: ${formatDateShort(coupon.endAt)}`;
-  return { main, condition, expiry };
+  return { title, main, condition, expiry };
 }
 
 function buildCouponWarnings(coupon) {
@@ -346,7 +347,10 @@ export default function CouponManager({ coupons = [], setCoupons }) {
                 className={`admin-promo-list-card ${isSelected ? "is-active" : ""}`}
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <p className="text-lg font-black tracking-wide text-slate-900">{coupon.code || "---"}</p>
+                  <div>
+                    <p className="text-lg font-black tracking-wide text-slate-900">{coupon.code || "---"}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{coupon.name || "Chưa đặt tên hiển thị"}</p>
+                  </div>
                   <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status.className}`}>{status.label}</span>
                 </div>
                 <p className="text-xl font-black text-orange-600">{formatDiscountValue(coupon)}</p>
@@ -370,6 +374,7 @@ export default function CouponManager({ coupons = [], setCoupons }) {
         ) : (
           <>
             <div className="admin-promo-preview-card">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500">{preview?.title}</p>
               <p className="text-2xl font-black leading-tight text-orange-600">{preview?.main}</p>
               <p className="mt-1 text-sm font-semibold text-slate-700">{preview?.condition}</p>
               <p className="mt-1 text-xs text-slate-500">{preview?.expiry}</p>
@@ -394,14 +399,12 @@ export default function CouponManager({ coupons = [], setCoupons }) {
                     <input className={inputClassName(true)} value={selectedCoupon.code} onChange={(event) => patchCoupon(selectedCoupon.id, { code: String(event.target.value || "").toUpperCase().replace(/\s+/g, "") })} />
                   </FieldLabel>
                   <FieldLabel label="Tên hiển thị">
-                    <input className={inputClassName()} value={selectedCoupon.name} onChange={(event) => patchCoupon(selectedCoupon.id, { name: event.target.value })} />
-                  </FieldLabel>
-                  <FieldLabel label="Loại voucher">
-                    <select className={inputClassName()} value={selectedCoupon.voucherType} onChange={(event) => patchCoupon(selectedCoupon.id, { voucherType: event.target.value })}>
-                      {VOUCHER_TYPES.map((type) => (
-                        <option key={type.value} value={type.value}>{type.label}</option>
-                      ))}
-                    </select>
+                    <input
+                      className={inputClassName()}
+                      autoComplete="off"
+                      value={selectedCoupon.name || ""}
+                      onChange={(event) => patchCoupon(selectedCoupon.id, { name: event.target.value })}
+                    />
                   </FieldLabel>
                   <FieldLabel label="Ngày hết hạn">
                     <input className={inputClassName()} type="date" value={selectedCoupon.endAt} onChange={(event) => patchCoupon(selectedCoupon.id, { endAt: event.target.value, expiry: event.target.value })} />
