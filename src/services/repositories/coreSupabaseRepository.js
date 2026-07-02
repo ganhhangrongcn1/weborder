@@ -20,6 +20,24 @@ const PROFILE_TABLE = "profiles";
 const LEGACY_CUSTOMER_TABLE = "customers";
 const DEFAULT_PROFILE_ROLE = "customer";
 const DEFAULT_PROFILE_STATUS = "active";
+const CUSTOMER_PROFILE_COLUMNS = [
+  "id",
+  "auth_user_id",
+  "phone",
+  "name",
+  "email",
+  "avatar_url",
+  "password_demo",
+  "registered",
+  "total_orders",
+  "total_spent",
+  "member_rank",
+  "role",
+  "status",
+  "metadata",
+  "created_at",
+  "updated_at"
+].join(",");
 const CUSTOMER_ORDER_COLUMNS = [
   "id",
   "order_code",
@@ -781,7 +799,7 @@ async function readProfilesMapFromTable() {
   const rows = [];
   const pageSize = 500;
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await selectProfileRows(client, "*").range(from, from + pageSize - 1);
+    const { data, error } = await selectProfileRows(client, CUSTOMER_PROFILE_COLUMNS).range(from, from + pageSize - 1);
     if (error) throw error;
     const page = Array.isArray(data) ? data : [];
     rows.push(...page);
@@ -802,7 +820,7 @@ async function readProfileForPhoneFromTable(phone = "") {
   const key = normalizePhone(phone);
   if (!key) return null;
 
-  const { data, error } = await selectProfileRows(client, "*")
+  const { data, error } = await selectProfileRows(client, CUSTOMER_PROFILE_COLUMNS)
     .eq("phone", key)
     .maybeSingle();
   if (error) throw error;
@@ -817,6 +835,28 @@ async function readCustomerProfileCountFromTable() {
     .from(PROFILE_TABLE)
     .select("id", { count: "exact", head: true })
     .eq("role", DEFAULT_PROFILE_ROLE);
+  if (error) throw error;
+  return Number.isFinite(Number(count)) ? Number(count) : null;
+}
+
+async function countCustomerProfilesCreatedInRange({ dateFrom = "", dateTo = "", registeredOnly = true } = {}) {
+  if (!isSupabaseReady()) return null;
+  const client = await getSupabaseClientAsync();
+  if (!client) return null;
+  let query = client
+    .from(PROFILE_TABLE)
+    .select("id", { count: "exact", head: true })
+    .eq("role", DEFAULT_PROFILE_ROLE);
+  if (registeredOnly) {
+    query = query.eq("registered", true);
+  }
+  if (dateFrom) {
+    query = query.gte("created_at", dateFrom);
+  }
+  if (dateTo) {
+    query = query.lt("created_at", dateTo);
+  }
+  const { count, error } = await query;
   if (error) throw error;
   return Number.isFinite(Number(count)) ? Number(count) : null;
 }
@@ -936,6 +976,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
   if (!client) return null;
   const dateFrom = String(options?.dateFrom || "").trim();
   const dateTo = String(options?.dateTo || "").trim();
+  const includeItems = options?.includeItems !== false;
   let ordersQuery = client.from("orders").select(CUSTOMER_ORDER_COLUMNS);
   if (dateFrom) {
     ordersQuery = ordersQuery.gte("created_at", dateFrom);
@@ -948,7 +989,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
 
   const orderIds = Array.isArray(orders) ? orders.map((order) => order?.id).filter(Boolean) : [];
   let items = [];
-  if (orderIds.length) {
+  if (includeItems && orderIds.length) {
     const { data: itemRows, error: itemError } = await client
       .from("order_items")
       .select(CUSTOMER_ORDER_ITEM_COLUMNS)
@@ -1453,9 +1494,15 @@ async function readLoyaltyForPhoneFromTable(phone, providedClient = null) {
 function mapLoyaltyAccountSummaryRow(row = {}, phone = "") {
   const customerPhone = normalizePhone(phone || row.customer_phone);
   if (!customerPhone) return null;
+  const loyaltyBalanceCandidates = [row.total_points, row.available_points, row.points];
+  const resolvedTotalPoints = loyaltyBalanceCandidates.reduce((found, candidate) => {
+    if (found !== null) return found;
+    const parsed = Number(candidate);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+  }, null);
   return {
     phone: customerPhone,
-    totalPoints: Number(row.total_points || 0),
+    totalPoints: resolvedTotalPoints === null ? 0 : resolvedTotalPoints,
     checkinStreak: Number(row.checkin_streak || 0),
     lastCheckinDate: row.last_checkin_date || null,
     lastMissedStreak: Number(row.last_missed_streak || 0),
@@ -1482,7 +1529,7 @@ async function readLoyaltyAccountSummaryForPhoneFromTable(phone) {
   if (!key) return null;
   const { data, error } = await client
     .from("loyalty_accounts")
-    .select(LOYALTY_ACCOUNT_SUMMARY_COLUMNS)
+    .select("*")
     .eq("customer_phone", key)
     .maybeSingle();
   if (error) throw error;
@@ -1491,14 +1538,22 @@ async function readLoyaltyAccountSummaryForPhoneFromTable(phone) {
 
 async function readLoyaltyAccountsSummaryFromTable() {
   if (!isSupabaseReady()) return null;
-  const client = await getSupabaseClientAsync();
+  const client = await getAdminSupabaseClientAsync() || await getSupabaseClientAsync();
   if (!client) return null;
-  const { data, error } = await client
-    .from("loyalty_accounts")
-    .select(LOYALTY_ACCOUNT_SUMMARY_COLUMNS);
-  if (error) throw error;
+  const rows = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await client
+      .from("loyalty_accounts")
+      .select("*")
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
   const map = {};
-  (data || []).forEach((row) => {
+  rows.forEach((row) => {
     const summary = mapLoyaltyAccountSummaryRow(row);
     if (!summary?.phone) return;
     map[summary.phone] = summary;
@@ -1875,6 +1930,7 @@ export const coreSupabaseRepository = {
   readProfilesMapFromTable,
   readProfileForPhoneFromTable,
   readCustomerProfileCountFromTable,
+  countCustomerProfilesCreatedInRange,
   readCustomersMapFromTable,
   writeProfilesMapToTable,
   writeCustomersMapToTable,

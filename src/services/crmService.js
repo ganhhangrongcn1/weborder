@@ -41,6 +41,13 @@ let crmSupportInFlight = null;
 let crmFastSupportCache = { value: null, cachedAt: 0 };
 let crmFastSupportInFlight = null;
 
+export function invalidateCrmSupportCache() {
+  crmSupportCache = { value: null, cachedAt: 0 };
+  crmSupportInFlight = null;
+  crmFastSupportCache = { value: null, cachedAt: 0 };
+  crmFastSupportInFlight = null;
+}
+
 function getOrderTimeValue(order = {}) {
   const value = order?.createdAt || order?.orderTime || order?.order_time || order?.created_at || "";
   const time = new Date(value || 0).getTime();
@@ -361,6 +368,10 @@ function getDaysSince(dateValue) {
   return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
 }
 
+function isRegisteredProfile(profile = {}) {
+  return Boolean(profile?.registered);
+}
+
 export function getCustomerTier(totalSpent = 0, loyaltyConfig = defaultLoyaltyConfig) {
   return resolveLoyaltyTier(totalSpent, loyaltyConfig).name;
 }
@@ -434,6 +445,7 @@ export async function buildCustomersFromCrmAnalyticsAsync(options = {}) {
 
   const {
     loyalty,
+    registeredUsers,
     loyaltyByPhone,
     supabaseProfileCount,
     memberRegistrationComparison
@@ -446,6 +458,7 @@ export async function buildCustomersFromCrmAnalyticsAsync(options = {}) {
   return buildCustomersSnapshotFromAnalytics({
     crmAnalytics,
     loyalty,
+    registeredUsers,
     loyaltyByPhone,
     supabaseProfileCount,
     memberRegistrationComparison
@@ -507,21 +520,25 @@ async function loadCrmFastSupportSnapshot({ force = false } = {}) {
   crmFastSupportInFlight = (async () => {
     const [
       loyaltyResult,
+      registeredUsersResult,
       loyaltyByPhoneResult,
       profileCountResult,
       memberRegistrationResult
     ] = await Promise.allSettled([
       loyaltyRepository.getCrmConfigAsync(defaultLoyaltyConfig),
+      customerRepository.getUsersAsync(),
       coreSupabaseRepository.readLoyaltyAccountsSummaryFromTable(),
       coreSupabaseRepository.readCustomerProfileCountFromTable(),
       getMemberRegistrationComparisonAsync()
     ]);
     recordAdminRequest("crm loyalty config", "app_configs");
+    recordAdminRequest("crm registered profiles", "profiles");
     recordAdminRequest("crm loyalty summary", "loyalty_accounts");
     recordAdminRequest("crm profile count", "profiles");
 
     const snapshot = {
       loyalty: loyaltyResult.status === "fulfilled" ? loyaltyResult.value : defaultLoyaltyConfig,
+      registeredUsers: registeredUsersResult.status === "fulfilled" ? registeredUsersResult.value : {},
       loyaltyByPhone: loyaltyByPhoneResult.status === "fulfilled" ? (loyaltyByPhoneResult.value || {}) : {},
       supabaseProfileCount: profileCountResult.status === "fulfilled" ? profileCountResult.value : null,
       memberRegistrationComparison: memberRegistrationResult.status === "fulfilled" ? memberRegistrationResult.value : null
@@ -529,6 +546,9 @@ async function loadCrmFastSupportSnapshot({ force = false } = {}) {
 
     if (loyaltyResult.status === "rejected") {
       console.error("[crmService] load fast loyalty config failed", loyaltyResult.reason);
+    }
+    if (registeredUsersResult.status === "rejected") {
+      console.error("[crmService] load fast registered users failed", registeredUsersResult.reason);
     }
     if (loyaltyByPhoneResult.status === "rejected") {
       console.error("[crmService] load fast loyalty-by-phone failed", loyaltyByPhoneResult.reason);
@@ -731,12 +751,7 @@ function buildCustomersSnapshotFromSources({
         spentPoints,
         otherAdjustPoints,
         currentPoints,
-        registeredCustomer: Boolean(
-          registeredUser?.authUserId ||
-          registeredUser?.registered ||
-          registeredUser?.passwordDemo ||
-          registeredUser?.email
-        ),
+        registeredCustomer: isRegisteredProfile(registeredUser),
         tier: getCustomerTier(loyaltyQualifyingSpend, normalizedLoyaltyConfig),
         daysSinceLastOrder: getDaysSince(lastOrderAt),
         vouchers: resolvedVouchers,
@@ -799,6 +814,7 @@ function buildCustomersSnapshotFromSources({
 function buildCustomersSnapshotFromAnalytics({
   crmAnalytics = null,
   loyalty = defaultLoyaltyConfig,
+  registeredUsers = {},
   loyaltyByPhone = {},
   supabaseProfileCount = null,
   memberRegistrationComparison = null
@@ -812,6 +828,7 @@ function buildCustomersSnapshotFromAnalytics({
     .map((analyticsCustomer) => {
       const phone = getCustomerKey(analyticsCustomer?.phone || "");
       if (!phone) return null;
+      const registeredUser = registeredUsers[phone] || {};
       const phoneLoyalty = normalizeLoyaltyData({
         ...defaultLoyaltyData,
         ...(loyaltyByPhone[phone] || {})
@@ -819,12 +836,12 @@ function buildCustomersSnapshotFromAnalytics({
       const totalOrders = toOrderCountingNumber(analyticsCustomer.totalOrders, 0);
       const totalSpent = toOrderCountingNumber(analyticsCustomer.totalSpent, 0);
       const currentPoints = Math.max(0, Number(phoneLoyalty.totalPoints || 0));
-      const displayName = String(analyticsCustomer.name || "").trim() || "Khách";
+      const displayName = String(registeredUser?.name || analyticsCustomer.name || "").trim() || "Khách";
       return {
         phone,
         name: displayName,
         lastOrderName: displayName,
-        registeredCustomerName: displayName,
+        registeredCustomerName: String(registeredUser?.name || "").trim(),
         orderCustomerName: displayName,
         profileSource: analyticsCustomer.profileSource || "profile",
         totalOrders,
@@ -855,7 +872,7 @@ function buildCustomersSnapshotFromAnalytics({
         spentPoints: 0,
         otherAdjustPoints: 0,
         currentPoints,
-        registeredCustomer: true,
+        registeredCustomer: isRegisteredProfile(registeredUser),
         tier: getCustomerTier(totalSpent, normalizedLoyaltyConfig),
         daysSinceLastOrder: analyticsCustomer.daysSinceLastOrder,
         vouchers: (Array.isArray(phoneLoyalty.voucherHistory) ? phoneLoyalty.voucherHistory : []).map(normalizeCrmVoucher),

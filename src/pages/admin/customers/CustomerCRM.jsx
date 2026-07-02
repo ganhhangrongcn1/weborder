@@ -549,6 +549,7 @@ export default function CustomerCRM({
       const matchFilter =
         customerFilter === "all" ||
         (tierFilterName && normalizeTierText(getCustomerTierName(customer)) === tierFilterName) ||
+        (customerFilter === "registered" && !isGuestCustomer(customer)) ||
         (customerFilter === "care" && needsCare(customer)) ||
         (customerFilter === "inactive7" && Number(customer.daysSinceLastOrder || 0) >= 7) ||
         (customerFilter === "inactive15" && Number(customer.daysSinceLastOrder || 0) >= 15) ||
@@ -983,6 +984,7 @@ export default function CustomerCRM({
             </select>
             <select className="crm-segment-select" value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
               <option value="all">Tất cả nhóm khách</option>
+              <option value="registered">Khách đã đăng ký</option>
               {tierFilterOptions.map((tier) => (
                 <option key={tier.id} value={`tier:${tier.id}`}>{tier.label}</option>
               ))}

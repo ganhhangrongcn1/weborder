@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   buildCustomersFromCrmAnalyticsAsync,
-  buildCustomersFromOrderListAsync
+  buildCustomersFromOrderListAsync,
+  invalidateCrmSupportCache
 } from "../../../services/crmService.js";
 import { getAdminDashboardSummaryRpc } from "../../../services/adminDashboardService.js";
 import { getAdminDashboardRevenueSeriesRpc } from "../../../services/adminDashboardRevenueService.js";
@@ -28,6 +29,7 @@ import {
   hasDateRange,
   toVietnamDateInputValue
 } from "../../../utils/adminDateRange.js";
+import { coreSupabaseRepository } from "../../../services/repositories/coreSupabaseRepository.js";
 
 const SNAPSHOT_CACHE_TTL_MS = 60000;
 const ADMIN_REALTIME_NOTICE_DELAY_MS = 2000;
@@ -538,6 +540,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
     let disposed = false;
     let refreshTimer = null;
+    let profileRealtimeUnsubscribe = () => {};
+    let loyaltyRealtimeUnsubscribe = () => {};
 
     const refreshCrmOnly = async () => {
       if (section !== "customers") return;
@@ -553,6 +557,18 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         if (disposed) return;
         console.error("[admin][crm] failed to load snapshot", error);
       }
+    };
+
+    const scheduleCrmRefresh = ({ invalidateCache = false } = {}) => {
+      if (section !== "customers") return;
+      if (invalidateCache) {
+        invalidateCrmSupportCache();
+      }
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        refreshCrmOnly();
+      }, ADMIN_ORDER_REFRESH_DEBOUNCE_MS);
     };
 
     const refreshAll = async () => {
@@ -616,11 +632,21 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     const handleStorageChange = (event) => {
       if (event.key === STORAGE_KEYS.ordersByPhone) scheduleRefreshAll();
     };
+    const handleCustomerDataChange = () => {
+      scheduleCrmRefresh({ invalidateCache: true });
+    };
 
     window.addEventListener("ghr:orders-changed", scheduleRefreshAll);
     window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("ghr:customer-data-changed", handleCustomerDataChange);
     if (section === "customers") {
       refreshCrmOnly();
+      profileRealtimeUnsubscribe = coreSupabaseRepository.subscribeProfilesRealtime(() => {
+        scheduleCrmRefresh({ invalidateCache: true });
+      });
+      loyaltyRealtimeUnsubscribe = coreSupabaseRepository.subscribeLoyaltyRealtime(() => {
+        scheduleCrmRefresh({ invalidateCache: true });
+      });
     }
 
     return () => {
@@ -631,6 +657,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       }
       window.removeEventListener("ghr:orders-changed", scheduleRefreshAll);
       window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("ghr:customer-data-changed", handleCustomerDataChange);
+      profileRealtimeUnsubscribe?.();
+      loyaltyRealtimeUnsubscribe?.();
     };
   }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches]);
 
