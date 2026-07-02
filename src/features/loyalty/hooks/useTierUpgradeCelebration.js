@@ -40,16 +40,13 @@ export default function useTierUpgradeCelebration({ customerPhone, journey }) {
     const currentIndex = tierIds.indexOf(currentTier.id);
     const seenIndex = tierIds.indexOf(seenTierId);
 
-    if (!seenTierId) {
+    if (!seenTierId || seenIndex < 0) {
       saveSeenTier(storageKey, currentTier.id);
       return;
     }
 
-    if (currentIndex > seenIndex && seenIndex >= 0) {
+    if (currentIndex > seenIndex) {
       setCelebratedTier(currentTier);
-    }
-
-    if (currentIndex !== seenIndex) {
       saveSeenTier(storageKey, currentTier.id);
     }
   }, [customerKey, currentTier?.id, cycleYear, tierSignature]);

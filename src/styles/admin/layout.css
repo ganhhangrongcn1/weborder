@@ -7,6 +7,16 @@
   overflow-x: clip;
 }
 
+.admin-shell.admin-shell--auth {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.admin-shell--auth .admin-main {
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
+}
+
 @media (max-width: 640px) {
   html,
   body,

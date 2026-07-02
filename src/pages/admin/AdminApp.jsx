@@ -11,7 +11,8 @@ import useAdminConfigSyncEffect from "./useAdminConfigSyncEffect.js";
 import { getRepositoryRuntimeInfo } from "../../services/repositories/repositoryRuntime.js";
 import { adminNavToPath } from "../../app/routeState.js";
 import AdminPageContent from "./pages/AdminPageContent.jsx";
-import { AdminButton, AdminCard, AdminInput, AdminPageHeader } from "./ui/AdminCommon.jsx";
+import { AdminButton, AdminCard, AdminPageHeader } from "./ui/AdminCommon.jsx";
+import { AdminInput as AdminAuthInput } from "./ui/index.js";
 import { getAdminSession, loginAdminWithPassword, logoutAdmin, subscribeAdminAuth } from "../../services/adminAuthService.js";
 
 export default function AdminApp({
@@ -267,7 +268,7 @@ export default function AdminApp({
 
   if (isSupabaseAdminMode && authLoading) {
     return (
-      <div className="admin-app admin-shell admin-layout">
+      <div className="admin-app admin-shell admin-shell--auth admin-layout">
         <main className="admin-main admin-content">
           <AdminPageHeader title="Đang kiểm tra phiên đăng nhập" description="Vui lòng chờ..." />
           <AdminCard variant="elevated" className="admin-auth-card admin-auth-card--status">
@@ -282,7 +283,7 @@ export default function AdminApp({
 
   if (isSupabaseAdminMode && blockedAdminSession && !adminSession) {
     return (
-      <div className="admin-app admin-shell admin-layout">
+      <div className="admin-app admin-shell admin-shell--auth admin-layout">
         <main className="admin-main admin-content">
           <AdminPageHeader
             title="Không có quyền truy cập admin"
@@ -312,7 +313,7 @@ export default function AdminApp({
 
   if (isSupabaseAdminMode && !adminSession) {
     return (
-      <div className="admin-app admin-shell admin-layout">
+      <div className="admin-app admin-shell admin-shell--auth admin-layout">
         <main className="admin-main admin-content">
           <AdminPageHeader
             title="Đăng nhập Admin"
@@ -322,21 +323,25 @@ export default function AdminApp({
             <form onSubmit={handleAdminLogin} className="admin-auth-form">
               <label className="admin-auth-field">
                 <span>Email</span>
-                <AdminInput
+                <AdminAuthInput
                   type="email"
+                  name="email"
                   value={loginEmail}
                   onValueChange={setLoginEmail}
                   placeholder="admin@yourdomain.com"
+                  autoComplete="username"
                   required
                 />
               </label>
               <label className="admin-auth-field">
                 <span>Mật khẩu</span>
-                <AdminInput
+                <AdminAuthInput
                   type="password"
+                  name="password"
                   value={loginPassword}
                   onValueChange={setLoginPassword}
                   placeholder="Nhập mật khẩu"
+                  autoComplete="current-password"
                   required
                 />
               </label>
