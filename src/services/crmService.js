@@ -466,6 +466,14 @@ export async function getCustomerLoyaltyDetailAsync(phone, { limit = 50, offset 
     const account = accountResult.status === "fulfilled" && accountResult.value
       ? accountResult.value
       : null;
+    const ledgerLoadFailed = ledgerResult.status === "rejected";
+    const accountLoadFailed = accountResult.status === "rejected";
+    if (ledgerLoadFailed) {
+      console.error("[crm] load loyalty ledger failed", ledgerResult.reason);
+    }
+    if (accountLoadFailed) {
+      console.error("[crm] load loyalty account failed", accountResult.reason);
+    }
     return {
       rows: Array.isArray(ledger.rows) ? ledger.rows : [],
       total: Number(ledger.total || 0),
@@ -473,10 +481,19 @@ export async function getCustomerLoyaltyDetailAsync(phone, { limit = 50, offset 
       accountVouchers: Array.isArray(account?.voucherHistory)
         ? account.voucherHistory.map(normalizeCrmVoucher)
         : [],
-      accountUpdatedAt: account?.updatedAt || ""
+      accountUpdatedAt: account?.updatedAt || "",
+      ledgerLoadFailed,
+      accountLoadFailed
     };
-  } catch {
-    return { rows: [], total: 0 };
+  } catch (error) {
+    console.error("[crm] load customer loyalty detail failed", error);
+    return {
+      rows: [],
+      total: 0,
+      accountVouchers: [],
+      ledgerLoadFailed: true,
+      accountLoadFailed: true
+    };
   }
 }
 

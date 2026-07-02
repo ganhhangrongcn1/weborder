@@ -75,6 +75,23 @@ const CUSTOMER_ORDER_ITEM_COLUMNS = [
   "kitchen_item_status",
   "metadata"
 ].join(",");
+const LOYALTY_ACCOUNT_SUMMARY_COLUMNS = [
+  "customer_phone",
+  "total_points",
+  "checkin_streak",
+  "last_checkin_date",
+  "last_missed_streak",
+  "comeback_used_date",
+  "vouchers",
+  "tier_id",
+  "tier_cycle_year",
+  "tier_qualifying_spend",
+  "tier_qualifying_order_count",
+  "tier_qualified_at",
+  "last_purchase_at",
+  "points_expires_at",
+  "updated_at"
+].join(",");
 
 function isSupabaseReady() {
   const info = getRepositoryRuntimeInfo();
@@ -1433,45 +1450,66 @@ async function readLoyaltyForPhoneFromTable(phone, providedClient = null) {
   return buildLoyaltySnapshotFromRows(account, ledger || [], key);
 }
 
+function mapLoyaltyAccountSummaryRow(row = {}, phone = "") {
+  const customerPhone = normalizePhone(phone || row.customer_phone);
+  if (!customerPhone) return null;
+  return {
+    phone: customerPhone,
+    totalPoints: Number(row.total_points || 0),
+    checkinStreak: Number(row.checkin_streak || 0),
+    lastCheckinDate: row.last_checkin_date || null,
+    lastMissedStreak: Number(row.last_missed_streak || 0),
+    comebackUsedDate: row.comeback_used_date || null,
+    voucherHistory: Array.isArray(row.vouchers) ? row.vouchers : [],
+    tierId: row.tier_id || "new_customer",
+    tierCycleYear: Number(row.tier_cycle_year || new Date().getFullYear()),
+    tierQualifyingSpend: Number(row.tier_qualifying_spend || 0),
+    tierQualifyingOrderCount: Number(row.tier_qualifying_order_count || 0),
+    tierQualifiedAt: row.tier_qualified_at || null,
+    lastPurchaseAt: row.last_purchase_at || null,
+    pointsExpiresAt: row.points_expires_at || null,
+    pointHistory: [],
+    checkinHistory: [],
+    updatedAt: row.updated_at || ""
+  };
+}
+
+async function readLoyaltyAccountSummaryForPhoneFromTable(phone) {
+  if (!isSupabaseReady()) return null;
+  const client = await getAdminSupabaseClientAsync();
+  if (!client) throw new Error("missing_admin_supabase_client");
+  const key = normalizePhone(phone);
+  if (!key) return null;
+  const { data, error } = await client
+    .from("loyalty_accounts")
+    .select(LOYALTY_ACCOUNT_SUMMARY_COLUMNS)
+    .eq("customer_phone", key)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapLoyaltyAccountSummaryRow(data, key) : null;
+}
+
 async function readLoyaltyAccountsSummaryFromTable() {
   if (!isSupabaseReady()) return null;
   const client = await getSupabaseClientAsync();
   if (!client) return null;
   const { data, error } = await client
     .from("loyalty_accounts")
-    .select("*");
+    .select(LOYALTY_ACCOUNT_SUMMARY_COLUMNS);
   if (error) throw error;
   const map = {};
   (data || []).forEach((row) => {
-    const phone = normalizePhone(row.customer_phone);
-    if (!phone) return;
-    map[phone] = {
-      phone,
-      totalPoints: Number(row.total_points || 0),
-      checkinStreak: Number(row.checkin_streak || 0),
-      lastCheckinDate: row.last_checkin_date || null,
-      lastMissedStreak: Number(row.last_missed_streak || 0),
-      comebackUsedDate: row.comeback_used_date || null,
-      voucherHistory: Array.isArray(row.vouchers) ? row.vouchers : [],
-      tierId: row.tier_id || "new_customer",
-      tierCycleYear: Number(row.tier_cycle_year || new Date().getFullYear()),
-      tierQualifyingSpend: Number(row.tier_qualifying_spend || 0),
-      tierQualifyingOrderCount: Number(row.tier_qualifying_order_count || 0),
-      tierQualifiedAt: row.tier_qualified_at || null,
-      lastPurchaseAt: row.last_purchase_at || null,
-      pointsExpiresAt: row.points_expires_at || null,
-      pointHistory: [],
-      checkinHistory: [],
-      updatedAt: row.updated_at || ""
-    };
+    const summary = mapLoyaltyAccountSummaryRow(row);
+    if (!summary?.phone) return;
+    map[summary.phone] = summary;
   });
   return map;
 }
 
 async function readLoyaltyLedgerByPhonePaged(phone, { limit = 50, offset = 0 } = {}) {
   if (!isSupabaseReady()) return { rows: [], total: 0 };
-  const client = await getSupabaseClientAsync();
-  if (!client) return { rows: [], total: 0 };
+  const client = await getAdminSupabaseClientAsync();
+  if (!client) throw new Error("missing_admin_supabase_client");
   const key = normalizePhone(phone);
   if (!key) return { rows: [], total: 0 };
   const safeLimit = Math.max(1, Math.min(200, Number(limit || 50)));
@@ -1852,6 +1890,7 @@ export const coreSupabaseRepository = {
   updateOrderStatusById,
   readLoyaltyByPhoneFromTable,
   readLoyaltyForPhoneFromTable,
+  readLoyaltyAccountSummaryForPhoneFromTable,
   readLoyaltyAccountsSummaryFromTable,
   readLoyaltyLedgerByPhonePaged,
   processOrderLoyalty,

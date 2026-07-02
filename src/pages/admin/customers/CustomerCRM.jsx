@@ -780,6 +780,8 @@ export default function CustomerCRM({
               : Math.max(0, Number(result.accountTotalPoints || 0)),
             accountVouchers: Array.isArray(result?.accountVouchers) ? result.accountVouchers : [],
             accountUpdatedAt: result?.accountUpdatedAt || "",
+            ledgerLoadFailed: result?.ledgerLoadFailed === true,
+            accountLoadFailed: result?.accountLoadFailed === true,
             isLedgerPartial: Number(result?.total || rows.length) > rows.length
           }
         }));
@@ -1195,7 +1197,7 @@ export default function CustomerCRM({
                     <h3>Voucher đã tặng</h3>
                   </div>
                   <div className="crm-mini-list">
-                    {sortedSelectedVouchers.map((voucher) => {
+                    {!isLoyaltyDetailLoading && sortedSelectedVouchers.map((voucher) => {
                       const status = getVoucherStatus(voucher);
                       return (
                         <article key={voucher.id}>
@@ -1224,7 +1226,15 @@ export default function CustomerCRM({
                         </article>
                       );
                     })}
-                    {sortedSelectedVouchers.length === 0 && <p>Chưa có voucher.</p>}
+                    {isLoyaltyDetailLoading && <p>Đang tải voucher...</p>}
+                    {!isLoyaltyDetailLoading &&
+                      selectedLoyaltyDetail?.accountLoadFailed &&
+                      sortedSelectedVouchers.length === 0 && (
+                        <p>Không tải được voucher. Vui lòng tải lại trang hoặc đăng nhập lại.</p>
+                      )}
+                    {!isLoyaltyDetailLoading &&
+                      !selectedLoyaltyDetail?.accountLoadFailed &&
+                      sortedSelectedVouchers.length === 0 && <p>Chưa có voucher.</p>}
                   </div>
                 </section>
               </div>
