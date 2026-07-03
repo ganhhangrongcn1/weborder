@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import CouponManager from "./CouponManager.jsx";
 import { AdminButton, AdminPanel } from "../ui/AdminCommon.jsx";
 import StrikePriceTab from "./StrikePriceTab.jsx";
@@ -8,6 +8,8 @@ import FreeshipManager from "./FreeshipManager.jsx";
 import { promoTabs } from "./promotionConfig.js";
 import usePromotionTabsState from "./usePromotionTabsState.js";
 import { catalogConfigRepository, syncPromotionCatalogToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
+import { normalizeLoyaltyProgramConfig } from "../../../services/loyaltyProgramConfigService.js";
+import { getLoyaltyRuleConfigAsync } from "../../../services/loyaltyService.js";
 
 function toArray(value) {
   return Array.isArray(value) ? value : [];
@@ -121,6 +123,18 @@ function PromotionOverview({ overview }) {
   );
 }
 
+function PromotionSaveButton({ hasUnsavedChanges, isSaving, onSave }) {
+  return (
+    <AdminButton
+      type="button"
+      onClick={onSave}
+      disabled={!hasUnsavedChanges || isSaving}
+    >
+      {isSaving ? "Đang lưu..." : hasUnsavedChanges ? "Lưu khuyến mãi" : "Đã đồng bộ"}
+    </AdminButton>
+  );
+}
+
 export default function PromotionTabsManager({
   products,
   promos,
@@ -129,10 +143,12 @@ export default function PromotionTabsManager({
   setCoupons,
   smartPromotions,
   setSmartPromotions,
-  normalizeSmartPromotion
+  normalizeSmartPromotion,
+  onSaveLoyaltyConfig
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [loyaltyConfig, setLoyaltyConfig] = useState(() => normalizeLoyaltyProgramConfig({}));
   const {
     activeTab,
     setActiveTab,
@@ -167,7 +183,12 @@ export default function PromotionTabsManager({
     [promos, campaigns, coupons, smartPromotions]
   );
   const [lastSavedSignature, setLastSavedSignature] = useState(currentSignature);
-  const hasUnsavedChanges = currentSignature !== lastSavedSignature;
+  const loyaltyConfigSignature = useMemo(
+    () => JSON.stringify(loyaltyConfig || {}),
+    [loyaltyConfig]
+  );
+  const [lastSavedLoyaltySignature, setLastSavedLoyaltySignature] = useState(loyaltyConfigSignature);
+  const hasUnsavedChanges = currentSignature !== lastSavedSignature || loyaltyConfigSignature !== lastSavedLoyaltySignature;
   const overview = useMemo(
     () => buildPromotionOverview({ promos, coupons, smartPromotions }),
     [promos, coupons, smartPromotions]
@@ -183,6 +204,27 @@ export default function PromotionTabsManager({
     [coupons, freeShippingPromo, strikePromos.length, flashSalePromos.length, giftPromo]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLoyaltyConfig() {
+      try {
+        const loaded = normalizeLoyaltyProgramConfig(await getLoyaltyRuleConfigAsync());
+        if (cancelled) return;
+        const nextSignature = JSON.stringify(loaded);
+        setLoyaltyConfig(loaded);
+        setLastSavedLoyaltySignature(nextSignature);
+      } catch (error) {
+        console.warn("[PromotionTabsManager] load loyalty config failed", error);
+      }
+    }
+
+    loadLoyaltyConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSavePromotions = async () => {
     if (!hasUnsavedChanges || isSaving) return;
     setIsSaving(true);
@@ -192,7 +234,8 @@ export default function PromotionTabsManager({
         catalogConfigRepository.setAsync("ghr_promos", promos || []),
         catalogConfigRepository.setAsync("ghr_campaigns", campaigns || []),
         catalogConfigRepository.setAsync("ghr_coupons", coupons || []),
-        catalogConfigRepository.setAsync("ghr_smart_promotions", smartPromotions || [])
+        catalogConfigRepository.setAsync("ghr_smart_promotions", smartPromotions || []),
+        Promise.resolve(onSaveLoyaltyConfig?.(loyaltyConfig))
       ]);
       await syncPromotionCatalogToSupabase({
         promos,
@@ -202,6 +245,7 @@ export default function PromotionTabsManager({
       });
 
       setLastSavedSignature(currentSignature);
+      setLastSavedLoyaltySignature(loyaltyConfigSignature);
       setSaveMessage("Đã lưu khuyến mãi.");
     } catch (error) {
       console.warn("[PromotionTabsManager] save promotions failed", error);
@@ -233,13 +277,11 @@ export default function PromotionTabsManager({
       className="admin-promo-v2 admin-promo-page"
       bodyClassName="admin-promo-page-body"
       action={(
-        <AdminButton
-          type="button"
-          onClick={handleSavePromotions}
-          disabled={!hasUnsavedChanges || isSaving}
-        >
-          {isSaving ? "Đang lưu..." : hasUnsavedChanges ? "Lưu khuyến mãi" : "Đã đồng bộ"}
-        </AdminButton>
+        <PromotionSaveButton
+          hasUnsavedChanges={hasUnsavedChanges}
+          isSaving={isSaving}
+          onSave={handleSavePromotions}
+        />
       )}
     >
       <PromotionOverview overview={overview} />
@@ -271,7 +313,14 @@ export default function PromotionTabsManager({
         ))}
       </div>
 
-      {activeTab === "coupon" && <CouponManager coupons={coupons} setCoupons={setCoupons} />}
+      {activeTab === "coupon" && (
+        <CouponManager
+          coupons={coupons}
+          setCoupons={setCoupons}
+          loyaltyConfig={loyaltyConfig}
+          setLoyaltyConfig={setLoyaltyConfig}
+        />
+      )}
 
       {activeTab === "free_shipping" && (
         <FreeshipManager
@@ -324,6 +373,22 @@ export default function PromotionTabsManager({
           />
         ) : renderNotConfigured("gift_threshold")
       )}
+
+      <div className={`admin-promo-save-dock ${hasUnsavedChanges ? "is-dirty" : "is-clean"}`}>
+        <div>
+          <strong>{hasUnsavedChanges ? "Có thay đổi chưa lưu" : "Khuyến mãi đã đồng bộ"}</strong>
+          <span>
+            {hasUnsavedChanges
+              ? "Lưu để Web, QR và POS nhận cấu hình mới."
+              : "Khi chỉnh form, nút lưu sẽ bật lại tại đây."}
+          </span>
+        </div>
+        <PromotionSaveButton
+          hasUnsavedChanges={hasUnsavedChanges}
+          isSaving={isSaving}
+          onSave={handleSavePromotions}
+        />
+      </div>
     </AdminPanel>
   );
 }

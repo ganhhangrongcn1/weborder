@@ -13,6 +13,7 @@ import {
   syncCustomerProfileToSupabase,
   updateRecoveryPasswordAuth
 } from "../../../services/supabaseAuthService.js";
+import { grantWelcomeVoucherToNewMemberIfEligible } from "../../../services/loyaltyWelcomeVoucherService.js";
 import { addAddress, updateAddress, deleteAddress, setDefaultAddress } from "../../../services/addressService.js";
 import { orderStorage } from "../../../services/orderService.js";
 import { getPartnerOrdersByPhone, mergeCustomerLookupOrders } from "../../../services/partnerOrderService.js";
@@ -693,7 +694,20 @@ export default function useAccountViewModel({
         setRemoteUser(refreshedUser);
       }
     }
-    setAuthNotice("Đăng ký thành công. Dữ liệu cũ theo số điện thoại đã được liên kết.");
+    let grantedWelcomeVoucher = false;
+    if (result?.isNew) {
+      try {
+        const welcomeResult = await grantWelcomeVoucherToNewMemberIfEligible(registerPhone);
+        grantedWelcomeVoucher = welcomeResult?.granted === true;
+      } catch (error) {
+        console.warn("[account] welcome voucher grant failed", error);
+      }
+    }
+    setAuthNotice(
+      grantedWelcomeVoucher
+        ? "Đăng ký thành công. Khách đã nhận voucher chào thành viên mới trong mục ưu đãi."
+        : "Đăng ký thành công. Dữ liệu cũ theo số điện thoại đã được liên kết."
+    );
     setAuthPhone("");
     setAuthPassword("");
     setAuthMode("lookup");

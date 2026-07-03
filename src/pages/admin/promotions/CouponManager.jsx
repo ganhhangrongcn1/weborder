@@ -3,6 +3,7 @@ import {
   applyLoyaltyVoucherPresets,
   LOYALTY_VOUCHER_PRESETS
 } from "../../../services/loyaltyVoucherPresetService.js";
+import { normalizeLoyaltyProgramConfig } from "../../../services/loyaltyProgramConfigService.js";
 import { ALL_PROMOTION_SALES_CHANNELS, normalizeSalesChannels } from "../../../services/promotionChannelService.js";
 import PromotionFormSection from "./PromotionFormSection.jsx";
 import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
@@ -37,6 +38,10 @@ function normalizeSearch(value = "") {
 
 function getCouponId(coupon = {}) {
   return String(coupon.id || coupon.code || `coupon-${Date.now()}`);
+}
+
+function getCouponRef(coupon = {}) {
+  return String(coupon?.id || coupon?.code || "").trim();
 }
 
 function normalizeCoupon(coupon = {}) {
@@ -125,15 +130,11 @@ function buildCouponSummary(coupon) {
   const minOrder = Number(coupon?.minOrder || 0) > 0
     ? `Đơn từ ${Number(coupon.minOrder || 0).toLocaleString("vi-VN")}đ`
     : "Mọi đơn";
-  const usageLimit = Number(coupon?.usageLimit || 0) > 0
-    ? `Còn ${Math.max(Number(coupon.usageLimit || 0) - Number(coupon.totalUsed || 0), 0)} lượt`
-    : "Không giới hạn lượt";
   return [
     status,
     coupon?.voucherType === "loyalty" ? "Loyalty / CRM" : "Checkout",
     formatSalesChannelSummary(coupon),
-    minOrder,
-    usageLimit
+    minOrder
   ];
 }
 
@@ -152,30 +153,39 @@ function FieldLabel({ label, children }) {
   );
 }
 
-export default function CouponManager({ coupons = [], setCoupons }) {
+export default function CouponManager({
+  coupons = [],
+  setCoupons,
+  loyaltyConfig = {},
+  setLoyaltyConfig = () => {}
+}) {
   const safeCoupons = useMemo(() => coupons.map((coupon) => normalizeCoupon(coupon)), [coupons]);
+  const normalizedLoyaltyConfig = useMemo(
+    () => normalizeLoyaltyProgramConfig(loyaltyConfig || {}),
+    [loyaltyConfig]
+  );
   const [voucherTypeFilter, setVoucherTypeFilter] = useState("checkout");
   const [statusFilter, setStatusFilter] = useState("running");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCouponId, setSelectedCouponId] = useState("");
   const [presetMessage, setPresetMessage] = useState("");
+
   const visibleCoupons = useMemo(
     () => safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === voucherTypeFilter),
     [safeCoupons, voucherTypeFilter]
   );
-  const filteredCoupons = useMemo(
-    () => {
-      const searchValue = normalizeSearch(searchTerm);
-      return visibleCoupons.filter((coupon) => {
-        const status = getCouponStatus(coupon);
-        const searchKey = normalizeSearch(`${coupon.code} ${coupon.name}`);
-        const matchesStatus = statusFilter === "all" || status.code === statusFilter;
-        const matchesSearch = !searchValue || searchKey.includes(searchValue);
-        return matchesStatus && matchesSearch;
-      });
-    },
-    [visibleCoupons, searchTerm, statusFilter]
-  );
+
+  const filteredCoupons = useMemo(() => {
+    const searchValue = normalizeSearch(searchTerm);
+    return visibleCoupons.filter((coupon) => {
+      const status = getCouponStatus(coupon);
+      const searchKey = normalizeSearch(`${coupon.code} ${coupon.name}`);
+      const matchesStatus = statusFilter === "all" || status.code === statusFilter;
+      const matchesSearch = !searchValue || searchKey.includes(searchValue);
+      return matchesStatus && matchesSearch;
+    });
+  }, [visibleCoupons, searchTerm, statusFilter]);
+
   const visibleStats = useMemo(
     () => visibleCoupons.reduce(
       (total, coupon) => {
@@ -187,9 +197,15 @@ export default function CouponManager({ coupons = [], setCoupons }) {
     ),
     [visibleCoupons]
   );
+
   const loyaltyCoupons = safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === "loyalty");
   const loyaltyCodes = new Set(loyaltyCoupons.map((coupon) => String(coupon.code || "").toUpperCase()).filter(Boolean));
   const loyaltyPresetReadyCount = LOYALTY_VOUCHER_PRESETS.filter((preset) => loyaltyCodes.has(preset.code)).length;
+  const loyaltySetupReady = loyaltyPresetReadyCount === LOYALTY_VOUCHER_PRESETS.length;
+  const welcomeVoucherCoupon = useMemo(
+    () => loyaltyCoupons.find((coupon) => getCouponRef(coupon) === String(normalizedLoyaltyConfig.welcomeVoucherId || "").trim()) || null,
+    [loyaltyCoupons, normalizedLoyaltyConfig.welcomeVoucherId]
+  );
 
   useEffect(() => {
     if (!filteredCoupons.length) {
@@ -249,6 +265,13 @@ export default function CouponManager({ coupons = [], setCoupons }) {
     setCoupons((current) => (current || []).filter((item) => getCouponId(item) !== couponId));
   };
 
+  const patchWelcomeVoucherConfig = (patch) => {
+    setLoyaltyConfig((current) => normalizeLoyaltyProgramConfig({
+      ...(current || normalizedLoyaltyConfig),
+      ...patch
+    }));
+  };
+
   return (
     <section className="admin-promo-split grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
       <aside className="admin-promo-side rounded-[14px] border border-slate-200 bg-white p-3 shadow-sm">
@@ -280,7 +303,7 @@ export default function CouponManager({ coupons = [], setCoupons }) {
               autoComplete="off"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Nhập mã hoặc tên…"
+              placeholder="Nhập mã hoặc tên..."
             />
           </label>
           <label>
@@ -301,38 +324,123 @@ export default function CouponManager({ coupons = [], setCoupons }) {
         </div>
 
         {voucherTypeFilter === "loyalty" ? (
-          <div className="mb-3 rounded-[14px] border border-amber-200 bg-amber-50 p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-wide text-amber-700">Setup nhanh loyalty</p>
-                <strong className="mt-1 block text-sm font-black text-slate-900">
-                  Có {loyaltyPresetReadyCount}/{LOYALTY_VOUCHER_PRESETS.length} voucher mẫu
-                </strong>
-                <p className="mt-1 text-xs font-semibold text-slate-600">
-                  Tạo một lần để dùng cho auto-tặng theo hạng, sau đó chỉ cần sửa lại số tiền hoặc hạn dùng.
-                </p>
+          <details className="admin-promo-helper-card mb-3">
+            <summary className="admin-promo-helper-summary">
+              <div className="admin-promo-helper-copy">
+                <span>Cài nhanh loyalty</span>
+                <strong>Voucher mẫu và tự động tặng khách mới</strong>
+                <small>Chỉ mở phần này khi mình cần setup loyalty.</small>
               </div>
-              <button type="button" className="admin-cta" onClick={addLoyaltyPresetPack}>
-                Tạo bộ mẫu
-              </button>
+              <div className="admin-promo-helper-badges">
+                <span className={loyaltySetupReady ? "is-ready" : ""}>
+                  {loyaltyPresetReadyCount}/{LOYALTY_VOUCHER_PRESETS.length} mẫu
+                </span>
+                <span className={normalizedLoyaltyConfig.welcomeVoucherEnabled ? "is-ready" : ""}>
+                  {normalizedLoyaltyConfig.welcomeVoucherEnabled ? "Auto đang bật" : "Auto đang tắt"}
+                </span>
+              </div>
+            </summary>
+
+            <div className="admin-promo-helper-body">
+              <div className="admin-promo-helper-steps">
+                <span>1. Tạo bộ voucher mẫu nếu chưa có.</span>
+                <span>2. Chọn đúng voucher muốn tặng cho khách mới.</span>
+                <span>3. Bấm Lưu khuyến mãi để áp dụng.</span>
+              </div>
+
+              <div className="admin-promo-helper-panels">
+                <section className="admin-promo-helper-panel">
+                  <div className="admin-promo-helper-panel-head">
+                    <div>
+                      <strong>Bộ voucher loyalty mẫu</strong>
+                      <small>Dùng để setup nhanh các voucher CRM cơ bản.</small>
+                    </div>
+                    <button type="button" className="admin-cta" onClick={addLoyaltyPresetPack}>
+                      Tạo bộ mẫu
+                    </button>
+                  </div>
+
+                  <div className="admin-promo-helper-chip-list">
+                    {LOYALTY_VOUCHER_PRESETS.map((preset) => {
+                      const ready = loyaltyCodes.has(String(preset.code || "").toUpperCase());
+                      return (
+                        <span
+                          key={preset.code}
+                          className={`admin-promo-helper-chip ${ready ? "is-ready" : ""}`}
+                        >
+                          {preset.code}
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  {presetMessage ? (
+                    <p className="admin-promo-helper-note is-warm">{presetMessage}</p>
+                  ) : null}
+                </section>
+
+                <section className="admin-promo-helper-panel">
+                  <div className="admin-promo-helper-panel-head">
+                    <div>
+                      <strong>Tự động tặng khách mới</strong>
+                      <small>Khách mới đăng ký thành viên sẽ nhận voucher này.</small>
+                    </div>
+                    <label className="admin-switch">
+                      <input
+                        type="checkbox"
+                        checked={normalizedLoyaltyConfig.welcomeVoucherEnabled}
+                        onChange={(event) => patchWelcomeVoucherConfig({
+                          welcomeVoucherEnabled: event.target.checked
+                        })}
+                      />
+                      <span />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <label className="admin-promo-field-label">
+                      Voucher tự động tặng
+                      <select
+                        className="admin-input admin-promo-field-input"
+                        value={normalizedLoyaltyConfig.welcomeVoucherId}
+                        onChange={(event) => patchWelcomeVoucherConfig({
+                          welcomeVoucherId: event.target.value
+                        })}
+                      >
+                        <option value="">Chưa chọn voucher</option>
+                        {loyaltyCoupons.map((voucher) => (
+                          <option key={getCouponRef(voucher)} value={getCouponRef(voucher)}>
+                            {voucher.code || "Không có mã"} - {voucher.name || voucher.title || "Voucher loyalty"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="admin-promo-field-label">
+                      Hạn dùng sau khi tặng (ngày)
+                      <input
+                        className="admin-input admin-promo-field-input"
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={normalizedLoyaltyConfig.welcomeVoucherValidityDays}
+                        onChange={(event) => patchWelcomeVoucherConfig({
+                          welcomeVoucherValidityDays: Math.min(60, Math.max(1, Number(event.target.value || 1)))
+                        })}
+                      />
+                    </label>
+                  </div>
+
+                  <p className="admin-promo-helper-note">
+                    {welcomeVoucherCoupon
+                      ? `Đang chọn: ${welcomeVoucherCoupon.code || "Không có mã"} - ${welcomeVoucherCoupon.name || "Voucher loyalty"}.`
+                      : "Chưa chọn voucher chào thành viên mới."}
+                    {" "}Nếu voucher không có ngày hết hạn cố định, hệ thống sẽ dùng số ngày ở đây.
+                  </p>
+                </section>
+              </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {LOYALTY_VOUCHER_PRESETS.map((preset) => {
-                const ready = loyaltyCodes.has(String(preset.code || "").toUpperCase());
-                return (
-                  <span
-                    key={preset.code}
-                    className={`rounded-full px-2 py-1 text-[10px] font-bold ${ready ? "bg-emerald-100 text-emerald-700" : "bg-white text-slate-500"}`}
-                  >
-                    {preset.code}
-                  </span>
-                );
-              })}
-            </div>
-            {presetMessage ? (
-              <p className="mt-3 text-xs font-semibold text-amber-800">{presetMessage}</p>
-            ) : null}
-          </div>
+          </details>
         ) : null}
 
         <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
@@ -389,10 +497,21 @@ export default function CouponManager({ coupons = [], setCoupons }) {
               <PromotionSummaryPills items={couponSummary} />
               <PromotionSetupWarnings warnings={couponWarnings} />
 
+              <div className="admin-promo-mode-strip" aria-hidden="true">
+                <div className="is-active">
+                  <strong>Cơ bản</strong>
+                  <span>Mã, tên, giảm giá, hạn dùng, kênh áp dụng.</span>
+                </div>
+                <div>
+                  <strong>Nâng cao</strong>
+                  <span>Giới hạn lượt và số đã dùng nếu cần quản lý sâu hơn.</span>
+                </div>
+              </div>
+
               <PromotionFormSection
                 step="1"
-                title="Khách thấy gì?"
-                note="Mã, tên và nơi hiển thị của voucher."
+                title="Cơ bản: khách thấy gì?"
+                note="Nhập mã, tên hiển thị, hạn dùng và kênh áp dụng."
               >
                 <div className="admin-promo-form-grid">
                   <FieldLabel label="Mã voucher">
@@ -421,7 +540,7 @@ export default function CouponManager({ coupons = [], setCoupons }) {
 
               <PromotionFormSection
                 step="2"
-                title="Giảm bao nhiêu?"
+                title="Cơ bản: giảm bao nhiêu?"
                 note="Chọn kiểu giảm, giá trị giảm và mốc đơn tối thiểu."
               >
                 <div className="admin-promo-form-grid">
@@ -445,9 +564,23 @@ export default function CouponManager({ coupons = [], setCoupons }) {
                 </div>
               </PromotionFormSection>
 
+              <div className="admin-promo-active-row admin-promo-form-span-2">
+                <div>
+                  <strong>Bật voucher</strong>
+                  <span>Tắt để ẩn khỏi checkout/CRM nhưng vẫn giữ dữ liệu.</span>
+                </div>
+                <label className="admin-switch">
+                  <input type="checkbox" checked={selectedCoupon.active} onChange={(event) => patchCoupon(selectedCoupon.id, { active: event.target.checked })} />
+                  <span />
+                </label>
+              </div>
+
               <details className="admin-promo-form-card">
-                <summary className="admin-promo-details-summary">3. Giới hạn sử dụng</summary>
+                <summary className="admin-promo-details-summary">Nâng cao: giới hạn và thống kê sử dụng</summary>
                 <div className="mt-4 space-y-4">
+                  <p className="admin-promo-advanced-note">
+                    Chỉ cần mở phần này khi anh muốn giới hạn tổng lượt dùng, giới hạn theo từng khách hoặc chỉnh dữ liệu đã dùng.
+                  </p>
                   <div className="admin-promo-form-grid">
                     <FieldLabel label="Giới hạn dùng toàn bộ">
                       <input className={inputClassName()} type="number" min="0" value={selectedCoupon.usageLimit} onChange={(event) => patchCoupon(selectedCoupon.id, { usageLimit: Number(event.target.value || 0) })} />
@@ -458,16 +591,6 @@ export default function CouponManager({ coupons = [], setCoupons }) {
                     <FieldLabel label="Đã dùng">
                       <input className={inputClassName()} type="number" min="0" value={selectedCoupon.totalUsed} onChange={(event) => patchCoupon(selectedCoupon.id, { totalUsed: Number(event.target.value || 0) })} />
                     </FieldLabel>
-                  </div>
-                  <div className="admin-promo-active-row admin-promo-form-span-2">
-                    <div>
-                      <strong>Bật voucher</strong>
-                      <span>Tắt để ẩn khỏi checkout/CRM nhưng vẫn giữ dữ liệu.</span>
-                    </div>
-                    <label className="admin-switch">
-                      <input type="checkbox" checked={selectedCoupon.active} onChange={(event) => patchCoupon(selectedCoupon.id, { active: event.target.checked })} />
-                      <span />
-                    </label>
                   </div>
                 </div>
               </details>

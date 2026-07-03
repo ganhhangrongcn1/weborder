@@ -1,4 +1,4 @@
-export const LOYALTY_PROGRAM_SCHEMA_VERSION = 4;
+export const LOYALTY_PROGRAM_SCHEMA_VERSION = 5;
 
 export const LOYALTY_TIER_ICON_OPTIONS = [
   { key: "sprout", label: "Mầm non", symbol: "🌱" },
@@ -77,6 +77,9 @@ export const DEFAULT_LOYALTY_PROGRAM_CONFIG = {
   tierCycleMode: "CALENDAR_YEAR",
   checkinEnabled: true,
   checkinDailyPoints: 100,
+  welcomeVoucherEnabled: false,
+  welcomeVoucherId: "",
+  welcomeVoucherValidityDays: 7,
   streakRewards: {
     7: 700,
     14: 1500,
@@ -169,6 +172,15 @@ export function normalizeLoyaltyProgramConfig(config = {}) {
     checkinDailyPoints: nonNegativeInteger(
       config?.checkinDailyPoints,
       DEFAULT_LOYALTY_PROGRAM_CONFIG.checkinDailyPoints
+    ),
+    welcomeVoucherEnabled: config?.welcomeVoucherEnabled === true,
+    welcomeVoucherId: String(config?.welcomeVoucherId || "").trim(),
+    welcomeVoucherValidityDays: Math.min(
+      60,
+      positiveInteger(
+        config?.welcomeVoucherValidityDays,
+        DEFAULT_LOYALTY_PROGRAM_CONFIG.welcomeVoucherValidityDays
+      )
     ),
     streakRewards: {
       7: nonNegativeInteger(incomingStreakRewards?.[7], DEFAULT_LOYALTY_PROGRAM_CONFIG.streakRewards[7]),
