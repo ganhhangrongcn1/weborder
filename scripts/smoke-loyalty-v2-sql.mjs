@@ -65,6 +65,18 @@ const REGISTRATION_VOUCHER_FIX_FILE = path.join(
   "migrations",
   "20260703083716_fix_loyalty_registration_and_monthly_tier_vouchers.sql",
 );
+const VOUCHER_SECURITY_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260703100427_secure_voucher_catalog_and_crm_analytics.sql",
+);
+const VOUCHER_POLICY_HELPER_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260703101048_allow_coupon_policy_helper_execution.sql",
+);
 
 const assertIncludes = (content, expected, message) => {
   if (!content.includes(expected)) {
@@ -72,7 +84,7 @@ const assertIncludes = (content, expected, message) => {
   }
 };
 
-const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix] = await Promise.all([
+const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper] = await Promise.all([
   readFile(FOUNDATION_FILE, "utf8"),
   readFile(AUDIT_FILE, "utf8"),
   readFile(POSTCHECK_FILE, "utf8"),
@@ -85,6 +97,8 @@ const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived,
   readFile(TIER_IDENTITY_FILE, "utf8"),
   readFile(ATOMIC_COMPLETION_FILE, "utf8"),
   readFile(REGISTRATION_VOUCHER_FIX_FILE, "utf8"),
+  readFile(VOUCHER_SECURITY_FILE, "utf8"),
+  readFile(VOUCHER_POLICY_HELPER_FILE, "utf8"),
 ]);
 
 assertIncludes(foundation, "begin;", "Foundation migration must be transactional");
@@ -317,6 +331,48 @@ assertIncludes(
   registrationVoucherFix,
   "grant_current_monthly_tier_voucher(new.phone, now())",
   "Profile registration must grant the current tier voucher",
+);
+assertIncludes(voucherSecurity, "begin;", "Voucher security migration must be transactional");
+assertIncludes(voucherSecurity, "commit;", "Voucher security migration must commit");
+assertIncludes(
+  voucherSecurity,
+  "drop policy if exists catalog_public_write_coupons on public.coupons;",
+  "Permissive anonymous coupon writes must be removed",
+);
+assertIncludes(
+  voucherSecurity,
+  "create policy coupons_write_linked_admin",
+  "Coupon writes must require a linked admin profile",
+);
+assertIncludes(
+  voucherSecurity,
+  "revoke all on public.coupons from anon;",
+  "Anonymous table writes must be revoked",
+);
+assertIncludes(
+  voucherSecurity,
+  "raise exception 'crm_access_denied'",
+  "CRM analytics must reject non-backoffice callers",
+);
+assertIncludes(
+  voucherSecurity,
+  "revoke all on function public.get_admin_crm_analytics()",
+  "CRM analytics must not inherit PUBLIC execution",
+);
+assertIncludes(
+  voucherSecurity,
+  "set search_path = pg_catalog",
+  "Security-definer CRM facade must use a fixed search path",
+);
+assertIncludes(
+  voucherPolicyHelper,
+  "to authenticated;",
+  "Authenticated coupon policies must be able to evaluate the role helper",
+);
+assertIncludes(
+  voucherPolicyHelper,
+  "from public, anon;",
+  "Anonymous callers must not execute the coupon role helper",
 );
 
 console.log("Loyalty V2 SQL smoke test passed.");
