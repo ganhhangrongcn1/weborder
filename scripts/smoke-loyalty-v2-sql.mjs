@@ -59,6 +59,12 @@ const ATOMIC_COMPLETION_FILE = path.join(
   "migrations",
   "20260622084850_complete_website_order_loyalty_atomic.sql",
 );
+const REGISTRATION_VOUCHER_FIX_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260703083716_fix_loyalty_registration_and_monthly_tier_vouchers.sql",
+);
 
 const assertIncludes = (content, expected, message) => {
   if (!content.includes(expected)) {
@@ -66,7 +72,7 @@ const assertIncludes = (content, expected, message) => {
   }
 };
 
-const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion] = await Promise.all([
+const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix] = await Promise.all([
   readFile(FOUNDATION_FILE, "utf8"),
   readFile(AUDIT_FILE, "utf8"),
   readFile(POSTCHECK_FILE, "utf8"),
@@ -78,6 +84,7 @@ const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived,
   readFile(REACHABLE_TIERS_FILE, "utf8"),
   readFile(TIER_IDENTITY_FILE, "utf8"),
   readFile(ATOMIC_COMPLETION_FILE, "utf8"),
+  readFile(REGISTRATION_VOUCHER_FIX_FILE, "utf8"),
 ]);
 
 assertIncludes(foundation, "begin;", "Foundation migration must be transactional");
@@ -289,5 +296,27 @@ if (/p_(customer_)?phone|p_points|p_amount/i.test(atomicCompletionFacade[1])) {
 if (/security\s+definer/i.test(atomicCompletion)) {
   throw new Error("Atomic website completion RPC must not use SECURITY DEFINER");
 }
+assertIncludes(registrationVoucherFix, "begin;", "Registration voucher fix must be transactional");
+assertIncludes(registrationVoucherFix, "commit;", "Registration voucher fix must commit");
+assertIncludes(
+  registrationVoucherFix,
+  "or trim(coalesce(c.data ->> 'id', '')) = trim(p_reference)",
+  "Configured coupon lookup must support application coupon IDs",
+);
+assertIncludes(
+  registrationVoucherFix,
+  "on conflict (customer_phone, tier_id, grant_month) do nothing",
+  "Monthly tier vouchers must remain idempotent per customer, tier, and month",
+);
+assertIncludes(
+  registrationVoucherFix,
+  "grant_registration_welcome_voucher(new.phone, now())",
+  "Profile registration must grant the welcome voucher",
+);
+assertIncludes(
+  registrationVoucherFix,
+  "grant_current_monthly_tier_voucher(new.phone, now())",
+  "Profile registration must grant the current tier voucher",
+);
 
 console.log("Loyalty V2 SQL smoke test passed.");

@@ -695,13 +695,12 @@ export default function useAccountViewModel({
       }
     }
     let grantedWelcomeVoucher = false;
-    if (result?.isNew) {
-      try {
-        const welcomeResult = await grantWelcomeVoucherToNewMemberIfEligible(registerPhone);
-        grantedWelcomeVoucher = welcomeResult?.granted === true;
-      } catch (error) {
-        console.warn("[account] welcome voucher grant failed", error);
-      }
+    try {
+      const welcomeResult = await grantWelcomeVoucherToNewMemberIfEligible(registerPhone);
+      grantedWelcomeVoucher = welcomeResult?.granted === true ||
+        welcomeResult?.reason === "welcome_voucher_already_granted";
+    } catch (error) {
+      console.warn("[account] welcome voucher grant failed", error);
     }
     setAuthNotice(
       grantedWelcomeVoucher
