@@ -1,6 +1,7 @@
-﻿export function toAdminStatus(status) {
+export function toAdminStatus(status) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "pending_zalo" || normalized === "new") return "new";
+  if (["cancelled", "canceled", "cancel", "hủy", "huy", "đã hủy", "da huy"].includes(normalized)) return "cancelled";
   if (normalized === "ready_for_pickup" || normalized === "ready_for_delivery") return "doing";
   if (normalized === "delivering" || normalized === "đang giao") return "delivering";
   if (normalized === "done" || normalized === "completed" || normalized === "hoàn tất") return "done";
@@ -48,11 +49,15 @@ export function getSettlement(order) {
 }
 
 export function groupOrdersByBoard(orders) {
-  const groupedOrders = { new: [], doing: [], done: [] };
+  const groupedOrders = { new: [], doing: [], done: [], cancelled: [] };
   (orders || []).forEach((order) => {
     const fulfillmentType = String(order.fulfillmentType || "").toLowerCase() === "pickup" ? "pickup" : "delivery";
     const rawStatus = toAdminStatus(order.status);
     const status = fulfillmentType === "pickup" && rawStatus === "delivering" ? "done" : rawStatus;
+    if (status === "cancelled") {
+      groupedOrders.cancelled.push(order);
+      return;
+    }
     if (status === "delivering") {
       groupedOrders.doing.push(order);
       return;

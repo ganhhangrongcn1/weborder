@@ -1,4 +1,4 @@
-﻿import OrderManager from "./orders/OrderManager.jsx";
+import OrderManager from "./orders/OrderManager.jsx";
 import AdminCustomerSection from "./customers/AdminCustomerSection.jsx";
 import {
   buildCustomersFromCrmAnalyticsAsync,
@@ -19,6 +19,7 @@ function mapAdminStatusToOrderStatus(nextStatus) {
   if (nextStatus === "doing") return "confirmed";
   if (nextStatus === "delivering") return "delivering";
   if (nextStatus === "done") return "done";
+  if (nextStatus === "cancelled") return "cancelled";
   return "pending_zalo";
 }
 

@@ -26,6 +26,7 @@ const STATUS_META = {
   delivering: { label: "Đang giao", className: "admin-order-status-delivering" },
   done: { label: "Hoàn thành", className: "admin-order-status-done" }
 };
+STATUS_META.cancelled = { label: "Đã hủy", className: "admin-order-status-cancelled" };
 const ORDER_PAGE_SIZE = 25;
 
 function getOrderId(order) {
@@ -174,6 +175,32 @@ function OrderStatusBadge({ status }) {
   return <span className={`admin-order-status-badge ${getStatusClass(status)}`}>{getStatusLabel(status)}</span>;
 }
 
+function CancelOrderButton({ order, status, updateOrderStatus, compact = false }) {
+  if (isReadOnlyPartnerOrder(order) || status === "cancelled") return null;
+
+  const orderId = getOrderId(order);
+  const orderCode = getDisplayOrderCode(order);
+
+  const handleCancelOrder = (event) => {
+    event?.stopPropagation?.();
+    const warningText = status === "done"
+      ? `Đơn ${orderCode} đang ở trạng thái hoàn thành. Anh/chị vẫn muốn hủy đơn này?`
+      : `Anh/chị có chắc muốn hủy đơn ${orderCode} không?`;
+    if (!window.confirm(warningText)) return;
+    updateOrderStatus(orderId, "cancelled");
+  };
+
+  return (
+    <button
+      type="button"
+      className={`admin-order-cancel-btn${compact ? " is-compact" : ""}`}
+      onClick={handleCancelOrder}
+    >
+      Hủy đơn
+    </button>
+  );
+}
+
 function hasClaimedPartnerPoints() {
   return false;
 }
@@ -319,6 +346,10 @@ function OrderStatusSelect({ order, status, updateOrderStatus }) {
     return <span className="admin-order-status-readonly">Đồng bộ NexPOS</span>;
   }
 
+  if (status === "cancelled") {
+    return <span className="admin-order-status-readonly is-cancelled">Đã hủy</span>;
+  }
+
   if (status === "done") {
     return (
       <span className="admin-order-status-readonly is-done">
@@ -352,12 +383,14 @@ function OrderQuickActions({ order, status, updateOrderStatus }) {
         { value: "new", label: "Mới" },
         { value: "doing", label: "Làm" },
         { value: "delivering", label: "Giao" },
-        { value: "done", label: "Xong" }
+        { value: "done", label: "Xong" },
+        { value: "cancelled", label: "Hủy" }
       ]
     : [
         { value: "new", label: "Mới" },
         { value: "doing", label: "Làm" },
-        { value: "done", label: "Xong" }
+        { value: "done", label: "Xong" },
+        { value: "cancelled", label: "Hủy" }
       ];
 
   return (
@@ -890,7 +923,10 @@ function OrderDetailPanelV2({
         {isPartnerOrder ? (
           <span className="admin-order-partner-sync-note">Theo trạng thái NexPOS</span>
         ) : (
-          <OrderStatusSelect order={order} status={status} updateOrderStatus={updateOrderStatus} />
+          <div className="admin-order-detail-action-row">
+            <OrderStatusSelect order={order} status={status} updateOrderStatus={updateOrderStatus} />
+            <CancelOrderButton order={order} status={status} updateOrderStatus={updateOrderStatus} />
+          </div>
         )}
       </div>
     </aside>
@@ -980,7 +1016,7 @@ export default function OrderManager({
     counts.all += 1;
     counts[status] = (counts[status] || 0) + 1;
     return counts;
-  }, { all: 0, new: 0, doing: 0, delivering: 0, done: 0 }), [searchedOrders]);
+  }, { all: 0, new: 0, doing: 0, delivering: 0, done: 0, cancelled: 0 }), [searchedOrders]);
 
   const visibleOrders = useMemo(() => {
     if (statusFilter === "all") return searchedOrders;

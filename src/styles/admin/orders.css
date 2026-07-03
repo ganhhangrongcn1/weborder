@@ -434,6 +434,11 @@
   color: #059669;
 }
 
+.admin-order-status-cancelled {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
 .admin-order-status-all {
   background: #f1f5f9;
   color: #475569;
@@ -601,6 +606,12 @@
   border-color: #bbf7d0;
   background: #f0fdf4;
   color: #15803d;
+}
+
+.admin-order-status-readonly.is-cancelled {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .admin-order-row-actions > button {
@@ -893,9 +904,32 @@
   padding: 12px 14px 14px;
 }
 
+.admin-order-detail-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
 .admin-order-detail-actions .admin-order-status-select {
   width: 100%;
   max-width: none;
+}
+
+.admin-order-cancel-btn {
+  min-height: 38px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fef2f2;
+  padding: 0 14px;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.admin-order-cancel-btn:hover {
+  border-color: #f87171;
+  background: #fee2e2;
 }
 
 .admin-order-detail-head-v2 {
@@ -1550,6 +1584,14 @@
   .admin-order-status-select {
     width: 100%;
     max-width: none;
+  }
+
+  .admin-order-detail-action-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-order-cancel-btn {
+    width: 100%;
   }
 }
 
