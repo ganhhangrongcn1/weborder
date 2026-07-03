@@ -79,6 +79,13 @@ function normalizeNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizePositiveInteger(value, fallback = 0) {
+  const parsed = Math.floor(Number(value));
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  const fallbackParsed = Math.floor(Number(fallback));
+  return Number.isFinite(fallbackParsed) && fallbackParsed > 0 ? fallbackParsed : 0;
+}
+
 function normalizeText(value, fallback = "") {
   const text = String(value ?? "").normalize("NFC").trim();
   return text || fallback;
@@ -558,50 +565,41 @@ async function readStructuredCoupons(fallback) {
   if (!client) return fallback;
   const { data, error } = await client
     .from("coupons")
-    .select("id,data,code,name,discount_type,value,max_discount,min_order,start_at,end_at,customer_type,usage_limit,per_user_limit,total_used,voucher_type,fulfillment_type,scope_type,scope_values,stackable,active,updated_at")
+    .select("id,data,code,name,discount_type,value,max_discount,min_order,start_at,end_at,customer_type,usage_limit,per_user_limit,total_used,voucher_type,valid_days_after_grant,fulfillment_type,scope_type,scope_values,stackable,active,updated_at")
     .order("updated_at", { ascending: false });
   if (error) throw error;
   if (!Array.isArray(data) || !data.length) return fallback;
-  return data.map((row) => ({
-    ...((row?.data && typeof row.data === "object") ? row.data : {}),
-    id: String(((row?.data && typeof row.data === "object" ? row.data.id : null) || row?.id || row?.code || "")),
-    code: String(((row?.data && typeof row.data === "object" ? row.data.code : null) || row?.code || "")).toUpperCase(),
-    name: String(((row?.data && typeof row.data === "object" ? row.data.name : null) || row?.name || "")),
-    discountType: (
-      String((row?.data && typeof row.data === "object" ? row.data.discountType : row?.discount_type) || "fixed") === "percent"
-      ? "percent"
-      : "fixed"
-    ),
-    value: normalizeNumber(
-      (row?.data && typeof row.data === "object" ? row.data.value : row?.value),
-      0
-    ),
-    maxDiscount: normalizeNumber(
-      (row?.data && typeof row.data === "object" ? row.data.maxDiscount : row?.max_discount),
-      0
-    ),
-    minOrder: normalizeNumber(
-      (row?.data && typeof row.data === "object" ? row.data.minOrder : row?.min_order),
-      0
-    ),
-    startAt: String((row?.data && typeof row.data === "object" ? row.data.startAt : row?.start_at) || ""),
-    endAt: String(
-      (row?.data && typeof row.data === "object" ? (row.data.endAt || row.data.expiry) : row?.end_at) || ""
-    ),
-    expiry: String(
-      (row?.data && typeof row.data === "object" ? (row.data.endAt || row.data.expiry) : row?.end_at) || ""
-    ),
-    customerType: String((row?.data && typeof row.data === "object" ? row.data.customerType : row?.customer_type) || "all"),
-    usageLimit: normalizeNumber((row?.data && typeof row.data === "object" ? row.data.usageLimit : row?.usage_limit), 0),
-    perUserLimit: Math.max(1, normalizeNumber((row?.data && typeof row.data === "object" ? row.data.perUserLimit : row?.per_user_limit), 1)),
-    totalUsed: normalizeNumber((row?.data && typeof row.data === "object" ? row.data.totalUsed : row?.total_used), 0),
-    voucherType: String((row?.data && typeof row.data === "object" ? row.data.voucherType : row?.voucher_type) || "checkout"),
-    fulfillmentType: String((row?.data && typeof row.data === "object" ? row.data.fulfillmentType : row?.fulfillment_type) || "all"),
-    scopeType: String((row?.data && typeof row.data === "object" ? row.data.scopeType : row?.scope_type) || "all"),
-    scopeValues: String((row?.data && typeof row.data === "object" ? row.data.scopeValues : row?.scope_values) || ""),
-    stackable: Boolean((row?.data && typeof row.data === "object" ? row.data.stackable : row?.stackable)),
-    active: normalizeBoolean((row?.data && typeof row.data === "object" ? row.data.active : row?.active), true)
-  }));
+  return data.map((row) => {
+    const rowData = row?.data && typeof row.data === "object" ? row.data : {};
+    const voucherType = String((rowData?.voucherType ?? row?.voucher_type) || "checkout");
+    const endAt = voucherType === "loyalty"
+      ? ""
+      : String((rowData?.endAt || rowData?.expiry || row?.end_at) || "");
+    return {
+      ...rowData,
+      id: String((rowData?.id || row?.id || row?.code || "")),
+      code: String((rowData?.code || row?.code || "")).toUpperCase(),
+      name: String((rowData?.name || row?.name || "")),
+      discountType: (String((rowData?.discountType ?? row?.discount_type) || "fixed") === "percent" ? "percent" : "fixed"),
+      value: normalizeNumber((rowData?.value ?? row?.value), 0),
+      maxDiscount: normalizeNumber((rowData?.maxDiscount ?? row?.max_discount), 0),
+      minOrder: normalizeNumber((rowData?.minOrder ?? row?.min_order), 0),
+      startAt: String((rowData?.startAt || row?.start_at) || ""),
+      endAt,
+      expiry: endAt,
+      customerType: String((rowData?.customerType || row?.customer_type) || "all"),
+      usageLimit: normalizeNumber((rowData?.usageLimit ?? row?.usage_limit), 0),
+      perUserLimit: Math.max(1, normalizeNumber((rowData?.perUserLimit ?? row?.per_user_limit), 1)),
+      totalUsed: normalizeNumber((rowData?.totalUsed ?? row?.total_used), 0),
+      voucherType,
+      validDaysAfterGrant: normalizePositiveInteger((rowData?.validDaysAfterGrant ?? row?.valid_days_after_grant), 0),
+      fulfillmentType: String((rowData?.fulfillmentType || row?.fulfillment_type) || "all"),
+      scopeType: String((rowData?.scopeType || row?.scope_type) || "all"),
+      scopeValues: String((rowData?.scopeValues || row?.scope_values) || ""),
+      stackable: Boolean((rowData?.stackable ?? row?.stackable)),
+      active: normalizeBoolean((rowData?.active ?? row?.active), true)
+    };
+  });
 }
 
 async function readStructuredBranches(fallback) {
@@ -664,6 +662,13 @@ async function writeStructuredCoupons(value) {
   const rows = Array.isArray(value) ? value : [];
   const payload = rows.map((item) => {
     const code = normalizeText(item?.code, "").toUpperCase();
+    const voucherType = normalizeText(item?.voucherType, "checkout") === "loyalty" ? "loyalty" : "checkout";
+    const validDaysAfterGrant = voucherType === "loyalty"
+      ? normalizePositiveInteger(item?.validDaysAfterGrant, 7)
+      : 0;
+    const endAt = voucherType === "loyalty"
+      ? ""
+      : normalizeText(item?.endAt || item?.expiry, "");
     const normalized = {
       ...item,
       id: normalizeText(item?.id, "") || code || "",
@@ -674,23 +679,47 @@ async function writeStructuredCoupons(value) {
       maxDiscount: normalizeNumber(item?.maxDiscount, 0),
       minOrder: normalizeNumber(item?.minOrder, 0),
       startAt: normalizeText(item?.startAt, ""),
-      endAt: normalizeText(item?.endAt || item?.expiry, ""),
-      expiry: normalizeText(item?.endAt || item?.expiry, ""),
+      endAt,
+      expiry: endAt,
       customerType: normalizeText(item?.customerType, "all"),
       usageLimit: normalizeNumber(item?.usageLimit, 0),
       perUserLimit: Math.max(1, normalizeNumber(item?.perUserLimit, 1)),
       totalUsed: normalizeNumber(item?.totalUsed, 0),
-      voucherType: normalizeText(item?.voucherType, "checkout"),
+      voucherType,
+      validDaysAfterGrant,
       fulfillmentType: normalizeText(item?.fulfillmentType, "all"),
       scopeType: normalizeText(item?.scopeType, "all"),
       scopeValues: normalizeText(item?.scopeValues, ""),
       stackable: Boolean(item?.stackable),
       active: normalizeBoolean(item?.active, true)
     };
+    const data = {
+      ...normalized
+    };
+    if (voucherType !== "loyalty") {
+      delete data.validDaysAfterGrant;
+    }
     return {
       code: normalized.code || normalized.id || "",
       name: normalized.name,
-      data: normalized
+      discount_type: normalized.discountType,
+      value: normalized.value,
+      max_discount: normalized.maxDiscount,
+      min_order: normalized.minOrder,
+      start_at: normalized.startAt || null,
+      end_at: normalized.endAt || null,
+      customer_type: normalized.customerType,
+      usage_limit: normalized.usageLimit,
+      per_user_limit: normalized.perUserLimit,
+      total_used: normalized.totalUsed,
+      voucher_type: normalized.voucherType,
+      valid_days_after_grant: normalized.voucherType === "loyalty" ? normalized.validDaysAfterGrant : null,
+      fulfillment_type: normalized.fulfillmentType,
+      scope_type: normalized.scopeType,
+      scope_values: normalized.scopeValues,
+      stackable: normalized.stackable,
+      active: normalized.active,
+      data
     };
   });
 

@@ -134,19 +134,9 @@ export async function applyOrderLoyaltyAsync({
     );
   }
 
-  if (
-    plannedActions.includes("SPEND") &&
-    promoSource === "loyalty" &&
-    (promoVoucherId || promoCode)
-  ) {
-    await loyaltyRepository.markVoucherUsedByPhoneAsync(
+  if (promoSource === "loyalty" && (promoVoucherId || promoCode)) {
+    await loyaltyRepository.syncVoucherUsageByPhoneAsync(
       key,
-      {
-        voucherId: promoVoucherId,
-        voucherCode: promoCode,
-        orderId,
-        usedAt: createdAt
-      },
       defaultLoyaltyData
     );
   }

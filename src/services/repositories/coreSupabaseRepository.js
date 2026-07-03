@@ -1834,6 +1834,20 @@ async function setLoyaltyVoucherUsage({
   return data === true;
 }
 
+async function syncLoyaltyVoucherUsageFromOrders(phone = "") {
+  if (!isSupabaseReady()) return false;
+  const client = await getSupabaseClientAsync();
+  if (!client) return false;
+  const key = normalizePhone(phone);
+  if (!key) return false;
+
+  const { data, error } = await client.rpc("sync_loyalty_voucher_usage_from_orders", {
+    p_customer_phone: key
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 async function validateCheckoutVoucher({
   orderId = "",
   customerPhone = "",
@@ -1997,6 +2011,7 @@ export const coreSupabaseRepository = {
   getCustomerOrderPointStatuses,
   upsertLoyaltyAccountByPhone,
   setLoyaltyVoucherUsage,
+  syncLoyaltyVoucherUsageFromOrders,
   validateCheckoutVoucher,
   subscribeProfilesRealtime,
   subscribeCustomersRealtime,

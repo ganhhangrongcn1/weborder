@@ -383,6 +383,33 @@ export const loyaltyRepository = {
 
     return nextRecord;
   },
+  async syncVoucherUsageByPhoneAsync(phone, fallback) {
+    const key = getCustomerKey(phone);
+    if (!key) return null;
+
+    if (shouldWriteDomainToSupabase("loyalty")) {
+      try {
+        await coreSupabaseRepository.syncLoyaltyVoucherUsageFromOrders(key);
+      } catch (error) {
+        logSupabaseError("sync loyalty voucher usage from orders", error, { phone: key });
+      }
+    }
+
+    try {
+      const remoteOnly = normalizeLoyaltyByPhoneMap({
+        [key]: await coreSupabaseRepository.readLoyaltyForPhoneFromTable(key)
+      })[key] || { ...(fallback || {}), phone: key };
+      const localAll = normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}));
+      const nextAll = normalizeLoyaltyByPhoneMap({ ...localAll, [key]: remoteOnly });
+      await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, nextAll);
+      loyaltyRemoteCache = { value: nextAll, cachedAt: Date.now() };
+      notifyLoyaltyChanged();
+      return remoteOnly;
+    } catch (error) {
+      logSupabaseError("read loyalty after voucher usage sync", error, { phone: key });
+      return this.getByPhoneAsync(key, fallback);
+    }
+  },
   async getCrmConfigAsync(fallback) {
     return repository.getAsync(STORAGE_KEYS.crmLoyalty, fallback);
   },

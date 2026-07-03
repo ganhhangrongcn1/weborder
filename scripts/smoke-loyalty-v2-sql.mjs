@@ -83,6 +83,18 @@ const ORDER_VOUCHER_VALIDATION_FILE = path.join(
   "migrations",
   "20260703102642_validate_order_vouchers_server_side.sql",
 );
+const LOYALTY_VOUCHER_VALIDITY_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260703124309_normalize_loyalty_voucher_validity_and_coupon_schema.sql",
+);
+const LOYALTY_VOUCHER_USAGE_SYNC_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260703131554_sync_loyalty_voucher_usage_from_orders.sql",
+);
 
 const assertIncludes = (content, expected, message) => {
   if (!content.includes(expected)) {
@@ -90,7 +102,7 @@ const assertIncludes = (content, expected, message) => {
   }
 };
 
-const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper, orderVoucherValidation] = await Promise.all([
+const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper, orderVoucherValidation, loyaltyVoucherValidity, loyaltyVoucherUsageSync] = await Promise.all([
   readFile(FOUNDATION_FILE, "utf8"),
   readFile(AUDIT_FILE, "utf8"),
   readFile(POSTCHECK_FILE, "utf8"),
@@ -106,6 +118,8 @@ const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived,
   readFile(VOUCHER_SECURITY_FILE, "utf8"),
   readFile(VOUCHER_POLICY_HELPER_FILE, "utf8"),
   readFile(ORDER_VOUCHER_VALIDATION_FILE, "utf8"),
+  readFile(LOYALTY_VOUCHER_VALIDITY_FILE, "utf8"),
+  readFile(LOYALTY_VOUCHER_USAGE_SYNC_FILE, "utf8"),
 ]);
 
 assertIncludes(foundation, "begin;", "Foundation migration must be transactional");
@@ -410,6 +424,55 @@ assertIncludes(
   orderVoucherValidation,
   "voucher_discount_mismatch",
   "Forged voucher discounts must be rejected",
+);
+assertIncludes(loyaltyVoucherValidity, "begin;", "Loyalty voucher validity migration must be transactional");
+assertIncludes(loyaltyVoucherValidity, "commit;", "Loyalty voucher validity migration must commit");
+assertIncludes(
+  loyaltyVoucherValidity,
+  "add column if not exists valid_days_after_grant integer null",
+  "Coupons must store valid days after grant for loyalty vouchers",
+);
+assertIncludes(
+  loyaltyVoucherValidity,
+  "create trigger trg_coupons_sync_canonical_fields",
+  "Coupons must auto-sync canonical fields before writes",
+);
+assertIncludes(
+  loyaltyVoucherValidity,
+  "update public.coupons",
+  "Existing coupons must be backfilled into the canonical schema",
+);
+assertIncludes(
+  loyaltyVoucherValidity,
+  "'validDaysAfterGrant', new.valid_days_after_grant",
+  "Coupon JSON must publish validDaysAfterGrant",
+);
+assertIncludes(
+  loyaltyVoucherValidity,
+  "v_validity_days := loyalty_private.resolve_coupon_validity_days(v_coupon, 7);",
+  "Tier voucher grants must use the template valid days after grant",
+);
+assertIncludes(
+  loyaltyVoucherValidity,
+  "'validDaysAfterGrant', v_validity_days",
+  "Granted loyalty vouchers must remember the valid days used",
+);
+assertIncludes(loyaltyVoucherUsageSync, "begin;", "Loyalty voucher usage sync migration must be transactional");
+assertIncludes(loyaltyVoucherUsageSync, "commit;", "Loyalty voucher usage sync migration must commit");
+assertIncludes(
+  loyaltyVoucherUsageSync,
+  "compute_loyalty_voucher_usage_from_orders",
+  "Missing wallet voucher usage sync helper",
+);
+assertIncludes(
+  loyaltyVoucherUsageSync,
+  "sync_loyalty_voucher_usage_from_orders",
+  "Missing public wallet voucher usage sync RPC",
+);
+assertIncludes(
+  loyaltyVoucherUsageSync,
+  "update public.loyalty_accounts as la",
+  "Existing wallet vouchers must be backfilled from orders",
 );
 
 console.log("Loyalty V2 SQL smoke test passed.");

@@ -190,7 +190,7 @@ export default function LoyaltySettings({
           <article>
             <span>Voucher hạng theo tháng</span>
             <strong>{assignedVoucherCount}/{config.tiers.length} hạng đã gắn</strong>
-            <small>{activeVoucherCount} voucher loyalty đang hoạt động. Mỗi hạng tặng tối đa 1 lần/tháng, hạn dùng 7 ngày.</small>
+            <small>{activeVoucherCount} voucher loyalty đang hoạt động. Mỗi hạng tặng tối đa 1 lần/tháng, hạn dùng lấy theo số ngày đã cấu hình trên từng voucher.</small>
           </article>
           <article>
             <span>Điểm danh</span>
@@ -362,7 +362,7 @@ export default function LoyaltySettings({
         <div className="admin-loyalty-quick-steps">
           <span><strong>1.</strong> Tạo bộ voucher loyalty mẫu</span>
           <span><strong>2.</strong> Gắn từng voucher vào đúng hạng</span>
-          <span><strong>3.</strong> Lưu lại để tự tặng mỗi tháng, hạn dùng 7 ngày</span>
+          <span><strong>3.</strong> Lưu lại để tự tặng mỗi tháng, hạn dùng lấy theo từng voucher đã gắn</span>
         </div>
 
         <div className="admin-loyalty-checklist-summary">

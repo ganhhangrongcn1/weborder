@@ -5,6 +5,12 @@ import {
 } from "../../../services/loyaltyVoucherPresetService.js";
 import { normalizeLoyaltyProgramConfig } from "../../../services/loyaltyProgramConfigService.js";
 import { ALL_PROMOTION_SALES_CHANNELS, normalizeSalesChannels } from "../../../services/promotionChannelService.js";
+import {
+  describeCouponExpiry,
+  getCouponValidDaysAfterGrant,
+  getCouponVoucherType,
+  normalizeValidDaysAfterGrant
+} from "../../../services/voucherTemplateService.js";
 import PromotionFormSection from "./PromotionFormSection.jsx";
 import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
 import {
@@ -45,7 +51,8 @@ function getCouponRef(coupon = {}) {
 }
 
 function normalizeCoupon(coupon = {}) {
-  const endAt = String(coupon.endAt || coupon.expiry || "");
+  const voucherType = getCouponVoucherType(coupon);
+  const endAt = voucherType === "loyalty" ? "" : String(coupon.endAt || coupon.expiry || "");
   return {
     id: getCouponId(coupon),
     code: String(coupon.code || "SALE10").toUpperCase(),
@@ -60,7 +67,10 @@ function normalizeCoupon(coupon = {}) {
     usageLimit: Number(coupon.usageLimit || 0),
     perUserLimit: Number(coupon.perUserLimit || 1),
     totalUsed: Number(coupon.totalUsed || 0),
-    voucherType: String(coupon.voucherType || "checkout"),
+    voucherType,
+    validDaysAfterGrant: voucherType === "loyalty"
+      ? getCouponValidDaysAfterGrant(coupon, 7)
+      : 0,
     fulfillmentType: String(coupon.fulfillmentType || "all"),
     scopeType: String(coupon.scopeType || "all"),
     scopeValues: String(coupon.scopeValues || ""),
@@ -84,6 +94,11 @@ function formatDateShort(dateText) {
 }
 
 function getCouponStatus(coupon) {
+  if (getCouponVoucherType(coupon) === "loyalty") {
+    return coupon.active
+      ? { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" }
+      : { code: "off", label: "Tạm tắt", className: "bg-slate-100 text-slate-600" };
+  }
   if (!coupon.active) return { code: "off", label: "Tạm tắt", className: "bg-slate-100 text-slate-600" };
   if (!coupon.endAt) return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
 
@@ -105,7 +120,9 @@ function buildPreviewLines(coupon) {
   const condition = Number(coupon.minOrder || 0)
     ? `Đơn từ ${Number(coupon.minOrder || 0).toLocaleString("vi-VN")}đ`
     : "Áp dụng mọi đơn";
-  const expiry = `Hết hạn: ${formatDateShort(coupon.endAt)}`;
+  const expiry = getCouponVoucherType(coupon) === "loyalty"
+    ? `Dùng trong: ${describeCouponExpiry(coupon, 7)}`
+    : `Hết hạn: ${formatDateShort(coupon.endAt)}`;
   return { title, main, condition, expiry };
 }
 
@@ -115,7 +132,11 @@ function buildCouponWarnings(coupon) {
   if (!String(coupon?.name || "").trim()) warnings.push("Chưa nhập tên hiển thị cho khách.");
   if (Number(coupon?.value || 0) <= 0) warnings.push("Giá trị giảm đang bằng 0 nên khách sẽ không được giảm.");
   if (coupon?.discountType === "percent" && Number(coupon?.value || 0) > 100) warnings.push("Giảm theo % đang lớn hơn 100%.");
-  if (coupon?.endAt) {
+  if (getCouponVoucherType(coupon) === "loyalty") {
+    if (Number(coupon?.validDaysAfterGrant || 0) <= 0) {
+      warnings.push("Voucher loyalty cần có số ngày sử dụng sau khi nhận.");
+    }
+  } else if (coupon?.endAt) {
     const endDate = new Date(`${coupon.endAt}T23:59:59`);
     if (!Number.isNaN(endDate.getTime()) && endDate.getTime() < Date.now()) warnings.push("Voucher đã hết hạn, checkout sẽ không áp dụng.");
   }
@@ -133,7 +154,7 @@ function buildCouponSummary(coupon) {
   return [
     status,
     coupon?.voucherType === "loyalty" ? "Loyalty / CRM" : "Checkout",
-    formatSalesChannelSummary(coupon),
+    coupon?.voucherType === "loyalty" ? describeCouponExpiry(coupon, 7) : formatSalesChannelSummary(coupon),
     minOrder
   ];
 }
@@ -242,6 +263,7 @@ export default function CouponManager({
       minOrder: 0,
       endAt: "",
       voucherType: voucherTypeFilter,
+      validDaysAfterGrant: voucherTypeFilter === "loyalty" ? 7 : 0,
       salesChannels: ["web", "qr"],
       active: true
     });
@@ -257,7 +279,7 @@ export default function CouponManager({
     setPresetMessage(
       result.createdCount > 0
         ? `Đã tạo ${result.createdCount} voucher loyalty mẫu. Anh chỉnh lại giá trị rồi bấm Lưu khuyến mãi là xong.`
-        : "Bộ voucher loyalty mẫu đã có sẵn. Anh chỉ cần chỉnh lại mức giảm và hạn dùng."
+        : "Bộ voucher loyalty mẫu đã có sẵn. Anh chỉ cần chỉnh lại mức giảm và số ngày dùng sau khi nhận."
     );
   };
 
@@ -415,27 +437,13 @@ export default function CouponManager({
                         ))}
                       </select>
                     </label>
-
-                    <label className="admin-promo-field-label">
-                      Hạn dùng sau khi tặng (ngày)
-                      <input
-                        className="admin-input admin-promo-field-input"
-                        type="number"
-                        min="1"
-                        max="60"
-                        value={normalizedLoyaltyConfig.welcomeVoucherValidityDays}
-                        onChange={(event) => patchWelcomeVoucherConfig({
-                          welcomeVoucherValidityDays: Math.min(60, Math.max(1, Number(event.target.value || 1)))
-                        })}
-                      />
-                    </label>
                   </div>
 
                   <p className="admin-promo-helper-note">
                     {welcomeVoucherCoupon
                       ? `Đang chọn: ${welcomeVoucherCoupon.code || "Không có mã"} - ${welcomeVoucherCoupon.name || "Voucher loyalty"}.`
                       : "Chưa chọn voucher chào thành viên mới."}
-                    {" "}Nếu voucher không có ngày hết hạn cố định, hệ thống sẽ dùng số ngày ở đây.
+                    {" "}Hệ thống sẽ lấy đúng số ngày sử dụng sau khi nhận ngay trên voucher này.
                   </p>
                 </section>
               </div>
@@ -464,7 +472,7 @@ export default function CouponManager({
                 <p className="text-xl font-black text-orange-600">{formatDiscountValue(coupon)}</p>
                 <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
                   <span>{Number(coupon.minOrder || 0) ? `Đơn từ ${Number(coupon.minOrder || 0).toLocaleString("vi-VN")}đ` : "Mọi đơn"}</span>
-                  <span>{formatDateShort(coupon.endAt)}</span>
+                  <span>{coupon.voucherType === "loyalty" ? describeCouponExpiry(coupon, 7) : formatDateShort(coupon.endAt)}</span>
                 </div>
               </button>
             );
@@ -525,9 +533,26 @@ export default function CouponManager({
                       onChange={(event) => patchCoupon(selectedCoupon.id, { name: event.target.value })}
                     />
                   </FieldLabel>
-                  <FieldLabel label="Ngày hết hạn">
-                    <input className={inputClassName()} type="date" value={selectedCoupon.endAt} onChange={(event) => patchCoupon(selectedCoupon.id, { endAt: event.target.value, expiry: event.target.value })} />
-                  </FieldLabel>
+                  {selectedCoupon.voucherType === "loyalty" ? (
+                    <FieldLabel label="Số ngày sử dụng sau khi nhận">
+                      <input
+                        className={inputClassName()}
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={selectedCoupon.validDaysAfterGrant || 7}
+                        onChange={(event) => patchCoupon(selectedCoupon.id, {
+                          validDaysAfterGrant: normalizeValidDaysAfterGrant(event.target.value, 7),
+                          endAt: "",
+                          expiry: ""
+                        })}
+                      />
+                    </FieldLabel>
+                  ) : (
+                    <FieldLabel label="Ngày hết hạn">
+                      <input className={inputClassName()} type="date" value={selectedCoupon.endAt} onChange={(event) => patchCoupon(selectedCoupon.id, { endAt: event.target.value, expiry: event.target.value })} />
+                    </FieldLabel>
+                  )}
                   <div className="admin-promo-form-span-2 text-[12px] font-semibold text-slate-500">
                     Kênh áp dụng
                     <PromotionSalesChannelField

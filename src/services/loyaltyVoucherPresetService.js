@@ -61,22 +61,6 @@ const LOYALTY_VOUCHER_PRESET_ROWS = [
   }
 ];
 
-function toDateKey(value = new Date()) {
-  const date = value instanceof Date ? new Date(value) : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addDays(dateKey, days) {
-  const date = new Date(`${String(dateKey || "").slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return "";
-  date.setDate(date.getDate() + Number(days || 0));
-  return toDateKey(date);
-}
-
 function normalizeCode(value = "") {
   return String(value || "").trim().toUpperCase();
 }
@@ -87,9 +71,9 @@ export function getLoyaltyVoucherPresetByTierId(tierId = "") {
   return LOYALTY_VOUCHER_PRESETS.find((item) => item.tierId === String(tierId || "").trim()) || null;
 }
 
-export function buildLoyaltyPresetCoupon(preset, now = new Date()) {
-  const today = toDateKey(now);
+export function buildLoyaltyPresetCoupon(preset) {
   const safePreset = preset || {};
+  const validDaysAfterGrant = Number(safePreset.validDays || 30);
   return {
     id: `coupon-${safePreset.code || Date.now()}`,
     code: normalizeCode(safePreset.code),
@@ -98,24 +82,25 @@ export function buildLoyaltyPresetCoupon(preset, now = new Date()) {
     value: Number(safePreset.value || 0),
     maxDiscount: Number(safePreset.maxDiscount || 0),
     minOrder: Number(safePreset.minOrder || 0),
-    startAt: today,
-    endAt: addDays(today, safePreset.validDays || 30),
+    startAt: "",
+    endAt: "",
     customerType: "all",
     usageLimit: 0,
     perUserLimit: 1,
     totalUsed: 0,
     voucherType: "loyalty",
+    validDaysAfterGrant,
     fulfillmentType: "all",
     scopeType: "all",
     scopeValues: "",
     salesChannels: ["web", "qr"],
     stackable: false,
     active: true,
-    expiry: addDays(today, safePreset.validDays || 30)
+    expiry: ""
   };
 }
 
-export function applyLoyaltyVoucherPresets(coupons = [], now = new Date()) {
+export function applyLoyaltyVoucherPresets(coupons = []) {
   const safeCoupons = Array.isArray(coupons) ? [...coupons] : [];
   const existingCodes = new Set(
     safeCoupons.map((coupon) => normalizeCode(coupon?.code)).filter(Boolean)
@@ -124,7 +109,7 @@ export function applyLoyaltyVoucherPresets(coupons = [], now = new Date()) {
 
   LOYALTY_VOUCHER_PRESETS.forEach((preset) => {
     if (existingCodes.has(normalizeCode(preset.code))) return;
-    const coupon = buildLoyaltyPresetCoupon(preset, now);
+    const coupon = buildLoyaltyPresetCoupon(preset);
     created.push(coupon);
     safeCoupons.unshift(coupon);
     existingCodes.add(normalizeCode(coupon.code));
@@ -149,25 +134,19 @@ export function findAssignedLoyaltyVoucher(tier = {}, coupons = []) {
   )) || null;
 }
 
-export function buildLoyaltyVoucherChecklist(tiers = [], coupons = [], now = new Date()) {
-  const today = toDateKey(now);
+export function buildLoyaltyVoucherChecklist(tiers = [], coupons = []) {
   return (Array.isArray(tiers) ? tiers : []).map((tier) => {
     const preset = getLoyaltyVoucherPresetByTierId(tier?.id);
     const assignedCoupon = findAssignedLoyaltyVoucher(tier, coupons);
-    const expired = assignedCoupon?.endAt
-      ? String(assignedCoupon.endAt).slice(0, 10) < today
-      : false;
     const inactive = assignedCoupon ? assignedCoupon.active === false : false;
 
     let status = "missing";
     if (!tier?.milestoneVoucherId && preset?.autoGrantRecommended === false) {
       status = "optional";
-    } else if (assignedCoupon && !inactive && !expired) {
+    } else if (assignedCoupon && !inactive) {
       status = "ready";
     } else if (assignedCoupon && inactive) {
       status = "inactive";
-    } else if (assignedCoupon && expired) {
-      status = "expired";
     }
 
     return {

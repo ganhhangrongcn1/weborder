@@ -31,6 +31,11 @@ import {
   normalizeLoyaltyData,
   resolveVoucherUsageFromOrders
 } from "./loyaltyService.js";
+import {
+  getCouponValidDaysAfterGrant,
+  getCouponVoucherType,
+  resolveGrantedVoucherExpiry
+} from "./voucherTemplateService.js";
 export const CRM_CUSTOMERS_KEY = "ghr_customers";
 export const CRM_LOYALTY_KEY = "ghr_loyalty";
 
@@ -94,6 +99,7 @@ function getUtcMonthKey(date = new Date()) {
 
 function normalizeCrmVoucher(voucher) {
   const createdAt = String(voucher?.createdAt || getDateKey(new Date()));
+  const validDaysAfterGrant = Math.max(0, Number(voucher?.validDaysAfterGrant || 0));
   return {
     id: voucher?.id || `voucher-${Date.now()}`,
     type: voucher?.type || "CRM_GIFT",
@@ -110,7 +116,8 @@ function normalizeCrmVoucher(voucher) {
     canceled: Boolean(voucher?.canceled),
     canceledAt: voucher?.canceledAt || "",
     orderCode: voucher?.orderCode || "",
-    expiredAt: voucher?.expiredAt || addDaysToDateKey(createdAt, 7)
+    validDaysAfterGrant,
+    expiredAt: voucher?.expiredAt || addDaysToDateKey(createdAt, validDaysAfterGrant || 7)
   };
 }
 
@@ -783,6 +790,7 @@ function buildCustomersSnapshotFromSources({
     crmAnalytics,
     loyaltyConfig: normalizedLoyaltyConfig,
     supabaseProfileCount,
+    memberRegistrationComparison,
     transactionSummary: {
       source: rpcCustomerCount === customers.length && customers.length > 0
         ? "rpc"
@@ -930,6 +938,9 @@ export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 
     }))
   });
   const today = getDateKey(new Date());
+  const fallbackDays = getCouponVoucherType(sourceVoucher) === "loyalty"
+    ? getCouponValidDaysAfterGrant(sourceVoucher, 7)
+    : 7;
   const nextVoucher = normalizeCrmVoucher({
     id: `crm-voucher-${Date.now()}`,
     type: "CRM_GIFT",
@@ -942,7 +953,11 @@ export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 
     title: sourceVoucher?.name || sourceVoucher?.title || voucherTitle,
     createdAt: today,
     used: false,
-    expiredAt: sourceVoucher?.endAt || sourceVoucher?.expiry || addDaysToDateKey(today, 7)
+    validDaysAfterGrant: fallbackDays,
+    expiredAt: resolveGrantedVoucherExpiry(sourceVoucher || {}, {
+      createdAt: today,
+      fallbackDays
+    })
   });
   const next = normalizeLoyaltyData({
     ...current,

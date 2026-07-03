@@ -3,6 +3,7 @@ import { normalizeLoyaltyProgramConfig } from "./loyaltyProgramConfigService.js"
 import { catalogConfigRepository } from "./repositories/catalogConfigRepository.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
 import { getCustomerKey } from "./storageService.js";
+import { getCouponValidDaysAfterGrant, resolveGrantedVoucherExpiry } from "./voucherTemplateService.js";
 
 function toDateKey(value = new Date()) {
   const date = value instanceof Date ? new Date(value) : new Date(value);
@@ -11,13 +12,6 @@ function toDateKey(value = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function addDays(dateKey, days) {
-  const date = new Date(`${String(dateKey || "").slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return "";
-  date.setDate(date.getDate() + Number(days || 0));
-  return toDateKey(date);
 }
 
 function normalizeCode(value = "") {
@@ -62,8 +56,14 @@ function hasReceivedWelcomeVoucher(loyalty = {}) {
 
 function buildGrantedVoucher(coupon = {}, config = {}, now = new Date()) {
   const createdAt = toDateKey(now);
-  const expiry = String(coupon?.endAt || coupon?.expiry || "").trim() ||
-    addDays(createdAt, Number(config?.welcomeVoucherValidityDays || 7));
+  const validDaysAfterGrant = getCouponValidDaysAfterGrant(
+    coupon,
+    Number(config?.welcomeVoucherValidityDays || 7)
+  );
+  const expiry = resolveGrantedVoucherExpiry(coupon, {
+    createdAt,
+    fallbackDays: validDaysAfterGrant
+  });
 
   return {
     id: `welcome-voucher-${Date.now()}`,
@@ -76,6 +76,7 @@ function buildGrantedVoucher(coupon = {}, config = {}, now = new Date()) {
     minOrder: Number(coupon?.minOrder || 0),
     title: String(coupon?.name || coupon?.title || "Voucher chao thanh vien moi"),
     createdAt,
+    validDaysAfterGrant,
     used: false,
     canceled: false,
     orderCode: "",
