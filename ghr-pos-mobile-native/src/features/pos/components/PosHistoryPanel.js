@@ -61,6 +61,14 @@ function getSessionStatusGroup(status = "") {
   return "processing";
 }
 
+function isWebsitePaymentSession(session = {}) {
+  return ["web", "qr_order"].includes(toText(session.source).toLowerCase());
+}
+
+function canCancelPaymentSession(session = {}) {
+  return ["draft", "pending_payment"].includes(toText(session.status).toLowerCase());
+}
+
 function getOrderStatusGroup(order = {}) {
   const status = toText(order.status).toLowerCase();
   const kitchenStatus = toText(order.kitchenStatus).toLowerCase();
@@ -135,10 +143,14 @@ function OrderCard({ order, loading, onOpen }) {
 }
 
 function SessionCard({ session, loading, onOpen, onCancel }) {
+  const websiteSession = isWebsitePaymentSession(session);
+  const canOpen = !websiteSession;
+  const canCancel = canCancelPaymentSession(session);
+
   return (
     <Pressable
-      style={({ pressed }) => [styles.card, styles.sessionCard, pressed && styles.cardPressed]}
-      onPress={() => onOpen?.(session)}
+      style={({ pressed }) => [styles.card, styles.sessionCard, canOpen && pressed && styles.cardPressed]}
+      onPress={canOpen ? () => onOpen?.(session) : undefined}
       disabled={loading}
     >
       <View style={styles.cardHead}>
@@ -148,6 +160,7 @@ function SessionCard({ session, loading, onOpen, onCancel }) {
           </Text>
           <Text style={styles.rowMeta} numberOfLines={2}>
             {[
+              websiteSession ? "QR đơn website" : "QR tại quầy",
               session.pagerNumber ? `Thẻ ${session.pagerNumber}` : "Không có thẻ",
               session.customerName || "Khách tại quầy",
               formatTime(session.createdAt)
@@ -164,14 +177,21 @@ function SessionCard({ session, loading, onOpen, onCancel }) {
       </View>
 
       <View style={styles.inlineActions}>
-        <Text style={styles.tapHint}>Bấm để mở QR</Text>
-        <Pressable
-          style={styles.cancelPill}
-          onPress={() => onCancel?.(session)}
-          disabled={loading}
-        >
-          <Text style={[styles.dangerActionText, loading && styles.disabledText]}>Hủy QR</Text>
-        </Pressable>
+        <Text style={styles.tapHint}>
+          {websiteSession ? "Phiên thanh toán của đơn website" : "Bấm để mở QR"}
+        </Text>
+        {canCancel ? (
+          <Pressable
+            style={styles.cancelPill}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onCancel?.(session);
+            }}
+            disabled={loading}
+          >
+            <Text style={[styles.dangerActionText, loading && styles.disabledText]}>Hủy QR</Text>
+          </Pressable>
+        ) : null}
       </View>
     </Pressable>
   );

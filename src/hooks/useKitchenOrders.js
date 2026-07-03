@@ -31,6 +31,64 @@ const KITCHEN_SCHEDULE_STATUS_TICK_MS = 30000;
 const KITCHEN_SOURCE_WEBSITE = "website";
 const KITCHEN_SOURCE_PARTNER = "partner";
 
+function buildKitchenRealtimeStatus(status = "idle", error = null) {
+  const rawStatus = String(status || "idle").trim();
+  const normalizedStatus = rawStatus.toLowerCase();
+  const errorMessage = error?.message || "";
+
+  if (["subscribed", "connected"].includes(normalizedStatus)) {
+    return {
+      status: "connected",
+      label: "Realtime đang chạy",
+      tone: "success",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  if (["connecting", "joining"].includes(normalizedStatus)) {
+    return {
+      status: "connecting",
+      label: "Đang nối realtime",
+      tone: "warning",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  if (["channel_error", "timed_out", "error"].includes(normalizedStatus)) {
+    return {
+      status: "error",
+      label: errorMessage ? `Realtime lỗi: ${errorMessage}` : "Realtime lỗi, đang tự đồng bộ",
+      tone: "danger",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  if (["closed", "disconnected", "offline"].includes(normalizedStatus)) {
+    return {
+      status: "disconnected",
+      label: "Realtime ngắt, đang tự đồng bộ",
+      tone: "warning",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  if (normalizedStatus === "unavailable") {
+    return {
+      status: "unavailable",
+      label: "Realtime chưa sẵn sàng",
+      tone: "warning",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  return {
+    status: "idle",
+    label: "Chưa nối realtime",
+    tone: "muted",
+    updatedAt: new Date().toISOString()
+  };
+}
+
 function getTodayDateKey() {
   const now = new Date();
   const year = now.getFullYear();
@@ -579,6 +637,8 @@ export default function useKitchenOrders(options = null) {
   const [doneOrderLimit, setDoneOrderLimit] = useState(DONE_ORDER_PAGE_SIZE);
   const [search, setSearch] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState("");
+  const [realtimeStatus, setRealtimeStatus] = useState(() => buildKitchenRealtimeStatus());
+  const [realtimeReconnectKey, setRealtimeReconnectKey] = useState(0);
   const [scheduleStatusTick, setScheduleStatusTick] = useState(() => Date.now());
   const [requestAudit, setRequestAudit] = useState(() => getKitchenRequestAuditSnapshot());
   const [updatingOrderId, setUpdatingOrderId] = useState("");
@@ -596,6 +656,10 @@ export default function useKitchenOrders(options = null) {
   useEffect(() => {
     setDoneOrderLimit(DONE_ORDER_PAGE_SIZE);
   }, [dateFilter, sourceFilter, statusFilter]);
+
+  const reconnectRealtime = useCallback(() => {
+    setRealtimeReconnectKey((key) => key + 1);
+  }, []);
 
   const stabilizeRecentlyClosedOrders = useCallback((list = [], currentOrders = []) => {
     const now = Date.now();
@@ -725,12 +789,47 @@ export default function useKitchenOrders(options = null) {
   }, [enabled, loadOrders]);
 
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled || typeof window === "undefined") return undefined;
+
+    const syncAfterResume = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      reconnectRealtime();
+      loadOrders({ silent: true, force: true });
+    };
+    const syncAfterVisible = () => {
+      if (typeof document === "undefined" || document.visibilityState !== "visible") return;
+      syncAfterResume();
+    };
+    const markOffline = () => {
+      setRealtimeStatus(buildKitchenRealtimeStatus("offline"));
+    };
+
+    window.addEventListener("online", syncAfterResume);
+    window.addEventListener("offline", markOffline);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", syncAfterVisible);
+    }
+
+    return () => {
+      window.removeEventListener("online", syncAfterResume);
+      window.removeEventListener("offline", markOffline);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", syncAfterVisible);
+      }
+    };
+  }, [enabled, loadOrders, reconnectRealtime]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setRealtimeStatus(buildKitchenRealtimeStatus());
+      return undefined;
+    }
     let alive = true;
     let unsubscribe = () => {};
+    setRealtimeStatus(buildKitchenRealtimeStatus("connecting"));
 
     async function startRealtime() {
-      unsubscribe = await subscribeKitchenOrderChanges((change) => {
+      const nextUnsubscribe = await subscribeKitchenOrderChanges((change) => {
         if (!alive) return;
         const dateRange = getDateRange(dateFilter);
         if (!realtimeEventMatchesBranch(change, options, currentOrdersRef.current)) return;
@@ -745,7 +844,19 @@ export default function useKitchenOrders(options = null) {
           realtimeReloadTimerRef.current = null;
           loadOrders({ silent: true, sourceType });
         }, isRealtimeItemTable(change.table) ? ITEM_REALTIME_RELOAD_DELAY_MS : REALTIME_RELOAD_DELAY_MS);
+      }, {
+        onStatus: (nextStatus) => {
+          if (!alive) return;
+          setRealtimeStatus(buildKitchenRealtimeStatus(nextStatus?.status, nextStatus?.error));
+        }
       });
+
+      if (!alive) {
+        nextUnsubscribe?.();
+        return;
+      }
+
+      unsubscribe = nextUnsubscribe;
     }
 
     startRealtime();
@@ -758,7 +869,7 @@ export default function useKitchenOrders(options = null) {
       }
       unsubscribe?.();
     };
-  }, [dateFilter, enabled, loadOrders]);
+  }, [dateFilter, enabled, loadOrders, realtimeReconnectKey]);
 
   const filteredOrders = useMemo(() => {
     const matchedOrders = orders.filter((order) => {
@@ -932,6 +1043,11 @@ export default function useKitchenOrders(options = null) {
     }
   }, [claimingGiftOrderId, dateFilter, options, orders, loadOrders]);
 
+  const reload = useCallback(async () => {
+    reconnectRealtime();
+    await loadOrders({ silent: true, force: true });
+  }, [loadOrders, reconnectRealtime]);
+
   return {
     orders,
     filteredOrders,
@@ -949,6 +1065,7 @@ export default function useKitchenOrders(options = null) {
     search,
     setSearch,
     lastUpdatedAt,
+    realtimeStatus,
     requestAudit,
     resetRequestAudit,
     updatingOrderId,
@@ -958,7 +1075,7 @@ export default function useKitchenOrders(options = null) {
     markDone,
     toggleItemDone,
     claimGift,
-    reload: () => loadOrders({ silent: true, force: true })
+    reload
   };
 }
 

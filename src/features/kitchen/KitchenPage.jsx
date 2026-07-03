@@ -61,8 +61,45 @@ function formatUpdatedTime(value = "") {
 
   return date.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    second: "2-digit"
   });
+}
+
+function getRealtimeToneStyle(tone = "muted") {
+  if (tone === "success") {
+    return {
+      border: "1px solid #bbf7d0",
+      background: "#f0fdf4",
+      color: "#166534",
+      dot: "#16a34a"
+    };
+  }
+
+  if (tone === "danger") {
+    return {
+      border: "1px solid #fecaca",
+      background: "#fef2f2",
+      color: "#991b1b",
+      dot: "#dc2626"
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      border: "1px solid #fde68a",
+      background: "#fffbeb",
+      color: "#92400e",
+      dot: "#f59e0b"
+    };
+  }
+
+  return {
+    border: "1px solid #e5e7eb",
+    background: "#f8fafc",
+    color: "#475569",
+    dot: "#94a3b8"
+  };
 }
 
 function FilterButton({ active, badgeCount = 0, children, onClick }) {
@@ -575,6 +612,8 @@ export default function KitchenPage() {
     setStatusFilter,
     search,
     setSearch,
+    lastUpdatedAt,
+    realtimeStatus,
     updatingOrderId,
     updatingItemKey,
     claimingGiftOrderId,
@@ -927,6 +966,8 @@ export default function KitchenPage() {
     : isTabletBoard
       ? "minmax(0, 1fr) minmax(320px, 0.48fr)"
       : "minmax(0, 1fr) minmax(340px, 0.44fr)";
+  const realtimeToneStyle = getRealtimeToneStyle(realtimeStatus?.tone);
+  const syncStatusText = `${realtimeStatus?.label || "Chưa nối realtime"} · Cập nhật ${formatUpdatedTime(lastUpdatedAt)}`;
 
   return (
     <main
@@ -1140,6 +1181,38 @@ export default function KitchenPage() {
             <FilterButton active={statusFilter === "all"} onClick={() => handleStatusFilterChange("all")}>
               Tất cả
             </FilterButton>
+            <span
+              title={syncStatusText}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                minHeight: 34,
+                maxWidth: isMobile ? "100%" : 360,
+                border: realtimeToneStyle.border,
+                background: realtimeToneStyle.background,
+                color: realtimeToneStyle.color,
+                borderRadius: 8,
+                padding: "7px 10px",
+                fontSize: 12,
+                fontWeight: 850,
+                lineHeight: 1.25,
+                whiteSpace: "normal",
+                boxSizing: "border-box"
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 999,
+                  background: realtimeToneStyle.dot,
+                  flex: "0 0 auto"
+                }}
+              />
+              <span>{syncStatusText}</span>
+            </span>
             {false ? <KitchenRequestAuditBadge audit={requestAudit} onReset={resetRequestAudit} /> : null}
           </div>
         </header>

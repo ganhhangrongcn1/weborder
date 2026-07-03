@@ -10,13 +10,14 @@ export const defaultHomeContent = [
 export const defaultSmartPromotions = [
   {
     id: "promo-freeship-150",
-    name: "Freeship đơn từ 150k",
+    name: "Hỗ trợ ship đơn từ 150k",
     type: "free_shipping",
-    title: "Freeship 150k",
+    title: "Hỗ trợ ship 150k",
     text: "GHR hỗ trợ phí ship",
     icon: "bike",
     active: true,
     displayPlaces: ["home", "checkout"],
+    salesChannels: ["web"],
     condition: { minSubtotal: 150000, customerType: "all", productIds: "", categoryIds: "" },
     reward: { type: "shipping_discount", value: "full" },
     startAt: "2026-05-01",
@@ -48,7 +49,7 @@ export const promotionPlaces = [
 ];
 
 export const promotionTypes = [
-  { id: "free_shipping", label: "Freeship tự động" },
+  { id: "free_shipping", label: "Hỗ trợ ship tự động" },
   { id: "coupon_hint", label: "Mã giảm giá / gợi ý" },
   { id: "gift_threshold", label: "Đủ mức nhận quà" },
   { id: "happy_hour", label: "Giờ vàng" },

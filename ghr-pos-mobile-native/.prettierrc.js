@@ -1,4 +1,4 @@
-rr30t4module.exports = {
+module.exports = {
   arrowParens: 'avoid',
   bracketSameLine: true,
   bracketSpacing: false,

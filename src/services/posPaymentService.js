@@ -96,6 +96,15 @@ export function calculateCashChange(total = 0, cashReceived = 0) {
 
 export function buildPosPaymentReference(orderIdentity = {}, branch = {}) {
   const config = getPosQrPaymentConfig(branch);
+  const explicitReference = toText(
+    orderIdentity.paymentReference ||
+    orderIdentity.payment_reference
+  );
+
+  if (explicitReference) {
+    return explicitReference;
+  }
+
   if (config.provider === "sepay") {
     return toText(orderIdentity.orderCode || orderIdentity.displayOrderCode || "");
   }

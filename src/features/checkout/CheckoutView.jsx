@@ -133,6 +133,22 @@ export default function Checkout({
     [coupons, subtotal, checkoutLoyalty?.voucherHistory, demoOrders]
   );
 
+  useEffect(() => {
+    if (!selectedPromo) return;
+    const refreshedPromo = promoCodes.find((promo) => promo.id === selectedPromo.id);
+    if (!refreshedPromo || Number(refreshedPromo.discount || 0) <= 0) {
+      setSelectedPromo(null);
+      return;
+    }
+    if (
+      Number(refreshedPromo.discount || 0) !== Number(selectedPromo.discount || 0) ||
+      refreshedPromo.code !== selectedPromo.code ||
+      refreshedPromo.condition !== selectedPromo.condition
+    ) {
+      setSelectedPromo(refreshedPromo);
+    }
+  }, [promoCodes, selectedPromo]);
+
   const availablePoints = userProfile?.points || 0;
   const {
     baseCheckoutShip,

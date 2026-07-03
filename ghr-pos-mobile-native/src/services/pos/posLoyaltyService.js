@@ -1,11 +1,6 @@
 import { supabase } from "../supabase/client";
 import { normalizeCustomerPhone } from "./posCustomerService";
 
-const DEFAULT_LOYALTY_RULE = {
-  currencyPerPoint: 100,
-  pointPerUnit: 1
-};
-
 function toText(value = "") {
   return String(value ?? "").normalize("NFC").trim();
 }
@@ -33,18 +28,6 @@ function normalizeSourceKey(value = "") {
     .replace(/^_+|_+$/g, "");
 }
 
-function calculateOrderPoints(amount = 0, loyaltyRule = DEFAULT_LOYALTY_RULE) {
-  const currencyPerPoint = Math.max(1, toNumber(loyaltyRule.currencyPerPoint, 100));
-  const pointPerUnit = Math.max(1, toNumber(loyaltyRule.pointPerUnit, 1));
-  return Math.floor((toNumber(amount, 0) / currencyPerPoint) * pointPerUnit);
-}
-
-function isSettlementDone(status = "") {
-  return ["done", "completed", "complete", "finish", "finished", "served", "hoan_tat", "hoantat"].includes(
-    normalizeSourceKey(status)
-  );
-}
-
 function normalizeVoucherHistory(row = {}) {
   const vouchers = Array.isArray(row.vouchers)
     ? row.vouchers
@@ -54,22 +37,25 @@ function normalizeVoucherHistory(row = {}) {
   return vouchers;
 }
 
-async function applyLoyaltyEvent({ phone, entryType, points, orderId, amount, title, note, metadata, createdAt }) {
-  if (!supabase || !phone || !entryType || !points) return;
+function buildOrderLoyaltyIdempotencyKey(orderId = "", action = "") {
+  const safeOrderId = toText(orderId).replace(/\s+/g, "-").slice(0, 120);
+  const safeAction = toText(action).toUpperCase();
+  return `loyalty-v2:ORDER:${safeOrderId}:${safeAction}:v1`.slice(0, 200);
+}
 
-  const { error } = await supabase.rpc("apply_loyalty_event", {
-    p_customer_phone: phone,
-    p_entry_type: entryType,
-    p_points: Math.trunc(toNumber(points, 0)),
-    p_order_id: toText(orderId) || null,
-    p_amount: toNumber(amount, 0),
-    p_title: toText(title),
-    p_note: toText(note),
-    p_metadata: getObject(metadata),
-    p_created_at: createdAt || new Date().toISOString()
+async function processOrderLoyalty({ orderId = "", action = "" } = {}) {
+  if (!supabase || !orderId || !action) return null;
+
+  const safeAction = toText(action).toUpperCase();
+  const { data, error } = await supabase.rpc("process_order_loyalty", {
+    p_source_type: "ORDER",
+    p_source_order_id: toText(orderId),
+    p_action: safeAction,
+    p_idempotency_key: buildOrderLoyaltyIdempotencyKey(orderId, safeAction)
   });
-
   if (error) throw error;
+
+  return Array.isArray(data) ? data[0] || null : data || null;
 }
 
 async function markLoyaltyVoucherUsed({ phone, voucherId = "", voucherCode = "", orderId = "", usedAt = "" }) {
@@ -117,14 +103,11 @@ async function markLoyaltyVoucherUsed({ phone, voucherId = "", voucherCode = "",
 export async function applyPosOrderLoyaltyMobile({
   phone = "",
   orderId = "",
-  amount = 0,
   createdAt = new Date().toISOString(),
-  orderStatus = "",
   pointsDiscount = 0,
   promoSource = "",
   promoVoucherId = "",
-  promoCode = "",
-  loyaltyRule = null
+  promoCode = ""
 } = {}) {
   const normalizedPhone = normalizeCustomerPhone(phone);
   const normalizedOrderId = toText(orderId);
@@ -132,56 +115,16 @@ export async function applyPosOrderLoyaltyMobile({
     return { ok: true, skipped: true };
   }
 
-  const rule = {
-    ...DEFAULT_LOYALTY_RULE,
-    ...getObject(loyaltyRule)
-  };
+  // POS chỉ gửi SPEND qua loyalty V2 và đánh dấu voucher.
+  // Điểm thưởng được loyalty V2 cộng đúng một lần khi bếp hoàn tất đơn.
   const spendPoints = Math.max(0, Math.floor(toNumber(pointsDiscount, 0)));
-  const earnPoints = isSettlementDone(orderStatus) ? calculateOrderPoints(amount, rule) : 0;
-  const tasks = [];
-
-  if (earnPoints > 0) {
-    tasks.push(
-      applyLoyaltyEvent({
-        phone: normalizedPhone,
-        entryType: "ORDER_EARN",
-        points: earnPoints,
-        orderId: normalizedOrderId,
-        amount,
-        title: `Tích điểm đơn ${normalizedOrderId}`,
-        note: "Tích điểm từ đơn POS",
-        metadata: {
-          source: "pos_mobile",
-          type: "ORDER_EARN",
-          orderId: normalizedOrderId
-        },
-        createdAt
-      })
-    );
-  }
+  let spendResult = null;
 
   if (spendPoints > 0) {
-    tasks.push(
-      applyLoyaltyEvent({
-        phone: normalizedPhone,
-        entryType: "ORDER_SPEND",
-        points: -spendPoints,
-        orderId: normalizedOrderId,
-        amount,
-        title: `Dùng điểm đơn ${normalizedOrderId}`,
-        note: "Dùng điểm khi thanh toán POS",
-        metadata: {
-          source: "pos_mobile",
-          type: "ORDER_SPEND",
-          orderId: normalizedOrderId
-        },
-        createdAt
-      })
-    );
-  }
-
-  if (tasks.length) {
-    await Promise.all(tasks);
+    spendResult = await processOrderLoyalty({
+      orderId: normalizedOrderId,
+      action: "SPEND"
+    });
   }
 
   if (normalizeSourceKey(promoSource) === "loyalty" && (promoVoucherId || promoCode)) {
@@ -196,8 +139,9 @@ export async function applyPosOrderLoyaltyMobile({
 
   return {
     ok: true,
-    pointsEarned: earnPoints,
+    pointsEarned: 0,
     pointsSpent: spendPoints,
+    spendApplied: Boolean(spendResult?.applied),
     voucherUsed: normalizeSourceKey(promoSource) === "loyalty" && Boolean(promoVoucherId || promoCode)
   };
 }

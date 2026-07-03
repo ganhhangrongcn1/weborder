@@ -62,7 +62,7 @@ function updateStreakReward(setCrmSnapshot, day, value) {
 function getChecklistLabel(status = "") {
   const labels = {
     ready: "Sẵn sàng",
-    missing: "Chưa gán",
+    missing: "Chưa gắn",
     inactive: "Đang tắt",
     expired: "Hết hạn",
     optional: "Tùy chọn"
@@ -336,7 +336,7 @@ export default function LoyaltySettings({
                         milestoneVoucherId: event.target.value
                       })}
                     >
-                      <option value="">Chưa gán voucher</option>
+                      <option value="">Chưa gắn voucher</option>
                       {loyaltyCoupons.map((voucher) => (
                         <option key={voucher.id || voucher.code} value={voucher.id || voucher.code}>
                           {voucher.code || "Không có mã"} - {voucher.name || voucher.title || "Voucher loyalty"}{voucher.active === false ? " (đang tắt)" : ""}
@@ -350,7 +350,7 @@ export default function LoyaltySettings({
           })}
         </div>
         <p className="admin-loyalty-note">
-          Đơn tiền lẻ được tính theo công thức làm tròn xuống. Không gán voucher thì khách vẫn thăng hạng bình thường.
+          Đơn tiền lẻ được tính theo công thức làm tròn xuống. Không gắn voucher thì khách vẫn thăng hạng bình thường.
         </p>
       </AdminPanel>
 
@@ -361,7 +361,7 @@ export default function LoyaltySettings({
       >
         <div className="admin-loyalty-quick-steps">
           <span><strong>1.</strong> Tạo bộ voucher loyalty mẫu</span>
-          <span><strong>2.</strong> Gán từng voucher vào đúng hạng</span>
+          <span><strong>2.</strong> Gắn từng voucher vào đúng hạng</span>
           <span><strong>3.</strong> Lưu lại để tự tặng mỗi tháng, hạn dùng 7 ngày</span>
         </div>
 

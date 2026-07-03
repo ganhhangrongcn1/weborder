@@ -32,6 +32,33 @@ function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function pickPositiveNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const parsed = toNumber(value);
+    if (parsed > 0) return parsed;
+  }
+  return 0;
+}
+
+function getCashPaidAmount(order = {}) {
+  const metadata = getObject(order.metadata);
+  return Math.max(0, pickPositiveNumber(
+    metadata.paymentAmount,
+    metadata.payment_amount,
+    metadata.cashPaymentAmount,
+    metadata.cash_payment_amount,
+    order.total_amount
+  ));
+}
+
+function getCashRoundingDiscount(order = {}) {
+  const metadata = getObject(order.metadata);
+  const explicitDiscount = pickPositiveNumber(metadata.cashRoundingDiscount, metadata.cash_rounding_discount);
+  if (explicitDiscount > 0) return explicitDiscount;
+  return Math.max(0, toNumber(order.total_amount, 0) - getCashPaidAmount(order));
+}
+
 function isCancelledStatus(value = "") {
   return ["cancelled", "canceled", "cancel"].includes(toText(value).toLowerCase());
 }
@@ -83,6 +110,8 @@ function buildEmptyShiftSummary(openingCash = 0) {
     revenue: 0,
     openingCash: safeOpeningCash,
     expectedCash: safeOpeningCash,
+    cashOriginalTotal: 0,
+    cashRoundingTotal: 0,
     updatedAt: new Date().toISOString()
   };
 }
@@ -262,14 +291,19 @@ export async function fetchPosShiftSummary({ shiftId = "", openingCash = 0 } = {
       summary.qrOrderCount += 1;
       summary.qrTotal += amount;
     } else {
+      const cashPaidAmount = getCashPaidAmount(order);
       summary.cashOrderCount += 1;
-      summary.cashTotal += amount;
+      summary.cashTotal += cashPaidAmount;
+      summary.cashOriginalTotal += amount;
+      summary.cashRoundingTotal += getCashRoundingDiscount(order);
     }
     return summary;
   }, {
     cashOrderCount: 0,
     qrOrderCount: 0,
     cashTotal: 0,
+    cashOriginalTotal: 0,
+    cashRoundingTotal: 0,
     qrTotal: 0
   });
 
@@ -296,6 +330,8 @@ export async function fetchPosShiftSummary({ shiftId = "", openingCash = 0 } = {
       revenue: totals.cashTotal + totals.qrTotal,
       openingCash: safeOpeningCash,
       expectedCash: safeOpeningCash + totals.cashTotal,
+      cashOriginalTotal: totals.cashOriginalTotal,
+      cashRoundingTotal: totals.cashRoundingTotal,
       updatedAt: new Date().toISOString()
     },
     message: ""
@@ -346,7 +382,7 @@ export async function closePosShift({
     : Math.max(0, Math.round(toNumber(closingCashCounted, 0)));
   const openingCashValue = Math.max(0, toNumber(normalizedShift.openingCash, 0));
   const cashTotal = Math.max(0, toNumber(safeSummary.cashTotal, 0));
-  const expectedCash = Math.max(0, toNumber(safeSummary.expectedCash, openingCashValue + cashTotal));
+  const expectedCash = Math.max(0, toNumber(safeSummary.expectedCash ?? openingCashValue + cashTotal));
   const closedAt = new Date().toISOString();
   const note = toText(closingNote);
   const payload = {

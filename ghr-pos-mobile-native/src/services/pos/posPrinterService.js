@@ -4,13 +4,18 @@ import { getCashBreakdownEntries } from "./posCashBreakdownService";
 import { formatMoney } from "../../utils/format";
 
 const printerModule = NativeModules.PosPrinter || null;
-const NO_FOOTER_SOURCE_TYPES = new Set(["pos_payment_qr", "pos_shift_close"]);
+const NO_FOOTER_SOURCE_TYPES = new Set([
+  "pos_payment_qr",
+  "pickup_order_payment_qr",
+  "delivery_order_payment_qr",
+  "pos_shift_close"
+]);
 const DEFAULT_RECEIPT_FOOTER_TEXT = [
   "------------------------------------------",
   "@@CENTER:Quét QR tích điểm ngay",
   "@@QR",
   "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon",
-  "@@CENTER:đều được tích điểm tại Gánh Hàng Rong",
+  "@@CENTER:đều được tích 10 - 15% điểm tại Gánh Hàng Rong",
   "@@CENTER:Quét để xem đơn và dùng điểm",
   "@@CENTER:Hotline: 0933 799 061",
   "@@CENTER:Cảm ơn quý khách!"
@@ -198,7 +203,17 @@ export function buildPosCustomerBillText({
     lines.push(alignReceiptLine("Giam diem", `-${formatMoney(totals.pointsDiscount || 0)}`, width));
   }
 
-  lines.push(alignReceiptLine("Tong can thu", formatMoney(totals.total || 0), width));
+  const cashRoundingDiscount = paymentConfirmed?.method === "cash"
+    ? toNumber(paymentConfirmed.cashRoundingDiscount, 0)
+    : 0;
+  if (cashRoundingDiscount > 0) {
+    lines.push(alignReceiptLine("Lam tron tien mat", `-${formatMoney(cashRoundingDiscount)}`, width));
+  }
+
+  const amountDue = paymentConfirmed?.method === "cash" && toNumber(paymentConfirmed.amount, 0) > 0
+    ? toNumber(paymentConfirmed.amount, 0)
+    : toNumber(totals.total, 0);
+  lines.push(alignReceiptLine("Tong can thu", formatMoney(amountDue), width));
   lines.push(buildLine("-", width));
   lines.push(`Thanh toan: ${paymentConfirmed?.method === "bank_qr" ? "QR" : "Tien mat"}`);
 
@@ -257,6 +272,7 @@ export function buildPosShiftCloseReceiptText({
 } = {}) {
   const width = 42;
   const expectedCash = toNumber(summary.expectedCash ?? shift.expectedCashSnapshot, 0);
+  const cashRoundingTotal = toNumber(summary.cashRoundingTotal, 0);
   const countedCash = toNumber(closingCashCounted || shift.closingCashCounted, 0);
   const difference = countedCash - expectedCash;
   const shortShiftId = toText(shift.id || shift.shiftId).slice(0, 8).toUpperCase();
@@ -273,6 +289,9 @@ export function buildPosShiftCloseReceiptText({
     alignReceiptLine("Tien dau ca", formatMoney(shift.openingCash || 0), width),
     alignReceiptLine("Tien mat da thu", formatMoney(summary.cashTotal || 0), width),
     alignReceiptLine("QR da thu", formatMoney(summary.qrTotal || 0), width),
+    ...(cashRoundingTotal > 0
+      ? [alignReceiptLine("Giam lam tron", `-${formatMoney(cashRoundingTotal)}`, width)]
+      : []),
     alignReceiptLine("Du kien trong ket", formatMoney(expectedCash), width),
     alignReceiptLine("Thuc dem", formatMoney(countedCash), width),
     alignReceiptLine(

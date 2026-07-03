@@ -1,20 +1,26 @@
 import { supabase } from "../supabase/client";
 
-const PICKUP_ORDER_SELECT = [
+const WEBSITE_ORDER_SELECT = [
   "id",
   "order_code",
   "customer_name",
   "customer_phone",
+  "subtotal",
   "total_amount",
   "payment_method",
   "status",
   "kitchen_status",
   "fulfillment_type",
+  "shipping_fee",
+  "original_shipping_fee",
   "branch_uuid",
   "branch_name",
   "pickup_branch_uuid",
   "pickup_branch_name",
   "pickup_time_text",
+  "delivery_branch_uuid",
+  "delivery_branch_name",
+  "delivery_address",
   "pos_shift_id",
   "metadata",
   "created_at"
@@ -71,9 +77,22 @@ function isPosSource(row = {}) {
   return tokens.some((token) => ["pos", "pos_mobile", "posmobile", "counter", "tai_quay"].includes(token));
 }
 
-function isPickupOrder(row = {}) {
+function getFulfillmentType(row = {}) {
   const metadata = getObject(row.metadata);
-  return normalizeToken(row.fulfillment_type || metadata.fulfillmentType || metadata.fulfillment_type) === "pickup";
+  const rawType = normalizeToken(
+    row.fulfillment_type ||
+      metadata.fulfillmentType ||
+      metadata.fulfillment_type
+  );
+
+  if (rawType === "pickup") return "pickup";
+  if (["delivery", "ship", "shipping"].includes(rawType)) return "delivery";
+  if (toText(row.pickup_time_text || metadata.pickupTimeText || metadata.pickup_time_text)) return "pickup";
+  return "delivery";
+}
+
+function isPickupOrder(row = {}) {
+  return getFulfillmentType(row) === "pickup";
 }
 
 function matchesBranch(row = {}, branchUuid = "") {
@@ -83,10 +102,13 @@ function matchesBranch(row = {}, branchUuid = "") {
   return [
     row.branch_uuid,
     row.pickup_branch_uuid,
+    row.delivery_branch_uuid,
     metadata.branchUuid,
     metadata.branch_uuid,
     metadata.pickupBranchUuid,
-    metadata.pickup_branch_uuid
+    metadata.pickup_branch_uuid,
+    metadata.deliveryBranchUuid,
+    metadata.delivery_branch_uuid
   ].map(toText).includes(safeBranchUuid);
 }
 
@@ -110,99 +132,145 @@ function getPaymentStatus(row = {}) {
 }
 
 function isPaid(row = {}) {
-  return getPaymentStatus(row) === "paid" || Boolean(toText(row.paid_at || getObject(row.metadata).paidAt || getObject(row.metadata).paid_at));
+  const metadata = getObject(row.metadata);
+  return getPaymentStatus(row) === "paid" || Boolean(toText(row.paid_at || metadata.paidAt || metadata.paid_at));
 }
 
-function normalizePickupOrder(row = {}) {
+function getWebsiteOrderLabel(order = {}) {
+  return order.fulfillmentType === "delivery" ? "đơn giao hàng" : "đơn hẹn lấy";
+}
+
+function normalizeWebsiteOrder(row = {}) {
   const metadata = getObject(row.metadata);
+  const fulfillmentType = getFulfillmentType(row);
   const paid = isPaid(row);
+  const shippingFee = Math.max(
+    0,
+    toNumber(row.shipping_fee || metadata.shippingFee || metadata.shipping_fee || metadata.deliveryFee || metadata.delivery_fee)
+  );
+  const totalAmount = Math.max(0, toNumber(row.total_amount || metadata.totalAmount || metadata.total));
+  const subtotal = Math.max(
+    0,
+    toNumber(
+      row.subtotal ||
+        metadata.subtotal ||
+        metadata.itemsAmount ||
+        metadata.items_amount ||
+        Math.max(0, totalAmount - shippingFee)
+    )
+  );
+
   return {
     id: toText(row.id || row.order_code),
     orderCode: toText(row.order_code || row.id),
     displayOrderCode: toText(metadata.displayOrderCode || row.order_code || row.id),
-    customerName: toText(row.customer_name || metadata.customerName || metadata.customer_name) || "Khách tự lấy",
+    fulfillmentType,
+    fulfillmentLabel: fulfillmentType === "delivery" ? "Giao hàng" : "Hẹn lấy",
+    customerName: toText(row.customer_name || metadata.customerName || metadata.customer_name) || "Khách đặt web",
     customerPhone: toText(row.customer_phone || metadata.customerPhone || metadata.customer_phone),
-    totalAmount: Math.max(0, toNumber(row.total_amount || metadata.totalAmount || metadata.total)),
+    subtotal,
+    shippingFee,
+    totalAmount,
+    collectAmount: totalAmount,
     paymentMethod: toText(row.payment_method || metadata.paymentMethod || metadata.payment_method || "cash"),
     paymentStatus: paid ? "paid" : "unpaid",
-    paymentAmount: Math.max(0, toNumber(row.payment_amount || metadata.paymentAmount || metadata.payment_amount || row.total_amount)),
+    paymentAmount: Math.max(0, toNumber(row.payment_amount || metadata.paymentAmount || metadata.payment_amount || totalAmount)),
     paymentReference: toText(row.payment_reference || metadata.paymentReference || metadata.payment_reference),
     paidAt: toText(row.paid_at || metadata.paidAt || metadata.paid_at),
     status: toText(row.status || metadata.status),
     kitchenStatus: toText(row.kitchen_status || metadata.kitchenStatus || metadata.kitchen_status),
     pickupTimeText: toText(row.pickup_time_text || metadata.pickupTimeText || metadata.pickup_time_text),
     pickupBranchName: toText(row.pickup_branch_name || metadata.pickupBranchName || metadata.pickup_branch_name || row.branch_name),
+    deliveryBranchName: toText(row.delivery_branch_name || metadata.deliveryBranchName || metadata.delivery_branch_name || row.branch_name),
+    deliveryAddress: toText(row.delivery_address || metadata.deliveryAddress || metadata.delivery_address),
     posShiftId: toText(row.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id),
     createdAt: toText(row.created_at),
     metadata
   };
 }
 
-function shouldShowInPickupQueue(row = {}) {
+function shouldShowInWebsiteQueue(row = {}) {
   if (isCancelled(row)) return false;
   if (!isPaid(row)) return true;
   return !isKitchenCompleted(row);
 }
 
-export async function getPosPickupOrders({ branchUuid = "", limit = 60 } = {}) {
+function shouldShowInWebsiteHistory(row = {}) {
+  return isPaid(row) || isCancelled(row);
+}
+
+function splitWebsiteOrders(rows = []) {
+  const pickupOrders = [];
+  const deliveryOrders = [];
+
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const order = normalizeWebsiteOrder(row);
+    if (order.fulfillmentType === "delivery") {
+      deliveryOrders.push(order);
+      return;
+    }
+    pickupOrders.push(order);
+  });
+
+  return { pickupOrders, deliveryOrders };
+}
+
+async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = true } = {}) {
   const safeBranchUuid = toText(branchUuid);
   if (!supabase || !safeBranchUuid) return [];
 
   const safeLimit = Math.max(10, Math.min(120, Math.floor(Number(limit || 60))));
   const startOfToday = getStartOfTodayIso();
   const startOfTomorrow = getStartOfTomorrowIso();
-  const { data, error } = await supabase
+  const query = supabase
     .from("orders")
-    .select(PICKUP_ORDER_SELECT)
-    .or(`branch_uuid.eq.${safeBranchUuid},pickup_branch_uuid.eq.${safeBranchUuid}`)
+    .select(WEBSITE_ORDER_SELECT)
+    .or(`branch_uuid.eq.${safeBranchUuid},pickup_branch_uuid.eq.${safeBranchUuid},delivery_branch_uuid.eq.${safeBranchUuid}`)
     .gte("created_at", startOfToday)
     .lt("created_at", startOfTomorrow)
     .order("created_at", { ascending: false })
     .limit(safeLimit);
 
+  const { data, error } = await query;
   if (error || !Array.isArray(data)) {
-    throw new Error(error?.message || "Không tải được đơn hẹn lấy.");
+    throw new Error(error?.message || "Không tải được đơn website.");
   }
 
   return data
     .filter((row) => matchesBranch(row, safeBranchUuid))
-    .filter(isPickupOrder)
     .filter((row) => !isPosSource(row))
-    .filter(shouldShowInPickupQueue)
-    .map(normalizePickupOrder);
+    .filter((row) => ["pickup", "delivery"].includes(getFulfillmentType(row)))
+    .filter((row) => (includePaid ? true : !isPaid(row)));
 }
 
-function shouldShowInPickupHistory(row = {}) {
-  return isPaid(row) || isCancelled(row);
+export async function getPosWebsiteOrders({ branchUuid = "", limit = 80 } = {}) {
+  const rows = await readWebsiteOrders({ branchUuid, limit, includePaid: true });
+  return splitWebsiteOrders(rows.filter(shouldShowInWebsiteQueue));
 }
 
-export async function getPosPickupHistoryOrders({ branchUuid = "", limit = 20 } = {}) {
+export async function getPosPickupOrders({ branchUuid = "", limit = 60 } = {}) {
+  const { pickupOrders } = await getPosWebsiteOrders({ branchUuid, limit });
+  return pickupOrders;
+}
+
+export async function getPosDeliveryOrders({ branchUuid = "", limit = 60 } = {}) {
+  const { deliveryOrders } = await getPosWebsiteOrders({ branchUuid, limit });
+  return deliveryOrders;
+}
+
+export async function getPosWebsiteHistoryOrders({ branchUuid = "", limit = 20 } = {}) {
   const safeBranchUuid = toText(branchUuid);
   if (!supabase || !safeBranchUuid) return [];
 
   const safeLimit = Math.max(8, Math.min(60, Math.floor(Number(limit || 20))));
   const fetchLimit = Math.max(24, safeLimit * 3);
-  const startOfToday = getStartOfTodayIso();
-  const { data, error } = await supabase
-    .from("orders")
-    .select(PICKUP_ORDER_SELECT)
-    .or(`branch_uuid.eq.${safeBranchUuid},pickup_branch_uuid.eq.${safeBranchUuid}`)
-    .gte("created_at", startOfToday)
-    .order("created_at", { ascending: false })
-    .limit(fetchLimit);
+  const rows = await readWebsiteOrders({ branchUuid: safeBranchUuid, limit: fetchLimit, includePaid: true });
 
-  if (error || !Array.isArray(data)) {
-    throw new Error(error?.message || "Không tải được lịch sử đơn hẹn lấy.");
-  }
-
-  return data
-    .filter((row) => matchesBranch(row, safeBranchUuid))
-    .filter(isPickupOrder)
-    .filter((row) => !isPosSource(row))
-    .filter(shouldShowInPickupHistory)
+  return rows
+    .filter(shouldShowInWebsiteHistory)
     .slice(0, safeLimit)
     .map((row) => {
-      const order = normalizePickupOrder(row);
+      const order = normalizeWebsiteOrder(row);
       return {
         id: order.id,
         displayOrderCode: order.displayOrderCode,
@@ -217,20 +285,90 @@ export async function getPosPickupHistoryOrders({ branchUuid = "", limit = 20 } 
         createdAt: order.createdAt,
         metadata: {
           ...order.metadata,
-          orderChannelLabel: "Website tự lấy",
-          orderSourceType: "website_pickup",
+          orderChannelLabel: order.fulfillmentType === "delivery" ? "Website giao hàng" : "Website tự lấy",
+          orderSourceType: order.fulfillmentType === "delivery" ? "website_delivery" : "website_pickup",
           pickupOrderCreatedAt: order.createdAt,
-          paidAt: order.paidAt
+          paidAt: order.paidAt,
+          fulfillmentType: order.fulfillmentType,
+          shippingFee: order.shippingFee,
+          subtotal: order.subtotal,
+          deliveryAddress: order.deliveryAddress,
+          pickupTimeText: order.pickupTimeText
         },
         canCancel: false
       };
     });
 }
 
-export async function markPickupOrderPaidCash({
+export async function getPosPickupHistoryOrders({ branchUuid = "", limit = 20 } = {}) {
+  const historyOrders = await getPosWebsiteHistoryOrders({ branchUuid, limit: Math.max(24, limit * 3) });
+  return historyOrders
+    .filter((order) => toText(order.metadata?.orderSourceType) === "website_pickup")
+    .slice(0, Math.max(1, Math.floor(Number(limit || 20))));
+}
+
+function buildWebsitePaymentPatch({
+  order,
+  shiftId = "",
+  cashierName = "",
+  paymentMethod = "cash",
+  paymentReference = "",
+  paidAt = "",
+  paymentAmount = 0,
+  cashReceived = 0,
+  cashChange = 0,
+  cashRoundingDiscount = 0,
+  cashRoundingUnit = 0
+} = {}) {
+  const metadata = getObject(order?.metadata);
+  const fulfillmentType = order?.fulfillmentType === "delivery" ? "delivery" : "pickup";
+  const normalizedPaidAt = toText(paidAt) || new Date().toISOString();
+  const normalizedCashierName = toText(cashierName) || metadata.cashierName || "POS mobile";
+  const amount = Math.max(0, toNumber(paymentAmount || order?.collectAmount || order?.totalAmount || order?.paymentAmount));
+  const nextMetadata = {
+    ...metadata,
+    paymentMethod,
+    paymentStatus: "paid",
+    paymentAmount: amount,
+    paymentReference: toText(paymentReference),
+    paidAt: normalizedPaidAt,
+    posShiftId: shiftId,
+    pos_shift_id: shiftId,
+    cashierName: normalizedCashierName,
+    websitePaymentCollectedAt: normalizedPaidAt,
+    websitePaymentCollectedBy: normalizedCashierName
+  };
+
+  if (paymentMethod === "cash") {
+    nextMetadata.cashReceived = Math.max(amount, toNumber(cashReceived || amount));
+    nextMetadata.cashChange = Math.max(0, toNumber(cashChange || 0));
+    nextMetadata.originalPaymentAmount = Math.max(amount, toNumber(order?.collectAmount || order?.totalAmount || order?.paymentAmount || amount));
+    nextMetadata.cashRoundingDiscount = Math.max(0, toNumber(cashRoundingDiscount || 0));
+    nextMetadata.cashRoundingUnit = Math.max(0, toNumber(cashRoundingUnit || 0));
+  }
+
+  if (fulfillmentType === "delivery") {
+    nextMetadata.deliveryPaymentCollectedAt = normalizedPaidAt;
+    nextMetadata.deliveryPaymentCollectedBy = normalizedCashierName;
+  } else {
+    nextMetadata.pickupPaymentCollectedAt = normalizedPaidAt;
+    nextMetadata.pickupPaymentCollectedBy = normalizedCashierName;
+  }
+
+  return {
+    payment_method: paymentMethod,
+    pos_shift_id: shiftId,
+    metadata: nextMetadata
+  };
+}
+
+export async function markWebsiteOrderPaidCash({
   order,
   shift,
   cashierName = "",
+  paymentAmount = 0,
+  cashRoundingDiscount = 0,
+  cashRoundingUnit = 0,
   cashReceived = 0,
   cashChange = 0,
   paymentReference = ""
@@ -238,56 +376,45 @@ export async function markPickupOrderPaidCash({
   const orderId = toText(order?.id);
   const shiftId = toText(shift?.id);
   if (!supabase) return { ok: false, message: "Supabase chưa sẵn sàng." };
-  if (!orderId) return { ok: false, message: "Thiếu mã đơn hẹn lấy." };
+  if (!orderId) return { ok: false, message: "Thiếu mã đơn website." };
   if (!shiftId) return { ok: false, message: "Cần mở ca POS trước khi thu tiền." };
 
-  const paidAt = new Date().toISOString();
-  const amount = Math.max(0, toNumber(order.totalAmount || order.paymentAmount));
-  const receivedAmount = Math.max(amount, toNumber(cashReceived || amount));
-  const changeAmount = Math.max(0, toNumber(cashChange || 0));
-  const metadata = getObject(order.metadata);
-  const patch = {
-    payment_method: "cash",
-    pos_shift_id: shiftId,
-    metadata: {
-      ...metadata,
-      paymentMethod: "cash",
-      paymentStatus: "paid",
-      paymentAmount: amount,
-      paymentReference: toText(paymentReference),
-      paidAt,
-      posShiftId: shiftId,
-      pos_shift_id: shiftId,
-      cashReceived: receivedAmount,
-      cashChange: changeAmount,
-      cashierName: toText(cashierName) || metadata.cashierName || "",
-      pickupPaymentCollectedAt: paidAt,
-      pickupPaymentCollectedBy: toText(cashierName) || "POS mobile"
-    }
-  };
+  const patch = buildWebsitePaymentPatch({
+    order,
+    shiftId,
+    cashierName,
+    paymentMethod: "cash",
+    paymentAmount,
+    paymentReference,
+    cashReceived,
+    cashChange,
+    cashRoundingDiscount,
+    cashRoundingUnit
+  });
 
   const { data, error } = await supabase
     .from("orders")
     .update(patch)
     .eq("id", orderId)
-    .select(PICKUP_ORDER_SELECT)
+    .select(WEBSITE_ORDER_SELECT)
     .maybeSingle();
 
   if (error || !data) {
     return {
       ok: false,
-      message: error?.message || "Không cập nhật được thanh toán đơn hẹn lấy."
+      message: error?.message || "Không cập nhật được thanh toán đơn website."
     };
   }
 
+  const nextOrder = normalizeWebsiteOrder(data);
   return {
     ok: true,
-    order: normalizePickupOrder(data),
-    message: `Đã thu tiền mặt đơn ${order.displayOrderCode || order.orderCode || orderId}.`
+    order: nextOrder,
+    message: `Đã thu tiền mặt ${getWebsiteOrderLabel(nextOrder)} ${nextOrder.displayOrderCode || nextOrder.orderCode || orderId}.`
   };
 }
 
-export async function markPickupOrderPaidQr({
+export async function markWebsiteOrderPaidQr({
   order,
   shift,
   cashierName = "",
@@ -298,51 +425,53 @@ export async function markPickupOrderPaidQr({
   const orderId = toText(order?.id);
   const shiftId = toText(shift?.id);
   if (!supabase) return { ok: false, message: "Supabase chưa sẵn sàng." };
-  if (!orderId) return { ok: false, message: "Thiếu mã đơn hẹn lấy." };
+  if (!orderId) return { ok: false, message: "Thiếu mã đơn website." };
   if (!shiftId) return { ok: false, message: "Cần mở ca POS trước khi thu tiền." };
 
-  const normalizedPaidAt = toText(paidAt) || new Date().toISOString();
-  const amount = Math.max(0, toNumber(paymentAmount || order.totalAmount || order.paymentAmount));
-  const metadata = getObject(order.metadata);
-  const patch = {
-    payment_method: "bank_qr",
-    pos_shift_id: shiftId,
-    metadata: {
-      ...metadata,
-      paymentMethod: "bank_qr",
-      paymentStatus: "paid",
-      paymentAmount: amount,
-      paymentReference: toText(paymentReference),
-      paidAt: normalizedPaidAt,
-      posShiftId: shiftId,
-      pos_shift_id: shiftId,
-      cashierName: toText(cashierName) || metadata.cashierName || "",
-      pickupPaymentCollectedAt: normalizedPaidAt,
-      pickupPaymentCollectedBy: toText(cashierName) || "POS mobile"
-    }
-  };
+  const patch = buildWebsitePaymentPatch({
+    order,
+    shiftId,
+    cashierName,
+    paymentMethod: "bank_qr",
+    paymentReference,
+    paidAt,
+    paymentAmount
+  });
 
   const { data, error } = await supabase
     .from("orders")
     .update(patch)
     .eq("id", orderId)
-    .select(PICKUP_ORDER_SELECT)
+    .select(WEBSITE_ORDER_SELECT)
     .maybeSingle();
 
   if (error || !data) {
     return {
       ok: false,
-      message: error?.message || "Không cập nhật được thanh toán QR cho đơn hẹn lấy."
+      message: error?.message || "Không cập nhật được thanh toán QR cho đơn website."
     };
   }
 
+  const nextOrder = normalizeWebsiteOrder(data);
   return {
     ok: true,
-    order: normalizePickupOrder(data),
-    message: `Đã nhận thanh toán QR đơn ${order.displayOrderCode || order.orderCode || orderId}.`
+    order: nextOrder,
+    message: `Đã nhận thanh toán QR ${getWebsiteOrderLabel(nextOrder)} ${nextOrder.displayOrderCode || nextOrder.orderCode || orderId}.`
   };
 }
 
-export function countUnpaidPickupOrders(orders = []) {
+export async function markPickupOrderPaidCash(options = {}) {
+  return markWebsiteOrderPaidCash(options);
+}
+
+export async function markPickupOrderPaidQr(options = {}) {
+  return markWebsiteOrderPaidQr(options);
+}
+
+export function countUnpaidWebsiteOrders(orders = []) {
   return (Array.isArray(orders) ? orders : []).filter((order) => order.paymentStatus !== "paid").length;
+}
+
+export function countUnpaidPickupOrders(orders = []) {
+  return countUnpaidWebsiteOrders(orders.filter((order) => order?.fulfillmentType !== "delivery"));
 }

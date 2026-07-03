@@ -20,7 +20,7 @@ const suggestText = {
   chooseMore: "Chọn thêm món",
   addonSpice: "Thêm cho đủ vị",
   defaultSpice: "Vừa cay",
-  freeshipTitle: "Freeship",
+  freeshipTitle: "Hỗ trợ ship",
   addonShort: "Topping riêng từ mục Thêm cho đủ vị.",
   addonDescription: "Món thêm giúp đơn đủ vị hơn."
 };
@@ -104,7 +104,7 @@ export default function CheckoutMilestoneSuggest({
     ? {
         amount: Number(freeShipPromotion?.condition?.minSubtotal || freeshipMinSubtotal),
         title: suggestText.freeshipTitle,
-        reward: `Đơn món từ ${formatMoney(Number(freeShipPromotion?.condition?.minSubtotal || freeshipMinSubtotal))} miễn phí giao hàng`,
+        reward: `Đơn món từ ${formatMoney(Number(freeShipPromotion?.condition?.minSubtotal || freeshipMinSubtotal))} được hỗ trợ phí giao hàng`,
         sourceType: "promotion"
       }
     : null;

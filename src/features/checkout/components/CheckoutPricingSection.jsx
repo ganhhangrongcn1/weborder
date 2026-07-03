@@ -19,6 +19,8 @@ export default function CheckoutPricingSection({
   usePoints,
   setUsePoints,
   pointsDiscount,
+  maxRedemptionPercent = 50,
+  maxPointDiscount = 0,
   earnedPreviewPoints,
   originalSubtotal,
   giftSavingAmount,
@@ -68,6 +70,9 @@ export default function CheckoutPricingSection({
                     ? `Đã áp dụng -${formatMoney(pointsDiscount)} vào đơn hàng`
                     : `Bạn sẽ nhận được +${earnedPreviewPoints} điểm khi đặt đơn`}
                 </span>
+                <small className="points-limit-note">
+                  Dùng tối đa {maxRedemptionPercent}% tiền món sau ưu đãi{maxPointDiscount > 0 ? ` (${formatMoney(maxPointDiscount)})` : ""}.
+                </small>
               </div>
               <input
                 type="checkbox"

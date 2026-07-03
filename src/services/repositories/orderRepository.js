@@ -365,12 +365,13 @@ export const orderRepository = {
     const dateFrom = String(options?.dateFrom || "").trim();
     const dateTo = String(options?.dateTo || "").trim();
     const requireRemote = options?.requireRemote === true;
+    const includeItems = options?.includeItems !== false;
     const hasDateFilter = Boolean(dateFrom || dateTo);
     const now = Date.now();
-    if (!requireRemote && !hasDateFilter && ordersRemoteCache.value && now - ordersRemoteCache.cachedAt < REMOTE_CACHE_TTL_MS) {
+    if (!requireRemote && includeItems && !hasDateFilter && ordersRemoteCache.value && now - ordersRemoteCache.cachedAt < REMOTE_CACHE_TTL_MS) {
       return normalizeOrdersByPhoneForRead(normalizeOrdersByPhoneMap(ordersRemoteCache.value || {}));
     }
-    if (!requireRemote && !hasDateFilter && ordersReadInFlight) {
+    if (!requireRemote && includeItems && !hasDateFilter && ordersReadInFlight) {
       return ordersReadInFlight;
     }
     const readTask = (async () => {
@@ -378,11 +379,14 @@ export const orderRepository = {
     const fallback = allowLocalFallback ? await repository.getAsync(STORAGE_KEYS.ordersByPhone, {}) : {};
     try {
       const remote = await coreSupabaseRepository.readOrdersByPhoneFromTable(
-        hasDateFilter ? { dateFrom, dateTo } : undefined
+        {
+          ...(hasDateFilter ? { dateFrom, dateTo } : {}),
+          includeItems
+        }
       );
       if (remote && typeof remote === "object") {
         const remoteOnly = normalizeOrdersByPhoneMap(remote);
-        if (!hasDateFilter) {
+        if (includeItems && !hasDateFilter) {
           repository.set(STORAGE_KEYS.ordersByPhone, remoteOnly);
           ordersRemoteCache = { value: remoteOnly, cachedAt: Date.now() };
         }
@@ -399,18 +403,18 @@ export const orderRepository = {
       if (hasDateFilter) {
         normalizedFallback = filterOrdersByDateRange(normalizedFallback, dateFrom, dateTo);
       }
-      if (!hasDateFilter) {
+      if (includeItems && !hasDateFilter) {
         ordersRemoteCache = { value: normalizedFallback, cachedAt: Date.now() };
       }
       return normalizeOrdersByPhoneForRead(normalizedFallback);
     })();
-    if (!hasDateFilter) {
+    if (includeItems && !hasDateFilter) {
       ordersReadInFlight = readTask;
     }
     try {
       return await readTask;
     } finally {
-      if (!hasDateFilter) {
+      if (includeItems && !hasDateFilter) {
         ordersReadInFlight = null;
       }
     }

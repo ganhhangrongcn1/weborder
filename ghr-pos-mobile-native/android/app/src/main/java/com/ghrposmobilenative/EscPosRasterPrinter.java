@@ -30,7 +30,7 @@ final class EscPosRasterPrinter {
     private static final int BIG_LINE_HEIGHT = 100;
     private static final int NORMAL_TEXT_SIZE = 24;
     private static final int NORMAL_LINE_HEIGHT = 34;
-    private static final int PAYMENT_QR_SIZE_DOTS = 320;
+    private static final int PAYMENT_QR_SIZE_DOTS = 384;
     private static final int FOOTER_QR_SIZE_DOTS = 220;
 
     private EscPosRasterPrinter() {
@@ -44,20 +44,21 @@ final class EscPosRasterPrinter {
             String footerQrUrl
     ) {
         String cleanText = cleanVietnamese(text);
-        ReceiptRasterParts parts = "pos_payment_qr".equals(normalizeSourceType(sourceType))
+        boolean paymentQrSource = isPaymentQrSource(sourceType);
+        ReceiptRasterParts parts = paymentQrSource
                 ? new ReceiptRasterParts(cleanText, "")
                 : splitReceiptFooter(cleanText);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         output.write(0x1B);
         output.write(0x40);
 
-        int bodyQrSize = "pos_payment_qr".equals(normalizeSourceType(sourceType))
+        int bodyQrSize = paymentQrSource
                 ? PAYMENT_QR_SIZE_DOTS
                 : FOOTER_QR_SIZE_DOTS;
 
-        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl, bodyQrSize));
+        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl, bodyQrSize, paymentQrSource));
         if (footerText != null && !footerText.trim().isEmpty()) {
-            writeRasterBitmap(output, renderTextBitmap(cleanVietnamese(footerText), RECEIPT_WIDTH_DOTS_80MM, footerQrUrl, FOOTER_QR_SIZE_DOTS));
+            writeRasterBitmap(output, renderTextBitmap(cleanVietnamese(footerText), RECEIPT_WIDTH_DOTS_80MM, footerQrUrl, FOOTER_QR_SIZE_DOTS, false));
         }
 
         output.write("\n\n\n".getBytes(StandardCharsets.US_ASCII), 0, 3);
@@ -70,6 +71,13 @@ final class EscPosRasterPrinter {
 
     private static String normalizeSourceType(String value) {
         return String.valueOf(value == null ? "" : value).trim().toLowerCase();
+    }
+
+    private static boolean isPaymentQrSource(String sourceType) {
+        String normalized = normalizeSourceType(sourceType);
+        return "pos_payment_qr".equals(normalized)
+                || "pickup_order_payment_qr".equals(normalized)
+                || "delivery_order_payment_qr".equals(normalized);
     }
 
     static String cleanVietnamese(String value) {
@@ -134,15 +142,18 @@ final class EscPosRasterPrinter {
         return new ReceiptRasterParts(bodyText, footerText);
     }
 
-    private static Bitmap renderTextBitmap(String text, int width, String qrUrl, int qrSize) {
+    private static Bitmap renderTextBitmap(String text, int width, String qrUrl, int qrSize, boolean requireRemoteQr) {
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setColor(Color.BLACK);
         paint.setTextSize(NORMAL_TEXT_SIZE);
         paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
 
         int padding = 16;
-        Bitmap qrBitmap = createQrBitmap(qrUrl, qrSize);
+        Bitmap qrBitmap = createQrBitmap(qrUrl, qrSize, requireRemoteQr);
         List<String> lines = expandReceiptLines(cleanVietnamese(text), paint, width - padding * 2);
+        if (requireRemoteQr && lines.contains("@@QR") && qrBitmap == null) {
+            throw new IllegalStateException("Khong tai duoc anh VietQR de in.");
+        }
         int height = Math.max(160, padding * 2 + estimateReceiptHeight(lines, qrBitmap));
 
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
@@ -225,12 +236,13 @@ final class EscPosRasterPrinter {
         return result;
     }
 
-    private static Bitmap createQrBitmap(String qrUrl, int size) {
+    private static Bitmap createQrBitmap(String qrUrl, int size, boolean requireRemoteQr) {
         String value = String.valueOf(qrUrl == null ? "" : qrUrl).trim();
         if (value.isEmpty()) return null;
         try {
             Bitmap remoteQrBitmap = loadRemoteQrBitmap(value, size);
             if (remoteQrBitmap != null) return remoteQrBitmap;
+            if (requireRemoteQr && isRemoteUrl(value)) return null;
 
             Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
             hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
@@ -248,8 +260,12 @@ final class EscPosRasterPrinter {
         }
     }
 
+    private static boolean isRemoteUrl(String value) {
+        return value.startsWith("http://") || value.startsWith("https://");
+    }
+
     private static Bitmap loadRemoteQrBitmap(String value, int size) {
-        if (!value.startsWith("http://") && !value.startsWith("https://")) return null;
+        if (!isRemoteUrl(value)) return null;
 
         HttpURLConnection connection = null;
         try {

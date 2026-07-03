@@ -4,6 +4,7 @@ import {
   AdminCard as UIAdminCard,
   AdminInput as UIAdminInput,
   AdminPanel as UIAdminPanel,
+  AdminSelect as UIAdminSelect,
   AdminStatCard as UIAdminStatCard
 } from "./index.js";
 
@@ -15,13 +16,21 @@ export function AdminButton({ children, variant = "primary", className = "", ...
   );
 }
 
-export function AdminBadge({ children, tone = "neutral" }) {
+export function AdminBadge({ children, tone = "neutral", className = "" }) {
   const normalizedTone = tone === "default" ? "neutral" : tone;
-  return <UIAdminBadge tone={normalizedTone}>{children}</UIAdminBadge>;
+  return (
+    <UIAdminBadge tone={normalizedTone} className={className}>
+      {children}
+    </UIAdminBadge>
+  );
 }
 
-export function AdminCard({ children, className = "" }) {
-  return <UIAdminCard className={className}>{children}</UIAdminCard>;
+export function AdminCard({ children, className = "", variant = "default", as = "section" }) {
+  return (
+    <UIAdminCard className={className} variant={variant} as={as}>
+      {children}
+    </UIAdminCard>
+  );
 }
 
 export function AdminSectionTitle({ title, description, action }) {
@@ -57,24 +66,63 @@ export function AdminToolbar({ left, right }) {
   );
 }
 
-export function AdminSearchInput({ value, onChange, placeholder = "Tìm kiếm..." }) {
+export function AdminSearchInput({
+  value,
+  onChange,
+  onValueChange,
+  placeholder = "Tìm kiếm...",
+  className = "",
+  inputClassName = "",
+  ...props
+}) {
+  const handleChange = (event) => {
+    if (onValueChange) {
+      onValueChange(event.target.value, event);
+      return;
+    }
+    if (onChange) onChange(event);
+  };
+
   return (
-    <label className="admin-search-input">
-      <span className="admin-search-icon">⌕</span>
-      <UIAdminInput value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+    <label className={`admin-search-input ${className}`.trim()}>
+      <span className="admin-search-icon" aria-hidden="true">
+        ⌕
+      </span>
+      <UIAdminInput
+        value={value}
+        onChange={handleChange}
+        placeholder={placeholder}
+        className={inputClassName}
+        {...props}
+      />
     </label>
   );
 }
 
-export function AdminStatusSelect({ value, onChange, options = [] }) {
+export function AdminStatusSelect({
+  value,
+  onChange,
+  onValueChange,
+  options = [],
+  className = "",
+  ...props
+}) {
+  const handleChange = (event) => {
+    if (onValueChange) {
+      onValueChange(event.target.value, event);
+      return;
+    }
+    if (onChange) onChange(event);
+  };
+
   return (
-    <select className="admin-status-select" value={value} onChange={(event) => onChange(event.target.value)}>
-      {options.map((item) => (
-        <option key={item.value} value={item.value}>
-          {item.label}
-        </option>
-      ))}
-    </select>
+    <UIAdminSelect
+      className={`admin-status-select ${className}`.trim()}
+      value={value}
+      onChange={handleChange}
+      options={options}
+      {...props}
+    />
   );
 }
 
@@ -91,8 +139,31 @@ export function AdminEmptyState({ message = "Chưa có dữ liệu.", action }) 
   );
 }
 
-export function AdminInput({ value, onChange, type = "text" }) {
-  return <UIAdminInput type={type} value={value} onChange={(event) => onChange(event.target.value)} />;
+export function AdminInput({
+  value,
+  onChange,
+  onValueChange,
+  type = "text",
+  className = "",
+  ...props
+}) {
+  const handleChange = (event) => {
+    if (onValueChange) {
+      onValueChange(event.target.value, event);
+      return;
+    }
+    if (onChange) onChange(event);
+  };
+
+  return (
+    <UIAdminInput
+      type={type}
+      value={value}
+      onChange={handleChange}
+      className={className}
+      {...props}
+    />
+  );
 }
 
 export function AdminSwitch({ checked, onChange }) {
@@ -108,13 +179,28 @@ export function AdminStat({ title, value }) {
   return <AdminStatCard title={title} value={value} />;
 }
 
-export function AdminPanel({ title, action, onAction, children }) {
+export function AdminPanel({
+  title,
+  description,
+  action,
+  onAction,
+  children,
+  className = "",
+  bodyClassName = ""
+}) {
+  const resolvedAction =
+    typeof action === "string" && onAction
+      ? <UIAdminButton onClick={onAction}>{action}</UIAdminButton>
+      : action;
+
   return (
     <UIAdminPanel
       title={title}
-      action={action ? <UIAdminButton onClick={onAction}>{action}</UIAdminButton> : null}
+      description={description}
+      action={resolvedAction}
+      className={className}
     >
-      {children ? <div className="admin-ui-panel-body">{children}</div> : null}
+      {children ? <div className={`admin-ui-panel-body ${bodyClassName}`.trim()}>{children}</div> : null}
     </UIAdminPanel>
   );
 }
@@ -138,7 +224,9 @@ export function AdminEditableCard({ item, fields, onChange, onDelete }) {
             key={field}
             type={typeof item[field] === "number" ? "number" : "text"}
             value={item[field] ?? ""}
-            onChange={(value) => onChange({ [field]: typeof item[field] === "number" ? Number(value) : value })}
+            onValueChange={(value) =>
+              onChange({ [field]: typeof item[field] === "number" ? Number(value) : value })
+            }
           />
         ))}
       </div>

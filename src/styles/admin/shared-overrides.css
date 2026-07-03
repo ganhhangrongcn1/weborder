@@ -1,9 +1,17 @@
+.admin-shell .admin-card,
 .admin-shell .admin-panel,
-.admin-shell .admin-mini-card {
+.admin-shell .admin-mini-card,
+.admin-shell .admin-promo-side,
+.admin-shell .admin-promo-editor,
+.admin-shell .admin-orders-realtime-notice {
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-radius-xl);
   background: var(--admin-card-bg);
   box-shadow: var(--admin-shadow-soft);
+}
+
+.admin-shell .admin-card {
+  overflow: hidden;
 }
 
 .admin-shell .admin-mini-card {
@@ -11,10 +19,29 @@
   box-shadow: var(--admin-shadow-card);
 }
 
+.admin-shell .admin-panel-head,
+.admin-shell .admin-ui-panel-head,
+.admin-shell .admin-dashboard-toolbar,
+.admin-shell .admin-toolbar,
+.admin-shell .admin-orders-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-shell .admin-panel-head,
+.admin-shell .admin-ui-panel-head {
+  border-bottom: 1px solid #eef2f7;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+}
+
 .admin-shell .admin-panel-head button,
 .admin-shell .admin-btn,
 .admin-shell .admin-secondary,
-.admin-shell .admin-danger {
+.admin-shell .admin-danger,
+.admin-shell .admin-cta {
   display: inline-flex;
   min-height: var(--admin-control-height-lg);
   align-items: center;
@@ -28,7 +55,8 @@
 }
 
 .admin-shell .admin-panel-head button,
-.admin-shell .admin-btn-primary {
+.admin-shell .admin-btn-primary,
+.admin-shell .admin-cta {
   border: 1px solid #fb923c;
   background: linear-gradient(135deg, #ff7a00, #ff4f17);
   color: #fff;
@@ -50,7 +78,9 @@
 
 .admin-shell .admin-input,
 .admin-shell .admin-status-select,
-.admin-shell .admin-search-input {
+.admin-shell .admin-search-input,
+.admin-shell .admin-dashboard-search,
+.admin-shell .admin-top-search {
   min-height: var(--admin-control-height-lg);
   border: 1px solid var(--admin-border-strong);
   border-radius: var(--admin-radius-md);
@@ -63,9 +93,145 @@
 
 .admin-shell .admin-input:focus,
 .admin-shell .admin-status-select:focus,
-.admin-shell .admin-search-input:focus-within {
+.admin-shell .admin-search-input:focus-within,
+.admin-shell .admin-dashboard-search:focus-within,
+.admin-shell .admin-top-search:focus-within {
   border-color: #fb923c;
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+}
+
+.admin-shell .admin-search-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+}
+
+.admin-shell .admin-search-input .admin-ui-input {
+  border: 0;
+  box-shadow: none;
+  padding-inline: 0;
+  background: transparent;
+}
+
+.admin-shell .admin-search-icon {
+  color: var(--admin-muted);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.admin-shell .admin-dashboard-toolbar,
+.admin-shell .admin-orders-toolbar {
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.admin-shell .admin-dashboard-search,
+.admin-shell .admin-dashboard-preset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-shell .admin-auth-card {
+  width: min(100%, 440px);
+  padding: 18px;
+}
+
+.admin-shell .admin-auth-card--blocked {
+  width: min(100%, 560px);
+}
+
+.admin-shell .admin-auth-card--status {
+  width: min(100%, 420px);
+}
+
+.admin-shell .admin-auth-card-body,
+.admin-shell .admin-auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-shell .admin-auth-field {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-shell .admin-auth-field span {
+  color: var(--admin-secondary);
+  font-size: var(--admin-font-size-sm);
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.admin-shell .admin-auth-note,
+.admin-shell .admin-auth-message {
+  margin: 0;
+}
+
+.admin-shell .admin-auth-note {
+  color: var(--admin-secondary);
+  font-size: var(--admin-font-size-md);
+  font-weight: var(--admin-font-weight-medium);
+  line-height: 1.6;
+}
+
+.admin-shell .admin-auth-account {
+  color: var(--admin-text);
+}
+
+.admin-shell .admin-auth-message {
+  color: var(--admin-danger);
+  font-size: var(--admin-font-size-sm);
+  font-weight: var(--admin-font-weight-semibold);
+}
+
+.admin-shell .admin-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-shell .admin-auth-form .admin-ui-button {
+  width: 100%;
+}
+
+.admin-shell .admin-promo-side,
+.admin-shell .admin-promo-editor,
+.admin-shell .admin-store-panel,
+.admin-shell .admin-menu-section,
+.admin-shell .admin-cake-section,
+.admin-shell .admin-orders-realtime-notice {
+  padding: 18px;
+}
+
+.admin-shell .admin-promo-side,
+.admin-shell .admin-promo-editor {
+  overflow: hidden;
+}
+
+.admin-shell .admin-promo-side .admin-cta,
+.admin-shell .admin-promo-editor .admin-danger,
+.admin-shell .admin-promo-editor .admin-secondary {
+  width: fit-content;
+}
+
+.admin-shell .admin-promo-side .admin-cta,
+.admin-shell .admin-panel-head .admin-cta {
+  min-height: 40px;
+  padding-inline: 14px;
+}
+
+.admin-shell .admin-orders-realtime-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-shell .admin-mini-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
 }
 
 @media (max-width: 980px) {

@@ -67,6 +67,8 @@ export default function PosShiftCloseModal({
   }, [visible]);
 
   const expectedCash = Number(summary?.expectedCash ?? shift?.openingCash ?? 0);
+  const cashRoundingTotal = Number(summary?.cashRoundingTotal || 0);
+  const hasCashRounding = cashRoundingTotal > 0;
   const countedAmount = useMemo(() => getCashBreakdownTotal(cashBreakdown), [cashBreakdown]);
   const difference = countedAmount - expectedCash;
   const hasCountedCash = Boolean(cashBreakdown);
@@ -106,6 +108,9 @@ export default function PosShiftCloseModal({
                 <View style={styles.summaryCard}>
                   <Text style={styles.summaryLabel}>Dự kiến trong két</Text>
                   <Text style={styles.summaryValue}>{formatMoney(expectedCash)}</Text>
+                  {hasCashRounding ? (
+                    <Text style={styles.summaryHint}>Giảm làm tròn {formatMoney(cashRoundingTotal)}</Text>
+                  ) : null}
                 </View>
               </View>
 
@@ -304,6 +309,11 @@ const styles = StyleSheet.create({
     color: POS_COLORS.heading,
     fontSize: 17,
     fontWeight: "900"
+  },
+  summaryHint: {
+    color: POS_COLORS.muted,
+    fontSize: 11,
+    fontWeight: "800"
   },
   section: {
     gap: 8

@@ -74,6 +74,8 @@ function isSupportedSource(value: string) {
   return ["pos", "web", "qr_order"].includes(value);
 }
 
+const POS_MANAGED_SESSION_SOURCES = ["pos", "web", "qr_order"];
+
 function response(body: JsonRecord, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -489,7 +491,7 @@ async function listSessions(
       updated_at: now
     })
     .eq("branch_uuid", branchUuid)
-    .eq("source", "pos")
+    .in("source", POS_MANAGED_SESSION_SOURCES)
     .eq("status", "pending_payment")
     .lt("expires_at", now);
 
@@ -504,7 +506,7 @@ async function listSessions(
     .from("pos_payment_sessions")
     .select(SESSION_COLUMNS)
     .eq("branch_uuid", branchUuid)
-    .eq("source", "pos")
+    .in("source", POS_MANAGED_SESSION_SOURCES)
     .in("status", ["draft", "pending_payment", "paid", "converting"])
     .order("created_at", { ascending: false })
     .limit(50);

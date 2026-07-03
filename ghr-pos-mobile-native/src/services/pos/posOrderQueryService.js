@@ -1,5 +1,4 @@
 import { supabase } from "../supabase/client";
-import { applyPosOrderLoyaltyMobile } from "./posLoyaltyService";
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -19,11 +18,6 @@ function normalizePagerNumber(value = "") {
 function isOrderClosedStatus(status = "") {
   const normalized = toText(status).toLowerCase();
   return ["done", "completed", "complete", "cancelled", "canceled", "cancel"].includes(normalized);
-}
-
-function isOrderCompletedStatus(status = "") {
-  const normalized = toText(status).toLowerCase();
-  return ["done", "completed", "complete"].includes(normalized);
 }
 
 function normalizeSourceToken(value = "") {
@@ -98,59 +92,6 @@ function isRemoteOrderPagerClosed(row = {}) {
   return isOrderClosedStatus(kitchenStatus);
 }
 
-function getRemoteOrderSettlementStatus(row = {}) {
-  const metadata = getObject(row.metadata);
-  const orderStatus = toText(row.status || metadata.status || metadata.orderStatus).toLowerCase();
-  const kitchenStatus = toText(row.kitchen_status || metadata.kitchenStatus || metadata.kitchen_status).toLowerCase();
-  if (isOrderCompletedStatus(orderStatus)) return orderStatus;
-  if (isOrderCompletedStatus(kitchenStatus)) return kitchenStatus;
-  return orderStatus || kitchenStatus;
-}
-
-async function syncCompletedOrderLoyalty(row = {}) {
-  if (!supabase || !row?.id) return null;
-
-  const metadata = getObject(row.metadata);
-  const settlementStatus = getRemoteOrderSettlementStatus(row);
-  if (!isOrderCompletedStatus(settlementStatus)) return null;
-
-  const customerPhone = toText(row.customer_phone || metadata.customerPhone || metadata.customer_phone);
-  if (!customerPhone) return null;
-
-  try {
-    const result = await applyPosOrderLoyaltyMobile({
-      phone: customerPhone,
-      orderId: toText(row.id || row.order_code),
-      amount: Number(row.total_amount || metadata.totalAmount || metadata.total || 0),
-      createdAt: toText(row.created_at || metadata.createdAt) || new Date().toISOString(),
-      orderStatus: settlementStatus,
-      pointsDiscount: 0,
-      promoSource: "",
-      promoVoucherId: "",
-      promoCode: "",
-      loyaltyRule: metadata.pointRedeemRule || metadata.loyaltyRule || null
-    });
-
-    if (result?.pointsEarned > 0 && !Number(row.points_earned || 0)) {
-      await supabase
-        .from("orders")
-        .update({
-          points_earned: result.pointsEarned,
-          metadata: {
-            ...metadata,
-            pointsEarned: result.pointsEarned,
-            loyaltyEarnSyncedAt: new Date().toISOString()
-          }
-        })
-        .eq("id", row.id);
-    }
-
-    return result;
-  } catch {
-    return null;
-  }
-}
-
 export async function getBusyPosPagerNumbers({ branchUuid = "" } = {}) {
   if (!supabase) return [];
 
@@ -191,8 +132,6 @@ export async function getPosRecentOrders({ branchUuid = "", limit = 8 } = {}) {
     .filter((row) => matchesRemoteOrderBranch(row, branchUuid))
     .filter(isPosRemoteOrder)
     .slice(0, safeLimit);
-
-  await Promise.allSettled(rows.map((row) => syncCompletedOrderLoyalty(row)));
 
   return rows.map((row) => {
       const metadata = getObject(row.metadata);
@@ -300,7 +239,6 @@ export async function readPosOrderForPrint(orderId = "") {
   }
 
   const metadata = getObject(orderRow.metadata);
-  await syncCompletedOrderLoyalty(orderRow);
   const cart = (Array.isArray(itemRows) ? itemRows : []).map((item, index) => {
     const itemMetadata = getObject(item.metadata);
     const optionGroups = Array.isArray(item.option_groups) ? item.option_groups : [];
@@ -386,7 +324,6 @@ export async function readPosOrderDetail(orderId = "") {
   }
 
   const metadata = getObject(orderRow.metadata);
-  await syncCompletedOrderLoyalty(orderRow);
   const items = (Array.isArray(itemRows) ? itemRows : []).map((item, index) => {
     const itemMetadata = getObject(item.metadata);
     const optionGroups = Array.isArray(item.option_groups) ? item.option_groups : [];

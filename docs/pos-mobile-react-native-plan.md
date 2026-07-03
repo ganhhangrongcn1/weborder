@@ -26,7 +26,7 @@ Do not reuse the current Java APK as the main product path.
 
 ## Mobile app path
 
-- `ghr-pos-mobile/`
+- `ghr-pos-mobile-native/`
 - Native stack navigation
 - POS composer hook
 - Shared pure helpers for:

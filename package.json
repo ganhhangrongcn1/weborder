@@ -3,7 +3,6 @@
     "scripts": {
         "dev": "node scripts/patch-vite.mjs && vite",
         "build": "node scripts/check-encoding.mjs && node scripts/patch-vite.mjs && vite build --minify false --target es2020",
-        "build:apk-web": "node scripts/check-encoding.mjs && node scripts/patch-vite.mjs && vite build --config vite.apk.config.js --mode production",
         "smoke:loyalty": "node scripts/smoke-loyalty-config.mjs",
         "smoke:loyalty-v2": "node scripts/smoke-loyalty-v2-sql.mjs",
         "smoke:flows": "node scripts/smoke-main-flows.mjs",

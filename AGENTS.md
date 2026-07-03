@@ -20,7 +20,7 @@ UI Component / Page
 
 Main runtime flow:
 
-- `src/main.jsx` initializes Supabase runtime client, registers the PWA service worker, selects `BrowserRouter` or `HashRouter` for APK builds, and renders `App`.
+- `src/main.jsx` initializes Supabase runtime client, registers the PWA service worker, selects `BrowserRouter` or `HashRouter` from runtime flags, and renders `App`.
 - `src/App.jsx` wraps routes with `AppProviders`.
 - `src/features/app/useAppProviders.js` composes domain state and customer runtime state.
 - `src/app/routes.jsx` defines customer, admin, POS, kitchen, QR, cake, download, and QR-code-tool routes.
@@ -49,7 +49,6 @@ Data architecture:
 - Autoprefixer `10.4.21`
 - ESLint `^9.0.0`
 - Supabase Edge Function for SePay POS webhook at `supabase/functions/sepay-pos-webhook/index.ts`
-- Android POS printer wrapper under `android-pos-printer`
 - PWA assets and service worker under `public`
 
 ## Folder Structure
@@ -73,7 +72,7 @@ Data architecture:
 - `supabase/functions`: Supabase Edge Functions.
 - `scripts`: build/encoding/smoke helper scripts.
 - `public`: static assets, PWA manifest/service worker, Goong config, cake images.
-- `android-pos-printer`: Android wrapper and printer bridge assets.
+- `ghr-pos-mobile-native`: active React Native POS app.
 
 ## Coding Standards
 
@@ -313,12 +312,6 @@ npm run build
 node scripts/check-encoding.mjs
 node scripts/patch-vite.mjs
 vite build --minify false --target es2020
-```
-
-- APK web build:
-
-```txt
-npm run build:apk-web
 ```
 
 - Preview:

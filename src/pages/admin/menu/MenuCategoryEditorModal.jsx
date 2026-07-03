@@ -41,7 +41,7 @@ export default function MenuCategoryEditorModal({
             <AdminButton variant="danger" className="admin-danger" onClick={deleteCategoryFromEditor}>Xóa danh mục</AdminButton>
           )}
           <span />
-          <AdminButton onClick={saveCategoryEditor} style={{ gridColumn: "1 / -1" }}>
+          <AdminButton className="menu-category-save-btn" onClick={saveCategoryEditor}>
             {isCreating ? "Tạo danh mục" : "Lưu thay đổi"}
           </AdminButton>
         </div>

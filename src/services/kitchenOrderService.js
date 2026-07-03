@@ -1811,10 +1811,29 @@ export async function updateKitchenOrderItemStatus(order = {}, item = {}, nextSt
   };
 }
 
-export async function subscribeKitchenOrderChanges(onChange) {
+function notifyKitchenRealtimeStatus(onStatus, status = "", error = null) {
+  if (typeof onStatus !== "function") return;
+
+  onStatus({
+    status: String(status || ""),
+    error: error || null,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+export async function subscribeKitchenOrderChanges(onChange, options = {}) {
+  const onStatus = typeof options?.onStatus === "function" ? options.onStatus : null;
   const client = await getClient();
-  if (!client || typeof onChange !== "function") return () => {};
-  if (!(await ensureSupabaseRealtimeReady(client))) return () => {};
+  if (!client || typeof onChange !== "function") {
+    notifyKitchenRealtimeStatus(onStatus, "unavailable");
+    return () => {};
+  }
+
+  notifyKitchenRealtimeStatus(onStatus, "connecting");
+  if (!(await ensureSupabaseRealtimeReady(client))) {
+    notifyKitchenRealtimeStatus(onStatus, "unavailable");
+    return () => {};
+  }
 
   const channel = client
     .channel(`kitchen-order-feed-${Date.now()}`)
@@ -1838,10 +1857,12 @@ export async function subscribeKitchenOrderChanges(onChange) {
       { event: "*", schema: "public", table: "partner_order_items" },
       (payload) => onChange({ table: "partner_order_items", payload })
     )
-    .subscribe();
+    .subscribe((status, error) => {
+      notifyKitchenRealtimeStatus(onStatus, status, error);
+    });
 
   return () => {
-    client.removeChannel(channel);
+    Promise.resolve(client.removeChannel(channel)).catch(() => {});
   };
 }
 

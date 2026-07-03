@@ -52,7 +52,7 @@ export default function MenuGroupsPanel({
         <div className="admin-menu-col">
           <div className="admin-menu-col-head"><strong>Tùy chọn</strong></div>
           {selectedPreset ? (
-            <div className="admin-stack" style={{ padding: 12 }}>
+            <div className="admin-stack admin-menu-options-stack">
               {(selectedPreset.options || []).map((option) => (
                 <div key={option.id} className="admin-option-group">
                   <div className="admin-option-group-row">
@@ -70,7 +70,7 @@ export default function MenuGroupsPanel({
               <AdminButton variant="secondary" className="admin-secondary" onClick={() => addPresetOption(selectedPreset.id)}>Thêm tùy chọn</AdminButton>
             </div>
           ) : (
-            <p className="admin-help-text" style={{ padding: 12 }}>Chưa có nhóm tùy chọn.</p>
+            <p className="admin-help-text admin-menu-empty-note">Chưa có nhóm tùy chọn.</p>
           )}
         </div>
       </div>

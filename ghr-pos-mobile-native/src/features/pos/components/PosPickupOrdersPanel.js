@@ -11,6 +11,11 @@ const FILTERS = [
   { id: "paid", label: "Đã thanh toán" }
 ];
 
+const SEGMENTS = [
+  { id: "pickup", label: "Hẹn lấy" },
+  { id: "delivery", label: "Giao hàng" }
+];
+
 function formatTime(value = "") {
   if (!value) return "--";
   const date = new Date(value);
@@ -23,13 +28,6 @@ function formatTime(value = "") {
   });
 }
 
-function getPaymentLabel(order = {}) {
-  if (order.paymentStatus === "paid") {
-    return order.paymentMethod === "bank_qr" ? "Đã thanh toán QR" : "Đã thu tiền mặt";
-  }
-  return "Chưa thanh toán";
-}
-
 function getKitchenLabel(order = {}) {
   const status = String(order.kitchenStatus || order.status || "").trim().toLowerCase();
   if (["done", "completed", "complete"].includes(status)) return "Bếp đã xong";
@@ -37,9 +35,25 @@ function getKitchenLabel(order = {}) {
   return "Đang chờ bếp";
 }
 
-function PickupOrderCard({ order, loading, onPayCash, onPayQr }) {
+function getPaymentLabel(order = {}) {
   const paid = order.paymentStatus === "paid";
-  const pickupSchedule = order.pickupTimeText || "Khách ghé lấy khi tới";
+  if (!paid) {
+    return order.fulfillmentType === "delivery" ? "Chưa thu shipper" : "Chưa thanh toán";
+  }
+  if (order.paymentMethod === "bank_qr") {
+    return order.fulfillmentType === "delivery" ? "Đã thu shipper QR" : "Đã thanh toán QR";
+  }
+  return order.fulfillmentType === "delivery" ? "Đã thu shipper tiền mặt" : "Đã thu tiền mặt";
+}
+
+function getOrderAmount(order = {}) {
+  return Number(order.collectAmount || order.totalAmount || order.paymentAmount || 0);
+}
+
+function WebsiteOrderCard({ order, loading, onPayCash, onPayQr }) {
+  const paid = order.paymentStatus === "paid";
+  const isDelivery = order.fulfillmentType === "delivery";
+  const amount = getOrderAmount(order);
 
   return (
     <View style={styles.card}>
@@ -48,11 +62,12 @@ function PickupOrderCard({ order, loading, onPayCash, onPayQr }) {
           <Text style={styles.orderCode} numberOfLines={1}>
             {order.displayOrderCode || order.orderCode}
           </Text>
+
           <View style={styles.highlightGrid}>
             <View style={styles.highlightCard}>
-              <Text style={styles.highlightLabel}>Khách nhận</Text>
+              <Text style={styles.highlightLabel}>Tên khách</Text>
               <Text style={styles.highlightValue} numberOfLines={1}>
-                {order.customerName || "Khách tự lấy"}
+                {order.customerName || "Khách đặt web"}
               </Text>
               <Text style={styles.highlightMeta} numberOfLines={1}>
                 {order.customerPhone || "Không có SĐT"}
@@ -60,19 +75,36 @@ function PickupOrderCard({ order, loading, onPayCash, onPayQr }) {
             </View>
 
             <View style={styles.highlightCard}>
-              <Text style={styles.highlightLabel}>Hẹn ghé lấy</Text>
-              <Text style={styles.highlightValue} numberOfLines={1}>
-                {pickupSchedule}
+              <Text style={styles.highlightLabel}>
+                {isDelivery ? "Giao tới" : "Hẹn ghé lấy"}
+              </Text>
+              <Text style={styles.highlightValue} numberOfLines={2}>
+                {isDelivery
+                  ? order.deliveryAddress || "Chưa có địa chỉ giao hàng"
+                  : order.pickupTimeText || "Khách ghé lấy khi tới"}
               </Text>
               <Text style={styles.highlightMeta} numberOfLines={1}>
                 Đặt lúc {formatTime(order.createdAt)}
               </Text>
             </View>
           </View>
+
+          {isDelivery ? (
+            <View style={styles.deliveryMoneyRow}>
+              <View style={styles.moneyMetaPill}>
+                <Text style={styles.moneyMetaLabel}>Tiền món</Text>
+                <Text style={styles.moneyMetaValue}>{formatMoney(order.subtotal || 0)}</Text>
+              </View>
+              <View style={styles.moneyMetaPill}>
+                <Text style={styles.moneyMetaLabel}>Phí ship</Text>
+                <Text style={styles.moneyMetaValue}>{formatMoney(order.shippingFee || 0)}</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.amountCol}>
-          <Text style={styles.amount}>{formatMoney(order.totalAmount)}</Text>
+          <Text style={styles.amount}>{formatMoney(amount)}</Text>
           <View style={[styles.badge, paid ? styles.badgeSuccess : styles.badgeWarning]}>
             <Text style={styles.badgeText}>{getPaymentLabel(order)}</Text>
           </View>
@@ -106,7 +138,7 @@ function PickupOrderCard({ order, loading, onPayCash, onPayQr }) {
           >
             <PosIcon name="cash" size={14} color={paid ? POS_COLORS.muted : POS_COLORS.primaryDark} />
             <Text style={[styles.cashButtonText, paid && styles.disabledText]}>
-              {paid ? "Đã thu" : "Tiền mặt"}
+              {paid ? "Đã thu" : isDelivery ? "Thu shipper" : "Tiền mặt"}
             </Text>
           </Pressable>
         </View>
@@ -116,25 +148,37 @@ function PickupOrderCard({ order, loading, onPayCash, onPayQr }) {
 }
 
 const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
-  orders = [],
+  pickupOrders = [],
+  deliveryOrders = [],
   loading = false,
   error = "",
   onRefresh,
   onPayCash,
   onPayQr
 }) {
+  const [segment, setSegment] = useState("pickup");
   const [filter, setFilter] = useState("unpaid");
-  const unpaidCount = useMemo(
-    () => (Array.isArray(orders) ? orders : []).filter((order) => order.paymentStatus !== "paid").length,
-    [orders]
+
+  const pickupUnpaidCount = useMemo(
+    () => (Array.isArray(pickupOrders) ? pickupOrders : []).filter((order) => order.paymentStatus !== "paid").length,
+    [pickupOrders]
   );
+  const deliveryUnpaidCount = useMemo(
+    () => (Array.isArray(deliveryOrders) ? deliveryOrders : []).filter((order) => order.paymentStatus !== "paid").length,
+    [deliveryOrders]
+  );
+  const totalUnpaidCount = pickupUnpaidCount + deliveryUnpaidCount;
+
+  const sourceOrders = segment === "delivery" ? deliveryOrders : pickupOrders;
+  const activeUnpaidCount = segment === "delivery" ? deliveryUnpaidCount : pickupUnpaidCount;
+
   const filteredOrders = useMemo(
-    () => (Array.isArray(orders) ? orders : []).filter((order) => {
+    () => (Array.isArray(sourceOrders) ? sourceOrders : []).filter((order) => {
       if (filter === "unpaid") return order.paymentStatus !== "paid";
       if (filter === "paid") return order.paymentStatus === "paid";
       return true;
     }),
-    [filter, orders]
+    [filter, sourceOrders]
   );
 
   return (
@@ -145,16 +189,39 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
     >
       <View style={styles.header}>
         <View style={styles.titleWrap}>
-          <Text style={styles.eyebrow}>Website tự lấy</Text>
-          <Text style={styles.title}>Đơn hẹn lấy</Text>
+          <Text style={styles.eyebrow}>Website</Text>
+          <Text style={styles.title}>Đơn website</Text>
           <Text style={styles.subtitle}>
-            Thu tiền tại POS, trạng thái giao khách vẫn để Kitchen xử lý.
+            Gom chung đơn tự lấy và giao hàng để nhân viên theo dõi trong một chỗ.
           </Text>
         </View>
         <View style={styles.countPill}>
-          <Text style={styles.countValue}>{unpaidCount}</Text>
+          <Text style={styles.countValue}>{totalUnpaidCount}</Text>
           <Text style={styles.countLabel}>cần thu</Text>
         </View>
+      </View>
+
+      <View style={styles.segmentRow}>
+        {SEGMENTS.map((item) => {
+          const active = item.id === segment;
+          const count = item.id === "delivery" ? deliveryUnpaidCount : pickupUnpaidCount;
+          return (
+            <Pressable
+              key={item.id}
+              style={[styles.segmentButton, active && styles.segmentButtonActive]}
+              onPress={() => setSegment(item.id)}
+            >
+              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                {item.label}
+              </Text>
+              <View style={[styles.segmentBadge, active && styles.segmentBadgeActive]}>
+                <Text style={[styles.segmentBadgeText, active && styles.segmentBadgeTextActive]}>
+                  {count}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={styles.toolbar}>
@@ -172,12 +239,13 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
                 onPress={() => setFilter(item.id)}
               >
                 <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                  {item.id === "unpaid" && unpaidCount > 0 ? `${item.label} (${unpaidCount})` : item.label}
+                  {item.id === "unpaid" && activeUnpaidCount > 0 ? `${item.label} (${activeUnpaidCount})` : item.label}
                 </Text>
               </Pressable>
             );
           })}
         </ScrollView>
+
         <Pressable style={styles.refreshButton} onPress={onRefresh} disabled={loading}>
           <Text style={styles.refreshText}>{loading ? "Đang tải" : "Tải lại"}</Text>
         </Pressable>
@@ -188,7 +256,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
       <View style={styles.listFrame}>
         {filteredOrders.length ? (
           filteredOrders.map((order) => (
-            <PickupOrderCard
+            <WebsiteOrderCard
               key={order.id}
               order={order}
               loading={loading}
@@ -198,9 +266,13 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
           ))
         ) : (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Không có đơn hẹn lấy phù hợp.</Text>
+            <Text style={styles.emptyTitle}>
+              {segment === "delivery" ? "Không có đơn giao hàng phù hợp." : "Không có đơn hẹn lấy phù hợp."}
+            </Text>
             <Text style={styles.emptyCopy}>
-              Đơn đặt web tự lấy sẽ hiện tại đây nếu đúng chi nhánh và còn cần xử lý.
+              {segment === "delivery"
+                ? "Đơn website giao hàng đúng chi nhánh sẽ hiện tại đây để nhân viên theo dõi và thu tiền."
+                : "Đơn website tự lấy đúng chi nhánh sẽ hiện tại đây để nhân viên theo dõi và thu tiền."}
             </Text>
           </View>
         )}
@@ -258,7 +330,7 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   countPill: {
-    width: 92,
+    width: 96,
     borderWidth: 1,
     borderColor: "#86efac",
     backgroundColor: POS_COLORS.primarySoft,
@@ -277,6 +349,58 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase"
+  },
+  segmentRow: {
+    flexDirection: "row",
+    gap: 8
+  },
+  segmentButton: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12
+  },
+  segmentButtonActive: {
+    borderColor: "#9fd5ae",
+    backgroundColor: POS_COLORS.primarySoft
+  },
+  segmentText: {
+    color: POS_COLORS.slate,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  segmentTextActive: {
+    color: POS_COLORS.primaryDark
+  },
+  segmentBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.subtleSurface,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6
+  },
+  segmentBadgeActive: {
+    borderColor: "#86efac",
+    backgroundColor: "#dcfce7"
+  },
+  segmentBadgeText: {
+    color: POS_COLORS.slate,
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  segmentBadgeTextActive: {
+    color: POS_COLORS.primaryDark
   },
   toolbar: {
     minHeight: 52,
@@ -373,12 +497,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
-  metaText: {
-    marginTop: 4,
-    color: POS_COLORS.muted,
-    fontSize: 11,
-    fontWeight: "800"
-  },
   highlightGrid: {
     marginTop: 8,
     gap: 8
@@ -410,8 +528,35 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     fontWeight: "700"
   },
+  deliveryMoneyRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8
+  },
+  moneyMetaPill: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.surface,
+    borderRadius: 999,
+    paddingHorizontal: 10
+  },
+  moneyMetaLabel: {
+    color: POS_COLORS.muted,
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  moneyMetaValue: {
+    color: POS_COLORS.heading,
+    fontSize: 11,
+    fontWeight: "900"
+  },
   amountCol: {
-    minWidth: 112,
+    minWidth: 124,
     alignItems: "flex-end",
     gap: 6
   },
@@ -437,7 +582,8 @@ const styles = StyleSheet.create({
   badgeText: {
     color: POS_COLORS.slate,
     fontSize: 10,
-    fontWeight: "900"
+    fontWeight: "900",
+    textAlign: "right"
   },
   footer: {
     flexDirection: "row",

@@ -34,7 +34,7 @@ export default function PromoModal({
                 <small>{promo.condition}</small>
                 <small>Mã: {promo.code}</small>
               </span>
-              <em>{disabled ? "Chưa đủ" : promo.freeShip ? "Freeship" : `-${formatMoney(promo.discount)}`}</em>
+              <em>{disabled ? "Chưa đủ" : promo.freeShip ? "Hỗ trợ ship" : `-${formatMoney(promo.discount)}`}</em>
             </button>
           );
         })}

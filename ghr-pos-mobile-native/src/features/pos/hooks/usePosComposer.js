@@ -73,6 +73,7 @@ import { applyPosFlashSaleToProduct, buildPosPromotionHints, syncAutoGiftItems }
 export default function usePosComposer() {
   const announcedQrPaymentIdsRef = useRef(new Set());
   const runtimeRefreshInFlightRef = useRef(false);
+  const createCashOrderInFlightRef = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState(null);
@@ -1362,6 +1363,13 @@ export default function usePosComposer() {
       return false;
     }
 
+    const orderIdentity = createPosOrderIdentity(new Date());
+    const requestKey = [
+      "pos-cash",
+      profile?.branchUuid || "branch",
+      orderIdentity.orderCode
+    ].join(":");
+
     setPaymentConfirmed({
       method: "cash",
       amount: cashSummary.paymentAmount,
@@ -1370,7 +1378,9 @@ export default function usePosComposer() {
       cashRoundingUnit: cashSummary.cashRoundingUnit,
       received: normalizedReceived,
       change: calculateCashChange(cashSummary.paymentAmount, normalizedReceived),
-      reference: `CASH-${Date.now()}`
+      reference: `CASH-${orderIdentity.orderCode}`,
+      orderIdentity,
+      requestKey
     });
     setShiftMessage("Đã xác nhận thanh toán tiền mặt. Đang mở két tiền...");
     void openLocalCashDrawer()
@@ -2038,7 +2048,6 @@ export default function usePosComposer() {
       authUserId: session?.user?.id
     });
     setBusy(false);
-
     setShiftMessage(result.message || "");
     if (!result.ok) return false;
 
@@ -2107,6 +2116,15 @@ export default function usePosComposer() {
   };
 
   const createCashOrder = async () => {
+    if (createCashOrderInFlightRef.current) {
+      setShiftMessage("Đang tạo đơn. Vui lòng chờ trong giây lát.");
+      return;
+    }
+
+    createCashOrderInFlightRef.current = true;
+    setBusy(true);
+
+    try {
     if (!paymentConfirmed || !profile || !shift?.id) {
       setShiftMessage("Cần đăng nhập và mở ca trước khi tạo đơn.");
       return;
@@ -2123,7 +2141,13 @@ export default function usePosComposer() {
       return;
     }
 
-    setBusy(true);
+    const orderIdentity = paymentConfirmed.orderIdentity || createPosOrderIdentity(new Date());
+    const requestKey = paymentConfirmed.requestKey || [
+      "pos-cash",
+      profile.branchUuid || "branch",
+      orderIdentity.orderCode
+    ].join(":");
+    const paymentReference = paymentConfirmed.reference || `CASH-${orderIdentity.orderCode}`;
     const result = await createPosTakeawayOrderMobile({
       cart,
       totals,
@@ -2148,19 +2172,18 @@ export default function usePosComposer() {
       paymentMethod: paymentConfirmed.method,
       paymentStatus: "paid",
       paymentAmount: paymentConfirmed.amount,
-      paymentReference: paymentConfirmed.reference,
+      paymentReference,
       paidAt: paymentConfirmed.paidAt || new Date().toISOString(),
       posShiftId: shift.id,
       paymentMeta: {
         ...(paymentConfirmed.paymentSessionId ? { provider: "sepay", paymentSessionId: paymentConfirmed.paymentSessionId } : {}),
         originalAmount: paymentConfirmed.originalAmount || paymentConfirmed.amount,
         cashRoundingDiscount: paymentConfirmed.cashRoundingDiscount || 0,
-        cashRoundingUnit: paymentConfirmed.cashRoundingUnit || 0
+        cashRoundingUnit: paymentConfirmed.cashRoundingUnit || 0,
+        requestKey
       },
-      orderIdentity: paymentConfirmed.orderIdentity || null
+      orderIdentity
     });
-    setBusy(false);
-
     setShiftMessage(result.message || "");
     if (!result.ok) {
       return;
@@ -2215,6 +2238,10 @@ export default function usePosComposer() {
       await refreshShiftSummary(shift);
     }
     setShiftMessage(`${result.message || ""}${printMessage}`.trim());
+    } finally {
+      createCashOrderInFlightRef.current = false;
+      setBusy(false);
+    }
   };
 
   return {

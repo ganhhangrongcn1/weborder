@@ -366,7 +366,7 @@ export default function BranchSettings({
             </AdminButton>
           </div>
         </div>
-        {branchSaveMessage ? <p className="text-sm text-slate-600">{branchSaveMessage}</p> : null}
+        {branchSaveMessage ? <p className="admin-store-message">{branchSaveMessage}</p> : null}
         <div className="admin-table">
           {draftBranches.map((branch) => {
             const { openTime, closeTime } = extractOpenCloseTime(branch);
@@ -379,7 +379,7 @@ export default function BranchSettings({
             const paymentPreviewUrl = paymentPreviewOpen && qrPaymentConfig.ready ? getBranchPaymentPreviewUrl(branch) : "";
 
             return (
-              <div key={branch.id} className="admin-edit-card">
+              <div key={branch.id} className="admin-edit-card admin-branch-card">
                 <div className="admin-branch-layout">
                   <div className="admin-branch-main">
                     <div className="admin-edit-fields admin-branch-top-grid">
@@ -437,7 +437,7 @@ export default function BranchSettings({
                       />
 
                       <div className="admin-branch-time-grid">
-                        <label className="admin-input flex items-center justify-between gap-2">
+                        <label className="admin-branch-field-card admin-branch-time-field">
                           <span className="text-xs font-semibold text-brown/70">Mở cửa</span>
                           <AdminInput
                             type="time"
@@ -445,7 +445,7 @@ export default function BranchSettings({
                             onChange={(event) => updateBranchTime(branch.id, event.target.value, closeTime)}
                           />
                         </label>
-                        <label className="admin-input flex items-center justify-between gap-2">
+                        <label className="admin-branch-field-card admin-branch-time-field">
                           <span className="text-xs font-semibold text-brown/70">Đóng cửa</span>
                           <AdminInput
                             type="time"
@@ -457,7 +457,7 @@ export default function BranchSettings({
                     </div>
 
                     <div className="admin-branch-bottom-grid">
-                      <label className="admin-input flex items-center justify-between gap-3">
+                      <label className="admin-branch-field-card admin-branch-toggle-field">
                         <span className="text-xs font-semibold text-brown/70">Bật giao hàng chi nhánh này</span>
                         <input
                           type="checkbox"
@@ -466,7 +466,7 @@ export default function BranchSettings({
                           className="toggle-input"
                         />
                       </label>
-                      <label className="admin-input flex items-center justify-between gap-3">
+                      <label className="admin-branch-field-card admin-branch-toggle-field">
                         <span className="text-xs font-semibold text-brown/70">Bật đến lấy chi nhánh này</span>
                         <input
                           type="checkbox"
@@ -476,7 +476,7 @@ export default function BranchSettings({
                         />
                       </label>
                     </div>
-                    <div className="admin-input flex flex-col gap-3">
+                    <div className="admin-branch-subcard admin-branch-qr-card">
                       <span className="text-xs font-semibold text-brown/70">QR order tại quầy</span>
                       <code className="rounded-xl bg-white px-3 py-2 text-[11px] leading-5 text-brown/70">
                         {getBranchQrUrl(branch)}
@@ -505,10 +505,10 @@ export default function BranchSettings({
                       </div>
                     </div>
 
-                    <div className="admin-input flex flex-col gap-3">
+                    <div className="admin-branch-subcard admin-branch-payment-card">
                       <span className="text-xs font-semibold text-brown/70">Tài khoản nhận chuyển khoản POS</span>
                       <div className="admin-edit-fields admin-branch-top-grid">
-                        <label className="admin-input flex flex-col gap-2">
+                        <label className="admin-branch-field-card admin-branch-select-field">
                           <span className="text-xs font-semibold text-brown/70">Kiểu QR POS</span>
                           <select
                             className="admin-input"
@@ -519,7 +519,7 @@ export default function BranchSettings({
                             <option value="sepay">SePay tự động</option>
                           </select>
                         </label>
-                        <label className="admin-input flex flex-col gap-2">
+                        <label className="admin-branch-field-card admin-branch-select-field">
                           <span className="text-xs font-semibold text-brown/70">Ngân hàng</span>
                           <select
                             className="admin-input"
@@ -646,7 +646,7 @@ export default function BranchSettings({
             {shippingSaving ? "Đang lưu..." : "Lưu thay đổi"}
           </AdminButton>
         </div>
-        {shippingSaveMessage ? <p className="text-sm text-slate-600">{shippingSaveMessage}</p> : null}
+        {shippingSaveMessage ? <p className="admin-store-message">{shippingSaveMessage}</p> : null}
         <div className="admin-mini-grid admin-ship-compact-grid">
           <div className="admin-mini-card admin-ship-compact-item">
             <label>Phí 3km đầu</label>
@@ -668,7 +668,7 @@ export default function BranchSettings({
           </div>
           <div className="admin-mini-card admin-ship-compact-item">
             <label>Ưu đãi freeship</label>
-            <div className="admin-input flex items-center text-xs text-brown/70">
+            <div className="admin-ship-info-note">
               Cấu hình tại Khuyến mãi → Freeship.
             </div>
           </div>

@@ -154,8 +154,8 @@ export default function useHomeComputed({
   const mainFlashProduct = flashProducts[0] || null;
   const homeShippingConfig = DEFAULT_SHIPPING_CONFIG;
   const homeFreeShipThreshold = Number(homeShippingConfig.freeShipThreshold || freeshipMinSubtotal);
-  const homeFreeShipTitle = `Freeship ${Math.round(homeFreeShipThreshold / 1000)}K`;
-  const homeFreeShipText = `Giảm phí ship từ đơn ${formatMoney(homeFreeShipThreshold)}.`;
+  const homeFreeShipTitle = `Hỗ trợ ship ${Math.round(homeFreeShipThreshold / 1000)}K`;
+  const homeFreeShipText = `Hỗ trợ phí ship từ đơn ${formatMoney(homeFreeShipThreshold)}.`;
 
   const bannersFromAdmin = safeHomeContent
     .filter((block) => isTopBannerItem(block) && block?.active !== false && String(block?.image || "").trim())

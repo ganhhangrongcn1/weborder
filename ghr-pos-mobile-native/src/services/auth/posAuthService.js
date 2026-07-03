@@ -27,6 +27,24 @@ function normalizeEmail(value = "") {
   return toText(value).toLowerCase();
 }
 
+function syncRealtimeSession(session = null) {
+  if (!supabase) return;
+
+  const accessToken = toText(session?.access_token);
+  if (accessToken) {
+    void supabase.realtime.setAuth(accessToken);
+    return;
+  }
+
+  void supabase.realtime.setAuth();
+}
+
+function stopRealtimeChannels() {
+  if (!supabase) return;
+  void supabase.removeAllChannels();
+  void supabase.realtime.setAuth();
+}
+
 function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -248,6 +266,7 @@ async function readProfileBySession(session) {
 
 async function clearLocalAuthSession() {
   if (!supabase) return;
+  stopRealtimeChannels();
   try {
     await supabase.auth.signOut({ scope: "local" });
   } catch {
@@ -290,6 +309,7 @@ export async function signInPosOperator({ email, password }) {
   }
 
   try {
+    syncRealtimeSession(data.session);
     const profile = await readProfileBySession(data.session);
     if (!profile) {
       await clearLocalAuthSession();
@@ -339,6 +359,7 @@ export async function restorePosSession() {
   }
 
   try {
+    syncRealtimeSession(data.session);
     const profile = await readProfileBySession(data.session);
     if (!profile?.branchUuid) {
       await clearLocalAuthSession();
@@ -371,5 +392,28 @@ export async function signOutPosOperator() {
   }
   return {
     ok: true
+  };
+}
+
+export function subscribePosAuthState(onChange) {
+  if (!supabase || typeof onChange !== "function") return () => {};
+
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    if (session?.access_token) {
+      syncRealtimeSession(session);
+    }
+
+    if (event === "SIGNED_OUT") {
+      stopRealtimeChannels();
+    }
+
+    onChange({
+      event,
+      session: session || null
+    });
+  });
+
+  return () => {
+    data?.subscription?.unsubscribe();
   };
 }

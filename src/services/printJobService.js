@@ -596,6 +596,7 @@ export async function createPosQrPrintJob({
         orderCode: safeOrderCode,
         customerName
       }),
+      qrUrl: safeQrUrl,
       loyaltyUrl: safeQrUrl,
       order: {
         id: "",

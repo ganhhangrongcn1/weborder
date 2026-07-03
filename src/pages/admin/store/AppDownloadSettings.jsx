@@ -5,6 +5,7 @@ import {
   saveGoogleDriveDownload,
   uploadApkDownload
 } from "../../../services/downloadService.js";
+import { AdminButton, AdminInput } from "../ui/index.js";
 
 function formatDate(value = "") {
   const date = value ? new Date(value) : null;
@@ -24,15 +25,6 @@ function guessNextVersion(currentVersion = "") {
   const nextNumber = Number(match[1]) + 1;
   return String(currentVersion).replace(/(\d+)(?!.*\d)/, String(nextNumber));
 }
-
-const inputStyle = {
-  border: "1px solid #cbd5e1",
-  borderRadius: 8,
-  padding: "11px 12px",
-  fontSize: 14,
-  width: "100%",
-  boxSizing: "border-box"
-};
 
 export default function AppDownloadSettings() {
   const [downloads, setDownloads] = useState(() => getFallbackAppDownloads());
@@ -96,12 +88,12 @@ export default function AppDownloadSettings() {
   }
 
   return (
-    <section className="admin-card admin-stack" style={{ gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+    <section className="admin-card admin-stack admin-download-card">
+      <div className="admin-download-head">
         <div>
-          <p className="admin-eyebrow" style={{ margin: "0 0 6px" }}>Ứng dụng POS</p>
-          <h2 style={{ margin: 0, color: "#111827", fontSize: 22 }}>Cập nhật file APK</h2>
-          <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: 13, fontWeight: 700 }}>
+          <p className="admin-eyebrow">Ứng dụng POS</p>
+          <h2>Cập nhật file APK</h2>
+          <p>
             Dùng Google Drive cho file lớn hoặc tiếp tục upload lên Supabase Storage.
           </p>
         </div>
@@ -109,100 +101,96 @@ export default function AppDownloadSettings() {
           href="/download"
           target="_blank"
           rel="noreferrer"
-          style={{
-            border: "1px solid #cbd5e1",
-            background: "#ffffff",
-            color: "#334155",
-            borderRadius: 8,
-            padding: "10px 12px",
-            textDecoration: "none",
-            fontSize: 13,
-            fontWeight: 900
-          }}
+          className="admin-download-link"
         >
           Mở trang download
         </a>
       </div>
 
       {latest ? (
-        <div style={{ border: "1px solid #dbe3ef", background: "#f8fafc", borderRadius: 8, padding: 14, display: "grid", gap: 8 }}>
-          <strong style={{ color: "#0f172a", fontSize: 15 }}>{latest.appName}</strong>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", color: "#475569", fontSize: 13, fontWeight: 800 }}>
+        <div className="admin-download-current">
+          <strong>{latest.appName}</strong>
+          <div>
             <span>Phiên bản hiện tại: {latest.version}</span>
-            <span>•</span>
             <span>Cập nhật: {formatDate(latest.updatedAt)}</span>
           </div>
-          <a href={latest.url} target="_blank" rel="noreferrer" style={{ color: "#0f766e", fontSize: 13, fontWeight: 900, wordBreak: "break-all" }}>
+          <a href={latest.url} target="_blank" rel="noreferrer">
             Kiểm tra link tải hiện tại
           </a>
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
-        <fieldset style={{ margin: 0, padding: 0, border: 0, display: "grid", gap: 8 }}>
-          <legend style={{ marginBottom: 8, color: "#334155", fontSize: 13, fontWeight: 900 }}>Nguồn file APK</legend>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8 }}>
-            <label style={{ border: source === "google-drive" ? "2px solid #14b8a6" : "1px solid #cbd5e1", borderRadius: 8, padding: 12, display: "flex", gap: 9, cursor: "pointer", background: source === "google-drive" ? "#f0fdfa" : "#ffffff" }}>
+      <form onSubmit={handleSubmit} className="admin-download-form">
+        <fieldset className="admin-download-source">
+          <legend>Nguồn file APK</legend>
+          <div className="admin-download-source-grid">
+            <label className={source === "google-drive" ? "is-active" : ""}>
               <input type="radio" name="download-source" value="google-drive" checked={source === "google-drive"} onChange={() => setSource("google-drive")} />
-              <span><strong>Google Drive</strong><br /><small style={{ color: "#64748b" }}>Khuyên dùng cho file APK lớn</small></span>
+              <span>
+                <strong>Google Drive</strong>
+                <small>Khuyên dùng cho file APK lớn</small>
+              </span>
             </label>
-            <label style={{ border: source === "supabase" ? "2px solid #14b8a6" : "1px solid #cbd5e1", borderRadius: 8, padding: 12, display: "flex", gap: 9, cursor: "pointer", background: source === "supabase" ? "#f0fdfa" : "#ffffff" }}>
+            <label className={source === "supabase" ? "is-active" : ""}>
               <input type="radio" name="download-source" value="supabase" checked={source === "supabase"} onChange={() => setSource("supabase")} />
-              <span><strong>Supabase Storage</strong><br /><small style={{ color: "#64748b" }}>Giữ cách upload cũ</small></span>
+              <span>
+                <strong>Supabase Storage</strong>
+                <small>Giữ cách upload cũ</small>
+              </span>
             </label>
           </div>
         </fieldset>
 
-        <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 900 }}>
+        <label className="admin-download-field">
           Phiên bản mới
-          <input value={version} onChange={(event) => setVersion(event.target.value)} placeholder={suggestedVersion} style={inputStyle} />
+          <AdminInput value={version} onChange={(event) => setVersion(event.target.value)} placeholder={suggestedVersion} />
         </label>
 
         {source === "google-drive" ? (
-          <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 900 }}>
+          <label className="admin-download-field">
             Link chia sẻ Google Drive
-            <input
+            <AdminInput
               type="url"
               value={driveUrl}
               onChange={(event) => setDriveUrl(event.target.value)}
               placeholder="https://drive.google.com/file/d/.../view"
-              style={inputStyle}
             />
-            <small style={{ color: "#64748b", fontWeight: 700, lineHeight: 1.45 }}>
+            <small>
               Trên Google Drive, chọn Chia sẻ → Quyền truy cập chung → Bất kỳ ai có đường liên kết.
             </small>
           </label>
         ) : (
-          <label style={{ display: "grid", gap: 6, color: "#334155", fontSize: 13, fontWeight: 900 }}>
+          <label className="admin-download-field">
             File APK mới
             <input
               type="file"
               accept=".apk,application/vnd.android.package-archive"
               onChange={(event) => setFile(event.target.files?.[0] || null)}
-              style={{ ...inputStyle, borderStyle: "dashed", background: "#ffffff" }}
+              className="admin-download-file"
             />
           </label>
         )}
 
         {source === "supabase" && file ? (
-          <div style={{ color: "#475569", fontSize: 13, fontWeight: 800 }}>
+          <div className="admin-download-file-note">
             Đã chọn: {file.name} ({Math.max(1, Math.round(file.size / 1024 / 1024))} MB)
           </div>
         ) : null}
 
         {notice ? (
-          <div style={{ border: "1px solid #bae6fd", background: "#f0f9ff", color: "#075985", borderRadius: 8, padding: 11, fontSize: 13, fontWeight: 800 }}>
+          <div className="admin-download-notice">
             {notice}
           </div>
         ) : null}
 
-        <button
+        <AdminButton
           type="submit"
           disabled={loading}
-          style={{ border: "1px solid #0f766e", background: "#14b8a6", color: "#ffffff", borderRadius: 8, padding: "12px 14px", fontSize: 14, fontWeight: 950, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.72 : 1 }}
+          variant="success"
+          className="admin-download-submit"
         >
           {loading ? "Đang cập nhật..." : source === "google-drive" ? "Lưu link Google Drive" : "Upload và cập nhật bản mới"}
-        </button>
+        </AdminButton>
       </form>
     </section>
   );

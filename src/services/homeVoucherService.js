@@ -145,13 +145,13 @@ function buildFreeshipCards(smartPromotions = [], now = new Date()) {
       return {
         id: `freeship-${promotion.id || minSubtotal}`,
         type: "freeship",
-        badge: "VẬN CHUYỂN",
-        title: promotion.title || promotion.name || "Miễn phí vận chuyển",
-        reward: "Miễn phí vận chuyển",
+        badge: "PHÍ SHIP",
+        title: promotion.title || promotion.name || "Hỗ trợ phí ship",
+        reward: maxSupportShipFee > 0 ? `Hỗ trợ ship tối đa ${formatMoney(maxSupportShipFee)}` : "Hỗ trợ toàn bộ phí ship",
         code: String(promotion.code || promotion.couponCode || "TỰ ĐỘNG").toUpperCase(),
         icon: "bike",
         lines: [
-          `Đơn tối thiểu ${formatMoney(minSubtotal)}`,
+          `Đơn từ ${formatMoney(minSubtotal)}`,
           maxSupportShipFee > 0 ? `Tối đa ${formatMoney(maxSupportShipFee)}` : "Hỗ trợ phí giao hàng"
         ],
         priority: 30

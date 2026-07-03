@@ -17,7 +17,7 @@ import {
   Trash2,
   UserRound,
   WalletCards
-} from "lucide-react-native/dist/cjs/lucide-react-native";
+} from "lucide-react-native";
 
 const ICONS = {
   brand: Store,

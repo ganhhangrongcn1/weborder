@@ -9,14 +9,19 @@ const POLL_INTERVAL_MS = 30000;
 const AUTO_PRINT_WINDOW_MS = 5 * 60 * 1000;
 const MAX_JOBS_PER_POLL = 3;
 const EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
-const NO_FOOTER_SOURCE_TYPES = new Set(["pos_payment_qr", "pos_shift_close"]);
+const NO_FOOTER_SOURCE_TYPES = new Set([
+  "pos_payment_qr",
+  "pickup_order_payment_qr",
+  "delivery_order_payment_qr",
+  "pos_shift_close"
+]);
 const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "counter", "tai_quay"]);
 const DEFAULT_FOOTER_TEXT = [
   "------------------------------------------",
   "@@CENTER:Quét QR tích điểm ngay",
   "@@QR",
   "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon",
-  "@@CENTER:đều được tích điểm tại Gánh Hàng Rong",
+  "@@CENTER:đều được tích 10 - 15% điểm tại Gánh Hàng Rong",
   "@@CENTER:Quét để xem đơn và dùng điểm",
   "@@CENTER:Hotline: 0933 799 061",
   "@@CENTER:Cảm ơn quý khách!"
@@ -171,7 +176,7 @@ async function markFailed(job, message) {
 
 function buildPrintPayload(job = {}) {
   const payload = getObject(job.payload);
-  const sourceType = toText(job.source_type || payload.type || payload.sourceType);
+  const sourceType = toText(job.source_type || payload.type || payload.sourceType).toLowerCase();
   const skipFooter = NO_FOOTER_SOURCE_TYPES.has(sourceType);
 
   return {

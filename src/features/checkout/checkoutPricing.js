@@ -13,6 +13,30 @@ function isExpired(dateValue) {
   return String(dateValue).slice(0, 10) < getDateKey();
 }
 
+function isDateInRange(startAt, endAt, now = new Date()) {
+  const startText = String(startAt || "").trim();
+  const endText = String(endAt || "").trim();
+  const nowTime = now.getTime();
+
+  if (startText) {
+    const start = new Date(`${startText.slice(0, 10)}T00:00:00`);
+    if (!Number.isNaN(start.getTime()) && nowTime < start.getTime()) return false;
+  }
+
+  if (endText) {
+    const end = new Date(`${endText.slice(0, 10)}T23:59:59`);
+    if (!Number.isNaN(end.getTime()) && nowTime > end.getTime()) return false;
+  }
+
+  return true;
+}
+
+function hasRemainingUsage(coupon = {}) {
+  const usageLimit = Number(coupon.usageLimit || 0);
+  if (usageLimit <= 0) return true;
+  return Number(coupon.totalUsed || 0) < usageLimit;
+}
+
 function calculateCouponDiscount(coupon, subtotal) {
   const value = Number(coupon.value || 0);
   if (coupon.discountType === "percent") {
@@ -64,6 +88,8 @@ export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, form
   const adminCheckoutCoupons = (coupons.length ? coupons : fallbackCoupons)
     .filter((coupon) => coupon.active !== false && String(coupon.voucherType || "checkout") !== "loyalty")
     .filter((coupon) => !isExpired(coupon.endAt || coupon.expiry))
+    .filter((coupon) => isDateInRange(coupon.startAt, coupon.endAt || coupon.expiry))
+    .filter((coupon) => hasRemainingUsage(coupon))
     .map((coupon) => normalizeCheckoutCoupon(coupon, subtotal, formatMoney, "checkout"));
 
   const loyaltyUsageLookup = buildUsedVoucherLookupFromOrders(orders);
@@ -124,7 +150,7 @@ export function buildShippingZonesFromConfig(shippingConfig, deliveryFee, freesh
   return [
     `0-3km \u0111\u1ea7u: ${formatMoney(Number(shippingConfig.baseFeeFirst3Km || deliveryFee))}`,
     `M\u1ed7i km sau: +${formatMoney(Number(shippingConfig.feePerNextKm || 0))}/km`,
-    `Freeship \u0111\u01a1n t\u1eeb ${formatMoney(freeShipThreshold)}`,
+    `Hỗ trợ ship đơn từ ${formatMoney(freeShipThreshold)}`,
     `Qu\u00e1n h\u1ed7 tr\u1ee3 ship t\u1ed1i \u0111a: ${maxSupportShipFee > 0 ? formatMoney(maxSupportShipFee) : "Kh\u00f4ng gi\u1edbi h\u1ea1n"}`,
     `B\u00e1n k\u00ednh giao t\u1ed1i \u0111a: ${Number(shippingConfig.maxRadiusKm || 0)}km`
   ];

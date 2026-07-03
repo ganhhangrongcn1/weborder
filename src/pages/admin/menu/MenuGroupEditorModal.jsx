@@ -111,18 +111,8 @@ export default function MenuGroupEditorModal({
               <h3>QUY TẮC LỰA CHỌN</h3>
             </div>
             <div className="group-rule-box">
-              <label
-                className="group-rule-radio"
-                style={{
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                  textTransform: "none"
-                }}
-              >
+              <label className="group-rule-radio">
                 <input
-                  style={{ margin: 0 }}
                   type="radio"
                   name={`rule-${editingPresetDraft.id}`}
                   checked={editingPresetDraft.required}
@@ -156,18 +146,8 @@ export default function MenuGroupEditorModal({
                   }
                 />
               </div>
-              <label
-                className="group-rule-radio"
-                style={{
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 8,
-                  textTransform: "none"
-                }}
-              >
+              <label className="group-rule-radio">
                 <input
-                  style={{ margin: 0 }}
                   type="radio"
                   name={`rule-${editingPresetDraft.id}`}
                   checked={!editingPresetDraft.required}
