@@ -37,6 +37,27 @@ function hasRemainingUsage(coupon = {}) {
   return Number(coupon.totalUsed || 0) < usageLimit;
 }
 
+function hasRemainingPerUserUsage(coupon = {}, orders = []) {
+  const perUserLimit = Number(coupon.perUserLimit || 0);
+  if (perUserLimit <= 0) return true;
+  const code = String(coupon.code || "").trim().toUpperCase();
+  if (!code) return false;
+
+  const usedCount = (Array.isArray(orders) ? orders : []).reduce((count, order) => {
+    const status = String(order?.status || order?.orderStatus || "").trim().toLowerCase();
+    if (["cancel", "canceled", "cancelled", "refunded"].includes(status)) return count;
+    const orderCode = String(
+      order?.promoCode ||
+      order?.promo_code ||
+      order?.metadata?.promoCode ||
+      ""
+    ).trim().toUpperCase();
+    return orderCode === code ? count + 1 : count;
+  }, 0);
+
+  return usedCount < perUserLimit;
+}
+
 function calculateCouponDiscount(coupon, subtotal) {
   const value = Number(coupon.value || 0);
   if (coupon.discountType === "percent") {
@@ -90,6 +111,7 @@ export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, form
     .filter((coupon) => !isExpired(coupon.endAt || coupon.expiry))
     .filter((coupon) => isDateInRange(coupon.startAt, coupon.endAt || coupon.expiry))
     .filter((coupon) => hasRemainingUsage(coupon))
+    .filter((coupon) => hasRemainingPerUserUsage(coupon, orders))
     .map((coupon) => normalizeCheckoutCoupon(coupon, subtotal, formatMoney, "checkout"));
 
   const loyaltyUsageLookup = buildUsedVoucherLookupFromOrders(orders);

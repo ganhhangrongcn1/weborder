@@ -238,7 +238,8 @@ export default function Checkout({
     pickupTimeText,
     orderSource: isQrCounterOrder ? "qr_counter" : "online",
     navigate,
-    onNotice: setCheckoutNotice
+    onNotice: setCheckoutNotice,
+    onVoucherRejected: () => setSelectedPromo(null)
   });
 
   const shippingZonesFromConfig = buildShippingZonesFromConfig(

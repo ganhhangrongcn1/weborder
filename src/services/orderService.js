@@ -3,6 +3,7 @@ import { orderRepository } from "./repositories/orderRepository.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
 import { composeMemberLoyaltySnapshot } from "./memberLoyaltySnapshotService.js";
 import { applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
+import { validateCheckoutVoucherBeforeOrder } from "./checkoutOrderService.js";
 
 function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
   const branchId = String(
@@ -338,8 +339,22 @@ export async function createOrderAsync(params) {
   const subtotalAmount = Number(
     subtotal ?? cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
   );
+  const validatedVoucher = await validateCheckoutVoucherBeforeOrder({
+    orderId: orderCode,
+    customerPhone: deliveryInfo?.phone || userProfile.phone,
+    subtotal: subtotalAmount,
+    promoDiscount,
+    promoCode,
+    promoSource,
+    promoVoucherId,
+    at: createdAt
+  });
+  const appliedPromoDiscount = validatedVoucher.promoDiscount;
+  const appliedPromoCode = validatedVoucher.promoCode;
+  const appliedPromoSource = validatedVoucher.promoSource;
+  const appliedPromoVoucherId = validatedVoucher.promoVoucherId;
   const pointsAmount = Number(
-    pointsBaseAmount ?? Math.max(subtotalAmount - Number(promoDiscount || 0), 0)
+    pointsBaseAmount ?? Math.max(subtotalAmount - Number(appliedPromoDiscount || 0), 0)
   );
   const loyaltyRule = await getLoyaltyRuleConfigAsync();
   const pointsEarned = calculateOrderPoints(pointsAmount, loyaltyRule);
@@ -356,10 +371,10 @@ export async function createOrderAsync(params) {
     shippingFee,
     originalShippingFee,
     shippingSupportDiscount,
-    promoDiscount,
-    promoCode,
-    promoSource,
-    promoVoucherId,
+    promoDiscount: appliedPromoDiscount,
+    promoCode: appliedPromoCode,
+    promoSource: appliedPromoSource,
+    promoVoucherId: appliedPromoVoucherId,
     pointsSpent,
     pointsDiscount,
     pointsDiscountAmount,
@@ -404,9 +419,9 @@ export async function createOrderAsync(params) {
     order,
     pointsAmount,
     createdAt,
-    promoSource,
-    promoVoucherId,
-    promoCode,
+    promoSource: appliedPromoSource,
+    promoVoucherId: appliedPromoVoucherId,
+    promoCode: appliedPromoCode,
     pointsSpent,
     pointsDiscount,
     currentPhone,

@@ -1834,6 +1834,42 @@ async function setLoyaltyVoucherUsage({
   return data === true;
 }
 
+async function validateCheckoutVoucher({
+  orderId = "",
+  customerPhone = "",
+  subtotal = 0,
+  promoCode = "",
+  promoSource = "",
+  promoVoucherId = "",
+  at = ""
+} = {}) {
+  if (!isSupabaseReady()) return null;
+  const client = await getSupabaseClientAsync();
+  if (!client) return null;
+
+  const { data, error } = await client.rpc("validate_checkout_voucher", {
+    p_order_id: String(orderId || "").trim(),
+    p_customer_phone: normalizePhone(customerPhone),
+    p_subtotal: Math.max(0, toFiniteNumber(subtotal, 0)),
+    p_promo_code: String(promoCode || "").trim().toUpperCase(),
+    p_promo_source: String(promoSource || "").trim().toLowerCase(),
+    p_promo_voucher_id: String(promoVoucherId || "").trim(),
+    p_at: at || new Date().toISOString()
+  });
+  if (error) throw error;
+
+  const row = Array.isArray(data) ? data[0] || null : data || null;
+  if (!row) return null;
+  return {
+    valid: row.is_valid === true,
+    reason: String(row.reason || "voucher_invalid"),
+    discountAmount: Math.max(0, toFiniteNumber(row.discount_amount, 0)),
+    promoCode: String(row.promo_code || "").trim().toUpperCase(),
+    promoSource: String(row.promo_source || "").trim().toLowerCase(),
+    promoVoucherId: String(row.promo_voucher_id || "").trim()
+  };
+}
+
 function subscribeCoreDomainRealtime({ tables = [], onChange }) {
   const client = getRuntimeSupabaseClient();
   if (!client || typeof onChange !== "function") return () => {};
@@ -1961,6 +1997,7 @@ export const coreSupabaseRepository = {
   getCustomerOrderPointStatuses,
   upsertLoyaltyAccountByPhone,
   setLoyaltyVoucherUsage,
+  validateCheckoutVoucher,
   subscribeProfilesRealtime,
   subscribeCustomersRealtime,
   subscribeCustomerAddressesRealtime,

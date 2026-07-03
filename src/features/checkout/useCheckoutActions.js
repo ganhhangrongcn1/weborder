@@ -1,5 +1,7 @@
 ﻿import { buildCreateOrderPayload, validateCheckoutContact } from "../../services/checkoutOrderService.js";
 
+import { getCheckoutVoucherErrorMessage } from "../../services/checkoutOrderService.js";
+
 export default function useCheckoutActions({
   setCart,
   createOrderFromCheckout,
@@ -21,6 +23,7 @@ export default function useCheckoutActions({
   orderSource = "online",
   navigate,
   onNotice,
+  onVoucherRejected,
   repriceCartNow
 }) {
   const updateQty = (cartId, delta) => setCart((items) => items.map((item) => {
@@ -117,6 +120,20 @@ export default function useCheckoutActions({
         details: error?.details || "",
         hint: error?.hint || ""
       });
+      const voucherMessage = getCheckoutVoucherErrorMessage(error);
+      if (voucherMessage) {
+        if (typeof onVoucherRejected === "function") onVoucherRejected();
+        if (typeof onNotice === "function") {
+          onNotice({
+            title: "Voucher không còn áp dụng được",
+            message: voucherMessage,
+            icon: "warning"
+          });
+        } else {
+          alert(voucherMessage);
+        }
+        return;
+      }
       if (typeof onNotice === "function") {
         onNotice({
           title: "Không thể tạo đơn hàng",

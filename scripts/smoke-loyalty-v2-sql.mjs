@@ -77,6 +77,12 @@ const VOUCHER_POLICY_HELPER_FILE = path.join(
   "migrations",
   "20260703101048_allow_coupon_policy_helper_execution.sql",
 );
+const ORDER_VOUCHER_VALIDATION_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260703102642_validate_order_vouchers_server_side.sql",
+);
 
 const assertIncludes = (content, expected, message) => {
   if (!content.includes(expected)) {
@@ -84,7 +90,7 @@ const assertIncludes = (content, expected, message) => {
   }
 };
 
-const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper] = await Promise.all([
+const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper, orderVoucherValidation] = await Promise.all([
   readFile(FOUNDATION_FILE, "utf8"),
   readFile(AUDIT_FILE, "utf8"),
   readFile(POSTCHECK_FILE, "utf8"),
@@ -99,6 +105,7 @@ const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived,
   readFile(REGISTRATION_VOUCHER_FIX_FILE, "utf8"),
   readFile(VOUCHER_SECURITY_FILE, "utf8"),
   readFile(VOUCHER_POLICY_HELPER_FILE, "utf8"),
+  readFile(ORDER_VOUCHER_VALIDATION_FILE, "utf8"),
 ]);
 
 assertIncludes(foundation, "begin;", "Foundation migration must be transactional");
@@ -373,6 +380,36 @@ assertIncludes(
   voucherPolicyHelper,
   "from public, anon;",
   "Anonymous callers must not execute the coupon role helper",
+);
+assertIncludes(
+  orderVoucherValidation,
+  "create or replace function loyalty_private.evaluate_order_voucher(",
+  "Missing server-owned voucher evaluator",
+);
+assertIncludes(
+  orderVoucherValidation,
+  "create or replace function public.validate_checkout_voucher(",
+  "Missing checkout voucher preflight RPC",
+);
+assertIncludes(
+  orderVoucherValidation,
+  "create trigger orders_00_validate_voucher",
+  "Missing mandatory order voucher trigger",
+);
+assertIncludes(
+  orderVoucherValidation,
+  "pg_advisory_xact_lock",
+  "Voucher validation must serialize competing uses",
+);
+assertIncludes(
+  orderVoucherValidation,
+  "loyalty_owner_required",
+  "Loyalty vouchers must verify wallet ownership",
+);
+assertIncludes(
+  orderVoucherValidation,
+  "voucher_discount_mismatch",
+  "Forged voucher discounts must be rejected",
 );
 
 console.log("Loyalty V2 SQL smoke test passed.");
