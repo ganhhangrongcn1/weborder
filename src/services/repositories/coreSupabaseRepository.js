@@ -110,6 +110,40 @@ const LOYALTY_ACCOUNT_SUMMARY_COLUMNS = [
   "points_expires_at",
   "updated_at"
 ].join(",");
+const CUSTOMER_VOUCHER_COLUMNS = [
+  "id",
+  "voucher_instance_id",
+  "profile_id",
+  "customer_phone",
+  "voucher_template_id",
+  "campaign_id",
+  "batch_id",
+  "voucher_code",
+  "voucher_name",
+  "voucher_type",
+  "management_group",
+  "discount_type",
+  "discount_value",
+  "max_discount",
+  "min_order",
+  "valid_days_after_grant",
+  "status",
+  "source_type",
+  "source_label",
+  "campaign_key",
+  "campaign_label",
+  "audience",
+  "granted_at",
+  "expires_at",
+  "used_at",
+  "used_order_id",
+  "used_order_code",
+  "canceled_at",
+  "metadata",
+  "legacy_payload",
+  "created_at",
+  "updated_at"
+].join(",");
 
 function isSupabaseReady() {
   const info = getRepositoryRuntimeInfo();
@@ -554,7 +588,62 @@ function buildCheckinStatsFromLedger(pointHistory = []) {
   };
 }
 
-function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone = "") {
+function mapCustomerVoucherRow(row = {}) {
+  const legacyPayload = getObject(row?.legacy_payload);
+  const grantedAt = row?.granted_at || row?.created_at || legacyPayload?.createdAt || "";
+  const code = String(row?.voucher_code || legacyPayload?.code || legacyPayload?.couponCode || "").trim().toUpperCase();
+  const title = String(row?.voucher_name || legacyPayload?.title || legacyPayload?.name || "").trim();
+  const status = String(row?.status || "").trim().toLowerCase();
+  const voucherType = String(row?.voucher_type || legacyPayload?.voucherType || "loyalty").trim().toLowerCase() === "loyalty"
+    ? "loyalty"
+    : "checkout";
+  const usedAt = row?.used_at || legacyPayload?.usedAt || "";
+  const canceledAt = row?.canceled_at || legacyPayload?.canceledAt || "";
+  const expiresAt = row?.expires_at || legacyPayload?.expiredAt || "";
+  const grantedId = String(row?.voucher_instance_id || row?.id || legacyPayload?.id || "").trim();
+  return {
+    id: grantedId || `voucher-${Date.now()}`,
+    type: legacyPayload?.type || "CRM_GIFT",
+    voucherType,
+    couponId: String(row?.voucher_template_id || legacyPayload?.couponId || "").trim(),
+    code,
+    title: title || "Voucher CRM",
+    createdAt: grantedAt,
+    used: status === "used" || Boolean(usedAt) || Boolean(legacyPayload?.used),
+    usedAt,
+    canceled: status === "canceled" || Boolean(canceledAt) || Boolean(legacyPayload?.canceled),
+    canceledAt,
+    orderCode: String(row?.used_order_code || legacyPayload?.orderCode || "").trim(),
+    managementGroup: String(row?.management_group || legacyPayload?.managementGroup || "").trim(),
+    discountType: String(row?.discount_type || legacyPayload?.discountType || "fixed").trim() || "fixed",
+    value: Number(row?.discount_value ?? legacyPayload?.value ?? 0),
+    maxDiscount: Number(row?.max_discount ?? legacyPayload?.maxDiscount ?? 0),
+    minOrder: Number(row?.min_order ?? legacyPayload?.minOrder ?? 0),
+    grantSourceType: String(row?.source_type || legacyPayload?.grantSourceType || "").trim(),
+    grantSourceLabel: String(row?.source_label || legacyPayload?.grantSourceLabel || "").trim(),
+    grantCampaignKey: String(row?.campaign_key || legacyPayload?.grantCampaignKey || "").trim(),
+    grantCampaignLabel: String(row?.campaign_label || legacyPayload?.grantCampaignLabel || "").trim(),
+    grantAudience: String(row?.audience || legacyPayload?.grantAudience || "").trim(),
+    grantBatchId: String(row?.batch_id || legacyPayload?.grantBatchId || "").trim(),
+    validDaysAfterGrant: Number(row?.valid_days_after_grant ?? legacyPayload?.validDaysAfterGrant ?? 0),
+    expiredAt: String(expiresAt || "").trim(),
+    sourceLabel: String(row?.source_label || legacyPayload?.sourceLabel || "").trim(),
+    metadata: getObject(row?.metadata),
+    legacyPayload
+  };
+}
+
+function mergeVoucherHistorySources(primaryVouchers = [], fallbackVouchers = []) {
+  const normalizedPrimary = Array.isArray(primaryVouchers) ? primaryVouchers : [];
+  const normalizedFallback = Array.isArray(fallbackVouchers) ? fallbackVouchers : [];
+  return mergeById(normalizedFallback, normalizedPrimary).sort((a, b) => {
+    const aTime = new Date(a?.createdAt || a?.grantedAt || 0).getTime();
+    const bTime = new Date(b?.createdAt || b?.grantedAt || 0).getTime();
+    return bTime - aTime;
+  });
+}
+
+function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone = "", voucherRows = []) {
   const pointHistory = (ledgerRows || []).map((row) => ({
     id: row.id,
     type: row.entry_type,
@@ -584,7 +673,10 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     lastCheckinDate: checkinStats.lastCheckinDate || null,
     lastMissedStreak: Number(accountRow?.last_missed_streak || 0),
     comebackUsedDate: accountRow?.comeback_used_date || null,
-    voucherHistory: Array.isArray(accountRow?.vouchers) ? accountRow.vouchers : [],
+    voucherHistory: mergeVoucherHistorySources(
+      (Array.isArray(voucherRows) ? voucherRows : []).map(mapCustomerVoucherRow),
+      Array.isArray(accountRow?.vouchers) ? accountRow.vouchers : []
+    ),
     tierId: accountRow?.tier_id || "new_customer",
     tierCycleYear: Number(accountRow?.tier_cycle_year || new Date().getFullYear()),
     tierQualifyingSpend: Number(accountRow?.tier_qualifying_spend || 0),
@@ -595,6 +687,41 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     pointHistory,
     checkinHistory: checkinStats.checkinHistory
   };
+}
+
+async function readCustomerVouchersByPhonesFromTable(phones = [], providedClient = null) {
+  if (!isSupabaseReady()) return {};
+  const client = providedClient || await getAdminSupabaseClientAsync() || await getSupabaseClientAsync();
+  if (!client) return {};
+
+  const normalizedPhones = Array.from(new Set(
+    (Array.isArray(phones) ? phones : [])
+      .map((phone) => normalizePhone(phone))
+      .filter(Boolean)
+  ));
+  if (!normalizedPhones.length) return {};
+
+  const rows = [];
+  const batchSize = 200;
+  for (let index = 0; index < normalizedPhones.length; index += batchSize) {
+    const phoneBatch = normalizedPhones.slice(index, index + batchSize);
+    const { data, error } = await client
+      .from("customer_vouchers")
+      .select(CUSTOMER_VOUCHER_COLUMNS)
+      .in("customer_phone", phoneBatch)
+      .order("granted_at", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    rows.push(...(Array.isArray(data) ? data : []));
+  }
+
+  return rows.reduce((map, row) => {
+    const phone = normalizePhone(row.customer_phone);
+    if (!phone) return map;
+    if (!map[phone]) map[phone] = [];
+    map[phone].push(row);
+    return map;
+  }, {});
 }
 
 function getOrderPhoneKey(rawPhone) {
@@ -1451,12 +1578,19 @@ async function updateOrderStatusById(orderId, nextStatus) {
 
 async function readLoyaltyByPhoneFromTable() {
   if (!isSupabaseReady()) return null;
-  const client = await getSupabaseClientAsync();
+  const client = await getAdminSupabaseClientAsync() || await getSupabaseClientAsync();
   if (!client) return null;
   const { data: accounts, error: accountError } = await client.from("loyalty_accounts").select("*");
   if (accountError) throw accountError;
   const { data: ledger, error: ledgerError } = await client.from("loyalty_ledger").select("*").order("created_at", { ascending: false });
   if (ledgerError) throw ledgerError;
+
+  const accountPhones = Array.from(
+    new Set((accounts || [])
+      .map((row) => normalizePhone(row.customer_phone))
+      .filter(Boolean))
+  );
+  const voucherRowsByPhone = await readCustomerVouchersByPhonesFromTable(accountPhones, client);
 
   const ledgerByPhone = {};
   (ledger || []).forEach((row) => {
@@ -1468,11 +1602,11 @@ async function readLoyaltyByPhoneFromTable() {
   (accounts || []).forEach((row) => {
     const phone = normalizePhone(row.customer_phone);
     if (!phone) return;
-    map[phone] = buildLoyaltySnapshotFromRows(row, ledgerByPhone[phone] || [], phone);
+    map[phone] = buildLoyaltySnapshotFromRows(row, ledgerByPhone[phone] || [], phone, voucherRowsByPhone[phone] || []);
   });
   Object.entries(ledgerByPhone).forEach(([phone, rows]) => {
     if (map[phone]) return;
-    map[phone] = buildLoyaltySnapshotFromRows(null, rows || [], phone);
+    map[phone] = buildLoyaltySnapshotFromRows(null, rows || [], phone, voucherRowsByPhone[phone] || []);
   });
   return map;
 }
@@ -1512,7 +1646,8 @@ async function readLoyaltyForPhoneFromTable(phone, providedClient = null) {
     .order("created_at", { ascending: false });
   if (ledgerError) throw ledgerError;
 
-  return buildLoyaltySnapshotFromRows(account, ledger || [], key);
+  const voucherRowsByPhone = await readCustomerVouchersByPhonesFromTable([key], client);
+  return buildLoyaltySnapshotFromRows(account, ledger || [], key, voucherRowsByPhone[key] || []);
 }
 
 function mapLoyaltyAccountSummaryRow(row = {}, phone = "") {
