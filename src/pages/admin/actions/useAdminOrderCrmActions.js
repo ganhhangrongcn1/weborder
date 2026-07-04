@@ -1,6 +1,7 @@
 import { buildCustomersFromOrderListAsync, buildCustomersFromOrdersAsync, giftVoucherToCustomer, cancelCustomerVoucher } from "../../../services/crmService.js";
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
 import { recordAdminRequest } from "../../../services/adminRequestAuditService.js";
+import { appendBulkGiftHistoryAsync } from "../../../services/crmCampaignService.js";
 
 export default function useAdminOrderCrmActions({
   orderStorage,
@@ -59,7 +60,7 @@ export default function useAdminOrderCrmActions({
     return nextLoyalty;
   };
 
-  const handleBulkGiftVoucher = async (phones = [], voucher) => {
+  const handleBulkGiftVoucher = async (phones = [], voucher, options = {}) => {
     const uniquePhones = Array.from(new Set(
       (Array.isArray(phones) ? phones : [])
         .map((phone) => String(phone || "").trim())
@@ -93,12 +94,28 @@ export default function useAdminOrderCrmActions({
       console.error("[crm] bulk gift voucher failed", { phone, error: result.reason });
     });
 
+    const historyEntry = await appendBulkGiftHistoryAsync({
+      campaignKey: options?.campaignKey || "",
+      campaignLabel: options?.campaignLabel || "Tặng theo bộ lọc CRM",
+      filterValue: options?.filterValue || "all",
+      audience: options?.audience || "all",
+      voucherId: String(voucher?.id || "").trim(),
+      voucherCode: String(voucher?.code || "").trim().toUpperCase(),
+      voucherName: String(voucher?.name || voucher?.title || "Voucher CRM").trim(),
+      totalRecipients: uniquePhones.length,
+      successCount: successPhones.length,
+      failedCount: failedPhones.length,
+      successPhones,
+      failedPhones
+    });
+
     return {
       successCount: successPhones.length,
       failedCount: failedPhones.length,
       successPhones,
       failedPhones,
-      results
+      results,
+      historyEntry
     };
   };
 
