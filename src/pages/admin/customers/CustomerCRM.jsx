@@ -25,6 +25,26 @@ const INITIAL_DETAIL_ORDER_LIMIT = 3;
 const DETAIL_ORDER_PAGE_SIZE = 10;
 const DETAIL_ORDER_FETCH_LIMIT = 100;
 const CUSTOMER_PAGE_SIZE = 12;
+const CRM_VIEW_TABS = [
+  {
+    id: "customers",
+    label: "Danh sách khách",
+    eyebrow: "CRM khách hàng",
+    description: "Tìm khách, lọc nhóm, chọn nhiều khách và xử lý tặng tay ngay trên danh sách."
+  },
+  {
+    id: "campaigns",
+    label: "Gửi voucher",
+    eyebrow: "Gửi theo nhóm",
+    description: "Chọn nhóm khách, kiểm tra người nhận rồi chọn voucher để gửi ngay trong một luồng."
+  },
+  {
+    id: "history",
+    label: "Lịch sử gửi",
+    eyebrow: "CRM lịch sử",
+    description: "Theo dõi các đợt gửi voucher hàng loạt gần đây, số thành công, số trùng và số lỗi."
+  }
+];
 
 function getCompactPageItems(page, totalPages) {
   if (totalPages <= 7) {
@@ -577,15 +597,6 @@ function CrmStatCard({ icon, title, value, subtitle, tone, scope }) {
   );
 }
 
-function CrmDataPill({ label, value, tone = "neutral" }) {
-  return (
-    <span className={`crm-data-pill crm-data-pill--${tone}`}>
-      <small>{label}</small>
-      <strong>{value}</strong>
-    </span>
-  );
-}
-
 function formatCompactDate(value = "") {
   const [year, month, day] = String(value || "").slice(0, 10).split("-");
   if (!year || !month || !day) return "--";
@@ -676,9 +687,12 @@ export default function CustomerCRM({
   const [channelFilter, setChannelFilter] = useState("all");
   const [detailOrdersByPhone, setDetailOrdersByPhone] = useState({});
   const [detailOrderLimitByPhone, setDetailOrderLimitByPhone] = useState({});
+  const [activeViewTab, setActiveViewTab] = useState("customers");
   const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
   const [voucherPickerMode, setVoucherPickerMode] = useState("single");
   const [selectedPhones, setSelectedPhones] = useState([]);
+  const [campaignSelectedPhones, setCampaignSelectedPhones] = useState([]);
+  const [campaignPreviewKeyword, setCampaignPreviewKeyword] = useState("");
   const [campaignPresets, setCampaignPresets] = useState([]);
   const [bulkGiftHistory, setBulkGiftHistory] = useState([]);
   const [activeBulkCampaign, setActiveBulkCampaign] = useState(null);
@@ -691,9 +705,6 @@ export default function CustomerCRM({
   const [currentPage, setCurrentPage] = useState(1);
   const [topCustomerMode, setTopCustomerMode] = useState("spent");
   const crmAnalytics = crmSnapshot.crmAnalytics?.source === "rpc" ? crmSnapshot.crmAnalytics : null;
-  const dataHealth = crmSnapshot.dataHealth || {};
-  const transactionSummary = crmSnapshot.transactionSummary || {};
-  const transactionAudit = crmSnapshot.transactionAudit || {};
   const activeDateScope = getDateScopeLabel(customersDatePreset, customersDateFrom, customersDateTo);
   const loyaltyConfig = crmSnapshot.loyaltyConfig || {};
   const tierFilterOptions = useMemo(() => {
@@ -747,14 +758,35 @@ export default function CustomerCRM({
     [selectedPhones]
   );
 
+  const registeredCustomerPhoneSet = useMemo(
+    () => new Set(
+      (crmSnapshot.customers || [])
+        .filter((customer) => Boolean(customer?.registeredCustomer))
+        .map((customer) => String(customer?.phone || "").trim())
+        .filter(Boolean)
+    ),
+    [crmSnapshot.customers]
+  );
+
+  const campaignSelectedPhoneSet = useMemo(
+    () => new Set(campaignSelectedPhones),
+    [campaignSelectedPhones]
+  );
+
   useEffect(() => {
     setCurrentPage(1);
   }, [keyword, customerFilter, sortBy, branchFilter, channelFilter]);
 
   useEffect(() => {
     const availablePhones = new Set((crmSnapshot.customers || []).map((customer) => String(customer?.phone || "").trim()).filter(Boolean));
-    setSelectedPhones((current) => current.filter((phone) => availablePhones.has(String(phone || "").trim())));
-  }, [crmSnapshot.customers]);
+    setSelectedPhones((current) => current.filter((phone) => (
+      availablePhones.has(String(phone || "").trim()) &&
+      registeredCustomerPhoneSet.has(String(phone || "").trim())
+    )));
+    setCampaignSelectedPhones((current) => current.filter((phone) => (
+      registeredCustomerPhoneSet.has(String(phone || "").trim())
+    )));
+  }, [crmSnapshot.customers, registeredCustomerPhoneSet]);
 
   useEffect(() => {
     let disposed = false;
@@ -811,20 +843,73 @@ export default function CustomerCRM({
   }, [crmSnapshot.customers]);
 
   const campaignPresetCards = useMemo(() => {
-    const customers = crmSnapshot.customers || [];
+    const customers = (crmSnapshot.customers || []).filter((customer) => Boolean(customer?.registeredCustomer));
     return (campaignPresets || []).map((preset) => ({
       ...preset,
       count: customers.filter((customer) => matchesCustomerFilterSelection(customer, preset.filterValue, tierFilterOptions)).length
     }));
   }, [campaignPresets, crmSnapshot.customers, tierFilterOptions]);
 
+  const campaignTargetCustomers = useMemo(() => {
+    if (!activeBulkCampaign) return [];
+    return (crmSnapshot.customers || []).filter((customer) => (
+      Boolean(customer?.registeredCustomer) &&
+      matchesCustomerFilterSelection(customer, activeBulkCampaign.filterValue, tierFilterOptions)
+    ));
+  }, [activeBulkCampaign, crmSnapshot.customers, tierFilterOptions]);
+
+  const campaignSelectedCustomers = useMemo(
+    () => campaignTargetCustomers.filter((customer) => campaignSelectedPhoneSet.has(String(customer?.phone || "").trim())),
+    [campaignSelectedPhoneSet, campaignTargetCustomers]
+  );
+
+  const filteredCampaignPreviewCustomers = useMemo(() => {
+    const keywordValue = campaignPreviewKeyword.trim().toLowerCase();
+    const phoneKey = getCustomerKey(keywordValue);
+    if (!keywordValue) return campaignSelectedCustomers;
+    return campaignSelectedCustomers.filter((customer) => {
+      const name = String(customer?.name || "").toLowerCase();
+      const phone = String(customer?.phone || "").toLowerCase();
+      return name.includes(keywordValue) || phone.includes(keywordValue) || (phoneKey && phone.includes(phoneKey));
+    });
+  }, [campaignPreviewKeyword, campaignSelectedCustomers]);
+
+  const visibleCampaignPreviewCustomers = useMemo(
+    () => filteredCampaignPreviewCustomers.slice(0, 40),
+    [filteredCampaignPreviewCustomers]
+  );
+
+  const crmViewTabs = useMemo(() => ([
+    {
+      id: "customers",
+      label: "Danh sách khách",
+      count: Number((crmSnapshot.customers || []).length || 0).toLocaleString("vi-VN")
+    },
+    {
+      id: "campaigns",
+      label: "Gửi voucher",
+      count: Number(campaignPresetCards.length || 0).toLocaleString("vi-VN")
+    },
+    {
+      id: "history",
+      label: "Lịch sử gửi",
+      count: Number(bulkGiftHistory.length || 0).toLocaleString("vi-VN")
+    }
+  ]), [bulkGiftHistory.length, campaignPresetCards.length, crmSnapshot.customers]);
+
   const filteredCustomerPhones = useMemo(
-    () => filteredCustomers.map((customer) => String(customer?.phone || "").trim()).filter(Boolean),
+    () => filteredCustomers
+      .filter((customer) => Boolean(customer?.registeredCustomer))
+      .map((customer) => String(customer?.phone || "").trim())
+      .filter(Boolean),
     [filteredCustomers]
   );
 
   const visibleCustomerPhones = useMemo(
-    () => visibleCustomers.map((customer) => String(customer?.phone || "").trim()).filter(Boolean),
+    () => visibleCustomers
+      .filter((customer) => Boolean(customer?.registeredCustomer))
+      .map((customer) => String(customer?.phone || "").trim())
+      .filter(Boolean),
     [visibleCustomers]
   );
 
@@ -838,48 +923,35 @@ export default function CustomerCRM({
     [selectedPhoneSet, visibleCustomerPhones]
   );
 
-  const dataHealthAlerts = useMemo(() => {
-    const alerts = [];
-    const missingProfiles = Number(dataHealth.missingProfileFromOrdersCount || 0);
-    const missingLoyaltyProfiles = Number(dataHealth.missingProfileFromLoyaltyCount || 0);
-    const fallbackCustomers = Number(transactionSummary.fallbackCustomerCount || dataHealth.transactionFallbackCustomerCount || 0);
-    const mismatchCustomers = Number(transactionAudit.mismatchCustomerCount || 0);
-    if (fallbackCustomers > 0) alerts.push(`${fallbackCustomers.toLocaleString("vi-VN")} khách đang dùng tổng hợp fallback`);
-    if (missingProfiles > 0) alerts.push(`${missingProfiles.toLocaleString("vi-VN")} khách có đơn nhưng thiếu hồ sơ`);
-    if (missingLoyaltyProfiles > 0) alerts.push(`${missingLoyaltyProfiles.toLocaleString("vi-VN")} số có điểm nhưng thiếu hồ sơ`);
-    if (mismatchCustomers > 0) alerts.push(`${mismatchCustomers.toLocaleString("vi-VN")} khách lệch tổng đơn khi đối chiếu RPC`);
-    return alerts;
-  }, [dataHealth, transactionAudit, transactionSummary]);
+  const activeViewTabMeta = useMemo(
+    () => CRM_VIEW_TABS.find((tab) => tab.id === activeViewTab) || CRM_VIEW_TABS[0],
+    [activeViewTab]
+  );
 
-  const dataHealthPills = useMemo(() => {
-    const transactionSource = transactionSummary.source === "rpc"
-      ? "RPC"
-      : transactionSummary.source === "mixed"
-        ? "RPC + fallback"
-        : "Fallback";
-    return [
-      {
-        label: "Hồ sơ",
-        value: Number(dataHealth.profileCustomerCount || 0).toLocaleString("vi-VN"),
-        tone: "profile"
-      },
-      {
-        label: "Có đơn",
-        value: Number(dataHealth.transactionCustomerCount || 0).toLocaleString("vi-VN"),
-        tone: "order"
-      },
-      {
-        label: "Điểm",
-        value: Number(dataHealth.loyaltyCustomerCount || 0).toLocaleString("vi-VN"),
-        tone: "loyalty"
-      },
-      {
-        label: "Tổng đơn",
-        value: transactionSource,
-        tone: transactionSummary.source === "client-fallback" ? "warning" : "ok"
-      }
-    ];
-  }, [dataHealth, transactionSummary]);
+  const bulkGiftHistorySummary = useMemo(() => {
+    return (Array.isArray(bulkGiftHistory) ? bulkGiftHistory : []).reduce((summaryAcc, entry) => {
+      const totalRecipients = Number(entry?.totalRecipients || 0);
+      const successCount = Number(entry?.successCount || 0);
+      const duplicateCount = Number(entry?.duplicateCount || 0);
+      const unregisteredCount = Number(entry?.unregisteredCount || 0);
+      const failedCount = Number(entry?.failedCount || 0);
+      return {
+        campaigns: summaryAcc.campaigns + 1,
+        recipients: summaryAcc.recipients + totalRecipients,
+        success: summaryAcc.success + successCount,
+        duplicates: summaryAcc.duplicates + duplicateCount,
+        unregistered: summaryAcc.unregistered + unregisteredCount,
+        failed: summaryAcc.failed + Math.max(0, failedCount - duplicateCount - unregisteredCount)
+      };
+    }, {
+      campaigns: 0,
+      recipients: 0,
+      success: 0,
+      duplicates: 0,
+      unregistered: 0,
+      failed: 0
+    });
+  }, [bulkGiftHistory]);
 
   const priorityRows = useMemo(() => {
     const segments = Array.isArray(crmAnalytics?.voucherSegments) ? crmAnalytics.voucherSegments : [];
@@ -959,19 +1031,24 @@ export default function CustomerCRM({
 
   const effectiveBulkAudience = currentBulkCampaignMeta.audience || bulkTargetAudience;
 
-  const effectiveVoucherAudience = voucherPickerMode === "bulk"
+  const isBulkVoucherPicker = voucherPickerMode !== "single";
+  const bulkRecipientPhones = voucherPickerMode === "campaign"
+    ? campaignSelectedPhones
+    : selectedPhones;
+
+  const effectiveVoucherAudience = isBulkVoucherPicker
     ? effectiveBulkAudience
     : primaryCustomerAudience;
 
   const giftableVouchers = useMemo(() => {
     return listCrmGiftableCoupons(coupons, loyaltyConfig).sort((a, b) => {
-      const rankDiff = voucherPickerMode === "bulk"
+      const rankDiff = isBulkVoucherPicker
         ? Number(!isRecommendedVoucherForAudience(a, effectiveBulkAudience)) - Number(!isRecommendedVoucherForAudience(b, effectiveBulkAudience))
         : getVoucherAudienceRank(a, selectedCustomer || {}) - getVoucherAudienceRank(b, selectedCustomer || {});
       if (rankDiff !== 0) return rankDiff;
       return String(a?.code || "").localeCompare(String(b?.code || ""));
     });
-  }, [coupons, effectiveBulkAudience, loyaltyConfig, selectedCustomer, voucherPickerMode]);
+  }, [coupons, effectiveBulkAudience, isBulkVoucherPicker, loyaltyConfig, selectedCustomer]);
 
   const autoManagedVoucherCount = useMemo(() => {
     return (coupons || []).filter((coupon) => {
@@ -996,11 +1073,11 @@ export default function CustomerCRM({
 
   const recommendedGiftableVoucherCount = useMemo(() => {
     return giftableVouchers.filter((voucher) => (
-      voucherPickerMode === "bulk"
+      isBulkVoucherPicker
         ? isRecommendedVoucherForAudience(voucher, effectiveBulkAudience)
         : isRecommendedVoucherForCustomer(voucher, selectedCustomer || {})
     )).length;
-  }, [effectiveBulkAudience, giftableVouchers, selectedCustomer, voucherPickerMode]);
+  }, [effectiveBulkAudience, giftableVouchers, isBulkVoucherPicker, selectedCustomer]);
 
   const selectedCustomerPhoneKey = selectedCustomer?.phone ? getCustomerKey(selectedCustomer.phone) : "";
 
@@ -1144,7 +1221,7 @@ export default function CustomerCRM({
 
   const toggleSelectedPhone = (phone) => {
     const key = String(phone || "").trim();
-    if (!key) return;
+    if (!key || !registeredCustomerPhoneSet.has(key)) return;
     setSelectedPhones((current) => (
       current.includes(key)
         ? current.filter((item) => item !== key)
@@ -1164,41 +1241,45 @@ export default function CustomerCRM({
     setSelectedPhones([]);
   };
 
-  const applyCampaignPreset = (preset, { openPicker = false } = {}) => {
+  const applyCampaignPreset = (preset) => {
     if (!preset) return;
     const targetPhones = (crmSnapshot.customers || [])
-      .filter((customer) => matchesCustomerFilterSelection(customer, preset.filterValue, tierFilterOptions))
+      .filter((customer) => (
+        Boolean(customer?.registeredCustomer) &&
+        matchesCustomerFilterSelection(customer, preset.filterValue, tierFilterOptions)
+      ))
       .map((customer) => String(customer?.phone || "").trim())
       .filter(Boolean);
 
-    setCustomerFilter(preset.filterValue || "all");
-    setSelectedPhones(targetPhones);
+    setCampaignSelectedPhones(targetPhones);
+    setCampaignPreviewKeyword("");
     setActiveBulkCampaign(preset);
-
-    if (openPicker && targetPhones.length) {
-      setVoucherPickerMode("bulk");
-      setVoucherPickerOpen(true);
-    }
   };
 
   const openSingleVoucherPicker = () => {
+    if (!selectedCustomer?.registeredCustomer) return;
     setActiveBulkCampaign(null);
     setVoucherPickerMode("single");
     setVoucherPickerOpen(true);
   };
 
-  const openBulkVoucherPicker = () => {
+  const openBulkVoucherPicker = ({ preserveCampaign = false } = {}) => {
     if (!selectedPhones.length) return;
-    setActiveBulkCampaign(null);
+    if (!preserveCampaign) {
+      setActiveBulkCampaign(null);
+    }
     setVoucherPickerMode("bulk");
+    setVoucherPickerOpen(true);
+  };
+
+  const openCampaignVoucherPicker = () => {
+    if (!campaignSelectedPhones.length || !activeBulkCampaign) return;
+    setVoucherPickerMode("campaign");
     setVoucherPickerOpen(true);
   };
 
   const closeVoucherPicker = () => {
     setVoucherPickerOpen(false);
-    if (voucherPickerMode === "bulk") {
-      setActiveBulkCampaign(null);
-    }
   };
 
   const resetFilters = () => {
@@ -1262,6 +1343,7 @@ export default function CustomerCRM({
                 type="button"
                 className={`crm-priority-row crm-priority-row--${item.tone}`}
                 onClick={() => {
+                  setActiveViewTab("customers");
                   if (item.label.toLowerCase().includes("30")) setCustomerFilter("inactive30");
                   else if (item.label.toLowerCase().includes("15")) setCustomerFilter("inactive15");
                   else if (item.label.toLowerCase().includes("7")) setCustomerFilter("inactive7");
@@ -1302,33 +1384,54 @@ export default function CustomerCRM({
           </div>
         </section>
 
-        <details className={`crm-data-health ${dataHealthAlerts.length ? "is-warning" : "is-ok"}`}>
-          <summary>
-            <div>
-              <strong>Trạng thái dữ liệu</strong>
-              <span>{dataHealthAlerts.length ? `${dataHealthAlerts.length} cảnh báo cần xem` : "Dữ liệu chính đang ổn"}</span>
-            </div>
-            <div className="crm-data-pills">
-              {dataHealthPills.map((pill) => (
-                <CrmDataPill key={pill.label} {...pill} />
-              ))}
-            </div>
-          </summary>
-          <div className="crm-data-health-body">
-            <span>Hồ sơ khách, giao dịch và điểm loyalty đang được đối chiếu theo phạm vi: {activeDateScope}.</span>
-            <div className="crm-data-health-alerts">
-              {dataHealthAlerts.length ? (
-                dataHealthAlerts.map((alert) => <em key={alert}>{alert}</em>)
-              ) : (
-                <em>Dữ liệu chính đang khớp nguồn</em>
-              )}
-            </div>
-          </div>
-        </details>
       </div>
 
-      <div className="crm-workspace">
-        <div className="crm-list-panel">
+      <div className="crm-view-tabs" role="tablist" aria-label="Điều hướng CRM">
+        {crmViewTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeViewTab === tab.id}
+            className={`crm-view-tab ${activeViewTab === tab.id ? "is-active" : ""}`}
+            onClick={() => setActiveViewTab(tab.id)}
+          >
+            <span>{tab.label}</span>
+            <strong>{tab.count}</strong>
+          </button>
+        ))}
+      </div>
+
+      <div className={`crm-workspace ${activeViewTab === "customers" ? "" : "crm-workspace--single"}`}>
+        <div className={`crm-list-panel crm-list-panel--${activeViewTab}`}>
+          <section className="crm-tab-shell">
+            <div className="crm-tab-shell__copy">
+                  <span>{activeViewTabMeta.eyebrow}</span>
+              <strong>{activeViewTabMeta.label}</strong>
+              <p>{activeViewTabMeta.description}</p>
+            </div>
+            <div className="crm-tab-shell__meta">
+              {activeViewTab === "customers" ? (
+                <>
+                  <b>{filteredCustomers.length.toLocaleString("vi-VN")} khách đang lọc</b>
+                  <small>{selectedPhones.length.toLocaleString("vi-VN")} khách đang chọn</small>
+                </>
+              ) : null}
+              {activeViewTab === "campaigns" ? (
+                <>
+                  <b>{campaignSelectedPhones.length.toLocaleString("vi-VN")} khách sẽ nhận</b>
+                  <small>{activeBulkCampaign?.label || "Chưa chọn nhóm khách"}</small>
+                </>
+              ) : null}
+              {activeViewTab === "history" ? (
+                <>
+                  <b>{bulkGiftHistorySummary.campaigns.toLocaleString("vi-VN")} đợt gửi</b>
+                  <small>{bulkGiftHistorySummary.success.toLocaleString("vi-VN")} lượt thành công</small>
+                </>
+              ) : null}
+            </div>
+          </section>
+          {activeViewTab === "customers" ? (
           <div className="crm-filter-bar">
             <label className="crm-search">
               <Icon name="search" size={17} />
@@ -1358,6 +1461,9 @@ export default function CustomerCRM({
             </select>
             <button type="button" className="crm-reset-btn" onClick={resetFilters}>Xóa lọc</button>
           </div>
+          ) : null}
+
+          {activeViewTab === "customers" ? (
           <div className="crm-segment-strip">
             {segmentQuickFilters.map((segment) => (
               <button
@@ -1371,33 +1477,36 @@ export default function CustomerCRM({
               </button>
             ))}
           </div>
-          {campaignPresetCards.length ? (
+          ) : null}
+
+          {activeViewTab === "campaigns" && campaignPresetCards.length ? (
             <section className="crm-campaign-panel">
               <div className="crm-campaign-panel__head">
                 <div>
-                  <span>Campaign preset</span>
-                  <strong>Chọn nhanh nhóm khách để lọc hoặc tặng voucher hàng loạt</strong>
+                  <span>Bước 1</span>
+                  <strong>Chọn nhóm khách muốn gửi voucher</strong>
+                  <p>Chỉ hiển thị khách đã đăng ký và có thể nhận voucher trong ví.</p>
                 </div>
               </div>
               <div className="crm-campaign-grid">
                 {campaignPresetCards.map((preset) => (
-                  <article key={preset.id} className={`crm-campaign-card crm-campaign-card--${preset.tone || "default"}`}>
+                  <article
+                    key={preset.id}
+                    className={`crm-campaign-card crm-campaign-card--${preset.tone || "default"} ${activeBulkCampaign?.id === preset.id ? "is-active" : ""}`}
+                  >
                     <div>
                       <strong>{preset.label}</strong>
                       <small>{preset.description}</small>
                     </div>
                     <b>{preset.count.toLocaleString("vi-VN")} khách</b>
                     <div className="crm-campaign-card__actions">
-                      <button type="button" onClick={() => applyCampaignPreset(preset)}>
-                        Lọc nhóm
-                      </button>
                       <button
                         type="button"
                         className="crm-campaign-card__primary"
-                        onClick={() => applyCampaignPreset(preset, { openPicker: true })}
+                        onClick={() => applyCampaignPreset(preset)}
                         disabled={!preset.count}
                       >
-                        Chọn & tặng
+                        {activeBulkCampaign?.id === preset.id ? "Đang chọn nhóm này" : "Chọn nhóm này"}
                       </button>
                     </div>
                   </article>
@@ -1405,10 +1514,125 @@ export default function CustomerCRM({
               </div>
             </section>
           ) : null}
+
+          {activeViewTab === "campaigns" && activeBulkCampaign ? (
+            <section className="crm-campaign-audience">
+              <div className="crm-campaign-audience__head">
+                <div>
+                  <span>Bước 2</span>
+                  <strong>Kiểm tra khách sẽ nhận</strong>
+                  <p>Danh sách này độc lập với tab Danh sách khách. Bỏ chọn nếu có khách anh chưa muốn gửi.</p>
+                </div>
+                <div className="crm-campaign-audience__count">
+                  <b>{campaignSelectedPhones.length.toLocaleString("vi-VN")}</b>
+                  <small>/ {campaignTargetCustomers.length.toLocaleString("vi-VN")} khách</small>
+                </div>
+              </div>
+
+              <div className="crm-campaign-summary__stats">
+                <article className="crm-campaign-stat">
+                  <small>Nhóm đang chọn</small>
+                  <strong>{activeBulkCampaign.label}</strong>
+                </article>
+                <article className="crm-campaign-stat">
+                  <small>Sẽ nhận voucher</small>
+                  <strong>{campaignSelectedPhones.length.toLocaleString("vi-VN")} khách</strong>
+                </article>
+                <article className="crm-campaign-stat">
+                  <small>Đã bỏ khỏi danh sách</small>
+                  <strong>{Math.max(0, campaignTargetCustomers.length - campaignSelectedPhones.length).toLocaleString("vi-VN")} khách</strong>
+                </article>
+              </div>
+
+              <div className="crm-campaign-preview-tools">
+                <label className="crm-search">
+                  <Icon name="search" size={17} />
+                  <input
+                    placeholder="Tìm trong nhóm đang chọn..."
+                    value={campaignPreviewKeyword}
+                    onChange={(event) => setCampaignPreviewKeyword(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCampaignSelectedPhones(
+                    campaignTargetCustomers
+                      .map((customer) => String(customer?.phone || "").trim())
+                      .filter(Boolean)
+                  )}
+                  disabled={campaignSelectedPhones.length === campaignTargetCustomers.length}
+                >
+                  Chọn lại toàn bộ
+                </button>
+              </div>
+
+              <div className="crm-campaign-preview-list">
+                {visibleCampaignPreviewCustomers.map((customer) => (
+                  <article key={customer.phone}>
+                    <CustomerIdentity customer={customer} />
+                    <div className="crm-campaign-preview-meta">
+                      <span>{getCustomerReturnLabel(customer)}</span>
+                      <small>{Number(customer.totalOrders || 0).toLocaleString("vi-VN")} đơn · {formatMoney(customer.totalSpent)}</small>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCampaignSelectedPhones((current) => current.filter((phone) => phone !== customer.phone))}
+                      aria-label={`Bỏ khách ${customer.name || customer.phone || ""} khỏi danh sách gửi`}
+                    >
+                      Bỏ
+                    </button>
+                  </article>
+                ))}
+                {!filteredCampaignPreviewCustomers.length ? (
+                  <div className="crm-campaign-preview-empty">
+                    {campaignSelectedPhones.length
+                      ? "Không tìm thấy khách phù hợp trong nhóm đang chọn."
+                      : "Anh đã bỏ toàn bộ khách khỏi danh sách gửi."}
+                  </div>
+                ) : null}
+              </div>
+
+              {filteredCampaignPreviewCustomers.length > visibleCampaignPreviewCustomers.length ? (
+                <p className="crm-campaign-preview-note">
+                  Đang hiện 40 / {filteredCampaignPreviewCustomers.length.toLocaleString("vi-VN")} khách. Anh có thể tìm theo tên hoặc số điện thoại.
+                </p>
+              ) : null}
+
+              <div className="crm-campaign-next">
+                <div>
+                  <span>Bước 3</span>
+                  <strong>Chọn voucher và xác nhận gửi</strong>
+                  <small>Hệ thống vẫn kiểm tra voucher trùng trước khi tặng.</small>
+                </div>
+                <button
+                  type="button"
+                  className="crm-bulk-toolbar__primary"
+                  onClick={openCampaignVoucherPicker}
+                  disabled={!campaignSelectedPhones.length || isBulkGifting}
+                >
+                  {isBulkGifting ? "Đang tặng..." : `Tiếp tục với ${campaignSelectedPhones.length.toLocaleString("vi-VN")} khách`}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          {activeViewTab === "campaigns" && !activeBulkCampaign ? (
+            <div className="crm-campaign-empty">
+              <Icon name="gift" size={26} />
+              <div>
+                <strong>Chưa chọn nhóm khách</strong>
+                <p>Chọn một nhóm ở Bước 1 để xem chính xác ai sẽ nhận voucher.</p>
+              </div>
+            </div>
+          ) : null}
+
+          {activeViewTab === "customers" ? (
           <p className="crm-result-summary">
             Hiển thị {visibleCustomers.length} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
           </p>
+          ) : null}
 
+          {activeViewTab === "customers" ? (
           <div className="crm-bulk-toolbar">
             <div className="crm-bulk-toolbar__summary">
               <strong>Đã chọn {selectedPhones.length.toLocaleString("vi-VN")} khách</strong>
@@ -1420,11 +1644,11 @@ export default function CustomerCRM({
               </span>
             </div>
             <div className="crm-bulk-toolbar__actions">
-              <button type="button" onClick={selectAllFilteredCustomers} disabled={!filteredCustomers.length}>
+              <button type="button" onClick={selectAllFilteredCustomers} disabled={!filteredCustomerPhones.length}>
                 Chọn tất cả đang lọc
               </button>
               {filteredCustomers.length > visibleCustomers.length ? (
-                <button type="button" onClick={selectVisibleCustomers} disabled={!visibleCustomers.length}>
+                <button type="button" onClick={selectVisibleCustomers} disabled={!visibleCustomerPhones.length}>
                   Chọn trang này
                 </button>
               ) : null}
@@ -1441,7 +1665,9 @@ export default function CustomerCRM({
               </button>
             </div>
           </div>
+          ) : null}
 
+          {activeViewTab === "customers" ? (
           <div className="crm-table">
             <div className="crm-table-head">
               <span>Chọn</span>
@@ -1466,15 +1692,25 @@ export default function CustomerCRM({
                       <span
                         role="checkbox"
                         aria-checked={selectedPhoneSet.has(customer.phone)}
+                        aria-disabled={!customer.registeredCustomer}
                         tabIndex={-1}
-                        className={selectedPhoneSet.has(customer.phone) ? "is-checked" : ""}
+                        className={
+                          !customer.registeredCustomer
+                            ? "is-disabled"
+                            : selectedPhoneSet.has(customer.phone)
+                              ? "is-checked"
+                              : ""
+                        }
                         onClick={(event) => {
                           event.stopPropagation();
                           toggleSelectedPhone(customer.phone);
                         }}
                         aria-label={`Chọn khách ${customer.name || customer.phone || ""}`}
+                        title={customer.registeredCustomer ? "Chọn khách để tặng voucher" : "Khách chưa đăng ký nên chưa thể nhận voucher"}
                       >
-                        {selectedPhoneSet.has(customer.phone) ? "✓" : ""}
+                        {customer.registeredCustomer
+                          ? selectedPhoneSet.has(customer.phone) ? "✓" : ""
+                          : "—"}
                       </span>
                     </span>
                     <CustomerIdentity customer={customer} insight={getCustomerInsight(customer)} />
@@ -1507,15 +1743,37 @@ export default function CustomerCRM({
               })}
             </div>
           </div>
+          ) : null}
 
-          {filteredCustomers.length === 0 && (
+          {activeViewTab === "customers" && filteredCustomers.length === 0 && (
             <div className="crm-empty-state">
               <Icon name="user" size={28} />
               <p>Chưa có khách hàng phù hợp với bộ lọc.</p>
             </div>
           )}
 
-          {bulkGiftHistory.length ? (
+          {activeViewTab === "history" ? (
+            <section className="crm-history-overview">
+              <article className="crm-history-overview-card">
+                <small>Đợt gửi</small>
+                <strong>{bulkGiftHistorySummary.campaigns.toLocaleString("vi-VN")}</strong>
+              </article>
+              <article className="crm-history-overview-card">
+                <small>Lượt thành công</small>
+                <strong>{bulkGiftHistorySummary.success.toLocaleString("vi-VN")}</strong>
+              </article>
+              <article className="crm-history-overview-card">
+                <small>Bị chặn trùng</small>
+                <strong>{bulkGiftHistorySummary.duplicates.toLocaleString("vi-VN")}</strong>
+              </article>
+              <article className="crm-history-overview-card">
+                <small>Lỗi khác</small>
+                <strong>{bulkGiftHistorySummary.failed.toLocaleString("vi-VN")}</strong>
+              </article>
+            </section>
+          ) : null}
+
+          {activeViewTab === "history" && bulkGiftHistory.length ? (
             <section className="crm-history-panel">
               <div className="crm-history-panel__head">
                 <div>
@@ -1526,7 +1784,8 @@ export default function CustomerCRM({
               <div className="crm-history-list">
                 {bulkGiftHistory.slice(0, 6).map((entry) => {
                   const duplicateCount = Number(entry.duplicateCount || 0);
-                  const otherFailedCount = Math.max(0, Number(entry.failedCount || 0) - duplicateCount);
+                  const unregisteredCount = Number(entry.unregisteredCount || 0);
+                  const otherFailedCount = Math.max(0, Number(entry.failedCount || 0) - duplicateCount - unregisteredCount);
                   return (
                     <article key={entry.id}>
                       <div>
@@ -1538,6 +1797,7 @@ export default function CustomerCRM({
                         <span>
                           {entry.successCount}/{entry.totalRecipients} thành công
                           {duplicateCount ? ` · trùng ${duplicateCount}` : ""}
+                          {unregisteredCount ? ` · chưa đăng ký ${unregisteredCount}` : ""}
                           {otherFailedCount ? ` · lỗi ${otherFailedCount}` : ""}
                         </span>
                       </div>
@@ -1548,7 +1808,14 @@ export default function CustomerCRM({
             </section>
           ) : null}
 
-          {filteredCustomers.length > CUSTOMER_PAGE_SIZE ? (
+          {activeViewTab === "history" && !bulkGiftHistory.length ? (
+            <div className="crm-empty-state">
+              <Icon name="gift" size={28} />
+              <p>Chưa có lịch sử gửi voucher hàng loạt.</p>
+            </div>
+          ) : null}
+
+          {activeViewTab === "customers" && filteredCustomers.length > CUSTOMER_PAGE_SIZE ? (
             <CrmCompactPagination
               page={safeCurrentPage}
               totalPages={totalPages}
@@ -1559,6 +1826,7 @@ export default function CustomerCRM({
           ) : null}
         </div>
 
+        {activeViewTab === "customers" ? (
         <aside className={`crm-detail-panel ${selectedCustomer ? "is-open" : ""}`}>
           {selectedCustomer ? (
             <>
@@ -1750,113 +2018,15 @@ export default function CustomerCRM({
               </div>
 
               <div className="crm-detail-actions">
-                <button type="button" onClick={openSingleVoucherPicker}>{selectedCarePlan.actionLabel}</button>
+                <button
+                  type="button"
+                  onClick={openSingleVoucherPicker}
+                  disabled={!selectedCustomer.registeredCustomer}
+                  title={selectedCustomer.registeredCustomer ? "" : "Khách cần đăng ký tài khoản trước khi nhận voucher"}
+                >
+                  {selectedCustomer.registeredCustomer ? selectedCarePlan.actionLabel : "Khách chưa đăng ký"}
+                </button>
               </div>
-
-              {voucherPickerOpen ? (
-                <div className="crm-voucher-picker-backdrop" role="presentation" onClick={closeVoucherPicker}>
-                  <section className="crm-voucher-picker" role="dialog" aria-modal="true" aria-label="Chọn voucher CRM" onClick={(event) => event.stopPropagation()}>
-                    <div className="crm-voucher-picker-head">
-                      <div>
-                        <h3>{voucherPickerMode === "bulk" ? "Tặng voucher cho nhiều khách" : "Chọn voucher CRM"}</h3>
-                        <p>
-                          Chỉ hiển thị voucher thuộc nhóm CRM / chiến dịch riêng đang bật.
-                          {voucherPickerMode === "bulk" ? ` Đang áp dụng cho ${selectedPhones.length.toLocaleString("vi-VN")} khách đã chọn.` : ""}
-                          {((voucherPickerMode === "bulk" && effectiveVoucherAudience !== "all") || (voucherPickerMode === "single" && selectedCustomer))
-                            ? ` Đang ưu tiên nhóm ${getVoucherAudienceDefinition(effectiveVoucherAudience).label.toLowerCase()}.`
-                            : ""}
-                        </p>
-                      </div>
-                      <button type="button" onClick={closeVoucherPicker}>×</button>
-                    </div>
-                    <div className="crm-voucher-picker-list">
-                      {recommendedGiftableVoucherCount > 0 && effectiveVoucherAudience !== "all" ? (
-                        <p className="crm-voucher-picker-note crm-voucher-picker-note--strong">
-                          Có {recommendedGiftableVoucherCount} voucher đang khớp với nhóm này: {getVoucherAudienceDefinition(effectiveVoucherAudience).label}.
-                        </p>
-                      ) : null}
-                      {autoManagedVoucherCount > 0 ? (
-                        <p className="crm-voucher-picker-note">
-                          Đang ẩn {autoManagedVoucherCount} voucher loyalty tự động để tránh tặng nhầm trong CRM.
-                        </p>
-                      ) : null}
-                      {giftableVouchers.map((voucher) => {
-                        const audienceLabel = getVoucherAudienceDefinition(voucher?.campaignAudience || "all").label;
-                        const isRecommended = voucherPickerMode === "bulk"
-                          ? isRecommendedVoucherForAudience(voucher, effectiveBulkAudience)
-                          : isRecommendedVoucherForCustomer(voucher, selectedCustomer || {});
-                        return (
-                          <button
-                            key={voucher.id || voucher.code}
-                            type="button"
-                            className={isRecommended ? "is-recommended" : ""}
-                            onClick={async () => {
-                              try {
-                                if (voucherPickerMode === "bulk") {
-                                  setIsBulkGifting(true);
-                                  const result = await bulkGiftVoucherToCustomers?.(selectedPhones, voucher, currentBulkCampaignMeta);
-                                  const failedPhones = Array.isArray(result?.failedPhones) ? result.failedPhones : [];
-                                  const duplicateCount = Number(result?.duplicateCount || 0);
-                                  const failedSet = new Set(failedPhones.map((phone) => String(phone || "").trim()));
-                                  setSelectedPhones((current) => current.filter((phone) => failedSet.has(String(phone || "").trim())));
-                                  if (result?.historyEntry) {
-                                    setBulkGiftHistory((current) => [result.historyEntry, ...(Array.isArray(current) ? current : [])].slice(0, 30));
-                                  }
-                                  setIsBulkGifting(false);
-                                  closeVoucherPicker();
-                                  setActiveBulkCampaign(null);
-
-                                  const successCount = Number(result?.successCount || 0);
-                                  const failedCount = Number(result?.failedCount || 0);
-                                  const otherFailedCount = Math.max(0, failedCount - duplicateCount);
-                                  if (failedCount > 0) {
-                                    window.alert(
-                                      duplicateCount > 0
-                                        ? `Đã tặng ${successCount} khách. Có ${duplicateCount} khách đã có voucher còn hiệu lực nên bị chặn trùng${otherFailedCount ? `, thêm ${otherFailedCount} khách lỗi khác` : ""}. Em giữ lại danh sách lỗi để anh xử lý tiếp.`
-                                        : `Đã tặng ${successCount} khách. Còn ${failedCount} khách lỗi, em giữ lại danh sách để anh xử lý tiếp.`
-                                    );
-                                  } else {
-                                    window.alert(`Đã tặng voucher cho ${successCount} khách.`);
-                                  }
-                                  return;
-                                }
-
-                                await giftVoucherToCustomer(selectedCustomer.phone, voucher);
-                                closeVoucherPicker();
-                              } catch (error) {
-                                setIsBulkGifting(false);
-                                console.error("[crm] gift voucher failed", error);
-                                if (String(error?.message || "") === "LOYALTY_AUTO_VOUCHER_NOT_ALLOWED_IN_CRM") {
-                                  window.alert("Voucher loyalty tự động không được tặng tay trong CRM. Anh chọn voucher thuộc nhóm CRM / chiến dịch riêng giúp em.");
-                                  return;
-                                }
-                                if (String(error?.code || error?.message || "") === "CRM_DUPLICATE_ACTIVE_VOUCHER") {
-                                  window.alert("Khách này đã có voucher này còn hiệu lực rồi nên hệ thống chặn tặng trùng.");
-                                  return;
-                                }
-                                window.alert("Tặng voucher thất bại. Anh kiểm tra quyền Supabase/RPC loyalty giúp em.");
-                              }
-                            }}
-                          >
-                            <span>
-                              <strong>{voucher.code}</strong>
-                              <small>{getGiftableVoucherTypeLabel(voucher, loyaltyConfig)} · {voucher.name || "Voucher CRM"}</small>
-                              <p>
-                                {voucher.campaignLabel || audienceLabel} · {audienceLabel}
-                                {isRecommended ? " · Phù hợp khách này" : ""}
-                              </p>
-                            </span>
-                            <em>{formatVoucherDiscount(voucher)}</em>
-                          </button>
-                        );
-                      })}
-                      {!giftableVouchers.length ? (
-                        <p>Chưa có voucher CRM / chiến dịch riêng đang bật. Anh tạo voucher loyalty và chọn đúng nhóm quản trị trước nhé.</p>
-                      ) : null}
-                    </div>
-                  </section>
-                </div>
-              ) : null}
             </>
           ) : (
             <div className="crm-detail-empty">
@@ -1866,7 +2036,125 @@ export default function CustomerCRM({
             </div>
           )}
         </aside>
+        ) : null}
       </div>
+
+      {voucherPickerOpen ? (
+        <div className="crm-voucher-picker-backdrop" role="presentation" onClick={closeVoucherPicker}>
+          <section className="crm-voucher-picker" role="dialog" aria-modal="true" aria-label="Chọn voucher CRM" onClick={(event) => event.stopPropagation()}>
+            <div className="crm-voucher-picker-head">
+              <div>
+                <h3>{isBulkVoucherPicker ? "Tặng voucher cho nhiều khách" : "Chọn voucher CRM"}</h3>
+                <p>
+                  Chỉ hiển thị voucher thuộc nhóm CRM / chiến dịch riêng đang bật.
+                  {isBulkVoucherPicker ? ` Đang áp dụng cho ${bulkRecipientPhones.length.toLocaleString("vi-VN")} khách đã chọn.` : ""}
+                  {((isBulkVoucherPicker && effectiveVoucherAudience !== "all") || (voucherPickerMode === "single" && selectedCustomer))
+                    ? ` Đang ưu tiên nhóm ${getVoucherAudienceDefinition(effectiveVoucherAudience).label.toLowerCase()}.`
+                    : ""}
+                </p>
+              </div>
+              <button type="button" onClick={closeVoucherPicker}>×</button>
+            </div>
+            <div className="crm-voucher-picker-list">
+              {recommendedGiftableVoucherCount > 0 && effectiveVoucherAudience !== "all" ? (
+                <p className="crm-voucher-picker-note crm-voucher-picker-note--strong">
+                  Có {recommendedGiftableVoucherCount} voucher đang khớp với nhóm này: {getVoucherAudienceDefinition(effectiveVoucherAudience).label}.
+                </p>
+              ) : null}
+              {autoManagedVoucherCount > 0 ? (
+                <p className="crm-voucher-picker-note">
+                  Đang ẩn {autoManagedVoucherCount} voucher loyalty tự động để tránh tặng nhầm trong CRM.
+                </p>
+              ) : null}
+              {giftableVouchers.map((voucher) => {
+                const audienceLabel = getVoucherAudienceDefinition(voucher?.campaignAudience || "all").label;
+                const isRecommended = isBulkVoucherPicker
+                  ? isRecommendedVoucherForAudience(voucher, effectiveBulkAudience)
+                  : isRecommendedVoucherForCustomer(voucher, selectedCustomer || {});
+                return (
+                  <button
+                    key={voucher.id || voucher.code}
+                    type="button"
+                    className={isRecommended ? "is-recommended" : ""}
+                    onClick={async () => {
+                      try {
+                        if (isBulkVoucherPicker) {
+                          setIsBulkGifting(true);
+                          const result = await bulkGiftVoucherToCustomers?.(bulkRecipientPhones, voucher, currentBulkCampaignMeta);
+                          const failedPhones = Array.isArray(result?.failedPhones) ? result.failedPhones : [];
+                          const duplicateCount = Number(result?.duplicateCount || 0);
+                          const unregisteredCount = Number(result?.unregisteredCount || 0);
+                          const failedSet = new Set(failedPhones.map((phone) => String(phone || "").trim()));
+                          if (voucherPickerMode === "campaign") {
+                            setCampaignSelectedPhones((current) => current.filter((phone) => failedSet.has(String(phone || "").trim())));
+                            if (!failedSet.size) {
+                              setActiveBulkCampaign(null);
+                            }
+                          } else {
+                            setSelectedPhones((current) => current.filter((phone) => failedSet.has(String(phone || "").trim())));
+                          }
+                          if (result?.historyEntry) {
+                            setBulkGiftHistory((current) => [result.historyEntry, ...(Array.isArray(current) ? current : [])].slice(0, 30));
+                          }
+                          setIsBulkGifting(false);
+                          closeVoucherPicker();
+
+                          const successCount = Number(result?.successCount || 0);
+                          const failedCount = Number(result?.failedCount || 0);
+                          const otherFailedCount = Math.max(0, failedCount - duplicateCount - unregisteredCount);
+                          if (failedCount > 0) {
+                            const failureNotes = [
+                              duplicateCount ? `${duplicateCount} khách bị chặn trùng` : "",
+                              unregisteredCount ? `${unregisteredCount} khách chưa đăng ký` : "",
+                              otherFailedCount ? `${otherFailedCount} khách lỗi khác` : ""
+                            ].filter(Boolean);
+                            window.alert(`Đã tặng ${successCount} khách. ${failureNotes.join(", ")}. Em giữ lại danh sách chưa xử lý để anh kiểm tra.`);
+                          } else {
+                            window.alert(`Đã tặng voucher cho ${successCount} khách.`);
+                          }
+                          return;
+                        }
+
+                        await giftVoucherToCustomer(selectedCustomer.phone, voucher);
+                        closeVoucherPicker();
+                      } catch (error) {
+                        setIsBulkGifting(false);
+                        console.error("[crm] gift voucher failed", error);
+                        if (String(error?.message || "") === "LOYALTY_AUTO_VOUCHER_NOT_ALLOWED_IN_CRM") {
+                          window.alert("Voucher loyalty tự động không được tặng tay trong CRM. Anh chọn voucher thuộc nhóm CRM / chiến dịch riêng giúp em.");
+                          return;
+                        }
+                        if (String(error?.code || error?.message || "") === "CRM_DUPLICATE_ACTIVE_VOUCHER") {
+                          window.alert("Khách này đã có voucher này còn hiệu lực rồi nên hệ thống chặn tặng trùng.");
+                          return;
+                        }
+                        if (String(error?.code || error?.message || "") === "CRM_CUSTOMER_NOT_REGISTERED") {
+                          window.alert("Khách này chưa đăng ký tài khoản nên chưa thể nhận voucher vào ví.");
+                          return;
+                        }
+                        window.alert("Tặng voucher thất bại. Anh kiểm tra quyền Supabase/RPC loyalty giúp em.");
+                      }
+                    }}
+                  >
+                    <span>
+                      <strong>{voucher.code}</strong>
+                      <small>{getGiftableVoucherTypeLabel(voucher, loyaltyConfig)} · {voucher.name || "Voucher CRM"}</small>
+                      <p>
+                        {voucher.campaignLabel || audienceLabel} · {audienceLabel}
+                        {isRecommended ? " · Phù hợp khách này" : ""}
+                      </p>
+                    </span>
+                    <em>{formatVoucherDiscount(voucher)}</em>
+                  </button>
+                );
+              })}
+              {!giftableVouchers.length ? (
+                <p>Chưa có voucher CRM / chiến dịch riêng đang bật. Anh tạo voucher loyalty và chọn đúng nhóm quản trị trước nhé.</p>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

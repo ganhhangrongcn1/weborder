@@ -100,6 +100,7 @@ function normalizeBulkGiftHistoryEntry(entry = {}) {
   const successPhones = normalizePhones(entry.successPhones);
   const failedPhones = normalizePhones(entry.failedPhones);
   const duplicatePhones = normalizePhones(entry.duplicatePhones);
+  const unregisteredPhones = normalizePhones(entry.unregisteredPhones);
 
   return {
     id: normalizeText(entry.id || `crm-bulk-${Date.now()}`),
@@ -117,9 +118,11 @@ function normalizeBulkGiftHistoryEntry(entry = {}) {
     successCount: Math.max(0, Number(entry.successCount || successPhones.length)),
     failedCount: Math.max(0, Number(entry.failedCount || failedPhones.length)),
     duplicateCount: Math.max(0, Number(entry.duplicateCount || duplicatePhones.length)),
+    unregisteredCount: Math.max(0, Number(entry.unregisteredCount || unregisteredPhones.length)),
     successPhones,
     failedPhones,
-    duplicatePhones
+    duplicatePhones,
+    unregisteredPhones
   };
 }
 

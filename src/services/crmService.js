@@ -154,6 +154,13 @@ function createDuplicateVoucherError(sourceVoucher = {}, duplicateVoucher = null
   return error;
 }
 
+function createUnregisteredVoucherCustomerError(phone = "") {
+  const error = new Error("CRM_CUSTOMER_NOT_REGISTERED");
+  error.code = "CRM_CUSTOMER_NOT_REGISTERED";
+  error.phone = getCustomerKey(phone);
+  return error;
+}
+
 function normalizeCrmVoucher(voucher) {
   const createdAt = String(voucher?.createdAt || getDateKey(new Date()));
   const validDaysAfterGrant = Math.max(0, Number(voucher?.validDaysAfterGrant || 0));
@@ -310,17 +317,23 @@ async function loadCrmSupportSnapshot({ force = false } = {}) {
       loyaltyResult,
       customerMetaResult,
       registeredUsersResult,
-      loyaltyByPhoneResult,
       profileCountResult,
       memberRegistrationResult
     ] = await Promise.allSettled([
       loyaltyRepository.getCrmConfigAsync(defaultLoyaltyConfig),
       customerRepository.getCustomersMetaAsync(),
-      customerRepository.getUsersAsync(),
-      coreSupabaseRepository.readLoyaltyAccountsSummaryFromTable(),
+      customerRepository.getRegisteredUsersAsync(),
       coreSupabaseRepository.readCustomerProfileCountFromTable(),
       getMemberRegistrationComparisonAsync()
     ]);
+    const registeredUsers = registeredUsersResult.status === "fulfilled"
+      ? registeredUsersResult.value || {}
+      : {};
+    const loyaltyByPhoneResult = await Promise.resolve(
+      coreSupabaseRepository.readLoyaltyAccountsSummaryForPhonesFromTable(Object.keys(registeredUsers))
+    )
+      .then((value) => ({ status: "fulfilled", value }))
+      .catch((reason) => ({ status: "rejected", reason }));
     recordAdminRequest("crm loyalty config", "app_configs");
     recordAdminRequest("crm customer meta", "app_configs");
     recordAdminRequest("crm registered profiles", "profiles");
@@ -330,7 +343,7 @@ async function loadCrmSupportSnapshot({ force = false } = {}) {
     const snapshot = {
       loyalty: loyaltyResult.status === "fulfilled" ? loyaltyResult.value : defaultLoyaltyConfig,
       customerMeta: customerMetaResult.status === "fulfilled" ? customerMetaResult.value : {},
-      registeredUsers: registeredUsersResult.status === "fulfilled" ? registeredUsersResult.value : {},
+      registeredUsers,
       loyaltyByPhone: loyaltyByPhoneResult.status === "fulfilled" ? (loyaltyByPhoneResult.value || {}) : {},
       supabaseProfileCount: profileCountResult.status === "fulfilled" ? profileCountResult.value : null,
       memberRegistrationComparison: memberRegistrationResult.status === "fulfilled" ? memberRegistrationResult.value : null
@@ -596,16 +609,22 @@ async function loadCrmFastSupportSnapshot({ force = false } = {}) {
     const [
       loyaltyResult,
       registeredUsersResult,
-      loyaltyByPhoneResult,
       profileCountResult,
       memberRegistrationResult
     ] = await Promise.allSettled([
       loyaltyRepository.getCrmConfigAsync(defaultLoyaltyConfig),
-      customerRepository.getUsersAsync(),
-      coreSupabaseRepository.readLoyaltyAccountsSummaryFromTable(),
+      customerRepository.getRegisteredUsersAsync(),
       coreSupabaseRepository.readCustomerProfileCountFromTable(),
       getMemberRegistrationComparisonAsync()
     ]);
+    const registeredUsers = registeredUsersResult.status === "fulfilled"
+      ? registeredUsersResult.value || {}
+      : {};
+    const loyaltyByPhoneResult = await Promise.resolve(
+      coreSupabaseRepository.readLoyaltyAccountsSummaryForPhonesFromTable(Object.keys(registeredUsers))
+    )
+      .then((value) => ({ status: "fulfilled", value }))
+      .catch((reason) => ({ status: "rejected", reason }));
     recordAdminRequest("crm loyalty config", "app_configs");
     recordAdminRequest("crm registered profiles", "profiles");
     recordAdminRequest("crm loyalty summary", "loyalty_accounts");
@@ -613,7 +632,7 @@ async function loadCrmFastSupportSnapshot({ force = false } = {}) {
 
     const snapshot = {
       loyalty: loyaltyResult.status === "fulfilled" ? loyaltyResult.value : defaultLoyaltyConfig,
-      registeredUsers: registeredUsersResult.status === "fulfilled" ? registeredUsersResult.value : {},
+      registeredUsers,
       loyaltyByPhone: loyaltyByPhoneResult.status === "fulfilled" ? (loyaltyByPhoneResult.value || {}) : {},
       supabaseProfileCount: profileCountResult.status === "fulfilled" ? profileCountResult.value : null,
       memberRegistrationComparison: memberRegistrationResult.status === "fulfilled" ? memberRegistrationResult.value : null
@@ -997,6 +1016,10 @@ function buildCustomersSnapshotFromAnalytics({
 export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 10.000đ", options = {}) {
   const key = getCustomerKey(phone);
   if (!key) return null;
+  const registeredUsers = await customerRepository.getRegisteredUsersAsync();
+  if (!registeredUsers?.[key]?.registered) {
+    throw createUnregisteredVoucherCustomerError(key);
+  }
   const sourceVoucher = typeof voucherTitle === "object" && voucherTitle ? voucherTitle : null;
   let sourceLoyaltyConfig = defaultLoyaltyConfig;
   if (sourceVoucher && getCouponVoucherType(sourceVoucher) === "loyalty") {

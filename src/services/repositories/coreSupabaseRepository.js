@@ -813,6 +813,30 @@ async function readProfilesMapFromTable() {
   }, {});
 }
 
+async function readRegisteredProfilesMapFromTable() {
+  if (!isSupabaseReady()) return null;
+  const client = await getAdminSupabaseClientAsync() || await getSupabaseClientAsync();
+  if (!client) return null;
+  const rows = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await selectProfileRows(client, CUSTOMER_PROFILE_COLUMNS)
+      .eq("registered", true)
+      .or(`status.eq.${DEFAULT_PROFILE_STATUS},status.is.null`)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows.reduce((acc, row) => {
+    const user = fromCustomerRow(row);
+    if (!user.phone || !user.registered) return acc;
+    acc[user.phone] = user;
+    return acc;
+  }, {});
+}
+
 async function readProfileForPhoneFromTable(phone = "") {
   if (!isSupabaseReady()) return null;
   const client = await getSupabaseClientAsync();
@@ -1529,7 +1553,7 @@ async function readLoyaltyAccountSummaryForPhoneFromTable(phone) {
   if (!key) return null;
   const { data, error } = await client
     .from("loyalty_accounts")
-    .select("*")
+    .select(LOYALTY_ACCOUNT_SUMMARY_COLUMNS)
     .eq("customer_phone", key)
     .maybeSingle();
   if (error) throw error;
@@ -1545,7 +1569,7 @@ async function readLoyaltyAccountsSummaryFromTable() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await client
       .from("loyalty_accounts")
-      .select("*")
+      .select(LOYALTY_ACCOUNT_SUMMARY_COLUMNS)
       .range(from, from + pageSize - 1);
     if (error) throw error;
     const page = Array.isArray(data) ? data : [];
@@ -1559,6 +1583,36 @@ async function readLoyaltyAccountsSummaryFromTable() {
     map[summary.phone] = summary;
   });
   return map;
+}
+
+async function readLoyaltyAccountsSummaryForPhonesFromTable(phones = []) {
+  if (!isSupabaseReady()) return null;
+  const client = await getAdminSupabaseClientAsync() || await getSupabaseClientAsync();
+  if (!client) return null;
+  const normalizedPhones = Array.from(new Set(
+    (Array.isArray(phones) ? phones : [])
+      .map((phone) => normalizePhone(phone))
+      .filter(Boolean)
+  ));
+  if (!normalizedPhones.length) return {};
+
+  const rows = [];
+  const batchSize = 200;
+  for (let index = 0; index < normalizedPhones.length; index += batchSize) {
+    const phoneBatch = normalizedPhones.slice(index, index + batchSize);
+    const { data, error } = await client
+      .from("loyalty_accounts")
+      .select(LOYALTY_ACCOUNT_SUMMARY_COLUMNS)
+      .in("customer_phone", phoneBatch);
+    if (error) throw error;
+    rows.push(...(Array.isArray(data) ? data : []));
+  }
+
+  return rows.reduce((map, row) => {
+    const summary = mapLoyaltyAccountSummaryRow(row);
+    if (summary?.phone) map[summary.phone] = summary;
+    return map;
+  }, {});
 }
 
 async function readLoyaltyLedgerByPhonePaged(phone, { limit = 50, offset = 0 } = {}) {
@@ -1978,6 +2032,7 @@ const subscribeCustomersRealtime = subscribeProfilesRealtime;
 
 export const coreSupabaseRepository = {
   readProfilesMapFromTable,
+  readRegisteredProfilesMapFromTable,
   readProfileForPhoneFromTable,
   readCustomerProfileCountFromTable,
   countCustomerProfilesCreatedInRange,
@@ -1998,6 +2053,7 @@ export const coreSupabaseRepository = {
   readLoyaltyForPhoneFromTable,
   readLoyaltyAccountSummaryForPhoneFromTable,
   readLoyaltyAccountsSummaryFromTable,
+  readLoyaltyAccountsSummaryForPhonesFromTable,
   readLoyaltyLedgerByPhonePaged,
   processOrderLoyalty,
   completeWebsiteOrderWithLoyalty,

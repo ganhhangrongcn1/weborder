@@ -82,9 +82,11 @@ export default function useAdminOrderCrmActions({
         successCount: 0,
         failedCount: 0,
         duplicateCount: 0,
+        unregisteredCount: 0,
         successPhones: [],
         failedPhones: [],
         duplicatePhones: [],
+        unregisteredPhones: [],
         results: []
       };
     }
@@ -104,6 +106,7 @@ export default function useAdminOrderCrmActions({
     const successPhones = [];
     const failedPhones = [];
     const duplicatePhones = [];
+    const unregisteredPhones = [];
 
     results.forEach((result, index) => {
       const phone = uniquePhones[index];
@@ -116,6 +119,9 @@ export default function useAdminOrderCrmActions({
       failedPhones.push(phone);
       if (getErrorCode(result.reason) === "CRM_DUPLICATE_ACTIVE_VOUCHER") {
         duplicatePhones.push(phone);
+      }
+      if (getErrorCode(result.reason) === "CRM_CUSTOMER_NOT_REGISTERED") {
+        unregisteredPhones.push(phone);
       }
       console.error("[crm] bulk gift voucher failed", { phone, error: result.reason });
     });
@@ -134,18 +140,22 @@ export default function useAdminOrderCrmActions({
       successCount: successPhones.length,
       failedCount: failedPhones.length,
       duplicateCount: duplicatePhones.length,
+      unregisteredCount: unregisteredPhones.length,
       successPhones,
       failedPhones,
-      duplicatePhones
+      duplicatePhones,
+      unregisteredPhones
     });
 
     return {
       successCount: successPhones.length,
       failedCount: failedPhones.length,
       duplicateCount: duplicatePhones.length,
+      unregisteredCount: unregisteredPhones.length,
       successPhones,
       failedPhones,
       duplicatePhones,
+      unregisteredPhones,
       results,
       historyEntry
     };
