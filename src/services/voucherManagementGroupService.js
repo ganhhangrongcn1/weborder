@@ -81,10 +81,23 @@ export function normalizeCouponManagementGroup(coupon = {}, loyaltyConfig = {}, 
   return getCouponManagementGroup(coupon, loyaltyConfig, preferredGroup);
 }
 
+export function isCouponManualCrmVoucher(coupon = {}, loyaltyConfig = {}) {
+  if (getCouponVoucherType(coupon) !== "loyalty") return false;
+  return getCouponManagementGroup(coupon, loyaltyConfig) === "loyalty_crm";
+}
+
+export function listCrmGiftableCoupons(coupons = [], loyaltyConfig = {}) {
+  return (Array.isArray(coupons) ? coupons : [])
+    .filter((coupon) => coupon?.active !== false && isCouponManualCrmVoucher(coupon, loyaltyConfig))
+    .sort((a, b) => String(a?.code || "").localeCompare(String(b?.code || "")));
+}
+
 export default {
   COUPON_MANAGEMENT_GROUPS,
   getCouponManagementGroup,
   getCouponManagementGroupDefinition,
+  isCouponManualCrmVoucher,
+  listCrmGiftableCoupons,
   listCouponManagementGroupsForVoucherType,
   normalizeCouponManagementGroup
 };

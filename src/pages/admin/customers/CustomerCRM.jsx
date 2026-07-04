@@ -12,6 +12,11 @@ import {
   buildLoyaltyOrderPointLookup,
   resolveOrderPointStatus
 } from "../../../services/loyaltyLedgerUtils.js";
+import {
+  getCouponManagementGroup,
+  getCouponManagementGroupDefinition,
+  listCrmGiftableCoupons
+} from "../../../services/voucherManagementGroupService.js";
 import { formatMoney } from "../../../utils/format.js";
 
 const INITIAL_DETAIL_ORDER_LIMIT = 3;
@@ -305,8 +310,43 @@ function formatVoucherDiscount(voucher) {
   return formatMoney(Number(voucher.value || 0));
 }
 
-function getGiftableVoucherTypeLabel(voucher) {
-  return String(voucher?.voucherType || "checkout") === "loyalty" ? "Loyalty" : "Mã giảm giá";
+function getCouponRefCandidates(coupon = {}) {
+  const refs = [];
+  const id = String(coupon?.id || "").trim();
+  const code = String(coupon?.code || "").trim().toUpperCase();
+  if (id) refs.push(id);
+  if (code) refs.push(code);
+  return refs;
+}
+
+function getGrantedVoucherRefCandidates(voucher = {}) {
+  const refs = [];
+  const couponId = String(voucher?.couponId || "").trim();
+  const code = String(voucher?.code || "").trim().toUpperCase();
+  if (couponId) refs.push(couponId);
+  if (code) refs.push(code);
+  return refs;
+}
+
+function getGiftableVoucherTypeLabel(voucher, loyaltyConfig = {}) {
+  if (String(voucher?.voucherType || "checkout") !== "loyalty") return "Mã giảm giá";
+  const managementGroup = getCouponManagementGroup(voucher, loyaltyConfig);
+  return getCouponManagementGroupDefinition(managementGroup).label;
+}
+
+function resolveGrantedVoucherMeta(voucher = {}, couponMetaByRef = new Map()) {
+  const refs = getGrantedVoucherRefCandidates(voucher);
+  for (let index = 0; index < refs.length; index += 1) {
+    const resolved = couponMetaByRef.get(refs[index]);
+    if (resolved) return resolved;
+  }
+  if (String(voucher?.voucherType || "") !== "loyalty") return null;
+  const fallbackGroup = String(voucher?.managementGroup || "").trim() || "loyalty_crm";
+  const definition = getCouponManagementGroupDefinition(fallbackGroup);
+  return {
+    label: definition.label,
+    value: definition.value
+  };
 }
 
 function getVoucherStatus(voucher) {
@@ -517,9 +557,10 @@ export default function CustomerCRM({
   const transactionSummary = crmSnapshot.transactionSummary || {};
   const transactionAudit = crmSnapshot.transactionAudit || {};
   const activeDateScope = getDateScopeLabel(customersDatePreset, customersDateFrom, customersDateTo);
+  const loyaltyConfig = crmSnapshot.loyaltyConfig || {};
   const tierFilterOptions = useMemo(() => {
-    const configTiers = Array.isArray(crmSnapshot.loyaltyConfig?.tiers)
-      ? crmSnapshot.loyaltyConfig.tiers
+    const configTiers = Array.isArray(loyaltyConfig?.tiers)
+      ? loyaltyConfig.tiers
       : [];
     const activeTiers = configTiers
       .filter((tier) => tier?.enabled !== false && String(tier?.name || "").trim())
@@ -533,7 +574,7 @@ export default function CustomerCRM({
         .map(getCustomerTierName)
         .filter(Boolean)
     )).map((label) => ({ id: label, label }));
-  }, [crmSnapshot.customers, crmSnapshot.loyaltyConfig]);
+  }, [crmSnapshot.customers, loyaltyConfig]);
 
   const filteredCustomers = useMemo(() => {
     const q = keyword.trim().toLowerCase();
@@ -693,13 +734,31 @@ export default function CustomerCRM({
     [crmSnapshot.customers, selectedCustomerPhone]
   );
 
-  const giftableVouchers = useMemo(() => {
-    return (coupons || [])
-      .filter((coupon) => coupon.active !== false && String(coupon?.voucherType || "") === "loyalty")
-      .sort((a, b) => {
-        return String(a.code || "").localeCompare(String(b.code || ""));
+  const giftableVouchers = useMemo(
+    () => listCrmGiftableCoupons(coupons, loyaltyConfig),
+    [coupons, loyaltyConfig]
+  );
+
+  const autoManagedVoucherCount = useMemo(() => {
+    return (coupons || []).filter((coupon) => {
+      return coupon?.active !== false && getCouponManagementGroup(coupon, loyaltyConfig) === "loyalty_auto";
+    }).length;
+  }, [coupons, loyaltyConfig]);
+
+  const couponMetaByRef = useMemo(() => {
+    return (coupons || []).reduce((map, coupon) => {
+      if (String(coupon?.voucherType || "") !== "loyalty") return map;
+      const managementGroup = getCouponManagementGroup(coupon, loyaltyConfig);
+      const definition = getCouponManagementGroupDefinition(managementGroup);
+      getCouponRefCandidates(coupon).forEach((ref) => {
+        map.set(ref, {
+          label: definition.label,
+          value: definition.value
+        });
       });
-  }, [coupons]);
+      return map;
+    }, new Map());
+  }, [coupons, loyaltyConfig]);
 
   const selectedCustomerPhoneKey = selectedCustomer?.phone ? getCustomerKey(selectedCustomer.phone) : "";
 
@@ -1201,11 +1260,12 @@ export default function CustomerCRM({
                   <div className="crm-mini-list">
                     {!isLoyaltyDetailLoading && sortedSelectedVouchers.map((voucher) => {
                       const status = getVoucherStatus(voucher);
+                      const voucherMeta = resolveGrantedVoucherMeta(voucher, couponMetaByRef);
                       return (
                         <article key={voucher.id}>
                           <div>
                             <strong>{voucher.code ? `${voucher.code} - ${voucher.title}` : voucher.title}</strong>
-                            <small>HSD: {voucher.expiredAt || "--"}</small>
+                            <small>{voucherMeta?.label ? `${voucherMeta.label} · ` : ""}HSD: {voucher.expiredAt || "--"}</small>
                           </div>
                           <div className="crm-voucher-row-actions">
                             <em className={status.className}>{status.label}</em>
@@ -1251,11 +1311,16 @@ export default function CustomerCRM({
                     <div className="crm-voucher-picker-head">
                       <div>
                         <h3>Chọn voucher CRM</h3>
-                        <p>Chỉ hiển thị voucher loyalty đang bật.</p>
+                        <p>Chỉ hiển thị voucher thuộc nhóm CRM / chiến dịch riêng đang bật.</p>
                       </div>
                       <button type="button" onClick={() => setVoucherPickerOpen(false)}>×</button>
                     </div>
                     <div className="crm-voucher-picker-list">
+                      {autoManagedVoucherCount > 0 ? (
+                        <p className="crm-voucher-picker-note">
+                          Đang ẩn {autoManagedVoucherCount} voucher loyalty tự động để tránh tặng nhầm trong CRM.
+                        </p>
+                      ) : null}
                       {giftableVouchers.map((voucher) => (
                         <button
                           key={voucher.id || voucher.code}
@@ -1266,19 +1331,23 @@ export default function CustomerCRM({
                               setVoucherPickerOpen(false);
                             } catch (error) {
                               console.error("[crm] gift voucher failed", error);
+                              if (String(error?.message || "") === "LOYALTY_AUTO_VOUCHER_NOT_ALLOWED_IN_CRM") {
+                                window.alert("Voucher loyalty tự động không được tặng tay trong CRM. Anh chọn voucher thuộc nhóm CRM / chiến dịch riêng giúp em.");
+                                return;
+                              }
                               window.alert("Tặng voucher thất bại. Anh kiểm tra quyền Supabase/RPC loyalty giúp em.");
                             }
                           }}
                         >
                           <span>
                             <strong>{voucher.code}</strong>
-                            <small>{getGiftableVoucherTypeLabel(voucher)} · {voucher.name || "Voucher CRM"}</small>
+                            <small>{getGiftableVoucherTypeLabel(voucher, loyaltyConfig)} · {voucher.name || "Voucher CRM"}</small>
                           </span>
                           <em>{formatVoucherDiscount(voucher)}</em>
                         </button>
                       ))}
                       {!giftableVouchers.length ? (
-                        <p>Chưa có voucher loyalty đang bật. Anh tạo hoặc bật voucher loyalty trước nhé.</p>
+                        <p>Chưa có voucher CRM / chiến dịch riêng đang bật. Anh tạo voucher loyalty và chọn đúng nhóm quản trị trước nhé.</p>
                       ) : null}
                     </div>
                   </section>

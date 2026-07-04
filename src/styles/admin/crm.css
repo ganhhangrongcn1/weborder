@@ -1030,6 +1030,13 @@
   font-weight: 800;
 }
 
+.crm-voucher-picker-note {
+  border: 1px dashed #fdba74;
+  border-radius: 14px;
+  background: #fff7ed;
+  padding: 10px 12px;
+}
+
 .crm-voucher-picker-list em {
   flex: 0 0 auto;
   border-radius: 999px;

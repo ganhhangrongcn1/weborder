@@ -36,6 +36,10 @@ import {
   getCouponVoucherType,
   resolveGrantedVoucherExpiry
 } from "./voucherTemplateService.js";
+import {
+  getCouponManagementGroup,
+  isCouponManualCrmVoucher
+} from "./voucherManagementGroupService.js";
 export const CRM_CUSTOMERS_KEY = "ghr_customers";
 export const CRM_LOYALTY_KEY = "ghr_loyalty";
 
@@ -100,11 +104,14 @@ function getUtcMonthKey(date = new Date()) {
 function normalizeCrmVoucher(voucher) {
   const createdAt = String(voucher?.createdAt || getDateKey(new Date()));
   const validDaysAfterGrant = Math.max(0, Number(voucher?.validDaysAfterGrant || 0));
+  const voucherType = getCouponVoucherType(voucher);
   return {
     id: voucher?.id || `voucher-${Date.now()}`,
     type: voucher?.type || "CRM_GIFT",
     couponId: voucher?.couponId || "",
     code: voucher?.code || "",
+    voucherType,
+    managementGroup: voucher?.managementGroup || "",
     discountType: voucher?.discountType || "fixed",
     value: Number(voucher?.value || 0),
     maxDiscount: Number(voucher?.maxDiscount || 0),
@@ -930,6 +937,13 @@ export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 
   const key = getCustomerKey(phone);
   if (!key) return null;
   const sourceVoucher = typeof voucherTitle === "object" && voucherTitle ? voucherTitle : null;
+  let sourceLoyaltyConfig = defaultLoyaltyConfig;
+  if (sourceVoucher && getCouponVoucherType(sourceVoucher) === "loyalty") {
+    sourceLoyaltyConfig = normalizeLoyaltyProgramConfig(await loyaltyRepository.getCrmConfigAsync(defaultLoyaltyConfig));
+    if (!isCouponManualCrmVoucher(sourceVoucher, sourceLoyaltyConfig)) {
+      throw new Error("LOYALTY_AUTO_VOUCHER_NOT_ALLOWED_IN_CRM");
+    }
+  }
   const current = normalizeLoyaltyData({
     ...defaultLoyaltyData,
     ...(await loyaltyRepository.getByPhoneAsync(key, {
@@ -941,11 +955,16 @@ export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 
   const fallbackDays = getCouponVoucherType(sourceVoucher) === "loyalty"
     ? getCouponValidDaysAfterGrant(sourceVoucher, 7)
     : 7;
+  const managementGroup = sourceVoucher
+    ? getCouponManagementGroup(sourceVoucher, sourceLoyaltyConfig)
+    : "";
   const nextVoucher = normalizeCrmVoucher({
     id: `crm-voucher-${Date.now()}`,
     type: "CRM_GIFT",
     couponId: sourceVoucher?.id || "",
     code: String(sourceVoucher?.code || "").trim().toUpperCase(),
+    voucherType: getCouponVoucherType(sourceVoucher),
+    managementGroup,
     discountType: sourceVoucher?.discountType || "fixed",
     value: sourceVoucher?.value ?? 0,
     maxDiscount: sourceVoucher?.maxDiscount ?? 0,
