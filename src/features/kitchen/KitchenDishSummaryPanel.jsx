@@ -15,11 +15,11 @@ function SmallBadge({ children }) {
         display: "inline-flex",
         alignItems: "center",
         border: "1px solid #cbd5e1",
-        borderRadius: 999,
+        borderRadius: 6,
         background: "#ffffff",
         color: "#334155",
-        padding: "4px 8px",
-        fontSize: 11,
+        padding: "3px 6px",
+        fontSize: 10,
         fontWeight: 800,
         whiteSpace: "nowrap"
       }}
@@ -39,14 +39,14 @@ function OrderCodeBadge({ order }) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        minWidth: 58,
+        minWidth: 0,
         maxWidth: 82,
         border: `1px solid ${tone.border}`,
         background: tone.background,
         color: tone.color,
-        borderRadius: 7,
-        padding: "4px 7px",
-        fontSize: 11,
+        borderRadius: 6,
+        padding: "3px 6px",
+        fontSize: 10,
         fontWeight: 950,
         lineHeight: 1,
         overflow: "hidden",
@@ -70,11 +70,11 @@ function OptionBadge({ label }) {
         flexDirection: parsedOption.group ? "column" : "row",
         gap: parsedOption.group ? 2 : 0,
         border: "1px solid #cbd5e1",
-        borderRadius: 999,
+        borderRadius: 6,
         background: "#ffffff",
         color: "#334155",
-        padding: parsedOption.group ? "5px 9px 6px" : "4px 8px",
-        fontSize: 11,
+        padding: parsedOption.group ? "4px 7px 5px" : "3px 6px",
+        fontSize: 10,
         fontWeight: 800,
         lineHeight: 1.12,
         whiteSpace: "nowrap"
@@ -82,10 +82,10 @@ function OptionBadge({ label }) {
     >
       {parsedOption.group ? (
         <>
-          <span style={{ color: "#64748b", fontSize: 10, fontWeight: 750 }}>
+          <span style={{ color: "#64748b", fontSize: 9, fontWeight: 750 }}>
             {parsedOption.group}
           </span>
-          <strong style={{ color: "#111827", fontSize: 12, fontWeight: 950 }}>
+          <strong style={{ color: "#111827", fontSize: 11, fontWeight: 950 }}>
             {parsedOption.value || label}
           </strong>
         </>
@@ -102,11 +102,11 @@ function NoteBadge({ children }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
-        borderRadius: 999,
+        borderRadius: 6,
         background: "#f97316",
         color: "#ffffff",
-        padding: "4px 8px",
-        fontSize: 11,
+        padding: "3px 6px",
+        fontSize: 10,
         fontWeight: 950,
         whiteSpace: "nowrap"
       }}
@@ -116,24 +116,23 @@ function NoteBadge({ children }) {
   );
 }
 
-function StatBox({ label, tone = "#111827", value }) {
+function InlineStat({ label, tone = "#111827", value }) {
   return (
-    <div
+    <span
       style={{
-        background: "#ffffff",
-        borderRadius: 10,
-        padding: "10px 8px",
-        textAlign: "center",
-        minWidth: 0
+        display: "inline-flex",
+        alignItems: "baseline",
+        gap: 3,
+        color: "#64748b",
+        fontSize: 10,
+        whiteSpace: "nowrap"
       }}
     >
-      <strong style={{ display: "block", color: tone, fontSize: 14, lineHeight: 1 }}>
+      <strong style={{ color: tone, fontSize: 12, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
         {value}
       </strong>
-      <span style={{ display: "block", marginTop: 4, color: "#64748b", fontSize: 11 }}>
-        {label}
-      </span>
-    </div>
+      {label}
+    </span>
   );
 }
 
@@ -174,7 +173,7 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
     ? group.notes.filter((note) => note.orderKey === activeOrderKey)
     : [];
   const visibleNotes = mergeVisibleNotes(
-    activeNotes.length ? activeNotes : activeOrderKey ? [] : group.notes.slice(0, 2)
+    activeNotes.length ? activeNotes : activeOrderKey ? [] : group.notes
   );
   const optionCounts = group.options.reduce((acc, option) => {
     acc[option] = (acc[option] || 0) + 1;
@@ -193,41 +192,38 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
         textAlign: "left",
         border: hasActiveOrder ? "2px solid #8b5cf6" : "1px solid #dbe3ef",
         background: hasActiveOrder ? "#f5f3ff" : "#f8fafc",
-        borderRadius: 14,
-        padding: 10,
+        borderRadius: 10,
+        padding: 8,
         display: "grid",
-        gap: 7,
+        gap: 5,
         cursor: "pointer",
-        boxShadow: hasActiveOrder ? "0 10px 24px rgba(139, 92, 246, 0.12)" : "none"
+        boxShadow: hasActiveOrder ? "0 6px 16px rgba(139, 92, 246, 0.11)" : "none"
       }}
     >
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8, alignItems: "start" }}>
         <div style={{ minWidth: 0 }}>
-          <strong style={{ display: "block", color: "#000000", fontSize: 15, lineHeight: 1.15 }}>
+          <strong style={{ display: "block", color: "#111827", fontSize: 13, lineHeight: 1.18 }}>
             {group.name}
           </strong>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-            <SmallBadge>Chờ {formatWaitingMinutes(group.oldestPendingTimeValue)}</SmallBadge>
-          </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ color: "#000000", fontSize: 26, fontWeight: 950, lineHeight: 0.95 }}>
+          <div style={{ color: "#111827", fontSize: 22, fontWeight: 950, lineHeight: 0.95, fontVariantNumeric: "tabular-nums" }}>
             {group.pendingQuantity}
           </div>
-          <div style={{ color: "#64748b", fontSize: 12, lineHeight: 1.05 }}>
+          <div style={{ color: "#64748b", fontSize: 10, lineHeight: 1.05 }}>
             cần
           </div>
         </div>
       </div>
 
       {recipeOptions.length ? (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {recipeOptions.map((option) => (
             <OptionBadge key={`${group.key}-${option.label}`} label={option.label} />
           ))}
         </div>
       ) : Object.keys(optionCounts).length ? (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {Object.entries(optionCounts)
             .sort((first, second) => second[1] - first[1])
             .slice(0, 6)
@@ -237,10 +233,20 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-        <StatBox label={hasSelectedOrder ? "Đơn này" : "Tổng"} value={selectedOrderQuantity} />
-        <StatBox label={hasSelectedOrder ? "Đơn khác" : "Chờ"} tone="#d97706" value={otherOrdersQuantity} />
-        <StatBox
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "4px 8px",
+          flexWrap: "wrap",
+          borderTop: "1px solid #e5e7eb",
+          paddingTop: 5
+        }}
+      >
+        <SmallBadge>Chờ {formatWaitingMinutes(group.oldestPendingTimeValue)}</SmallBadge>
+        <InlineStat label={hasSelectedOrder ? "đơn này" : "tổng"} value={selectedOrderQuantity} />
+        <InlineStat label={hasSelectedOrder ? "đơn khác" : "chờ"} tone="#d97706" value={otherOrdersQuantity} />
+        <InlineStat
           label={hasSelectedOrder ? "Cần làm" : "Xong"}
           tone="#047857"
           value={hasSelectedOrder ? group.pendingQuantity : group.doneQuantity}
@@ -253,38 +259,36 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
             border: activeNotes.length ? "1px solid #f59e0b" : "1px solid #fde68a",
             background: activeNotes.length ? "#fef3c7" : "#fffbeb",
             color: "#92400e",
-            borderRadius: 10,
-            padding: activeNotes.length ? 10 : 8,
+            borderRadius: 7,
+            padding: 7,
             display: "grid",
-            gap: 7,
-            fontSize: 12,
-            opacity: activeNotes.length ? 1 : 0.42,
-            filter: activeNotes.length ? "none" : "saturate(0.65)",
-            boxShadow: activeNotes.length ? "0 8px 18px rgba(245, 158, 11, 0.18)" : "none"
+            gap: 5,
+            fontSize: 11,
+            boxShadow: activeNotes.length ? "0 5px 12px rgba(245, 158, 11, 0.12)" : "none"
           }}
         >
-          <strong style={{ color: "#92400e", fontSize: 12 }}>
-            {activeNotes.length ? "Ghi chú" : "Có ghi chú"}
+          <strong style={{ color: "#92400e", fontSize: 10 }}>
+            Ghi chú
           </strong>
           {visibleNotes.map((note) => (
             <div
               key={`${group.key}-${note.orderKey}-${note.itemIndex}-${note.text}`}
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: 8,
+                alignItems: "flex-start",
+                gap: 5,
                 flexWrap: "wrap",
-                border: activeNotes.length ? "1px solid #f59e0b" : "0",
-                background: activeNotes.length ? "#fde68a" : "transparent",
-                borderRadius: 8,
-                padding: activeNotes.length ? "7px 8px" : 0
+                borderTop: "1px solid rgba(217, 119, 6, 0.18)",
+                paddingTop: 5
               }}
             >
               <NoteBadge>{note.orderCode}</NoteBadge>
               <SmallBadge>
                 {(note.itemIndexes || [note.itemIndex]).map((itemIndex) => `#${itemIndex}`).join(" · ")}
               </SmallBadge>
-              <span style={{ color: "#92400e", fontWeight: 700 }}>{note.text}</span>
+              <span style={{ color: "#78350f", fontWeight: 750, lineHeight: 1.35, flex: "1 1 100%" }}>
+                {note.text}
+              </span>
             </div>
           ))}
         </div>
@@ -308,7 +312,7 @@ function DishGroupButton({ active, activeOrderKey, group, onClick }) {
               justifyContent: "flex-end",
               gap: 5,
               flexWrap: "wrap",
-              maxWidth: 250
+              maxWidth: 220
             }}
           >
             {relatedOrders.slice(0, 8).map((order) => (
@@ -345,21 +349,15 @@ export default function KitchenDishSummaryPanel({
         style={{
           border: "1px solid #e5e7eb",
           background: "#ffffff",
-          borderRadius: 18,
-          padding: 14,
+          borderRadius: 10,
+          padding: 10,
           display: "grid",
-          gridTemplateRows: "auto minmax(0, 1fr)",
-          gap: 12,
+          gridTemplateRows: "minmax(0, 1fr)",
           minHeight: 0,
           height: "100%"
         }}
       >
-        <div>
-          <h2 style={{ margin: 0, color: "#000000", fontSize: 22, lineHeight: 1.15 }}>
-            Tổng món
-          </h2>
-        </div>
-        <div style={{ display: "grid", gap: 10, overflow: "auto", minHeight: 0, paddingRight: 4 }}>
+        <div style={{ display: "grid", gap: 7, overflow: "auto", minHeight: 0, paddingRight: 2 }}>
           {groups.length ? (
             groups.map((group) => (
               <DishGroupButton

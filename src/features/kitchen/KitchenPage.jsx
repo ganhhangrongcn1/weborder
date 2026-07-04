@@ -1,6 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import useKitchenAuth from "../../hooks/useKitchenAuth.js";
-import useKitchenNewOrderAlert from "../../hooks/useKitchenNewOrderAlert.js";
 import useKitchenOrders, { getTodayDateKey } from "../../hooks/useKitchenOrders.js";
 import KitchenDishSummaryPanel from "./KitchenDishSummaryPanel.jsx";
 import KitchenOrderCard from "./KitchenOrderCard.jsx";
@@ -112,10 +111,11 @@ function FilterButton({ active, badgeCount = 0, children, onClick }) {
         background: active ? "#111827" : "#ffffff",
         color: active ? "#ffffff" : "#374151",
         borderRadius: 8,
-        padding: "9px 11px",
-        fontSize: 13,
+        padding: "7px 8px",
+        fontSize: 12,
         fontWeight: 800,
         cursor: "pointer",
+        minHeight: 34,
         whiteSpace: "nowrap"
       }}
     >
@@ -149,12 +149,11 @@ function FilterButton({ active, badgeCount = 0, children, onClick }) {
 
 function ToolbarIcon({ name, size = 15 }) {
   const map = {
-    search: "⌕",
     calendar: "◷",
     refresh: "↻",
     printer: "⎙",
-    bellOff: "🔕",
-    logout: "⇥"
+    logout: "⇥",
+    more: "..."
   };
 
   return <span aria-hidden="true" style={{ fontSize: size, lineHeight: 1 }}>{map[name] || "•"}</span>;
@@ -167,8 +166,8 @@ function SourceFilterSelect({ value, onChange }) {
         position: "relative",
         display: "inline-flex",
         alignItems: "center",
-        minWidth: 156,
-        height: 40
+        minWidth: 112,
+        height: 34
       }}
     >
       <select
@@ -182,10 +181,10 @@ function SourceFilterSelect({ value, onChange }) {
           background: "#ffffff",
           color: "#374151",
           borderRadius: 8,
-          padding: "0 32px 0 11px",
-          fontSize: 13,
+          padding: "0 28px 0 9px",
+          fontSize: 12,
           fontWeight: 800,
-          lineHeight: "40px",
+          lineHeight: "34px",
           cursor: "pointer",
           boxShadow: "0 1px 0 rgba(15, 23, 42, 0.03)",
           outline: "none"
@@ -201,7 +200,7 @@ function SourceFilterSelect({ value, onChange }) {
         aria-hidden="true"
         style={{
           position: "absolute",
-          right: 12,
+          right: 10,
           width: 0,
           height: 0,
           borderLeft: "5px solid transparent",
@@ -569,11 +568,13 @@ export default function KitchenPage() {
   const [printerNotice, setPrinterNotice] = useState("");
   const [printingOrderKey, setPrintingOrderKey] = useState("");
   const [printJobsByOrderKey, setPrintJobsByOrderKey] = useState({});
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const autoPrintBootstrappedRef = useRef(false);
   const autoPrintStartedAtRef = useRef(0);
   const autoPrintedOrderKeysRef = useRef(new Set());
   const autoPrintingOrderKeysRef = useRef(new Set());
   const processingPrintJobsRef = useRef(new Set());
+  const moreMenuRef = useRef(null);
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 1280 : window.innerWidth,
     height: typeof window === "undefined" ? 800 : window.innerHeight
@@ -610,8 +611,6 @@ export default function KitchenPage() {
     setSourceFilter,
     statusFilter,
     setStatusFilter,
-    search,
-    setSearch,
     lastUpdatedAt,
     realtimeStatus,
     updatingOrderId,
@@ -625,10 +624,6 @@ export default function KitchenPage() {
     claimGift,
     reload
   } = useKitchenOrders(kitchenOrderOptions);
-  const {
-    soundEnabled,
-    toggleSound
-  } = useKitchenNewOrderAlert(orders, Boolean(session && profile));
 
   useEffect(() => {
     if (!session || !profile) return undefined;
@@ -764,6 +759,26 @@ export default function KitchenPage() {
   }, []);
 
   useEffect(() => {
+    if (!showMoreMenu || typeof window === "undefined") return undefined;
+
+    function handlePointerDown(event) {
+      if (moreMenuRef.current?.contains(event.target)) return;
+      setShowMoreMenu(false);
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") setShowMoreMenu(false);
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showMoreMenu]);
+
+  useEffect(() => {
     if (!session || !profile || loading) return;
 
     const activeOrders = orders.filter(isAutoPrintableOrder);
@@ -863,11 +878,6 @@ export default function KitchenPage() {
     setActiveOrderKey("");
   }
 
-  function handleSearchChange(value = "") {
-    clearActiveSelection();
-    setSearch(value);
-  }
-
   function handleDateFilterChange(value = "") {
     clearActiveSelection();
     setDateFilter(value);
@@ -887,6 +897,11 @@ export default function KitchenPage() {
     clearActiveSelection();
     setStatusFilter("active");
     reload();
+  }
+
+  function handleLogout() {
+    setShowMoreMenu(false);
+    logout();
   }
 
   function handleSelectDish(dishKey = "") {
@@ -964,8 +979,8 @@ export default function KitchenPage() {
   const boardColumns = isMobile
     ? "1fr"
     : isTabletBoard
-      ? "minmax(0, 1fr) minmax(320px, 0.48fr)"
-      : "minmax(0, 1fr) minmax(340px, 0.44fr)";
+      ? "minmax(0, 1fr) minmax(320px, 0.38fr)"
+      : "minmax(0, 1fr) minmax(340px, 0.40fr)";
   const realtimeToneStyle = getRealtimeToneStyle(realtimeStatus?.tone);
   const syncStatusText = `${realtimeStatus?.label || "Chưa nối realtime"} · Cập nhật ${formatUpdatedTime(lastUpdatedAt)}`;
 
@@ -977,7 +992,7 @@ export default function KitchenPage() {
         background: "#f8fafc",
         color: "#1f2933",
         fontFamily: "Inter, system-ui, Arial, sans-serif",
-        padding: isMobile ? 6 : 8,
+        padding: isMobile ? 6 : isTabletBoard ? 6 : 8,
         boxSizing: "border-box",
         overflow: isMobile ? "auto" : "hidden"
       }}
@@ -990,177 +1005,261 @@ export default function KitchenPage() {
           margin: "0 auto",
           display: "grid",
           gridTemplateRows: "auto minmax(0, 1fr)",
-          gap: isMobile ? 6 : 8
+          gap: isMobile ? 6 : isTabletBoard ? 6 : 8
         }}
       >
         <header
           style={{
             display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "260px minmax(0, 1fr)",
-            alignItems: "start",
-            gap: isMobile ? 10 : "10px 16px",
+            gridTemplateColumns: isMobile
+              ? "minmax(118px, 138px) minmax(0, 1fr) auto"
+              : "minmax(150px, 190px) minmax(0, 1fr) auto",
+            alignItems: "center",
+            gap: isMobile ? 6 : 8,
             border: "1px solid #e5e7eb",
             background: "#ffffff",
-            borderRadius: isMobile ? 12 : 18,
-            padding: isMobile ? 10 : 12,
-            boxShadow: "0 6px 18px rgba(15, 23, 42, 0.05)"
+            borderRadius: isMobile ? 12 : 14,
+            padding: isMobile ? 7 : "8px 10px",
+            boxShadow: "0 5px 14px rgba(15, 23, 42, 0.045)"
           }}
         >
-          <div>
+          <div style={{ minWidth: 0 }}>
             <p
               style={{
-                margin: "0 0 6px",
+                margin: 0,
                 color: "#6b7280",
-                fontSize: 13,
-                fontWeight: 800,
-                textTransform: "uppercase"
+                fontSize: 11,
+                fontWeight: 850,
+                lineHeight: 1.2,
+                textTransform: "uppercase",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
               }}
             >
               {branchLabel}
             </p>
             <h1
               style={{
-                margin: 0,
+                margin: "2px 0 0",
                 color: "#111827",
-                fontSize: isMobile ? 22 : 28,
-                lineHeight: 1.15
+                fontSize: isMobile ? 17 : 20,
+                lineHeight: 1.1,
+                whiteSpace: "nowrap"
               }}
             >
               Bếp chi nhánh
             </h1>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "flex-start" : "flex-end", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ color: "#334155", fontSize: 13, fontWeight: 800 }}>
-              {displayName}
-            </span>
-            <label
-              style={{
-                display: "inline-grid",
-                gridTemplateColumns: "16px minmax(0, 1fr)",
-                alignItems: "center",
-                gap: 8,
-                width: isMobile ? "min(100%, 240px)" : 220,
-                border: "1px solid #cbd5e1",
-                borderRadius: 10,
-                padding: "0 12px",
-                height: 40,
-                boxSizing: "border-box",
-                color: "#64748b"
-              }}
-            >
-              <ToolbarIcon name="search" />
-              <input
-                value={search}
-                onChange={(event) => handleSearchChange(event.target.value)}
-                placeholder="Tìm đơn, khách, món"
-                style={{
-                  width: "100%",
-                  border: "none",
-                  outline: "none",
-                  fontSize: 13,
-                  color: "#334155",
-                  background: "transparent"
-                }}
-              />
-            </label>
-            <label
-              style={{
-                display: "inline-grid",
-                gridTemplateColumns: "16px minmax(0, 1fr)",
-                alignItems: "center",
-                gap: 8,
-                width: isMobile ? "min(100%, 170px)" : 158,
-                border: "1px solid #cbd5e1",
-                borderRadius: 10,
-                padding: "0 12px",
-                height: 40,
-                boxSizing: "border-box",
-                color: "#64748b"
-              }}
-            >
-              <ToolbarIcon name="calendar" />
-              <input
-                type="date"
-                value={dateFilter}
-                onChange={(event) => handleDateFilterChange(event.target.value)}
-                style={{
-                  width: "100%",
-                  border: "none",
-                  outline: "none",
-                  fontSize: 13,
-                  color: "#334155",
-                  background: "transparent"
-                }}
-              />
-            </label>
-            <FilterButton active={dateFilter === getTodayDateKey()} onClick={() => handleDateFilterChange(getTodayDateKey())}>
-              Hôm nay
-            </FilterButton>
+          <div
+            style={{
+              gridColumn: 3,
+              gridRow: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              gap: 6
+            }}
+          >
             <button
               type="button"
               onClick={handleReload}
               disabled={refreshing}
+              aria-label="Tải lại danh sách đơn"
+              title="Tải lại"
               style={{
                 border: "1px solid #16a34a",
                 background: "#16a34a",
                 color: "#ffffff",
                 borderRadius: 8,
-                padding: "9px 12px",
-                fontSize: 13,
+                padding: 0,
+                fontSize: 14,
                 fontWeight: 900,
                 cursor: refreshing ? "not-allowed" : "pointer",
                 opacity: refreshing ? 0.85 : 1,
-                minWidth: 70
+                width: 34,
+                height: 34
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <ToolbarIcon name="refresh" />
-                Tải lại
-              </span>
+              <ToolbarIcon name="refresh" size={17} />
             </button>
-            <button
-              type="button"
-              onClick={toggleSound}
-              style={{
-                border: soundEnabled ? "1px solid #15803d" : "1px solid #d1d5db",
-                background: soundEnabled ? "#dcfce7" : "#ffffff",
-                color: soundEnabled ? "#166534" : "#374151",
-                borderRadius: 8,
-                padding: "9px 12px",
-                fontSize: 13,
-                fontWeight: 900,
-                cursor: "pointer"
-              }}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <ToolbarIcon name="bellOff" />
-                {soundEnabled ? "Chuông bật" : "Chuông"}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={logout}
-              disabled={submitting}
-              style={{
-                border: "1px solid #d1d5db",
-                background: "#ffffff",
-                color: "#374151",
-                borderRadius: 8,
-                padding: "9px 12px",
-                fontSize: 13,
-                fontWeight: 900,
-                cursor: submitting ? "not-allowed" : "pointer"
-              }}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <ToolbarIcon name="logout" />
-                Đăng xuất
-              </span>
-            </button>
+
+            <div ref={moreMenuRef} style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setShowMoreMenu((current) => !current)}
+                aria-expanded={showMoreMenu}
+                aria-label="Mở thêm tùy chọn"
+                title="Thêm"
+                style={{
+                  border: "1px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#334155",
+                  borderRadius: 8,
+                  padding: 0,
+                  fontSize: 14,
+                  fontWeight: 900,
+                  cursor: "pointer",
+                  width: 34,
+                  height: 34
+                }}
+              >
+                <ToolbarIcon name="more" size={17} />
+              </button>
+
+              {showMoreMenu ? (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 8px)",
+                    width: isMobile ? "min(320px, calc(100vw - 20px))" : 330,
+                    maxWidth: "calc(100vw - 20px)",
+                    maxHeight: "calc(100dvh - 72px)",
+                    border: "1px solid #dbe3ef",
+                    background: "#ffffff",
+                    borderRadius: 12,
+                    boxShadow: "0 18px 44px rgba(15, 23, 42, 0.16)",
+                    padding: isMobile ? 10 : 12,
+                    boxSizing: "border-box",
+                    overflowY: "auto",
+                    overscrollBehavior: "contain",
+                    zIndex: 30,
+                    display: "grid",
+                    gap: isMobile ? 8 : 10
+                  }}
+                >
+                  <div style={{ display: "grid", gap: 3 }}>
+                    <strong style={{ color: "#111827", fontSize: 14, lineHeight: 1.25 }}>
+                      {displayName}
+                    </strong>
+                    <span style={{ color: "#64748b", fontSize: 12, fontWeight: 750 }}>
+                      {branchLabel}
+                    </span>
+                  </div>
+
+                  <label
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "16px minmax(0, 1fr)",
+                      alignItems: "center",
+                      gap: 8,
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 9,
+                      padding: "0 11px",
+                      height: 38,
+                      width: "100%",
+                      minWidth: 0,
+                      color: "#64748b",
+                      boxSizing: "border-box"
+                    }}
+                  >
+                    <ToolbarIcon name="calendar" />
+                    <input
+                      type="date"
+                      value={dateFilter}
+                      onChange={(event) => handleDateFilterChange(event.target.value)}
+                      style={{
+                        width: "100%",
+                        minWidth: 0,
+                        border: "none",
+                        outline: "none",
+                        fontSize: 13,
+                        color: "#334155",
+                        background: "transparent",
+                        boxSizing: "border-box"
+                      }}
+                    />
+                  </label>
+
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%", minWidth: 0 }}>
+                    <FilterButton active={dateFilter === getTodayDateKey()} onClick={() => handleDateFilterChange(getTodayDateKey())}>
+                      Hôm nay
+                    </FilterButton>
+                    <span
+                      title={syncStatusText}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 7,
+                        minHeight: 34,
+                        flex: "1 1 auto",
+                        minWidth: 0,
+                        border: realtimeToneStyle.border,
+                        background: realtimeToneStyle.background,
+                        color: realtimeToneStyle.color,
+                        borderRadius: 8,
+                        padding: "7px 9px",
+                        fontSize: 12,
+                        fontWeight: 850,
+                        lineHeight: 1.25,
+                        boxSizing: "border-box"
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 999,
+                          background: realtimeToneStyle.dot,
+                          flex: "0 0 auto"
+                        }}
+                      />
+                      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {syncStatusText}
+                      </span>
+                    </span>
+                  </div>
+
+                  {printerNotice ? (
+                    <span style={{ color: "#334155", fontSize: 12, fontWeight: 750, lineHeight: 1.35 }}>
+                      {printerNotice}
+                    </span>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={submitting}
+                    style={{
+                      border: "1px solid #d1d5db",
+                      background: "#ffffff",
+                      color: "#374151",
+                      borderRadius: 8,
+                      padding: "9px 12px",
+                      fontSize: 13,
+                      fontWeight: 900,
+                      cursor: submitting ? "not-allowed" : "pointer",
+                      textAlign: "left",
+                      width: "100%",
+                      boxSizing: "border-box"
+                    }}
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <ToolbarIcon name="logout" />
+                      Đăng xuất
+                    </span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
 
-          <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div
+            style={{
+              gridColumn: 2,
+              gridRow: 1,
+              display: "flex",
+              gap: 6,
+              flexWrap: "nowrap",
+              alignItems: "center",
+              minWidth: 0,
+              overflowX: "auto",
+              scrollbarWidth: "none"
+            }}
+          >
             <SourceFilterSelect value={sourceFilter} onChange={handleSourceFilterChange} />
             <FilterButton active={statusFilter === "active"} onClick={() => handleStatusFilterChange("active")}>
               Đang xử lý
@@ -1181,38 +1280,6 @@ export default function KitchenPage() {
             <FilterButton active={statusFilter === "all"} onClick={() => handleStatusFilterChange("all")}>
               Tất cả
             </FilterButton>
-            <span
-              title={syncStatusText}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 7,
-                minHeight: 34,
-                maxWidth: isMobile ? "100%" : 360,
-                border: realtimeToneStyle.border,
-                background: realtimeToneStyle.background,
-                color: realtimeToneStyle.color,
-                borderRadius: 8,
-                padding: "7px 10px",
-                fontSize: 12,
-                fontWeight: 850,
-                lineHeight: 1.25,
-                whiteSpace: "normal",
-                boxSizing: "border-box"
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 999,
-                  background: realtimeToneStyle.dot,
-                  flex: "0 0 auto"
-                }}
-              />
-              <span>{syncStatusText}</span>
-            </span>
             {false ? <KitchenRequestAuditBadge audit={requestAudit} onReset={resetRequestAudit} /> : null}
           </div>
         </header>
@@ -1242,76 +1309,6 @@ export default function KitchenPage() {
               </strong>
             </div>
           ))}
-        </section>
-
-        <section
-          style={{
-            border: "1px solid #e5e7eb",
-            background: "#ffffff",
-            borderRadius: 8,
-            padding: 14,
-            display: "none",
-            gap: 12
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(220px, 1fr) 170px auto",
-              gap: 10,
-              alignItems: "center"
-            }}
-          >
-            <input
-              value={search}
-              onChange={(event) => handleSearchChange(event.target.value)}
-              placeholder="Tìm mã đơn, khách, món..."
-              style={{
-                width: "100%",
-                border: "1px solid #d1d5db",
-                borderRadius: 8,
-                padding: "11px 12px",
-                fontSize: 14,
-                boxSizing: "border-box"
-              }}
-            />
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(event) => handleDateFilterChange(event.target.value)}
-              style={{
-                border: "1px solid #d1d5db",
-                borderRadius: 8,
-                padding: "10px 12px",
-                fontSize: 14
-              }}
-            />
-            <FilterButton active={dateFilter === getTodayDateKey()} onClick={() => handleDateFilterChange(getTodayDateKey())}>
-              Hôm nay
-            </FilterButton>
-          </div>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <FilterButton active={statusFilter === "active"} onClick={() => handleStatusFilterChange("active")}>
-              Đang xử lý
-            </FilterButton>
-            <FilterButton
-              active={statusFilter === "scheduled"}
-              badgeCount={stats.scheduled || 0}
-              onClick={() => handleStatusFilterChange("scheduled")}
-            >
-              Đơn đặt trước
-            </FilterButton>
-            <FilterButton active={statusFilter === "done"} onClick={() => handleStatusFilterChange("done")}>
-              Đã xong
-            </FilterButton>
-            <FilterButton active={statusFilter === "cancelled"} onClick={() => handleStatusFilterChange("cancelled")}>
-              Đã hủy
-            </FilterButton>
-            <FilterButton active={statusFilter === "all"} onClick={() => handleStatusFilterChange("all")}>
-              Tất cả trạng thái
-            </FilterButton>
-          </div>
         </section>
 
         {error ? (
@@ -1352,7 +1349,7 @@ export default function KitchenPage() {
           style={{
             display: "grid",
             gridTemplateColumns: boardColumns,
-            gap: isMobile ? 8 : 10,
+            gap: isMobile ? 8 : isTabletBoard ? 8 : 10,
             alignItems: "stretch",
             minHeight: 0,
             height: isMobile ? "auto" : "100%",
@@ -1363,7 +1360,7 @@ export default function KitchenPage() {
             style={{
               display: "grid",
               gridTemplateRows: "minmax(0, 1fr) auto",
-              gap: isMobile ? 8 : 10,
+              gap: isMobile ? 8 : isTabletBoard ? 8 : 10,
               minHeight: 0,
               overflow: isMobile ? "visible" : "hidden"
             }}

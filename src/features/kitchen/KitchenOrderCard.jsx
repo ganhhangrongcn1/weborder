@@ -1078,10 +1078,10 @@ export default function KitchenOrderCard({
           : isScheduledPickupOrder && !isCancelled && !isKitchenOrderDone(order)
             ? scheduledPickupTheme.card
             : theme.background,
-        borderRadius: 16,
-        padding: 12,
+        borderRadius: tabletCompact ? 12 : 16,
+        padding: tabletCompact ? 8 : 12,
         display: "grid",
-        gap: 10,
+        gap: tabletCompact ? 7 : 10,
         color: theme.text,
         cursor: "pointer",
         boxSizing: "border-box",
@@ -1100,13 +1100,13 @@ export default function KitchenOrderCard({
           gridTemplateColumns: compact
             ? "1fr"
             : tabletCompact
-              ? "minmax(0, 1.1fr) minmax(190px, 0.85fr) auto"
+              ? "minmax(210px, 0.85fr) minmax(270px, 1.15fr) auto"
               : "minmax(260px, 1fr) minmax(230px, 0.9fr) auto",
-          gap: isNarrowLayout ? 10 : 16,
+          gap: tabletCompact ? 8 : isNarrowLayout ? 10 : 16,
           alignItems: "start"
         }}
       >
-        <div style={{ minWidth: 0, display: "grid", gap: 9 }}>
+        <div style={{ minWidth: 0, display: "grid", gap: tabletCompact ? 5 : 9 }}>
           <div
             style={{
               display: "grid",
@@ -1122,7 +1122,7 @@ export default function KitchenOrderCard({
               style={{
                 margin: 0,
                 color: "inherit",
-                fontSize: isNarrowLayout ? 20 : 22,
+                fontSize: tabletCompact ? 18 : isNarrowLayout ? 20 : 22,
                 lineHeight: 1.1,
                 fontWeight: 840,
                 overflow: "hidden",
@@ -1133,7 +1133,7 @@ export default function KitchenOrderCard({
               #{shortOrderCode}
             </h3>
           </div>
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: tabletCompact ? 4 : 7, flexWrap: "wrap" }}>
             {active ? (
               <Badge tone={{ background: theme.border, border: theme.border, color: "#ffffff" }} icon="badge">
                 Đang chọn
@@ -1190,7 +1190,7 @@ export default function KitchenOrderCard({
           </InfoLine>
         </div>
 
-        <div style={{ display: "grid", gap: isNarrowLayout ? 6 : 9, color: "#0f172a", fontWeight: 680, minWidth: 0 }}>
+        <div style={{ display: "grid", gap: tabletCompact ? 4 : isNarrowLayout ? 6 : 9, color: "#0f172a", fontWeight: 680, minWidth: 0 }}>
           <InfoLine icon="phone" color="#0f172a" strong wrap={isNarrowLayout}>
             {order.customerName || "Khách"}
             {order.customerPhone ? ` - ${order.customerPhone}` : ""}
@@ -1271,7 +1271,7 @@ export default function KitchenOrderCard({
           ) : null}
         </div>
 
-        <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: 6, justifyItems: compact ? "start" : "end", minWidth: 0 }}>
+        <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: tabletCompact ? 4 : 6, justifyItems: compact ? "start" : "end", minWidth: 0 }}>
           <strong style={{ color: "#334155", fontSize: isNarrowLayout ? 18 : 21, fontWeight: 780 }}>
             {isCancelled ? "Đã hủy" : `${doneItems}/${totalItems}`}
           </strong>
@@ -1327,10 +1327,10 @@ export default function KitchenOrderCard({
           gridTemplateColumns: itemGridColumns,
           gridAutoRows: "auto",
           alignItems: "start",
-          gap: 10,
+          gap: tabletCompact ? 7 : 10,
           maxHeight: compact ? "none" : 420,
           overflowY: compact ? "visible" : "auto",
-          paddingRight: 4
+          paddingRight: tabletCompact ? 2 : 4
         }}
       >
         {displayItems.length ? (
@@ -1352,14 +1352,20 @@ export default function KitchenOrderCard({
                 if (recipeOnlyLabel) return [recipeOnlyLabel];
                 return isPaidToppingDisplayOption(option.label, paidToppingKeys) ? [] : [option.label];
               }));
-            const itemMinHeight = item.note && paidToppings.length
-              ? 178
-              : item.note
-                ? 158
-                : paidToppings.length
-                  ? 130
-                  : tabletCompact
-                    ? 96
+            const itemMinHeight = tabletCompact
+              ? item.note && paidToppings.length
+                ? 132
+                : item.note
+                  ? 112
+                  : paidToppings.length
+                    ? 104
+                    : 72
+              : item.note && paidToppings.length
+                ? 178
+                : item.note
+                  ? 158
+                  : paidToppings.length
+                    ? 130
                     : 112;
 
             return (
@@ -1375,10 +1381,10 @@ export default function KitchenOrderCard({
                   border: itemHighlighted ? "2px solid #8b5cf6" : "1px solid #dbe3ef",
                   background: itemHighlighted ? "#faf5ff" : itemDone ? "#f0fdf4" : unitChecked ? "#fffbeb" : "rgba(255,255,255,0.88)",
                   borderRadius: 12,
-                  padding: 11,
+                  padding: tabletCompact ? 8 : 11,
                   display: "grid",
-                  gridTemplateColumns: "22px minmax(0, 1fr)",
-                  gap: 9,
+                  gridTemplateColumns: tabletCompact ? "20px minmax(0, 1fr)" : "22px minmax(0, 1fr)",
+                  gap: tabletCompact ? 7 : 9,
                   alignContent: "start",
                   alignItems: "start",
                   overflow: "visible",
@@ -1389,8 +1395,8 @@ export default function KitchenOrderCard({
                 <span
                   aria-hidden="true"
                   style={{
-                    width: 18,
-                    height: 18,
+                    width: tabletCompact ? 16 : 18,
+                    height: tabletCompact ? 16 : 18,
                     borderRadius: 3,
                     border: itemDone ? "1px solid #16a34a" : unitChecked ? "1px solid #f59e0b" : "1px solid #94a3b8",
                     background: itemDone ? "#16a34a" : unitChecked ? "#f59e0b" : "#ffffff",
@@ -1398,11 +1404,11 @@ export default function KitchenOrderCard({
                     boxShadow: itemDone || unitChecked ? "inset 0 0 0 3px #ffffff" : "none"
                   }}
                 />
-                <span style={{ minWidth: 0, display: "grid", gap: 9 }}>
+                <span style={{ minWidth: 0, display: "grid", gap: tabletCompact ? 6 : 9 }}>
                   <strong
                     style={{
                       color: itemDone ? "#64748b" : "#111827",
-                      fontSize: 15,
+                      fontSize: tabletCompact ? 14 : 15,
                       lineHeight: 1.24,
                       fontWeight: 760,
                       overflowWrap: "anywhere",
@@ -1475,7 +1481,7 @@ export default function KitchenOrderCard({
         style={{
           display: "grid",
           gridTemplateColumns: compact ? "1fr" : "minmax(0, 1fr) auto auto",
-          gap: 10,
+          gap: tabletCompact ? 7 : 10,
           alignItems: "center"
         }}
       >
@@ -1491,7 +1497,7 @@ export default function KitchenOrderCard({
             background: isActionButtonEnabled ? actionButtonTone.background : "#e2e8f0",
             color: isActionButtonEnabled ? "#ffffff" : "#64748b",
             borderRadius: 10,
-            padding: "12px 14px",
+            padding: tabletCompact ? "9px 11px" : "12px 14px",
             fontSize: 13,
             fontWeight: 950,
             cursor: !canMarkDone || updating || (nextOrderAction?.requiresReady && !orderReadyToConfirm) ? "not-allowed" : "pointer",
@@ -1520,7 +1526,7 @@ export default function KitchenOrderCard({
             background: printButtonConfig.background,
             color: printButtonConfig.color,
             borderRadius: 10,
-            padding: "12px 14px",
+            padding: tabletCompact ? "9px 11px" : "12px 14px",
             fontSize: 13,
             fontWeight: 900,
             cursor: printButtonConfig.disabled ? "not-allowed" : "pointer",
@@ -1538,7 +1544,7 @@ export default function KitchenOrderCard({
             background: isCancelled || isPreorder ? "#f1f5f9" : "#ffffff",
             color: isCancelled || isPreorder ? "#94a3b8" : "#111827",
             borderRadius: 10,
-            padding: "12px 14px",
+            padding: tabletCompact ? "9px 11px" : "12px 14px",
             fontSize: 13,
             fontWeight: 900,
             cursor: isCancelled || isPreorder ? "not-allowed" : "default"
