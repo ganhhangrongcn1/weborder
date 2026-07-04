@@ -275,9 +275,6 @@ function getCustomerSegmentBadges(customer = {}) {
   if (isNewMemberCustomer(customer)) {
     badges.push({ key: "new_member", label: "Mới đăng ký chưa có đơn" });
   }
-  if (hasTierMember(customer)) {
-    badges.push({ key: "tier_member", label: "Khách có hạng thành viên" });
-  }
   if (isWinbackCustomer(customer, 15)) {
     badges.push({ key: "winback_15d", label: "Chưa quay lại 15+ ngày" });
   } else if (isWinbackCustomer(customer, 7)) {
@@ -690,6 +687,7 @@ export default function CustomerCRM({
   const [activeViewTab, setActiveViewTab] = useState("customers");
   const [voucherPickerOpen, setVoucherPickerOpen] = useState(false);
   const [voucherPickerMode, setVoucherPickerMode] = useState("single");
+  const [isManualSelectionMode, setIsManualSelectionMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState([]);
   const [campaignSelectedPhones, setCampaignSelectedPhones] = useState([]);
   const [campaignPreviewKeyword, setCampaignPreviewKeyword] = useState("");
@@ -1241,6 +1239,11 @@ export default function CustomerCRM({
     setSelectedPhones([]);
   };
 
+  const closeManualSelectionMode = () => {
+    setSelectedPhones([]);
+    setIsManualSelectionMode(false);
+  };
+
   const applyCampaignPreset = (preset) => {
     if (!preset) return;
     const targetPhones = (crmSnapshot.customers || [])
@@ -1394,7 +1397,10 @@ export default function CustomerCRM({
             role="tab"
             aria-selected={activeViewTab === tab.id}
             className={`crm-view-tab ${activeViewTab === tab.id ? "is-active" : ""}`}
-            onClick={() => setActiveViewTab(tab.id)}
+            onClick={() => {
+              setActiveViewTab(tab.id);
+              if (tab.id !== "customers") closeManualSelectionMode();
+            }}
           >
             <span>{tab.label}</span>
             <strong>{tab.count}</strong>
@@ -1627,12 +1633,24 @@ export default function CustomerCRM({
           ) : null}
 
           {activeViewTab === "customers" ? (
-          <p className="crm-result-summary">
-            Hiển thị {visibleCustomers.length} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
-          </p>
+          <div className="crm-result-row">
+            <p className="crm-result-summary">
+              Hiển thị {visibleCustomers.length} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
+            </p>
+            {!isManualSelectionMode ? (
+              <button
+                type="button"
+                className="crm-start-selection-btn"
+                onClick={() => setIsManualSelectionMode(true)}
+                disabled={!registeredCustomerPhoneSet.size}
+              >
+                Chọn nhiều khách
+              </button>
+            ) : null}
+          </div>
           ) : null}
 
-          {activeViewTab === "customers" ? (
+          {activeViewTab === "customers" && isManualSelectionMode ? (
           <div className="crm-bulk-toolbar">
             <div className="crm-bulk-toolbar__summary">
               <strong>Đã chọn {selectedPhones.length.toLocaleString("vi-VN")} khách</strong>
@@ -1653,7 +1671,10 @@ export default function CustomerCRM({
                 </button>
               ) : null}
               <button type="button" onClick={clearSelectedCustomers} disabled={!selectedPhones.length}>
-                Bỏ chọn
+                Bỏ chọn hết
+              </button>
+              <button type="button" onClick={closeManualSelectionMode}>
+                Đóng chọn nhiều
               </button>
               <button
                 type="button"
@@ -1668,9 +1689,9 @@ export default function CustomerCRM({
           ) : null}
 
           {activeViewTab === "customers" ? (
-          <div className="crm-table">
+          <div className={`crm-table ${isManualSelectionMode ? "is-selection-mode" : ""}`}>
             <div className="crm-table-head">
-              <span>Chọn</span>
+              {isManualSelectionMode ? <span>Chọn</span> : null}
               <span>Khách hàng</span>
               <span>Trạng thái</span>
               <span>Lần mua cuối</span>
@@ -1688,31 +1709,28 @@ export default function CustomerCRM({
                     className={`crm-table-row ${isSelected ? "is-selected" : ""}`}
                     onClick={() => setSelectedCustomerPhone(isSelected ? "" : customer.phone)}
                   >
-                    <span className="crm-row-select">
-                      <span
-                        role="checkbox"
-                        aria-checked={selectedPhoneSet.has(customer.phone)}
-                        aria-disabled={!customer.registeredCustomer}
-                        tabIndex={-1}
-                        className={
-                          !customer.registeredCustomer
-                            ? "is-disabled"
-                            : selectedPhoneSet.has(customer.phone)
-                              ? "is-checked"
-                              : ""
-                        }
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          toggleSelectedPhone(customer.phone);
-                        }}
-                        aria-label={`Chọn khách ${customer.name || customer.phone || ""}`}
-                        title={customer.registeredCustomer ? "Chọn khách để tặng voucher" : "Khách chưa đăng ký nên chưa thể nhận voucher"}
-                      >
-                        {customer.registeredCustomer
-                          ? selectedPhoneSet.has(customer.phone) ? "✓" : ""
-                          : "—"}
+                    {isManualSelectionMode ? (
+                      <span className="crm-row-select">
+                        {customer.registeredCustomer ? (
+                          <span
+                            role="checkbox"
+                            aria-checked={selectedPhoneSet.has(customer.phone)}
+                            tabIndex={-1}
+                            className={selectedPhoneSet.has(customer.phone) ? "is-checked" : ""}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleSelectedPhone(customer.phone);
+                            }}
+                            aria-label={`Chọn khách ${customer.name || customer.phone || ""}`}
+                            title="Chọn khách để tặng voucher"
+                          >
+                            {selectedPhoneSet.has(customer.phone) ? "✓" : ""}
+                          </span>
+                        ) : (
+                          <span className="is-placeholder" aria-hidden="true" />
+                        )}
                       </span>
-                    </span>
+                    ) : null}
                     <CustomerIdentity customer={customer} insight={getCustomerInsight(customer)} />
                     <span className="crm-badge-stack">
                       <em className={`crm-soft-badge ${getCustomerTypeClass(customer)}`}>{getCustomerTypeLabel(customer)}</em>
