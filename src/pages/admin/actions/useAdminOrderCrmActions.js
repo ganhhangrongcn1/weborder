@@ -1,4 +1,9 @@
-import { buildCustomersFromOrderListAsync, buildCustomersFromOrdersAsync, giftVoucherToCustomer, cancelCustomerVoucher } from "../../../services/crmService.js";
+import {
+  buildCustomersFromOrderListAsync,
+  buildCustomersFromOrdersAsync,
+  giftVoucherToCustomer,
+  cancelCustomerVoucher
+} from "../../../services/crmService.js";
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
 import { recordAdminRequest } from "../../../services/adminRequestAuditService.js";
 import { appendBulkGiftHistoryAsync } from "../../../services/crmCampaignService.js";
@@ -8,6 +13,8 @@ export default function useAdminOrderCrmActions({
   setOrdersSnapshot,
   setCrmSnapshot
 }) {
+  const getErrorCode = (error) => String(error?.code || error?.message || "").trim();
+
   const patchCustomerLoyaltyInSnapshot = (phone, loyalty) => {
     const key = String(phone || "").trim();
     if (!key || !loyalty) return;
@@ -54,8 +61,12 @@ export default function useAdminOrderCrmActions({
     return nextSnapshot;
   };
 
-  const handleGiftVoucher = async (phone, voucher) => {
-    const nextLoyalty = await giftVoucherToCustomer(phone, voucher);
+  const handleGiftVoucher = async (phone, voucher, options = {}) => {
+    const nextLoyalty = await giftVoucherToCustomer(phone, voucher, {
+      sourceType: "crm_single",
+      sourceLabel: "CRM - tặng tay",
+      ...options
+    });
     patchCustomerLoyaltyInSnapshot(phone, nextLoyalty);
     return nextLoyalty;
   };
@@ -70,18 +81,29 @@ export default function useAdminOrderCrmActions({
       return {
         successCount: 0,
         failedCount: 0,
+        duplicateCount: 0,
         successPhones: [],
         failedPhones: [],
+        duplicatePhones: [],
         results: []
       };
     }
 
+    const grantBatchId = String(options?.grantBatchId || `crm-bulk-${Date.now()}`).trim();
+    const bulkGiftOptions = {
+      ...options,
+      sourceType: String(options?.sourceType || "crm_bulk").trim() || "crm_bulk",
+      sourceLabel: String(options?.sourceLabel || "CRM - gửi theo nhóm").trim() || "CRM - gửi theo nhóm",
+      grantBatchId
+    };
+
     const results = await Promise.allSettled(
-      uniquePhones.map((phone) => giftVoucherToCustomer(phone, voucher))
+      uniquePhones.map((phone) => giftVoucherToCustomer(phone, voucher, bulkGiftOptions))
     );
 
     const successPhones = [];
     const failedPhones = [];
+    const duplicatePhones = [];
 
     results.forEach((result, index) => {
       const phone = uniquePhones[index];
@@ -90,7 +112,11 @@ export default function useAdminOrderCrmActions({
         successPhones.push(phone);
         return;
       }
+
       failedPhones.push(phone);
+      if (getErrorCode(result.reason) === "CRM_DUPLICATE_ACTIVE_VOUCHER") {
+        duplicatePhones.push(phone);
+      }
       console.error("[crm] bulk gift voucher failed", { phone, error: result.reason });
     });
 
@@ -102,18 +128,24 @@ export default function useAdminOrderCrmActions({
       voucherId: String(voucher?.id || "").trim(),
       voucherCode: String(voucher?.code || "").trim().toUpperCase(),
       voucherName: String(voucher?.name || voucher?.title || "Voucher CRM").trim(),
+      sourceType: bulkGiftOptions.sourceType,
+      sourceLabel: bulkGiftOptions.sourceLabel,
       totalRecipients: uniquePhones.length,
       successCount: successPhones.length,
       failedCount: failedPhones.length,
+      duplicateCount: duplicatePhones.length,
       successPhones,
-      failedPhones
+      failedPhones,
+      duplicatePhones
     });
 
     return {
       successCount: successPhones.length,
       failedCount: failedPhones.length,
+      duplicateCount: duplicatePhones.length,
       successPhones,
       failedPhones,
+      duplicatePhones,
       results,
       historyEntry
     };
@@ -133,6 +165,7 @@ export default function useAdminOrderCrmActions({
     handleGiftVoucher,
     handleBulkGiftVoucher,
     handleCancelVoucher,
-    handleOrderUpdated
+    handleOrderUpdated,
+    refreshCrmOnly
   };
 }

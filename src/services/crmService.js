@@ -101,6 +101,59 @@ function getUtcMonthKey(date = new Date()) {
   return date.toISOString().slice(0, 7);
 }
 
+function normalizeVoucherCode(value = "") {
+  return String(value || "").trim().toUpperCase();
+}
+
+function isCrmVoucherExpired(voucher = {}, todayKey = getDateKey(new Date())) {
+  const expiredAt = String(voucher?.expiredAt || voucher?.endAt || voucher?.expiry || "").trim();
+  if (!expiredAt) return false;
+  return expiredAt < todayKey;
+}
+
+function getDefaultVoucherGrantSourceLabel(sourceType = "") {
+  switch (String(sourceType || "").trim()) {
+    case "crm_bulk":
+      return "CRM - gửi theo nhóm";
+    case "crm_single":
+      return "CRM - tặng tay";
+    case "loyalty_welcome":
+      return "Tự động - đăng ký mới";
+    case "loyalty_tier":
+      return "Tự động - hạng thành viên";
+    default:
+      return "CRM";
+  }
+}
+
+function findActiveDuplicateVoucher(voucherHistory = [], sourceVoucher = {}) {
+  const targetCouponId = String(sourceVoucher?.id || sourceVoucher?.couponId || "").trim();
+  const targetCode = normalizeVoucherCode(sourceVoucher?.code);
+  if (!targetCouponId && !targetCode) return null;
+
+  const todayKey = getDateKey(new Date());
+  return (Array.isArray(voucherHistory) ? voucherHistory : [])
+    .map(normalizeCrmVoucher)
+    .find((voucher) => {
+      if (voucher?.used || voucher?.canceled || isCrmVoucherExpired(voucher, todayKey)) return false;
+      const currentCouponId = String(voucher?.couponId || "").trim();
+      const currentCode = normalizeVoucherCode(voucher?.code);
+      return (
+        (targetCouponId && currentCouponId && currentCouponId === targetCouponId) ||
+        (targetCode && currentCode && currentCode === targetCode)
+      );
+    }) || null;
+}
+
+function createDuplicateVoucherError(sourceVoucher = {}, duplicateVoucher = null) {
+  const error = new Error("CRM_DUPLICATE_ACTIVE_VOUCHER");
+  error.code = "CRM_DUPLICATE_ACTIVE_VOUCHER";
+  error.voucherCode = normalizeVoucherCode(sourceVoucher?.code || duplicateVoucher?.code);
+  error.couponId = String(sourceVoucher?.id || sourceVoucher?.couponId || duplicateVoucher?.couponId || "").trim();
+  error.duplicateVoucher = duplicateVoucher || null;
+  return error;
+}
+
 function normalizeCrmVoucher(voucher) {
   const createdAt = String(voucher?.createdAt || getDateKey(new Date()));
   const validDaysAfterGrant = Math.max(0, Number(voucher?.validDaysAfterGrant || 0));
@@ -123,6 +176,14 @@ function normalizeCrmVoucher(voucher) {
     canceled: Boolean(voucher?.canceled),
     canceledAt: voucher?.canceledAt || "",
     orderCode: voucher?.orderCode || "",
+    campaignLabel: voucher?.campaignLabel || "",
+    campaignAudience: voucher?.campaignAudience || "",
+    grantSourceType: voucher?.grantSourceType || "",
+    grantSourceLabel: voucher?.grantSourceLabel || "",
+    grantCampaignKey: voucher?.grantCampaignKey || voucher?.campaignKey || "",
+    grantCampaignLabel: voucher?.grantCampaignLabel || "",
+    grantAudience: voucher?.grantAudience || "",
+    grantBatchId: voucher?.grantBatchId || "",
     validDaysAfterGrant,
     expiredAt: voucher?.expiredAt || addDaysToDateKey(createdAt, validDaysAfterGrant || 7)
   };
@@ -933,7 +994,7 @@ function buildCustomersSnapshotFromAnalytics({
   };
 }
 
-export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 10.000đ") {
+export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 10.000đ", options = {}) {
   const key = getCustomerKey(phone);
   if (!key) return null;
   const sourceVoucher = typeof voucherTitle === "object" && voucherTitle ? voucherTitle : null;
@@ -951,6 +1012,12 @@ export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 
       phone: key
     }))
   });
+  if (sourceVoucher) {
+    const duplicateVoucher = findActiveDuplicateVoucher(current.voucherHistory, sourceVoucher);
+    if (duplicateVoucher) {
+      throw createDuplicateVoucherError(sourceVoucher, duplicateVoucher);
+    }
+  }
   const today = getDateKey(new Date());
   const fallbackDays = getCouponVoucherType(sourceVoucher) === "loyalty"
     ? getCouponValidDaysAfterGrant(sourceVoucher, 7)
@@ -958,11 +1025,17 @@ export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 
   const managementGroup = sourceVoucher
     ? getCouponManagementGroup(sourceVoucher, sourceLoyaltyConfig)
     : "";
+  const grantSourceType = String(options?.sourceType || "crm_single").trim() || "crm_single";
+  const grantSourceLabel = String(options?.sourceLabel || "").trim() || getDefaultVoucherGrantSourceLabel(grantSourceType);
+  const grantCampaignKey = String(options?.campaignKey || "").trim();
+  const grantCampaignLabel = String(options?.campaignLabel || "").trim();
+  const grantAudience = String(options?.audience || "").trim();
+  const grantBatchId = String(options?.grantBatchId || "").trim();
   const nextVoucher = normalizeCrmVoucher({
     id: `crm-voucher-${Date.now()}`,
     type: "CRM_GIFT",
     couponId: sourceVoucher?.id || "",
-    code: String(sourceVoucher?.code || "").trim().toUpperCase(),
+    code: normalizeVoucherCode(sourceVoucher?.code),
     voucherType: getCouponVoucherType(sourceVoucher),
     managementGroup,
     discountType: sourceVoucher?.discountType || "fixed",
@@ -972,6 +1045,14 @@ export async function giftVoucherToCustomer(phone, voucherTitle = "Voucher demo 
     title: sourceVoucher?.name || sourceVoucher?.title || voucherTitle,
     createdAt: today,
     used: false,
+    campaignLabel: String(sourceVoucher?.campaignLabel || "").trim(),
+    campaignAudience: String(sourceVoucher?.campaignAudience || "").trim(),
+    grantSourceType,
+    grantSourceLabel,
+    grantCampaignKey,
+    grantCampaignLabel,
+    grantAudience,
+    grantBatchId,
     validDaysAfterGrant: fallbackDays,
     expiredAt: resolveGrantedVoucherExpiry(sourceVoucher || {}, {
       createdAt: today,

@@ -55,6 +55,14 @@ function normalizeText(value = "") {
   return String(value || "").trim();
 }
 
+function normalizePhones(value) {
+  return Array.from(new Set(
+    (Array.isArray(value) ? value : [])
+      .map((phone) => normalizeText(phone))
+      .filter(Boolean)
+  ));
+}
+
 function normalizeCampaignPreset(preset = {}, fallback = {}) {
   return {
     id: normalizeText(preset.id || fallback.id),
@@ -89,16 +97,9 @@ function normalizeCampaignPresetList(value) {
 
 function normalizeBulkGiftHistoryEntry(entry = {}) {
   const createdAt = normalizeText(entry.createdAt || new Date().toISOString());
-  const successPhones = Array.from(new Set(
-    (Array.isArray(entry.successPhones) ? entry.successPhones : [])
-      .map((phone) => normalizeText(phone))
-      .filter(Boolean)
-  ));
-  const failedPhones = Array.from(new Set(
-    (Array.isArray(entry.failedPhones) ? entry.failedPhones : [])
-      .map((phone) => normalizeText(phone))
-      .filter(Boolean)
-  ));
+  const successPhones = normalizePhones(entry.successPhones);
+  const failedPhones = normalizePhones(entry.failedPhones);
+  const duplicatePhones = normalizePhones(entry.duplicatePhones);
 
   return {
     id: normalizeText(entry.id || `crm-bulk-${Date.now()}`),
@@ -110,11 +111,15 @@ function normalizeBulkGiftHistoryEntry(entry = {}) {
     voucherId: normalizeText(entry.voucherId),
     voucherCode: normalizeText(entry.voucherCode),
     voucherName: normalizeText(entry.voucherName || "Voucher CRM"),
+    sourceType: normalizeText(entry.sourceType || "crm_bulk"),
+    sourceLabel: normalizeText(entry.sourceLabel || "CRM - gửi theo nhóm"),
     totalRecipients: Math.max(0, Number(entry.totalRecipients || successPhones.length + failedPhones.length)),
     successCount: Math.max(0, Number(entry.successCount || successPhones.length)),
     failedCount: Math.max(0, Number(entry.failedCount || failedPhones.length)),
+    duplicateCount: Math.max(0, Number(entry.duplicateCount || duplicatePhones.length)),
     successPhones,
-    failedPhones
+    failedPhones,
+    duplicatePhones
   };
 }
 

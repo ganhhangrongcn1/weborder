@@ -460,6 +460,26 @@ function resolveGrantedVoucherMeta(voucher = {}, couponMetaByRef = new Map()) {
   };
 }
 
+function getVoucherGrantSourceLabel(voucher = {}) {
+  const grantSourceLabel = String(voucher?.grantSourceLabel || "").trim();
+  const grantCampaignLabel = String(voucher?.grantCampaignLabel || "").trim();
+  if (grantSourceLabel && grantCampaignLabel && grantCampaignLabel !== grantSourceLabel) {
+    return `${grantSourceLabel} · ${grantCampaignLabel}`;
+  }
+  if (grantSourceLabel) return grantSourceLabel;
+  if (grantCampaignLabel) return grantCampaignLabel;
+  if (String(voucher?.type || "").trim().toUpperCase() === "WELCOME_REGISTER") {
+    return "Tự động - đăng ký mới";
+  }
+  if (String(voucher?.grantSourceType || "").trim() === "crm_bulk") {
+    return "CRM - gửi theo nhóm";
+  }
+  if (String(voucher?.grantSourceType || "").trim() === "crm_single") {
+    return "CRM - tặng tay";
+  }
+  return "";
+}
+
 function getVoucherStatus(voucher) {
   if (voucher.canceled) return { label: "Đã hủy", className: "crm-status-canceled" };
   if (voucher.used) return { label: "Đã dùng", className: "crm-status-used" };
@@ -1504,18 +1524,26 @@ export default function CustomerCRM({
                 </div>
               </div>
               <div className="crm-history-list">
-                {bulkGiftHistory.slice(0, 6).map((entry) => (
-                  <article key={entry.id}>
-                    <div>
-                      <strong>{entry.campaignLabel || "Tặng theo bộ lọc CRM"}</strong>
-                      <small>{entry.voucherCode || "--"} · {entry.voucherName || "Voucher CRM"}</small>
-                    </div>
-                    <div className="crm-history-meta">
-                      <em>{formatDateTime(entry.createdAt)}</em>
-                      <span>{entry.successCount}/{entry.totalRecipients} thành công{entry.failedCount ? ` · lỗi ${entry.failedCount}` : ""}</span>
-                    </div>
-                  </article>
-                ))}
+                {bulkGiftHistory.slice(0, 6).map((entry) => {
+                  const duplicateCount = Number(entry.duplicateCount || 0);
+                  const otherFailedCount = Math.max(0, Number(entry.failedCount || 0) - duplicateCount);
+                  return (
+                    <article key={entry.id}>
+                      <div>
+                        <strong>{entry.campaignLabel || "Tặng theo bộ lọc CRM"}</strong>
+                        <small>{entry.sourceLabel || "CRM - gửi theo nhóm"} · {entry.voucherCode || "--"} · {entry.voucherName || "Voucher CRM"}</small>
+                      </div>
+                      <div className="crm-history-meta">
+                        <em>{formatDateTime(entry.createdAt)}</em>
+                        <span>
+                          {entry.successCount}/{entry.totalRecipients} thành công
+                          {duplicateCount ? ` · trùng ${duplicateCount}` : ""}
+                          {otherFailedCount ? ` · lỗi ${otherFailedCount}` : ""}
+                        </span>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ) : null}
@@ -1676,11 +1704,16 @@ export default function CustomerCRM({
                     {!isLoyaltyDetailLoading && sortedSelectedVouchers.map((voucher) => {
                       const status = getVoucherStatus(voucher);
                       const voucherMeta = resolveGrantedVoucherMeta(voucher, couponMetaByRef);
+                      const voucherSourceLabel = getVoucherGrantSourceLabel(voucher);
                       return (
                         <article key={voucher.id}>
                           <div>
                             <strong>{voucher.code ? `${voucher.code} - ${voucher.title}` : voucher.title}</strong>
-                            <small>{voucherMeta?.label ? `${voucherMeta.label} · ` : ""}HSD: {voucher.expiredAt || "--"}</small>
+                            <small>
+                              {voucherMeta?.label ? `${voucherMeta.label} · ` : ""}
+                              {voucherSourceLabel ? `${voucherSourceLabel} · ` : ""}
+                              HSD: {voucher.expiredAt || "--"}
+                            </small>
                           </div>
                           <div className="crm-voucher-row-actions">
                             <em className={status.className}>{status.label}</em>
@@ -1763,6 +1796,7 @@ export default function CustomerCRM({
                                   setIsBulkGifting(true);
                                   const result = await bulkGiftVoucherToCustomers?.(selectedPhones, voucher, currentBulkCampaignMeta);
                                   const failedPhones = Array.isArray(result?.failedPhones) ? result.failedPhones : [];
+                                  const duplicateCount = Number(result?.duplicateCount || 0);
                                   const failedSet = new Set(failedPhones.map((phone) => String(phone || "").trim()));
                                   setSelectedPhones((current) => current.filter((phone) => failedSet.has(String(phone || "").trim())));
                                   if (result?.historyEntry) {
@@ -1774,8 +1808,13 @@ export default function CustomerCRM({
 
                                   const successCount = Number(result?.successCount || 0);
                                   const failedCount = Number(result?.failedCount || 0);
+                                  const otherFailedCount = Math.max(0, failedCount - duplicateCount);
                                   if (failedCount > 0) {
-                                    window.alert(`Đã tặng ${successCount} khách. Còn ${failedCount} khách lỗi, em giữ lại danh sách để anh xử lý tiếp.`);
+                                    window.alert(
+                                      duplicateCount > 0
+                                        ? `Đã tặng ${successCount} khách. Có ${duplicateCount} khách đã có voucher còn hiệu lực nên bị chặn trùng${otherFailedCount ? `, thêm ${otherFailedCount} khách lỗi khác` : ""}. Em giữ lại danh sách lỗi để anh xử lý tiếp.`
+                                        : `Đã tặng ${successCount} khách. Còn ${failedCount} khách lỗi, em giữ lại danh sách để anh xử lý tiếp.`
+                                    );
                                   } else {
                                     window.alert(`Đã tặng voucher cho ${successCount} khách.`);
                                   }
@@ -1789,6 +1828,10 @@ export default function CustomerCRM({
                                 console.error("[crm] gift voucher failed", error);
                                 if (String(error?.message || "") === "LOYALTY_AUTO_VOUCHER_NOT_ALLOWED_IN_CRM") {
                                   window.alert("Voucher loyalty tự động không được tặng tay trong CRM. Anh chọn voucher thuộc nhóm CRM / chiến dịch riêng giúp em.");
+                                  return;
+                                }
+                                if (String(error?.code || error?.message || "") === "CRM_DUPLICATE_ACTIVE_VOUCHER") {
+                                  window.alert("Khách này đã có voucher này còn hiệu lực rồi nên hệ thống chặn tặng trùng.");
                                   return;
                                 }
                                 window.alert("Tặng voucher thất bại. Anh kiểm tra quyền Supabase/RPC loyalty giúp em.");
