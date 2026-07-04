@@ -136,6 +136,7 @@ export default function AdminApp({
   const {
     saveOptionGroupPresetsState,
     handleGiftVoucher,
+    handleBulkGiftVoucher,
     handleCancelVoucher,
     handleSaveZalo,
     handleSaveShipping,
@@ -448,6 +449,7 @@ export default function AdminApp({
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           onGiftVoucher={handleGiftVoucher}
+          onBulkGiftVoucher={handleBulkGiftVoucher}
           onCancelVoucher={handleCancelVoucher}
           orderStorage={orderStorage}
           products={products}

@@ -10,6 +10,7 @@ export default function AdminCustomerSection({
   setSelectedCustomerPhone,
   refreshCrm,
   giftVoucherToCustomer,
+  bulkGiftVoucherToCustomers,
   cancelCustomerVoucher,
   showCustomerTier,
   setCrmSnapshot,
@@ -41,6 +42,7 @@ export default function AdminCustomerSection({
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           refreshCrm={refreshCrm}
           giftVoucherToCustomer={giftVoucherToCustomer}
+          bulkGiftVoucherToCustomers={bulkGiftVoucherToCustomers}
           cancelCustomerVoucher={cancelCustomerVoucher}
           showCustomerTier={showCustomerTier}
           coupons={coupons}

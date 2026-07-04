@@ -15,6 +15,7 @@ export default function AdminCustomersPage({
   selectedCustomerPhone,
   setSelectedCustomerPhone,
   onGiftVoucher,
+  onBulkGiftVoucher,
   onCancelVoucher,
   onSaveLoyaltyConfig,
   orderStorage,
@@ -146,6 +147,7 @@ export default function AdminCustomersPage({
         selectedCustomerPhone={selectedCustomerPhone}
         setSelectedCustomerPhone={setSelectedCustomerPhone}
         onGiftVoucher={onGiftVoucher}
+        onBulkGiftVoucher={onBulkGiftVoucher}
         onCancelVoucher={onCancelVoucher}
         onSaveLoyaltyConfig={onSaveLoyaltyConfig}
         orderStorage={orderStorage}

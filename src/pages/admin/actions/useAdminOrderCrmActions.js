@@ -59,6 +59,49 @@ export default function useAdminOrderCrmActions({
     return nextLoyalty;
   };
 
+  const handleBulkGiftVoucher = async (phones = [], voucher) => {
+    const uniquePhones = Array.from(new Set(
+      (Array.isArray(phones) ? phones : [])
+        .map((phone) => String(phone || "").trim())
+        .filter(Boolean)
+    ));
+    if (!uniquePhones.length) {
+      return {
+        successCount: 0,
+        failedCount: 0,
+        successPhones: [],
+        failedPhones: [],
+        results: []
+      };
+    }
+
+    const results = await Promise.allSettled(
+      uniquePhones.map((phone) => giftVoucherToCustomer(phone, voucher))
+    );
+
+    const successPhones = [];
+    const failedPhones = [];
+
+    results.forEach((result, index) => {
+      const phone = uniquePhones[index];
+      if (result.status === "fulfilled") {
+        patchCustomerLoyaltyInSnapshot(phone, result.value);
+        successPhones.push(phone);
+        return;
+      }
+      failedPhones.push(phone);
+      console.error("[crm] bulk gift voucher failed", { phone, error: result.reason });
+    });
+
+    return {
+      successCount: successPhones.length,
+      failedCount: failedPhones.length,
+      successPhones,
+      failedPhones,
+      results
+    };
+  };
+
   const handleCancelVoucher = async (phone, voucherId) => {
     const nextLoyalty = await cancelCustomerVoucher(phone, voucherId);
     patchCustomerLoyaltyInSnapshot(phone, nextLoyalty);
@@ -71,6 +114,7 @@ export default function useAdminOrderCrmActions({
 
   return {
     handleGiftVoucher,
+    handleBulkGiftVoucher,
     handleCancelVoucher,
     handleOrderUpdated
   };

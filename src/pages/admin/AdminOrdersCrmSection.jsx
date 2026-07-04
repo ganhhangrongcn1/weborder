@@ -46,6 +46,7 @@ export default function AdminOrdersCrmSection({
   selectedCustomerPhone,
   setSelectedCustomerPhone,
   onGiftVoucher,
+  onBulkGiftVoucher,
   onCancelVoucher,
   onSaveLoyaltyConfig,
   orderStorage,
@@ -176,6 +177,7 @@ export default function AdminOrdersCrmSection({
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           refreshCrm={refreshCrm}
           giftVoucherToCustomer={onGiftVoucher}
+          bulkGiftVoucherToCustomers={onBulkGiftVoucher}
           cancelCustomerVoucher={onCancelVoucher}
           showCustomerTier={getCustomerTier}
           setCrmSnapshot={setCrmSnapshot}

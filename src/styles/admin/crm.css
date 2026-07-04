@@ -435,7 +435,7 @@
 .crm-table-head,
 .crm-table-row {
   display: grid;
-  grid-template-columns: minmax(230px, 1.35fr) 120px 90px 130px 145px 90px;
+  grid-template-columns: 42px minmax(230px, 1.35fr) 120px 90px 130px 145px;
   gap: 12px;
   align-items: center;
 }
@@ -474,6 +474,31 @@
   color: #0f172a;
   font-size: 13px;
   font-weight: 950;
+}
+
+.crm-row-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crm-row-select > span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: transparent;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.crm-row-select > span.is-checked {
+  border-color: #fb923c;
+  background: #fff7ed;
+  color: #ea580c;
 }
 
 .crm-customer-identity {
@@ -2090,6 +2115,64 @@
   font-weight: 800;
 }
 
+.crm-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 12px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+}
+
+.crm-bulk-toolbar__summary {
+  display: grid;
+  gap: 2px;
+}
+
+.crm-bulk-toolbar__summary strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.crm-bulk-toolbar__summary span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.crm-bulk-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.crm-bulk-toolbar__actions button {
+  min-height: 36px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0 12px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.crm-bulk-toolbar__actions button.crm-bulk-toolbar__primary {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.crm-bulk-toolbar__actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .crm-list-panel .crm-filter-bar {
   grid-template-columns: minmax(280px, 1fr) 132px 142px 176px 86px;
   position: static;
@@ -2103,7 +2186,7 @@
 
 .crm-table-head,
 .crm-table-row {
-  grid-template-columns: minmax(260px, 1.45fr) minmax(150px, 0.8fr) minmax(120px, 0.62fr) minmax(128px, 0.68fr) minmax(132px, 0.62fr);
+  grid-template-columns: 42px minmax(260px, 1.45fr) minmax(150px, 0.8fr) minmax(120px, 0.62fr) minmax(128px, 0.68fr) minmax(132px, 0.62fr);
   gap: 10px;
 }
 
@@ -2739,6 +2822,15 @@
     justify-content: flex-start;
   }
 
+  .crm-bulk-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .crm-bulk-toolbar__actions {
+    justify-content: flex-start;
+  }
+
   .crm-table-head {
     display: none;
   }
@@ -2750,6 +2842,10 @@
 
   .crm-table-row .crm-customer-identity {
     grid-column: 1 / -1;
+  }
+
+  .crm-row-select {
+    justify-content: flex-start;
   }
 }
 
@@ -2776,6 +2872,10 @@
 
   .crm-table-row {
     grid-template-columns: 1fr;
+  }
+
+  .crm-row-select {
+    grid-column: 1 / -1;
   }
 
   .crm-insight-grid {
