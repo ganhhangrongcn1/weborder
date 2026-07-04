@@ -383,6 +383,54 @@
   margin-bottom: 12px;
 }
 
+.admin-promo-group-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.admin-promo-group-card {
+  display: grid;
+  width: 100%;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  text-align: left;
+  transition: border-color var(--admin-transition), background-color var(--admin-transition), box-shadow var(--admin-transition), transform var(--admin-transition);
+}
+
+.admin-promo-group-card:hover {
+  border-color: #fdba74;
+  transform: translateY(-1px);
+}
+
+.admin-promo-group-card.is-active {
+  border-color: #fb923c;
+  background: #fff7ed;
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.14);
+}
+
+.admin-promo-group-card span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.admin-promo-group-card strong {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.admin-promo-group-card small {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
 .admin-promo-list-tools label {
   display: grid;
   gap: 5px;
@@ -565,6 +613,64 @@
 
 .admin-promo-helper-note.is-warm {
   color: #9a3412;
+  font-weight: 800;
+}
+
+.admin-promo-context-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 12px;
+  box-shadow: var(--admin-shadow-card);
+}
+
+.admin-promo-context-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-promo-context-card__head span {
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.admin-promo-context-card__head strong {
+  display: block;
+  margin-top: 3px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.35;
+}
+
+.admin-promo-context-card__head b {
+  min-width: 54px;
+  border-radius: 999px;
+  background: #ecfeff;
+  color: #0f766e;
+  padding: 6px 10px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.admin-promo-context-list {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-promo-context-list span {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 8px 10px;
+  color: #475569;
+  font-size: 12px;
   font-weight: 800;
 }
 

@@ -11,6 +11,12 @@ import {
   getCouponVoucherType,
   normalizeValidDaysAfterGrant
 } from "../../../services/voucherTemplateService.js";
+import {
+  COUPON_MANAGEMENT_GROUPS,
+  getCouponManagementGroupDefinition,
+  listCouponManagementGroupsForVoucherType,
+  normalizeCouponManagementGroup
+} from "../../../services/voucherManagementGroupService.js";
 import PromotionFormSection from "./PromotionFormSection.jsx";
 import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
 import {
@@ -18,11 +24,6 @@ import {
   PromotionSummaryPills,
   formatSalesChannelSummary
 } from "./PromotionSetupFeedback.jsx";
-
-const VOUCHER_TYPES = [
-  { value: "checkout", label: "Voucher thanh toán" },
-  { value: "loyalty", label: "Voucher loyalty" }
-];
 
 const STATUS_FILTERS = [
   { value: "all", label: "Tất cả" },
@@ -50,9 +51,11 @@ function getCouponRef(coupon = {}) {
   return String(coupon?.id || coupon?.code || "").trim();
 }
 
-function normalizeCoupon(coupon = {}) {
+function normalizeCoupon(coupon = {}, loyaltyConfig = {}) {
   const voucherType = getCouponVoucherType(coupon);
   const endAt = voucherType === "loyalty" ? "" : String(coupon.endAt || coupon.expiry || "");
+  const managementGroup = normalizeCouponManagementGroup(coupon, loyaltyConfig);
+
   return {
     id: getCouponId(coupon),
     code: String(coupon.code || "SALE10").toUpperCase(),
@@ -68,6 +71,7 @@ function normalizeCoupon(coupon = {}) {
     perUserLimit: Number(coupon.perUserLimit || 1),
     totalUsed: Number(coupon.totalUsed || 0),
     voucherType,
+    managementGroup,
     validDaysAfterGrant: voucherType === "loyalty"
       ? getCouponValidDaysAfterGrant(coupon, 7)
       : 0,
@@ -99,16 +103,24 @@ function getCouponStatus(coupon) {
       ? { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" }
       : { code: "off", label: "Tạm tắt", className: "bg-slate-100 text-slate-600" };
   }
+
   if (!coupon.active) return { code: "off", label: "Tạm tắt", className: "bg-slate-100 text-slate-600" };
   if (!coupon.endAt) return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
 
   const now = new Date();
   const endDate = new Date(`${coupon.endAt}T23:59:59`);
-  if (Number.isNaN(endDate.getTime())) return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
-  if (endDate.getTime() < now.getTime()) return { code: "expired", label: "Hết hạn", className: "bg-slate-100 text-slate-600" };
+  if (Number.isNaN(endDate.getTime())) {
+    return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
+  }
+  if (endDate.getTime() < now.getTime()) {
+    return { code: "expired", label: "Hết hạn", className: "bg-slate-100 text-slate-600" };
+  }
 
   const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-  if (daysLeft <= 3) return { code: "expiring", label: "Sắp hết hạn", className: "bg-orange-100 text-orange-700" };
+  if (daysLeft <= 3) {
+    return { code: "expiring", label: "Sắp hết hạn", className: "bg-orange-100 text-orange-700" };
+  }
+
   return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
 }
 
@@ -123,6 +135,7 @@ function buildPreviewLines(coupon) {
   const expiry = getCouponVoucherType(coupon) === "loyalty"
     ? `Dùng trong: ${describeCouponExpiry(coupon, 7)}`
     : `Hết hạn: ${formatDateShort(coupon.endAt)}`;
+
   return { title, main, condition, expiry };
 }
 
@@ -132,17 +145,22 @@ function buildCouponWarnings(coupon) {
   if (!String(coupon?.name || "").trim()) warnings.push("Chưa nhập tên hiển thị cho khách.");
   if (Number(coupon?.value || 0) <= 0) warnings.push("Giá trị giảm đang bằng 0 nên khách sẽ không được giảm.");
   if (coupon?.discountType === "percent" && Number(coupon?.value || 0) > 100) warnings.push("Giảm theo % đang lớn hơn 100%.");
+
   if (getCouponVoucherType(coupon) === "loyalty") {
     if (Number(coupon?.validDaysAfterGrant || 0) <= 0) {
       warnings.push("Voucher loyalty cần có số ngày sử dụng sau khi nhận.");
     }
   } else if (coupon?.endAt) {
     const endDate = new Date(`${coupon.endAt}T23:59:59`);
-    if (!Number.isNaN(endDate.getTime()) && endDate.getTime() < Date.now()) warnings.push("Voucher đã hết hạn, checkout sẽ không áp dụng.");
+    if (!Number.isNaN(endDate.getTime()) && endDate.getTime() < Date.now()) {
+      warnings.push("Voucher đã hết hạn, checkout sẽ không áp dụng.");
+    }
   }
+
   if (Number(coupon?.usageLimit || 0) > 0 && Number(coupon?.totalUsed || 0) >= Number(coupon?.usageLimit || 0)) {
     warnings.push("Voucher đã chạm giới hạn lượt dùng.");
   }
+
   return warnings;
 }
 
@@ -151,9 +169,11 @@ function buildCouponSummary(coupon) {
   const minOrder = Number(coupon?.minOrder || 0) > 0
     ? `Đơn từ ${Number(coupon.minOrder || 0).toLocaleString("vi-VN")}đ`
     : "Mọi đơn";
+  const managementLabel = getCouponManagementGroupDefinition(coupon?.managementGroup).label;
+
   return [
     status,
-    coupon?.voucherType === "loyalty" ? "Loyalty / CRM" : "Checkout",
+    managementLabel,
     coupon?.voucherType === "loyalty" ? describeCouponExpiry(coupon, 7) : formatSalesChannelSummary(coupon),
     minOrder
   ];
@@ -162,7 +182,7 @@ function buildCouponSummary(coupon) {
 function inputClassName(isImportant = false) {
   const baseClass = "admin-input admin-promo-field-input";
   const sizeClass = isImportant ? "admin-promo-field-input--strong" : "";
-  return `${baseClass} ${sizeClass}`;
+  return `${baseClass} ${sizeClass}`.trim();
 }
 
 function FieldLabel({ label, children }) {
@@ -180,20 +200,35 @@ export default function CouponManager({
   loyaltyConfig = {},
   setLoyaltyConfig = () => {}
 }) {
-  const safeCoupons = useMemo(() => coupons.map((coupon) => normalizeCoupon(coupon)), [coupons]);
   const normalizedLoyaltyConfig = useMemo(
     () => normalizeLoyaltyProgramConfig(loyaltyConfig || {}),
     [loyaltyConfig]
   );
-  const [voucherTypeFilter, setVoucherTypeFilter] = useState("checkout");
+  const safeCoupons = useMemo(
+    () => coupons.map((coupon) => normalizeCoupon(coupon, normalizedLoyaltyConfig)),
+    [coupons, normalizedLoyaltyConfig]
+  );
+  const [managementGroupFilter, setManagementGroupFilter] = useState("checkout_sales");
   const [statusFilter, setStatusFilter] = useState("running");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCouponId, setSelectedCouponId] = useState("");
   const [presetMessage, setPresetMessage] = useState("");
 
+  const couponGroups = useMemo(
+    () => COUPON_MANAGEMENT_GROUPS.map((group) => ({
+      ...group,
+      count: safeCoupons.filter((coupon) => coupon.managementGroup === group.value).length
+    })),
+    [safeCoupons]
+  );
+  const activeGroup = useMemo(
+    () => getCouponManagementGroupDefinition(managementGroupFilter),
+    [managementGroupFilter]
+  );
+
   const visibleCoupons = useMemo(
-    () => safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === voucherTypeFilter),
-    [safeCoupons, voucherTypeFilter]
+    () => safeCoupons.filter((coupon) => String(coupon.managementGroup || "checkout_sales") === managementGroupFilter),
+    [safeCoupons, managementGroupFilter]
   );
 
   const filteredCoupons = useMemo(() => {
@@ -219,8 +254,22 @@ export default function CouponManager({
     [visibleCoupons]
   );
 
-  const loyaltyCoupons = safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === "loyalty");
-  const loyaltyCodes = new Set(loyaltyCoupons.map((coupon) => String(coupon.code || "").toUpperCase()).filter(Boolean));
+  const loyaltyCoupons = useMemo(
+    () => safeCoupons.filter((coupon) => String(coupon.voucherType || "checkout") === "loyalty"),
+    [safeCoupons]
+  );
+  const loyaltyAutoCoupons = useMemo(
+    () => safeCoupons.filter((coupon) => coupon.managementGroup === "loyalty_auto"),
+    [safeCoupons]
+  );
+  const loyaltyCrmCoupons = useMemo(
+    () => safeCoupons.filter((coupon) => coupon.managementGroup === "loyalty_crm"),
+    [safeCoupons]
+  );
+
+  const loyaltyCodes = new Set(
+    loyaltyCoupons.map((coupon) => String(coupon.code || "").toUpperCase()).filter(Boolean)
+  );
   const loyaltyPresetReadyCount = LOYALTY_VOUCHER_PRESETS.filter((preset) => loyaltyCodes.has(preset.code)).length;
   const loyaltySetupReady = loyaltyPresetReadyCount === LOYALTY_VOUCHER_PRESETS.length;
   const welcomeVoucherCoupon = useMemo(
@@ -233,6 +282,7 @@ export default function CouponManager({
       setSelectedCouponId("");
       return;
     }
+
     const selectedStillVisible = filteredCoupons.some((coupon) => coupon.id === selectedCouponId);
     if (!selectedStillVisible) setSelectedCouponId(filteredCoupons[0].id);
   }, [selectedCouponId, filteredCoupons]);
@@ -247,35 +297,44 @@ export default function CouponManager({
       (current || []).map((item) => {
         const currentId = getCouponId(item);
         if (currentId !== couponId) return item;
-        const next = normalizeCoupon({ ...item, ...patch, id: currentId });
+        const next = normalizeCoupon({ ...item, ...patch, id: currentId }, normalizedLoyaltyConfig);
         return { ...next, expiry: next.endAt || "" };
       })
     );
   };
 
   const addCoupon = () => {
+    const voucherType = activeGroup.voucherType;
     const seed = normalizeCoupon({
       id: `coupon-${Date.now()}`,
-      code: voucherTypeFilter === "loyalty" ? "LOYAL10" : "NEW10",
-      name: voucherTypeFilter === "loyalty" ? "Voucher loyalty mới" : "Voucher mới",
+      code: managementGroupFilter === "loyalty_auto" ? "AUTO10" : managementGroupFilter === "loyalty_crm" ? "CRM10" : "NEW10",
+      name: activeGroup.label,
       discountType: "fixed",
       value: 10000,
       minOrder: 0,
       endAt: "",
-      voucherType: voucherTypeFilter,
-      validDaysAfterGrant: voucherTypeFilter === "loyalty" ? 7 : 0,
+      voucherType,
+      managementGroup: managementGroupFilter,
+      validDaysAfterGrant: voucherType === "loyalty" ? 7 : 0,
       salesChannels: ["web", "qr"],
       active: true
-    });
+    }, normalizedLoyaltyConfig);
+
     setCoupons((current) => [seed, ...(current || [])]);
     setSelectedCouponId(seed.id);
   };
 
   const addLoyaltyPresetPack = () => {
     const result = applyLoyaltyVoucherPresets(coupons);
-    setCoupons(result.coupons);
+    const createdIds = new Set(result.created.map((coupon) => getCouponId(coupon)));
+
+    setCoupons(result.coupons.map((coupon) => (
+      createdIds.has(getCouponId(coupon))
+        ? { ...coupon, managementGroup: "loyalty_auto" }
+        : coupon
+    )));
     if (result.created[0]?.id) setSelectedCouponId(result.created[0].id);
-    setVoucherTypeFilter("loyalty");
+    setManagementGroupFilter("loyalty_auto");
     setPresetMessage(
       result.createdCount > 0
         ? `Đã tạo ${result.createdCount} voucher loyalty mẫu. Anh chỉnh lại giá trị rồi bấm Lưu khuyến mãi là xong.`
@@ -302,15 +361,17 @@ export default function CouponManager({
           <button type="button" className="admin-cta" onClick={addCoupon}>+ Tạo mới</button>
         </div>
 
-        <div className="admin-menu-tabs admin-gap-12 mb-3">
-          {VOUCHER_TYPES.map((type) => (
+        <div className="admin-promo-group-grid">
+          {couponGroups.map((group) => (
             <button
-              key={type.value}
+              key={group.value}
               type="button"
-              className={voucherTypeFilter === type.value ? "active" : ""}
-              onClick={() => setVoucherTypeFilter(type.value)}
+              className={`admin-promo-group-card ${managementGroupFilter === group.value ? "is-active" : ""}`}
+              onClick={() => setManagementGroupFilter(group.value)}
             >
-              {type.label}
+              <span>{group.label}</span>
+              <strong>{group.count}</strong>
+              <small>{group.description}</small>
             </button>
           ))}
         </div>
@@ -345,13 +406,13 @@ export default function CouponManager({
           <span><b>{visibleStats.off}</b> đang tắt</span>
         </div>
 
-        {voucherTypeFilter === "loyalty" ? (
+        {managementGroupFilter === "loyalty_auto" ? (
           <details className="admin-promo-helper-card mb-3">
             <summary className="admin-promo-helper-summary">
               <div className="admin-promo-helper-copy">
                 <span>Cài nhanh loyalty</span>
-                <strong>Voucher mẫu và tự động tặng khách mới</strong>
-                <small>Chỉ mở phần này khi mình cần setup loyalty.</small>
+                <strong>Voucher loyalty tự động</strong>
+                <small>Nhóm này quản lý voucher đang gắn vào welcome hoặc quà hạng theo tháng.</small>
               </div>
               <div className="admin-promo-helper-badges">
                 <span className={loyaltySetupReady ? "is-ready" : ""}>
@@ -360,6 +421,9 @@ export default function CouponManager({
                 <span className={normalizedLoyaltyConfig.welcomeVoucherEnabled ? "is-ready" : ""}>
                   {normalizedLoyaltyConfig.welcomeVoucherEnabled ? "Auto đang bật" : "Auto đang tắt"}
                 </span>
+                <span className={loyaltyAutoCoupons.length > 0 ? "is-ready" : ""}>
+                  {loyaltyAutoCoupons.length} voucher auto
+                </span>
               </div>
             </summary>
 
@@ -367,7 +431,7 @@ export default function CouponManager({
               <div className="admin-promo-helper-steps">
                 <span>1. Tạo bộ voucher mẫu nếu chưa có.</span>
                 <span>2. Chọn đúng voucher muốn tặng cho khách mới.</span>
-                <span>3. Bấm Lưu khuyến mãi để áp dụng.</span>
+                <span>3. Gắn voucher theo hạng rồi bấm Lưu khuyến mãi.</span>
               </div>
 
               <div className="admin-promo-helper-panels">
@@ -375,7 +439,7 @@ export default function CouponManager({
                   <div className="admin-promo-helper-panel-head">
                     <div>
                       <strong>Bộ voucher loyalty mẫu</strong>
-                      <small>Dùng để setup nhanh các voucher CRM cơ bản.</small>
+                      <small>Dùng để setup nhanh bộ voucher tự động theo hạng.</small>
                     </div>
                     <button type="button" className="admin-cta" onClick={addLoyaltyPresetPack}>
                       Tạo bộ mẫu
@@ -451,10 +515,33 @@ export default function CouponManager({
           </details>
         ) : null}
 
+        {managementGroupFilter === "loyalty_crm" ? (
+          <section className="admin-promo-context-card mb-3">
+            <div className="admin-promo-context-card__head">
+              <div>
+                <span>CRM / chiến dịch</span>
+                <strong>Kho voucher riêng để anh tặng tay và chạy chương trình riêng</strong>
+              </div>
+              <b>{loyaltyCrmCoupons.length} voucher</b>
+            </div>
+
+            <div className="admin-promo-context-list">
+              <span>Khách lâu chưa quay lại 7 ngày / 15 ngày</span>
+              <span>Event tri ân, sinh nhật, mini game</span>
+              <span>Tặng tay từ CRM mà không đụng vào voucher auto</span>
+            </div>
+
+            <p className="admin-promo-helper-note">
+              Chặng này mình tách riêng kho voucher CRM trước cho dễ quản lý. Ở chặng sau em sẽ nối thêm rule lọc nhóm khách và campaign tự động.
+            </p>
+          </section>
+        ) : null}
+
         <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
           {filteredCoupons.map((coupon) => {
             const status = getCouponStatus(coupon);
             const isSelected = selectedCoupon?.id === coupon.id;
+
             return (
               <button
                 key={coupon.id}
@@ -479,7 +566,7 @@ export default function CouponManager({
           })}
 
           {!filteredCoupons.length ? (
-            <p className="admin-promo-empty-note">Không tìm thấy voucher phù hợp.</p>
+            <p className="admin-promo-empty-note">Chưa có voucher phù hợp trong nhóm {activeGroup.label.toLowerCase()}.</p>
           ) : null}
         </div>
       </aside>
@@ -495,7 +582,7 @@ export default function CouponManager({
               <p className="mt-1 text-sm font-semibold text-slate-700">{preview?.condition}</p>
               <p className="mt-1 text-xs text-slate-500">{preview?.expiry}</p>
               <div className="admin-promo-preview-meta">
-                <span>Hiển thị: {selectedCoupon.voucherType === "loyalty" ? "Loyalty / CRM" : "Checkout"}</span>
+                <span>Nhóm: {getCouponManagementGroupDefinition(selectedCoupon.managementGroup).label}</span>
                 <span>Giới hạn: {Number(selectedCoupon.usageLimit || 0) > 0 ? `${selectedCoupon.totalUsed}/${selectedCoupon.usageLimit} lượt` : "Không giới hạn"}</span>
                 <span>Mỗi khách: {Number(selectedCoupon.perUserLimit || 1)} lượt</span>
               </div>
@@ -525,6 +612,7 @@ export default function CouponManager({
                   <FieldLabel label="Mã voucher">
                     <input className={inputClassName(true)} value={selectedCoupon.code} onChange={(event) => patchCoupon(selectedCoupon.id, { code: String(event.target.value || "").toUpperCase().replace(/\s+/g, "") })} />
                   </FieldLabel>
+
                   <FieldLabel label="Tên hiển thị">
                     <input
                       className={inputClassName()}
@@ -533,6 +621,21 @@ export default function CouponManager({
                       onChange={(event) => patchCoupon(selectedCoupon.id, { name: event.target.value })}
                     />
                   </FieldLabel>
+
+                  {selectedCoupon.voucherType === "loyalty" ? (
+                    <FieldLabel label="Nhóm quản trị">
+                      <select
+                        className={inputClassName()}
+                        value={selectedCoupon.managementGroup}
+                        onChange={(event) => patchCoupon(selectedCoupon.id, { managementGroup: event.target.value })}
+                      >
+                        {listCouponManagementGroupsForVoucherType(selectedCoupon.voucherType).map((group) => (
+                          <option key={group.value} value={group.value}>{group.label}</option>
+                        ))}
+                      </select>
+                    </FieldLabel>
+                  ) : null}
+
                   {selectedCoupon.voucherType === "loyalty" ? (
                     <FieldLabel label="Số ngày sử dụng sau khi nhận">
                       <input
@@ -553,6 +656,7 @@ export default function CouponManager({
                       <input className={inputClassName()} type="date" value={selectedCoupon.endAt} onChange={(event) => patchCoupon(selectedCoupon.id, { endAt: event.target.value, expiry: event.target.value })} />
                     </FieldLabel>
                   )}
+
                   <div className="admin-promo-form-span-2 text-[12px] font-semibold text-slate-500">
                     Kênh áp dụng
                     <PromotionSalesChannelField
@@ -575,14 +679,17 @@ export default function CouponManager({
                       <option value="percent">Giảm theo %</option>
                     </select>
                   </FieldLabel>
+
                   <FieldLabel label={`Giá trị giảm (${selectedCoupon.discountType === "percent" ? "%" : "đ"})`}>
                     <input className={inputClassName(true)} type="number" min="0" value={selectedCoupon.value} onChange={(event) => patchCoupon(selectedCoupon.id, { value: Number(event.target.value || 0) })} />
                   </FieldLabel>
+
                   {selectedCoupon.discountType === "percent" ? (
                     <FieldLabel label="Giảm tối đa (đ)">
                       <input className={inputClassName()} type="number" min="0" value={selectedCoupon.maxDiscount} onChange={(event) => patchCoupon(selectedCoupon.id, { maxDiscount: Number(event.target.value || 0) })} />
                     </FieldLabel>
                   ) : null}
+
                   <FieldLabel label="Đơn tối thiểu (đ)">
                     <input className={inputClassName()} type="number" min="0" value={selectedCoupon.minOrder} onChange={(event) => patchCoupon(selectedCoupon.id, { minOrder: Number(event.target.value || 0) })} />
                   </FieldLabel>
