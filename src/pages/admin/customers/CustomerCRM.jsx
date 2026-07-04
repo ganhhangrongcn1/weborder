@@ -17,6 +17,7 @@ import {
   getCouponManagementGroupDefinition,
   listCrmGiftableCoupons
 } from "../../../services/voucherManagementGroupService.js";
+import { getVoucherAudienceDefinition } from "../../../services/voucherCampaignPresetService.js";
 import { formatMoney } from "../../../utils/format.js";
 
 const INITIAL_DETAIL_ORDER_LIMIT = 3;
@@ -216,6 +217,67 @@ function getCustomerCarePlan(customer = {}) {
     title: "Đang hoạt động",
     actionLabel: "Tặng voucher"
   };
+}
+
+function isNewMemberCustomer(customer = {}) {
+  return !isGuestCustomer(customer) && Number(customer.totalOrders || 0) <= 0;
+}
+
+function hasTierMember(customer = {}) {
+  return Boolean(getCustomerTierName(customer));
+}
+
+function isWinbackCustomer(customer = {}, minDays = 7) {
+  const days = Number(customer.daysSinceLastOrder);
+  return Number(customer.totalOrders || 0) > 0 && Number.isFinite(days) && days >= minDays;
+}
+
+function getCustomerCampaignAudiences(customer = {}) {
+  const audiences = ["all"];
+  if (isNewMemberCustomer(customer)) audiences.unshift("new_member");
+  if (hasTierMember(customer)) audiences.unshift("tier_member");
+  if (isWinbackCustomer(customer, 15)) {
+    audiences.unshift("winback_15d");
+    audiences.unshift("winback_7d");
+  } else if (isWinbackCustomer(customer, 7)) {
+    audiences.unshift("winback_7d");
+  }
+  return Array.from(new Set(audiences));
+}
+
+function getPrimaryCustomerAudience(customer = {}) {
+  return getCustomerCampaignAudiences(customer).find((audience) => audience !== "all") || "all";
+}
+
+function getCustomerSegmentBadges(customer = {}) {
+  const badges = [];
+  if (isNewMemberCustomer(customer)) {
+    badges.push({ key: "new_member", label: "Mới đăng ký chưa có đơn" });
+  }
+  if (hasTierMember(customer)) {
+    badges.push({ key: "tier_member", label: "Khách có hạng thành viên" });
+  }
+  if (isWinbackCustomer(customer, 15)) {
+    badges.push({ key: "winback_15d", label: "Chưa quay lại 15+ ngày" });
+  } else if (isWinbackCustomer(customer, 7)) {
+    badges.push({ key: "winback_7d", label: "Chưa quay lại 7+ ngày" });
+  }
+  return badges;
+}
+
+function getVoucherAudienceRank(voucher = {}, customer = {}) {
+  const audience = String(voucher?.campaignAudience || "all");
+  const priorities = [...getCustomerCampaignAudiences(customer), "event_special"];
+  const index = priorities.indexOf(audience);
+  if (index >= 0) return index;
+  return priorities.length + 1;
+}
+
+function isRecommendedVoucherForCustomer(voucher = {}, customer = {}) {
+  const primaryAudience = getPrimaryCustomerAudience(customer);
+  const voucherAudience = String(voucher?.campaignAudience || "all");
+  if (primaryAudience === "all") return voucherAudience === "all";
+  return voucherAudience === primaryAudience || voucherAudience === "all";
 }
 
 function getOrderStatusLabel(status) {
@@ -591,10 +653,12 @@ export default function CustomerCRM({
         customerFilter === "all" ||
         (tierFilterName && normalizeTierText(getCustomerTierName(customer)) === tierFilterName) ||
         (customerFilter === "registered" && !isGuestCustomer(customer)) ||
+        (customerFilter === "new_member" && isNewMemberCustomer(customer)) ||
+        (customerFilter === "tier_member" && hasTierMember(customer)) ||
         (customerFilter === "care" && needsCare(customer)) ||
-        (customerFilter === "inactive7" && Number(customer.daysSinceLastOrder || 0) >= 7) ||
-        (customerFilter === "inactive15" && Number(customer.daysSinceLastOrder || 0) >= 15) ||
-        (customerFilter === "inactive30" && Number(customer.daysSinceLastOrder || 0) >= 30);
+        (customerFilter === "inactive7" && isWinbackCustomer(customer, 7)) ||
+        (customerFilter === "inactive15" && isWinbackCustomer(customer, 15)) ||
+        (customerFilter === "inactive30" && isWinbackCustomer(customer, 30));
       const matchBranch = branchFilter === "all" || customer.lastBranch === branchFilter;
       const matchChannel = channelFilter === "all" || customer.lastChannel === channelFilter;
       return matchKeyword && matchFilter && matchBranch && matchChannel;
@@ -641,6 +705,18 @@ export default function CustomerCRM({
       careCount: rpcSummary?.inactive30Days ?? customers.filter(needsCare).length
     };
   }, [crmSnapshot.customers, crmSnapshot.supabaseProfileCount, crmAnalytics]);
+
+  const segmentQuickFilters = useMemo(() => {
+    const customers = crmSnapshot.customers || [];
+    return [
+      { value: "all", label: "Tất cả", count: customers.length },
+      { value: "new_member", label: "Mới đăng ký", count: customers.filter(isNewMemberCustomer).length },
+      { value: "tier_member", label: "Khách có hạng", count: customers.filter(hasTierMember).length },
+      { value: "inactive7", label: "7+ ngày chưa quay lại", count: customers.filter((customer) => isWinbackCustomer(customer, 7)).length },
+      { value: "inactive15", label: "15+ ngày chưa quay lại", count: customers.filter((customer) => isWinbackCustomer(customer, 15)).length },
+      { value: "inactive30", label: "30+ ngày cần chăm sóc", count: customers.filter((customer) => isWinbackCustomer(customer, 30)).length }
+    ];
+  }, [crmSnapshot.customers]);
 
   const dataHealthAlerts = useMemo(() => {
     const alerts = [];
@@ -734,10 +810,18 @@ export default function CustomerCRM({
     [crmSnapshot.customers, selectedCustomerPhone]
   );
 
-  const giftableVouchers = useMemo(
-    () => listCrmGiftableCoupons(coupons, loyaltyConfig),
-    [coupons, loyaltyConfig]
+  const primaryCustomerAudience = useMemo(
+    () => getPrimaryCustomerAudience(selectedCustomer || {}),
+    [selectedCustomer]
   );
+
+  const giftableVouchers = useMemo(() => {
+    return listCrmGiftableCoupons(coupons, loyaltyConfig).sort((a, b) => {
+      const rankDiff = getVoucherAudienceRank(a, selectedCustomer || {}) - getVoucherAudienceRank(b, selectedCustomer || {});
+      if (rankDiff !== 0) return rankDiff;
+      return String(a?.code || "").localeCompare(String(b?.code || ""));
+    });
+  }, [coupons, loyaltyConfig, selectedCustomer]);
 
   const autoManagedVoucherCount = useMemo(() => {
     return (coupons || []).filter((coupon) => {
@@ -759,6 +843,10 @@ export default function CustomerCRM({
       return map;
     }, new Map());
   }, [coupons, loyaltyConfig]);
+
+  const recommendedGiftableVoucherCount = useMemo(() => {
+    return giftableVouchers.filter((voucher) => isRecommendedVoucherForCustomer(voucher, selectedCustomer || {})).length;
+  }, [giftableVouchers, selectedCustomer]);
 
   const selectedCustomerPhoneKey = selectedCustomer?.phone ? getCustomerKey(selectedCustomer.phone) : "";
 
@@ -1043,7 +1131,9 @@ export default function CustomerCRM({
             </select>
             <select className="crm-segment-select" value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
               <option value="all">Tất cả nhóm khách</option>
+              <option value="new_member">Mới đăng ký chưa có đơn</option>
               <option value="registered">Khách đã đăng ký</option>
+              <option value="tier_member">Khách có hạng thành viên</option>
               {tierFilterOptions.map((tier) => (
                 <option key={tier.id} value={`tier:${tier.id}`}>{tier.label}</option>
               ))}
@@ -1053,6 +1143,19 @@ export default function CustomerCRM({
               <option value="inactive30">Chưa quay lại 30+ ngày</option>
             </select>
             <button type="button" className="crm-reset-btn" onClick={resetFilters}>Xóa lọc</button>
+          </div>
+          <div className="crm-segment-strip">
+            {segmentQuickFilters.map((segment) => (
+              <button
+                key={segment.value}
+                type="button"
+                className={`crm-segment-chip ${customerFilter === segment.value ? "is-active" : ""}`}
+                onClick={() => setCustomerFilter(segment.value)}
+              >
+                <span>{segment.label}</span>
+                <strong>{segment.count.toLocaleString("vi-VN")}</strong>
+              </button>
+            ))}
           </div>
           <p className="crm-result-summary">
             Hiển thị {visibleCustomers.length} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
@@ -1085,6 +1188,9 @@ export default function CustomerCRM({
                           {getCustomerTierName(customer)}
                         </em>
                       ) : null}
+                      {getCustomerSegmentBadges(customer).slice(0, 1).map((badge) => (
+                        <em key={badge.key} className="crm-soft-badge crm-soft-badge--segment">{badge.label}</em>
+                      ))}
                       {needsCare(customer) ? <em className="crm-soft-badge crm-soft-badge--care">Cần chăm sóc</em> : null}
                     </span>
                     <span className="crm-row-metric">
@@ -1145,6 +1251,13 @@ export default function CustomerCRM({
                   <span>{selectedCarePlan.label}</span>
                   <strong>{selectedCarePlan.title}</strong>
                   {selectedCarePlan.description ? <p>{selectedCarePlan.description}</p> : null}
+                  {getCustomerSegmentBadges(selectedCustomer).length ? (
+                    <div className="crm-care-plan-tags">
+                      {getCustomerSegmentBadges(selectedCustomer).map((badge) => (
+                        <em key={badge.key}>{badge.label}</em>
+                      ))}
+                    </div>
+                  ) : null}
                 </section>
 
                 <div className="crm-detail-metrics">
@@ -1311,41 +1424,58 @@ export default function CustomerCRM({
                     <div className="crm-voucher-picker-head">
                       <div>
                         <h3>Chọn voucher CRM</h3>
-                        <p>Chỉ hiển thị voucher thuộc nhóm CRM / chiến dịch riêng đang bật.</p>
+                        <p>
+                          Chỉ hiển thị voucher thuộc nhóm CRM / chiến dịch riêng đang bật.
+                          {selectedCustomer ? ` Đang ưu tiên nhóm ${getVoucherAudienceDefinition(primaryCustomerAudience).label.toLowerCase()}.` : ""}
+                        </p>
                       </div>
                       <button type="button" onClick={() => setVoucherPickerOpen(false)}>×</button>
                     </div>
                     <div className="crm-voucher-picker-list">
+                      {recommendedGiftableVoucherCount > 0 && primaryCustomerAudience !== "all" ? (
+                        <p className="crm-voucher-picker-note crm-voucher-picker-note--strong">
+                          Có {recommendedGiftableVoucherCount} voucher đang khớp với nhóm khách này: {getVoucherAudienceDefinition(primaryCustomerAudience).label}.
+                        </p>
+                      ) : null}
                       {autoManagedVoucherCount > 0 ? (
                         <p className="crm-voucher-picker-note">
                           Đang ẩn {autoManagedVoucherCount} voucher loyalty tự động để tránh tặng nhầm trong CRM.
                         </p>
                       ) : null}
-                      {giftableVouchers.map((voucher) => (
-                        <button
-                          key={voucher.id || voucher.code}
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await giftVoucherToCustomer(selectedCustomer.phone, voucher);
-                              setVoucherPickerOpen(false);
-                            } catch (error) {
-                              console.error("[crm] gift voucher failed", error);
-                              if (String(error?.message || "") === "LOYALTY_AUTO_VOUCHER_NOT_ALLOWED_IN_CRM") {
-                                window.alert("Voucher loyalty tự động không được tặng tay trong CRM. Anh chọn voucher thuộc nhóm CRM / chiến dịch riêng giúp em.");
-                                return;
+                      {giftableVouchers.map((voucher) => {
+                        const audienceLabel = getVoucherAudienceDefinition(voucher?.campaignAudience || "all").label;
+                        const isRecommended = isRecommendedVoucherForCustomer(voucher, selectedCustomer || {});
+                        return (
+                          <button
+                            key={voucher.id || voucher.code}
+                            type="button"
+                            className={isRecommended ? "is-recommended" : ""}
+                            onClick={async () => {
+                              try {
+                                await giftVoucherToCustomer(selectedCustomer.phone, voucher);
+                                setVoucherPickerOpen(false);
+                              } catch (error) {
+                                console.error("[crm] gift voucher failed", error);
+                                if (String(error?.message || "") === "LOYALTY_AUTO_VOUCHER_NOT_ALLOWED_IN_CRM") {
+                                  window.alert("Voucher loyalty tự động không được tặng tay trong CRM. Anh chọn voucher thuộc nhóm CRM / chiến dịch riêng giúp em.");
+                                  return;
+                                }
+                                window.alert("Tặng voucher thất bại. Anh kiểm tra quyền Supabase/RPC loyalty giúp em.");
                               }
-                              window.alert("Tặng voucher thất bại. Anh kiểm tra quyền Supabase/RPC loyalty giúp em.");
-                            }
-                          }}
-                        >
-                          <span>
-                            <strong>{voucher.code}</strong>
-                            <small>{getGiftableVoucherTypeLabel(voucher, loyaltyConfig)} · {voucher.name || "Voucher CRM"}</small>
-                          </span>
-                          <em>{formatVoucherDiscount(voucher)}</em>
-                        </button>
-                      ))}
+                            }}
+                          >
+                            <span>
+                              <strong>{voucher.code}</strong>
+                              <small>{getGiftableVoucherTypeLabel(voucher, loyaltyConfig)} · {voucher.name || "Voucher CRM"}</small>
+                              <p>
+                                {voucher.campaignLabel || audienceLabel} · {audienceLabel}
+                                {isRecommended ? " · Phù hợp khách này" : ""}
+                              </p>
+                            </span>
+                            <em>{formatVoucherDiscount(voucher)}</em>
+                          </button>
+                        );
+                      })}
                       {!giftableVouchers.length ? (
                         <p>Chưa có voucher CRM / chiến dịch riêng đang bật. Anh tạo voucher loyalty và chọn đúng nhóm quản trị trước nhé.</p>
                       ) : null}
