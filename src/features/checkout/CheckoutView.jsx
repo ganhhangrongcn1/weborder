@@ -525,10 +525,28 @@ export default function Checkout({
             className={`cta ${isPlacingOrder ? "is-loading" : ""}`}
             disabled={isPlacingOrder}
           >
-            {isPlacingOrder ? "Đang gửi đơn..." : "Đặt món"}
+            {isPlacingOrder ? "Đang xác nhận..." : "Đặt món"}
           </button>
         </div>
       </div>
+
+      {isPlacingOrder && (
+        <div className="checkout-placing-overlay" role="status" aria-live="polite">
+          <div className="checkout-placing-card">
+            <div className="checkout-placing-icon">
+              <Icon name="check" size={26} />
+            </div>
+            <span>Đang xác nhận đơn</span>
+            <h3>Quán đang nhận thông tin đặt món</h3>
+            <p>Hệ thống đang lưu đơn và gửi thông báo nội bộ. Bạn chờ một chút nhé.</p>
+            <div className="checkout-placing-steps">
+              <em>Kiểm tra món</em>
+              <em>Lưu đơn</em>
+              <em>Báo cho quán</em>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CheckoutModals
         isPromoModalOpen={isPromoModalOpen}

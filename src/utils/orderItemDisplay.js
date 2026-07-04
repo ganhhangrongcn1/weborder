@@ -4,7 +4,7 @@ function normalizeOptionText(value = "") {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/đ/g, "d")
+    .replace(/\u0111/g, "d")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
@@ -45,6 +45,6 @@ export function getOrderItemOptionLabels(item = {}, { includeNote = true, includ
   return [
     item.spice,
     ...toppingLabels,
-    includeNote && item.note ? `Ghi chú: ${item.note}` : ""
+    includeNote && item.note ? `Ghi ch\u00fa: ${item.note}` : ""
   ].filter(Boolean);
 }

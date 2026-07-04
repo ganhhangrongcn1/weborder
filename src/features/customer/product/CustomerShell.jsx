@@ -126,8 +126,6 @@ export default function CustomerShell({
   openCartItemEditor,
   currentOrder,
   branches,
-  orderStatus,
-  confirmCurrentOrder,
   composedUserProfile,
   currentPhone,
   reorderOrder,
@@ -198,9 +196,8 @@ export default function CustomerShell({
   const currentOrderTime = new Date(currentOrder?.createdAt || 0).getTime();
   const latestProfileOrderTime = new Date(latestProfileOrder?.createdAt || 0).getTime();
   const successOrder = forcedLatestOrder || (latestProfileOrderTime > currentOrderTime ? latestProfileOrder : (currentOrder || latestProfileOrder));
-  const successStatus = String(successOrder?.status || orderStatus || "").toLowerCase();
-  const isWaitingZaloSend = page === "success" && successStatus === "pending_zalo" && !successOrder?.zaloSentAt;
   const isChoosingProduct = isOptionModalOpen || page === "detail";
+  const shouldHideBottomNav = isChoosingProduct || page === "success";
 
   const trackingOrderHistory = forcedLatestOrder
     ? [forcedLatestOrder, ...(Array.isArray(composedUserProfile?.orderHistory) ? composedUserProfile.orderHistory : []).filter((order) => {
@@ -292,7 +289,7 @@ export default function CustomerShell({
             {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
             {page === "detail" && <ProductDetailPage render={pageProps.Detail} {...pageProps} />}
             {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
-            {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} branchPhone={branches[0]?.zaloPhone || "0788422424"} orderStatus={orderStatus} confirmCurrentOrder={confirmCurrentOrder} />}
+            {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} />}
             {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} />}
             {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
             {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}
@@ -343,7 +340,7 @@ export default function CustomerShell({
             )}
 
             {toastVisible && <CustomerToast message="Đã thêm vào giỏ" />}
-            {!isWaitingZaloSend && !isChoosingProduct && (
+            {!shouldHideBottomNav && (
               isQrCounterFlow
                 ? <BottomNav activeTab={activeTab} onChange={handleQrBottomNav} items={qrBottomNavItems} />
                 : <BottomNav activeTab={activeTab} onChange={handleBottomNav} />

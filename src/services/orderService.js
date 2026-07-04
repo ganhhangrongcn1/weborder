@@ -4,6 +4,7 @@ import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js
 import { composeMemberLoyaltySnapshot } from "./memberLoyaltySnapshotService.js";
 import { applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 import { validateCheckoutVoucherBeforeOrder } from "./checkoutOrderService.js";
+import { notifyWebOrderWebhook } from "./orderNotificationService.js";
 
 function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
   const branchId = String(
@@ -287,7 +288,7 @@ function updateCreatedOrderProfile({
 
 function finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, setCart }) {
   setCurrentOrder(savedOrder);
-  setOrderStatus("pending_zalo");
+  setOrderStatus(savedOrder?.status || "new");
   setCart([]);
 }
 
@@ -385,7 +386,7 @@ export async function createOrderAsync(params) {
     total: totalAmount,
     totalAmount,
     createdAt,
-    status: "pending_zalo",
+    status: "new",
     customerName: deliveryInfo?.name || userProfile.name,
     orderCustomerName: deliveryInfo?.name || userProfile.name,
     customerPhone: deliveryInfo?.phone || userProfile.phone,
@@ -403,7 +404,7 @@ export async function createOrderAsync(params) {
     deliveryBranchName: fulfillmentType === "delivery" ? (branchInfo?.name || "") : "",
     deliveryBranchAddress: fulfillmentType === "delivery" ? (branchInfo?.address || "") : "",
     pickupTimeText,
-    deliveryAddress: fulfillmentType === "pickup" ? "Khach tu den lay" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
+    deliveryAddress: fulfillmentType === "pickup" ? "Khách tự đến lấy" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
     paymentMethod,
     source: orderSource,
     channel: orderSource,
@@ -413,6 +414,9 @@ export async function createOrderAsync(params) {
   };
 
   const savedOrder = await orderStorage.addOrderAsync(order);
+  notifyWebOrderWebhook({ order: savedOrder }).catch((error) => {
+    console.warn("[order] web order webhook failed", error);
+  });
   saveCreatedOrderCustomerMarker({ order, currentPhone, saveDemoUser });
   await syncCreatedOrderListAsync({ order, currentPhone, setDemoOrdersState });
   const nextPhoneLoyalty = await applyCreatedOrderLoyaltyAsync({
