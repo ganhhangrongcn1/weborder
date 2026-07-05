@@ -10,10 +10,10 @@ export default function ToppingMenuCard({ topping, onAdd, onRemove, selectedCoun
       <div>
         <strong>{formatMoney(Number(topping.price) || 0)}</strong>
         {selectedCount > 0 ? (
-          <span className="addon-stepper">
-            <button type="button" onClick={onRemove}>-</button>
+          <span className="addon-stepper" role="group" aria-label={`Số lượng ${topping.name}`}>
+            <button type="button" onClick={onRemove} aria-label={`Bớt ${topping.name}`}>−</button>
             <em>{selectedCount}</em>
-            <button type="button" onClick={onAdd}>+</button>
+            <button type="button" onClick={onAdd} aria-label={`Thêm ${topping.name}`}>+</button>
           </span>
         ) : (
           <button type="button" className="addon-plus" onClick={onAdd} aria-label={`Th\u00eam ${topping.name}`}>

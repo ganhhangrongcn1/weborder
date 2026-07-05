@@ -28,6 +28,21 @@
   transform: scale(1.03);
 }
 
+.home2026-banner-action {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.home2026-banner-action:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.92);
+  outline-offset: -5px;
+}
+
 .home2026-banner-content {
   position: relative;
   z-index: 1;
@@ -78,16 +93,33 @@
 }
 
 .home2026-dots button {
+  position: relative;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: transparent;
+  touch-action: manipulation;
+}
+
+.home2026-dots button::after {
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: rgba(58, 31, 20, 0.16);
-  transition: 0.2s ease;
+  background: rgba(58, 31, 20, 0.2);
+  content: "";
+  transition: width 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
-.home2026-dots button.active {
+.home2026-dots button.active::after {
   width: 22px;
   background: #ff6a00;
+}
+
+.home2026-dots button:focus-visible {
+  outline: 2px solid rgba(255, 106, 0, 0.38);
+  outline-offset: 0;
 }
 
 /* Home 2026 layout corrections */

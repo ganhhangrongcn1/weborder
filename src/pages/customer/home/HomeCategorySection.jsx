@@ -1,6 +1,11 @@
 function HomeCategoryBubble({ category, onClick, active }) {
   return (
-    <button type="button" onClick={onClick} className={`home2026-category-bubble ${active ? "active" : ""}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`home2026-category-bubble ${active ? "active" : ""}`}
+      aria-pressed={active}
+    >
       {category.label}
     </button>
   );
@@ -18,6 +23,7 @@ export default function HomeCategorySection({
     <section className="home2026-section">
       <div className="home2026-section-head">
         <h2>{categoryTitle}</h2>
+        <button type="button" onClick={onViewAll}>{viewAll}</button>
       </div>
       <div className="home2026-category-scroll-wrap">
         <div className="home2026-category-scroll no-scrollbar">

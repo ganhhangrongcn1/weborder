@@ -53,12 +53,21 @@ export default function HomeHero({
   const voucherBadge = voucherCount > 9 ? "9+" : String(voucherCount);
   const logoUrl = String(siteBrand?.logo || "").trim();
   const brandName = String(siteBrand?.title || "Gánh Hàng Rong").trim();
+  const selectBanner = (index) => {
+    setActiveBanner(index);
+    const track = bannerRef.current;
+    if (!track) return;
+    track.scrollTo({
+      left: track.clientWidth * index,
+      behavior: "smooth"
+    });
+  };
 
   return (
     <>
       <div className="home2026-app-header">
         <div className={`home2026-brand-logo ${logoUrl ? "has-image" : ""}`} aria-label={brandName}>
-          {logoUrl ? <img src={logoUrl} alt={brandName} /> : <span>G</span>}
+          {logoUrl ? <img src={logoUrl} alt={brandName} width="48" height="48" loading="eager" /> : <span>G</span>}
         </div>
         <div className="home2026-greeting-copy">
           <span>
@@ -82,12 +91,24 @@ export default function HomeHero({
         <div className="home2026-banner-zone">
           <div ref={bannerRef} onScroll={handleBannerScroll} className="home2026-banner-track no-scrollbar">
             {banners.map((banner) => (
-              <AppBanner key={banner.id} banner={banner} onClick={onBannerClick} />
+              <AppBanner
+                key={banner.id}
+                banner={banner}
+                onClick={onBannerClick}
+                priority={banner.id === banners[0]?.id}
+              />
             ))}
           </div>
-          <div className="home2026-dots">
+          <div className="home2026-dots" role="group" aria-label={bannerAria}>
             {banners.map((banner, index) => (
-              <button key={banner.id} onClick={() => setActiveBanner(index)} className={index === activeBanner ? "active" : ""} aria-label={`${bannerAria} ${index + 1}`} />
+              <button
+                key={banner.id}
+                type="button"
+                onClick={() => selectBanner(index)}
+                className={index === activeBanner ? "active" : ""}
+                aria-label={`${bannerAria} ${index + 1}`}
+                aria-pressed={index === activeBanner}
+              />
             ))}
           </div>
         </div>

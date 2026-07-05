@@ -1046,3 +1046,24 @@
   background: #ff6a00;
   box-shadow: 0 8px 16px rgba(255, 106, 0, 0.18);
 }
+
+.home2026-flash-main-card {
+  position: relative;
+}
+
+.home2026-flash-main-card > .home2026-flash-main-action {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: block !important;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: transparent;
+  padding: 0;
+}
+
+.home2026-flash-main-card > .home2026-flash-main-action:focus-visible {
+  outline: 3px solid rgba(255, 106, 0, 0.42);
+  outline-offset: 2px;
+}

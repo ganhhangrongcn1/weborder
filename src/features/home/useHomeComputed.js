@@ -74,8 +74,22 @@ function getProductDiscountAmount(product = {}) {
   return originalPrice > price ? originalPrice - price : 0;
 }
 
-function sortDiscountedProductsFirst(products = []) {
+function sortFeaturedProducts(products = [], popularProductIds = []) {
+  const popularRank = new Map(
+    popularProductIds.map((productId, index) => [String(productId), index])
+  );
+
   return [...products].sort((first, second) => {
+    const firstRank = popularRank.get(String(first?.id || ""));
+    const secondRank = popularRank.get(String(second?.id || ""));
+    const firstIsPopular = firstRank !== undefined;
+    const secondIsPopular = secondRank !== undefined;
+
+    if (firstIsPopular && secondIsPopular && firstRank !== secondRank) {
+      return firstRank - secondRank;
+    }
+    if (firstIsPopular !== secondIsPopular) return firstIsPopular ? -1 : 1;
+
     const firstDiscount = getProductDiscountAmount(first);
     const secondDiscount = getProductDiscountAmount(second);
     if (firstDiscount !== secondDiscount) return secondDiscount - firstDiscount;
@@ -123,6 +137,7 @@ export default function useHomeComputed({
   homeText,
   categories,
   homeCategory,
+  popularProductIds = [],
   showAllHomeProducts,
   branches,
   selectedDeliveryBranch
@@ -250,8 +265,9 @@ export default function useHomeComputed({
   const filteredHomeProducts = activeHomeCategory === homeCategories[0]?.value
     ? homePricedProducts
     : homePricedProducts.filter((product) => product.category === activeHomeCategory);
-  const featuredProducts = sortDiscountedProductsFirst(
-    filteredHomeProducts.length ? filteredHomeProducts : homePricedProducts
+  const featuredProducts = sortFeaturedProducts(
+    filteredHomeProducts.length ? filteredHomeProducts : homePricedProducts,
+    popularProductIds
   ).slice(0, showAllHomeProducts ? 8 : 4);
 
   return {

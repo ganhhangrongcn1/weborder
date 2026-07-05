@@ -68,7 +68,7 @@ export const homeText = {
 
 export const menuText = {
   title: "MENU",
-  searchPlaceholder: "T\u00ecm b\u00e1nh tr\u00e1ng, combo, tr\u00e0 xo\u00e0i...",
+  searchPlaceholder: "T\u00ecm b\u00e1nh tr\u00e1ng, combo, tr\u00e0 xo\u00e0i\u2026",
   quickFilters: {
     bestSelling: "B\u00e1n ch\u1ea1y",
     combo: "Combo",

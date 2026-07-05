@@ -24,15 +24,24 @@ import useHomeComputed from "./useHomeComputed.js";
 import { createHomeActionHandlers } from "./homeActions.js";
 import { createHomeFulfillmentActions } from "./homeFulfillmentActions.js";
 import useHomeEffects from "./useHomeEffects.js";
+import useHomePopularProducts from "./useHomePopularProducts.js";
 
 const FALLBACK_HOME_BLOCK_ORDER = [
   "hero",
-  "promoVouchers",
   "fulfillment",
   "categorySection",
-  "featuredProducts",
+  "promoVouchers",
   "flashSale",
+  "featuredProducts",
   "deliveryApps"
+];
+
+const HOME_ORDERING_BLOCKS = [
+  "fulfillment",
+  "categorySection",
+  "promoVouchers",
+  "flashSale",
+  "featuredProducts"
 ];
 
 const SUPPORTED_HOME_BLOCK_KEYS = new Set([
@@ -70,11 +79,22 @@ function resolveHomeBlockOrder(homeContent) {
     .filter((key) => SUPPORTED_HOME_BLOCK_KEYS.has(key) && key !== "popupCampaign");
 
   const uniqueConfiguredOrder = Array.from(new Set(configuredOrder));
-  const baseOrder = uniqueConfiguredOrder.length ? uniqueConfiguredOrder : FALLBACK_HOME_BLOCK_ORDER;
+  const supportingOrder = uniqueConfiguredOrder.filter(
+    (key) => key !== "hero" && key !== "deliveryApps" && !HOME_ORDERING_BLOCKS.includes(key)
+  );
+
   return [
     "hero",
-    ...baseOrder.filter((key) => key !== "hero"),
-    ...FALLBACK_HOME_BLOCK_ORDER.filter((key) => key !== "hero" && !baseOrder.includes(key))
+    ...HOME_ORDERING_BLOCKS,
+    ...supportingOrder,
+    ...FALLBACK_HOME_BLOCK_ORDER.filter(
+      (key) =>
+        key !== "hero" &&
+        key !== "deliveryApps" &&
+        !HOME_ORDERING_BLOCKS.includes(key) &&
+        !supportingOrder.includes(key)
+    ),
+    "deliveryApps"
   ];
 }
 
@@ -119,9 +139,13 @@ export default function Home({
   const [pickupDate, setPickupDate] = useState(() => normalizePickupDate(checkoutPreset?.pickupDate));
   const [pickupClock, setPickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
   const [homeCategory, setHomeCategory] = useState("");
-  const [showAllHomeProducts, setShowAllHomeProducts] = useState(false);
   const [homePopupOpen, setHomePopupOpen] = useState(false);
   const [homeClockTick, setHomeClockTick] = useState(() => Date.now());
+  const popularProductIds = useHomePopularProducts({
+    enabled: products.length > 0,
+    days: 30,
+    limit: 12
+  });
   const cashbackRef = useRef(null);
   const promoVouchersRef = useRef(null);
   const deliveryAppsRef = useRef(null);
@@ -176,7 +200,8 @@ export default function Home({
     homeText: t,
     categories,
     homeCategory,
-    showAllHomeProducts,
+    popularProductIds,
+    showAllHomeProducts: false,
     branches,
     selectedDeliveryBranch
   });
@@ -241,6 +266,19 @@ export default function Home({
     () => pickupBranches.find((branch) => branch.id === pickupBranch) || pickupBranches[0] || null,
     [pickupBranches, pickupBranch]
   );
+  const handleBannerScroll = (event) => {
+    const track = event.currentTarget;
+    const slideWidth = track.clientWidth;
+    if (!slideWidth) return;
+    const nextIndex = Math.round(track.scrollLeft / slideWidth);
+    setActiveBanner((current) => (current === nextIndex ? current : nextIndex));
+  };
+
+  const openMenuCategory = (category) => {
+    setHomeCategory(category);
+    setActiveCategory?.(category);
+    navigate("menu", "menu");
+  };
 
   const homeBlockRenderers = {
     hero: () => (
@@ -249,7 +287,7 @@ export default function Home({
         bannerAria={t.bannerAria}
         navigate={navigate}
         bannerRef={bannerRef}
-        handleBannerScroll={() => {}}
+        handleBannerScroll={handleBannerScroll}
         banners={banners}
         activeBanner={activeBanner}
         setActiveBanner={setActiveBanner}
@@ -316,25 +354,17 @@ export default function Home({
         viewAll={t.viewAll}
         homeCategories={homeCategories}
         activeHomeCategory={activeHomeCategory}
-        onSelectCategory={(category) => {
-          setHomeCategory(category);
-          setShowAllHomeProducts(false);
-        }}
-        onViewAll={() => {
-          setHomeCategory(homeCategories[0]?.value);
-          setShowAllHomeProducts(true);
-        }}
+        onSelectCategory={openMenuCategory}
+        onViewAll={() => openMenuCategory(homeCategories[0]?.value || categories[0] || t.all)}
       /></section>
     ) : null,
     featuredProducts: () => showFeaturedProducts ? (
       <section ref={featuredProductsRef}><HomeFeaturedProducts
         featuredTitle={t.featuredTitle}
         viewMore={t.viewMore}
-        collapse={t.collapse}
-        showAllHomeProducts={showAllHomeProducts}
-        setShowAllHomeProducts={setShowAllHomeProducts}
         featuredProducts={featuredProducts}
         openOptionModal={openOptionModal}
+        onViewAll={() => navigate("menu", "menu")}
       /></section>
     ) : null
   };

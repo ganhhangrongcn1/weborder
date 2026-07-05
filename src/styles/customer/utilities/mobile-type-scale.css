@@ -192,6 +192,64 @@
   line-height: 1.2;
 }
 
+/* Comfortable touch targets and visible keyboard focus on Home/Menu. */
+.customer-shell .home2026-category-bubble,
+.customer-shell .chip {
+  min-height: 44px;
+}
+
+.customer-shell .menu-search-clear {
+  width: 40px;
+  height: 40px;
+}
+
+.customer-shell .product-add-btn,
+.customer-shell .product-row .product-add-btn,
+.customer-shell .menu-addon-card .addon-plus {
+  width: 44px;
+  height: 44px;
+}
+
+.customer-shell .product-card-stepper,
+.customer-shell .addon-stepper {
+  min-height: 44px;
+}
+
+.customer-shell .product-card-stepper button,
+.customer-shell .addon-stepper button {
+  width: 40px;
+  height: 40px;
+}
+
+.customer-shell .product-row .product-card-stepper button {
+  width: 36px;
+  height: 36px;
+}
+
+.customer-shell .menu-addon-card {
+  min-width: 178px;
+}
+
+.customer-shell .menu-search:focus-within {
+  border-color: rgba(255, 106, 0, 0.58);
+  box-shadow: 0 0 0 3px rgba(255, 106, 0, 0.12);
+}
+
+.customer-shell :is(
+  .menu-search-clear,
+  .chip,
+  .menu-addon-toggle,
+  .menu-addon-card button,
+  .product-row button,
+  .product-card button,
+  .home2026-category-bubble,
+  .home2026-section-head button,
+  .home2026-fulfillment-tabs button
+):focus-visible {
+  outline: 3px solid rgba(255, 106, 0, 0.36);
+  outline-offset: 2px;
+}
+
 @media (max-width: 600px) {
   .customer-shell input,
   .customer-shell select,

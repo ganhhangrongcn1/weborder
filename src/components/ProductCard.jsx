@@ -24,7 +24,14 @@ export default function ProductCard({ product, compact = false, onOpen, onAdd, o
         className={compact ? "product-row-image" : "product-image-wrap"}
         aria-label={`Xem ${product.name}`}
       >
-        <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
+        <img
+          src={product.image}
+          alt={product.name}
+          width={compact ? 220 : 360}
+          height={compact ? 202 : 281}
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
         {badgeText ? <span className="badge">{badgeText}</span> : null}
         {selectedCount > 0 ? <span className="selected-badge">Đã chọn {selectedCount}</span> : null}
       </button>
@@ -43,7 +50,7 @@ export default function ProductCard({ product, compact = false, onOpen, onAdd, o
           </div>
 
           {selectedCount > 0 ? (
-            <div className="product-card-stepper" aria-label={`Số lượng ${product.name}`}>
+            <div className="product-card-stepper" role="group" aria-label={`Số lượng ${product.name}`}>
               <button type="button" onClick={() => onRemove?.(product)} aria-label={`Bớt ${product.name}`}>-</button>
               <span>{selectedCount}</span>
               <button type="button" onClick={() => onAdd(product)} aria-label={`Thêm ${product.name}`}>+</button>

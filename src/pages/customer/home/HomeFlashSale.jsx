@@ -16,7 +16,7 @@ function HomeFlashCard({ product, onBuy, buyText }) {
   return (
     <article className="home2026-flash-card">
       <div className="home2026-flash-image">
-        <img src={product.image} alt={product.name} />
+        <img src={product.image} alt={product.name} width="128" height="128" loading="lazy" />
         <span>-{product.discountPercent}%</span>
       </div>
       <div className="min-w-0 flex-1">
@@ -31,9 +31,15 @@ function HomeFlashCard({ product, onBuy, buyText }) {
 
 function HomeFlashDealCard({ product, onBuy, flashSub }) {
   return (
-    <article className="home2026-flash-main-card" onClick={onBuy}>
+    <article className="home2026-flash-main-card">
+      <button
+        type="button"
+        className="home2026-flash-main-action"
+        onClick={onBuy}
+        aria-label={`Xem ưu đãi ${product.name}`}
+      />
       <div className="home2026-flash-main-image">
-        <img src={product.image} alt={product.name} />
+        <img src={product.image} alt={product.name} width="172" height="152" loading="lazy" />
       </div>
       <div className="home2026-flash-main-info">
         <h3>{product.name}</h3>

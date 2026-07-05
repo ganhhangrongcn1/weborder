@@ -21,15 +21,15 @@ export default function Menu({
   setCart
 }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [isAddonOpen, setIsAddonOpen] = useState(false);
 
   const cartProductCount = useMemo(() => {
-    return cart.reduce((map, item) => {
+    const counts = {};
+    cart.forEach((item) => {
       const key = String(item.id || "").replace(/^addon-/, "");
-      return {
-        ...map,
-        [key]: (map[key] || 0) + (item.quantity || 1)
-      };
-    }, {});
+      counts[key] = (counts[key] || 0) + (item.quantity || 1);
+    });
+    return counts;
   }, [cart]);
 
   const sortedToppings = useMemo(
@@ -104,6 +104,10 @@ export default function Menu({
           <div className="menu-search">
             <Icon name="search" size={17} />
             <input
+              type="search"
+              name="menuSearch"
+              autoComplete="off"
+              aria-label="Tìm món trong menu"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-brown/35"
@@ -124,6 +128,7 @@ export default function Menu({
                   type="button"
                   onClick={() => setActiveCategory(category)}
                   className={`chip ${activeCategory === category ? "chip-active" : ""} ${index === 0 && category === "Tất cả" ? "chip-pinned-all" : ""}`}
+                  aria-pressed={activeCategory === category}
                 >
                   {category}
                 </button>
@@ -132,10 +137,44 @@ export default function Menu({
           </div>
         </div>
 
-        <div className="menu-result-row">
+        <div className="menu-result-row" role="status" aria-live="polite">
           <span>{displayProducts.length} món</span>
           {searchTerm ? <strong>Đang tìm “{searchTerm}”</strong> : <strong>{activeCategory}</strong>}
         </div>
+
+        {!searchTerm && sortedToppings.length ? (
+          <section className={`menu-addon-section${isAddonOpen ? " is-open" : ""}`}>
+            <button
+              type="button"
+              className="menu-addon-toggle"
+              onClick={() => setIsAddonOpen((current) => !current)}
+              aria-expanded={isAddonOpen}
+            >
+              <span>
+                <small>{menuText.addonSectionEyebrow}</small>
+                <strong>{menuText.addonSectionTitle}</strong>
+              </span>
+              <span className="menu-addon-toggle__meta">
+                {isAddonOpen ? "Thu gọn" : menuText.addonSectionHint}
+                <Icon name="back" size={15} className={isAddonOpen ? "is-open" : ""} />
+              </span>
+            </button>
+
+            {isAddonOpen ? (
+              <div className="no-scrollbar menu-addon-scroll">
+                {sortedToppings.map((topping) => (
+                  <ToppingMenuCard
+                    key={topping.id}
+                    topping={topping}
+                    onAdd={() => addToppingAsItem(topping)}
+                    onRemove={() => removeOneByKey(topping.id)}
+                    selectedCount={cartProductCount[topping.id] || 0}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {displayProducts.length ? (
           <div className="menu-product-list">
@@ -158,26 +197,6 @@ export default function Menu({
           </div>
         )}
 
-        <div className="menu-addon-section">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p>{menuText.addonSectionEyebrow}</p>
-              <h2>{menuText.addonSectionTitle}</h2>
-            </div>
-            <span>{menuText.addonSectionHint}</span>
-          </div>
-          <div className="no-scrollbar menu-addon-scroll">
-            {sortedToppings.map((topping) => (
-              <ToppingMenuCard
-                key={topping.id}
-                topping={topping}
-                onAdd={() => addToppingAsItem(topping)}
-                onRemove={() => removeOneByKey(topping.id)}
-                selectedCount={cartProductCount[topping.id] || 0}
-              />
-            ))}
-          </div>
-        </div>
       </div>
     </section>
   );

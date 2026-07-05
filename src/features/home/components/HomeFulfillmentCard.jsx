@@ -8,11 +8,21 @@ export default function HomeFulfillmentCard({
 
   return (
     <div className="pickup-time-card">
-      <div className="pickup-mode-tabs service-tabs" aria-label="Chọn hình thức nhận món">
-        <button type="button" onClick={onDelivery} className={homeFulfillment === "delivery" ? "active" : ""}>
+      <div className="pickup-mode-tabs service-tabs" role="group" aria-label="Chọn hình thức nhận món">
+        <button
+          type="button"
+          onClick={onDelivery}
+          className={homeFulfillment === "delivery" ? "active" : ""}
+          aria-pressed={homeFulfillment === "delivery"}
+        >
           <span>Giao hàng</span>
         </button>
-        <button type="button" onClick={onPickup} className={homeFulfillment === "pickup" ? "active" : ""}>
+        <button
+          type="button"
+          onClick={onPickup}
+          className={homeFulfillment === "pickup" ? "active" : ""}
+          aria-pressed={homeFulfillment === "pickup"}
+        >
           <span>Tự lấy</span>
         </button>
       </div>
