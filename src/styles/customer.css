@@ -6,6 +6,7 @@
 @import "./customer/home/fulfillment.css";
 @import "./customer/components/button.css";
 @import "./customer/components/ui.css";
+@import "./customer/components/offer-card.css";
 @import "./customer/components/fulfillment-tabs.css";
 @import "./customer/components/form.css";
 @import "./customer/components/product-card.css";
@@ -28,3 +29,4 @@
 @import "./customer/components/bottom-sheet.css";
 @import "./customer/components/pwa-install-banner.css";
 @import "./customer/home/popup.css";
+@import "./customer/utilities/mobile-type-scale.css";

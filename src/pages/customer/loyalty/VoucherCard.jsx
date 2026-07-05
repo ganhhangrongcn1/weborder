@@ -1,4 +1,4 @@
-import Icon from "../../../components/Icon.jsx";
+import CustomerOfferCard from "../../../components/customer/CustomerOfferCard.jsx";
 
 function formatVoucherValue(voucher) {
   const value = Number(voucher?.value || 0);
@@ -36,42 +36,18 @@ export default function VoucherCard({ voucher, expired, onUse }) {
   const title = voucher?.title || voucher?.name || "Voucher dành cho bạn";
 
   return (
-    <article className={`loyalty-offer-card${inactive ? " is-inactive" : ""}`}>
-      <div className="loyalty-offer-card__mark" aria-hidden="true">
-        <Icon name="gift" size={22} />
-        <span>Ưu đãi</span>
-      </div>
-
-      <div className="loyalty-offer-card__body">
-        <div className="loyalty-offer-card__heading">
-          <div className="min-w-0">
-            <strong className="loyalty-offer-card__value">{valueText || "Quà tặng"}</strong>
-            <h3>{title}</h3>
-          </div>
-          <span className={`loyalty-offer-card__status${inactive ? " is-muted" : ""}`}>
-            {statusLabel}
-          </span>
-        </div>
-
-        <div className="loyalty-offer-card__details">
-          <span><Icon name="tag" size={14} />{conditionText}</span>
-          <span><Icon name="clock" size={14} />Dùng đến {formatVoucherDate(expiresAt)}</span>
-        </div>
-
-        <div className="loyalty-offer-card__footer">
-          {voucher?.code ? (
-            <span className="loyalty-offer-card__code">Mã: <strong>{voucher.code}</strong></span>
-          ) : (
-            <span className="loyalty-offer-card__code">Chọn tại bước thanh toán</span>
-          )}
-          {!inactive && onUse ? (
-            <button type="button" onClick={() => onUse(voucher)}>
-              Dùng ngay
-              <Icon name="cart" size={15} />
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </article>
+    <CustomerOfferCard
+      value={valueText || "Quà tặng"}
+      title={title}
+      status={statusLabel}
+      inactive={inactive}
+      details={[
+        { icon: "tag", text: conditionText },
+        { icon: "clock", text: `Dùng đến ${formatVoucherDate(expiresAt)}` }
+      ]}
+      codeLabel={voucher?.code ? `Mã: ${voucher.code}` : "Chọn tại bước thanh toán"}
+      actionLabel={!inactive && onUse ? "Dùng ngay" : ""}
+      onAction={!inactive && onUse ? () => onUse(voucher) : undefined}
+    />
   );
 }

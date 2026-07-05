@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { isToppingAlreadyShownInSpice } from "../../utils/orderItemDisplay.js";
 
 export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableItem, CheckoutCard, addonCategory, formatMoney, Icon }) {
+  const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+
   const isSpiceOption = (item, topping) => {
     return isToppingAlreadyShownInSpice(item, topping);
   };
@@ -17,7 +20,33 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
   };
 
   return (
-    <CheckoutCard title="Món đã chọn" action={cart.length ? "Xóa tất cả" : ""} onAction={() => setCart([])}>
+    <CheckoutCard
+      title="Món đã chọn"
+      action={cart.length ? "Xóa tất cả" : ""}
+      onAction={() => setIsConfirmingClear(true)}
+    >
+      {isConfirmingClear ? (
+        <div className="checkout-clear-confirm" role="alert">
+          <span>
+            <strong>Xóa toàn bộ món?</strong>
+            <small>Thao tác này sẽ làm trống giỏ hàng.</small>
+          </span>
+          <div>
+            <button type="button" onClick={() => setIsConfirmingClear(false)}>Giữ lại</button>
+            <button
+              type="button"
+              className="is-danger"
+              onClick={() => {
+                setCart([]);
+                setIsConfirmingClear(false);
+              }}
+            >
+              Xóa giỏ
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-3">
         {cart.map((item) => {
           const originalLineTotal = Number(item.originalLineTotal || 0);
@@ -25,19 +54,18 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
           const hasDiscountPrice = originalLineTotal > lineTotal;
 
           return (
-            <div
+            <article
               key={item.cartId}
-              onClick={() => {
-                if (isEditableItem?.(item)) onEditItem?.(item);
-              }}
               className={`checkout-cart-item ${item.category === addonCategory ? "checkout-cart-addon" : ""}`}
-              style={{ cursor: isEditableItem?.(item) ? "pointer" : "default" }}
             >
               {item.category !== addonCategory ? (
                 item.image ? (
                   <img
                     src={item.image}
                     alt={item.name}
+                    width="70"
+                    height="70"
+                    loading="lazy"
                     onError={(event) => {
                       event.currentTarget.style.display = "none";
                     }}
@@ -59,14 +87,37 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
                   </div>
                 )}
                 {item.note && <div className="checkout-note-pill">Ghi chú: {item.note}</div>}
+                {isEditableItem?.(item) ? (
+                  <button
+                    type="button"
+                    className="checkout-edit-item"
+                    onClick={() => onEditItem?.(item)}
+                  >
+                    Chỉnh món
+                  </button>
+                ) : null}
                 <div className="mt-2 flex items-center justify-between gap-2">
                   {item.autoGiftByPromo ? (
                     <div className="text-xs text-brown/60">Tự động thêm khi đủ mốc</div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <button onClick={(event) => { event.stopPropagation(); updateQty(item.cartId, -1); }} className="qty-btn">-</button>
+                      <button
+                        type="button"
+                        onClick={() => updateQty(item.cartId, -1)}
+                        className="qty-btn"
+                        aria-label={`Giảm số lượng ${item.name}`}
+                      >
+                        −
+                      </button>
                       <span className="w-5 text-center text-sm font-black">{item.quantity}</span>
-                      <button onClick={(event) => { event.stopPropagation(); updateQty(item.cartId, 1); }} className="qty-btn text-orange-600">+</button>
+                      <button
+                        type="button"
+                        onClick={() => updateQty(item.cartId, 1)}
+                        className="qty-btn text-orange-600"
+                        aria-label={`Tăng số lượng ${item.name}`}
+                      >
+                        +
+                      </button>
                     </div>
                   )}
                   <div className="text-right">
@@ -78,11 +129,16 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
                 </div>
               </div>
               {item.autoGiftByPromo ? null : (
-                <button onClick={(event) => { event.stopPropagation(); setCart((items) => items.filter((cartItem) => cartItem.cartId !== item.cartId)); }} className="checkout-remove" aria-label={`Xóa ${item.name}`}>
+                <button
+                  type="button"
+                  onClick={() => setCart((items) => items.filter((cartItem) => cartItem.cartId !== item.cartId))}
+                  className="checkout-remove"
+                  aria-label={`Xóa ${item.name}`}
+                >
                   <Icon name="trash" size={15} />
                 </button>
               )}
-            </div>
+            </article>
           );
         })}
       </div>

@@ -53,16 +53,31 @@ export default function CheckoutPricingSection({
         smartPromotions={smartPromotions}
       />
 
-      <CheckoutCard title="Ưu đãi">
-        <button onClick={() => setIsPromoModalOpen(true)} className="promo-select">
-          {selectedPromo ? `${selectedPromo.code} · -${formatMoney(selectedPromo.discount)}` : "Chọn mã khuyến mãi"} <span>›</span>
-        </button>
-      </CheckoutCard>
-
       {showMemberBenefits ? (
-        <>
-          <CheckoutCard title="Dùng điểm thưởng">
-            <div className="points-row">
+        <CheckoutCard title="Ưu đãi & điểm Gánh" className="checkout-benefits-card">
+          <div className="checkout-benefit-stack">
+            <button
+              type="button"
+              onClick={() => setIsPromoModalOpen(true)}
+              className={`promo-select${selectedPromo ? " is-applied" : ""}`}
+            >
+              <span className="promo-select__copy">
+                <small>Mã ưu đãi</small>
+                <strong>
+                  {selectedPromo
+                    ? selectedPromo.freeShip
+                      ? `${selectedPromo.code} · Hỗ trợ phí ship`
+                      : `${selectedPromo.code} · Tiết kiệm ${formatMoney(selectedPromo.discount)}`
+                    : "Chọn mã phù hợp với đơn"}
+                </strong>
+              </span>
+              <span className="promo-select__status">
+                {selectedPromo ? "Đã áp dụng" : "Chọn"}
+                <Icon name="back" size={14} />
+              </span>
+            </button>
+
+            <label className="points-row">
               <div>
                 <strong>Bạn có {availablePoints.toLocaleString("vi-VN")} điểm</strong>
                 <span>
@@ -79,26 +94,40 @@ export default function CheckoutPricingSection({
                 checked={usePoints}
                 onChange={(event) => setUsePoints(event.target.checked)}
                 className="toggle-input"
+                aria-label="Dùng điểm thưởng cho đơn hàng"
               />
-            </div>
-          </CheckoutCard>
-        </>
+            </label>
+          </div>
+        </CheckoutCard>
       ) : (
-        <CheckoutCard title="Ưu đãi thành viên">
-          <div className="rounded-2xl bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700">
+        <CheckoutCard title="Ưu đãi & điểm Gánh">
+          <div className="checkout-benefit-stack">
+            <button type="button" onClick={() => setIsPromoModalOpen(true)} className="promo-select">
+              <span className="promo-select__copy">
+                <small>Mã ưu đãi</small>
+                <strong>Chọn mã phù hợp với đơn</strong>
+              </span>
+              <span className="promo-select__status">
+                Chọn
+                <Icon name="back" size={14} />
+              </span>
+            </button>
+          </div>
+          <div className="mt-3 rounded-2xl bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700">
             Đăng nhập để dùng voucher thành viên và điểm tích lũy của bạn.
           </div>
         </CheckoutCard>
       )}
 
       <CheckoutCard title="Phương thức thanh toán">
-        <button className="payment-card active">
+        <div className="payment-card active" aria-label="Phương thức thanh toán: Tiền mặt">
           <Icon name="bag" size={18} />
           <span>
             <strong>Tiền mặt</strong>
             <small>Thanh toán khi nhận món</small>
           </span>
-        </button>
+          <span className="payment-card__selected" aria-hidden="true">✓</span>
+        </div>
       </CheckoutCard>
 
       <CheckoutTotalCard

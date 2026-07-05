@@ -1,0 +1,201 @@
+/* Shared mobile type scale for all customer-facing routes. */
+.customer-shell {
+  --customer-type-display: 22px;
+  --customer-type-section: 16px;
+  --customer-type-body: 14px;
+  --customer-type-supporting: 12px;
+  --customer-type-compact: 11px;
+}
+
+.customer-shell .customer-page-header__title,
+.customer-shell .checkout-card-head h2,
+.customer-shell .account-overview__header h2,
+.customer-shell .loyalty-section-head h2,
+.customer-shell .home2026-section-head h2 {
+  font-size: var(--customer-type-section);
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.customer-shell .customer-page-header__subtitle,
+.customer-shell .topbar-subtitle,
+.customer-shell .home2026-location-eyebrow,
+.customer-shell .home2026-greeting-copy span,
+.customer-shell .home2026-location-copy small,
+.customer-shell .home2026-order-strip span,
+.customer-shell .home2026-fulfillment-note {
+  font-size: var(--customer-type-supporting);
+  line-height: 1.4;
+}
+
+.customer-shell small,
+.customer-shell .text-\[9px\],
+.customer-shell .text-\[10px\],
+.customer-shell .text-\[11px\],
+.customer-shell .text-xs {
+  font-size: var(--customer-type-supporting) !important;
+  line-height: 1.4;
+}
+
+.customer-shell .text-sm {
+  font-size: var(--customer-type-body) !important;
+}
+
+/* Menu and product cards */
+.customer-shell .product-card-copy h3,
+.customer-shell .menu-result-row strong,
+.customer-shell .menu-addon-card h3,
+.customer-shell .home2026-featured-card h3,
+.customer-shell .home2026-flash-card h3,
+.customer-shell .home2026-flash-main-info h3 {
+  font-size: var(--customer-type-body);
+  line-height: 1.3;
+  text-wrap: pretty;
+}
+
+.customer-shell .product-card-copy p,
+.customer-shell .menu-addon-card p,
+.customer-shell .topping-card span,
+.customer-shell .menu-addon-section > div:first-child > span {
+  font-size: var(--customer-type-supporting);
+  line-height: 1.4;
+}
+
+.customer-shell .product-price-stack strong,
+.customer-shell .home2026-flash-price,
+.customer-shell .home2026-flash-main-price strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Checkout and order tracking */
+.customer-shell .checkout-cart-item h3 {
+  font-size: var(--customer-type-body);
+  line-height: 1.3;
+}
+
+.customer-shell .checkout-cart-item p,
+.customer-shell .checkout-spice-pill,
+.customer-shell .checkout-topping-list span,
+.customer-shell .checkout-note-pill,
+.customer-shell .points-row span,
+.customer-shell .points-limit-note,
+.customer-shell .checkout-sticky-status,
+.customer-shell .tracking-page-content .text-xs {
+  font-size: var(--customer-type-supporting);
+}
+
+.customer-shell .checkout-cart-item .text-right > strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.customer-shell .checkout-edit-item {
+  min-height: 40px;
+  font-size: 13px;
+}
+
+.customer-shell .checkout-cart-item .qty-btn,
+.customer-shell .checkout-remove {
+  width: 44px;
+  height: 44px;
+  font-size: var(--customer-type-body);
+}
+
+.customer-shell .promo-select__copy strong,
+.customer-shell .points-row strong,
+.customer-shell .payment-card strong,
+.customer-shell .order-detail-item strong {
+  font-size: var(--customer-type-body);
+}
+
+/* Shared offers across checkout and loyalty */
+.customer-shell .customer-offer-card h3 {
+  font-size: var(--customer-type-body);
+}
+
+.customer-shell .customer-offer-card__mark span,
+.customer-shell .customer-offer-card__status {
+  font-size: var(--customer-type-compact);
+}
+
+.customer-shell .customer-offer-card__details span,
+.customer-shell .customer-offer-card__code,
+.customer-shell .customer-offer-card__footer button {
+  font-size: var(--customer-type-supporting);
+}
+
+.customer-shell .customer-offer-card__footer button {
+  min-height: 44px;
+}
+
+/* Loyalty */
+.customer-shell .loyalty-page .loyalty-summary__eyebrow,
+.customer-shell .loyalty-page .loyalty-section-head small,
+.customer-shell .loyalty-page .loyalty-summary__message,
+.customer-shell .loyalty-page .loyalty-summary__journey-copy,
+.customer-shell .loyalty-page .loyalty-summary__meta b,
+.customer-shell .loyalty-page .loyalty-summary__meta small,
+.customer-shell .loyalty-page .loyalty-action-row__copy small,
+.customer-shell .loyalty-page .loyalty-guest-benefits__list small,
+.customer-shell .loyalty-page .loyalty-quick-actions small,
+.customer-shell .loyalty-page .streak-pill,
+.customer-shell .loyalty-page .checkin-bonus-grid span,
+.customer-shell .loyalty-page .loyalty-checkin-calendar span {
+  font-size: var(--customer-type-supporting);
+  line-height: 1.4;
+}
+
+.customer-shell .loyalty-page .loyalty-action-row__copy strong,
+.customer-shell .loyalty-page .loyalty-quick-actions strong {
+  font-size: var(--customer-type-body);
+}
+
+.customer-shell .loyalty-tier-current-mark small,
+.customer-shell .loyalty-tier-focus__item small,
+.customer-shell .loyalty-tier-focus__item span,
+.customer-shell .loyalty-tier-all__row small,
+.customer-shell .loyalty-tier-all__row em,
+.customer-shell .loyalty-tier-benefits {
+  font-size: var(--customer-type-supporting);
+  line-height: 1.4;
+}
+
+/* Account */
+.customer-shell .account-profile-kicker,
+.customer-shell .account-overview__header > span,
+.customer-shell .account-overview-metric > span,
+.customer-shell .account-overview-metric strong small,
+.customer-shell .account-shortcut small,
+.customer-shell .account-recent-order__top p,
+.customer-shell .account-recent-order__summary span,
+.customer-shell .account-sync-notice p,
+.customer-shell .account-auth-field > small {
+  font-size: var(--customer-type-supporting);
+  line-height: 1.4;
+}
+
+.customer-shell .account-order-source,
+.customer-shell .account-order-status {
+  font-size: var(--customer-type-compact);
+}
+
+.customer-shell .account-shortcut strong,
+.customer-shell .account-recent-order__top strong,
+.customer-shell .account-overview-metric strong {
+  font-size: var(--customer-type-body);
+}
+
+/* Persistent navigation stays compact, but no longer drops to 10px. */
+.customer-shell .customer-bottom-nav__item {
+  font-size: var(--customer-type-compact);
+  line-height: 1.2;
+}
+
+@media (max-width: 600px) {
+  .customer-shell input,
+  .customer-shell select,
+  .customer-shell textarea {
+    font-size: 16px;
+  }
+}

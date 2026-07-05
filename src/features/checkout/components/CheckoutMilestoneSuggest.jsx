@@ -51,6 +51,7 @@ export default function CheckoutMilestoneSuggest({
   smartPromotions = []
 }) {
   const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+  const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
   const showMilestoneBox = true;
 
   const couponMilestones = coupons
@@ -166,41 +167,66 @@ export default function CheckoutMilestoneSuggest({
         </button>
       )}
 
-      <div className="suggestion-section suggestion-section-v2">
-        <div className="suggestion-row-title">
-          <strong>{suggestText.toppingTitle}</strong>
-          <span>{suggestText.quickAdd}</span>
-        </div>
-        <div className="no-scrollbar suggestion-slider suggestion-slider-v2">
-          {toppingSuggestions.map((topping) => (
-            <button
-              key={topping.id}
-              type="button"
-              onClick={() => addToCart({ product: makeAddonProduct(topping), spice: suggestText.addonSpice, toppings: [], note: "", quantity: 1 })}
-              className="suggestion-chip suggestion-chip-v2"
-            >
-              <span>{topping.name}</span>
-              <strong>+{formatMoney(topping.price)}</strong>
-            </button>
-          ))}
-        </div>
-      </div>
+      {toppingSuggestions.length || mainSuggestions.length ? (
+        <div className="checkout-suggestion-disclosure">
+          <button
+            type="button"
+            className="checkout-suggestion-toggle"
+            aria-expanded={isSuggestionsOpen}
+            onClick={() => setIsSuggestionsOpen((current) => !current)}
+          >
+            <span>
+              <strong>Mua thêm nhanh</strong>
+              <small>{isSuggestionsOpen ? "Thu gọn danh sách món" : "Xem topping và món phù hợp"}</small>
+            </span>
+            <Icon name="back" size={15} className={isSuggestionsOpen ? "is-open" : ""} />
+          </button>
 
-      <div className="suggestion-section suggestion-section-v2">
-        <div className="suggestion-row-title">
-          <strong>{suggestText.mainTitle}</strong>
-          <span>{suggestText.chooseMore}</span>
+          {isSuggestionsOpen ? (
+            <div className="checkout-suggestion-content">
+              {toppingSuggestions.length ? (
+                <div className="suggestion-section suggestion-section-v2">
+                  <div className="suggestion-row-title">
+                    <strong>{suggestText.toppingTitle}</strong>
+                    <span>{suggestText.quickAdd}</span>
+                  </div>
+                  <div className="no-scrollbar suggestion-slider suggestion-slider-v2">
+                    {toppingSuggestions.map((topping) => (
+                      <button
+                        key={topping.id}
+                        type="button"
+                        onClick={() => addToCart({ product: makeAddonProduct(topping), spice: suggestText.addonSpice, toppings: [], note: "", quantity: 1 })}
+                        className="suggestion-chip suggestion-chip-v2"
+                      >
+                        <span>{topping.name}</span>
+                        <strong>+{formatMoney(topping.price)}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {mainSuggestions.length ? (
+                <div className="suggestion-section suggestion-section-v2">
+                  <div className="suggestion-row-title">
+                    <strong>{suggestText.mainTitle}</strong>
+                    <span>{suggestText.chooseMore}</span>
+                  </div>
+                  <div className="no-scrollbar suggestion-slider suggestion-slider-v2 main-suggest-slider">
+                    {mainSuggestions.map((product) => (
+                      <button key={product.id} type="button" onClick={() => openOptionModal(product)} className="suggestion-chip suggestion-chip-v2 suggestion-main-chip">
+                        <img src={product.image} alt={product.name} width="112" height="92" loading="lazy" />
+                        <span>{product.name}</span>
+                        <strong>+{formatMoney(product.price)}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-        <div className="no-scrollbar suggestion-slider suggestion-slider-v2 main-suggest-slider">
-          {mainSuggestions.map((product) => (
-            <button key={product.id} type="button" onClick={() => openOptionModal(product)} className="suggestion-chip suggestion-chip-v2 suggestion-main-chip">
-              <img src={product.image} alt={product.name} />
-              <span>{product.name}</span>
-              <strong>+{formatMoney(product.price)}</strong>
-            </button>
-          ))}
-        </div>
-      </div>
+      ) : null}
 
       {isMilestoneModalOpen && createPortal(
         <CustomerBottomSheet

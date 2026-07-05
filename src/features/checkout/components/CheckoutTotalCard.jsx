@@ -44,7 +44,14 @@ export default function CheckoutTotalCard({
         <div className="summary-line">
           <span>
             Phí ship bạn trả {!isPickup && distanceKm ? `(${distanceKm.toFixed(1)}km)` : ""}{" "}
-            <button type="button" onClick={onShowDeliveryFee} className="fee-info-btn">i</button>
+            <button
+              type="button"
+              onClick={onShowDeliveryFee}
+              className="fee-info-btn"
+              aria-label="Xem cách tính phí giao hàng"
+            >
+              i
+            </button>
           </span>
           <strong>{isPickup ? "0đ" : formatMoney(effectiveShippingPaid)}</strong>
         </div>

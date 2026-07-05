@@ -149,7 +149,10 @@ export default function Checkout({
     }
   }, [promoCodes, selectedPromo]);
 
-  const availablePoints = userProfile?.points || 0;
+  const availablePoints = Math.max(
+    0,
+    Number(checkoutLoyalty?.totalPoints ?? userProfile?.points ?? 0)
+  );
   const {
     baseCheckoutShip,
     autoShipSupport,

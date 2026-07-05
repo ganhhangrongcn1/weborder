@@ -1,4 +1,5 @@
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
+import CustomerOfferCard from "../../../components/customer/CustomerOfferCard.jsx";
 import { formatMoney } from "../../../utils/format.js";
 
 export default function PromoModal({
@@ -22,20 +23,27 @@ export default function PromoModal({
         {promos.map((promo) => {
           const disabled = promo.freeShip ? !promo.freeShip : promo.discount <= 0;
           const active = selectedPromo?.id === promo.id;
+          const valueText = promo.freeShip
+            ? "Hỗ trợ phí ship"
+            : `Giảm ${formatMoney(promo.discount)}`;
           return (
-            <button
+            <CustomerOfferCard
               key={promo.id}
+              value={valueText}
+              title={promo.title}
+              status={active ? "Đã chọn" : disabled ? "Chưa đủ" : "Có thể dùng"}
+              details={[
+                { icon: "tag", text: promo.condition }
+              ]}
+              codeLabel={`Mã: ${promo.code}`}
+              actionLabel={active ? "Bỏ chọn" : "Áp dụng"}
+              actionIcon="check"
+              selected={active}
+              inactive={disabled}
               disabled={disabled}
-              onClick={() => onSelect(promo)}
-              className={`promo-code-card ${active ? "promo-code-active" : ""}`}
-            >
-              <span>
-                <strong>{promo.title}</strong>
-                <small>{promo.condition}</small>
-                <small>Mã: {promo.code}</small>
-              </span>
-              <em>{disabled ? "Chưa đủ" : promo.freeShip ? "Hỗ trợ ship" : `-${formatMoney(promo.discount)}`}</em>
-            </button>
+              onAction={() => onSelect(promo)}
+              className="checkout-offer-option"
+            />
           );
         })}
       </div>

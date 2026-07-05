@@ -1,11 +1,3 @@
-.checkout-cart-item {
-  cursor: pointer;
-}
-
-.checkout-cart-item:active {
-  transform: scale(0.995);
-}
-
 .modal-topping {
   position: relative;
   min-height: 58px;
@@ -174,6 +166,59 @@
 .suggestion-main-chip span {
   margin-top: 4px;
   -webkit-line-clamp: 2;
+}
+
+.checkout-suggestion-disclosure {
+  margin-top: 12px;
+  border-top: 1px solid rgba(58, 31, 20, 0.08);
+  padding-top: 10px;
+}
+
+.checkout-suggestion-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 15px;
+  background: #fffaf4;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.checkout-suggestion-toggle span,
+.checkout-suggestion-toggle strong,
+.checkout-suggestion-toggle small {
+  display: block;
+}
+
+.checkout-suggestion-toggle strong {
+  color: #3a1f14;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.checkout-suggestion-toggle small {
+  margin-top: 2px;
+  color: rgba(58, 31, 20, 0.54);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.checkout-suggestion-toggle > .icon-ux {
+  flex: 0 0 auto;
+  color: #e45a00;
+  transform: rotate(-90deg);
+  transition: transform 0.18s ease;
+}
+
+.checkout-suggestion-toggle > .icon-ux.is-open {
+  transform: rotate(90deg);
+}
+
+.checkout-suggestion-content {
+  padding-top: 2px;
 }
 
 /* Fix suggestion typography and option modal stability */
