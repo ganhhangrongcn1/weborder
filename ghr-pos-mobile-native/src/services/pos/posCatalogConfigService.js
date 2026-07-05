@@ -102,6 +102,8 @@ function normalizeSmartPromotion(row = {}) {
       totalSlots: toNumber(condition.totalSlots ?? condition.total_slots, 0),
       soldCount: toNumber(condition.soldCount ?? condition.sold_count, 0),
       maxPerCustomer: Math.max(1, toNumber(condition.maxPerCustomer ?? condition.max_per_customer, 1)),
+      minDiscountToShow: Math.max(0, toNumber(condition.minDiscountToShow ?? condition.min_discount_to_show, 0)),
+      minFinalPrice: Math.max(0, toNumber(condition.minFinalPrice ?? condition.min_final_price, 0)),
       noStackWithOtherPromotions: normalizeBoolean(condition.noStackWithOtherPromotions ?? condition.no_stack_with_other_promotions, false)
     },
     reward: {

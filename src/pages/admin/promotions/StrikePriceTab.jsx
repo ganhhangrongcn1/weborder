@@ -79,23 +79,29 @@ export default function StrikePriceTab({
   updatePromotion,
   activeCategories,
   activeProducts,
+  statusPromotions = [],
   setSmartPromotions,
   smartPromotions
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("running");
+  const statusPromotionById = useMemo(
+    () => new Map(statusPromotions.map((promo) => [String(promo?.id || ""), promo])),
+    [statusPromotions]
+  );
   const filteredStrikePromos = useMemo(
     () => {
       const searchValue = normalizeSearch(searchTerm);
       return strikePromos.filter((promo) => {
         const searchKey = normalizeSearch(`${promo.title} ${promo.name} ${promo.text}`);
-        const statusCode = getStrikeStatusCode(promo);
+        const statusSource = statusPromotionById.get(String(promo.id || "")) || promo;
+        const statusCode = getStrikeStatusCode(statusSource);
         const matchesStatus = statusFilter === "all" || statusCode === statusFilter;
         const matchesSearch = !searchValue || searchKey.includes(searchValue);
         return matchesStatus && matchesSearch;
       });
     },
-    [strikePromos, searchTerm, statusFilter]
+    [strikePromos, searchTerm, statusFilter, statusPromotionById]
   );
 
   useEffect(() => {
@@ -110,6 +116,9 @@ export default function StrikePriceTab({
 
   const visibleSelectedStrikePromo = filteredStrikePromos.some((promo) => promo.id === selectedStrikePromo?.id)
     ? selectedStrikePromo
+    : null;
+  const visibleStatusPromotion = visibleSelectedStrikePromo
+    ? statusPromotionById.get(String(visibleSelectedStrikePromo.id || "")) || visibleSelectedStrikePromo
     : null;
   const strikeWarnings = visibleSelectedStrikePromo ? buildStrikeWarnings(visibleSelectedStrikePromo) : [];
 
@@ -146,7 +155,8 @@ export default function StrikePriceTab({
 
         <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
           {filteredStrikePromos.map((promo) => {
-            const status = getStrikeStatus(promo);
+            const statusSource = statusPromotionById.get(String(promo.id || "")) || promo;
+            const status = getStrikeStatus(statusSource);
             const isSelected = selectedStrikePromo?.id === promo.id;
             return (
               <button
@@ -193,7 +203,7 @@ export default function StrikePriceTab({
             <div className="admin-promo-form-flow">
               <PromotionSummaryPills
                 items={[
-                  getStrikeStatus(visibleSelectedStrikePromo).label,
+                  getStrikeStatus(visibleStatusPromotion).label,
                   formatSalesChannelSummary(visibleSelectedStrikePromo),
                   getScopeSummary(visibleSelectedStrikePromo),
                   visibleSelectedStrikePromo.reward.type === "percent_discount" ? `Giảm ${Number(visibleSelectedStrikePromo.reward.value || 0)}%` : visibleSelectedStrikePromo.reward.type === "fixed_price" ? `Đồng giá ${formatMoney(visibleSelectedStrikePromo.reward.value || 0)}` : `Giảm ${formatMoney(visibleSelectedStrikePromo.reward.value || 0)}`

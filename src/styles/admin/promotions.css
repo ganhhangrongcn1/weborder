@@ -255,6 +255,14 @@
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
 }
 
+.admin-promo-save-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .admin-promo-tabs {
   position: sticky;
   top: 76px;
@@ -1073,6 +1081,15 @@
     bottom: 8px;
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .admin-promo-save-actions {
+    display: grid;
+    grid-template-columns: 1fr 1.25fr;
+  }
+
+  .admin-promo-save-actions .admin-ui-button {
+    width: 100%;
   }
 
   .admin-promo-form-grid {

@@ -1,6 +1,7 @@
 import { buildPosLoyaltyBenefit } from "../src/shared/pos/posLoyalty";
 import {
   applyPosFlashSaleToProduct,
+  applyPosPricePromotionToProduct,
   buildPosPromotionHints
 } from "../src/shared/pos/posPromotions";
 
@@ -52,6 +53,29 @@ function buildGiftPromotion(salesChannels = ["pos"]) {
   };
 }
 
+function buildStrikePromotion(salesChannels = ["pos"]) {
+  return {
+    id: "strike-1",
+    type: "strike_price",
+    active: true,
+    salesChannels,
+    startAt: "2020-01-01",
+    endAt: "2099-12-31",
+    condition: {
+      applyScope: "product",
+      productIds: product.id,
+      useTimeWindow: false,
+      minDiscountToShow: 5,
+      minFinalPrice: 0
+    },
+    reward: {
+      type: "fixed_discount",
+      value: 15000,
+      roundMode: "none"
+    }
+  };
+}
+
 describe("POS promotion sales channels", () => {
   it("does not apply flash sale when POS channel is off", () => {
     const result = applyPosFlashSaleToProduct(
@@ -73,6 +97,30 @@ describe("POS promotion sales channels", () => {
 
     expect(result.price).toBe(25000);
     expect(result.flashPromoId).toBe("flash-1");
+  });
+
+  it("does not apply strike price when POS channel is off", () => {
+    const result = applyPosPricePromotionToProduct(
+      { ...product, price: 40000 },
+      [buildStrikePromotion(["web", "qr"])],
+      new Date("2026-07-05T10:00:00")
+    );
+
+    expect(result.price).toBe(40000);
+    expect(result.pricePromotionId).toBeUndefined();
+  });
+
+  it("applies strike price when POS channel is on", () => {
+    const result = applyPosPricePromotionToProduct(
+      { ...product, price: 40000 },
+      [buildStrikePromotion(["pos"])],
+      new Date("2026-07-05T10:00:00")
+    );
+
+    expect(result.price).toBe(25000);
+    expect(result.originalPrice).toBe(40000);
+    expect(result.pricePromotionId).toBe("strike-1");
+    expect(result.pricePromotionType).toBe("strike_price");
   });
 
   it("does not suggest auto gift when POS channel is off", () => {

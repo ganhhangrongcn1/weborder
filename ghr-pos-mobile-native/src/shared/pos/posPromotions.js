@@ -106,15 +106,16 @@ function hasFlashSaleSlots(promotion = {}) {
   return totalSlots <= 0 || soldCount < totalSlots;
 }
 
-function isFlashSaleActive(promotion = {}, now = new Date()) {
-  if (promotion?.type !== "flash_sale") return false;
+function isPricePromotionActive(promotion = {}, now = new Date()) {
+  const promotionType = toText(promotion?.type).toLowerCase();
+  if (!["flash_sale", "strike_price"].includes(promotionType)) return false;
   if (promotion?.active === false) return false;
   if (!isPromotionAllowedForPos(promotion)) return false;
   if (!hasDisplayPlace(promotion, "pos")) return false;
   if (!isDateActive(promotion.startAt, promotion.endAt, now)) return false;
   if (!isWeekdayActive(promotion, now)) return false;
   if (!isTimeWindowActive(promotion, now)) return false;
-  return hasFlashSaleSlots(promotion);
+  return promotionType !== "flash_sale" || hasFlashSaleSlots(promotion);
 }
 
 function matchesPromotionTarget(product = {}, promotion = {}) {
@@ -155,39 +156,69 @@ function calculatePromotionPrice(originalPrice = 0, promotion = {}) {
     ? rewardValue
     : price - (rewardType === "percent_discount" ? (price * rewardValue) / 100 : rewardValue);
 
-  return Math.max(0, applyRoundMode(rawPrice, reward.roundMode || "none"));
+  const roundedPrice = Math.max(0, applyRoundMode(rawPrice, reward.roundMode || "none"));
+  const minFinalPrice = Math.max(0, toNumber(promotion?.condition?.minFinalPrice, 0));
+  return Math.max(roundedPrice, minFinalPrice);
 }
 
 export function getActivePosFlashSalePromotions(smartPromotions = [], now = new Date()) {
   return [...(Array.isArray(smartPromotions) ? smartPromotions : [])]
-    .filter((promotion) => isFlashSaleActive(promotion, now))
+    .filter((promotion) => promotion?.type === "flash_sale")
+    .filter((promotion) => isPricePromotionActive(promotion, now))
     .sort((first, second) => Number(first?.priority || 99) - Number(second?.priority || 99));
 }
 
-export function applyPosFlashSaleToProduct(product = {}, smartPromotions = [], now = new Date()) {
-  const activePromotions = getActivePosFlashSalePromotions(smartPromotions, now);
+export function getActivePosPricePromotions(smartPromotions = [], now = new Date()) {
+  return [...(Array.isArray(smartPromotions) ? smartPromotions : [])]
+    .filter((promotion) => isPricePromotionActive(promotion, now))
+    .sort((first, second) => Number(first?.priority || 99) - Number(second?.priority || 99));
+}
+
+function applyMatchedPricePromotion(product = {}, activePromotions = []) {
   const matched = activePromotions.find((promotion) => matchesPromotionTarget(product, promotion));
   if (!matched) return product;
 
-  const originalPrice = Math.max(0, toNumber(product.originalPrice || product.price, 0));
+  const originalPrice = Math.max(0, toNumber(product.price, 0));
   const salePrice = calculatePromotionPrice(originalPrice, matched);
   if (salePrice <= 0 || salePrice >= originalPrice) return product;
+  const percentDiscount = originalPrice > 0
+    ? ((originalPrice - salePrice) / originalPrice) * 100
+    : 0;
+  const minDiscountToShow = Math.max(0, toNumber(matched?.condition?.minDiscountToShow, 0));
+  if (percentDiscount < minDiscountToShow) return product;
+
+  const promotionTitle = matched.title || matched.name || (
+    matched.type === "strike_price" ? "Giảm giá món" : "Flashsale"
+  );
 
   return {
     ...product,
     price: salePrice,
     originalPrice,
     salePrice,
+    pricePromotionId: matched.id,
+    pricePromotionType: matched.type,
     flashPromoId: matched.id,
-    promoBadge: matched.title || matched.name || "Flashsale",
+    promoBadge: promotionTitle,
     metadata: {
       ...(product.metadata && typeof product.metadata === "object" ? product.metadata : {}),
+      pricePromotionId: matched.id,
+      pricePromotionType: matched.type,
+      pricePromotionTitle: promotionTitle,
       flashPromoId: matched.id,
-      flashPromoTitle: matched.title || matched.name || "Flashsale",
+      flashPromoTitle: promotionTitle,
       originalPrice,
       salePrice
     }
   };
+}
+
+export function applyPosPricePromotionToProduct(product = {}, smartPromotions = [], now = new Date()) {
+  return applyMatchedPricePromotion(product, getActivePosPricePromotions(smartPromotions, now));
+}
+
+export function applyPosFlashSaleToProduct(product = {}, smartPromotions = [], now = new Date()) {
+  return applyMatchedPricePromotion(product, getActivePosFlashSalePromotions(smartPromotions, now));
 }
 
 export function selectCheckoutSmartPromotions(smartPromotions = []) {

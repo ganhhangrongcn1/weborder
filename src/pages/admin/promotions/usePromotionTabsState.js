@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   calcPreviewPrice as calcPreviewPriceBase,
   normalizeFlashPromo as normalizeFlashPromoBase,
-  normalizeStrikePromo as normalizeStrikePromoBase
+  normalizeStrikePromo as normalizeStrikePromoBase,
+  toIdList
 } from "./promotionTabUtils.js";
 import { promoDefaults } from "./promotionConfig.js";
 
@@ -77,7 +78,23 @@ export default function usePromotionTabsState({
   }, [strikePromos, selectedStrikePromoId]);
 
   const selectedStrikePromo = strikePromos.find((item) => item.id === selectedStrikePromoId) || strikePromos[0] || null;
-  const preview = selectedStrikePromo ? calcPreviewPrice(selectedStrikePromo, 35000) : null;
+  const previewProduct = useMemo(() => {
+    if (!selectedStrikePromo) return null;
+    const scope = selectedStrikePromo.condition?.applyScope || "all";
+    if (scope === "product") {
+      const productIds = toIdList(selectedStrikePromo.condition?.productIds);
+      return activeProducts.find((product) => productIds.includes(String(product.id || ""))) || null;
+    }
+    if (scope === "category") {
+      const categoryIds = toIdList(selectedStrikePromo.condition?.categoryIds);
+      return activeProducts.find((product) => categoryIds.includes(String(product.category || ""))) || null;
+    }
+    return activeProducts[0] || null;
+  }, [activeProducts, selectedStrikePromo]);
+  const previewPrice = Number(previewProduct?.price || 0);
+  const preview = selectedStrikePromo
+    ? calcPreviewPrice(selectedStrikePromo, previewPrice > 0 ? previewPrice : 35000)
+    : null;
 
   const flashSalePromos = useMemo(
     () => smartPromotions

@@ -68,7 +68,7 @@ import {
 } from "../../../shared/pos/posCart";
 import { buildPosLoyaltyBenefit, buildVoucherSelectionKey } from "../../../shared/pos/posLoyalty";
 import { calculateCashChange, getCashPaymentSummary, normalizeCashReceived } from "../../../shared/pos/posPayment";
-import { applyPosFlashSaleToProduct, buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
+import { applyPosPricePromotionToProduct, buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
 
 export default function usePosComposer() {
   const announcedQrPaymentIdsRef = useRef(new Set());
@@ -155,7 +155,7 @@ export default function usePosComposer() {
   const effectiveCategory = catalog.categories.includes(activeCategory) ? activeCategory : defaultCategory;
 
   const pricedProducts = useMemo(
-    () => catalog.products.map((product) => applyPosFlashSaleToProduct(product, rawSmartPromotions, new Date(promotionNowTick))),
+    () => catalog.products.map((product) => applyPosPricePromotionToProduct(product, rawSmartPromotions, new Date(promotionNowTick))),
     [catalog.products, promotionNowTick, rawSmartPromotions]
   );
 
@@ -1054,7 +1054,7 @@ export default function usePosComposer() {
 
   const getPromotionPricedProduct = (product = {}) => {
     const matched = pricedProducts.find((item) => item.id === product.id);
-    return matched || applyPosFlashSaleToProduct(product, rawSmartPromotions, new Date(promotionNowTick));
+    return matched || applyPosPricePromotionToProduct(product, rawSmartPromotions, new Date(promotionNowTick));
   };
 
   const buildPromotedCartConfig = (product = {}, config = {}) => {
@@ -1067,7 +1067,7 @@ export default function usePosComposer() {
       return { ...config, metadata };
     }
 
-    if (!product.flashPromoId) {
+    if (!product.pricePromotionId && !product.flashPromoId) {
       return { ...config, metadata };
     }
 
@@ -1076,6 +1076,7 @@ export default function usePosComposer() {
       unitPrice: Number(product.price || 0),
       metadata: {
         ...metadata,
+        pricePromotionApplied: true,
         flashPromoApplied: true
       }
     };
@@ -1093,13 +1094,17 @@ export default function usePosComposer() {
 
     setCart((currentCart) => {
       const targetUnitPrice = Number(promotedConfig.unitPrice ?? promotedProduct.price ?? 0);
-      const targetPromoId = String(promotedConfig.metadata?.flashPromoId || "");
+      const targetPromoId = String(
+        promotedConfig.metadata?.pricePromotionId ||
+        promotedConfig.metadata?.flashPromoId ||
+        ""
+      );
       const canMerge = !promotedConfig.note && !promotedConfig.spice && !(promotedConfig.toppings || []).length && !(promotedConfig.selectedOptions || []).length;
       const existing = canMerge
         ? currentCart.find((item) =>
             item.productId === promotedProduct.id &&
             Number(item.price || 0) === targetUnitPrice &&
-            String(item.metadata?.flashPromoId || "") === targetPromoId &&
+            String(item.metadata?.pricePromotionId || item.metadata?.flashPromoId || "") === targetPromoId &&
             !item.note &&
             !(item.toppings || []).length &&
             !(item.selectedOptions || []).length &&

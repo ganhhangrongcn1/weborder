@@ -78,23 +78,29 @@ export default function FlashSaleTab({
   updatePromotion,
   activeCategories,
   activeProducts,
+  statusPromotions = [],
   setSmartPromotions,
   smartPromotions
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("running");
+  const statusPromotionById = useMemo(
+    () => new Map(statusPromotions.map((promo) => [String(promo?.id || ""), promo])),
+    [statusPromotions]
+  );
   const filteredFlashPromos = useMemo(
     () => {
       const searchValue = normalizeSearch(searchTerm);
       return flashSalePromos.filter((promo) => {
-        const status = getFlashStatus(promo, new Date(nowTick));
+        const statusSource = statusPromotionById.get(String(promo.id || "")) || promo;
+        const status = getFlashStatus(statusSource, new Date(nowTick));
         const searchKey = normalizeSearch(`${promo.title} ${promo.name} ${promo.text} ${promo.condition?.startTime} ${promo.condition?.endTime}`);
         const matchesStatus = statusFilter === "all" || status.code === statusFilter;
         const matchesSearch = !searchValue || searchKey.includes(searchValue);
         return matchesStatus && matchesSearch;
       });
     },
-    [flashSalePromos, nowTick, searchTerm, statusFilter]
+    [flashSalePromos, nowTick, searchTerm, statusFilter, statusPromotionById]
   );
 
   useEffect(() => {
@@ -109,6 +115,9 @@ export default function FlashSaleTab({
 
   const visibleSelectedFlashPromo = filteredFlashPromos.some((promo) => promo.id === selectedFlashPromo?.id)
     ? selectedFlashPromo
+    : null;
+  const visibleStatusPromotion = visibleSelectedFlashPromo
+    ? statusPromotionById.get(String(visibleSelectedFlashPromo.id || "")) || visibleSelectedFlashPromo
     : null;
   const flashWarnings = visibleSelectedFlashPromo ? buildFlashWarnings(visibleSelectedFlashPromo, nowTick) : [];
 
@@ -143,7 +152,8 @@ export default function FlashSaleTab({
         </div>
         <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
           {filteredFlashPromos.map((promo) => {
-            const status = getFlashStatus(promo, new Date(nowTick));
+            const statusSource = statusPromotionById.get(String(promo.id || "")) || promo;
+            const status = getFlashStatus(statusSource, new Date(nowTick));
             const isSelected = selectedFlashPromo?.id === promo.id;
             const totalSlots = Number(promo.condition?.totalSlots || 0);
             const soldCount = Math.min(Number(promo.condition?.soldCount || 0), totalSlots || Number.MAX_SAFE_INTEGER);
@@ -177,7 +187,7 @@ export default function FlashSaleTab({
         {visibleSelectedFlashPromo ? (
           <>
             {(() => {
-              const status = getFlashStatus(visibleSelectedFlashPromo, new Date(nowTick));
+              const status = getFlashStatus(visibleStatusPromotion, new Date(nowTick));
               const totalSlots = Math.max(0, Number(visibleSelectedFlashPromo.condition?.totalSlots || 0));
               const soldCount = Math.max(0, Math.min(Number(visibleSelectedFlashPromo.condition?.soldCount || 0), totalSlots || Number.MAX_SAFE_INTEGER));
               const remaining = Math.max(totalSlots - soldCount, 0);
@@ -211,7 +221,7 @@ export default function FlashSaleTab({
             <div className="admin-promo-form-flow">
               <PromotionSummaryPills
                 items={[
-                  getFlashStatus(visibleSelectedFlashPromo, new Date(nowTick)).label,
+                  getFlashStatus(visibleStatusPromotion, new Date(nowTick)).label,
                   formatSalesChannelSummary(visibleSelectedFlashPromo),
                   getScopeSummary(visibleSelectedFlashPromo),
                   `${visibleSelectedFlashPromo.condition?.startTime || "00:00"} - ${visibleSelectedFlashPromo.condition?.endTime || "23:59"}`,
