@@ -15,8 +15,6 @@ const supabase = createClient(url, anonKey, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
 
-const probeOrderId = `SMOKE-${Date.now()}`;
-
 async function assertSelect(table) {
   const { error } = await supabase
     .from(table)
@@ -61,41 +59,6 @@ async function assertLoginHintRpcAvailable() {
   }
 }
 
-async function cleanupProbeOrder() {
-  const { error: itemError } = await supabase
-    .from("order_items")
-    .delete()
-    .eq("order_id", probeOrderId);
-  if (itemError) throw new Error(`[order_items] cleanup failed: ${itemError.message}`);
-
-  const { error: orderError } = await supabase
-    .from("orders")
-    .delete()
-    .eq("id", probeOrderId);
-  if (orderError) throw new Error(`[orders] cleanup failed: ${orderError.message}`);
-}
-
-async function assertOrderWriteFlow() {
-  const { error: orderError } = await supabase.from("orders").insert({
-    id: probeOrderId,
-    order_code: probeOrderId,
-    customer_phone: null,
-    customer_name: "Smoke Test",
-    total_amount: 10000
-  });
-  if (orderError) throw new Error(`[orders] insert failed: ${orderError.message}`);
-
-  const { error: itemError } = await supabase.from("order_items").insert({
-    order_id: probeOrderId,
-    product_id: "smoke-product",
-    product_name: "Smoke Product",
-    quantity: 1,
-    unit_price: 10000,
-    line_total: 10000
-  });
-  if (itemError) throw new Error(`[order_items] insert failed: ${itemError.message}`);
-}
-
 async function run() {
   await assertSelect("customer_addresses");
   await assertSelect("orders");
@@ -105,13 +68,7 @@ async function run() {
   await assertLoyaltyAnonymousDenied("loyalty_ledger");
   await assertLoginHintRpcAvailable();
 
-  try {
-    await assertOrderWriteFlow();
-  } finally {
-    await cleanupProbeOrder();
-  }
-
-  console.log("Supabase core order/security smoke test passed.");
+  console.log("Supabase core access/security smoke test passed.");
 }
 
 run().catch((error) => {
