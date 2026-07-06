@@ -615,13 +615,11 @@ export default function KitchenPage() {
     realtimeStatus,
     updatingOrderId,
     updatingItemKey,
-    claimingGiftOrderId,
     requestAudit,
     resetRequestAudit,
     loadMoreDoneOrders,
     markDone,
     toggleItemDone,
-    claimGift,
     reload
   } = useKitchenOrders(kitchenOrderOptions);
 
@@ -1432,11 +1430,9 @@ export default function KitchenPage() {
                   updatingItemKey={updatingItemKey}
                   printingBill={printingOrderKey === orderKey}
                   printBillState={printBillState}
-                  claimingGift={String(claimingGiftOrderId) === String(order.id)}
                   onMarkDone={handleMarkOrderDone}
                   onPrintBill={handlePrintBill}
                   onToggleItemDone={toggleItemDone}
-                  onClaimGift={claimGift}
                 />
                 </div>
               );

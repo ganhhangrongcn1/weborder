@@ -34,6 +34,7 @@ import { coreSupabaseRepository } from "../../../services/repositories/coreSupab
 const SNAPSHOT_CACHE_TTL_MS = 60000;
 const ADMIN_REALTIME_NOTICE_DELAY_MS = 2000;
 const ADMIN_ORDER_REFRESH_DEBOUNCE_MS = 250;
+const ADMIN_DASHBOARD_REALTIME_REFRESH_DEBOUNCE_MS = 10000;
 const ordersSnapshotCache = new Map();
 const ordersSnapshotInFlight = new Map();
 const DASHBOARD_DATA_KEYS = ["summary", "analytics", "revenue", "orders", "traffic"];
@@ -470,14 +471,16 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     let unsubscribe = () => {};
 
     async function startDashboardRealtime() {
-      unsubscribe = await subscribeAdminOrderChanges(() => {
+      unsubscribe = await subscribeAdminOrderChanges((change) => {
         if (!alive) return;
+        const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
+        if (!realtimeEventMatchesDateRange(change, dateRange)) return;
         if (refreshTimer) window.clearTimeout(refreshTimer);
         refreshTimer = window.setTimeout(() => {
           refreshTimer = null;
           clearOrdersSnapshotCache();
           setDashboardRefreshVersion((version) => version + 1);
-        }, ADMIN_ORDER_REFRESH_DEBOUNCE_MS);
+        }, ADMIN_DASHBOARD_REALTIME_REFRESH_DEBOUNCE_MS);
       });
     }
 
@@ -491,7 +494,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       }
       unsubscribe?.();
     };
-  }, [section]);
+  }, [dashboardDateFrom, dashboardDateTo, section]);
 
   useEffect(() => {
     let disposed = false;

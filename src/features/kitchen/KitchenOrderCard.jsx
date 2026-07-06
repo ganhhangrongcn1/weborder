@@ -700,88 +700,6 @@ function ToppingCheck({ checked, label, onClick }) {
   );
 }
 
-function MonthlyGiftCard({ claiming = false, gift, onClaim }) {
-  if (!gift?.eligible) return null;
-
-  const claimed = Boolean(gift.claimed);
-
-  if (claimed) {
-    return (
-      <span
-        style={{
-          border: "1px solid #86efac",
-          background: "#f0fdf4",
-          color: "#166534",
-          borderRadius: 999,
-          padding: "4px 8px",
-          display: "inline-flex",
-          alignItems: "center",
-          justifySelf: "end",
-          width: "fit-content",
-          maxWidth: "100%",
-          fontSize: 11,
-          fontWeight: 900,
-          lineHeight: 1.1,
-          whiteSpace: "nowrap"
-        }}
-      >
-        Đã tặng quà
-      </span>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        border: "1px solid #fbbf24",
-        background: "#fffbeb",
-        color: "#92400e",
-        borderRadius: 9,
-        padding: "5px 8px",
-        display: "inline-grid",
-        gridTemplateColumns: "minmax(0, 1fr) auto",
-        gap: 7,
-        alignItems: "center",
-        width: "fit-content",
-        maxWidth: "100%",
-        justifySelf: "start"
-      }}
-    >
-      <div style={{ minWidth: 0, display: "grid", gap: 1 }}>
-        <strong style={{ fontSize: 12, fontWeight: 900, lineHeight: 1.15 }}>
-          Đủ quà
-        </strong>
-        <span style={{ fontSize: 10, fontWeight: 800, color: "#a16207", lineHeight: 1.15 }}>
-          Tháng này: {gift.monthlyOrderCount || 0} đơn
-        </span>
-      </div>
-
-      <button
-        type="button"
-        disabled={claiming}
-        onClick={(event) => {
-          event.stopPropagation();
-          onClaim?.();
-        }}
-        style={{
-          border: "1px solid #f59e0b",
-          background: "#f59e0b",
-          color: "#ffffff",
-          borderRadius: 8,
-          padding: "6px 8px",
-          fontSize: 11,
-          fontWeight: 900,
-          cursor: claiming ? "not-allowed" : "pointer",
-          opacity: claiming ? 0.72 : 1,
-          whiteSpace: "nowrap"
-        }}
-      >
-        {claiming ? "Đang lưu..." : "Đã tặng"}
-      </button>
-    </div>
-  );
-}
-
 export default function KitchenOrderCard({
   compact = false,
   tabletCompact = false,
@@ -794,9 +712,7 @@ export default function KitchenOrderCard({
   order,
   onMarkDone,
   onPrintBill,
-  onClaimGift,
   onToggleItemDone,
-  claimingGift = false,
   updating = false,
   printingBill = false,
   printBillState = {},
@@ -860,7 +776,6 @@ export default function KitchenOrderCard({
         opacity: 0.9
       }
     : getPrintButtonConfig(printBillState, printingBill);
-  const monthlyGift = order.monthlyGift || null;
   const driverName = String(order.driverName || order.rawData?.driver_name || order.raw?.raw_data?.driver_name || "").trim();
   const driverPhone = String(order.driverPhone || order.rawData?.driver_phone || order.raw?.raw_data?.driver_phone || "").trim();
   const deliveryTime = formatDeliveryTime(order.deliveryTime || order.rawData?.delivery_time || order.raw?.raw_data?.delivery_time);
@@ -1291,11 +1206,6 @@ export default function KitchenOrderCard({
                 : "Chờ bếp xác nhận hủy"
               : canMarkDone ? order.displayStatus : closedOrderLabel}
           </span>
-          <MonthlyGiftCard
-            claiming={claimingGift}
-            gift={isCancelled || isPreorder ? null : monthlyGift}
-            onClaim={() => onClaimGift?.(order)}
-          />
         </div>
       </div>
 

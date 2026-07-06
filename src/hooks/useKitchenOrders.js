@@ -7,10 +7,6 @@ import {
   updateKitchenOrderItemStatus
 } from "../services/kitchenOrderService.js";
 import {
-  claimMonthlyCustomerGift,
-  enrichKitchenOrdersWithMonthlyGifts
-} from "../services/kitchenCustomerRewardService.js";
-import {
   isKitchenOrderScheduledForLater,
   sortKitchenDoneOrders,
   sortKitchenOrdersForBoard
@@ -22,11 +18,10 @@ import {
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
 const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
-const KITCHEN_BACKGROUND_REFRESH_MS = 15000;
+const KITCHEN_BACKGROUND_REFRESH_MS = 60000;
 const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
 const DONE_ORDER_PAGE_SIZE = 20;
-const CLAIM_GIFT_TIMEOUT_MS = 12000;
 const KITCHEN_SCHEDULE_STATUS_TICK_MS = 30000;
 const KITCHEN_SOURCE_WEBSITE = "website";
 const KITCHEN_SOURCE_PARTNER = "partner";
@@ -87,6 +82,11 @@ function buildKitchenRealtimeStatus(status = "idle", error = null) {
     tone: "muted",
     updatedAt: new Date().toISOString()
   };
+}
+
+function shouldUseKitchenPollingFallback(realtimeStatus = {}) {
+  const status = String(realtimeStatus?.status || "").trim().toLowerCase();
+  return !["connected", "connecting"].includes(status);
 }
 
 function getTodayDateKey() {
@@ -607,24 +607,6 @@ function patchItemStatus(targetOrder = {}, targetItem = {}, nextStatus = "pendin
   };
 }
 
-function patchMonthlyGiftClaim(targetOrder = {}, gift = {}) {
-  return (order = {}) => {
-    if (!isSameKitchenOrder(order, targetOrder)) return order;
-
-    return {
-      ...order,
-      monthlyGift: {
-        ...(order.monthlyGift || {}),
-        claimed: true,
-        canClaim: false,
-        claimedAt: gift?.claimed_at || new Date().toISOString(),
-        claimedOrderCode: gift?.claimed_order_code || order.displayOrderCode || order.orderCode || "",
-        claimedByName: gift?.claimed_by_name || ""
-      }
-    };
-  };
-}
-
 export default function useKitchenOrders(options = null) {
   const enabled = options?.enabled !== false;
   const [orders, setOrders] = useState([]);
@@ -643,7 +625,6 @@ export default function useKitchenOrders(options = null) {
   const [requestAudit, setRequestAudit] = useState(() => getKitchenRequestAuditSnapshot());
   const [updatingOrderId, setUpdatingOrderId] = useState("");
   const [updatingItemKey, setUpdatingItemKey] = useState("");
-  const [claimingGiftOrderId, setClaimingGiftOrderId] = useState("");
   const loadingOrdersRef = useRef(false);
   const realtimeReloadTimerRef = useRef(null);
   const recentlyClosedOrderKeysRef = useRef(new Map());
@@ -722,17 +703,12 @@ export default function useKitchenOrders(options = null) {
         ...dateRange,
         ...(partialSourceType ? { sources: [partialSourceType] } : {})
       });
-      const giftResult = await enrichKitchenOrdersWithMonthlyGifts(result.orders || [], {
-        dateKey: dateFilter,
-        dateFrom: dateRange.dateFrom,
-        maxGiftOrders: 30
-      });
-      const hasReadError = Boolean(result.errors?.length || giftResult.error);
+      const hasReadError = Boolean(result.errors?.length);
 
       setOrders((currentOrders) => {
         const nextOrders = partialSourceType
-          ? mergeOrdersBySource(currentOrders, giftResult.orders || result.orders || [], partialSourceType)
-          : giftResult.orders || result.orders || [];
+          ? mergeOrdersBySource(currentOrders, result.orders || [], partialSourceType)
+          : result.orders || [];
         return stabilizeRecentlyClosedOrders(nextOrders, currentOrders);
       });
       setError(
@@ -782,11 +758,12 @@ export default function useKitchenOrders(options = null) {
     if (!enabled || typeof window === "undefined") return undefined;
     const timer = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (!shouldUseKitchenPollingFallback(realtimeStatus)) return;
       loadOrders({ silent: true });
     }, KITCHEN_BACKGROUND_REFRESH_MS);
 
     return () => window.clearInterval(timer);
-  }, [enabled, loadOrders]);
+  }, [enabled, loadOrders, realtimeStatus]);
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return undefined;
@@ -995,54 +972,6 @@ export default function useKitchenOrders(options = null) {
     }
   }, [orders, updatingItemKey]);
 
-  const claimGift = useCallback(async (order) => {
-    const orderId = String(order?.id || "").trim();
-    if (!orderId || claimingGiftOrderId) return;
-
-    const previousOrders = orders;
-    setClaimingGiftOrderId(orderId);
-    setError("");
-
-    try {
-      const claimRequest = claimMonthlyCustomerGift(order, {
-        dateKey: dateFilter,
-        profileId: options?.profileId || "",
-        profileName: options?.profileName || ""
-      });
-      const timeoutRequest = new Promise((_, reject) => {
-        window.setTimeout(() => {
-          reject(new Error("Xác nhận tặng quà quá thời gian, vui lòng thử lại."));
-        }, CLAIM_GIFT_TIMEOUT_MS);
-      });
-      const result = await Promise.race([claimRequest, timeoutRequest]);
-
-      if (!result.ok) {
-        setError(result.message || "Khong xac nhan duoc qua khach quen.");
-        return;
-      }
-
-      if (!result.gift && !result.alreadyClaimed) {
-        setError("Khong xac nhan duoc ban ghi tang qua tren he thong. Vui long thu lai.");
-        return;
-      }
-
-      if (result.gift) {
-        setOrders((currentOrders) => currentOrders.map(patchMonthlyGiftClaim(order, result.gift || {})));
-      }
-
-      await loadOrders({ silent: true, force: true });
-      if (result.alreadyClaimed) {
-        setError(result.message || "Khach nay da duoc tang qua trong thang.");
-      }
-    } catch (err) {
-      setOrders(previousOrders);
-      setError(err?.message || "Khong xac nhan duoc qua khach quen.");
-    } finally {
-      setRequestAudit(getKitchenRequestAuditSnapshot());
-      setClaimingGiftOrderId("");
-    }
-  }, [claimingGiftOrderId, dateFilter, options, orders, loadOrders]);
-
   const reload = useCallback(async () => {
     reconnectRealtime();
     await loadOrders({ silent: true, force: true });
@@ -1070,11 +999,9 @@ export default function useKitchenOrders(options = null) {
     resetRequestAudit,
     updatingOrderId,
     updatingItemKey,
-    claimingGiftOrderId,
     loadMoreDoneOrders,
     markDone,
     toggleItemDone,
-    claimGift,
     reload
   };
 }
