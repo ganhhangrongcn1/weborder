@@ -202,7 +202,7 @@
 }
 
 .floating-cart-bar:active {
-  transform: translateX(-50%) scale(0.992);
+  transform: scale(0.992);
 }
 
 .customer-native-card {

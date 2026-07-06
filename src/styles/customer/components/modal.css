@@ -308,6 +308,7 @@
   box-shadow: 0 16px 38px rgba(58, 31, 20, 0.16);
   animation: toast-in 0.22s ease-out;
   backdrop-filter: blur(12px);
+  pointer-events: none;
 }
 
 .toast strong {
