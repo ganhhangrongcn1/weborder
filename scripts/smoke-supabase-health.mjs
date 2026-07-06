@@ -15,27 +15,61 @@ const client = createClient(url, anonKey, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
 
-async function checkTable(table) {
+async function checkReadableTable(table) {
   const startedAt = Date.now();
-  const { error } = await client.from(table).select("*", { head: true, count: "exact" }).limit(1);
-  const durationMs = Date.now() - startedAt;
+  const { error } = await client
+    .from(table)
+    .select("*", { head: true, count: "exact" })
+    .limit(1);
   return {
-    table,
+    name: table,
     ok: !error,
-    durationMs,
+    durationMs: Date.now() - startedAt,
     error: error ? `${error.code || ""} ${error.message || error}`.trim() : ""
   };
 }
 
-const tables = ["profiles", "orders", "products", "app_configs"];
-const results = await Promise.all(tables.map(checkTable));
+async function checkProfilesProtected() {
+  const startedAt = Date.now();
+  const { error } = await client
+    .from("profiles")
+    .select("*", { head: true, count: "exact" })
+    .limit(1);
+  return {
+    name: "profiles protected",
+    ok: Boolean(error),
+    durationMs: Date.now() - startedAt,
+    error: error ? "" : "anonymous profiles select unexpectedly allowed"
+  };
+}
+
+async function checkLoginHintRpc() {
+  const startedAt = Date.now();
+  const { error } = await client.rpc("get_customer_profile_login_hint", {
+    p_phone: "9000000000"
+  });
+  return {
+    name: "profile login hint RPC",
+    ok: !error,
+    durationMs: Date.now() - startedAt,
+    error: error ? `${error.code || ""} ${error.message || error}`.trim() : ""
+  };
+}
+
+const results = await Promise.all([
+  checkProfilesProtected(),
+  checkLoginHintRpc(),
+  checkReadableTable("orders"),
+  checkReadableTable("products"),
+  checkReadableTable("app_configs")
+]);
 const failed = results.filter((item) => !item.ok);
 
 results.forEach((item) => {
   if (item.ok) {
-    console.log(`[OK] ${item.table} (${item.durationMs}ms)`);
+    console.log(`[OK] ${item.name} (${item.durationMs}ms)`);
   } else {
-    console.error(`[FAIL] ${item.table} (${item.durationMs}ms): ${item.error}`);
+    console.error(`[FAIL] ${item.name} (${item.durationMs}ms): ${item.error}`);
   }
 });
 
@@ -43,4 +77,4 @@ if (failed.length) {
   process.exit(1);
 }
 
-console.log("Supabase health smoke test passed.");
+console.log("Supabase health/security smoke test passed.");

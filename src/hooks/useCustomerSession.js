@@ -101,10 +101,6 @@ export default function useCustomerSession({
             await syncAuthProfileToCustomerRow();
           } catch {
           }
-          try {
-            await userStorage?.hydrateFromRemote?.();
-          } catch {
-          }
           const restoredUser = await customerRepository.getUserByPhoneAsync(authSnapshot.phone);
           const hydratedUser = restoredUser
             ? { ...restoredUser }
@@ -133,10 +129,6 @@ export default function useCustomerSession({
 
       const pointer = customerRepository.getSessionPointer?.() || {};
       if (pointer?.phone) {
-        try {
-          await userStorage?.hydrateFromRemote?.();
-        } catch {
-        }
         const restoredUser = await customerRepository.getUserByPhoneAsync(pointer.phone);
         const hydratedUser = restoredUser || (isSupabaseSource ? buildRestoredSessionUser(defaultUserDemo, pointer.phone) : null);
         if (!disposed && hydratedUser) {
@@ -197,16 +189,14 @@ export default function useCustomerSession({
       if (!isSessionRestoring) setIsSessionBootstrapping(false);
       return;
     }
+    if (isSessionRestoring) return;
     let disposed = false;
     setIsSessionBootstrapping(true);
 
     async function hydrateAccountDataOnce() {
       try {
-        if (userStorage?.hydrateFromRemote) {
-          await userStorage.hydrateFromRemote();
-        }
-
-        const [remoteOrders, remoteAddresses] = await Promise.all([
+        const [remoteUser, remoteOrders, remoteAddresses] = await Promise.all([
+          customerRepository.getUserByPhoneAsync(currentPhone),
           orderStorage?.getByPhoneAsync
             ? withTimeout(
                 orderStorage.getByPhoneAsync(currentPhone, { limit: CUSTOMER_TRACKING_INITIAL_LIMIT }),
@@ -223,7 +213,7 @@ export default function useCustomerSession({
 
         if (disposed) return;
 
-        const latestUser = userStorage.findByPhone(currentPhone);
+        const latestUser = remoteUser || userStorage.findByPhone(currentPhone);
         if (latestUser) setDemoUserState(latestUser);
         if (Array.isArray(remoteOrders)) setDemoOrdersState(remoteOrders);
         if (remoteLoyalty) setDemoLoyaltyState(remoteLoyalty);

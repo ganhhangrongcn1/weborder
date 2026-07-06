@@ -15,12 +15,37 @@ let suppressRemoteCustomerWriteUntil = 0;
 const REMOTE_USERS_CACHE_TTL_MS = 8000;
 let usersRemoteCache = { value: null, cachedAt: 0 };
 let usersReadInFlight = null;
+const userByPhoneRemoteCache = new Map();
+const userByPhoneReadInFlight = new Map();
 let registeredUsersRemoteCache = { value: null, cachedAt: 0 };
 let registeredUsersReadInFlight = null;
 
 function invalidateRegisteredUsersCache() {
   registeredUsersRemoteCache = { value: null, cachedAt: 0 };
   registeredUsersReadInFlight = null;
+}
+
+function cacheUserByPhone(phone, user) {
+  const key = getCustomerKey(phone);
+  if (!key) return user || null;
+  if (!user) {
+    userByPhoneRemoteCache.delete(key);
+    return null;
+  }
+  userByPhoneRemoteCache.set(key, {
+    value: user,
+    cachedAt: Date.now()
+  });
+  if (usersRemoteCache.value) {
+    usersRemoteCache = {
+      value: normalizeUsersMap({
+        ...usersRemoteCache.value,
+        [key]: user
+      }),
+      cachedAt: usersRemoteCache.cachedAt
+    };
+  }
+  return user;
 }
 
 function getBrowserLocalStorage() {
@@ -482,41 +507,50 @@ export const customerRepository = {
     }
     return saved;
   },
-  async getUserByPhoneAsync(phone) {
+  async getUserByPhoneAsync(phone, options = {}) {
     const key = getCustomerKey(phone);
     if (!key) return null;
-    try {
-      const remoteUser = await coreSupabaseRepository.readProfileForPhoneFromTable(key);
-      if (remoteUser) {
-        const allowLocalFallback = shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN);
-        const localUsers = allowLocalFallback
-          ? normalizeUsersMap(await repository.getAsync(STORAGE_KEYS.users, {}))
-          : {};
-        const nextUsers = normalizeUsersMap({
-          ...localUsers,
-          [key]: remoteUser
-        });
-        if (allowLocalFallback) {
-          await repository.setAsync(STORAGE_KEYS.users, nextUsers);
-        }
-        if (allowLocalFallback || usersRemoteCache.value) {
-          usersRemoteCache = {
-            value: normalizeUsersMap({
-              ...(usersRemoteCache.value || {}),
-              ...nextUsers
-            }),
-            cachedAt: Date.now()
-          };
-        }
-        return remoteUser;
-      }
-      if (!shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN)) return null;
-    } catch (error) {
-      logSupabaseError("read profile by phone", error, { phone: key });
+    const forceRefresh = options?.force === true;
+    const cached = userByPhoneRemoteCache.get(key);
+    if (!forceRefresh && cached?.value && Date.now() - cached.cachedAt < REMOTE_USERS_CACHE_TTL_MS) {
+      return cached.value;
+    }
+    if (!forceRefresh && userByPhoneReadInFlight.has(key)) {
+      return userByPhoneReadInFlight.get(key);
     }
 
-    const users = await this.getUsersAsync();
-    return users[key] || null;
+    const request = (async () => {
+      try {
+        const remoteUser = await coreSupabaseRepository.readProfileForPhoneFromTable(key);
+        if (remoteUser) {
+          const allowLocalFallback = shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN);
+          if (allowLocalFallback) {
+            const localUsers = normalizeUsersMap(await repository.getAsync(STORAGE_KEYS.users, {}));
+            await repository.setAsync(
+              STORAGE_KEYS.users,
+              normalizeUsersMap({
+                ...localUsers,
+                [key]: remoteUser
+              })
+            );
+          }
+          return cacheUserByPhone(key, remoteUser);
+        }
+        if (!shouldAllowLocalFallbackForDomain(CUSTOMER_PROFILE_DOMAIN)) return null;
+      } catch (error) {
+        logSupabaseError("read profile by phone", error, { phone: key });
+      }
+
+      const users = await this.getUsersAsync();
+      return cacheUserByPhone(key, users[key] || null);
+    })();
+
+    userByPhoneReadInFlight.set(key, request);
+    try {
+      return await request;
+    } finally {
+      userByPhoneReadInFlight.delete(key);
+    }
   },
   async saveCurrentPhoneAsync(phone) {
     const normalizedPhone = getCustomerKey(phone);

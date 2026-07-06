@@ -6,7 +6,6 @@ import {
   syncScopedSessionToRuntime
 } from "./supabase/supabaseRuntimeClient.js";
 
-const PROFILE_TABLE = "profiles";
 const PHONE_AUTH_EMAIL_DOMAIN = "@phone.ghr.vn";
 
 function toPhoneAuthEmail(phone) {
@@ -42,12 +41,12 @@ async function resolveAuthEmailForPhone(client, phone, preferredEmail = "") {
 
   try {
     const { data, error } = await client
-      .from(PROFILE_TABLE)
-      .select("email")
-      .eq("phone", normalizedPhone)
-      .maybeSingle();
+      .rpc("get_customer_profile_login_hint", {
+        p_phone: normalizedPhone
+      });
     if (!error) {
-      const profileEmail = normalizeEmail(data?.email || "");
+      const row = Array.isArray(data) ? data[0] : data;
+      const profileEmail = normalizeEmail(row?.email || "");
       if (isValidEmail(profileEmail)) return profileEmail;
     }
   } catch {
@@ -225,7 +224,7 @@ export async function updateRecoveryPasswordAuth({ password }) {
   }
 }
 
-export async function syncCustomerProfileToSupabase({ phone, name = "", email = "", avatarUrl = "", authUserId = "" }) {
+export async function syncCustomerProfileToSupabase({ phone, name = "", email: _email = "", avatarUrl = "", authUserId = "" }) {
   const client = await getClientReady();
   const normalizedPhone = getCustomerKey(phone);
   if (!client) return { ok: false, message: "Supabase chưa sẵn sàng." };
@@ -237,24 +236,15 @@ export async function syncCustomerProfileToSupabase({ phone, name = "", email = 
     const authUser = authData?.user || null;
     const safeName = String(name || "").trim();
     const safeAuthUserId = String(authUserId || authUser?.id || "").trim();
-    const safeEmail = normalizeEmail(email || authUser?.email || "");
     const safeAvatarUrl = String(avatarUrl || "").trim();
-    const profileRow = {
-      phone: normalizedPhone,
-      role: "customer",
-      status: "active",
-      registered: true,
-      updated_at: new Date().toISOString()
-    };
-    if (safeAuthUserId) profileRow.auth_user_id = safeAuthUserId;
-    if (safeName) profileRow.name = safeName;
-    if (safeEmail) profileRow.email = safeEmail;
-    if (safeAvatarUrl) profileRow.avatar_url = safeAvatarUrl;
-
-    const { error: profileError } = await client.from(PROFILE_TABLE).upsert(
-      [profileRow],
-      { onConflict: "phone" }
-    );
+    if (!safeAuthUserId) {
+      return { ok: false, message: "Phiên đăng nhập chưa có mã người dùng hợp lệ." };
+    }
+    const { error: profileError } = await client.rpc("sync_own_customer_profile", {
+      p_phone: normalizedPhone,
+      p_name: safeName || null,
+      p_avatar_url: safeAvatarUrl || null
+    });
     if (profileError) {
       console.error("[syncCustomerProfileToSupabase] profile upsert failed", profileError);
       return { ok: false, message: normalizeAuthError(profileError, "Không thể đồng bộ hồ sơ.") };
@@ -309,19 +299,9 @@ export async function syncAuthProfileToCustomerRow() {
     if (!phone) return { ok: false, message: "Auth user chưa có số điện thoại hợp lệ." };
     const name = String(meta.full_name || meta.display_name || meta.name || "").trim();
     const email = String(user.email || "").trim();
-    const { data: existingProfile, error: existingProfileError } = await client
-      .from(PROFILE_TABLE)
-      .select("phone,name,auth_user_id")
-      .eq("phone", phone)
-      .maybeSingle();
-    if (existingProfileError) {
-      return { ok: false, message: normalizeAuthError(existingProfileError, "Không đọc được hồ sơ profile.") };
-    }
-    const existingName = String(existingProfile?.name || "").trim();
-    const shouldFillName = !existingName && !!name;
     return syncCustomerProfileToSupabase({
       phone,
-      name: shouldFillName ? name : existingName,
+      name,
       email,
       authUserId: user.id
     });

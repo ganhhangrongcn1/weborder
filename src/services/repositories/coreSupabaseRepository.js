@@ -27,7 +27,6 @@ const CUSTOMER_PROFILE_COLUMNS = [
   "name",
   "email",
   "avatar_url",
-  "password_demo",
   "registered",
   "total_orders",
   "total_spent",
@@ -689,41 +688,6 @@ function fromCustomerRow(row = {}) {
   };
 }
 
-function buildCustomerStubProfileRow(phone, profile = {}, existingProfile = null) {
-  const customerPhone = normalizePhone(phone || profile?.phone);
-  if (!customerPhone) return null;
-  const safeName = String(
-    profile?.name ||
-      profile?.customerName ||
-      profile?.customer_name ||
-      ""
-  ).trim();
-  const existingRegistered = Boolean(existingProfile?.registered);
-  const existingName = String(existingProfile?.name || "").trim();
-  const metadata = {
-    ...(existingProfile?.metadata && typeof existingProfile.metadata === "object" ? existingProfile.metadata : {}),
-    ...(profile?.metadata && typeof profile.metadata === "object" ? profile.metadata : {}),
-    source:
-      profile?.metadata?.source ||
-      profile?.source ||
-      existingProfile?.metadata?.source ||
-      "app",
-    customer_stub: true
-  };
-
-  const row = {
-    phone: customerPhone,
-    role: DEFAULT_PROFILE_ROLE,
-    status: DEFAULT_PROFILE_STATUS,
-    registered: existingRegistered,
-    metadata
-  };
-
-  const nextName = existingName || safeName;
-  if (nextName) row.name = nextName;
-  return row;
-}
-
 function selectProfileRows(client, columns = "*") {
   return client.from(PROFILE_TABLE).select(columns).eq("role", DEFAULT_PROFILE_ROLE);
 }
@@ -750,46 +714,6 @@ async function upsertProfileRows(client, rows, options = {}) {
   }
 
   return profileResult;
-}
-
-async function ensureProfileExistsByPhone(client, phone, profile = {}) {
-  const key = normalizePhone(phone);
-  if (!key) return null;
-  const { data: existingProfile, error: existingProfileError } = await client
-    .from(PROFILE_TABLE)
-    .select("phone,name,registered,metadata")
-    .eq("phone", key)
-    .maybeSingle();
-  if (existingProfileError) throw existingProfileError;
-  const row = buildCustomerStubProfileRow(key, profile, existingProfile || null);
-  if (!row) return null;
-  const { error } = await upsertProfileRows(client, row, { onConflict: "phone" });
-  if (error) throw error;
-  return row;
-}
-
-async function ensureProfilesExistByPhones(client, phones = [], profileByPhone = {}) {
-  const normalizedPhones = Array.from(new Set((Array.isArray(phones) ? phones : []).map((phone) => normalizePhone(phone)).filter(Boolean)));
-  if (!normalizedPhones.length) return [];
-
-  const { data: existingCustomers, error: existingCustomersError } = await client
-    .from(PROFILE_TABLE)
-    .select("phone,name,registered,metadata")
-    .in("phone", normalizedPhones);
-  if (existingCustomersError) throw existingCustomersError;
-
-  const existingCustomerByPhone = new Map((existingCustomers || []).map((item) => [normalizePhone(item.phone), item]));
-  const rows = normalizedPhones
-    .filter((phone) => !existingCustomerByPhone.has(phone))
-    .map((phone) => buildCustomerStubProfileRow(phone, profileByPhone?.[phone] || {}, null))
-    .filter(Boolean);
-
-  if (rows.length) {
-    const { error: customerInsertError } = await upsertProfileRows(client, rows);
-    if (customerInsertError) throw customerInsertError;
-  }
-
-  return rows;
 }
 
 async function readProfilesMapFromTable() {
@@ -847,8 +771,18 @@ async function readProfileForPhoneFromTable(phone = "") {
   const { data, error } = await selectProfileRows(client, CUSTOMER_PROFILE_COLUMNS)
     .eq("phone", key)
     .maybeSingle();
-  if (error) throw error;
-  return data ? fromCustomerRow(data) : null;
+  if (!error && data) return fromCustomerRow(data);
+
+  const { data: lookupData, error: lookupError } = await client.rpc(
+    "get_customer_profile_login_hint",
+    { p_phone: key }
+  );
+  if (lookupError) {
+    if (error) throw error;
+    throw lookupError;
+  }
+  const lookupRow = Array.isArray(lookupData) ? lookupData[0] : lookupData;
+  return lookupRow ? fromCustomerRow(lookupRow) : null;
 }
 
 async function readCustomerProfileCountFromTable() {
@@ -902,7 +836,11 @@ async function writeProfileRowToTable(user = {}) {
   if (!client) return user;
   const row = toCustomerRow(user);
   if (!row) return user;
-  const { error } = await upsertProfileRows(client, [row], { onConflict: "phone" });
+  const { error } = await client.rpc("sync_own_customer_profile", {
+    p_phone: row.phone,
+    p_name: row.name || null,
+    p_avatar_url: row.avatar_url || null
+  });
   if (error) throw error;
   return user;
 }
@@ -968,8 +906,6 @@ async function writeAddressesByPhoneToTable(addressesByPhone = {}) {
   if (!client) return addressesByPhone;
   const phones = Object.keys(addressesByPhone || {}).map((item) => normalizePhone(item)).filter(Boolean);
   if (!phones.length) return addressesByPhone;
-
-  await ensureProfilesExistByPhones(client, phones);
 
   const { error: deleteError } = await client.from("customer_addresses").delete().in("customer_phone", phones);
   if (deleteError) throw deleteError;
@@ -1355,27 +1291,6 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
     if (!orderList.length) return ordersByPhone;
     const mapped = orderList.map(toOrderRows).filter(Boolean);
     const orderRows = mapped.map((item) => item.orderRow);
-    const customerRowsRaw = Array.from(
-      new Map(
-        orderRows.filter((row) => row.customer_phone).map((row) => [
-          row.customer_phone,
-          {
-            phone: row.customer_phone,
-            name: row.customer_name
-          }
-        ])
-      ).values()
-    );
-    if (customerRowsRaw.length) {
-      await ensureProfilesExistByPhones(
-        client,
-        customerRowsRaw.map((item) => item.phone),
-        customerRowsRaw.reduce((map, item) => {
-          map[normalizePhone(item.phone)] = item;
-          return map;
-        }, {})
-      );
-    }
 
     for (const row of orderRows) {
       await upsertOrderRowWithSchemaFallback(client, row);
@@ -1397,14 +1312,6 @@ async function upsertOrderToTable(order = {}) {
   const mapped = toOrderRows(normalizedOrder);
   if (!mapped) return order;
   const { orderRow } = mapped;
-
-  const customerPhone = normalizePhone(orderRow.customer_phone);
-  if (customerPhone) {
-    await ensureProfileExistsByPhone(client, customerPhone, {
-      customerName: orderRow.customer_name,
-      source: "orders"
-    });
-  }
 
   await upsertOrderRowWithSchemaFallback(client, orderRow);
 

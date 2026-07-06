@@ -16,6 +16,7 @@
         "smoke:supabase-core": "node scripts/smoke-supabase-core.mjs",
         "smoke:supabase-catalog": "node scripts/smoke-supabase-catalog.mjs",
         "smoke:supabase-health": "node scripts/smoke-supabase-health.mjs",
+        "smoke:customer-profile": "node scripts/smoke-customer-profile-access.mjs",
         "smoke:kitchen": "node scripts/smoke-kitchen-order-items.mjs"
     },
     "dependencies": {

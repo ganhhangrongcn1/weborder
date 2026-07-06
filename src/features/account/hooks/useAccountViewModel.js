@@ -83,10 +83,10 @@ async function refreshCustomerUserFromRemote(phone) {
   const key = getCustomerKey(phone);
   if (!key) return null;
   try {
-    await userStorage.hydrateFromRemote?.();
+    return await customerRepository.getUserByPhoneAsync(key, { force: true });
   } catch {
+    return userStorage.findByPhone(key) || null;
   }
-  return userStorage.findByPhone(key) || null;
 }
 
 async function syncRegisteredCustomerProfile({
@@ -266,19 +266,14 @@ export default function useAccountViewModel({
     const key = getCustomerKey(phone);
     if (!key) return fallbackUser;
     try {
-      await userStorage.hydrateFromRemote?.();
-    } catch {
-    }
-    const latest = userStorage.findByPhone(key);
-    if (latest) return latest;
-    try {
-      const remote = await customerRepository.getUserByPhoneAsync?.(key);
+      const remote = await customerRepository.getUserByPhoneAsync(key, { force: true });
       if (remote) {
-        userStorage.upsertUser(remote);
         return remote;
       }
     } catch {
     }
+    const latest = userStorage.findByPhone(key);
+    if (latest) return latest;
     return fallbackUser;
   }
 

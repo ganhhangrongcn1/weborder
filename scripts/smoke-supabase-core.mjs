@@ -15,95 +15,103 @@ const supabase = createClient(url, anonKey, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
 
-const probePhone = `9${Date.now().toString().slice(-9)}`;
 const probeOrderId = `SMOKE-${Date.now()}`;
 
 async function assertSelect(table) {
-  const { error } = await supabase.from(table).select("*", { head: true, count: "exact" });
+  const { error } = await supabase
+    .from(table)
+    .select("*", { head: true, count: "exact" });
   if (error) throw new Error(`[${table}] select failed: ${error.message}`);
 }
 
-async function assertLoyaltyAnonDenied(table) {
-  const { error: selectError } = await supabase
+async function assertAnonymousTableDenied(table) {
+  const { error } = await supabase
     .from(table)
     .select("*", { head: true, count: "exact" });
-  if (!selectError) {
-    throw new Error(`[${table}] anon select unexpectedly allowed`);
+  if (!error) {
+    throw new Error(`[${table}] anonymous select unexpectedly allowed`);
   }
+}
+
+async function assertLoyaltyAnonymousDenied(table) {
+  await assertAnonymousTableDenied(table);
 
   const deniedInsertRow = table === "loyalty_ledger"
     ? {
         id: `SMOKE-DENIED-${Date.now()}`,
-        customer_phone: probePhone,
+        customer_phone: "9000000000",
         entry_type: "OTHER",
         points: 1,
         amount: 0,
         title: "Smoke denied"
       }
-    : { customer_phone: probePhone, total_points: 1 };
-  const { error: insertError } = await supabase
-    .from(table)
-    .insert(deniedInsertRow);
-  if (!insertError) {
-    throw new Error(`[${table}] anon insert unexpectedly allowed`);
+    : { customer_phone: "9000000000", total_points: 1 };
+  const { error } = await supabase.from(table).insert(deniedInsertRow);
+  if (!error) {
+    throw new Error(`[${table}] anonymous insert unexpectedly allowed`);
   }
 }
 
-async function run() {
-  await assertSelect("profiles");
-  await assertSelect("customer_addresses");
-  await assertSelect("orders");
-  await assertSelect("order_items");
-  await assertLoyaltyAnonDenied("loyalty_accounts");
-  await assertLoyaltyAnonDenied("loyalty_ledger");
+async function assertLoginHintRpcAvailable() {
+  const { error } = await supabase.rpc("get_customer_profile_login_hint", {
+    p_phone: "9000000000"
+  });
+  if (error) {
+    throw new Error(`[get_customer_profile_login_hint] failed: ${error.message}`);
+  }
+}
 
-  const profileRow = {
-    phone: probePhone,
-    name: "Smoke Test",
-    registered: true,
-    role: "customer",
-    status: "active"
-  };
-  const { error: profileError } = await supabase.from("profiles").upsert(profileRow, { onConflict: "phone" });
-  if (profileError) throw new Error(`[profiles] upsert failed: ${profileError.message}`);
+async function cleanupProbeOrder() {
+  const { error: itemError } = await supabase
+    .from("order_items")
+    .delete()
+    .eq("order_id", probeOrderId);
+  if (itemError) throw new Error(`[order_items] cleanup failed: ${itemError.message}`);
 
-  const addressRow = {
-    customer_phone: probePhone,
-    label: "Smoke Address",
-    receiver_name: "Smoke Test",
-    phone: probePhone,
-    address: "Smoke Address",
-    is_default: true
-  };
-  const { error: addressError } = await supabase.from("customer_addresses").insert(addressRow);
-  if (addressError) throw new Error(`[customer_addresses] insert failed: ${addressError.message}`);
+  const { error: orderError } = await supabase
+    .from("orders")
+    .delete()
+    .eq("id", probeOrderId);
+  if (orderError) throw new Error(`[orders] cleanup failed: ${orderError.message}`);
+}
 
-  const orderRow = {
+async function assertOrderWriteFlow() {
+  const { error: orderError } = await supabase.from("orders").insert({
     id: probeOrderId,
     order_code: probeOrderId,
-    customer_phone: probePhone,
+    customer_phone: null,
     customer_name: "Smoke Test",
     total_amount: 10000
-  };
-  const { error: orderError } = await supabase.from("orders").upsert(orderRow, { onConflict: "id" });
-  if (orderError) throw new Error(`[orders] upsert failed: ${orderError.message}`);
+  });
+  if (orderError) throw new Error(`[orders] insert failed: ${orderError.message}`);
 
-  const itemRow = {
+  const { error: itemError } = await supabase.from("order_items").insert({
     order_id: probeOrderId,
     product_id: "smoke-product",
     product_name: "Smoke Product",
     quantity: 1,
     unit_price: 10000,
     line_total: 10000
-  };
-  const { error: itemError } = await supabase.from("order_items").insert(itemRow);
+  });
   if (itemError) throw new Error(`[order_items] insert failed: ${itemError.message}`);
+}
 
-  await supabase.from("order_items").delete().eq("order_id", probeOrderId);
-  await supabase.from("orders").delete().eq("id", probeOrderId);
-  await supabase.from("customer_addresses").delete().eq("customer_phone", probePhone);
+async function run() {
+  await assertSelect("customer_addresses");
+  await assertSelect("orders");
+  await assertSelect("order_items");
+  await assertAnonymousTableDenied("profiles");
+  await assertLoyaltyAnonymousDenied("loyalty_accounts");
+  await assertLoyaltyAnonymousDenied("loyalty_ledger");
+  await assertLoginHintRpcAvailable();
 
-  console.log("Supabase core smoke test passed.");
+  try {
+    await assertOrderWriteFlow();
+  } finally {
+    await cleanupProbeOrder();
+  }
+
+  console.log("Supabase core order/security smoke test passed.");
 }
 
 run().catch((error) => {
