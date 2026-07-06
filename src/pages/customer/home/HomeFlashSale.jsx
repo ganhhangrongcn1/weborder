@@ -66,7 +66,7 @@ function FlashSaleSheet({ products, onClose, onBuy, secondsLeft, endAfter, flash
       <div className="home2026-flash-sheet-head">
         <div>
           <p>{endAfter}</p>
-          <h2>{flashTitle}</h2>
+          <h2 className="customer-modal-title">{flashTitle}</h2>
         </div>
         <span>{formatCountdown(secondsLeft)}</span>
         <button type="button" onClick={onClose} aria-label={closeText}>

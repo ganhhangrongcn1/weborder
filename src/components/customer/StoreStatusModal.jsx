@@ -75,7 +75,7 @@ export default function StoreStatusModal({ notice, onClose }) {
         <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wide text-white ${tone.badge}`}>
           {notice.badge || "\u0110ang \u0111\u00f3ng c\u1eeda"}
         </span>
-        <h2 className="mt-3 text-2xl font-black leading-tight text-brown">{notice.title}</h2>
+        <h2 className="customer-modal-title mt-3 text-brown">{notice.title}</h2>
         <p className="mt-2 text-sm font-semibold leading-6 text-brown/70">{notice.description || notice.message}</p>
       </div>
     </CustomerBottomSheet>

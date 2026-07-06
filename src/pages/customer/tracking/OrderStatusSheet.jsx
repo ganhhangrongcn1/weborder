@@ -61,7 +61,7 @@ export default function OrderStatusSheet({
         <div className="min-w-0">
           <p className="customer-caption">{formatOrderTime(order.createdAt)}</p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="min-w-0 truncate customer-title-lg">{displayOrderCode}</h2>
+            <h2 className="customer-modal-title min-w-0 truncate text-brown">{displayOrderCode}</h2>
             <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-1 text-[11px] font-black ${sourceBadge.className}`}>
               {sourceBadge.label}
             </span>

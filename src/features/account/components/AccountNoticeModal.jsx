@@ -21,7 +21,7 @@ export default function AccountNoticeModal({ notice, onClose }) {
           <Icon name={notice.icon || "warning"} size={22} />
         </span>
         <div className="space-y-2">
-          <h2 className="text-[20px] font-black leading-tight text-brown">
+          <h2 className="customer-modal-title text-brown">
             {notice.title || "Thông báo"}
           </h2>
           <p className="text-sm font-semibold leading-6 text-brown/70">

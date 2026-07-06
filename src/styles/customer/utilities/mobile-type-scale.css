@@ -5,6 +5,7 @@
   --customer-type-body: 14px;
   --customer-type-supporting: 12px;
   --customer-type-compact: 11px;
+  --customer-type-modal-title: 20px;
 }
 
 .customer-shell .customer-page-header__title,
@@ -189,6 +190,26 @@
 /* Persistent navigation stays compact, but no longer drops to 10px. */
 .customer-shell .customer-bottom-nav__item {
   font-size: var(--customer-type-compact);
+  line-height: 1.2;
+}
+
+/* Shared modal and sheet hierarchy. */
+.customer-shell .customer-modal-title,
+.customer-shell .customer-sheet-title h2 {
+  font-size: var(--customer-type-modal-title) !important;
+  font-weight: 700 !important;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+/* Keep compact labels readable on a phone. */
+.customer-shell .badge,
+.customer-shell .selected-badge,
+.customer-shell .home2026-banner-content span,
+.customer-shell .home2026-flash-image span,
+.customer-shell .home2026-flash-progress span,
+.customer-shell .home2026-flash-main-info::after {
+  font-size: var(--customer-type-compact) !important;
   line-height: 1.2;
 }
 

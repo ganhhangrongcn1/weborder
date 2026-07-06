@@ -26,7 +26,7 @@ export default function CheckoutNoticeModal({ notice, onClose }) {
             <Icon name={notice?.icon || "warning"} size={18} />
           </span>
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-black text-slate-900">
+            <h3 className="customer-modal-title text-slate-900">
               {notice?.title || "Thông báo"}
             </h3>
             <p className="mt-1 text-sm font-medium leading-6 text-slate-600">

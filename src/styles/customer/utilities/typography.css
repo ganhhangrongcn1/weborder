@@ -65,8 +65,14 @@
 .customer-shell b,
 .customer-shell .font-black,
 .customer-shell .font-extrabold,
-.customer-shell .font-bold,
-.customer-shell .font-semibold,
+.customer-shell .font-bold {
+  font-weight: 700 !important;
+}
+
+.customer-shell .font-semibold {
+  font-weight: 600 !important;
+}
+
 .customer-shell .font-medium {
   font-weight: 500 !important;
 }
@@ -87,7 +93,7 @@
 .customer-shell .qty-btn,
 .customer-shell .topbar-title,
 .customer-shell .checkout-sticky-cta button {
-  font-weight: 500 !important;
+  font-weight: 600 !important;
 }
 
 .customer-shell .customer-page-header__title,

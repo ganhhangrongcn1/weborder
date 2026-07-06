@@ -126,7 +126,7 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
           <img src={product.image} alt={product.name} className="h-24 w-24 rounded-[22px] object-cover shadow-soft" />
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <h2 className="line-clamp-2 text-lg font-black leading-tight text-brown">{product.name}</h2>
+              <h2 className="customer-modal-title line-clamp-2 text-brown">{product.name}</h2>
               <button onClick={onClose} aria-label={optionModalText.close} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-orange-50 text-sm font-black text-orange-600">X</button>
             </div>
             <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-brown/55">{product.short}</p>
