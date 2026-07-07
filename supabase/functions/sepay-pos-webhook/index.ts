@@ -818,18 +818,22 @@ Deno.serve(async (request) => {
     }
 
     const paidSession = getObject(paymentResult.session);
-    const orderPaymentResult = await markOrderPaidFromPaymentSession(
-      supabase,
-      paidSession,
-      {
-        transferAmount,
-        transactionTime,
-        providerTransactionId: toText(body.id || body.referenceCode || body.code),
-        payload: body
-      }
-    );
+    const paidSessionSource = toText(paidSession.source).toLowerCase();
+    const shouldSyncQrOrder = paidSessionSource === "qr_order";
+    const orderPaymentResult = shouldSyncQrOrder
+      ? await markOrderPaidFromPaymentSession(
+          supabase,
+          paidSession,
+          {
+            transferAmount,
+            transactionTime,
+            providerTransactionId: toText(body.id || body.referenceCode || body.code),
+            payload: body
+          }
+        )
+      : { ok: true, updated: false, reason: "", printJob: {} };
 
-    if (!orderPaymentResult.ok) {
+    if (shouldSyncQrOrder && !orderPaymentResult.ok) {
       console.error("[sepay-pos-webhook] update order from payment session failed", orderPaymentResult.reason);
     }
 
@@ -837,11 +841,15 @@ Deno.serve(async (request) => {
       webhook_code: webhookCode,
       transfer_type: transferType,
       transfer_amount: transferAmount,
-      matched_order_id: toText(paidSession.order_id) || null,
+      matched_order_id: shouldSyncQrOrder ? toText(paidSession.order_id) || null : null,
       matched_payment_session_id: toText(paidSession.id),
-      processed_result: orderPaymentResult.ok
-        ? toText(orderPaymentResult.reason) || "payment_session_paid"
-        : "payment_session_paid_order_update_failed",
+      processed_result: shouldSyncQrOrder
+        ? orderPaymentResult.ok
+          ? toText(orderPaymentResult.reason) || "payment_session_paid"
+          : "payment_session_paid_order_update_failed"
+        : paymentResult.alreadyPaid
+          ? "payment_session_already_paid"
+          : "payment_session_paid",
       raw_payload: body,
       created_at: new Date().toISOString()
     });
@@ -852,12 +860,12 @@ Deno.serve(async (request) => {
         matched: true,
         matchedType: "payment_session",
         updated: !paymentResult.alreadyPaid,
-        orderUpdated: Boolean(orderPaymentResult.ok && orderPaymentResult.updated),
+        orderUpdated: Boolean(shouldSyncQrOrder && orderPaymentResult.ok && orderPaymentResult.updated),
         paymentSessionId: toText(paidSession.id),
         paymentReference: toText(paidSession.payment_reference),
-        orderId: toText(paidSession.order_id) || null,
+        orderId: shouldSyncQrOrder ? toText(paidSession.order_id) || null : null,
         status: toText(paidSession.status),
-        printJob: getObject(orderPaymentResult.printJob)
+        printJob: shouldSyncQrOrder ? getObject(orderPaymentResult.printJob) : {}
       }),
       {
         status: 200,
