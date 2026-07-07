@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { defaultBranches, defaultCampaigns, defaultHomeBanners, defaultStoreHours } from "../data/storeDefaults.js";
+import { isAllMenuCategory } from "../constants/menuCategoryConfig.js";
 import {
   catalogConfigRepository,
   CATALOG_CONFIG_KEYS,
@@ -545,11 +546,11 @@ export default function useProductList({
   }, [currentPage, smartPromotions, storeProducts]);
 
   const filteredProducts = useMemo(() => {
-    if (activeCategory === categories[0]) return customerProducts.filter((product) => product.visible !== false);
+    if (isAllMenuCategory(activeCategory)) return customerProducts.filter((product) => product.visible !== false);
     return customerProducts.filter(
       (product) => product.visible !== false && (product.category === activeCategory || product.badge === activeCategory)
     );
-  }, [activeCategory, categories, customerProducts]);
+  }, [activeCategory, customerProducts]);
 
   const customerCategories = useMemo(() => {
     const cleanCategories = adminCategories.filter(Boolean);

@@ -30,6 +30,29 @@ import useCheckoutDeliveryBranchSync from "./hooks/useCheckoutDeliveryBranchSync
 import useCheckoutLoyaltyRuleSync from "./hooks/useCheckoutLoyaltyRuleSync.js";
 import useCheckoutPickupContactSync from "./hooks/useCheckoutPickupContactSync.js";
 
+function isPlaceholderCustomerName(name = "") {
+  const normalized = String(name || "").trim().toLowerCase();
+  return !normalized || ["khách", "khách hàng", "khach", "khach hang"].includes(normalized);
+}
+
+function pickCheckoutCustomerName(user = {}, fallback = {}) {
+  const candidates = [
+    user?.name,
+    user?.fullName,
+    user?.full_name,
+    user?.displayName,
+    user?.display_name,
+    user?.customerName,
+    user?.customer_name,
+    fallback?.name,
+    fallback?.fullName,
+    fallback?.full_name,
+    fallback?.displayName,
+    fallback?.display_name
+  ];
+  return candidates.map((value) => String(value || "").trim()).find((value) => !isPlaceholderCustomerName(value)) || "";
+}
+
 function getShortBranchLabel(name = "", fallback = "") {
   const rawName = String(name || fallback || "").trim();
   if (!rawName) return "";
@@ -91,7 +114,7 @@ export default function Checkout({
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
   const [pickupContact, setPickupContact] = useState(() => ({
-    name: demoUser?.name || userProfile?.name || "",
+    name: pickCheckoutCustomerName(userProfile, demoUser),
     phone: currentPhone || demoUser?.phone || userProfile?.phone || ""
   }));
 
@@ -308,6 +331,7 @@ export default function Checkout({
   useCheckoutPickupContactSync({
     currentPhone,
     demoUser,
+    pickupPhone: pickupContact.phone,
     userProfile,
     setPickupContact
   });
@@ -434,6 +458,7 @@ export default function Checkout({
           fulfillmentType={fulfillmentType}
           setFulfillmentType={setFulfillmentType}
           forcePickupOnly={isQrCounterOrder}
+          isQrCounterOrder={isQrCounterOrder}
           deliveryAvailable={deliveryAvailable}
           onUnavailableDelivery={() => setCheckoutNotice({
             icon: "warning",

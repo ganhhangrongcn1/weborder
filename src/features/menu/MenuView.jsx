@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import ProductCard from "../../components/ProductCard.jsx";
 import Icon from "../../components/Icon.jsx";
 import AppHeader from "../../components/app/Header.jsx";
+import { isAllMenuCategory, sortCustomerMenuCategories } from "../../constants/menuCategoryConfig.js";
 import { products as productSeed } from "../../data/products.js";
 import { menuText, suggestText } from "../../data/uiText.js";
 import ToppingMenuCard from "./components/ToppingMenuCard.jsx";
@@ -38,10 +39,7 @@ export default function Menu({
   );
 
   const displayCategories = useMemo(() => {
-    const allLabel = "Tất cả";
-    const cleaned = (categories || []).map((item) => String(item || "").trim()).filter(Boolean);
-    const withoutAll = cleaned.filter((item) => item !== allLabel);
-    return cleaned.includes(allLabel) ? [allLabel, ...withoutAll] : cleaned;
+    return sortCustomerMenuCategories(categories);
   }, [categories]);
 
   const displayProducts = useMemo(() => {
@@ -122,12 +120,12 @@ export default function Menu({
 
           <div className="menu-chip-row-wrap">
             <div className="no-scrollbar menu-chip-row">
-              {displayCategories.map((category, index) => (
+              {displayCategories.map((category) => (
                 <button
                   key={category}
                   type="button"
                   onClick={() => setActiveCategory(category)}
-                  className={`chip ${activeCategory === category ? "chip-active" : ""} ${index === 0 && category === "Tất cả" ? "chip-pinned-all" : ""}`}
+                  className={`chip ${activeCategory === category ? "chip-active" : ""} ${isAllMenuCategory(category) ? "chip-pinned-all" : ""}`}
                   aria-pressed={activeCategory === category}
                 >
                   {category}

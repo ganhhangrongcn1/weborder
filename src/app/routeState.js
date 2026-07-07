@@ -24,7 +24,7 @@ export function customerPathToState(pathname = "/") {
     if (qrContext.subPage === "menu") return { page: "menu", activeTab: "menu" };
     if (qrContext.subPage === "loyalty") return { page: "loyalty", activeTab: "rewards" };
     if (qrContext.subPage === "account") return { page: "account", activeTab: "account" };
-    return { page: "qr-entry", activeTab: "menu" };
+    return { page: "home", activeTab: "home" };
   }
   if (path === "/menu") return { page: "menu", activeTab: "menu" };
   if (path === "/cart") return { page: "checkout", activeTab: "orders" };

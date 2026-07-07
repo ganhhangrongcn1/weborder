@@ -99,6 +99,16 @@ export default function CheckoutPricingSection({
             </label>
           </div>
         </CheckoutCard>
+      ) : isQrCounterOrder ? (
+        <CheckoutCard title="Thành viên Gánh" className="qr-member-checkout-card">
+          <div className="qr-member-checkout-note">
+            <Icon name="gift" size={18} />
+            <span>
+              <strong>Đăng ký thành viên để tích điểm từ đơn tại quầy.</strong>
+              <small>Sau khi đăng ký, anh/chị dùng số điện thoại này để theo dõi đơn và nhận ưu đãi lần sau.</small>
+            </span>
+          </div>
+        </CheckoutCard>
       ) : (
         <CheckoutCard title="Ưu đãi & điểm Gánh">
           <div className="checkout-benefit-stack">

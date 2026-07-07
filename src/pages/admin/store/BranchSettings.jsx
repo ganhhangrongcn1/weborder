@@ -4,6 +4,7 @@ import { buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/pos
 import { DEFAULT_SHIPPING_CONFIG } from "../../../services/shippingService.js";
 import { syncBranchesToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
 import { createStableBranchUuid } from "../../../services/branchIdentityService.js";
+import { createQrPngDataUrl, createQrSvg } from "../../../services/qrCodeService.js";
 import { AdminButton, AdminCard, AdminInput } from "../ui/index.js";
 
 const BANK_OPTIONS = [
@@ -75,20 +76,41 @@ export default function BranchSettings({
     const branchKey = encodeURIComponent(getQrBranchKey(branch));
     return `${getSiteOrigin()}/qr/${branchKey}`;
   };
-  const getBranchQrImageUrl = (branch) => {
-    const qrData = encodeURIComponent(getBranchQrUrl(branch));
-    return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${qrData}`;
+  const getBranchQrPreviewUrl = (branch) => {
+    const svgMarkup = createQrSvg(getBranchQrUrl(branch), {
+      moduleSize: 8,
+      quietZone: 4,
+      darkColor: "#2f1a10",
+      lightColor: "#fffaf3"
+    });
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgMarkup)}`;
+  };
+  const getBranchQrPngUrl = (branch) => {
+    return createQrPngDataUrl(getBranchQrUrl(branch), {
+      moduleSize: 10,
+      quietZone: 4,
+      darkColor: "#2f1a10",
+      lightColor: "#fffaf3"
+    });
+  };
+  const escapePrintText = (value = "") => {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   };
   const downloadBranchQr = (branch) => {
     const anchor = document.createElement("a");
-    anchor.href = getBranchQrImageUrl(branch);
-    anchor.download = `qr-${String(branch?.id || "branch")}.png`;
+    anchor.href = getBranchQrPngUrl(branch);
+    anchor.download = `qr-order-${String(getQrBranchKey(branch) || branch?.id || "branch").toLowerCase()}.png`;
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
   };
   const printBranchQr = (branch) => {
-    const qrUrl = getBranchQrImageUrl(branch);
+    const qrUrl = getBranchQrPngUrl(branch);
     const qrLink = getBranchQrUrl(branch);
     const printWindow = window.open("", "_blank", "width=800,height=900");
     if (!printWindow) return;
@@ -107,11 +129,11 @@ export default function BranchSettings({
         </head>
         <body>
           <div class="qr-sheet">
-            <h1>${String(branch?.name || "Chi nhánh")}</h1>
-            <p>${String(branch?.address || "")}</p>
+            <h1>${escapePrintText(branch?.name || "Chi nhánh")}</h1>
+            <p>${escapePrintText(branch?.address || "")}</p>
             <p>Quét mã để đặt món tại quầy</p>
             <img src="${qrUrl}" alt="QR order tại quầy" />
-            <p class="link">${qrLink}</p>
+            <p class="link">${escapePrintText(qrLink)}</p>
           </div>
         </body>
       </html>
@@ -478,6 +500,16 @@ export default function BranchSettings({
                     </div>
                     <div className="admin-branch-subcard admin-branch-qr-card">
                       <span className="text-xs font-semibold text-brown/70">QR order tại quầy</span>
+                      <div className="admin-branch-qr-preview">
+                        <img
+                          src={getBranchQrPreviewUrl(branch)}
+                          alt={`QR order tại quầy ${String(branch?.name || "")}`}
+                        />
+                        <div>
+                          <strong>{String(branch?.branch_code || branch?.branchCode || getQrBranchKey(branch) || "QR")}</strong>
+                          <small>Khách quét mã này để mở menu đúng chi nhánh và đặt món tại quầy.</small>
+                        </div>
+                      </div>
                       <code className="rounded-xl bg-white px-3 py-2 text-[11px] leading-5 text-brown/70">
                         {getBranchQrUrl(branch)}
                       </code>

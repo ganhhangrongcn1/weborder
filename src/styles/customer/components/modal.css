@@ -220,11 +220,12 @@
 .cart-glass-cta {
   flex: 0 0 auto;
   border-radius: 16px;
-  background: rgba(255, 106, 0, 0.1);
-  padding: 10px 12px;
-  color: #ff6a00;
-  font-size: 12px;
+  background: linear-gradient(135deg, #ff7a00, #ff4f17);
+  padding: 11px 14px;
+  color: #ffffff;
+  font-size: 13px;
   font-weight: 950;
+  box-shadow: 0 10px 22px rgba(255, 106, 0, 0.2);
 }
 
 @media (max-width: 380px) {

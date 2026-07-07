@@ -1,12 +1,13 @@
-﻿import { useEffect, useMemo } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import "../../../styles/customer.css";
+import Icon from "../../../components/Icon.jsx";
 import BottomNav from "../../../components/BottomNav.jsx";
 import StoreStatusModal from "../../../components/customer/StoreStatusModal.jsx";
 import CustomerOptionModal from "../../../components/customer/OptionModal.jsx";
 import CustomerFloatingCartBar from "../../../components/customer/FloatingCartBar.jsx";
 import CustomerToast from "../../../components/customer/Toast.jsx";
 import PwaInstallBanner from "../../../components/customer/PwaInstallBanner.jsx";
-import { CustomerLoadingState } from "../../../components/customer/CustomerUI.jsx";
+import { CustomerButton, CustomerLoadingState, CustomerModalFrame } from "../../../components/customer/CustomerUI.jsx";
 import HomePage from "../home/HomePage.jsx";
 import MenuPage from "./MenuPage.jsx";
 import ProductDetailPage from "./ProductDetailPage.jsx";
@@ -16,9 +17,11 @@ import TrackingPage from "../tracking/TrackingPage.jsx";
 import LoyaltyPage from "../loyalty/LoyaltyPage.jsx";
 import AccountPage from "../account/AccountPage.jsx";
 import QrOrderEntryPage from "../../../pages/customer/qr/QrOrderEntryPage.jsx";
+import QrMiniHomePage from "../../../pages/customer/qr/QrMiniHomePage.jsx";
 import { orderRepository } from "../../../services/repositories/orderRepository.js";
 
 const orderStatusPopupPersistedKeys = new Set();
+const qrMemberPromptSessionKeys = new Set();
 
 function normalizeOrderStatusText(value = "") {
   return String(value || "")
@@ -174,9 +177,11 @@ export default function CustomerShell({
   setServiceNotice,
   getStoreBlockNotice
 }) {
-  const isQrCounterFlow = String(pageProps?.checkoutPreset?.orderSource || pageProps?.checkoutPreset?.source || "").toLowerCase() === "qr_counter" && Boolean(pageProps?.checkoutPreset?.qrBranchLocked);
-  const qrAllowedPages = ["qr-entry", "menu", "detail", "checkout", "tracking", "success", "loyalty", "account"];
+  const isQrRoute = typeof window !== "undefined" && /^\/qr\/[^/]+/i.test(window.location.pathname || "");
+  const isQrCounterFlow = isQrRoute || (String(pageProps?.checkoutPreset?.orderSource || pageProps?.checkoutPreset?.source || "").toLowerCase() === "qr_counter" && Boolean(pageProps?.checkoutPreset?.qrBranchLocked));
+  const qrAllowedPages = ["home", "qr-entry", "menu", "detail", "checkout", "tracking", "success", "loyalty", "account"];
   const qrBottomNavItems = [
+    { id: "home", label: "Trang chủ", icon: "home" },
     { id: "menu", label: "Menu", icon: "dish" },
     { id: "orders", label: "Đơn hàng", icon: "bag" },
     { id: "rewards", label: "Ưu đãi", icon: "gift" },
@@ -186,6 +191,11 @@ export default function CustomerShell({
     () => (isQrCounterFlow ? resolveQrLockedBranch(branches, pageProps?.checkoutPreset || {}) : null),
     [isQrCounterFlow, branches, pageProps?.checkoutPreset]
   );
+  const qrMemberPromptKey = useMemo(
+    () => `ghr_qr_member_prompt_v3_${String(qrLockedBranch?.id || pageProps?.checkoutPreset?.qrBranchId || "branch").trim() || "branch"}`,
+    [pageProps?.checkoutPreset?.qrBranchId, qrLockedBranch?.id]
+  );
+  const [showQrMemberPrompt, setShowQrMemberPrompt] = useState(false);
 
   const lastCreatedOrderId = orderRepository.getLastCreatedOrderId();
   const forcedLatestOrder = (Array.isArray(profileOrders) ? profileOrders : []).find((order) => {
@@ -197,7 +207,7 @@ export default function CustomerShell({
   const latestProfileOrderTime = new Date(latestProfileOrder?.createdAt || 0).getTime();
   const successOrder = forcedLatestOrder || (latestProfileOrderTime > currentOrderTime ? latestProfileOrder : (currentOrder || latestProfileOrder));
   const isChoosingProduct = isOptionModalOpen || page === "detail";
-  const shouldHideBottomNav = isChoosingProduct || page === "success";
+  const shouldHideBottomNav = isChoosingProduct || page === "success" || page === "qr-entry";
 
   const trackingOrderHistory = forcedLatestOrder
     ? [forcedLatestOrder, ...(Array.isArray(composedUserProfile?.orderHistory) ? composedUserProfile.orderHistory : []).filter((order) => {
@@ -240,6 +250,42 @@ export default function CustomerShell({
     navigate("menu", "menu");
   }, [isQrCounterFlow, page, navigate]);
 
+  useEffect(() => {
+    if (!isQrCounterFlow || !qrLockedBranch || page !== "qr-entry") return;
+    navigate("menu", "menu");
+  }, [isQrCounterFlow, navigate, page, qrLockedBranch]);
+
+  useEffect(() => {
+    if (!isQrCounterFlow || !qrLockedBranch || isChoosingProduct) {
+      setShowQrMemberPrompt(false);
+      return;
+    }
+
+    if (page === "success") {
+      setShowQrMemberPrompt(false);
+      return;
+    }
+
+    if (qrMemberPromptSessionKeys.has(qrMemberPromptKey)) return;
+
+    try {
+      if (window.sessionStorage.getItem(qrMemberPromptKey) === "1") return;
+    } catch {
+    }
+
+    const timer = window.setTimeout(() => setShowQrMemberPrompt(true), page === "qr-entry" ? 420 : 900);
+    return () => window.clearTimeout(timer);
+  }, [hasCustomerAuthSession, isChoosingProduct, isQrCounterFlow, isRegisteredCustomer, page, qrLockedBranch, qrMemberPromptKey]);
+
+  const dismissQrMemberPrompt = () => {
+    qrMemberPromptSessionKeys.add(qrMemberPromptKey);
+    try {
+      window.sessionStorage.setItem(qrMemberPromptKey, "1");
+    } catch {
+    }
+    setShowQrMemberPrompt(false);
+  };
+
   const handleOpenCheckout = () => {
     const notice = getStoreBlockNotice?.();
     if (notice) {
@@ -250,6 +296,10 @@ export default function CustomerShell({
   };
 
   const handleQrBottomNav = (tab) => {
+    if (tab === "home") {
+      navigate("home", "home");
+      return;
+    }
     if (tab === "menu") {
       navigate("menu", "menu");
       return;
@@ -267,6 +317,13 @@ export default function CustomerShell({
     }
   };
 
+  const handleQrMemberPromptSignup = () => {
+    dismissQrMemberPrompt();
+    navigate("account", "account");
+  };
+
+  const shouldShowQrSignupAction = !isRegisteredCustomer && !hasCustomerAuthSession;
+
   return (
     <div className="customer-shell min-h-screen bg-app text-brown">
       <main className="mx-auto min-h-screen w-full max-w-[430px] bg-cream pb-24 shadow-preview">
@@ -277,14 +334,11 @@ export default function CustomerShell({
           </section>
         ) : (
           <>
-            {page === "home" && <HomePage render={pageProps.Home} {...pageProps} coupons={pageProps.homeCoupons || pageProps.coupons} smartPromotions={pageProps.homeSmartPromotions || pageProps.smartPromotions} openProduct={openOptionModalFromHome} openOptionModal={openOptionModalFromHome} />}
-            {isQrCounterFlow && qrLockedBranch ? (
-              <div className="px-4 pt-3">
-                <div className="rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
-                  Đang đặt tại: <strong>{qrLockedBranch.name}</strong>
-                </div>
-              </div>
-            ) : null}
+            {page === "home" && (
+              isQrCounterFlow
+                ? <QrMiniHomePage {...pageProps} isRegisteredCustomer={isRegisteredCustomer} />
+                : <HomePage render={pageProps.Home} {...pageProps} coupons={pageProps.homeCoupons || pageProps.coupons} smartPromotions={pageProps.homeSmartPromotions || pageProps.smartPromotions} openProduct={openOptionModalFromHome} openOptionModal={openOptionModalFromHome} />
+            )}
             {page === "qr-entry" && <QrOrderEntryPage branches={pageProps.branches} checkoutPreset={pageProps.checkoutPreset} setCheckoutPreset={pageProps.setCheckoutPreset} navigate={pageProps.navigate} isBranchOpenNow={pageProps.isBranchOpenNow} buildOutOfHoursNotice={pageProps.buildOutOfHoursNotice} setServiceNotice={pageProps.setServiceNotice} />}
             {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
             {page === "detail" && <ProductDetailPage render={pageProps.Detail} {...pageProps} />}
@@ -340,6 +394,50 @@ export default function CustomerShell({
             )}
 
             {toastVisible && <CustomerToast message="Đã thêm vào giỏ" />}
+            {showQrMemberPrompt ? (
+              <CustomerModalFrame className="qr-member-popup" onBackdropClick={dismissQrMemberPrompt}>
+                <div className="qr-member-popup__badge">
+                  <Icon name="star" size={17} />
+                  <span>Đặt món QR</span>
+                </div>
+                <h2>Đặt món QR tiện hơn</h2>
+                <p>
+                  Quét QR để tự chọn món, dùng ưu đãi và theo dõi đơn ngay trên điện thoại.
+                </p>
+                <div className="qr-member-popup__list">
+                  <div className="qr-member-popup__item">
+                    <span><Icon name="dish" size={17} /></span>
+                    <strong>Tự chọn món</strong>
+                    <small>Thoải mái xem menu, chọn topping, không cần chờ nhân viên ghi món.</small>
+                  </div>
+                  <div className="qr-member-popup__item">
+                    <span><Icon name="tag" size={17} /></span>
+                    <strong>Nhập voucher</strong>
+                    <small>Dùng mã ưu đãi phù hợp trước khi xác nhận đơn.</small>
+                  </div>
+                  <div className="qr-member-popup__item">
+                    <span><Icon name="star" size={17} /></span>
+                    <strong>Tích điểm</strong>
+                    <small>Nhập số điện thoại để quán ghi nhận điểm; đăng ký giúp xem điểm và nhận ưu đãi.</small>
+                  </div>
+                  <div className="qr-member-popup__item">
+                    <span><Icon name="bag" size={17} /></span>
+                    <strong>Theo dõi đơn</strong>
+                    <small>Xem trạng thái đơn đang làm và lịch sử mua hàng trên điện thoại.</small>
+                  </div>
+                </div>
+                <div className={`qr-member-popup__actions${shouldShowQrSignupAction ? "" : " qr-member-popup__actions--single"}`}>
+                  {shouldShowQrSignupAction ? (
+                    <CustomerButton onClick={handleQrMemberPromptSignup}>
+                      Đăng ký ngay
+                    </CustomerButton>
+                  ) : null}
+                  <CustomerButton variant={shouldShowQrSignupAction ? "secondary" : "primary"} onClick={dismissQrMemberPrompt}>
+                    Tiếp tục
+                  </CustomerButton>
+                </div>
+              </CustomerModalFrame>
+            ) : null}
             {!shouldHideBottomNav && (
               isQrCounterFlow
                 ? <BottomNav activeTab={activeTab} onChange={handleQrBottomNav} items={qrBottomNavItems} />

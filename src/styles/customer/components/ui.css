@@ -225,6 +225,102 @@
   max-width: 380px;
 }
 
+.qr-member-popup {
+  display: grid;
+  gap: 12px;
+  border-color: rgba(255, 106, 0, 0.2);
+  background: linear-gradient(180deg, #fffdf8 0%, #fff4e6 100%);
+  padding: 18px;
+  box-shadow: 0 24px 70px rgba(58, 31, 20, 0.24);
+}
+
+.qr-member-popup__badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  background: #fff0df;
+  padding: 7px 10px;
+  color: #d95700;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.qr-member-popup h2 {
+  margin: 0;
+  color: #2f1a10;
+  font-size: 21px;
+  font-weight: 950;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.qr-member-popup p {
+  margin: 0;
+  color: rgba(58, 31, 20, 0.66);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.qr-member-popup__list {
+  display: grid;
+  gap: 7px;
+}
+
+.qr-member-popup__item {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 3px 10px;
+  align-items: center;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 9px 10px;
+  color: #3a1f14;
+}
+
+.qr-member-popup__item > span {
+  grid-row: span 2;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #fff2df, #ffe4c7);
+  color: #e55b00;
+}
+
+.qr-member-popup__item strong {
+  display: block;
+  color: #2f1a10;
+  font-size: 13px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.qr-member-popup__item small {
+  display: block;
+  color: rgba(58, 31, 20, 0.6);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.28;
+}
+
+.qr-member-popup__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.qr-member-popup__actions--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.qr-member-popup__actions--single .customer-button {
+  width: 100%;
+}
+
 @keyframes customer-loading-pulse {
   0%,
   100% {
@@ -293,5 +389,9 @@
     max-height: calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .qr-member-popup__actions {
+    grid-template-columns: 1fr;
   }
 }

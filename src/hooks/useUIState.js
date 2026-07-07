@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
+import { DEFAULT_MENU_CATEGORY_LABEL } from "../constants/menuCategoryConfig.js";
 
 export default function useUIState({ productSeed, toppingSeed }) {
   const [page, setPage] = useState("home");
   const [activeTab, setActiveTab] = useState("home");
-  const [activeCategory, setActiveCategory] = useState("Tất cả");
+  const [activeCategory, setActiveCategory] = useState(DEFAULT_MENU_CATEGORY_LABEL);
   const [selectedProduct, setSelectedProduct] = useState(productSeed[0]);
   const [selectedSpice, setSelectedSpice] = useState("Vừa cay");
   const [selectedToppings, setSelectedToppings] = useState([toppingSeed[0], toppingSeed[2]]);
@@ -40,4 +41,3 @@ export default function useUIState({ productSeed, toppingSeed }) {
     toastTimer
   };
 }
-

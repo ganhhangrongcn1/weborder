@@ -8,6 +8,7 @@ export default function CheckoutFulfillmentSection({
   fulfillmentType,
   setFulfillmentType,
   forcePickupOnly = false,
+  isQrCounterOrder = false,
   deliveryAvailable = true,
   onUnavailableDelivery,
   hidePickupSchedule = false,
@@ -44,17 +45,19 @@ export default function CheckoutFulfillmentSection({
 
   return (
     <>
-      <div className="fulfillment-tabs">
-        <button
-          type="button"
-          onClick={handleSelectDelivery}
-          aria-disabled={deliveryLocked}
-          className={`${fulfillmentType === "delivery" ? "active" : ""} ${deliveryLocked ? "is-unavailable" : ""}`}
-        >
-          Giao tận nơi
-        </button>
-        <button type="button" onClick={() => setFulfillmentType("pickup")} className={fulfillmentType === "pickup" ? "active" : ""}>Đến lấy</button>
-      </div>
+      {!isQrCounterOrder ? (
+        <div className="fulfillment-tabs">
+          <button
+            type="button"
+            onClick={handleSelectDelivery}
+            disabled={deliveryLocked}
+            className={`${fulfillmentType === "delivery" ? "active" : ""} ${deliveryLocked ? "is-unavailable" : ""}`}
+          >
+            Giao tận nơi
+          </button>
+          <button type="button" onClick={() => setFulfillmentType("pickup")} className={fulfillmentType === "pickup" ? "active" : ""}>Đến lấy</button>
+        </div>
+      ) : null}
 
       {fulfillmentType === "delivery" ? (
         <CheckoutCard title={checkoutText.deliveryTo} action="Đổi" onAction={() => setIsAddressModalOpen(true)}>
@@ -78,8 +81,8 @@ export default function CheckoutFulfillmentSection({
                   <Icon name="user" size={16} />
                 </span>
                 <div>
-                  <strong>Thông tin người nhận</strong>
-                  <small>Quán dùng để xác nhận và tích điểm</small>
+                  <strong>{isQrCounterOrder ? "Thông tin nhận món" : "Thông tin người nhận"}</strong>
+                  <small>{isQrCounterOrder ? "Quán dùng để gọi khi cần và tích điểm thành viên" : "Quán dùng để xác nhận và tích điểm"}</small>
                 </div>
               </div>
 
@@ -110,73 +113,73 @@ export default function CheckoutFulfillmentSection({
               </div>
             </div>
 
-            <div className="checkout-pickup-section">
-              <div className="checkout-subsection-head">
-                <span className="checkout-subsection-icon" aria-hidden="true">
-                  <Icon name="home" size={16} />
-                </span>
-                <div>
-                  <strong>Chi nhánh lấy món</strong>
-                  <small>Chọn nơi thuận tiện để đến nhận</small>
+            {!lockPickupBranch ? (
+              <div className="checkout-pickup-section">
+                <div className="checkout-subsection-head">
+                  <span className="checkout-subsection-icon" aria-hidden="true">
+                    <Icon name="home" size={16} />
+                  </span>
+                  <div>
+                    <strong>Chi nhánh lấy món</strong>
+                    <small>Chọn nơi thuận tiện để đến nhận</small>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                {(selectedBranchInfo && !isChangingBranch ? [selectedBranchInfo].filter(Boolean) : pickupBranches).map((branch) => (
+                  <button
+                    type="button"
+                    key={branch.id}
+                    onClick={() => {
+                      setSelectedBranch(branch.id);
+                      setIsChangingBranch(false);
+                    }}
+                    className={`branch-card ${selectedBranch === branch.id ? "branch-card-active" : ""}`}
+                  >
+                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
+                      <Icon name="home" size={18} />
+                    </span>
+                    <span className="min-w-0 flex-1 text-left">
+                      <strong>{branch.name}</strong>
+                      <small>{branch.address}</small>
+                      <em>{branch.time}</em>
+                    </span>
+                    <span className="branch-radio">{selectedBranch === branch.id ? "✓" : ""}</span>
+                  </button>
+                ))}
+                {selectedBranchInfo && !isChangingBranch ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsChangingBranch(true)}
+                    className="checkout-inline-action"
+                  >
+                    Đổi chi nhánh lấy món
+                  </button>
+                ) : null}
                 </div>
               </div>
-
-              <div className="space-y-3">
-              {(selectedBranchInfo && !isChangingBranch || lockPickupBranch ? [selectedBranchInfo].filter(Boolean) : pickupBranches).map((branch) => (
-                <button
-                  type="button"
-                  key={branch.id}
-                  onClick={() => {
-                    if (lockPickupBranch) return;
-                    setSelectedBranch(branch.id);
-                    setIsChangingBranch(false);
-                  }}
-                  className={`branch-card ${selectedBranch === branch.id ? "branch-card-active" : ""}`}
-                >
-                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                    <Icon name="home" size={18} />
-                  </span>
-                  <span className="min-w-0 flex-1 text-left">
-                    <strong>{branch.name}</strong>
-                    <small>{branch.address}</small>
-                    <em>{branch.time}</em>
-                  </span>
-                  <span className="branch-radio">{selectedBranch === branch.id ? "✓" : ""}</span>
-                </button>
-              ))}
-              {selectedBranchInfo && !isChangingBranch && !lockPickupBranch ? (
-                <button
-                  type="button"
-                  onClick={() => setIsChangingBranch(true)}
-                  className="checkout-inline-action"
-                >
-                  Đổi chi nhánh lấy món
-                </button>
-              ) : null}
-              {lockPickupBranch ? (
-                <p className="checkout-inline-note">
-                  Đơn này đang khóa theo chi nhánh từ mã QR tại quầy.
-                </p>
-              ) : null}
-              </div>
-            </div>
+            ) : null}
 
             <div className="checkout-pickup-section">
-              <div className="checkout-subsection-head">
-                <span className="checkout-subsection-icon" aria-hidden="true">
-                  <Icon name="clock" size={16} />
-                </span>
-                <div>
-                  <strong>Thời gian nhận món</strong>
-                  <small>Chọn nhận sớm nhất hoặc hẹn giờ</small>
+              {!hidePickupSchedule ? (
+                <div className="checkout-subsection-head">
+                  <span className="checkout-subsection-icon" aria-hidden="true">
+                    <Icon name="clock" size={16} />
+                  </span>
+                  <div>
+                    <strong>Thời gian nhận món</strong>
+                    <small>Chọn nhận sớm nhất hoặc hẹn giờ</small>
+                  </div>
                 </div>
-              </div>
+              ) : null}
 
-              <div className="pickup-time-card">
-                <div className="pickup-mode-tabs">
-                  <button type="button" onClick={() => setPickupMode("soon")} className={pickupMode === "soon" ? "active" : ""}>Sớm nhất</button>
-                  {!hidePickupSchedule ? <button type="button" onClick={() => setPickupMode("schedule")} className={pickupMode === "schedule" ? "active" : ""}>Chọn giờ</button> : null}
-                </div>
+              <div className={`pickup-time-card${hidePickupSchedule ? " pickup-time-card--locked" : ""}`}>
+                {!hidePickupSchedule ? (
+                  <div className="pickup-mode-tabs">
+                    <button type="button" onClick={() => setPickupMode("soon")} className={pickupMode === "soon" ? "active" : ""}>Sớm nhất</button>
+                    <button type="button" onClick={() => setPickupMode("schedule")} className={pickupMode === "schedule" ? "active" : ""}>Chọn giờ</button>
+                  </div>
+                ) : null}
                 {pickupMode === "soon" || hidePickupSchedule ? (
                   <div className="pickup-soon">
                     <strong>{hidePickupSchedule ? "Đặt liền tại quầy" : "Sẵn sàng sau khoảng 20 phút"}</strong>

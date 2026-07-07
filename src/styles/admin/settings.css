@@ -114,6 +114,47 @@
   background: #fff7ed;
 }
 
+.admin-branch-qr-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.admin-branch-qr-preview img {
+  width: 92px;
+  height: 92px;
+  border: 1px solid #ffedd5;
+  border-radius: 12px;
+  background: #fffaf3;
+  object-fit: contain;
+  padding: 6px;
+}
+
+.admin-branch-qr-preview strong,
+.admin-branch-qr-preview small {
+  display: block;
+}
+
+.admin-branch-qr-preview strong {
+  color: #7c2d12;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.admin-branch-qr-preview small {
+  margin-top: 4px;
+  color: #9a5a2c;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .admin-branch-payment-card {
   border-color: #cbd5e1;
 }
@@ -199,6 +240,10 @@
 
   .admin-branch-time-field .admin-input {
     width: 100%;
+  }
+
+  .admin-branch-qr-preview {
+    grid-template-columns: 1fr;
   }
 
   .admin-ship-note-item {

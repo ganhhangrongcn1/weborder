@@ -32,6 +32,7 @@ import useCart from "../../hooks/useCart.js";
 import { resolveBranchFromCandidates } from "../../services/branchIdentityService.js";
 import { filterProductsForAvailability } from "../../services/productAvailabilityService.js";
 import { isPromotionAllowedForChannel } from "../../services/promotionChannelService.js";
+import { hasMenuCategory, isAllMenuCategory, resolveDefaultMenuCategory } from "../../constants/menuCategoryConfig.js";
 
 const userStorage = createUserStorage({
   getCustomerKey,
@@ -95,6 +96,10 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     () => productState.smartPromotions.filter((promotion) => isPromotionAllowedForChannel(promotion, menuChannel)),
     [menuChannel, productState.smartPromotions]
   );
+  const resolvedDefaultMenuCategory = useMemo(
+    () => resolveDefaultMenuCategory(productState.customerCategories),
+    [productState.customerCategories]
+  );
   const availableCustomerProducts = useMemo(
     () =>
       filterProductsForAvailability(productState.customerProducts, {
@@ -105,12 +110,15 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     [menuChannel, productState.customerProducts, selectedMenuBranch, selectedMenuBranchValue]
   );
   const availableFilteredProducts = useMemo(() => {
-    const allCategory = productState.customerCategories[0] || "";
-    if (!uiState.activeCategory || uiState.activeCategory === allCategory) return availableCustomerProducts;
+    if (!uiState.activeCategory || isAllMenuCategory(uiState.activeCategory)) return availableCustomerProducts;
+    const effectiveCategory = hasMenuCategory(productState.customerCategories, uiState.activeCategory)
+      ? uiState.activeCategory
+      : resolvedDefaultMenuCategory;
+    if (!effectiveCategory || isAllMenuCategory(effectiveCategory)) return availableCustomerProducts;
     return availableCustomerProducts.filter(
-      (product) => product.category === uiState.activeCategory || product.badge === uiState.activeCategory
+      (product) => product.category === effectiveCategory || product.badge === effectiveCategory
     );
-  }, [availableCustomerProducts, productState.customerCategories, uiState.activeCategory]);
+  }, [availableCustomerProducts, productState.customerCategories, resolvedDefaultMenuCategory, uiState.activeCategory]);
 
   const {
     navigate,
