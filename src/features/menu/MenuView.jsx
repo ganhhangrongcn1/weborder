@@ -6,6 +6,51 @@ import { isAllMenuCategory, sortCustomerMenuCategories } from "../../constants/m
 import { products as productSeed } from "../../data/products.js";
 import { menuText, suggestText } from "../../data/uiText.js";
 import ToppingMenuCard from "./components/ToppingMenuCard.jsx";
+import { buildQrPromotionOffers } from "../../services/qrOfferService.js";
+import { formatMoney } from "../../utils/format.js";
+import { getDefaultOrderChoices } from "../../utils/pureHelpers.js";
+
+function MenuPromoRail({ items = [], onOpen, onQuickAdd }) {
+  if (!items.length) return null;
+
+  return (
+    <section className="menu-promo-rail">
+      <div className="menu-promo-rail__scroll no-scrollbar" aria-label="Món đang giảm giá">
+        {items.map((item) => (
+          <article key={item.id} className="menu-promo-card">
+            <div className="menu-promo-card__main">
+              <button
+                type="button"
+                className="menu-promo-card__image"
+                onClick={() => onOpen(item.product)}
+                aria-label={`Xem ưu đãi ${item.product.name}`}
+              >
+                <img src={item.product.image} alt={item.product.name} loading="lazy" />
+                <em>{item.offer.eyebrow || "Flash Sale"}</em>
+              </button>
+              <span className="menu-promo-card__copy">
+                <strong>{item.product.name}</strong>
+                <small>{item.product.short || item.offer.detail || "Đang áp dụng tại quầy"}</small>
+                <span className="menu-promo-card__price">
+                  <b>{formatMoney(Number(item.offer.currentPrice || item.product.price || 0))}</b>
+                  <span>
+                    <del>{formatMoney(Number(item.offer.originalPrice || item.product.originalPrice || item.product.price || 0))}</del>
+                    <button type="button" className="menu-promo-card__cta" onClick={() => onQuickAdd(item.product)}>
+                      Mua ngay
+                    </button>
+                  </span>
+                </span>
+              </span>
+              <span className="menu-promo-card__discount">
+                -{Math.max(1, Math.round(((Number(item.offer.originalPrice || item.product.originalPrice || 0) - Number(item.offer.currentPrice || item.product.price || 0)) / Math.max(Number(item.offer.originalPrice || item.product.originalPrice || 1), 1)) * 100))}%
+              </span>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function Menu({
   navigate,
@@ -15,6 +60,8 @@ export default function Menu({
   filteredProducts,
   products,
   toppings,
+  smartPromotions = [],
+  checkoutPreset = {},
   openProduct,
   openOptionModal,
   addToCart,
@@ -23,6 +70,9 @@ export default function Menu({
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddonOpen, setIsAddonOpen] = useState(false);
+  const isQrCounterMenu =
+    String(checkoutPreset?.orderSource || checkoutPreset?.source || "").toLowerCase() === "qr_counter" ||
+    (typeof window !== "undefined" && /^\/qr\/[^/]+/i.test(window.location.pathname || ""));
 
   const cartProductCount = useMemo(() => {
     const counts = {};
@@ -53,6 +103,25 @@ export default function Menu({
       return !keyword || [name, short, category, badge].some((value) => value.includes(keyword));
     });
   }, [filteredProducts, searchTerm]);
+
+  const promoRailItems = useMemo(() => {
+    if (!isQrCounterMenu) return [];
+    const promotionOffers = buildQrPromotionOffers({ smartPromotions, products }).filter(
+      (offer) => Number(offer?.originalPrice || 0) > Number(offer?.currentPrice || 0)
+    );
+
+    const seenProductIds = new Set();
+    return promotionOffers
+      .map((offer) => {
+        const product = products.find((item) => String(item?.id || "") === String(offer?.productId || ""));
+        if (!product) return null;
+        if (seenProductIds.has(product.id)) return null;
+        seenProductIds.add(product.id);
+        return { id: `${offer.id}-${product.id}`, offer, product };
+      })
+      .filter(Boolean)
+      .slice(0, 8);
+  }, [isQrCounterMenu, products, smartPromotions]);
 
   const removeOneByKey = (rawKey) => {
     const key = String(rawKey || "").replace(/^addon-/, "");
@@ -94,6 +163,17 @@ export default function Menu({
     });
   };
 
+  const addMenuProductQuick = (product) => {
+    const defaults = getDefaultOrderChoices(product);
+    addToCart({
+      product,
+      spice: defaults.spice,
+      toppings: defaults.toppings,
+      quantity: 1,
+      note: ""
+    });
+  };
+
   return (
     <section>
       <AppHeader title={menuText.title} subtitle="Chọn món, thêm topping rồi thanh toán" onBack={() => navigate("home", "home")} />
@@ -117,27 +197,37 @@ export default function Menu({
               </button>
             ) : null}
           </div>
-
-          <div className="menu-chip-row-wrap">
-            <div className="no-scrollbar menu-chip-row">
-              {displayCategories.map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => setActiveCategory(category)}
-                  className={`chip ${activeCategory === category ? "chip-active" : ""} ${isAllMenuCategory(category) ? "chip-pinned-all" : ""}`}
-                  aria-pressed={activeCategory === category}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
-        <div className="menu-result-row" role="status" aria-live="polite">
-          <span>{displayProducts.length} món</span>
-          {searchTerm ? <strong>Đang tìm “{searchTerm}”</strong> : <strong>{activeCategory}</strong>}
+        {!isQrCounterMenu ? (
+          <div className="menu-result-row" role="status" aria-live="polite">
+            <span>{displayProducts.length} món</span>
+            {searchTerm ? <strong>Đang tìm “{searchTerm}”</strong> : <strong>{activeCategory}</strong>}
+          </div>
+        ) : null}
+
+        {!searchTerm ? (
+          <MenuPromoRail
+            items={promoRailItems}
+            onOpen={openProduct}
+            onQuickAdd={addMenuProductQuick}
+          />
+        ) : null}
+
+        <div className="menu-chip-row-wrap menu-chip-row-wrap--after-promo">
+          <div className="no-scrollbar menu-chip-row">
+            {displayCategories.map((category) => (
+              <button
+                key={category}
+                type="button"
+                onClick={() => setActiveCategory(category)}
+                className={`chip ${activeCategory === category ? "chip-active" : ""} ${isAllMenuCategory(category) ? "chip-pinned-all" : ""}`}
+                aria-pressed={activeCategory === category}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
         </div>
 
         {!searchTerm && sortedToppings.length ? (

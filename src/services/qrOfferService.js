@@ -176,6 +176,7 @@ function normalizePromotionOffer(promotion = {}, featuredProduct = null) {
   return {
     id: `promotion-${promotion.id || promotion.name || promotion.title}`,
     source: promotion.type || "promotion",
+    productId: featuredProduct?.id || "",
     icon: promotion.icon || (promotion.type === "flash_sale" ? "star" : "gift"),
     eyebrow: promotion.type === "flash_sale" ? "Flash Sale" : "Ưu đãi",
     value: getRewardValueText(promotion),

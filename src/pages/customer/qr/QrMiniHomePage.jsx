@@ -3,7 +3,7 @@ import Icon from "../../../components/Icon.jsx";
 import { CustomerButton, CustomerEmptyState } from "../../../components/customer/CustomerUI.jsx";
 import { buildQrCouponOffers, buildQrOfferItems } from "../../../services/qrOfferService.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
-import { getActiveVouchers } from "../../../utils/pureHelpers.js";
+import { getActiveVouchers, getDefaultOrderChoices } from "../../../utils/pureHelpers.js";
 import { formatMoney } from "../../../utils/format.js";
 
 function resolveQrBranch(branches = [], checkoutPreset = {}) {
@@ -164,6 +164,7 @@ function VoucherHintCard({ onClick }) {
 
 export default function QrMiniHomePage({
   navigate,
+  addToCart,
   coupons = [],
   checkoutCoupons = [],
   smartPromotions = [],
@@ -227,6 +228,33 @@ export default function QrMiniHomePage({
 
   const gridOffers = remainingOffers.slice(0, 2);
   const shouldShowVoucherHint = !voucherCards.length;
+  const primaryOfferProduct = useMemo(() => {
+    if (!primaryOffer) return null;
+    const preferredId = String(primaryOffer?.productId || "").trim();
+    if (preferredId) {
+      const matchedById = products.find((product) => String(product?.id || "").trim() === preferredId);
+      if (matchedById) return matchedById;
+    }
+    const productName = String(primaryOffer?.productName || primaryOffer?.title || "").trim().toLowerCase();
+    if (!productName) return null;
+    return products.find((product) => String(product?.name || "").trim().toLowerCase() === productName) || null;
+  }, [primaryOffer, products]);
+
+  const handleQuickAddPrimaryOffer = () => {
+    if (!primaryOfferProduct || typeof addToCart !== "function") {
+      navigate("menu", "menu");
+      return;
+    }
+    const defaults = getDefaultOrderChoices(primaryOfferProduct);
+    addToCart({
+      product: primaryOfferProduct,
+      spice: defaults.spice,
+      toppings: defaults.toppings,
+      quantity: 1,
+      note: ""
+    });
+    navigate("menu", "menu");
+  };
 
   return (
     <section className="qr-mini-home">
@@ -260,7 +288,7 @@ export default function QrMiniHomePage({
               size="md"
               variant="secondary"
               className="qr-mini-home__action-menu"
-              onClick={() => navigate("menu", "menu")}
+              onClick={handleQuickAddPrimaryOffer}
               icon="dish"
             >
               Đặt ngay
