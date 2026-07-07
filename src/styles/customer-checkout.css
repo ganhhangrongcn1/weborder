@@ -697,6 +697,17 @@
   color: #e55b00;
 }
 
+.qr-member-checkout-note__content {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.qr-member-checkout-note__text {
+  display: block;
+}
+
 .qr-member-checkout-note span,
 .qr-member-checkout-note strong,
 .qr-member-checkout-note small {
@@ -716,6 +727,20 @@
   font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
+}
+
+.qr-member-checkout-note__cta {
+  align-self: flex-start;
+  border: 1px solid rgba(255, 106, 0, 0.14);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ff8a1d 0%, #ff6a00 100%);
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 10px 22px rgba(255, 106, 0, 0.18);
+  white-space: nowrap;
 }
 
 .promo-code-list {

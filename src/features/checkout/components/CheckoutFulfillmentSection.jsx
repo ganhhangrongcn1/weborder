@@ -160,8 +160,8 @@ export default function CheckoutFulfillmentSection({
               </div>
             ) : null}
 
-            <div className="checkout-pickup-section">
-              {!hidePickupSchedule ? (
+            {!hidePickupSchedule ? (
+              <div className="checkout-pickup-section">
                 <div className="checkout-subsection-head">
                   <span className="checkout-subsection-icon" aria-hidden="true">
                     <Icon name="clock" size={16} />
@@ -171,34 +171,32 @@ export default function CheckoutFulfillmentSection({
                     <small>Chọn nhận sớm nhất hoặc hẹn giờ</small>
                   </div>
                 </div>
-              ) : null}
 
-              <div className={`pickup-time-card${hidePickupSchedule ? " pickup-time-card--locked" : ""}`}>
-                {!hidePickupSchedule ? (
+                <div className="pickup-time-card">
                   <div className="pickup-mode-tabs">
                     <button type="button" onClick={() => setPickupMode("soon")} className={pickupMode === "soon" ? "active" : ""}>Sớm nhất</button>
                     <button type="button" onClick={() => setPickupMode("schedule")} className={pickupMode === "schedule" ? "active" : ""}>Chọn giờ</button>
                   </div>
-                ) : null}
-                {pickupMode === "soon" || hidePickupSchedule ? (
-                  <div className="pickup-soon">
-                    <strong>{hidePickupSchedule ? "Đặt liền tại quầy" : "Sẵn sàng sau khoảng 20 phút"}</strong>
-                    <span>{hidePickupSchedule ? "Quán sẽ ưu tiên làm đơn ngay theo QR tại quầy." : "Quán sẽ nhắn khi món đã chuẩn bị xong."}</span>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="pickup-field">
-                      <span>Ngày lấy</span>
-                      <input name="pickupDate" type="date" value={pickupDate} onChange={(event) => setPickupDate(event.target.value)} />
-                    </label>
-                    <label className="pickup-field">
-                      <span>Giờ lấy</span>
-                      <input name="pickupTime" type="time" value={pickupClock} onChange={(event) => setPickupClock(event.target.value)} />
-                    </label>
-                  </div>
-                )}
+                  {pickupMode === "soon" ? (
+                    <div className="pickup-soon">
+                      <strong>Sẵn sàng sau khoảng 20 phút</strong>
+                      <span>Quán sẽ nhắn khi món đã chuẩn bị xong.</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="pickup-field">
+                        <span>Ngày lấy</span>
+                        <input name="pickupDate" type="date" value={pickupDate} onChange={(event) => setPickupDate(event.target.value)} />
+                      </label>
+                      <label className="pickup-field">
+                        <span>Giờ lấy</span>
+                        <input name="pickupTime" type="time" value={pickupClock} onChange={(event) => setPickupClock(event.target.value)} />
+                      </label>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : null}
           </CheckoutCard>
         </Fragment>
       )}

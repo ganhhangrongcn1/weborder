@@ -62,6 +62,7 @@ export default function OrderSuccess({
   currentPhone = "",
   branches = []
 }) {
+  const orderId = order?.id || order?.orderCode || "";
   const isQrPaymentOrder = isQrBankPaymentOrder(order);
   const [showSuccessPopup, setShowSuccessPopup] = useState(() => !isQrPaymentOrder);
   const [paymentSession, setPaymentSession] = useState(null);
@@ -106,7 +107,7 @@ export default function OrderSuccess({
   ]), []);
 
   useEffect(() => {
-    if (!isQrPaymentOrder || !order) return undefined;
+    if (!isQrPaymentOrder || !orderId || qrPaymentPaid) return undefined;
     setShowSuccessPopup(false);
 
     let isActive = true;
@@ -135,7 +136,7 @@ export default function OrderSuccess({
       isActive = false;
       if (timerId) window.clearInterval(timerId);
     };
-  }, [isQrPaymentOrder, order]);
+  }, [isQrPaymentOrder, order, orderId, qrPaymentPaid]);
 
   const handleCopyPaymentReference = async () => {
     if (!paymentReference) return;

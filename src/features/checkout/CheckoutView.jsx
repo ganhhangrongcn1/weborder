@@ -512,6 +512,7 @@ export default function Checkout({
           subtotal={subtotal}
           addToCart={addToCart}
           openOptionModal={openOptionModal}
+          navigate={navigate}
           products={products}
           toppings={toppings}
           coupons={coupons}

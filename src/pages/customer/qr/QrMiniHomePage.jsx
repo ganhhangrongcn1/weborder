@@ -170,9 +170,8 @@ function VoucherHintCard({ onClick }) {
         <Icon name="tag" size={17} />
       </span>
       <span className="qr-mini-home__voucher-hint-copy">
-        <small>Khuyến mãi cho bạn</small>
-        <strong>Khi quán bật voucher QR, khách sẽ thấy ngay tại đây</strong>
-        <em>Khối này ưu tiên hiện mã cá nhân trước, rồi tới mã chung của quán.</em>
+        <small>Voucher của bạn</small>
+        <strong>Voucher sẽ hiện ở đây nếu có</strong>
       </span>
     </button>
   );
@@ -371,8 +370,8 @@ export default function QrMiniHomePage({
         <section className="qr-mini-home__member">
           <span><Icon name="star" size={18} /></span>
           <div>
-            <strong>Đăng ký thành viên để xem điểm và lưu mã ưu đãi</strong>
-            <small>Không bắt buộc khi đặt món.</small>
+            <strong>Đăng ký để sử dụng điểm tích lũy và ưu đãi</strong>
+            <small>Tích điểm, voucher hàng tháng, theo dõi đơn hàng</small>
           </div>
           <button type="button" onClick={() => navigate("account", "account")}>Đăng ký ngay</button>
         </section>
