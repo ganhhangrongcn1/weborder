@@ -2,29 +2,14 @@ import { useMemo } from "react";
 import Icon from "../../../components/Icon.jsx";
 import { CustomerButton, CustomerEmptyState } from "../../../components/customer/CustomerUI.jsx";
 import { buildQrCouponOffers, buildQrOfferItems } from "../../../services/qrOfferService.js";
+import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 import { getActiveVouchers } from "../../../utils/pureHelpers.js";
 import { formatMoney } from "../../../utils/format.js";
-
-function matchBranchByQrKey(branch = {}, key = "") {
-  const normalizedKey = String(key || "").trim().toLowerCase();
-  if (!normalizedKey) return false;
-
-  const candidates = [
-    branch?.branch_code,
-    branch?.branchCode,
-    branch?.branch_uuid,
-    branch?.branchUuid,
-    branch?.slug,
-    branch?.id
-  ];
-
-  return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === normalizedKey);
-}
 
 function resolveQrBranch(branches = [], checkoutPreset = {}) {
   const key = String(checkoutPreset?.qrBranchId || checkoutPreset?.selectedBranch || "").trim().toLowerCase();
   if (!key) return null;
-  return (Array.isArray(branches) ? branches : []).find((branch) => matchBranchByQrKey(branch, key)) || null;
+  return resolveBranchFromCandidates([key], branches);
 }
 
 function getCompactBranchName(branch = {}) {

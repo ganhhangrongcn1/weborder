@@ -2,38 +2,12 @@ import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
+import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 
 function getBranchKeyFromPath(pathname = "") {
   const match = String(pathname || "").match(/^\/qr\/([^/]+)$/i);
   if (!match) return "";
   return decodeURIComponent(match[1] || "").trim().toLowerCase();
-}
-
-function inferBranchCodeFromName(name = "") {
-  const normalized = String(name || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  if (normalized.includes("30/4")) return "CN01";
-  if (normalized.includes("thich quang duc")) return "CN02";
-  if (normalized.includes("le hong phong")) return "CN03";
-  return "";
-}
-
-function matchBranchByQrKey(branch = {}, key = "") {
-  const normalizedKey = String(key || "").trim().toLowerCase();
-  if (!normalizedKey) return false;
-  const inferredBranchCode = inferBranchCodeFromName(branch?.name);
-  const candidates = [
-    branch?.branch_code,
-    branch?.branchCode,
-    inferredBranchCode,
-    branch?.branch_uuid,
-    branch?.branchUuid,
-    branch?.slug,
-    branch?.id
-  ];
-  return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === normalizedKey);
 }
 
 function getBranchRuntimeId(branch = {}) {
@@ -57,7 +31,7 @@ export default function QrOrderEntryPage({
   );
 
   const branch = useMemo(
-    () => pickupBranches.find((item) => matchBranchByQrKey(item, branchKey)) || null,
+    () => resolveBranchFromCandidates([branchKey], pickupBranches),
     [pickupBranches, branchKey]
   );
 
@@ -74,7 +48,7 @@ export default function QrOrderEntryPage({
       pickupMode: "soon",
       orderSource: "qr_counter",
       source: "qr_counter",
-      qrBranchId: String(branch?.branch_code || branch?.branchCode || inferBranchCodeFromName(branch?.name) || branch?.id || ""),
+      qrBranchId: String(branch?.branch_code || branch?.branchCode || branch?.id || ""),
       qrBranchLocked: true,
       qrAutoPickupNow: true
     }));

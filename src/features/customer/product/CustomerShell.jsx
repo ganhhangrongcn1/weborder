@@ -19,6 +19,7 @@ import AccountPage from "../account/AccountPage.jsx";
 import QrOrderEntryPage from "../../../pages/customer/qr/QrOrderEntryPage.jsx";
 import QrMiniHomePage from "../../../pages/customer/qr/QrMiniHomePage.jsx";
 import { orderRepository } from "../../../services/repositories/orderRepository.js";
+import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 
 const orderStatusPopupPersistedKeys = new Set();
 const qrMemberPromptSessionKeys = new Set();
@@ -100,24 +101,10 @@ function getOrderStatusPopupCandidate(order = {}, phone = "") {
   return null;
 }
 
-function matchBranchByQrKey(branch = {}, key = "") {
-  const normalizedKey = String(key || "").trim().toLowerCase();
-  if (!normalizedKey) return false;
-  const candidates = [
-    branch?.branch_code,
-    branch?.branchCode,
-    branch?.branch_uuid,
-    branch?.branchUuid,
-    branch?.slug,
-    branch?.id
-  ];
-  return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === normalizedKey);
-}
-
 function resolveQrLockedBranch(branches = [], checkoutPreset = {}) {
   const key = String(checkoutPreset?.qrBranchId || checkoutPreset?.selectedBranch || "").trim().toLowerCase();
   if (!key) return null;
-  return (Array.isArray(branches) ? branches : []).find((branch) => matchBranchByQrKey(branch, key)) || null;
+  return resolveBranchFromCandidates([key], branches);
 }
 
 export default function CustomerShell({

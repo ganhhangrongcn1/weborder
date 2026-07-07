@@ -154,16 +154,16 @@ function findBranchByMappedAlias(candidate = "", branches = []) {
 
   const aliasTargets = [
     {
-      aliases: ["phuhoa", "duong304", "duong30thang4", "304", "30thang4", "30t4"],
-      targets: ["duong304", "duong30thang4", "304", "30thang4", "30t4", "cn01"]
+      aliases: ["phuhoa", "duong304", "duong30thang4", "304", "30thang4", "30t4", "cn1", "cn01"],
+      targets: ["duong304", "duong30thang4", "304", "30thang4", "30t4", "cn1", "cn01"]
     },
     {
-      aliases: ["thichquangduc", "tqd"],
-      targets: ["thichquangduc", "tqd", "cn02"]
+      aliases: ["thichquangduc", "tqd", "cn2", "cn02"],
+      targets: ["thichquangduc", "tqd", "cn2", "cn02"]
     },
     {
-      aliases: ["lehongphong", "lhp"],
-      targets: ["lehongphong", "lhp", "cn03"]
+      aliases: ["lehongphong", "lhp", "cn3", "cn03"],
+      targets: ["lehongphong", "lhp", "cn3", "cn03"]
     }
   ];
 

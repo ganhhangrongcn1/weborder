@@ -1,33 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import CustomerAppShell from "./CustomerAppShell.jsx";
-
-function inferBranchCodeFromName(name = "") {
-  const normalized = String(name || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  if (normalized.includes("30/4")) return "CN01";
-  if (normalized.includes("thich quang duc")) return "CN02";
-  if (normalized.includes("le hong phong")) return "CN03";
-  return "";
-}
-
-function matchBranchByQrKey(branch = {}, key = "") {
-  const normalizedKey = String(key || "").trim().toLowerCase();
-  if (!normalizedKey) return false;
-  const inferredBranchCode = inferBranchCodeFromName(branch?.name);
-  const candidates = [
-    branch?.branch_code,
-    branch?.branchCode,
-    inferredBranchCode,
-    branch?.branch_uuid,
-    branch?.branchUuid,
-    branch?.slug,
-    branch?.id
-  ];
-  return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === normalizedKey);
-}
+import { resolveBranchFromCandidates } from "../../services/branchIdentityService.js";
 
 export default function AppCustomerRoutes(props) {
   const location = useLocation();
@@ -45,7 +19,7 @@ export default function AppCustomerRoutes(props) {
 
     const branchKey = rawBranchId.toLowerCase();
     const pickupBranches = Array.isArray(branches) ? branches.filter((branch) => branch?.pickupEnabled !== false) : [];
-    const matchedBranch = pickupBranches.find((branch) => matchBranchByQrKey(branch, branchKey));
+    const matchedBranch = resolveBranchFromCandidates([branchKey], pickupBranches);
     if (!matchedBranch) return;
 
     setCheckoutPreset?.((current) => {
@@ -59,7 +33,6 @@ export default function AppCustomerRoutes(props) {
         qrBranchId: String(
           matchedBranch?.branch_code ||
             matchedBranch?.branchCode ||
-            inferBranchCodeFromName(matchedBranch?.name) ||
             matchedBranch?.id ||
             ""
         ),
