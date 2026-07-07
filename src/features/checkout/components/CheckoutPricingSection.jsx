@@ -9,6 +9,7 @@ export default function CheckoutPricingSection({
   addToCart,
   openOptionModal,
   navigate,
+  promoCodes = [],
   products,
   toppings,
   coupons,
@@ -44,6 +45,14 @@ export default function CheckoutPricingSection({
 }) {
   const showMemberBenefits = !isQrCounterOrder || isRegisteredCustomer;
   const isBankQrSelected = String(paymentMethod || "").toLowerCase() === "bank_qr";
+  const hasPromoCodes = promoCodes.length > 0;
+  const promoSummary = selectedPromo
+    ? selectedPromo.freeShip
+      ? `${selectedPromo.code} · Hỗ trợ phí ship`
+      : `${selectedPromo.code} · Tiết kiệm ${formatMoney(selectedPromo.discount)}`
+    : hasPromoCodes
+      ? "Chọn mã phù hợp với đơn"
+      : "Hiện chưa có voucher áp dụng";
 
   return (
     <>
@@ -67,16 +76,10 @@ export default function CheckoutPricingSection({
             >
               <span className="promo-select__copy">
                 <small>Mã ưu đãi</small>
-                <strong>
-                  {selectedPromo
-                    ? selectedPromo.freeShip
-                      ? `${selectedPromo.code} · Hỗ trợ phí ship`
-                      : `${selectedPromo.code} · Tiết kiệm ${formatMoney(selectedPromo.discount)}`
-                    : "Chọn mã phù hợp với đơn"}
-                </strong>
+                <strong>{promoSummary}</strong>
               </span>
               <span className="promo-select__status">
-                {selectedPromo ? "Đã áp dụng" : "Chọn"}
+                {selectedPromo ? "Đã áp dụng" : hasPromoCodes ? "Chọn" : "Chưa có"}
                 <Icon name="back" size={14} />
               </span>
             </button>
@@ -104,20 +107,42 @@ export default function CheckoutPricingSection({
           </div>
         </CheckoutCard>
       ) : isQrCounterOrder ? (
-        <CheckoutCard title="Thành viên Gánh" className="qr-member-checkout-card">
-          <div className="qr-member-checkout-note">
-            <Icon name="gift" size={18} />
-            <div className="qr-member-checkout-note__content">
-              <span className="qr-member-checkout-note__text">
-                <strong>Đăng nhập để sử dụng điểm tích lũy và mã ưu đãi.</strong>
-                <small>Dùng số điện thoại thành viên để tích điểm, áp mã và theo dõi đơn hàng.</small>
-              </span>
-              <button type="button" className="qr-member-checkout-note__cta" onClick={() => navigate?.("account", "account")}>
-                Đăng nhập ngay
+        <>
+          <CheckoutCard title="Voucher của quán" className="checkout-benefits-card">
+            <div className="checkout-benefit-stack">
+              <button
+                type="button"
+                onClick={() => setIsPromoModalOpen(true)}
+                className={`promo-select${selectedPromo ? " is-applied" : ""}`}
+                disabled={!hasPromoCodes}
+              >
+                <span className="promo-select__copy">
+                  <small>Mã ưu đãi</small>
+                  <strong>{promoSummary}</strong>
+                </span>
+                <span className="promo-select__status">
+                  {selectedPromo ? "Đã áp dụng" : hasPromoCodes ? "Chọn" : "Chưa có"}
+                  <Icon name="back" size={14} />
+                </span>
               </button>
             </div>
-          </div>
-        </CheckoutCard>
+          </CheckoutCard>
+
+          <CheckoutCard title="Thành viên Gánh" className="qr-member-checkout-card">
+            <div className="qr-member-checkout-note">
+              <Icon name="gift" size={18} />
+              <div className="qr-member-checkout-note__content">
+                <span className="qr-member-checkout-note__text">
+                  <strong>Đăng nhập để sử dụng điểm tích lũy và mã ưu đãi.</strong>
+                  <small>Khi đăng nhập, voucher cá nhân sẽ được gộp chung và ưu tiên hiển thị trước.</small>
+                </span>
+                <button type="button" className="qr-member-checkout-note__cta" onClick={() => navigate?.("account", "account")}>
+                  Đăng nhập ngay
+                </button>
+              </div>
+            </div>
+          </CheckoutCard>
+        </>
       ) : (
         <CheckoutCard title="Ưu đãi & điểm Gánh">
           <div className="checkout-benefit-stack">

@@ -152,10 +152,15 @@ export default function Checkout({
     return currentTier ? { ...loyaltyRule, ...currentTier } : loyaltyRule;
   }, [checkoutLoyalty?.tierId, loyaltyRule]);
 
-  const promoCodes = useMemo(
+  const allPromoCodes = useMemo(
     () => buildCheckoutPromoCodes(coupons, checkoutFallbackCoupons, subtotal, formatMoney, checkoutLoyalty?.voucherHistory || [], demoOrders || []),
     [coupons, subtotal, checkoutLoyalty?.voucherHistory, demoOrders]
   );
+
+  const promoCodes = useMemo(() => {
+    if (!isQrCounterOrder || isRegisteredCustomer) return allPromoCodes;
+    return allPromoCodes.filter((promo) => String(promo?.source || "").toLowerCase() !== "loyalty");
+  }, [allPromoCodes, isQrCounterOrder, isRegisteredCustomer]);
 
   useEffect(() => {
     if (!selectedPromo) return;
@@ -513,6 +518,7 @@ export default function Checkout({
           addToCart={addToCart}
           openOptionModal={openOptionModal}
           navigate={navigate}
+          promoCodes={promoCodes}
           products={products}
           toppings={toppings}
           coupons={coupons}

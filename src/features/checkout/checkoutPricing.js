@@ -105,6 +105,23 @@ function dedupeByCodePreferLoyalty(items) {
   return Array.from(map.values());
 }
 
+function sortCheckoutPromos(items = []) {
+  return [...items].sort((a, b) => {
+    const aPriority = String(a?.source || "").toLowerCase() === "loyalty" ? 0 : 1;
+    const bPriority = String(b?.source || "").toLowerCase() === "loyalty" ? 0 : 1;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+
+    const discountGap = Number(b?.discount || 0) - Number(a?.discount || 0);
+    if (discountGap !== 0) return discountGap;
+
+    const aMinOrder = Number(a?.minOrder || 0);
+    const bMinOrder = Number(b?.minOrder || 0);
+    if (aMinOrder !== bMinOrder) return aMinOrder - bMinOrder;
+
+    return String(a?.title || "").localeCompare(String(b?.title || ""), "vi");
+  });
+}
+
 export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, formatMoney, loyaltyVouchers = [], orders = []) {
   const adminCheckoutCoupons = (coupons.length ? coupons : fallbackCoupons)
     .filter((coupon) => coupon.active !== false && String(coupon.voucherType || "checkout") !== "loyalty")
@@ -138,10 +155,10 @@ export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, form
       minOrder: Number(coupon.minOrder || 0)
     }));
 
-  return dedupeByCodePreferLoyalty([
+  return sortCheckoutPromos(dedupeByCodePreferLoyalty([
     ...adminCheckoutCoupons,
     ...customerLoyaltyCoupons.map((coupon) => normalizeCheckoutCoupon(coupon, subtotal, formatMoney, "loyalty"))
-  ]);
+  ]));
 }
 
 function getActiveFreeShipPromo(smartPromotions = []) {
