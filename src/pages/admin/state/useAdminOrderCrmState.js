@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   buildCustomersFromCrmAnalyticsAsync,
-  buildCustomersFromOrderListAsync,
-  invalidateCrmSupportCache
+  buildCustomersFromOrderListAsync
 } from "../../../services/crmService.js";
 import { getAdminDashboardSummaryRpc } from "../../../services/adminDashboardService.js";
 import { getAdminDashboardRevenueSeriesRpc } from "../../../services/adminDashboardRevenueService.js";
@@ -14,27 +13,21 @@ import {
 } from "../../../services/branchIdentityService.js";
 import {
   buildAdminOrderFeed,
-  readPartnerOrdersForAdmin,
-  subscribeAdminOrderChanges
+  readPartnerOrdersForAdmin
 } from "../../../services/adminOrderFeedService.js";
 import {
   getAdminRequestAuditSnapshot,
   recordAdminRequest,
   resetAdminRequestAudit
 } from "../../../services/adminRequestAuditService.js";
-import { STORAGE_KEYS } from "../../../services/repositories/storageKeys.js";
 import {
   addDaysToVietnamDateInput,
   buildVietnamDateRange,
   hasDateRange,
   toVietnamDateInputValue
 } from "../../../utils/adminDateRange.js";
-import { coreSupabaseRepository } from "../../../services/repositories/coreSupabaseRepository.js";
 
 const SNAPSHOT_CACHE_TTL_MS = 60000;
-const ADMIN_REALTIME_NOTICE_DELAY_MS = 2000;
-const ADMIN_ORDER_REFRESH_DEBOUNCE_MS = 250;
-const ADMIN_DASHBOARD_REALTIME_REFRESH_DEBOUNCE_MS = 10000;
 const ordersSnapshotCache = new Map();
 const ordersSnapshotInFlight = new Map();
 const DASHBOARD_DATA_KEYS = ["summary", "analytics", "revenue", "orders", "traffic"];
@@ -173,27 +166,6 @@ async function loadCrmSnapshotFastFirst(orderStorage, dateRange = {}, selectedBr
   });
 }
 
-function getTimeValue(value = "") {
-  if (!value) return 0;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function realtimeEventMatchesDateRange(change = {}, dateRange = {}) {
-  const table = String(change?.table || "");
-  if (table === "order_items" || table === "partner_order_items") return true;
-
-  const row = change?.payload?.new || change?.payload?.old || {};
-  const timeValue = getTimeValue(table === "partner_orders" ? row.order_time || row.created_at : row.created_at);
-  if (!timeValue) return true;
-
-  const fromValue = getTimeValue(dateRange.dateFrom);
-  const toValue = getTimeValue(dateRange.dateTo);
-  if (fromValue && timeValue < fromValue) return false;
-  if (toValue && timeValue >= toValue) return false;
-  return true;
-}
-
 export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const {
     section = "dashboard",
@@ -213,11 +185,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const [businessAnalytics, setBusinessAnalytics] = useState(null);
   const [siteTrafficSummary, setSiteTrafficSummary] = useState(null);
   const [dashboardDataStatus, setDashboardDataStatus] = useState(createDashboardDataStatus);
-  const [dashboardRefreshVersion, setDashboardRefreshVersion] = useState(0);
   const [crmSnapshot, setCrmSnapshot] = useState({ customers: [], loyaltyConfig: {} });
   const [adminRequestAudit, setAdminRequestAudit] = useState(() => getAdminRequestAuditSnapshot());
-  const [adminOrdersRealtimePending, setAdminOrdersRealtimePending] = useState(false);
-  const [adminOrdersRealtimeCount, setAdminOrdersRealtimeCount] = useState(0);
   const [adminOrdersLoadError, setAdminOrdersLoadError] = useState("");
   const [customerAdminTab, setCustomerAdminTab] = useState("crm");
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState("");
@@ -235,8 +204,6 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       });
       setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
       setAdminOrdersLoadError("");
-      setAdminOrdersRealtimePending(false);
-      setAdminOrdersRealtimeCount(0);
       setAdminRequestAudit(getAdminRequestAuditSnapshot());
       return nextOrders;
     } catch (error) {
@@ -287,7 +254,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid, dashboardRefreshVersion]);
+  }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid]);
 
   useEffect(() => {
     let disposed = false;
@@ -368,7 +335,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid, dashboardRefreshVersion]);
+  }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid]);
 
   useEffect(() => {
     let disposed = false;
@@ -423,78 +390,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches, dashboardRefreshVersion]);
-
-  useEffect(() => {
-    if (section !== "orders") {
-      setAdminOrdersRealtimePending(false);
-      setAdminOrdersRealtimeCount(0);
-      return undefined;
-    }
-
-    let alive = true;
-    let noticeTimer = null;
-    let unsubscribe = () => {};
-
-    async function startRealtime() {
-      unsubscribe = await subscribeAdminOrderChanges((change) => {
-        if (!alive) return;
-        const dateRange = buildVietnamDateRange(ordersDateFrom, ordersDateTo);
-        if (!realtimeEventMatchesDateRange(change, dateRange)) return;
-        if (noticeTimer) window.clearTimeout(noticeTimer);
-        noticeTimer = window.setTimeout(() => {
-          noticeTimer = null;
-          if (!alive) return;
-          setAdminOrdersRealtimePending(true);
-          setAdminOrdersRealtimeCount((count) => count + 1);
-        }, ADMIN_REALTIME_NOTICE_DELAY_MS);
-      });
-    }
-
-    startRealtime();
-
-    return () => {
-      alive = false;
-      if (noticeTimer) {
-        window.clearTimeout(noticeTimer);
-        noticeTimer = null;
-      }
-      unsubscribe?.();
-    };
-  }, [ordersDateFrom, ordersDateTo, section]);
-
-  useEffect(() => {
-    if (section !== "dashboard") return undefined;
-
-    let alive = true;
-    let refreshTimer = null;
-    let unsubscribe = () => {};
-
-    async function startDashboardRealtime() {
-      unsubscribe = await subscribeAdminOrderChanges((change) => {
-        if (!alive) return;
-        const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
-        if (!realtimeEventMatchesDateRange(change, dateRange)) return;
-        if (refreshTimer) window.clearTimeout(refreshTimer);
-        refreshTimer = window.setTimeout(() => {
-          refreshTimer = null;
-          clearOrdersSnapshotCache();
-          setDashboardRefreshVersion((version) => version + 1);
-        }, ADMIN_DASHBOARD_REALTIME_REFRESH_DEBOUNCE_MS);
-      });
-    }
-
-    startDashboardRealtime();
-
-    return () => {
-      alive = false;
-      if (refreshTimer) {
-        window.clearTimeout(refreshTimer);
-        refreshTimer = null;
-      }
-      unsubscribe?.();
-    };
-  }, [dashboardDateFrom, dashboardDateTo, section]);
+  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches]);
 
   useEffect(() => {
     let disposed = false;
@@ -534,24 +430,18 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardChartPreset, selectedBranchName, selectedBranchUuid, dashboardRefreshVersion]);
+  }, [section, dashboardChartPreset, selectedBranchName, selectedBranchUuid]);
 
   useEffect(() => {
-    if (section !== "dashboard" && section !== "orders" && section !== "customers") {
+    if (section !== "customers") {
       return undefined;
     }
 
     let disposed = false;
-    let refreshTimer = null;
-    let profileRealtimeUnsubscribe = () => {};
-    let loyaltyRealtimeUnsubscribe = () => {};
 
-    const refreshCrmOnly = async () => {
-      if (section !== "customers") return;
+    const refreshCrmSnapshot = async () => {
       try {
-        const activeDateFrom = section === "customers" ? customersDateFrom : dashboardDateFrom;
-        const activeDateTo = section === "customers" ? customersDateTo : dashboardDateTo;
-        const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
+        const dateRange = buildVietnamDateRange(customersDateFrom, customersDateTo);
         const nextCrm = await loadCrmSnapshotFastFirst(orderStorage, dateRange, selectedBranchOption);
         if (disposed) return;
         setCrmSnapshot(nextCrm);
@@ -562,109 +452,12 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       }
     };
 
-    const scheduleCrmRefresh = ({ invalidateCache = false } = {}) => {
-      if (section !== "customers") return;
-      if (invalidateCache) {
-        invalidateCrmSupportCache();
-      }
-      if (refreshTimer) window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => {
-        refreshTimer = null;
-        refreshCrmOnly();
-      }, ADMIN_ORDER_REFRESH_DEBOUNCE_MS);
-    };
-
-    const refreshAll = async () => {
-      if (section === "dashboard") {
-        clearOrdersSnapshotCache();
-        setDashboardRefreshVersion((version) => version + 1);
-        return;
-      }
-      const activeDateFrom = section === "orders" ? ordersDateFrom : section === "customers" ? customersDateFrom : dashboardDateFrom;
-      const activeDateTo = section === "orders" ? ordersDateTo : section === "customers" ? customersDateTo : dashboardDateTo;
-      const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
-      clearOrdersSnapshotCache();
-      if (section === "customers") {
-        const crmResult = await loadCrmSnapshotFastFirst(orderStorage, dateRange, selectedBranchOption)
-          .then((value) => ({ status: "fulfilled", value }))
-          .catch((reason) => ({ status: "rejected", reason }));
-        if (disposed) return;
-        if (crmResult.status === "rejected") {
-          console.error("[admin][crm] failed to load snapshot", crmResult.reason);
-        } else {
-          setCrmSnapshot(crmResult.value);
-        }
-        setAdminRequestAudit(getAdminRequestAuditSnapshot());
-        return;
-      }
-      const ordersResult = await loadOrdersSnapshot(orderStorage, dateRange, {
-        includePartnerOrders: true,
-        requireRemote: section === "orders",
-        includeOrderItems: true
-      })
-        .then((value) => ({ status: "fulfilled", value }))
-        .catch((reason) => ({ status: "rejected", reason }));
-      if (disposed) return;
-      const combinedOrders = ordersResult.status === "fulfilled" ? ordersResult.value : [];
-      const shouldScopeCombinedOrders = section === "dashboard";
-      const scopedCombinedOrders = shouldScopeCombinedOrders && selectedBranchOption
-        ? filterOrdersByBranch(combinedOrders, selectedBranchOption)
-        : combinedOrders;
-      if (disposed) return;
-      const nextOrders = section === "dashboard" || section === "orders" ? scopedCombinedOrders : getWebOrdersOnly(combinedOrders);
-      if (ordersResult.status === "rejected") {
-        console.error("[admin][orders] failed to load snapshot", ordersResult.reason);
-        if (section === "orders") {
-          setAdminOrdersLoadError("Không thể tải danh sách đơn hàng từ Supabase.");
-        }
-      } else if (section === "orders") {
-        setAdminOrdersLoadError("");
-      }
-      setOrdersSnapshot(Array.isArray(nextOrders) ? nextOrders : []);
-      setAdminRequestAudit(getAdminRequestAuditSnapshot());
-    };
-
-    const scheduleRefreshAll = () => {
-      if (refreshTimer) window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => {
-        refreshTimer = null;
-        refreshAll();
-      }, ADMIN_ORDER_REFRESH_DEBOUNCE_MS);
-    };
-
-    const handleStorageChange = (event) => {
-      if (event.key === STORAGE_KEYS.ordersByPhone) scheduleRefreshAll();
-    };
-    const handleCustomerDataChange = () => {
-      scheduleCrmRefresh({ invalidateCache: true });
-    };
-
-    window.addEventListener("ghr:orders-changed", scheduleRefreshAll);
-    window.addEventListener("storage", handleStorageChange);
-    window.addEventListener("ghr:customer-data-changed", handleCustomerDataChange);
-    if (section === "customers") {
-      refreshCrmOnly();
-      profileRealtimeUnsubscribe = coreSupabaseRepository.subscribeProfilesRealtime(() => {
-        scheduleCrmRefresh({ invalidateCache: true });
-      });
-      loyaltyRealtimeUnsubscribe = coreSupabaseRepository.subscribeLoyaltyRealtime(() => {
-        scheduleCrmRefresh({ invalidateCache: true });
-      });
-    }
+    refreshCrmSnapshot();
 
     return () => {
       disposed = true;
-      if (refreshTimer) {
-        window.clearTimeout(refreshTimer);
-        refreshTimer = null;
-      }
-      window.removeEventListener("ghr:orders-changed", scheduleRefreshAll);
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("ghr:customer-data-changed", handleCustomerDataChange);
-      profileRealtimeUnsubscribe?.();
-      loyaltyRealtimeUnsubscribe?.();
     };
-  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches]);
+  }, [orderStorage, section, customersDateFrom, customersDateTo, selectedBranchFilter, branches]);
 
   useEffect(() => {
     const syncAudit = () => {
@@ -698,8 +491,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     setCrmSnapshot,
     adminRequestAudit,
     resetAdminRequestAudit: resetAdminAudit,
-    adminOrdersRealtimePending,
-    adminOrdersRealtimeCount,
+    adminOrdersRealtimePending: false,
+    adminOrdersRealtimeCount: 0,
     adminOrdersLoadError,
     refreshAdminOrdersFromRealtime: () => loadActiveOrdersSnapshot({ force: true }).catch(() => []),
     customerAdminTab,
