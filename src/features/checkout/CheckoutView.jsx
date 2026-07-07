@@ -113,6 +113,7 @@ export default function Checkout({
   const [checkoutNotice, setCheckoutNotice] = useState(null);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
+  const [paymentMethod, setPaymentMethod] = useState(isQrCounterOrder ? "bank_qr" : "COD");
   const [pickupContact, setPickupContact] = useState(() => ({
     name: pickCheckoutCustomerName(userProfile, demoUser),
     phone: currentPhone || demoUser?.phone || userProfile?.phone || ""
@@ -263,6 +264,7 @@ export default function Checkout({
     deliverySourceBranch,
     pickupTimeText,
     orderSource: isQrCounterOrder ? "qr_counter" : "online",
+    paymentMethod: isQrCounterOrder ? paymentMethod : "COD",
     navigate,
     onNotice: setCheckoutNotice,
     onVoucherRejected: () => setSelectedPromo(null)
@@ -341,6 +343,11 @@ export default function Checkout({
     if (selectedPromo?.source === "loyalty") setSelectedPromo(null);
     if (usePoints) setUsePoints(false);
   }, [isQrCounterOrder, isRegisteredCustomer, selectedPromo, usePoints]);
+
+  useEffect(() => {
+    if (isQrCounterOrder) return;
+    setPaymentMethod("COD");
+  }, [isQrCounterOrder]);
 
   const handleCheckoutPlaceOrder = async () => {
     if (isPlacingOrder) return;
@@ -535,6 +542,8 @@ export default function Checkout({
           setIsDeliveryFeeModalOpen={setIsDeliveryFeeModalOpen}
           isRegisteredCustomer={isRegisteredCustomer}
           isQrCounterOrder={isQrCounterOrder}
+          paymentMethod={paymentMethod}
+          setPaymentMethod={setPaymentMethod}
         />
       </div>
 
@@ -553,7 +562,7 @@ export default function Checkout({
             className={`cta ${isPlacingOrder ? "is-loading" : ""}`}
             disabled={isPlacingOrder}
           >
-            {isPlacingOrder ? "Đang xác nhận..." : "Đặt món"}
+            {isPlacingOrder ? "Đang xác nhận..." : paymentMethod === "bank_qr" ? "Đặt & thanh toán QR" : "Đặt món"}
           </button>
         </div>
       </div>

@@ -37,9 +37,12 @@ export default function CheckoutPricingSection({
   deliveryDistanceKm,
   setIsDeliveryFeeModalOpen,
   isRegisteredCustomer = false,
-  isQrCounterOrder = false
+  isQrCounterOrder = false,
+  paymentMethod = "COD",
+  setPaymentMethod
 }) {
   const showMemberBenefits = !isQrCounterOrder || isRegisteredCustomer;
+  const isBankQrSelected = String(paymentMethod || "").toLowerCase() === "bank_qr";
 
   return (
     <>
@@ -130,14 +133,45 @@ export default function CheckoutPricingSection({
       )}
 
       <CheckoutCard title="Phương thức thanh toán">
-        <div className="payment-card active" aria-label="Phương thức thanh toán: Tiền mặt">
-          <Icon name="bag" size={18} />
-          <span>
-            <strong>Tiền mặt</strong>
-            <small>Thanh toán khi nhận món</small>
-          </span>
-          <span className="payment-card__selected" aria-hidden="true">✓</span>
-        </div>
+        {isQrCounterOrder ? (
+          <div className="payment-choice-stack">
+            <button
+              type="button"
+              onClick={() => setPaymentMethod?.("bank_qr")}
+              className={`payment-card${isBankQrSelected ? " active" : ""}`}
+              aria-label="Phương thức thanh toán: Quét QR chuyển khoản"
+            >
+              <Icon name="qr" size={18} />
+              <span>
+                <strong>Quét QR thanh toán</strong>
+                <small>Tự chuyển khoản, hệ thống tự xác nhận khi nhận tiền</small>
+              </span>
+              {isBankQrSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMethod?.("counter")}
+              className={`payment-card${!isBankQrSelected ? " active" : ""}`}
+              aria-label="Phương thức thanh toán: Thanh toán tại quầy"
+            >
+              <Icon name="bag" size={18} />
+              <span>
+                <strong>Thanh toán tại quầy</strong>
+                <small>Trả tiền mặt hoặc chuyển khoản trực tiếp cho nhân viên</small>
+              </span>
+              {!isBankQrSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
+            </button>
+          </div>
+        ) : (
+          <div className="payment-card active" aria-label="Phương thức thanh toán: Tiền mặt">
+            <Icon name="bag" size={18} />
+            <span>
+              <strong>Tiền mặt</strong>
+              <small>Thanh toán khi nhận món</small>
+            </span>
+            <span className="payment-card__selected" aria-hidden="true">✓</span>
+          </div>
+        )}
       </CheckoutCard>
 
       <CheckoutTotalCard

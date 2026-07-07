@@ -21,6 +21,7 @@ export default function useCheckoutActions({
   deliverySourceBranch,
   pickupTimeText,
   orderSource = "online",
+  paymentMethod = "COD",
   navigate,
   onNotice,
   onVoucherRejected,
@@ -98,7 +99,8 @@ export default function useCheckoutActions({
       selectedBranchInfo,
       deliverySourceBranch,
       pickupTimeText,
-      orderSource
+      orderSource,
+      paymentMethod
     });
     console.info("[checkout-debug] handlePlaceOrder:payload", {
       totalAmount: orderPayload.totalAmount,

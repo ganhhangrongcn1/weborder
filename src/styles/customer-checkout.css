@@ -989,6 +989,26 @@
   text-align: left;
 }
 
+button.payment-card {
+  cursor: pointer;
+}
+
+.payment-choice-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-card:not(.active) {
+  border-color: rgba(85, 61, 41, 0.1);
+  background: #ffffff;
+}
+
+.payment-card.active {
+  border-color: rgba(255, 106, 0, 0.45);
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+  box-shadow: 0 12px 28px rgba(255, 106, 0, 0.1);
+}
+
 .payment-card__selected {
   display: grid;
   width: 25px;
@@ -1597,6 +1617,186 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.order-success-card--waiting {
+  border-color: rgba(255, 106, 0, 0.18);
+}
+
+.qr-payment-wait-card {
+  margin-top: 16px;
+  border: 1px solid rgba(255, 106, 0, 0.22);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 181, 0, 0.22), transparent 36%),
+    #fffaf2;
+  padding: 14px;
+  text-align: left;
+  box-shadow: 0 18px 34px rgba(255, 106, 0, 0.12);
+}
+
+.qr-payment-wait-card.is-paid {
+  border-color: rgba(22, 130, 68, 0.22);
+  background: #f0fff6;
+  box-shadow: 0 18px 34px rgba(22, 130, 68, 0.1);
+}
+
+.qr-payment-wait-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.qr-payment-wait-card__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 16px;
+  background: #ff6a00;
+  color: #ffffff;
+}
+
+.qr-payment-wait-card.is-paid .qr-payment-wait-card__icon {
+  background: #168244;
+}
+
+.qr-payment-wait-card__head small,
+.qr-payment-wait-card__head strong {
+  display: block;
+}
+
+.qr-payment-wait-card__head small {
+  color: rgba(58, 31, 20, 0.48);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.qr-payment-wait-card__head strong {
+  margin-top: 2px;
+  color: #2b170f;
+  font-size: 17px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.qr-payment-wait-card__qr {
+  display: grid;
+  margin: 14px auto 0;
+  width: min(230px, 100%);
+  place-items: center;
+  border: 1px dashed rgba(255, 106, 0, 0.22);
+  border-radius: 20px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.qr-payment-wait-card__qr img {
+  display: block;
+  width: 100%;
+  max-width: 210px;
+  border-radius: 14px;
+}
+
+.qr-payment-wait-card__empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  border-radius: 16px;
+  background: #fff1e8;
+  padding: 12px;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.qr-payment-wait-card__info {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.qr-payment-wait-card__info span {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 10px 11px;
+}
+
+.qr-payment-wait-card__info small,
+.qr-payment-wait-card__info strong {
+  display: block;
+}
+
+.qr-payment-wait-card__info small {
+  color: rgba(58, 31, 20, 0.5);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.qr-payment-wait-card__info strong {
+  max-width: 58%;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 950;
+  text-align: right;
+  word-break: break-word;
+}
+
+.qr-payment-wait-card__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.qr-payment-wait-card__actions button,
+.qr-payment-wait-card__actions a {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  border: 0;
+  border-radius: 14px;
+  background: #ff6a00;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 950;
+  text-align: center;
+  text-decoration: none;
+}
+
+.qr-payment-wait-card__actions button:first-child {
+  background: #fff1e8;
+  color: #d95600;
+}
+
+.qr-payment-wait-card__actions button:disabled {
+  opacity: 0.65;
+}
+
+.qr-payment-wait-card__note,
+.qr-payment-wait-card__message,
+.qr-payment-wait-card__paid-text {
+  margin-top: 10px;
+  color: rgba(58, 31, 20, 0.62);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.qr-payment-wait-card__message {
+  color: #d95600;
+}
+
+.qr-payment-wait-card__paid-text {
+  color: #168244;
 }
 
 .success-member-prompt {

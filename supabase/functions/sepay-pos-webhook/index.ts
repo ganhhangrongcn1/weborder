@@ -550,6 +550,97 @@ async function ensureCustomerBillPrintJob(
   };
 }
 
+async function markOrderPaidFromPaymentSession(
+  supabase: ReturnType<typeof createClient>,
+  session: JsonRecord,
+  options: {
+    transferAmount: number;
+    transactionTime: string;
+    providerTransactionId: string;
+    payload: JsonRecord;
+  }
+) {
+  const orderId = toText(session.order_id);
+  if (!orderId) {
+    return { ok: true, updated: false, reason: "session_without_order" };
+  }
+
+  const { data: order, error: readError } = await supabase
+    .from("orders")
+    .select(ORDER_COLUMNS)
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (readError || !order) {
+    return {
+      ok: false,
+      updated: false,
+      reason: readError?.message || "order_not_found"
+    };
+  }
+
+  const metadata = getObject(order.metadata);
+  const alreadyPaid = toText(metadata.paymentStatus || metadata.payment_status).toLowerCase() === "paid";
+  if (!alreadyPaid) {
+    const paymentReference = toText(session.payment_reference);
+    const nextMetadata = {
+      ...metadata,
+      status: "pending_zalo",
+      kitchenStatus: "pending",
+      paymentMethod: "bank_qr",
+      paymentStatus: "paid",
+      paymentAmount: options.transferAmount,
+      paymentReference,
+      qrPaymentSessionId: toText(session.id),
+      paidAt: options.transactionTime,
+      paymentProvider: "sepay",
+      sepayWebhook: {
+        id: options.payload.id ?? null,
+        gateway: toText(options.payload.gateway),
+        accountNumber: toText(options.payload.accountNumber),
+        transactionDate: options.transactionTime,
+        code: toText(options.payload.code),
+        content: toText(options.payload.content),
+        referenceCode: toText(options.payload.referenceCode),
+        transferAmount: options.transferAmount,
+        providerTransactionId: options.providerTransactionId
+      }
+    };
+
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        status: "pending_zalo",
+        kitchen_status: "pending",
+        payment_method: "bank_qr",
+        updated_at: new Date().toISOString(),
+        metadata: nextMetadata
+      })
+      .eq("id", orderId);
+
+    if (updateError) {
+      return {
+        ok: false,
+        updated: false,
+        reason: updateError.message || "order_update_failed"
+      };
+    }
+
+    order.status = "pending_zalo";
+    order.kitchen_status = "pending";
+    order.payment_method = "bank_qr";
+    order.metadata = nextMetadata;
+  }
+
+  const printJob = await ensureCustomerBillPrintJob(supabase, order);
+  return {
+    ok: true,
+    updated: !alreadyPaid,
+    reason: alreadyPaid ? "already_paid" : "paid_and_sent_to_kitchen",
+    printJob
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return new Response(
@@ -727,15 +818,30 @@ Deno.serve(async (request) => {
     }
 
     const paidSession = getObject(paymentResult.session);
+    const orderPaymentResult = await markOrderPaidFromPaymentSession(
+      supabase,
+      paidSession,
+      {
+        transferAmount,
+        transactionTime,
+        providerTransactionId: toText(body.id || body.referenceCode || body.code),
+        payload: body
+      }
+    );
+
+    if (!orderPaymentResult.ok) {
+      console.error("[sepay-pos-webhook] update order from payment session failed", orderPaymentResult.reason);
+    }
+
     await tryInsertWebhookLog(supabase, {
       webhook_code: webhookCode,
       transfer_type: transferType,
       transfer_amount: transferAmount,
       matched_order_id: toText(paidSession.order_id) || null,
       matched_payment_session_id: toText(paidSession.id),
-      processed_result: paymentResult.alreadyPaid
-        ? "payment_session_already_paid"
-        : "payment_session_paid",
+      processed_result: orderPaymentResult.ok
+        ? toText(orderPaymentResult.reason) || "payment_session_paid"
+        : "payment_session_paid_order_update_failed",
       raw_payload: body,
       created_at: new Date().toISOString()
     });
@@ -746,10 +852,12 @@ Deno.serve(async (request) => {
         matched: true,
         matchedType: "payment_session",
         updated: !paymentResult.alreadyPaid,
+        orderUpdated: Boolean(orderPaymentResult.ok && orderPaymentResult.updated),
         paymentSessionId: toText(paidSession.id),
         paymentReference: toText(paidSession.payment_reference),
         orderId: toText(paidSession.order_id) || null,
-        status: toText(paidSession.status)
+        status: toText(paidSession.status),
+        printJob: getObject(orderPaymentResult.printJob)
       }),
       {
         status: 200,

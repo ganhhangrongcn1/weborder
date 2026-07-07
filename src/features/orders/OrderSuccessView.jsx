@@ -1,7 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard, CustomerModalFrame } from "../../components/customer/CustomerUI.jsx";
 import { formatMoney } from "../../utils/format.js";
+import {
+  buildQrOrderPaymentImageUrl,
+  createQrOrderPaymentSession,
+  findQrOrderPaymentBranch,
+  getQrOrderPaymentConfig,
+  getQrOrderPaymentReference,
+  isQrBankPaymentOrder,
+  isQrOrderPaid,
+  readQrOrderPaymentSession
+} from "../../services/qrPaymentService.js";
 
 function buildOrderTrackingPath(orderCode = "") {
   const code = String(orderCode || "").trim();
@@ -49,14 +59,33 @@ export default function OrderSuccess({
   navigate,
   order,
   isRegisteredCustomer = false,
-  currentPhone = ""
+  currentPhone = "",
+  branches = []
 }) {
-  const [showSuccessPopup, setShowSuccessPopup] = useState(true);
+  const isQrPaymentOrder = isQrBankPaymentOrder(order);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(() => !isQrPaymentOrder);
+  const [paymentSession, setPaymentSession] = useState(null);
+  const [paymentMessage, setPaymentMessage] = useState("");
   const orderCode = order?.orderCode || order?.id || "Đơn mới";
   const itemCount = getOrderItemsCount(order);
   const orderTotal = getOrderTotal(order);
   const fulfillmentText = getFulfillmentText(order);
   const branchText = getBranchText(order);
+  const paymentBranch = useMemo(() => findQrOrderPaymentBranch(order, branches), [branches, order]);
+  const paymentConfig = useMemo(() => getQrOrderPaymentConfig(paymentBranch), [paymentBranch]);
+  const paymentReference = getQrOrderPaymentReference(order, paymentSession);
+  const qrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
+  const qrPaymentPaid = isQrOrderPaid(order, paymentSession);
+  const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid;
+  const statusEyebrow = isQrPaymentWaiting ? "Chờ thanh toán" : "Đặt món thành công";
+  const statusTitle = isQrPaymentWaiting ? "Quét QR để thanh toán" : "Đơn hàng đã được ghi nhận";
+  const statusDescription = isQrPaymentWaiting
+    ? "Sau khi ngân hàng báo tiền vào, màn hình sẽ tự chuyển sang đã thanh toán và quán bắt đầu làm món."
+    : "Theo dõi đơn để biết khi nào món sẵn sàng. Đăng nhập thành viên để nhận thông báo và ưu đãi cho lần sau.";
+  const statusIcon = isQrPaymentWaiting ? "qr" : "check";
+  const statusIconClass = isQrPaymentWaiting ? "bg-orange-50 text-orange-600" : "bg-green-100 text-green-700";
+  const statusTextClass = isQrPaymentWaiting ? "text-orange-600" : "text-green-700";
+  const statusTitleClass = isQrPaymentWaiting ? "text-orange-700" : "text-green-800";
 
   const memberBenefits = useMemo(() => ([
     {
@@ -75,6 +104,48 @@ export default function OrderSuccess({
       text: "Đăng nhập để theo dõi trạng thái và nhận nhắc hoàn tất."
     }
   ]), []);
+
+  useEffect(() => {
+    if (!isQrPaymentOrder || !order) return undefined;
+    setShowSuccessPopup(false);
+
+    let isActive = true;
+    let timerId = null;
+
+    async function syncPaymentSession({ create = false } = {}) {
+      if (!isActive) return;
+      const result = create
+        ? await createQrOrderPaymentSession({ order })
+        : await readQrOrderPaymentSession({ order });
+      if (!isActive) return;
+      if (result.ok && result.session) {
+        setPaymentSession(result.session);
+        setPaymentMessage("");
+      } else if (result.message) {
+        setPaymentMessage(result.message);
+      }
+    }
+
+    syncPaymentSession({ create: true });
+    timerId = window.setInterval(() => {
+      syncPaymentSession({ create: false });
+    }, 3500);
+
+    return () => {
+      isActive = false;
+      if (timerId) window.clearInterval(timerId);
+    };
+  }, [isQrPaymentOrder, order]);
+
+  const handleCopyPaymentReference = async () => {
+    if (!paymentReference) return;
+    try {
+      await navigator.clipboard?.writeText(paymentReference);
+      setPaymentMessage("Đã sao chép nội dung chuyển khoản.");
+    } catch {
+      setPaymentMessage("Anh/chị copy nội dung chuyển khoản trên màn hình giúp em nhé.");
+    }
+  };
 
   const handleTrackOrder = () => openTrackingRoute(orderCode, navigate);
   const handleMemberAction = () => {
@@ -109,27 +180,29 @@ export default function OrderSuccess({
   return (
     <section className="order-success-page px-4 py-5">
       <div className="mx-auto grid w-full max-w-[430px] gap-4">
-        <CustomerCard tone="success" padding="lg" className="text-center">
-          <div className="mx-auto grid h-20 w-20 place-items-center rounded-[24px] bg-green-100 text-green-700">
-            <Icon name="check" size={30} />
+        <CustomerCard tone={isQrPaymentWaiting ? "default" : "success"} padding="lg" className={`text-center${isQrPaymentWaiting ? " order-success-card--waiting" : ""}`}>
+          <div className={`mx-auto grid h-20 w-20 place-items-center rounded-[24px] ${statusIconClass}`}>
+            <Icon name={statusIcon} size={30} />
           </div>
-          <p className="mt-5 customer-caption uppercase text-green-700">Đặt món thành công</p>
-          <h1 className="mt-2 text-2xl font-black leading-tight text-green-800">
-            Đơn hàng đã được ghi nhận
+          <p className={`mt-5 customer-caption uppercase ${statusTextClass}`}>{statusEyebrow}</p>
+          <h1 className={`mt-2 text-2xl font-black leading-tight ${statusTitleClass}`}>
+            {statusTitle}
           </h1>
           <p className="mt-2 text-sm font-bold leading-6 text-brown/70">
-            Theo dõi đơn để biết khi nào món sẵn sàng. Đăng nhập thành viên để nhận thông báo và ưu đãi cho lần sau.
+            {statusDescription}
           </p>
 
-          <div className="success-member-prompt mt-5">
-            <div>
-              <span>Thành viên GHR</span>
-              <strong>Tích điểm, nhận voucher và thông báo khi món hoàn tất.</strong>
+          {!isQrPaymentOrder ? (
+            <div className="success-member-prompt mt-5">
+              <div>
+                <span>Thành viên GHR</span>
+                <strong>Tích điểm, nhận voucher và thông báo khi món hoàn tất.</strong>
+              </div>
+              <button type="button" onClick={handleMemberAction}>
+                {isRegisteredCustomer ? "Xem ngay" : "Tham gia"}
+              </button>
             </div>
-            <button type="button" onClick={handleMemberAction}>
-              {isRegisteredCustomer ? "Xem ngay" : "Tham gia"}
-            </button>
-          </div>
+          ) : null}
 
           <div className="mt-5 rounded-3xl border border-green-100 bg-white p-4 text-left shadow-soft">
             <div className="flex items-start justify-between gap-3">
@@ -138,7 +211,7 @@ export default function OrderSuccess({
                 <strong className="mt-1 block text-2xl font-black text-brown">{orderCode}</strong>
               </div>
               <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-600">
-                Đơn mới
+                {isQrPaymentWaiting ? "Chờ thanh toán" : "Đơn mới"}
               </span>
             </div>
 
@@ -162,6 +235,68 @@ export default function OrderSuccess({
             </div>
           </div>
 
+          {isQrPaymentOrder ? (
+            <div className={`qr-payment-wait-card${qrPaymentPaid ? " is-paid" : ""}`}>
+              <div className="qr-payment-wait-card__head">
+                <span className="qr-payment-wait-card__icon">
+                  <Icon name={qrPaymentPaid ? "check" : "qr"} size={20} />
+                </span>
+                <div>
+                  <small>{qrPaymentPaid ? "Đã nhận thanh toán" : "Thanh toán QR"}</small>
+                  <strong>{qrPaymentPaid ? "Quán đã nhận tiền" : "Quét mã để chuyển khoản"}</strong>
+                </div>
+              </div>
+
+              {!qrPaymentPaid ? (
+                <>
+                  {qrPaymentImageUrl ? (
+                    <div className="qr-payment-wait-card__qr">
+                      <img src={qrPaymentImageUrl} alt="QR thanh toán ngân hàng" />
+                    </div>
+                  ) : (
+                    <div className="qr-payment-wait-card__empty">
+                      <Icon name="warning" size={20} />
+                      <span>Chi nhánh này chưa có cấu hình tài khoản ngân hàng. Anh/chị thanh toán tại quầy giúp em.</span>
+                    </div>
+                  )}
+
+                  <div className="qr-payment-wait-card__info">
+                    <span>
+                      <small>Số tiền</small>
+                      <strong>{formatMoney(paymentSession?.amountExpected || orderTotal)}</strong>
+                    </span>
+                    <span>
+                      <small>Nội dung chuyển khoản</small>
+                      <strong>{paymentReference}</strong>
+                    </span>
+                    {paymentConfig.ready ? (
+                      <span>
+                        <small>Tài khoản nhận</small>
+                        <strong>{paymentConfig.bankName} · {paymentConfig.accountNumber}</strong>
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="qr-payment-wait-card__actions">
+                    <button type="button" onClick={handleCopyPaymentReference}>Sao chép nội dung</button>
+                    {qrPaymentImageUrl ? (
+                      <a href={qrPaymentImageUrl} target="_blank" rel="noreferrer">Mở/tải QR</a>
+                    ) : null}
+                  </div>
+                  <p className="qr-payment-wait-card__note">
+                    Hệ thống đang tự chờ SePay xác nhận. Anh/chị không cần bấm báo đã chuyển khoản.
+                  </p>
+                </>
+              ) : (
+                <p className="qr-payment-wait-card__paid-text">
+                  Đơn đã được xác nhận thanh toán. Quán sẽ ưu tiên làm món ngay cho anh/chị.
+                </p>
+              )}
+
+              {paymentMessage ? <p className="qr-payment-wait-card__message">{paymentMessage}</p> : null}
+            </div>
+          ) : null}
+
           <CustomerButton full size="lg" className="mt-5" onClick={handleTrackOrder}>
             Theo dõi đúng đơn này
           </CustomerButton>
@@ -170,35 +305,37 @@ export default function OrderSuccess({
           </CustomerButton>
         </CustomerCard>
 
-        <CustomerCard padding="lg" className="member-benefit-card">
-          <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-              <Icon name="bag" size={20} />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-brown/55">Thành viên GHR</p>
-              <h2 className="text-lg font-black leading-tight text-brown">Quyền lợi khi quay lại</h2>
-            </div>
-          </div>
-
-          <div className="mt-4 divide-y divide-orange-100">
-            {memberBenefits.map((benefit) => (
-              <div key={benefit.title} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                  <Icon name={benefit.icon} size={18} />
-                </span>
-                <div className="min-w-0">
-                  <strong className="block text-sm font-black text-brown">{benefit.title}</strong>
-                  <span className="mt-1 block text-xs font-semibold leading-5 text-brown/60">{benefit.text}</span>
-                </div>
+        {!isQrPaymentOrder ? (
+          <CustomerCard padding="lg" className="member-benefit-card">
+            <div className="flex items-start gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-50 text-orange-600">
+                <Icon name="bag" size={20} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-brown/55">Thành viên GHR</p>
+                <h2 className="text-lg font-black leading-tight text-brown">Quyền lợi khi quay lại</h2>
               </div>
-            ))}
-          </div>
+            </div>
 
-          <CustomerButton full variant={isRegisteredCustomer ? "soft" : "primary"} className="mt-5" onClick={handleMemberAction}>
-            {memberActionText}
-          </CustomerButton>
-        </CustomerCard>
+            <div className="mt-4 divide-y divide-orange-100">
+              {memberBenefits.map((benefit) => (
+                <div key={benefit.title} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-orange-50 text-orange-600">
+                    <Icon name={benefit.icon} size={18} />
+                  </span>
+                  <div className="min-w-0">
+                    <strong className="block text-sm font-black text-brown">{benefit.title}</strong>
+                    <span className="mt-1 block text-xs font-semibold leading-5 text-brown/60">{benefit.text}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <CustomerButton full variant={isRegisteredCustomer ? "soft" : "primary"} className="mt-5" onClick={handleMemberAction}>
+              {memberActionText}
+            </CustomerButton>
+          </CustomerCard>
+        ) : null}
       </div>
 
       {showSuccessPopup && (
