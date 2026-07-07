@@ -18,7 +18,7 @@ import {
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
 const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
-const KITCHEN_BACKGROUND_REFRESH_MS = 60000;
+const KITCHEN_BACKGROUND_REFRESH_MS = 15000;
 const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
 const DONE_ORDER_PAGE_SIZE = 20;
@@ -82,11 +82,6 @@ function buildKitchenRealtimeStatus(status = "idle", error = null) {
     tone: "muted",
     updatedAt: new Date().toISOString()
   };
-}
-
-function shouldUseKitchenPollingFallback(realtimeStatus = {}) {
-  const status = String(realtimeStatus?.status || "").trim().toLowerCase();
-  return !["connected", "connecting"].includes(status);
 }
 
 function getTodayDateKey() {
@@ -758,12 +753,11 @@ export default function useKitchenOrders(options = null) {
     if (!enabled || typeof window === "undefined") return undefined;
     const timer = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-      if (!shouldUseKitchenPollingFallback(realtimeStatus)) return;
       loadOrders({ silent: true });
     }, KITCHEN_BACKGROUND_REFRESH_MS);
 
     return () => window.clearInterval(timer);
-  }, [enabled, loadOrders, realtimeStatus]);
+  }, [enabled, loadOrders]);
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return undefined;
