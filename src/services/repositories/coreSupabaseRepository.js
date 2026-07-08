@@ -507,9 +507,43 @@ function mapOrderItemRowToCartItem(item = {}) {
   };
 }
 
-function getDateKeyFromIso(value) {
-  const iso = String(value || "");
-  return iso.length >= 10 ? iso.slice(0, 10) : "";
+function normalizeDateKey(value = "") {
+  const text = String(value || "").trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : "";
+}
+
+function getVietnamDateKeyFromIso(value) {
+  const normalizedDate = normalizeDateKey(value);
+  if (!normalizedDate && !value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return normalizedDate;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).formatToParts(date).reduce((map, part) => {
+      if (part.type !== "literal") map[part.type] = part.value;
+      return map;
+    }, {});
+    if (parts.year && parts.month && parts.day) {
+      return `${parts.year}-${parts.month}-${parts.day}`;
+    }
+  } catch {
+    // Keep the existing ISO fallback if Intl timezone support is unavailable.
+  }
+  return normalizedDate;
+}
+
+function getCheckinBusinessDateKey(entry = {}) {
+  const metadata = entry?.metadata && typeof entry.metadata === "object" ? entry.metadata : {};
+  return (
+    normalizeDateKey(metadata.businessDate) ||
+    normalizeDateKey(metadata.business_date) ||
+    getVietnamDateKeyFromIso(entry?.createdAt)
+  );
 }
 
 function previousDateKey(dateKey) {
@@ -524,7 +558,7 @@ function buildCheckinStatsFromLedger(pointHistory = []) {
     new Set(
       (pointHistory || [])
         .filter((entry) => isCheckinLikeEntryType(entry?.type))
-        .map((entry) => getDateKeyFromIso(entry?.createdAt))
+        .map((entry) => getCheckinBusinessDateKey(entry))
         .filter(Boolean)
     )
   ).sort((a, b) => String(b).localeCompare(String(a)));
@@ -574,13 +608,23 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     createdAt: row.created_at
   }));
   const totalPoints = pointHistory.reduce((sum, entry) => sum + Number(entry?.points || 0), 0);
+  const accountTotalPoints = Number(accountRow?.total_points);
+  const resolvedTotalPoints = Number.isFinite(accountTotalPoints)
+    ? accountTotalPoints
+    : totalPoints;
   const checkinStats = buildCheckinStatsFromLedger(pointHistory);
+  const accountLastCheckinDate = normalizeDateKey(accountRow?.last_checkin_date);
+  const accountCheckinHistory = Array.from(new Set([
+    ...(checkinStats.checkinHistory || []),
+    accountLastCheckinDate
+  ].filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
+  const accountCheckinStreak = Number(accountRow?.checkin_streak || 0);
 
   return {
     phone,
-    totalPoints: Math.max(0, Number(totalPoints || 0)),
-    checkinStreak: Number(checkinStats.checkinStreak || 0),
-    lastCheckinDate: checkinStats.lastCheckinDate || null,
+    totalPoints: Math.max(0, Number(resolvedTotalPoints || 0)),
+    checkinStreak: accountLastCheckinDate ? accountCheckinStreak : Number(checkinStats.checkinStreak || 0),
+    lastCheckinDate: accountLastCheckinDate || checkinStats.lastCheckinDate || null,
     lastMissedStreak: Number(accountRow?.last_missed_streak || 0),
     comebackUsedDate: accountRow?.comeback_used_date || null,
     voucherHistory: Array.isArray(accountRow?.vouchers) ? accountRow.vouchers : [],
@@ -592,7 +636,7 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     lastPurchaseAt: accountRow?.last_purchase_at || null,
     pointsExpiresAt: accountRow?.points_expires_at || null,
     pointHistory,
-    checkinHistory: checkinStats.checkinHistory
+    checkinHistory: accountCheckinHistory
   };
 }
 
