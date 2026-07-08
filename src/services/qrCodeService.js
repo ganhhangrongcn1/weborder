@@ -125,7 +125,7 @@ const reedSolomonGenerator = (degree) => {
 };
 
 const makeErrorCorrection = (data) => {
-  const divisor = reedSolomonGenerator(ECC_CODEWORDS);
+  const divisor = reedSolomonGenerator(ECC_CODEWORDS).slice(0, ECC_CODEWORDS).reverse();
   const result = Array(ECC_CODEWORDS).fill(0);
 
   data.forEach((byte) => {

@@ -30,6 +30,8 @@ const BANK_OPTIONS = [
   { bin: "970439", name: "Public Bank Vietnam" }
 ];
 
+const QR_ORDER_PUBLIC_ORIGIN = "https://ganhhangrong.vn";
+
 export default function BranchSettings({
   branches,
   setBranches,
@@ -49,9 +51,10 @@ export default function BranchSettings({
   const [branchSaving, setBranchSaving] = useState(false);
   const [shippingSaving, setShippingSaving] = useState(false);
   const [previewBranchId, setPreviewBranchId] = useState("");
+  const [qrModalBranchId, setQrModalBranchId] = useState("");
+  const [qrRefreshVersionByBranchId, setQrRefreshVersionByBranchId] = useState({});
   const getSiteOrigin = () => {
-    if (typeof window === "undefined") return "";
-    return String(window.location.origin || "").trim();
+    return QR_ORDER_PUBLIC_ORIGIN;
   };
   const inferBranchCodeFromName = (name = "") => {
     const normalized = String(name || "")
@@ -72,6 +75,7 @@ export default function BranchSettings({
     if (slug) return slug;
     return String(branch?.id || "").trim();
   };
+  const getQrRefreshKey = (branch) => String(branch?.id || getQrBranchKey(branch) || "branch");
   const getBranchQrUrl = (branch) => {
     const branchKey = encodeURIComponent(getQrBranchKey(branch));
     return `${getSiteOrigin()}/qr/${branchKey}`;
@@ -142,6 +146,18 @@ export default function BranchSettings({
     printWindow.focus();
     printWindow.print();
   };
+  const regenerateBranchQr = (branch) => {
+    const refreshKey = getQrRefreshKey(branch);
+    setQrRefreshVersionByBranchId((current) => ({
+      ...current,
+      [refreshKey]: (current[refreshKey] || 0) + 1
+    }));
+    setBranchSaveMessage(`Đã tạo lại QR chi nhánh theo link ${getBranchQrUrl(branch)}.`);
+  };
+  const openBranchQrModal = (branch) => {
+    setQrModalBranchId(String(branch?.id || ""));
+    regenerateBranchQr(branch);
+  };
 
   const getBranchPaymentPreviewUrl = (branch) =>
     buildPosQrImageUrl({
@@ -166,6 +182,11 @@ export default function BranchSettings({
   const shippingDirty = useMemo(
     () => JSON.stringify(draftShippingConfig || {}) !== JSON.stringify(shippingConfig || {}),
     [draftShippingConfig, shippingConfig]
+  );
+
+  const qrModalBranch = useMemo(
+    () => draftBranches.find((branch) => String(branch?.id || "") === String(qrModalBranchId || "")) || null,
+    [draftBranches, qrModalBranchId]
   );
 
   const extractOpenCloseTime = (branch) => {
@@ -399,6 +420,8 @@ export default function BranchSettings({
             const qrPaymentConfig = getPosQrPaymentConfig(branch);
             const paymentPreviewOpen = previewBranchId === branch.id;
             const paymentPreviewUrl = paymentPreviewOpen && qrPaymentConfig.ready ? getBranchPaymentPreviewUrl(branch) : "";
+            const qrRefreshKey = getQrRefreshKey(branch);
+            const qrRefreshVersion = qrRefreshVersionByBranchId[qrRefreshKey] || 0;
 
             return (
               <div key={branch.id} className="admin-edit-card admin-branch-card">
@@ -502,6 +525,7 @@ export default function BranchSettings({
                       <span className="text-xs font-semibold text-brown/70">QR order tại quầy</span>
                       <div className="admin-branch-qr-preview">
                         <img
+                          key={`${qrRefreshKey}-${qrRefreshVersion}`}
                           src={getBranchQrPreviewUrl(branch)}
                           alt={`QR order tại quầy ${String(branch?.name || "")}`}
                         />
@@ -514,6 +538,9 @@ export default function BranchSettings({
                         {getBranchQrUrl(branch)}
                       </code>
                       <div className="flex flex-wrap items-center gap-2">
+                        <AdminButton variant="secondary" onClick={() => openBranchQrModal(branch)}>
+                          Xem QR lớn
+                        </AdminButton>
                         <AdminButton
                           variant="secondary"
                           onClick={async () => {
@@ -727,6 +754,61 @@ export default function BranchSettings({
           Khôi phục phí ship mặc định
         </AdminButton>
       </AdminCard>
+
+      {qrModalBranch ? (
+        <div className="admin-qr-modal-backdrop" role="presentation" onClick={() => setQrModalBranchId("")}>
+          <div
+            className="admin-qr-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`QR order tại quầy ${String(qrModalBranch?.name || "")}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="admin-qr-modal-head">
+              <div>
+                <span>QR order tại quầy</span>
+                <strong>{String(qrModalBranch?.branch_code || qrModalBranch?.branchCode || getQrBranchKey(qrModalBranch) || "QR")}</strong>
+              </div>
+              <AdminButton variant="secondary" onClick={() => setQrModalBranchId("")}>
+                Đóng
+              </AdminButton>
+            </div>
+            <div className="admin-qr-modal-preview">
+              <img
+                key={`modal-${getQrRefreshKey(qrModalBranch)}-${qrRefreshVersionByBranchId[getQrRefreshKey(qrModalBranch)] || 0}`}
+                src={getBranchQrPreviewUrl(qrModalBranch)}
+                alt={`QR order tại quầy ${String(qrModalBranch?.name || "")}`}
+              />
+            </div>
+            <code>{getBranchQrUrl(qrModalBranch)}</code>
+            <div className="admin-qr-modal-actions">
+              <AdminButton variant="secondary" onClick={() => regenerateBranchQr(qrModalBranch)}>
+                Tạo lại QR
+              </AdminButton>
+              <AdminButton
+                variant="secondary"
+                onClick={async () => {
+                  const link = getBranchQrUrl(qrModalBranch);
+                  try {
+                    await navigator.clipboard.writeText(link);
+                    setBranchSaveMessage("Đã copy link QR chi nhánh.");
+                  } catch {
+                    setBranchSaveMessage("Không thể copy tự động. Vui lòng copy thủ công.");
+                  }
+                }}
+              >
+                Copy link
+              </AdminButton>
+              <AdminButton variant="secondary" onClick={() => downloadBranchQr(qrModalBranch)}>
+                Tải PNG
+              </AdminButton>
+              <AdminButton variant="secondary" onClick={() => printBranchQr(qrModalBranch)}>
+                In QR
+              </AdminButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

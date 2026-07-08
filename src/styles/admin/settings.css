@@ -155,6 +155,95 @@
   line-height: 1.45;
 }
 
+.admin-qr-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.54);
+  padding: 18px;
+}
+
+.admin-qr-modal {
+  display: grid;
+  width: min(460px, 100%);
+  max-height: calc(100vh - 36px);
+  gap: 14px;
+  overflow: auto;
+  border: 1px solid #fed7aa;
+  border-radius: 18px;
+  background: #fffaf3;
+  padding: 18px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+}
+
+.admin-qr-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-qr-modal-head span,
+.admin-qr-modal-head strong {
+  display: block;
+}
+
+.admin-qr-modal-head span {
+  color: #9a5a2c;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.admin-qr-modal-head strong {
+  margin-top: 3px;
+  color: #7c2d12;
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.admin-qr-modal-preview {
+  display: flex;
+  justify-content: center;
+  border: 1px solid #fed7aa;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.admin-qr-modal-preview img {
+  width: min(320px, 100%);
+  aspect-ratio: 1;
+  border: 1px solid #ffedd5;
+  border-radius: 12px;
+  background: #fffaf3;
+  object-fit: contain;
+  padding: 8px;
+}
+
+.admin-qr-modal code {
+  display: block;
+  overflow-wrap: anywhere;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #7c2d12;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.admin-qr-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .admin-branch-payment-card {
   border-color: #cbd5e1;
 }
@@ -244,6 +333,20 @@
 
   .admin-branch-qr-preview {
     grid-template-columns: 1fr;
+  }
+
+  .admin-qr-modal {
+    padding: 14px;
+  }
+
+  .admin-qr-modal-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-qr-modal-actions .admin-btn,
+  .admin-qr-modal-actions button {
+    width: 100%;
   }
 
   .admin-ship-note-item {
