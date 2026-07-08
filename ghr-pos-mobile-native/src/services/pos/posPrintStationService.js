@@ -13,6 +13,9 @@ const PRINTER_KEY = "cashier-80mm";
 const POLL_INTERVAL_MS = 30000;
 const AUTO_PRINT_WINDOW_MS = 5 * 60 * 1000;
 const MAX_JOBS_PER_POLL = 3;
+const ALERT_GROUP_WINDOW_MS = 6500;
+const NEW_ORDER_ALERT_GRACE_MS = 900;
+const QR_CUSTOMER_BILL_PRINT_DELAY_MS = 1500;
 const EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
 const NO_FOOTER_SOURCE_TYPES = new Set([
   "pos_payment_qr",
@@ -33,6 +36,7 @@ const DEFAULT_FOOTER_TEXT = [
   "@@CENTER:Cảm ơn quý khách!"
 ].join("\n");
 const DEFAULT_FOOTER_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
+const recentAlertByOrderKey = new Map();
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -55,6 +59,47 @@ function normalizeSourceToken(value = "") {
     .replace(/đ/g, "d")
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function wait(ms = 0) {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, Math.max(0, Number(ms || 0)));
+  });
+}
+
+function pruneRecentAlerts(now = Date.now()) {
+  for (const [key, entry] of recentAlertByOrderKey.entries()) {
+    if (!entry?.at || now - entry.at > ALERT_GROUP_WINDOW_MS * 2) {
+      recentAlertByOrderKey.delete(key);
+    }
+  }
+}
+
+function buildAlertKey(job = {}, payload = {}) {
+  const order = getObject(payload.order);
+  return normalizeSourceToken(
+    job.order_code ||
+      order.orderCode ||
+      order.order_code ||
+      order.displayOrderCode ||
+      order.display_order_code ||
+      order.id ||
+      job.id
+  );
+}
+
+function isQrPaymentPrintPayload(payload = {}, sourceType = "") {
+  const order = getObject(payload.order);
+  const method = normalizeSourceToken(
+    payload.paymentMethod ||
+      payload.payment_method ||
+      order.paymentMethod ||
+      order.payment_method
+  );
+  return sourceType === "qr_order" ||
+    method.includes("qr") ||
+    method.includes("bank") ||
+    Boolean(toText(order.paymentReference || order.payment_reference || payload.paymentReference || payload.payment_reference));
 }
 
 function isPosOrderPrintJob(job = {}) {
@@ -200,6 +245,9 @@ function buildPrintPayload(job = {}) {
     text,
     qrUrl: toText(payload.qrUrl || payload.loyaltyUrl),
     sourceType,
+    alertKey: buildAlertKey(job, payload),
+    isQrPayment: isQrPaymentPrintPayload(payload, sourceType),
+    shouldDelayPrint: sourceType === "qr_order",
     footerText: skipFooter ? "" : toText(payload.footerText || DEFAULT_FOOTER_TEXT),
     footerQrUrl: skipFooter ? "" : toText(payload.footerQrUrl || DEFAULT_FOOTER_QR_URL)
   };
@@ -258,8 +306,29 @@ function buildReceiptTextFromOrder(order = {}, sourceType = "") {
   });
 }
 
-async function playPrintJobAlert(sourceType = "") {
-  if (normalizeSourceToken(sourceType) === "qr_order") {
+async function playPrintJobAlert(printPayload = {}) {
+  const now = Date.now();
+  pruneRecentAlerts(now);
+
+  const alertKey = toText(printPayload.alertKey || "print_job");
+  const previous = recentAlertByOrderKey.get(alertKey);
+  const previousIsFresh = previous?.at && now - previous.at <= ALERT_GROUP_WINDOW_MS;
+  const nextType = printPayload.isQrPayment ? "qr" : "new_order";
+
+  if (!printPayload.isQrPayment) {
+    await wait(NEW_ORDER_ALERT_GRACE_MS);
+    const latest = recentAlertByOrderKey.get(alertKey);
+    if (latest?.at && Date.now() - latest.at <= ALERT_GROUP_WINDOW_MS) {
+      return false;
+    }
+    recentAlertByOrderKey.set(alertKey, { type: nextType, at: Date.now() });
+    return playLocalNewOrderAlert();
+  }
+
+  if (previousIsFresh && previous.type === "qr") return false;
+  recentAlertByOrderKey.set(alertKey, { type: nextType, at: now });
+
+  if (printPayload.isQrPayment) {
     const played = await playLocalQrPaymentAlert();
     if (played) return true;
   }
@@ -284,8 +353,12 @@ async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
     if (typeof onStatus === "function") {
       onStatus({ running: true, tone: "printing", message: `Đang in ${claimed.order_code || "bill"}...` });
     }
-    await playPrintJobAlert(printPayload.sourceType);
+    const alertTask = playPrintJobAlert(printPayload).catch(() => {});
+    if (printPayload.shouldDelayPrint) {
+      await wait(QR_CUSTOMER_BILL_PRINT_DELAY_MS);
+    }
     await printLocalReceipt(printPayload);
+    void alertTask;
     await markPrinted(claimed.id);
     if (typeof onStatus === "function") {
       onStatus({ running: true, tone: "ready", message: `Đã in ${claimed.order_code || "bill"}.` });

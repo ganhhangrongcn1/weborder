@@ -252,6 +252,7 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void playQrPaymentAlert(Promise promise) {
         mainHandler.post(() -> {
+            stopNewOrderAlert();
             if (qrPaymentPlayer != null && qrPaymentPlayer.isPlaying()) {
                 promise.resolve(false);
                 return;
