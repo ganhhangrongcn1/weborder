@@ -43,7 +43,11 @@ async function normalizeFunctionError(error, fallbackMessage = "Không gọi đ�
   } catch {
     // The function response body is best-effort only.
   }
-  return error?.message || fallbackMessage;
+  const message = error?.message || "";
+  if (message.toLowerCase().includes("failed to send a request")) {
+    return "Chưa gọi được Edge Function tạo tài khoản. Vui lòng deploy branch-account-api trên Supabase rồi thử lại.";
+  }
+  return message || fallbackMessage;
 }
 
 async function invokeBranchAccountFunction(payload = {}) {
