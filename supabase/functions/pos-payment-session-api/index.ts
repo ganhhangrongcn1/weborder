@@ -13,6 +13,8 @@ const jsonHeaders = {
   "Content-Type": "application/json; charset=utf-8"
 };
 
+const POS_PAYMENT_SESSION_TIMEOUT_MS = 10 * 60 * 1000;
+
 const SESSION_COLUMNS = [
   "id",
   "payment_reference",
@@ -57,6 +59,10 @@ function getObject(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as JsonRecord
     : {};
+}
+
+function isPaidMetadata(metadata: JsonRecord) {
+  return toText(metadata.paymentStatus || metadata.payment_status).toLowerCase() === "paid";
 }
 
 function normalizePhone(value: unknown = "") {
@@ -329,7 +335,7 @@ async function createSession(
   }
 
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+  const expiresAt = new Date(now.getTime() + POS_PAYMENT_SESSION_TIMEOUT_MS).toISOString();
   const { data, error } = await serviceClient
     .from("pos_payment_sessions")
     .insert({
@@ -472,6 +478,53 @@ async function getSession(
   return response({ ok: true, session: current.data });
 }
 
+async function cancelExpiredQrOrderSessions(
+  serviceClient: ReturnType<typeof createClient>,
+  expiredSessions: JsonRecord[],
+  now: string
+) {
+  for (const session of expiredSessions) {
+    const orderId = toText(session.order_id);
+    if (!orderId) continue;
+
+    const { data: order } = await serviceClient
+      .from("orders")
+      .select("id,status,kitchen_status,payment_method,metadata")
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (!order) continue;
+
+    const metadata = getObject(order.metadata);
+    if (isPaidMetadata(metadata)) continue;
+
+    const nextMetadata = {
+      ...metadata,
+      status: "cancelled",
+      orderStatus: "cancelled",
+      kitchenStatus: "cancelled",
+      paymentMethod: "bank_qr",
+      paymentStatus: "expired",
+      paymentExpiredAt: now,
+      cancelReason: "payment_timeout",
+      cancelledBy: "qr_payment_timeout",
+      qrPaymentSessionId: toText(session.id) || metadata.qrPaymentSessionId,
+      paymentReference: toText(session.payment_reference) || metadata.paymentReference || metadata.payment_reference
+    };
+
+    await serviceClient
+      .from("orders")
+      .update({
+        status: "cancelled",
+        kitchen_status: "cancelled",
+        payment_method: "bank_qr",
+        metadata: nextMetadata,
+        updated_at: now
+      })
+      .eq("id", orderId);
+  }
+}
+
 async function listSessions(
   serviceClient: ReturnType<typeof createClient>,
   profile: JsonRecord,
@@ -483,11 +536,20 @@ async function listSessions(
   }
 
   const now = new Date().toISOString();
+  const { data: expiredQrOrderSessions } = await serviceClient
+    .from("pos_payment_sessions")
+    .select("id,order_id,payment_reference")
+    .eq("branch_uuid", branchUuid)
+    .eq("source", "qr_order")
+    .eq("status", "pending_payment")
+    .lt("expires_at", now);
+
   const { error: expireError } = await serviceClient
     .from("pos_payment_sessions")
     .update({
       status: "expired",
-      failure_reason: "Phiên QR hết hạn sau 15 phút",
+      failure_reason: "Phiên QR hết hạn thanh toán",
+      cancelled_at: now,
       updated_at: now
     })
     .eq("branch_uuid", branchUuid)
@@ -500,6 +562,8 @@ async function listSessions(
       branchUuid,
       message: toText(expireError.message)
     });
+  } else if (Array.isArray(expiredQrOrderSessions) && expiredQrOrderSessions.length) {
+    await cancelExpiredQrOrderSessions(serviceClient, expiredQrOrderSessions, now);
   }
 
   const { data, error } = await serviceClient

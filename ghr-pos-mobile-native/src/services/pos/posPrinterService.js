@@ -256,6 +256,7 @@ export function buildPosQrReceiptText({
   lines.push(buildLine("-", width));
   lines.push("@@CENTER:Dua ma nay cho khach quet");
   lines.push("@@QR");
+  lines.push("@@CENTER:Ma QR co hieu luc trong 10 phut.");
   lines.push(buildLine("-", width));
   lines.push(`Noi dung: ${toText(transferContent)}`);
   lines.push(buildLine("-", width));

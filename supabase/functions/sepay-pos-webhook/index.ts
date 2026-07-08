@@ -156,6 +156,16 @@ function isPosQrOrder(order: JsonRecord) {
   return paymentMethod === "bank_qr" && (source === "pos" || hasPosReference);
 }
 
+function isCancelledOrExpiredOrder(order: JsonRecord) {
+  const metadata = getObject(order.metadata);
+  const status = toText(order.status || metadata.status || metadata.orderStatus).toLowerCase();
+  const kitchenStatus = toText(order.kitchen_status || metadata.kitchenStatus || metadata.kitchen_status).toLowerCase();
+  const paymentStatus = toText(metadata.paymentStatus || metadata.payment_status).toLowerCase();
+  return ["cancelled", "canceled"].includes(status) ||
+    ["cancelled", "canceled"].includes(kitchenStatus) ||
+    ["expired", "cancelled", "canceled"].includes(paymentStatus);
+}
+
 async function tryInsertWebhookLog(supabase: ReturnType<typeof createClient>, row: JsonRecord) {
   const safeRow = {
     webhook_code: row.webhook_code,
@@ -208,6 +218,8 @@ const ORDER_COLUMNS = [
   "total_amount",
   "branch_uuid",
   "branch_name",
+  "pickup_branch_uuid",
+  "pos_shift_id",
   "branch_address",
   "metadata",
   "created_at",
@@ -273,15 +285,41 @@ const PAYMENT_SESSION_COLUMNS = [
   "source",
   "status",
   "branch_uuid",
+  "pos_shift_id",
   "amount_expected",
   "amount_paid",
   "order_id",
   "expires_at",
   "paid_at",
+  "converted_at",
   "provider_payload",
   "created_at",
   "updated_at"
 ].join(",");
+
+async function findActivePosShift(
+  supabase: ReturnType<typeof createClient>,
+  branchUuid = ""
+) {
+  const safeBranchUuid = toText(branchUuid);
+  if (!safeBranchUuid) return null;
+
+  const { data, error } = await supabase
+    .from("pos_shifts")
+    .select("id,branch_uuid,status,opened_at")
+    .eq("branch_uuid", safeBranchUuid)
+    .eq("status", "open")
+    .order("opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[sepay-pos-webhook] active shift lookup failed", error.message);
+    return null;
+  }
+
+  return data || null;
+}
 
 async function findPaymentSessionByReference(
   supabase: ReturnType<typeof createClient>,
@@ -457,10 +495,10 @@ function buildPrintOrder(order: JsonRecord, items: JsonRecord[]) {
     orderCode: toText(order.order_code || order.id),
     displayOrderCode: toText(metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id),
     platform: "POS",
-    sourceType: "website",
-    source: "pickup",
-    channel: "pos",
-    orderSource: "pos",
+    sourceType: "qr_order",
+    source: "qr_order",
+    channel: "qr_order",
+    orderSource: "qr_order",
     branchUuid: toText(order.branch_uuid || metadata.branchUuid),
     branchName: toText(order.branch_name || metadata.branchName),
     branchAddress: toText(order.branch_address || metadata.branchAddress),
@@ -468,6 +506,8 @@ function buildPrintOrder(order: JsonRecord, items: JsonRecord[]) {
     customerName: toText(order.customer_name),
     customerPhone: normalizePhone(order.customer_phone),
     paymentMethod: "Chuyển khoản QR",
+    paymentReference: toText(metadata.paymentReference || metadata.payment_reference),
+    paidAt: toText(metadata.paidAt || metadata.paid_at),
     fulfillmentType: toText(order.fulfillment_type || "pickup"),
     note: toText(metadata.orderNote || metadata.note),
     promoCode: toText(order.promo_code || metadata.promoCode),
@@ -503,6 +543,76 @@ function buildPrintOrder(order: JsonRecord, items: JsonRecord[]) {
   };
 }
 
+function formatReceiptMoney(value: unknown) {
+  const amount = Math.max(0, Math.round(toNumber(value)));
+  return `${amount.toLocaleString("vi-VN")}d`;
+}
+
+function buildReceiptLine(label = "", value = "", width = 42) {
+  const left = toText(label);
+  const right = toText(value);
+  const gap = Math.max(1, width - left.length - right.length);
+  return `${left}${" ".repeat(gap)}${right}`;
+}
+
+function buildReceiptSeparator(width = 42) {
+  return "-".repeat(width);
+}
+
+function buildQrOrderReceiptText(printOrder: JsonRecord) {
+  const width = 42;
+  const items = Array.isArray(printOrder.items) ? printOrder.items : [];
+  const lines = [
+    "@@CENTER:GANH HANG RONG",
+    "@@CENTER:HOA DON BAN HANG",
+    `@@BIG:${toText(printOrder.displayOrderCode || printOrder.orderCode || printOrder.id || "GHR")}`,
+    buildReceiptSeparator(width),
+    `Chi nhanh: ${toText(printOrder.branchName) || "Ganh Hang Rong"}`,
+    "Thu ngan: QR tai quay",
+    `Gio in: ${new Date().toLocaleString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "Asia/Ho_Chi_Minh"
+    })}`
+  ];
+
+  if (toText(printOrder.customerName)) lines.push(`Khach: ${toText(printOrder.customerName)}`);
+  if (toText(printOrder.customerPhone)) lines.push(`SDT: ${toText(printOrder.customerPhone)}`);
+
+  lines.push(buildReceiptSeparator(width));
+  for (const item of items) {
+    const itemObject = getObject(item);
+    const quantity = Math.max(1, Math.floor(toNumber(itemObject.quantity || 1)));
+    lines.push(`${quantity} x ${toText(itemObject.name || "Mon")}`);
+    const options = Array.isArray(itemObject.options) ? itemObject.options : [];
+    for (const option of options) {
+      if (toText(option)) lines.push(`  + ${toText(option)}`);
+    }
+    if (toText(itemObject.note)) lines.push(`  Ghi chu: ${toText(itemObject.note)}`);
+    lines.push(buildReceiptLine("  Thanh tien", formatReceiptMoney(itemObject.total || itemObject.lineTotal), width));
+  }
+
+  lines.push(buildReceiptSeparator(width));
+  lines.push(buildReceiptLine("Tam tinh", formatReceiptMoney(printOrder.subtotal || printOrder.totalAmount), width));
+  if (toNumber(printOrder.discount) > 0) {
+    lines.push(buildReceiptLine("Giam gia", `-${formatReceiptMoney(printOrder.discount)}`, width));
+  }
+  lines.push(buildReceiptLine("Tong can thu", formatReceiptMoney(printOrder.totalAmount), width));
+  lines.push(buildReceiptSeparator(width));
+  lines.push("Thanh toan: QR");
+  if (toText(printOrder.paymentReference)) lines.push(`Ma TT: ${toText(printOrder.paymentReference)}`);
+  if (toText(printOrder.note)) {
+    lines.push(buildReceiptSeparator(width));
+    lines.push(`Ghi chu: ${toText(printOrder.note)}`);
+  }
+  lines.push(buildReceiptSeparator(width));
+  lines.push("@@CENTER:Cam on quy khach!");
+  return lines.join("\n");
+}
+
 async function ensureCustomerBillPrintJob(
   supabase: ReturnType<typeof createClient>,
   order: JsonRecord
@@ -522,6 +632,7 @@ async function ensureCustomerBillPrintJob(
   const items = await readOrderItems(supabase, orderId);
   const now = new Date().toISOString();
   const metadata = getObject(order.metadata);
+  const printOrder = buildPrintOrder(order, items);
 
   const { error } = await supabase
     .from("print_jobs")
@@ -532,11 +643,14 @@ async function ensureCustomerBillPrintJob(
       status: "pending",
       order_id: orderId,
       order_code: toText(metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id),
-      source_type: "pos",
+      source_type: "qr_order",
       payload: {
         printerName: "Xprinter",
         receiptWidthMm: 80,
-        order: buildPrintOrder(order, items)
+        type: "qr_order",
+        sourceType: "qr_order",
+        text: buildQrOrderReceiptText(printOrder),
+        order: printOrder
       },
       requested_by: "sepay_webhook",
       requested_at: now,
@@ -581,10 +695,38 @@ async function markOrderPaidFromPaymentSession(
 
   const metadata = getObject(order.metadata);
   const alreadyPaid = toText(metadata.paymentStatus || metadata.payment_status).toLowerCase() === "paid";
+  const branchUuid = toText(session.branch_uuid || order.pickup_branch_uuid || order.branch_uuid);
+  const activeShift = await findActivePosShift(supabase, branchUuid);
+  const posShiftId = toText(
+    session.pos_shift_id ||
+    order.pos_shift_id ||
+    metadata.posShiftId ||
+    metadata.pos_shift_id ||
+    activeShift?.id
+  );
+  const paymentReference = toText(session.payment_reference);
+  const shiftMetadata = posShiftId
+    ? {
+        posShiftId,
+        pos_shift_id: posShiftId
+      }
+    : {};
+
+  if (posShiftId && toText(session.pos_shift_id) !== posShiftId) {
+    await supabase
+      .from("pos_payment_sessions")
+      .update({
+        pos_shift_id: posShiftId,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", toText(session.id));
+    session.pos_shift_id = posShiftId;
+  }
+
   if (!alreadyPaid) {
-    const paymentReference = toText(session.payment_reference);
     const nextMetadata = {
       ...metadata,
+      ...shiftMetadata,
       status: "pending_zalo",
       kitchenStatus: "pending",
       paymentMethod: "bank_qr",
@@ -606,16 +748,18 @@ async function markOrderPaidFromPaymentSession(
         providerTransactionId: options.providerTransactionId
       }
     };
+    const orderPatch: JsonRecord = {
+      status: "pending_zalo",
+      kitchen_status: "pending",
+      payment_method: "bank_qr",
+      updated_at: new Date().toISOString(),
+      metadata: nextMetadata
+    };
+    if (posShiftId) orderPatch.pos_shift_id = posShiftId;
 
     const { error: updateError } = await supabase
       .from("orders")
-      .update({
-        status: "pending_zalo",
-        kitchen_status: "pending",
-        payment_method: "bank_qr",
-        updated_at: new Date().toISOString(),
-        metadata: nextMetadata
-      })
+      .update(orderPatch)
       .eq("id", orderId);
 
     if (updateError) {
@@ -630,13 +774,66 @@ async function markOrderPaidFromPaymentSession(
     order.kitchen_status = "pending";
     order.payment_method = "bank_qr";
     order.metadata = nextMetadata;
+    if (posShiftId) order.pos_shift_id = posShiftId;
+  } else if (posShiftId && (
+    toText(order.pos_shift_id) !== posShiftId ||
+    toText(metadata.posShiftId || metadata.pos_shift_id) !== posShiftId
+  )) {
+    const nextMetadata = {
+      ...metadata,
+      ...shiftMetadata,
+      paymentMethod: "bank_qr",
+      paymentStatus: "paid",
+      paymentAmount: options.transferAmount || metadata.paymentAmount || metadata.payment_amount,
+      paymentReference: paymentReference || metadata.paymentReference || metadata.payment_reference,
+      qrPaymentSessionId: toText(session.id) || metadata.qrPaymentSessionId,
+      paidAt: options.transactionTime || metadata.paidAt || metadata.paid_at,
+      paymentProvider: metadata.paymentProvider || "sepay"
+    };
+    const { error: backfillError } = await supabase
+      .from("orders")
+      .update({
+        pos_shift_id: posShiftId,
+        metadata: nextMetadata,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", orderId);
+
+    if (backfillError) {
+      return {
+        ok: false,
+        updated: false,
+        reason: backfillError.message || "order_shift_backfill_failed"
+      };
+    }
+
+    order.pos_shift_id = posShiftId;
+    order.metadata = nextMetadata;
   }
 
   const printJob = await ensureCustomerBillPrintJob(supabase, order);
+  const now = new Date().toISOString();
+  const sessionPatch: JsonRecord = {
+    status: "converted",
+    order_id: orderId,
+    converted_at: now,
+    updated_at: now
+  };
+  if (posShiftId) sessionPatch.pos_shift_id = posShiftId;
+  await supabase
+    .from("pos_payment_sessions")
+    .update(sessionPatch)
+    .eq("id", toText(session.id))
+    .in("status", ["paid", "converting", "converted"]);
+
   return {
     ok: true,
     updated: !alreadyPaid,
-    reason: alreadyPaid ? "already_paid" : "paid_and_sent_to_kitchen",
+    reason: alreadyPaid
+      ? posShiftId
+        ? "already_paid_shift_synced"
+        : "already_paid"
+      : "paid_and_sent_to_kitchen",
     printJob
   };
 }
@@ -903,6 +1100,36 @@ Deno.serve(async (request) => {
     );
   }
 
+  if (isCancelledOrExpiredOrder(matchedOrder)) {
+    await tryInsertWebhookLog(supabase, {
+      provider: "sepay",
+      webhook_code: webhookCode,
+      transfer_type: transferType,
+      transfer_amount: transferAmount,
+      account_number: toText(body.accountNumber),
+      gateway: toText(body.gateway),
+      raw_payload: body,
+      matched_order_id: toText(matchedOrder.id),
+      processed_result: "order_expired_or_cancelled",
+      created_at: new Date().toISOString()
+    });
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        matched: true,
+        updated: false,
+        reason: "order_expired_or_cancelled",
+        orderId: toText(matchedOrder.id),
+        orderCode: toText(matchedOrder.order_code)
+      }),
+      {
+        status: 200,
+        headers: jsonHeaders
+      }
+    );
+  }
+
   const expectedAmount = Math.max(
     0,
     Math.floor(
@@ -952,10 +1179,27 @@ Deno.serve(async (request) => {
 
   const metadata = getObject(matchedOrder.metadata);
   const alreadyPaid = toText(metadata.paymentStatus || metadata.payment_status).toLowerCase() === "paid";
+  const activeShift = await findActivePosShift(
+    supabase,
+    toText(matchedOrder.pickup_branch_uuid || matchedOrder.branch_uuid)
+  );
+  const posShiftId = toText(
+    matchedOrder.pos_shift_id ||
+    metadata.posShiftId ||
+    metadata.pos_shift_id ||
+    activeShift?.id
+  );
+  const shiftMetadata = posShiftId
+    ? {
+        posShiftId,
+        pos_shift_id: posShiftId
+      }
+    : {};
 
   if (!alreadyPaid) {
     const nextMetadata = {
       ...metadata,
+      ...shiftMetadata,
       status: "pending_zalo",
       kitchenStatus: "pending",
       paymentMethod: "bank_qr",
@@ -975,16 +1219,18 @@ Deno.serve(async (request) => {
         transferAmount
       }
     };
+    const orderPatch: JsonRecord = {
+      status: "pending_zalo",
+      kitchen_status: "pending",
+      payment_method: "bank_qr",
+      updated_at: new Date().toISOString(),
+      metadata: nextMetadata
+    };
+    if (posShiftId) orderPatch.pos_shift_id = posShiftId;
 
     const { error } = await supabase
       .from("orders")
-      .update({
-        status: "pending_zalo",
-        kitchen_status: "pending",
-        payment_method: "bank_qr",
-        updated_at: new Date().toISOString(),
-        metadata: nextMetadata
-      })
+      .update(orderPatch)
       .eq("id", toText(matchedOrder.id));
 
     if (error) {
@@ -1008,8 +1254,35 @@ Deno.serve(async (request) => {
       status: "pending_zalo",
       kitchen_status: "pending",
       payment_method: "bank_qr",
+      pos_shift_id: posShiftId || matchedOrder.pos_shift_id,
       metadata: nextMetadata
     };
+  } else if (posShiftId && (
+    toText(matchedOrder.pos_shift_id) !== posShiftId ||
+    toText(metadata.posShiftId || metadata.pos_shift_id) !== posShiftId
+  )) {
+    const nextMetadata = {
+      ...metadata,
+      ...shiftMetadata
+    };
+    const { error } = await supabase
+      .from("orders")
+      .update({
+        pos_shift_id: posShiftId,
+        metadata: nextMetadata,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", toText(matchedOrder.id));
+
+    if (error) {
+      console.error("[sepay-pos-webhook] backfill order shift failed", error);
+    } else {
+      matchedOrder = {
+        ...matchedOrder,
+        pos_shift_id: posShiftId,
+        metadata: nextMetadata
+      };
+    }
   }
   console.log("[sepay-pos-webhook] order updated", JSON.stringify({
     orderId: toText(matchedOrder.id),

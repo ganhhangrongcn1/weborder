@@ -13,6 +13,8 @@ const jsonHeaders = {
   "Content-Type": "application/json; charset=utf-8"
 };
 
+const QR_ORDER_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
+
 const SESSION_COLUMNS = [
   "id",
   "payment_reference",
@@ -20,6 +22,7 @@ const SESSION_COLUMNS = [
   "source",
   "status",
   "branch_uuid",
+  "pos_shift_id",
   "branch_name",
   "customer_name",
   "customer_phone",
@@ -31,6 +34,7 @@ const SESSION_COLUMNS = [
   "failure_reason",
   "expires_at",
   "paid_at",
+  "cancelled_at",
   "created_at",
   "updated_at"
 ].join(",");
@@ -47,8 +51,11 @@ const ORDER_COLUMNS = [
   "branch_name",
   "pickup_branch_uuid",
   "pickup_branch_name",
+  "pos_shift_id",
   "metadata",
-  "created_at"
+  "created_at",
+  "updated_at",
+  "kitchen_status"
 ].join(",");
 
 function toText(value: unknown = "") {
@@ -76,6 +83,15 @@ function normalizePhone(value: unknown = "") {
 
 function normalizePaymentReference(value: unknown = "") {
   return toText(value).toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 80);
+}
+
+function isExpiredTime(value: unknown = "", now = Date.now()) {
+  const expiresAt = new Date(toText(value)).getTime();
+  return Number.isFinite(expiresAt) && expiresAt <= now;
+}
+
+function isPaidMetadata(metadata: JsonRecord) {
+  return toText(metadata.paymentStatus || metadata.payment_status).toLowerCase() === "paid";
 }
 
 function response(body: JsonRecord, status = 200) {
@@ -107,6 +123,27 @@ async function readOrder(serviceClient: ReturnType<typeof createClient>, body: J
     if (!error && data) return data;
   }
   return null;
+}
+
+async function findActivePosShift(serviceClient: ReturnType<typeof createClient>, branchUuid = "") {
+  const safeBranchUuid = toText(branchUuid);
+  if (!safeBranchUuid) return null;
+
+  const { data, error } = await serviceClient
+    .from("pos_shifts")
+    .select("id,branch_uuid,status,opened_at")
+    .eq("branch_uuid", safeBranchUuid)
+    .eq("status", "open")
+    .order("opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[qr-payment-session-api] active shift lookup failed", error.message);
+    return null;
+  }
+
+  return data || null;
 }
 
 function buildPaymentReference(order: JsonRecord, body: JsonRecord) {
@@ -143,7 +180,7 @@ async function findSession(serviceClient: ReturnType<typeof createClient>, body:
       .select(SESSION_COLUMNS)
       .eq("source", "qr_order")
       .eq("order_id", orderId)
-      .in("status", ["pending_payment", "paid", "converting", "converted"])
+      .in("status", ["pending_payment", "paid", "converting", "converted", "expired"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -163,6 +200,84 @@ async function findSession(serviceClient: ReturnType<typeof createClient>, body:
   return data || null;
 }
 
+async function cancelExpiredQrOrder(
+  serviceClient: ReturnType<typeof createClient>,
+  orderId = "",
+  session: JsonRecord,
+  now: string
+) {
+  const safeOrderId = toText(orderId);
+  if (!safeOrderId) return;
+
+  const { data: order } = await serviceClient
+    .from("orders")
+    .select(ORDER_COLUMNS)
+    .eq("id", safeOrderId)
+    .maybeSingle();
+
+  if (!order) return;
+
+  const metadata = getObject(order.metadata);
+  if (isPaidMetadata(metadata)) return;
+
+  const nextMetadata = {
+    ...metadata,
+    status: "cancelled",
+    orderStatus: "cancelled",
+    kitchenStatus: "cancelled",
+    paymentMethod: "bank_qr",
+    paymentStatus: "expired",
+    paymentExpiredAt: now,
+    cancelReason: "payment_timeout",
+    cancelledBy: "qr_payment_timeout",
+    qrPaymentSessionId: toText(session.id) || metadata.qrPaymentSessionId,
+    paymentReference: toText(session.payment_reference) || metadata.paymentReference || metadata.payment_reference
+  };
+
+  await serviceClient
+    .from("orders")
+    .update({
+      status: "cancelled",
+      kitchen_status: "cancelled",
+      payment_method: "bank_qr",
+      metadata: nextMetadata,
+      updated_at: now
+    })
+    .eq("id", safeOrderId);
+}
+
+async function expireQrOrderSessionIfNeeded(
+  serviceClient: ReturnType<typeof createClient>,
+  session: JsonRecord | null
+) {
+  if (!session) return null;
+  const source = toText(session.source).toLowerCase();
+  const status = toText(session.status).toLowerCase();
+  if (source !== "qr_order" || status !== "pending_payment" || !isExpiredTime(session.expires_at)) {
+    return session;
+  }
+
+  const now = new Date().toISOString();
+  const { data: expiredSession } = await serviceClient
+    .from("pos_payment_sessions")
+    .update({
+      status: "expired",
+      failure_reason: "Đơn QR quá hạn thanh toán sau 10 phút",
+      cancelled_at: now,
+      updated_at: now
+    })
+    .eq("id", toText(session.id))
+    .eq("status", "pending_payment")
+    .select(SESSION_COLUMNS)
+    .maybeSingle();
+
+  const nextSession = expiredSession || session;
+  if (expiredSession) {
+    await cancelExpiredQrOrder(serviceClient, toText(expiredSession.order_id || session.order_id), expiredSession, now);
+  }
+  return nextSession;
+}
+
 async function createSession(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
   const order = await readOrder(serviceClient, body);
   if (!order) return response({ ok: false, message: "Không tìm thấy đơn QR để tạo thanh toán." }, 404);
@@ -170,11 +285,56 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     return response({ ok: false, message: "Đơn này không phải đơn thanh toán QR." }, 400);
   }
 
+  const metadata = getObject(order.metadata);
+  const branchUuid = toText(order.pickup_branch_uuid || order.branch_uuid) || null;
+  const branchName = toText(order.pickup_branch_name || order.branch_name);
+  const activeShift = await findActivePosShift(serviceClient, branchUuid || "");
+  const posShiftId = toText(order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id || activeShift?.id);
+
   const existing = await findSession(serviceClient, {
     ...body,
     order_id: toText(order.id)
   });
-  if (existing) return response({ ok: true, session: existing, reused: true });
+  if (existing) {
+    let nextSession = await expireQrOrderSessionIfNeeded(serviceClient, existing);
+    if (toText(nextSession?.status).toLowerCase() === "expired") {
+      return response({
+        ok: false,
+        message: "Đơn đã quá hạn thanh toán sau 10 phút. Anh/chị vui lòng đặt lại đơn mới.",
+        session: nextSession
+      }, 409);
+    }
+    if (posShiftId && toText(existing.pos_shift_id) !== posShiftId) {
+      const { data: patchedSession } = await serviceClient
+        .from("pos_payment_sessions")
+        .update({
+          pos_shift_id: posShiftId,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", toText(existing.id))
+        .select(SESSION_COLUMNS)
+        .maybeSingle();
+      if (patchedSession) nextSession = patchedSession;
+    }
+    if (posShiftId && (
+      toText(order.pos_shift_id) !== posShiftId ||
+      toText(metadata.posShiftId || metadata.pos_shift_id) !== posShiftId
+    )) {
+      await serviceClient
+        .from("orders")
+        .update({
+          pos_shift_id: posShiftId,
+          metadata: {
+            ...metadata,
+            posShiftId,
+            pos_shift_id: posShiftId
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", toText(order.id));
+    }
+    return response({ ok: true, session: nextSession, reused: true });
+  }
 
   const amountExpected = toMoney(order.total_amount || getObject(order.metadata).totalAmount);
   if (!amountExpected) {
@@ -183,10 +343,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
 
   const paymentReference = buildPaymentReference(order, body);
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
-  const metadata = getObject(order.metadata);
-  const branchUuid = toText(order.pickup_branch_uuid || order.branch_uuid) || null;
-  const branchName = toText(order.pickup_branch_name || order.branch_name);
+  const expiresAt = new Date(now.getTime() + QR_ORDER_PAYMENT_TIMEOUT_MS).toISOString();
 
   const { data, error } = await serviceClient
     .from("pos_payment_sessions")
@@ -196,6 +353,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
       source: "qr_order",
       status: "pending_payment",
       branch_uuid: branchUuid,
+      pos_shift_id: posShiftId || null,
       branch_name: branchName,
       cashier_name: "",
       customer_name: toText(order.customer_name || metadata.customerName),
@@ -205,6 +363,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
       amount_paid: 0,
       cart_snapshot: Array.isArray(metadata.items) ? metadata.items : [],
       checkout_snapshot: {
+        posShiftId: posShiftId || "",
         orderIdentity: {
           orderId: toText(order.id),
           orderCode: toText(order.order_code),
@@ -224,27 +383,35 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     return response({ ok: false, message: error.message || "Không tạo được phiên thanh toán QR." }, 500);
   }
 
+  const nextMetadata = {
+    ...metadata,
+    paymentMethod: "bank_qr",
+    paymentStatus: "unpaid",
+    paymentAmount: amountExpected,
+    paymentReference,
+    qrPaymentSessionId: data.id,
+    ...(posShiftId ? {
+      posShiftId,
+      pos_shift_id: posShiftId
+    } : {})
+  };
+  const orderPatch: JsonRecord = {
+    payment_method: "bank_qr",
+    metadata: nextMetadata,
+    updated_at: now.toISOString()
+  };
+  if (posShiftId) orderPatch.pos_shift_id = posShiftId;
+
   await serviceClient
     .from("orders")
-    .update({
-      payment_method: "bank_qr",
-      metadata: {
-        ...metadata,
-        paymentMethod: "bank_qr",
-        paymentStatus: "unpaid",
-        paymentAmount: amountExpected,
-        paymentReference,
-        qrPaymentSessionId: data.id
-      },
-      updated_at: now.toISOString()
-    })
+    .update(orderPatch)
     .eq("id", toText(order.id));
 
   return response({ ok: true, session: data, reused: false });
 }
 
 async function readSession(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
-  const session = await findSession(serviceClient, body);
+  const session = await expireQrOrderSessionIfNeeded(serviceClient, await findSession(serviceClient, body));
   if (!session) return response({ ok: false, message: "Chưa có phiên thanh toán cho đơn này." }, 404);
   return response({ ok: true, session });
 }

@@ -69,6 +69,7 @@ export default function QrPaymentModal({
                 <Text style={styles.qrFallback}>Chưa tạo được QR</Text>
               )}
             </View>
+            <Text style={styles.validityNote}>Mã QR có hiệu lực trong 10 phút.</Text>
 
             <View style={styles.summaryBox}>
               <View style={styles.summaryRow}>
@@ -235,6 +236,12 @@ const styles = StyleSheet.create({
   qrFallback: {
     color: POS_COLORS.muted,
     fontWeight: "900"
+  },
+  validityNote: {
+    color: POS_COLORS.muted,
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "center"
   },
   summaryBox: {
     gap: 8,

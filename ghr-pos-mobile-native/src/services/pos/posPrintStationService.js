@@ -1,7 +1,12 @@
 import { AppState } from "react-native";
 
 import { supabase } from "../supabase/client";
-import { playLocalNewOrderAlert, printLocalReceipt } from "./posPrinterService";
+import {
+  buildPosCustomerBillText,
+  playLocalNewOrderAlert,
+  playLocalQrPaymentAlert,
+  printLocalReceipt
+} from "./posPrinterService";
 
 const JOB_TYPE = "customer_bill";
 const PRINTER_KEY = "cashier-80mm";
@@ -16,6 +21,7 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
   "pos_shift_close"
 ]);
 const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "counter", "tai_quay"]);
+const REMOTE_ORDER_SOURCE_TYPES = new Set(["web", "website", "qr_order", "customer_qr", "qr_tai_quay"]);
 const DEFAULT_FOOTER_TEXT = [
   "------------------------------------------",
   "@@CENTER:Quét QR tích điểm ngay",
@@ -34,6 +40,11 @@ function toText(value = "") {
 
 function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function toNumber(value = 0) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function normalizeSourceToken(value = "") {
@@ -65,6 +76,10 @@ function isPosOrderPrintJob(job = {}) {
     order.orderSource,
     order.platform
   ].map(normalizeSourceToken).filter(Boolean);
+
+  if (sourceTokens.some((token) => REMOTE_ORDER_SOURCE_TYPES.has(token) || token.includes("qr_order"))) {
+    return false;
+  }
 
   return sourceTokens.some((token) => (
     POS_ORDER_SOURCE_TYPES.has(token) ||
@@ -176,16 +191,79 @@ async function markFailed(job, message) {
 
 function buildPrintPayload(job = {}) {
   const payload = getObject(job.payload);
-  const sourceType = toText(job.source_type || payload.type || payload.sourceType).toLowerCase();
+  const sourceType = normalizeSourceToken(job.source_type || payload.type || payload.sourceType);
   const skipFooter = NO_FOOTER_SOURCE_TYPES.has(sourceType);
+  const order = getObject(payload.order);
+  const text = toText(payload.text) || buildReceiptTextFromOrder(order, sourceType);
 
   return {
-    text: toText(payload.text),
+    text,
     qrUrl: toText(payload.qrUrl || payload.loyaltyUrl),
     sourceType,
     footerText: skipFooter ? "" : toText(payload.footerText || DEFAULT_FOOTER_TEXT),
     footerQrUrl: skipFooter ? "" : toText(payload.footerQrUrl || DEFAULT_FOOTER_QR_URL)
   };
+}
+
+function buildReceiptTextFromOrder(order = {}, sourceType = "") {
+  const items = Array.isArray(order.items) ? order.items : [];
+  if (!items.length) return "";
+
+  const cart = items.map((item, index) => {
+    const itemObject = getObject(item);
+    const quantity = Math.max(1, toNumber(itemObject.quantity, 1));
+    const options = Array.isArray(itemObject.selectedOptions)
+      ? itemObject.selectedOptions
+      : (Array.isArray(itemObject.options) ? itemObject.options : []).map((option) => (
+          typeof option === "string" ? { name: option } : getObject(option)
+        ));
+
+    return {
+      cartId: toText(itemObject.id || `${toText(order.id || order.orderCode || "print")}-${index + 1}`),
+      id: toText(itemObject.productId || itemObject.product_id || itemObject.id || `${index + 1}`),
+      name: toText(itemObject.name || itemObject.productName || itemObject.product_name || "Món"),
+      quantity,
+      lineTotal: toNumber(itemObject.lineTotal || itemObject.total || itemObject.price * quantity),
+      note: toText(itemObject.note),
+      selectedOptions: options.map((option) => ({
+        name: toText(option.name || option.label || option.value)
+      })).filter((option) => option.name)
+    };
+  });
+
+  return buildPosCustomerBillText({
+    order: {
+      id: toText(order.id),
+      orderCode: toText(order.orderCode || order.order_code || order.id),
+      displayOrderCode: toText(order.displayOrderCode || order.display_order_code || order.orderCode || order.id)
+    },
+    cart,
+    totals: {
+      subtotal: toNumber(order.subtotal || order.totalAmount),
+      voucherDiscount: toNumber(order.discount || order.promoDiscount || order.voucherDiscount),
+      pointsDiscount: toNumber(order.pointsDiscount || order.pointsDiscountAmount),
+      total: toNumber(order.totalAmount || order.total_amount)
+    },
+    customerName: toText(order.customerName || order.customer_name),
+    customerPhone: toText(order.customerPhone || order.customer_phone),
+    pagerNumber: toText(order.pagerNumber || order.pager_number),
+    branchName: toText(order.branchName || order.branch_name),
+    cashierName: sourceType === "qr_order" ? "QR tại quầy" : toText(order.cashierName || order.cashier_name),
+    orderNote: toText(order.note || order.orderNote || order.order_note),
+    paymentConfirmed: {
+      method: normalizeSourceToken(order.paymentMethod || order.payment_method).includes("qr") ? "bank_qr" : "cash",
+      reference: toText(order.paymentReference || order.payment_reference),
+      paidAt: toText(order.paidAt || order.paid_at)
+    }
+  });
+}
+
+async function playPrintJobAlert(sourceType = "") {
+  if (normalizeSourceToken(sourceType) === "qr_order") {
+    const played = await playLocalQrPaymentAlert();
+    if (played) return true;
+  }
+  return playLocalNewOrderAlert();
 }
 
 async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
@@ -206,7 +284,7 @@ async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
     if (typeof onStatus === "function") {
       onStatus({ running: true, tone: "printing", message: `Đang in ${claimed.order_code || "bill"}...` });
     }
-    await playLocalNewOrderAlert();
+    await playPrintJobAlert(printPayload.sourceType);
     await printLocalReceipt(printPayload);
     await markPrinted(claimed.id);
     if (typeof onStatus === "function") {

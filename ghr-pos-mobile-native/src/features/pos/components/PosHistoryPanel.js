@@ -65,6 +65,13 @@ function isWebsitePaymentSession(session = {}) {
   return ["web", "qr_order"].includes(toText(session.source).toLowerCase());
 }
 
+function getPaymentSessionSourceText(session = {}) {
+  const source = toText(session.source).toLowerCase();
+  if (source === "qr_order") return "QR khách tự đặt";
+  if (source === "web") return "QR đơn website";
+  return "QR tại quầy";
+}
+
 function canCancelPaymentSession(session = {}) {
   return ["draft", "pending_payment"].includes(toText(session.status).toLowerCase());
 }
@@ -160,7 +167,7 @@ function SessionCard({ session, loading, onOpen, onCancel }) {
           </Text>
           <Text style={styles.rowMeta} numberOfLines={2}>
             {[
-              websiteSession ? "QR đơn website" : "QR tại quầy",
+              getPaymentSessionSourceText(session),
               session.pagerNumber ? `Thẻ ${session.pagerNumber}` : "Không có thẻ",
               session.customerName || "Khách tại quầy",
               formatTime(session.createdAt)
@@ -178,7 +185,7 @@ function SessionCard({ session, loading, onOpen, onCancel }) {
 
       <View style={styles.inlineActions}>
         <Text style={styles.tapHint}>
-          {websiteSession ? "Phiên thanh toán của đơn website" : "Bấm để mở QR"}
+          {websiteSession ? "Theo dõi tự động theo đơn" : "Bấm để mở QR"}
         </Text>
         {canCancel ? (
           <Pressable
@@ -234,9 +241,10 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
 
   const pendingPaymentCount = useMemo(
     () => (Array.isArray(paymentSessions) ? paymentSessions : []).filter((session) => (
+      matchesRange(session, rangeFilter, activeShiftId) &&
       getSessionStatusGroup(session.status) === "pending_payment"
     )).length,
-    [paymentSessions]
+    [activeShiftId, paymentSessions, rangeFilter]
   );
   const historyRecords = useMemo(
     () => [

@@ -40,6 +40,16 @@ const POS_TABS = [
   { key: "settings", label: "Thiết lập", icon: "settings" }
 ];
 
+function shouldCountHistoryPaymentSession(session = {}) {
+  const status = String(session?.status || "").trim().toLowerCase();
+  const source = String(session?.source || "").trim().toLowerCase();
+  if (["draft", "pending_payment"].includes(status)) return true;
+  if (["paid", "converting"].includes(status)) {
+    return !["web", "qr_order"].includes(source);
+  }
+  return false;
+}
+
 export default function PosHomeScreen() {
   const [optionProduct, setOptionProduct] = useState(null);
   const [editingCartItem, setEditingCartItem] = useState(null);
@@ -259,6 +269,10 @@ export default function PosHomeScreen() {
     [deliveryOrders]
   );
   const websiteUnpaidCount = pickupUnpaidCount + deliveryUnpaidCount;
+  const historyPaymentBadgeCount = useMemo(
+    () => (Array.isArray(pendingPaymentSessions) ? pendingPaymentSessions : []).filter(shouldCountHistoryPaymentSession).length,
+    [pendingPaymentSessions]
+  );
 
   useEffect(() => {
     let active = true;
@@ -1047,7 +1061,7 @@ export default function PosHomeScreen() {
           </View>
           {POS_TABS.map((tab) => {
             const active = tab.key === activeTab;
-            const showHistoryBadge = tab.key === "history" && pendingPaymentSessions.length > 0;
+            const showHistoryBadge = tab.key === "history" && historyPaymentBadgeCount > 0;
             const showPickupBadge = tab.key === "pickup" && websiteUnpaidCount > 0;
             return (
               <Pressable
@@ -1068,7 +1082,7 @@ export default function PosHomeScreen() {
                 {(showHistoryBadge || showPickupBadge) && (
                   <View style={styles.navBadge}>
                     <Text style={styles.navBadgeText}>
-                      {showPickupBadge ? websiteUnpaidCount : pendingPaymentSessions.length}
+                      {showPickupBadge ? websiteUnpaidCount : historyPaymentBadgeCount}
                     </Text>
                   </View>
                 )}

@@ -40,6 +40,16 @@ export function isQrOrderPaid(order = {}, session = null) {
   return ["paid", "converted"].includes(getQrOrderPaymentStatus(order, session));
 }
 
+export function isQrOrderPaymentExpired(order = {}, session = null) {
+  const metadata = getObject(order.metadata);
+  const status = getQrOrderPaymentStatus(order, session);
+  const orderStatus = toText(order.status || metadata.status || metadata.orderStatus).toLowerCase();
+  const kitchenStatus = toText(order.kitchenStatus || metadata.kitchenStatus || metadata.kitchen_status).toLowerCase();
+  return ["expired", "cancelled", "canceled"].includes(status) ||
+    ["cancelled", "canceled"].includes(orderStatus) ||
+    ["cancelled", "canceled"].includes(kitchenStatus);
+}
+
 export function getQrOrderPaymentReference(order = {}, session = null) {
   const metadata = getObject(order.metadata);
   return toText(

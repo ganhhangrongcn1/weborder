@@ -9,6 +9,7 @@ import {
   getQrOrderPaymentConfig,
   getQrOrderPaymentReference,
   isQrBankPaymentOrder,
+  isQrOrderPaymentExpired,
   isQrOrderPaid,
   readQrOrderPaymentSession
 } from "../../services/qrPaymentService.js";
@@ -77,16 +78,31 @@ export default function OrderSuccess({
   const paymentReference = getQrOrderPaymentReference(order, paymentSession);
   const qrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
   const qrPaymentPaid = isQrOrderPaid(order, paymentSession);
-  const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid;
-  const statusEyebrow = isQrPaymentWaiting ? "Chờ thanh toán" : "Đặt món thành công";
-  const statusTitle = isQrPaymentWaiting ? "Quét QR để thanh toán" : "Đơn hàng đã được ghi nhận";
-  const statusDescription = isQrPaymentWaiting
-    ? "Sau khi ngân hàng báo tiền vào, màn hình sẽ tự chuyển sang đã thanh toán và quán bắt đầu làm món."
+  const qrPaymentExpired = isQrOrderPaymentExpired(order, paymentSession);
+  const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid && !qrPaymentExpired;
+  const statusEyebrow = qrPaymentExpired
+    ? "Đã quá hạn"
+    : isQrPaymentWaiting
+      ? "Chờ thanh toán"
+      : "Đặt món thành công";
+  const statusTitle = qrPaymentExpired
+    ? "Đơn đã quá hạn thanh toán"
+    : isQrPaymentWaiting
+      ? "Quét QR để thanh toán"
+      : "Đơn hàng đã được ghi nhận";
+  const statusDescription = qrPaymentExpired
+    ? "Đơn chưa được thanh toán trong 10 phút nên đã tự hủy. Anh/chị vui lòng đặt lại giúp em."
+    : isQrPaymentWaiting
+    ? "Quán sẽ bắt đầu làm món sau khi nhận được thanh toán."
     : "Theo dõi đơn để biết khi nào món sẵn sàng. Đăng nhập thành viên để nhận thông báo và ưu đãi cho lần sau.";
-  const statusIcon = isQrPaymentWaiting ? "qr" : "check";
-  const statusIconClass = isQrPaymentWaiting ? "bg-orange-50 text-orange-600" : "bg-green-100 text-green-700";
-  const statusTextClass = isQrPaymentWaiting ? "text-orange-600" : "text-green-700";
-  const statusTitleClass = isQrPaymentWaiting ? "text-orange-700" : "text-green-800";
+  const statusIcon = qrPaymentExpired ? "warning" : isQrPaymentWaiting ? "qr" : "check";
+  const statusIconClass = qrPaymentExpired
+    ? "bg-red-50 text-red-600"
+    : isQrPaymentWaiting
+      ? "bg-orange-50 text-orange-600"
+      : "bg-green-100 text-green-700";
+  const statusTextClass = qrPaymentExpired ? "text-red-600" : isQrPaymentWaiting ? "text-orange-600" : "text-green-700";
+  const statusTitleClass = qrPaymentExpired ? "text-red-700" : isQrPaymentWaiting ? "text-orange-700" : "text-green-800";
 
   const memberBenefits = useMemo(() => ([
     {
@@ -107,7 +123,7 @@ export default function OrderSuccess({
   ]), []);
 
   useEffect(() => {
-    if (!isQrPaymentOrder || !orderId || qrPaymentPaid) return undefined;
+    if (!isQrPaymentOrder || !orderId || qrPaymentPaid || qrPaymentExpired) return undefined;
     setShowSuccessPopup(false);
 
     let isActive = true;
@@ -136,7 +152,7 @@ export default function OrderSuccess({
       isActive = false;
       if (timerId) window.clearInterval(timerId);
     };
-  }, [isQrPaymentOrder, order, orderId, qrPaymentPaid]);
+  }, [isQrPaymentOrder, order, orderId, qrPaymentExpired, qrPaymentPaid]);
 
   const handleCopyPaymentReference = async () => {
     if (!paymentReference) return;
@@ -244,11 +260,15 @@ export default function OrderSuccess({
                 </span>
                 <div>
                   <small>{qrPaymentPaid ? "Đã nhận thanh toán" : "Thanh toán QR"}</small>
-                  <strong>{qrPaymentPaid ? "Quán đã nhận tiền" : "Quét mã để chuyển khoản"}</strong>
+                  <strong>{qrPaymentPaid ? "Quán đã nhận tiền" : "Quét mã bên dưới"}</strong>
                 </div>
               </div>
 
-              {!qrPaymentPaid ? (
+              {qrPaymentExpired ? (
+                <p className="qr-payment-wait-card__paid-text">
+                  Mã QR của đơn này đã hết hiệu lực. Anh/chị vui lòng đặt lại đơn mới để thanh toán.
+                </p>
+              ) : !qrPaymentPaid ? (
                 <>
                   {qrPaymentImageUrl ? (
                     <div className="qr-payment-wait-card__qr">
@@ -260,6 +280,9 @@ export default function OrderSuccess({
                       <span>Chi nhánh này chưa có cấu hình tài khoản ngân hàng. Anh/chị thanh toán tại quầy giúp em.</span>
                     </div>
                   )}
+                  <p className="qr-payment-wait-card__note">
+                    Mã QR có hiệu lực trong 10 phút.
+                  </p>
 
                   <div className="qr-payment-wait-card__info">
                     <span>
@@ -284,9 +307,6 @@ export default function OrderSuccess({
                       <a href={qrPaymentImageUrl} target="_blank" rel="noreferrer">Mở/tải QR</a>
                     ) : null}
                   </div>
-                  <p className="qr-payment-wait-card__note">
-                    Hệ thống đang tự chờ SePay xác nhận. Anh/chị không cần bấm báo đã chuyển khoản.
-                  </p>
                 </>
               ) : (
                 <p className="qr-payment-wait-card__paid-text">
@@ -298,12 +318,20 @@ export default function OrderSuccess({
             </div>
           ) : null}
 
-          <CustomerButton full size="lg" className="mt-5" onClick={handleTrackOrder}>
-            Theo dõi đúng đơn này
-          </CustomerButton>
-          <CustomerButton full variant="secondary" className="mt-3" onClick={() => navigate?.("menu", "menu")}>
-            Đặt thêm món
-          </CustomerButton>
+          {qrPaymentExpired ? (
+            <CustomerButton full size="lg" className="mt-5" onClick={() => navigate?.("menu", "menu")}>
+              Đặt lại món
+            </CustomerButton>
+          ) : !isQrPaymentWaiting ? (
+            <>
+              <CustomerButton full size="lg" className="mt-5" onClick={handleTrackOrder}>
+                Theo dõi đúng đơn này
+              </CustomerButton>
+              <CustomerButton full variant="secondary" className="mt-3" onClick={() => navigate?.("menu", "menu")}>
+                Đặt thêm món
+              </CustomerButton>
+            </>
+          ) : null}
         </CustomerCard>
 
         {!isQrPaymentOrder ? (
