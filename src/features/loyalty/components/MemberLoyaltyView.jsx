@@ -57,6 +57,7 @@ export default function MemberLoyaltyView({
   recentDays,
   handleCheckin,
   canCheckin,
+  canShowLoyaltyPopups,
   checkinAuthNotice
 }) {
   const currentTier = tierJourney?.currentTier || {};
@@ -106,14 +107,14 @@ export default function MemberLoyaltyView({
     ganh_legend: "Bạn thuộc nhóm khách đặc biệt nhất của Gánh"
   };
   const { celebratedTier, closeTierCelebration } = useTierUpgradeCelebration({
-    customerPhone: currentPhone,
+    customerPhone: canShowLoyaltyPopups ? currentPhone : "",
     journey: tierJourney
   });
   const { popup: entryPopup, closePopup: closeEntryPopup } = useLoyaltyEntryPopup({
     customerPhone: currentPhone,
     isReady: isLoyaltyReady,
     vouchers: safeVoucherHistory,
-    blocked: Boolean(celebratedTier || luckyVoucher || activeSheet)
+    blocked: Boolean(!canShowLoyaltyPopups || celebratedTier || luckyVoucher || activeSheet)
   });
   const handleUseVoucher = () => navigate("menu", "menu");
   const handleEntryVoucherAction = () => {

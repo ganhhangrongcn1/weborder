@@ -76,6 +76,7 @@ export default function Loyalty(props) {
       recentDays={vm.recentDays}
       handleCheckin={vm.handleCheckin}
       canCheckin={canUseProtectedLoyaltyAction}
+      canShowLoyaltyPopups={canUseProtectedLoyaltyAction}
       checkinAuthNotice={
         requiresCustomerAuthSession && !canUseProtectedLoyaltyAction
           ? "Phiên đăng nhập thành viên đã hết. Anh đăng nhập lại để điểm danh và dùng các thao tác tích điểm nhé."
