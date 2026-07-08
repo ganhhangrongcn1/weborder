@@ -64,17 +64,35 @@ function isWebsiteCustomerOrder(order = {}) {
   return sourceType !== "partner";
 }
 
+function isQrCounterOrderSource(value = "") {
+  const source = normalizeOrderStatusText(value);
+  return ["qrcounter", "qrorder", "qrtaiquay", "customerqr"].includes(source);
+}
+
 function getOrderStatusPopupCandidate(order = {}, phone = "") {
   if (!order || !isWebsiteCustomerOrder(order)) return null;
 
   const status = normalizeOrderStatusText(order.status || order.orderStatus || order.order_status);
+  const kitchenStatus = normalizeOrderStatusText(order.kitchenStatus || order.kitchen_status);
   const fulfillmentType = normalizeOrderStatusText(order.fulfillmentType || order.fulfillment_type);
-  const source = normalizeOrderStatusText(order.source || order.channel || order.orderSource || order.platform);
+  const sourceValues = [
+    order.source,
+    order.channel,
+    order.orderSource,
+    order.order_source,
+    order.sourceType,
+    order.source_type,
+    order.platform
+  ];
+  const isQrCounterSource = sourceValues.some(isQrCounterOrderSource);
   const orderId = String(order.id || order.orderCode || "").trim();
   const phoneKey = String(phone || order.phone || order.customerPhone || "").replace(/\D/g, "");
   if (!orderId || !phoneKey) return null;
 
-  if (status === "readyforpickup" && (fulfillmentType === "pickup" || source === "qrcounter")) {
+  if (
+    (status === "readyforpickup" || kitchenStatus === "ready") &&
+    (fulfillmentType === "pickup" || isQrCounterSource)
+  ) {
     return {
       key: `ghr_order_status_popup_${phoneKey}_${orderId}_ready_pickup`,
       notice: {

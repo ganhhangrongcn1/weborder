@@ -68,6 +68,7 @@ export default function OrderSuccess({
   const [showSuccessPopup, setShowSuccessPopup] = useState(() => !isQrPaymentOrder);
   const [paymentSession, setPaymentSession] = useState(null);
   const [paymentMessage, setPaymentMessage] = useState("");
+  const [qrDownloadBusy, setQrDownloadBusy] = useState(false);
   const orderCode = order?.orderCode || order?.id || "Đơn mới";
   const itemCount = getOrderItemsCount(order);
   const orderTotal = getOrderTotal(order);
@@ -161,6 +162,38 @@ export default function OrderSuccess({
       setPaymentMessage("Đã sao chép nội dung chuyển khoản.");
     } catch {
       setPaymentMessage("Anh/chị copy nội dung chuyển khoản trên màn hình giúp em nhé.");
+    }
+  };
+
+  const handleDownloadQrImage = async () => {
+    if (!qrPaymentImageUrl || qrDownloadBusy) return;
+    setQrDownloadBusy(true);
+    try {
+      const response = await fetch(qrPaymentImageUrl, { mode: "cors" });
+      if (!response.ok) throw new Error("download_failed");
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `ma-qr-${paymentReference || orderCode}.png`
+        .toLowerCase()
+        .replace(/[^a-z0-9.-]+/g, "-")
+        .replace(/-+/g, "-");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      setPaymentMessage("Đã tải mã QR về máy.");
+    } catch {
+      const link = document.createElement("a");
+      link.href = qrPaymentImageUrl;
+      link.download = `ma-qr-${paymentReference || orderCode}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setPaymentMessage("Đã gửi lệnh tải QR. Nếu trình duyệt chưa tải, anh/chị nhấn giữ hình QR để lưu ảnh.");
+    } finally {
+      setQrDownloadBusy(false);
     }
   };
 
@@ -304,7 +337,9 @@ export default function OrderSuccess({
                   <div className="qr-payment-wait-card__actions">
                     <button type="button" onClick={handleCopyPaymentReference}>Sao chép nội dung</button>
                     {qrPaymentImageUrl ? (
-                      <a href={qrPaymentImageUrl} target="_blank" rel="noreferrer">Mở/tải QR</a>
+                      <button type="button" onClick={handleDownloadQrImage} disabled={qrDownloadBusy}>
+                        {qrDownloadBusy ? "Đang tải..." : "Tải mã QR"}
+                      </button>
                     ) : null}
                   </div>
                 </>
