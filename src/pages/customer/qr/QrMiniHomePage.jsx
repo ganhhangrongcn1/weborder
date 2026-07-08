@@ -3,7 +3,7 @@ import Icon from "../../../components/Icon.jsx";
 import { CustomerButton, CustomerEmptyState } from "../../../components/customer/CustomerUI.jsx";
 import { buildQrCouponOffers, buildQrOfferItems } from "../../../services/qrOfferService.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
-import { getActiveVouchers, getDefaultOrderChoices } from "../../../utils/pureHelpers.js";
+import { getActiveVouchers } from "../../../utils/pureHelpers.js";
 import { formatMoney } from "../../../utils/format.js";
 
 function resolveQrBranch(branches = [], checkoutPreset = {}) {
@@ -109,22 +109,37 @@ function buildVoucherCards(memberVouchers = [], qrCoupons = []) {
   });
 }
 
-function OfferImageCard({ offer, fallbackImage, onClick }) {
+function findProductForOffer(offer = {}, products = []) {
+  const safeProducts = Array.isArray(products) ? products : [];
+  const preferredId = String(offer?.productId || "").trim();
+  if (preferredId) {
+    const matchedById = safeProducts.find((product) => String(product?.id || "").trim() === preferredId);
+    if (matchedById) return matchedById;
+  }
+
+  const productName = String(offer?.productName || offer?.title || "").trim().toLowerCase();
+  if (!productName) return null;
+  return safeProducts.find((product) => String(product?.name || "").trim().toLowerCase() === productName) || null;
+}
+
+function OfferImageCard({ offer, fallbackImage, onClick, actionLabel = "Mua nhanh" }) {
   if (!offer) return null;
 
   const hasSalePrice = Number(offer?.originalPrice || 0) > Number(offer?.currentPrice || 0);
   const hasGiftThreshold = Number(offer?.thresholdAmount || 0) > 0;
   const savingAmount = getSavingAmount(offer);
+  const displayTitle = offer?.productName || offer?.title;
+  const displaySubtitle = offer?.productDescription || offer?.text || offer?.detail;
 
   return (
     <button type="button" className="qr-mini-offer-image-card" onClick={onClick}>
       <span className="qr-mini-offer-image-card__photo">
-        {offer.image || fallbackImage ? <img src={offer.image || fallbackImage} alt={offer.productName || offer.title} /> : null}
+        {offer.image || fallbackImage ? <img src={offer.image || fallbackImage} alt={displayTitle} /> : null}
+        <small className="qr-mini-offer-image-card__badge">{getOfferLabel(offer)}</small>
       </span>
       <span className="qr-mini-offer-image-card__copy">
-        <small>{getOfferLabel(offer)}</small>
-        <strong>{offer.title}</strong>
-        <em>{offer.productName || offer.detail}</em>
+        <strong>{displayTitle}</strong>
+        <em>{displaySubtitle}</em>
         {hasSalePrice ? (
           <span className="qr-mini-offer-image-card__price">
             <span className="qr-mini-offer-image-card__price-label">Hôm nay</span>
@@ -143,8 +158,45 @@ function OfferImageCard({ offer, fallbackImage, onClick }) {
         ) : (
           <span className="qr-mini-offer-image-card__summary">{offer.rewardSummary || offer.value}</span>
         )}
+        <span className="qr-mini-offer-image-card__foot">
+          <span className="qr-mini-offer-image-card__action">{actionLabel}</span>
+          <span className="qr-mini-offer-image-card__add">+</span>
+        </span>
       </span>
     </button>
+  );
+}
+
+function QrOfferSection({ title, count, items = [], fallbackImage, onOpenMenu, onOfferAction, actionLabel = "Mua nhanh", variant = "" }) {
+  if (!items.length) return null;
+
+  return (
+    <section className={`qr-mini-home__offer-section ${variant}`.trim()}>
+      <div className="qr-mini-home__offer-section-head">
+        <div>
+          <small>{title}</small>
+          <strong>{count ? `${count} ưu đãi` : "Đang áp dụng"}</strong>
+        </div>
+        <button type="button" onClick={onOpenMenu}>Xem menu</button>
+      </div>
+      <div className={`qr-mini-home__offer-grid${items.length === 1 ? " is-single" : ""}`}>
+        {items.map((offer) => (
+          <OfferImageCard
+            key={offer.id || offer.title}
+            offer={offer}
+            fallbackImage={fallbackImage}
+            actionLabel={actionLabel}
+            onClick={() => {
+              if (typeof onOfferAction === "function") {
+                onOfferAction(offer);
+                return;
+              }
+              onOpenMenu?.();
+            }}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -164,7 +216,7 @@ function VoucherHintCard({ onClick }) {
 
 export default function QrMiniHomePage({
   navigate,
-  addToCart,
+  openOptionModal,
   coupons = [],
   checkoutCoupons = [],
   smartPromotions = [],
@@ -182,7 +234,7 @@ export default function QrMiniHomePage({
         coupons: checkoutCoupons.length ? checkoutCoupons : coupons,
         smartPromotions: checkoutSmartPromotions.length ? checkoutSmartPromotions : smartPromotions,
         products,
-        limit: 6
+        limit: 12
       }),
     [checkoutCoupons, checkoutSmartPromotions, coupons, products, smartPromotions]
   );
@@ -200,10 +252,28 @@ export default function QrMiniHomePage({
     [offerItems]
   );
 
-  const primaryOffer = promotionOffers[0] || offerItems[0] || null;
+  const flashSaleOffers = useMemo(
+    () => promotionOffers.filter((offer) => offer?.source === "flash_sale"),
+    [promotionOffers]
+  );
+
+  const giftOffers = useMemo(
+    () => promotionOffers.filter((offer) => offer?.source === "gift_threshold"),
+    [promotionOffers]
+  );
+
+  const otherPromotionOffers = useMemo(
+    () => promotionOffers.filter((offer) => !["flash_sale", "gift_threshold"].includes(String(offer?.source || ""))),
+    [promotionOffers]
+  );
+
+  const primaryOffer = flashSaleOffers[0] || giftOffers[0] || otherPromotionOffers[0] || offerItems[0] || null;
   const heroImage = primaryOffer?.image || products.find((product) => product?.visible !== false)?.image || "";
   const primarySaving = getSavingAmount(primaryOffer);
   const hasHeroSale = Number(primaryOffer?.originalPrice || 0) > Number(primaryOffer?.currentPrice || 0);
+  const heroSummary = flashSaleOffers.length
+    ? `${flashSaleOffers.length} món đang áp dụng`
+    : primaryOffer?.detail || primaryOffer?.text || "Áp dụng hôm nay";
   const qrBranch = useMemo(() => resolveQrBranch(branches, checkoutPreset), [branches, checkoutPreset]);
   const compactBranchName = useMemo(() => getCompactBranchName(qrBranch), [qrBranch]);
 
@@ -220,40 +290,30 @@ export default function QrMiniHomePage({
     [activeMemberVouchers, hasCustomerAuthSession, isRegisteredCustomer, qrCouponOffers]
   );
 
-  const remainingOffers = useMemo(() => {
-    if (!primaryOffer) return [];
-    const sourceOffers = promotionOffers.length ? promotionOffers : offerItems;
-    return sourceOffers.filter((offer) => offer?.id !== primaryOffer.id);
-  }, [offerItems, primaryOffer, promotionOffers]);
-
-  const gridOffers = remainingOffers.slice(0, 2);
   const shouldShowVoucherHint = !voucherCards.length;
   const primaryOfferProduct = useMemo(() => {
-    if (!primaryOffer) return null;
-    const preferredId = String(primaryOffer?.productId || "").trim();
-    if (preferredId) {
-      const matchedById = products.find((product) => String(product?.id || "").trim() === preferredId);
-      if (matchedById) return matchedById;
-    }
-    const productName = String(primaryOffer?.productName || primaryOffer?.title || "").trim().toLowerCase();
-    if (!productName) return null;
-    return products.find((product) => String(product?.name || "").trim().toLowerCase() === productName) || null;
+    return findProductForOffer(primaryOffer, products);
   }, [primaryOffer, products]);
 
-  const handleQuickAddPrimaryOffer = () => {
-    if (!primaryOfferProduct || typeof addToCart !== "function") {
+  const openProductOptionsInMenu = (product) => {
+    if (!product || typeof openOptionModal !== "function") {
       navigate("menu", "menu");
       return;
     }
-    const defaults = getDefaultOrderChoices(primaryOfferProduct);
-    addToCart({
-      product: primaryOfferProduct,
-      spice: defaults.spice,
-      toppings: defaults.toppings,
-      quantity: 1,
-      note: ""
-    });
     navigate("menu", "menu");
+    openOptionModal(product);
+  };
+
+  const handleQuickAddPrimaryOffer = () => {
+    openProductOptionsInMenu(primaryOfferProduct);
+  };
+
+  const handleQuickBuyOffer = (offer) => {
+    if (offer?.source !== "flash_sale") {
+      navigate("menu", "menu");
+      return;
+    }
+    openProductOptionsInMenu(findProductForOffer(offer, products));
   };
 
   return (
@@ -276,9 +336,10 @@ export default function QrMiniHomePage({
                 <span>
                   <em>{formatMoney(Number(primaryOffer.originalPrice || 0))}</em>
                   {primarySaving > 0 ? ` • Tiết kiệm ${formatMoney(primarySaving)}` : ""}
+                  {flashSaleOffers.length ? ` • ${heroSummary}` : ""}
                 </span>
               ) : (
-                <span>{primaryOffer.detail || primaryOffer.text || "Áp dụng hôm nay"}</span>
+                <span>{heroSummary}</span>
               )}
             </div>
           ) : null}
@@ -309,6 +370,35 @@ export default function QrMiniHomePage({
           {heroImage ? <img src={heroImage} alt={primaryOffer?.productName || primaryOffer?.title || "Món đang ưu đãi"} /> : null}
         </div>
       </div>
+
+      <QrOfferSection
+        title="Flash Sale hôm nay"
+        count={flashSaleOffers.length}
+        items={flashSaleOffers}
+        fallbackImage={heroImage}
+        onOpenMenu={() => navigate("menu", "menu")}
+        onOfferAction={handleQuickBuyOffer}
+        actionLabel="Chọn món"
+      />
+
+      <QrOfferSection
+        title="Quà tặng theo đơn"
+        count={giftOffers.length}
+        items={giftOffers}
+        fallbackImage={heroImage}
+        onOpenMenu={() => navigate("menu", "menu")}
+        actionLabel="Xem menu"
+        variant="is-gift"
+      />
+
+      <QrOfferSection
+        title="Ưu đãi khác"
+        count={otherPromotionOffers.length}
+        items={otherPromotionOffers}
+        fallbackImage={heroImage}
+        onOpenMenu={() => navigate("menu", "menu")}
+        actionLabel="Xem menu"
+      />
 
       {voucherCards.length ? (
         <section className="qr-mini-home__voucher-strip">
@@ -352,19 +442,6 @@ export default function QrMiniHomePage({
             ))}
           </div>
         </section>
-      ) : null}
-
-      {gridOffers.length ? (
-        <div className={`qr-mini-home__quick-grid${gridOffers.length === 1 ? " is-single" : ""}`}>
-          {gridOffers.map((offer) => (
-            <OfferImageCard
-              key={offer.id || offer.title}
-              offer={offer}
-              fallbackImage={heroImage}
-              onClick={() => navigate("menu", "menu")}
-            />
-          ))}
-        </div>
       ) : null}
 
       {shouldShowVoucherHint ? <VoucherHintCard onClick={() => navigate("loyalty", "rewards")} /> : null}

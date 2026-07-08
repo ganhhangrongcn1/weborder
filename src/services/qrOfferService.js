@@ -124,6 +124,27 @@ function toIdList(value) {
     .filter(Boolean);
 }
 
+function getVisibleProducts(products = []) {
+  return (Array.isArray(products) ? products : []).filter((product) => product?.visible !== false);
+}
+
+function getFlashSaleProducts(promotion = {}, products = []) {
+  const visibleProducts = getVisibleProducts(products);
+  const scope = promotion?.condition?.applyScope || "product";
+
+  if (scope === "all") return visibleProducts;
+
+  if (scope === "category") {
+    const categoryIds = toIdList(promotion?.condition?.categoryIds);
+    if (!categoryIds.length) return [];
+    return visibleProducts.filter((product) => categoryIds.includes(String(product?.category || "")));
+  }
+
+  const productIds = toIdList(promotion?.condition?.productIds);
+  if (!productIds.length) return [];
+  return visibleProducts.filter((product) => productIds.includes(String(product?.id || "")));
+}
+
 function findPromotionProduct(promotion = {}, products = []) {
   const visibleProducts = (Array.isArray(products) ? products : []).filter((product) => product?.visible !== false);
   const rewardProductId = String(promotion?.reward?.productId || "").trim();
@@ -174,7 +195,7 @@ function normalizePromotionOffer(promotion = {}, featuredProduct = null) {
   const rewardSummary = getRewardSummaryText(promotion, featuredProduct);
 
   return {
-    id: `promotion-${promotion.id || promotion.name || promotion.title}`,
+    id: `promotion-${promotion.id || promotion.name || promotion.title}${featuredProduct?.id ? `-${featuredProduct.id}` : ""}`,
     source: promotion.type || "promotion",
     productId: featuredProduct?.id || "",
     icon: promotion.icon || (promotion.type === "flash_sale" ? "star" : "gift"),
@@ -186,6 +207,7 @@ function normalizePromotionOffer(promotion = {}, featuredProduct = null) {
     codeLabel: promotion.type === "flash_sale" ? "Giá đã hiển thị trên món" : "Tự áp dụng khi đủ điều kiện",
     image: promotion.image || featuredProduct?.image || "",
     productName: featuredProduct?.name || "",
+    productDescription: featuredProduct?.short || featuredProduct?.description || "",
     originalPrice: basePrice > currentPrice ? basePrice : 0,
     currentPrice: currentPrice > 0 ? currentPrice : 0,
     thresholdAmount: Number(promotion?.condition?.minSubtotal || 0),
@@ -213,18 +235,26 @@ export function buildQrPromotionOffers({
   products = [],
   now = new Date()
 } = {}) {
-  const activeFlashPromotions = getActiveFlashSalePromotions(smartPromotions, now);
+  const activeFlashPromotions = getActiveFlashSalePromotions(smartPromotions, now)
+    .filter((promotion) => isPromotionAllowedForChannel(promotion, "qr"))
+    .filter((promotion) => hasDisplayPlace(promotion, ["menu", "checkout", "loyalty", "home"]));
   const activeRegularPromotions = getActivePromotions(smartPromotions)
     .filter((promotion) => promotion.type !== "flash_sale")
     .filter((promotion) => promotion.reward?.type !== "shipping_discount")
     .filter((promotion) => isPromotionAllowedForChannel(promotion, "qr"))
     .filter((promotion) => hasDisplayPlace(promotion, ["menu", "checkout", "loyalty", "home"]));
 
-  return [...activeFlashPromotions, ...activeRegularPromotions]
-    .map((promotion) => {
-      const featuredProduct = findPromotionProduct(promotion, products);
-      return normalizePromotionOffer(promotion, featuredProduct);
-    });
+  const flashOffers = activeFlashPromotions.flatMap((promotion) =>
+    getFlashSaleProducts(promotion, products)
+      .map((product) => normalizePromotionOffer(promotion, product))
+  );
+
+  const regularOffers = activeRegularPromotions.map((promotion) => {
+    const featuredProduct = findPromotionProduct(promotion, products);
+    return normalizePromotionOffer(promotion, featuredProduct);
+  });
+
+  return [...flashOffers, ...regularOffers];
 }
 
 export function buildQrOfferItems({

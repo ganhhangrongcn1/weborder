@@ -23,6 +23,7 @@ import {
   saveMenuSchemaFromLegacy
 } from "../services/menuSchemaService.js";
 import { isPromotionAllowedForChannel } from "../services/promotionChannelService.js";
+import { getActiveFlashSalePromotions } from "../services/flashSaleService.js";
 
 function parseIdCsv(value) {
   return String(value || "")
@@ -117,6 +118,30 @@ function calcFinalStrikePrice(productPrice, promotion) {
     finalPrice,
     originalPrice: productPrice,
     discountPercent: Math.round(percentDiscount),
+    discountValue: productPrice - finalPrice
+  };
+}
+
+function isFixedPricePromotion(promotion = {}) {
+  return promotion?.reward?.type === "fixed_price" ||
+    promotion?.reward?.priceMode === "fixed_price" ||
+    promotion?.condition?.priceMode === "fixed_price";
+}
+
+function calcFinalFlashSalePrice(productPrice, promotion) {
+  const rewardType = isFixedPricePromotion(promotion) ? "fixed_price" : promotion?.reward?.type;
+  const rewardValue = Number(promotion?.reward?.value || 0);
+  const rawFinalPrice = rewardType === "fixed_price"
+    ? rewardValue
+    : productPrice - (rewardType === "percent_discount" ? (productPrice * rewardValue) / 100 : rewardValue);
+  const finalPrice = Math.max(applyRoundMode(rawFinalPrice, promotion?.reward?.roundMode), 0);
+
+  if (finalPrice <= 0 || finalPrice >= productPrice) return null;
+
+  return {
+    finalPrice,
+    originalPrice: productPrice,
+    discountPercent: Math.round(((productPrice - finalPrice) / productPrice) * 100),
     discountValue: productPrice - finalPrice
   };
 }
@@ -501,46 +526,63 @@ export default function useProductList({
       .filter((item) => isTimeWindowActive(item))
       .sort((first, second) => Number(first?.priority || 99) - Number(second?.priority || 99));
 
-    if (!activeStrikePromotions.length) {
-      return storeProducts.map((product) => ({
-        ...product,
-        originalPrice: undefined,
-        discountPercent: undefined,
-        discountValue: undefined
-      }));
-    }
+    const activeFlashPromotions = getActiveFlashSalePromotions(smartPromotions)
+      .filter((item) => isPromotionAllowedForChannel(item, runtimeSalesChannel));
 
     return storeProducts.map((product) => {
       const basePrice = Number(product?.price || 0);
-      if (basePrice <= 0) return product;
-
-      const matchedPromotion = activeStrikePromotions.find((promotion) => canApplyToProduct(promotion, product));
-      if (!matchedPromotion) {
+      if (basePrice <= 0) {
         return {
           ...product,
           originalPrice: undefined,
           discountPercent: undefined,
-          discountValue: undefined
+          discountValue: undefined,
+          strikePromotionId: undefined,
+          flashPromoId: undefined,
+          salePrice: undefined
         };
       }
 
-      const strikePrice = calcFinalStrikePrice(basePrice, matchedPromotion);
-      if (!strikePrice) {
-        return {
-          ...product,
-          originalPrice: undefined,
-          discountPercent: undefined,
-          discountValue: undefined
-        };
+      let pricedProduct = {
+        ...product,
+        originalPrice: undefined,
+        discountPercent: undefined,
+        discountValue: undefined,
+        strikePromotionId: undefined,
+        flashPromoId: undefined,
+        salePrice: undefined
+      };
+
+      const matchedStrikePromotion = activeStrikePromotions.find((promotion) => canApplyToProduct(promotion, product));
+      if (matchedStrikePromotion) {
+        const strikePrice = calcFinalStrikePrice(basePrice, matchedStrikePromotion);
+        if (strikePrice) {
+          pricedProduct = {
+            ...pricedProduct,
+            price: strikePrice.finalPrice,
+            originalPrice: strikePrice.originalPrice,
+            discountPercent: strikePrice.discountPercent,
+            discountValue: strikePrice.discountValue,
+            strikePromotionId: matchedStrikePromotion.id
+          };
+        }
       }
+
+      const matchedFlashPromotion = activeFlashPromotions.find((promotion) => canApplyToProduct(promotion, product));
+      if (!matchedFlashPromotion) return pricedProduct;
+
+      const flashPrice = calcFinalFlashSalePrice(basePrice, matchedFlashPromotion);
+      if (!flashPrice) return pricedProduct;
 
       return {
-        ...product,
-        price: strikePrice.finalPrice,
-        originalPrice: strikePrice.originalPrice,
-        discountPercent: strikePrice.discountPercent,
-        discountValue: strikePrice.discountValue,
-        strikePromotionId: matchedPromotion.id
+        ...pricedProduct,
+        price: flashPrice.finalPrice,
+        originalPrice: flashPrice.originalPrice,
+        salePrice: flashPrice.finalPrice,
+        discountPercent: flashPrice.discountPercent,
+        discountValue: flashPrice.discountValue,
+        flashPromoId: matchedFlashPromotion.id,
+        badge: pricedProduct.badge || "Flash Sale"
       };
     });
   }, [currentPage, smartPromotions, storeProducts]);

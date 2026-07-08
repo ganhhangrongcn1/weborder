@@ -8,26 +8,32 @@ import { menuText, suggestText } from "../../data/uiText.js";
 import ToppingMenuCard from "./components/ToppingMenuCard.jsx";
 import { buildQrPromotionOffers } from "../../services/qrOfferService.js";
 import { formatMoney } from "../../utils/format.js";
-import { getDefaultOrderChoices } from "../../utils/pureHelpers.js";
 
-function MenuPromoRail({ items = [], onOpen, onQuickAdd }) {
+function MenuPromoRail({ items = [], onOpen }) {
   if (!items.length) return null;
+  const canSwipe = items.length > 1;
 
   return (
-    <section className="menu-promo-rail">
+    <section className={`menu-promo-rail${canSwipe ? " is-scrollable" : " is-single"}`}>
+      <div className="menu-promo-rail__head">
+        <div>
+          <small>Ưu đãi hôm nay</small>
+          <strong>{items.length} món đang giảm</strong>
+        </div>
+      </div>
       <div className="menu-promo-rail__scroll no-scrollbar" aria-label="Món đang giảm giá">
         {items.map((item) => (
           <article key={item.id} className="menu-promo-card">
-            <div className="menu-promo-card__main">
-              <button
-                type="button"
-                className="menu-promo-card__image"
-                onClick={() => onOpen(item.product)}
-                aria-label={`Xem ưu đãi ${item.product.name}`}
-              >
+            <button
+              type="button"
+              className="menu-promo-card__main"
+              onClick={() => onOpen(item.product)}
+              aria-label={`Chọn ${item.product.name}`}
+            >
+              <span className="menu-promo-card__image">
                 <img src={item.product.image} alt={item.product.name} loading="lazy" />
                 <em>{item.offer.eyebrow || "Flash Sale"}</em>
-              </button>
+              </span>
               <span className="menu-promo-card__copy">
                 <strong>{item.product.name}</strong>
                 <small>{item.product.short || item.offer.detail || "Đang áp dụng tại quầy"}</small>
@@ -35,16 +41,16 @@ function MenuPromoRail({ items = [], onOpen, onQuickAdd }) {
                   <b>{formatMoney(Number(item.offer.currentPrice || item.product.price || 0))}</b>
                   <span>
                     <del>{formatMoney(Number(item.offer.originalPrice || item.product.originalPrice || item.product.price || 0))}</del>
-                    <button type="button" className="menu-promo-card__cta" onClick={() => onQuickAdd(item.product)}>
-                      Mua ngay
-                    </button>
+                    <span className="menu-promo-card__cta">
+                      Chọn món
+                    </span>
                   </span>
                 </span>
               </span>
               <span className="menu-promo-card__discount">
                 -{Math.max(1, Math.round(((Number(item.offer.originalPrice || item.product.originalPrice || 0) - Number(item.offer.currentPrice || item.product.price || 0)) / Math.max(Number(item.offer.originalPrice || item.product.originalPrice || 1), 1)) * 100))}%
               </span>
-            </div>
+            </button>
           </article>
         ))}
       </div>
@@ -163,17 +169,6 @@ export default function Menu({
     });
   };
 
-  const addMenuProductQuick = (product) => {
-    const defaults = getDefaultOrderChoices(product);
-    addToCart({
-      product,
-      spice: defaults.spice,
-      toppings: defaults.toppings,
-      quantity: 1,
-      note: ""
-    });
-  };
-
   return (
     <section>
       <AppHeader title={menuText.title} subtitle="Chọn món, thêm topping rồi thanh toán" onBack={() => navigate("home", "home")} />
@@ -210,7 +205,6 @@ export default function Menu({
           <MenuPromoRail
             items={promoRailItems}
             onOpen={openProduct}
-            onQuickAdd={addMenuProductQuick}
           />
         ) : null}
 
