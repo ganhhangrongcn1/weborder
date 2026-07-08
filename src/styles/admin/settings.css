@@ -248,6 +248,85 @@
   border-color: #cbd5e1;
 }
 
+.admin-branch-account-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-branch-account-note {
+  margin: 6px 0 0;
+  max-width: 780px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.admin-branch-account-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) minmax(180px, 1.2fr) minmax(160px, 0.9fr);
+  gap: 10px;
+  align-items: stretch;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 13px;
+}
+
+.admin-branch-account-form .admin-input,
+.admin-branch-account-form .admin-btn,
+.admin-branch-account-form button {
+  min-height: 44px;
+}
+
+.admin-branch-account-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-branch-account-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(150px, 0.8fr) minmax(220px, 1.2fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 13px;
+}
+
+.admin-branch-account-row strong,
+.admin-branch-account-row span {
+  display: block;
+}
+
+.admin-branch-account-row strong {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.25;
+}
+
+.admin-branch-account-row span {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.admin-branch-account-empty {
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 16px;
+  font-size: 13px;
+  font-weight: 850;
+  text-align: center;
+}
+
 .admin-branch-actions {
   display: flex;
   justify-content: flex-end;
@@ -307,6 +386,11 @@
   .admin-ship-compact-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .admin-branch-account-form,
+  .admin-branch-account-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -351,6 +435,11 @@
 
   .admin-ship-note-item {
     grid-column: auto;
+  }
+
+  .admin-branch-account-form,
+  .admin-branch-account-row {
+    grid-template-columns: 1fr;
   }
 }
 

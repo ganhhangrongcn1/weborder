@@ -1,6 +1,7 @@
 import ZaloSettings from "./store/ZaloSettings.jsx";
 import AppearanceSettings from "./store/AppearanceSettings.jsx";
 import BranchSettings from "./store/BranchSettings.jsx";
+import BranchAccountSettings from "./store/BranchAccountSettings.jsx";
 import AppDownloadSettings from "./store/AppDownloadSettings.jsx";
 import PromotionTabsManager from "./promotions/PromotionTabsManager.jsx";
 import { AdminPlaceholder } from "./ui/AdminCommon.jsx";
@@ -108,11 +109,15 @@ export default function AdminBackofficeSections({
             <ZaloSettings zaloConfig={zaloConfig} setZaloConfig={setZaloConfig} onSave={onSaveZalo} />
           )}
 
+          {activeSubSection === "accounts" && (
+            <BranchAccountSettings branches={branches} />
+          )}
+
           {activeSubSection === "downloads" && (
             <AppDownloadSettings />
           )}
 
-          {!["branches", "zalo", "downloads"].includes(activeSubSection) && (
+          {!["branches", "zalo", "accounts", "downloads"].includes(activeSubSection) && (
             <AdminPlaceholder text="Đang phát triển" />
           )}
         </div>

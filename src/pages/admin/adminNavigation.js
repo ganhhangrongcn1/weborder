@@ -16,6 +16,7 @@ export const navGroups = [
     items: [
       { id: "menu-main", label: "Menu", section: "menu" },
       { id: "store-branches", label: "Quản lý chi nhánh", section: "store", sub: "branches" },
+      { id: "store-accounts", label: "Tài khoản chi nhánh", section: "store", sub: "accounts" },
       { id: "store-zalo", label: "Cấu hình Zalo", section: "store", sub: "zalo" },
       { id: "store-downloads", label: "File APK POS", section: "store", sub: "downloads" }
     ]
@@ -36,6 +37,7 @@ export const navIconMap = {
   "cakes-main": "gift",
   "menu-main": "menu",
   "store-branches": "home",
+  "store-accounts": "user",
   "store-zalo": "phone",
   "store-downloads": "download",
   "store-ui": "star",
@@ -48,6 +50,7 @@ export const dashboardQuickActions = [
   { id: "menu-main", label: "Menu" },
   { id: "customer-main", label: "Khách hàng / CRM" },
   { id: "store-branches", label: "Chi nhánh" },
+  { id: "store-accounts", label: "Tài khoản chi nhánh" },
   { id: "store-downloads", label: "File APK POS" },
   { id: "promo-campaign", label: "Khuyến mãi" }
 ];

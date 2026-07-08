@@ -119,6 +119,13 @@ export function adminPathToState(pathname = "/admin") {
       activeSubSection: "zalo"
     };
   }
+  if (path === "/admin/settings/accounts") {
+    return {
+      section: "store",
+      activeAdminNav: "store-accounts",
+      activeSubSection: "accounts"
+    };
+  }
   if (path === "/admin/settings/downloads") {
     return {
       section: "store",
@@ -168,6 +175,7 @@ export function adminNavToPath(item) {
   if (item.id === "customer-main") return "/admin/customers";
   if (item.id === "menu-main") return "/admin/menu";
   if (item.id === "store-branches") return "/admin/settings";
+  if (item.id === "store-accounts") return "/admin/settings/accounts";
   if (item.id === "store-zalo") return "/admin/settings/zalo";
   if (item.id === "store-downloads") return "/admin/settings/downloads";
   if (item.id === "store-ui") return "/admin/ui";
