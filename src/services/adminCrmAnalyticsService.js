@@ -16,6 +16,7 @@ function mapCustomer(item = {}) {
     phone: String(item.customer_phone || ""),
     name: String(item.customer_name || "Khách hàng"),
     profileSource: String(item.profile_source || "profile"),
+    registeredCustomer: Boolean(item.registered_customer || item.registeredCustomer),
     totalOrders: toNumber(item.total_orders),
     rawOrderCount: toNumber(item.raw_order_count),
     totalSpent: toNumber(item.total_spent),

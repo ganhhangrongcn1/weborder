@@ -108,7 +108,8 @@ profile_customers as (
   select distinct on (public.normalize_vietnam_phone(p.phone))
     public.normalize_vietnam_phone(p.phone) as customer_phone,
     coalesce(nullif(trim(p.name), ''), 'Khách hàng') as customer_name,
-    coalesce(nullif(trim(p.metadata ->> 'source'), ''), 'profile') as profile_source
+    coalesce(nullif(trim(p.metadata ->> 'source'), ''), 'profile') as profile_source,
+    coalesce(p.registered, false) as registered_customer
   from public.profiles p
   where p.role = 'customer'
     and coalesce(trim(p.phone), '') <> ''
@@ -119,6 +120,7 @@ profile_variants as (
     p.customer_phone,
     p.customer_name,
     p.profile_source,
+    p.registered_customer,
     variant_phone
   from profile_customers p
   cross join lateral unnest(public.get_customer_phone_variants(p.customer_phone)) as variant_phone
@@ -167,6 +169,7 @@ customer_base as (
     p.customer_phone,
     p.customer_name,
     p.profile_source,
+    p.registered_customer,
     coalesce(o.total_orders, 0)::integer as total_orders,
     coalesce(ro.raw_order_count, 0)::integer as raw_order_count,
     coalesce(o.total_spent, 0)::numeric as total_spent,
@@ -211,6 +214,7 @@ customer_json as (
       'customer_phone', customer_phone,
       'customer_name', customer_name,
       'profile_source', profile_source,
+      'registered_customer', registered_customer,
       'total_orders', total_orders,
       'raw_order_count', raw_order_count,
       'total_spent', total_spent,

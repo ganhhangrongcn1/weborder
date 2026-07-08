@@ -16,6 +16,20 @@ where p.role = 'customer'
   and p.auth_user_id is null
   and lower(u.email) = lower(trim(p.phone) || '@phone.ghr.vn');
 
+-- Mark already-linked customer profiles as registered when the Auth user is confirmed.
+-- Safe to run multiple times.
+update public.profiles p
+set
+  registered = true,
+  email = coalesce(nullif(p.email, ''), u.email),
+  updated_at = now()
+from auth.users u
+where p.role = 'customer'
+  and coalesce(p.status, 'active') = 'active'
+  and p.auth_user_id = u.id
+  and u.email_confirmed_at is not null
+  and coalesce(p.registered, false) = false;
+
 -- Verification: remaining customer profiles with Auth-style email but no link.
 select
   p.phone,
