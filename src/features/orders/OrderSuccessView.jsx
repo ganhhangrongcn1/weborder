@@ -68,7 +68,6 @@ export default function OrderSuccess({
   const [showSuccessPopup, setShowSuccessPopup] = useState(() => !isQrPaymentOrder);
   const [paymentSession, setPaymentSession] = useState(null);
   const [paymentMessage, setPaymentMessage] = useState("");
-  const [qrDownloadBusy, setQrDownloadBusy] = useState(false);
   const orderCode = order?.orderCode || order?.id || "Đơn mới";
   const itemCount = getOrderItemsCount(order);
   const orderTotal = getOrderTotal(order);
@@ -165,36 +164,8 @@ export default function OrderSuccess({
     }
   };
 
-  const handleDownloadQrImage = async () => {
-    if (!qrPaymentImageUrl || qrDownloadBusy) return;
-    setQrDownloadBusy(true);
-    try {
-      const response = await fetch(qrPaymentImageUrl, { mode: "cors" });
-      if (!response.ok) throw new Error("download_failed");
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = `ma-qr-${paymentReference || orderCode}.png`
-        .toLowerCase()
-        .replace(/[^a-z0-9.-]+/g, "-")
-        .replace(/-+/g, "-");
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(objectUrl);
-      setPaymentMessage("Đã tải mã QR về máy.");
-    } catch {
-      const link = document.createElement("a");
-      link.href = qrPaymentImageUrl;
-      link.download = `ma-qr-${paymentReference || orderCode}.png`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setPaymentMessage("Đã gửi lệnh tải QR. Nếu trình duyệt chưa tải, anh/chị nhấn giữ hình QR để lưu ảnh.");
-    } finally {
-      setQrDownloadBusy(false);
-    }
+  const handleShowQrSaveGuide = () => {
+    setPaymentMessage("Nhấn giữ hình QR rồi chọn Lưu ảnh. Nếu Zalo không hiện nút lưu, anh/chị mở bằng Chrome rồi lưu lại giúp em nhé.");
   };
 
   const handleTrackOrder = () => openTrackingRoute(orderCode, navigate);
@@ -304,9 +275,14 @@ export default function OrderSuccess({
               ) : !qrPaymentPaid ? (
                 <>
                   {qrPaymentImageUrl ? (
-                    <div className="qr-payment-wait-card__qr">
-                      <img src={qrPaymentImageUrl} alt="QR thanh toán ngân hàng" />
-                    </div>
+                    <>
+                      <div className="qr-payment-wait-card__qr">
+                        <img src={qrPaymentImageUrl} alt="QR thanh toán ngân hàng" />
+                      </div>
+                      <p className="qr-payment-wait-card__save-hint">
+                        Muốn lưu mã QR: nhấn giữ ảnh QR rồi chọn Lưu ảnh.
+                      </p>
+                    </>
                   ) : (
                     <div className="qr-payment-wait-card__empty">
                       <Icon name="warning" size={20} />
@@ -337,8 +313,8 @@ export default function OrderSuccess({
                   <div className="qr-payment-wait-card__actions">
                     <button type="button" onClick={handleCopyPaymentReference}>Sao chép nội dung</button>
                     {qrPaymentImageUrl ? (
-                      <button type="button" onClick={handleDownloadQrImage} disabled={qrDownloadBusy}>
-                        {qrDownloadBusy ? "Đang tải..." : "Tải mã QR"}
+                      <button type="button" onClick={handleShowQrSaveGuide}>
+                        Cách lưu QR
                       </button>
                     ) : null}
                   </div>

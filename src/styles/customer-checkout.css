@@ -1725,6 +1725,18 @@ button.payment-card {
   border-radius: 14px;
 }
 
+.qr-payment-wait-card__save-hint {
+  margin-top: 8px;
+  border: 1px solid rgba(255, 106, 0, 0.14);
+  border-radius: 14px;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
 .qr-payment-wait-card__empty {
   display: flex;
   align-items: flex-start;

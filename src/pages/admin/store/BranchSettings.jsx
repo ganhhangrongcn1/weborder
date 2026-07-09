@@ -555,8 +555,8 @@ export default function BranchSettings({
                         >
                           Copy link
                         </AdminButton>
-                        <AdminButton variant="secondary" onClick={() => downloadBranchQr(branch)}>
-                          Tải PNG
+                        <AdminButton variant="secondary" onClick={() => openBranchQrModal(branch)}>
+                          Lưu QR
                         </AdminButton>
                         <AdminButton variant="secondary" onClick={() => printBranchQr(branch)}>
                           In QR
@@ -779,6 +779,10 @@ export default function BranchSettings({
                 src={getBranchQrPreviewUrl(qrModalBranch)}
                 alt={`QR order tại quầy ${String(qrModalBranch?.name || "")}`}
               />
+            </div>
+            <div className="admin-qr-modal-hint">
+              <strong>Lưu QR trên điện thoại</strong>
+              <span>Nhấn giữ ảnh QR rồi chọn Lưu ảnh. Nếu đang dùng Chrome hoặc máy tính, có thể bấm Tải PNG.</span>
             </div>
             <code>{getBranchQrUrl(qrModalBranch)}</code>
             <div className="admin-qr-modal-actions">
