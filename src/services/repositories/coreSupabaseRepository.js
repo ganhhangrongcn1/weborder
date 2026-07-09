@@ -2,7 +2,9 @@ import { getRuntimeSupabaseClient, getRepositoryRuntimeInfo } from "./repository
 import { getCustomerKey } from "../storageService.js";
 import {
   getSupabaseAdminAuthClient,
+  getSupabaseCustomerAuthClient,
   initSupabaseAdminAuthClient,
+  initSupabaseCustomerAuthClient,
   initSupabaseRuntimeClient,
   isSupabaseRealtimeReady
 } from "../supabase/supabaseRuntimeClient.js";
@@ -173,6 +175,34 @@ async function getAdminSupabaseClientAsync() {
   const initialized = await initSupabaseAdminAuthClient();
   if (initialized) return initialized;
   return getSupabaseAdminAuthClient();
+}
+
+async function getCustomerSupabaseClientAsync() {
+  const existing = getSupabaseCustomerAuthClient();
+  if (existing) return existing;
+  const initialized = await initSupabaseCustomerAuthClient();
+  if (initialized) return initialized;
+  return getSupabaseCustomerAuthClient();
+}
+
+async function hasSupabaseAuthSession(client = null) {
+  if (!client?.auth?.getSession) return false;
+  try {
+    const { data } = await client.auth.getSession();
+    return Boolean(data?.session?.access_token);
+  } catch {
+    return false;
+  }
+}
+
+async function getCustomerActionSupabaseClientAsync() {
+  const customerClient = await getCustomerSupabaseClientAsync();
+  if (await hasSupabaseAuthSession(customerClient)) return customerClient;
+
+  const runtimeClient = await getSupabaseClientAsync();
+  if (await hasSupabaseAuthSession(runtimeClient)) return runtimeClient;
+
+  return customerClient || runtimeClient;
 }
 
 function normalizePhone(phone) {
@@ -1430,7 +1460,7 @@ async function readLoyaltyByPhoneFromTable() {
 
 async function readLoyaltyForPhoneFromTable(phone, providedClient = null) {
   if (!isSupabaseReady()) return null;
-  const client = providedClient || await getSupabaseClientAsync();
+  const client = providedClient || await getCustomerActionSupabaseClientAsync();
   if (!client) return null;
   const key = normalizePhone(phone);
   if (!key) return null;
@@ -1649,10 +1679,13 @@ async function completeWebsiteOrderWithLoyalty({
   return Array.isArray(data) ? data[0] || null : data || null;
 }
 
-async function processLoyaltyCheckin({ idempotencyKey = "" } = {}) {
+async function processLoyaltyCheckin({ idempotencyKey = "", client: providedClient = null } = {}) {
   if (!isSupabaseReady()) return null;
-  const client = await getSupabaseClientAsync();
+  const client = providedClient || await getCustomerActionSupabaseClientAsync();
   if (!client) return null;
+  if (!await hasSupabaseAuthSession(client)) {
+    throw new Error("Phiên đăng nhập thành viên đã hết. Anh đăng nhập lại để điểm danh nhé.");
+  }
 
   const { data, error } = await client.rpc("process_loyalty_checkin", {
     p_idempotency_key: String(idempotencyKey || "").trim()
