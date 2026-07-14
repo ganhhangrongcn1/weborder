@@ -593,9 +593,12 @@ export async function claimPartnerOrderPoints({ orderId = null, orderCode = "", 
     if (import.meta?.env?.DEV) {
       console.warn("[partnerOrderService] claimPartnerOrderPoints failed", error);
     }
+    const message = error?.message || "Chưa thể cộng điểm lúc này. Bạn thử lại sau một chút nhé.";
+    const pointStatus = /quá 7 ngày|hết hạn tích điểm/i.test(message) ? "expired" : "";
     return {
       ok: false,
-      message: error?.message || "Chưa thể cộng điểm lúc này. Bạn thử lại sau một chút nhé."
+      pointStatus,
+      message
     };
   }
 }

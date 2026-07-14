@@ -358,6 +358,7 @@ function getOrderPointStatus(order = {}, statusMap = new Map(), loyaltyLookup = 
   const rpcStatus = resolveCustomerOrderPointStatus(statusMap, order);
   const status = rpcStatus || resolveOrderPointStatus(order, loyaltyLookup);
   if (status === "claimed") return { key: "claimed", label: "Đã tích điểm" };
+  if (status === "expired") return { key: "expired", label: "Đã hết hạn tích điểm" };
   if (status === "blocked") return { key: "blocked", label: "Không tích điểm" };
   if (status === "pending") return { key: "pending", label: "Chờ tích điểm" };
   return { key: "unknown", label: "Chưa rõ" };
@@ -368,9 +369,10 @@ function getOrderPointSummary(orders = [], statusMap = new Map(), loyaltyLookup 
     const status = getOrderPointStatus(order, statusMap, loyaltyLookup).key;
     if (status === "claimed") return { ...summary, claimed: summary.claimed + 1 };
     if (status === "pending") return { ...summary, pending: summary.pending + 1 };
+    if (status === "expired") return { ...summary, expired: summary.expired + 1 };
     if (status === "blocked") return { ...summary, blocked: summary.blocked + 1 };
     return { ...summary, unknown: summary.unknown + 1 };
-  }, { claimed: 0, pending: 0, blocked: 0, unknown: 0 });
+  }, { claimed: 0, pending: 0, expired: 0, blocked: 0, unknown: 0 });
 }
 
 function OrderSourceBadge({ order }) {
@@ -1901,6 +1903,9 @@ export default function CustomerCRM({
                   <div className="crm-point-status-grid">
                     <span className="crm-point-status crm-point-status--claimed">Đã tích điểm: {selectedPointSummary.claimed.toLocaleString("vi-VN")} đơn</span>
                     <span className="crm-point-status crm-point-status--pending">Chờ tích điểm: {selectedPointSummary.pending.toLocaleString("vi-VN")} đơn</span>
+                    {selectedPointSummary.expired > 0 ? (
+                      <span className="crm-point-status crm-point-status--expired">Hết hạn tích điểm: {selectedPointSummary.expired.toLocaleString("vi-VN")} đơn</span>
+                    ) : null}
                     {selectedPointSummary.blocked > 0 ? (
                       <span className="crm-point-status crm-point-status--blocked">Không tích điểm: {selectedPointSummary.blocked.toLocaleString("vi-VN")} đơn</span>
                     ) : null}

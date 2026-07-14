@@ -928,6 +928,12 @@
   color: #b91c1c;
 }
 
+.crm-point-status--expired,
+.crm-point-order-badge--expired {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 .crm-point-status--unknown,
 .crm-point-order-badge--unknown {
   background: #e2e8f0;

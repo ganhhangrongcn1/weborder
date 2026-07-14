@@ -303,6 +303,12 @@ export default function Tracking({
         className: "bg-slate-100 text-slate-600"
       };
     }
+    if (pointStatus === "expired") {
+      return {
+        label: "Đã hết hạn tích điểm",
+        className: "bg-red-50 text-red-700"
+      };
+    }
     return {
       label: "Chưa tích điểm",
       className: "bg-yellow-400 text-white"
@@ -376,6 +382,19 @@ export default function Tracking({
       }
 
       if (!result.ok) {
+        if (result.pointStatus === "expired") {
+          setPartnerOrders((items) => items.map((item) => (
+            String(item.id) === String(order.id)
+              ? { ...item, pointStatus: "expired" }
+              : item
+          )));
+          setSummaryRefreshKey((key) => key + 1);
+          setSelectedOrder((selected) => (
+            String(selected?.id || "") === String(order.id)
+              ? { ...selected, pointStatus: "expired" }
+              : selected
+          ));
+        }
         setServiceNotice?.({
           title: "Chưa cộng được điểm",
           description: result.message || "Bạn thử lại sau một chút nhé.",
@@ -605,7 +624,7 @@ export default function Tracking({
                         <p className="text-sm text-brown/60">
                           {getOrderAmountLabel(order)}: <strong className="text-base text-brown">{formatMoney(getOrderDisplayAmount(order))}</strong>
                         </p>
-                        {pointBadge && ["claimed", "waiting_data"].includes(String(order.pointStatus || "").toLowerCase()) ? (
+                        {pointBadge && ["claimed", "waiting_data", "expired"].includes(String(order.pointStatus || "").toLowerCase()) ? (
                           <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${pointBadge.className}`}>
                             {pointBadge.label}
                           </span>

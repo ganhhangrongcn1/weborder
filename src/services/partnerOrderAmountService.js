@@ -1,3 +1,5 @@
+import { resolvePartnerOrderPointStatus } from "./partnerOrderClaimWindowService.js";
+
 function toAmountOrNull(value) {
   if (value === null || value === undefined || value === "") return null;
   const normalized = typeof value === "string" ? value.replace(/,/g, "").trim() : value;
@@ -27,9 +29,9 @@ export function buildPartnerLoyaltyAmountSnapshot(row = {}) {
   const persistedHoldReason = String(
     row?.loyalty_hold_reason || row?.loyaltyHoldReason || ""
   ).trim();
-  const rawPointStatus = String(row?.point_status || row?.pointStatus || "pending").trim().toLowerCase();
+  const rawPointStatus = resolvePartnerOrderPointStatus(row);
   const isClaimed = rawPointStatus === "claimed";
-  const isBlocked = ["blocked", "rejected", "expired", "cancelled", "canceled"].includes(rawPointStatus);
+  const isBlocked = ["blocked", "rejected", "cancelled", "canceled"].includes(rawPointStatus);
   const loyaltyHoldReason = isClaimed
     ? ""
     : persistedHoldReason || (netReceivedAmount ? "" : "missing_partner_net_received");
@@ -39,7 +41,9 @@ export function buildPartnerLoyaltyAmountSnapshot(row = {}) {
     loyaltyEligibleAmount: netReceivedAmount || 0,
     pointsBaseAmount: netReceivedAmount || 0,
     loyaltyHoldReason,
-    pointStatus: isBlocked ? "blocked" : (loyaltyHoldReason ? "waiting_data" : rawPointStatus)
+    pointStatus: rawPointStatus === "expired"
+      ? "expired"
+      : (isBlocked ? "blocked" : (loyaltyHoldReason ? "waiting_data" : rawPointStatus))
   };
 }
 

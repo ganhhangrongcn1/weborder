@@ -1,5 +1,6 @@
 import { calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 import { resolvePartnerNetReceivedAmount } from "./partnerOrderAmountService.js";
+import { resolvePartnerOrderPointStatus } from "./partnerOrderClaimWindowService.js";
 import {
   EMPTY_ORDER_COUNT_SUMMARY,
   appendOrderCountSummary,
@@ -84,12 +85,12 @@ export async function getCustomerOrderSummary(phone = "") {
       .order("created_at", { ascending: false })),
     fetchAllPages(() => client
       .from("partner_orders")
-      .select("id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status,raw_data")
+      .select("id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status,raw_data,order_time,created_at")
       .in("customer_phone_key", phoneVariants)
       .order("order_time", { ascending: false })),
     fetchAllPages(() => client
       .from("partner_orders")
-      .select("id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status,raw_data")
+      .select("id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status,raw_data,order_time,created_at")
       .in("customer_phone", phoneVariants)
       .order("order_time", { ascending: false })),
     fetchAllPages(() => client
@@ -142,7 +143,7 @@ export async function getCustomerOrderSummary(phone = "") {
     const total = toOrderCountingNumber(order.total_amount);
     const pointBase = toOrderCountingNumber(resolvePartnerNetReceivedAmount(order));
     const points = calculateOrderPoints(pointBase, loyaltyRule);
-    const pointStatus = String(order.point_status || "pending").toLowerCase();
+    const pointStatus = resolvePartnerOrderPointStatus(order);
     const netPoints = getNetOrderPoints(loyaltyLookup, {
       sourceType: "partner",
       id: order.id,

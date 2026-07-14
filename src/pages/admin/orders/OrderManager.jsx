@@ -206,6 +206,11 @@ function hasClaimedPartnerPoints() {
 }
 
 function getUnifiedPointStatusText(order = {}, estimatedPoints = 0) {
+  const status = String(order?.pointStatus || order?.point_status || "").trim().toLowerCase();
+  if (status === "expired") return "Đã hết hạn tích điểm";
+  if (status === "claimed") {
+    return estimatedPoints > 0 ? `Đã tích +${estimatedPoints.toLocaleString("vi-VN")} điểm` : "Đã tích điểm";
+  }
   if (isBlockedPointStatus(order)) return "Không tích điểm";
   return estimatedPoints > 0 ? `Dự kiến +${estimatedPoints.toLocaleString("vi-VN")} điểm` : "Không có điểm";
 }

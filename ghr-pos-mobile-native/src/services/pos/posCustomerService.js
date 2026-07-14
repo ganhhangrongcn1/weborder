@@ -364,6 +364,7 @@ async function readOrderSummaryRpc(phone = "") {
 
 function buildStats({ webOrders = [], partnerOrders = [], ledgerRows = [], loyaltyRule = DEFAULT_LOYALTY_RULE } = {}) {
   const earnedLookup = buildEarnedLookup(ledgerRows);
+  const currentTime = Date.now();
   const summary = {
     totalOrders: 0,
     totalSpent: 0,
@@ -392,6 +393,8 @@ function buildStats({ webOrders = [], partnerOrders = [], ledgerRows = [], loyal
     const pointBase = toNumber(order.points_base_amount, 0) || total;
     const points = calculateOrderPoints(pointBase, loyaltyRule);
     const pointStatus = normalizeSourceKey(order.point_status || "pending");
+    const orderTime = new Date(order.order_time || order.created_at || 0).getTime();
+    const claimExpired = Number.isFinite(orderTime) && orderTime > 0 && currentTime >= orderTime + (7 * 24 * 60 * 60 * 1000);
     const alreadyEarned = earnedLookup.partnerOrderIds.has(toText(order.id)) ||
       getOrderIds(order).some((id) => earnedLookup.orderIds.has(id));
 
@@ -403,7 +406,7 @@ function buildStats({ webOrders = [], partnerOrders = [], ledgerRows = [], loyal
       return;
     }
 
-    if (!alreadyEarned && !["claimed", "rejected", "expired"].includes(pointStatus) && points > 0) {
+    if (!alreadyEarned && !claimExpired && !["claimed", "rejected", "expired"].includes(pointStatus) && points > 0) {
       summary.pendingPoints += points;
     }
   });
