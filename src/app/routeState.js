@@ -91,6 +91,12 @@ export function adminPathToState(pathname = "/admin") {
       activeAdminNav: "orders-main"
     };
   }
+  if (path === "/admin/shifts") {
+    return {
+      section: "shifts",
+      activeAdminNav: "shifts-main"
+    };
+  }
   if (path === "/admin/customers") {
     return {
       section: "customers",
@@ -172,6 +178,7 @@ export function adminNavToPath(item) {
 
   if (item.id === "dashboard-main") return "/admin";
   if (item.id === "orders-main") return "/admin/orders";
+  if (item.id === "shifts-main") return "/admin/shifts";
   if (item.id === "customer-main") return "/admin/customers";
   if (item.id === "menu-main") return "/admin/menu";
   if (item.id === "store-branches") return "/admin/settings";

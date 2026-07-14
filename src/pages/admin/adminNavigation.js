@@ -7,6 +7,7 @@ export const navGroups = [
     title: "Vận hành",
     items: [
       { id: "orders-main", label: "Đơn hàng", section: "orders" },
+      { id: "shifts-main", label: "Tổng quan ca", section: "shifts" },
       { id: "customer-main", label: "Khách hàng / CRM", section: "customers" },
       { id: "cakes-main", label: "Bánh sinh nhật", section: "cakes" }
     ]
@@ -33,6 +34,7 @@ export const navGroups = [
 export const navIconMap = {
   "dashboard-main": "home",
   "orders-main": "bag",
+  "shifts-main": "clock",
   "customer-main": "user",
   "cakes-main": "gift",
   "menu-main": "menu",
@@ -46,6 +48,7 @@ export const navIconMap = {
 
 export const dashboardQuickActions = [
   { id: "orders-main", label: "Đơn hàng" },
+  { id: "shifts-main", label: "Tổng quan ca" },
   { id: "cakes-main", label: "Bánh sinh nhật" },
   { id: "menu-main", label: "Menu" },
   { id: "customer-main", label: "Khách hàng / CRM" },
@@ -58,6 +61,7 @@ export const dashboardQuickActions = [
 export function getAdminPageTitle(section) {
   if (section === "dashboard") return "Dashboard";
   if (section === "orders") return "Quản lý đơn hàng";
+  if (section === "shifts") return "Tổng quan ca";
   if (section === "customers") return "Khách hàng / CRM";
   if (section === "cakes") return "Bánh sinh nhật bánh tráng";
   if (section === "menu") return "Quản lý menu";

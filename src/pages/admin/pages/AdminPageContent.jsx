@@ -5,6 +5,7 @@ import AdminMenuPage from "./AdminMenuPage.jsx";
 import AdminStorePage from "./AdminStorePage.jsx";
 import AdminPromoPage from "./AdminPromoPage.jsx";
 import AdminCakesPage from "./AdminCakesPage.jsx";
+import AdminShiftOverviewPage from "./AdminShiftOverviewPage.jsx";
 
 export default function AdminPageContent({ section, ...props }) {
   if (section === "dashboard") {
@@ -13,6 +14,10 @@ export default function AdminPageContent({ section, ...props }) {
 
   if (section === "orders") {
     return <AdminOrdersPage {...props} />;
+  }
+
+  if (section === "shifts") {
+    return <AdminShiftOverviewPage {...props} />;
   }
 
   if (section === "customers") {
