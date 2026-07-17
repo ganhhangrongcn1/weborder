@@ -13,6 +13,7 @@ import {
 } from "../../services/partnerOrderService.js";
 import { calculateOrderPoints, getLoyaltyRuleConfig } from "../../services/loyaltyService.js";
 import { orderStorage } from "../../services/orderService.js";
+import { orderRepository } from "../../services/repositories/orderRepository.js";
 import {
   getCustomerOrderDisplayStatus,
   getCustomerOrderStatusToneClass
@@ -110,6 +111,8 @@ export default function Tracking({
   userProfile,
   currentOrder,
   currentPhone,
+  hasCustomerAuthSession = false,
+  requiresCustomerAuthSession = false,
   isOrdersLoading = false,
   hasFetchedOrdersOnce = false,
   isSessionRestoring = false,
@@ -141,6 +144,17 @@ export default function Tracking({
   });
   const [currentOrderPointStatusMap, setCurrentOrderPointStatusMap] = useState(() => new Map());
   const guestLookup = useGuestOrderLookup();
+  const canAccessFullOrderHistory = Boolean(
+    currentPhone && (!requiresCustomerAuthSession || hasCustomerAuthSession)
+  );
+  const lastCreatedOrderId = orderRepository.getLastCreatedOrderId();
+  const currentDeviceActiveOrder = useMemo(() => {
+    if (!currentOrder) return null;
+    const currentOrderId = String(currentOrder?.id || currentOrder?.orderCode || "").trim();
+    const isCurrentDeviceOrder = Boolean(lastCreatedOrderId) && currentOrderId === lastCreatedOrderId;
+    const isTrackableOrder = getOrderFilterKey(currentOrder) === "active" && currentOrder?.sourceType !== "partner";
+    return isCurrentDeviceOrder && isTrackableOrder ? currentOrder : null;
+  }, [currentOrder, lastCreatedOrderId]);
 
   useEffect(() => {
     onOrderSheetVisibilityChange?.(Boolean(selectedOrder));
@@ -171,7 +185,7 @@ export default function Tracking({
     setCurrentOrderPointStatusMap(new Map());
     setOrderSearch("");
     setOrderFilter("all");
-  }, [currentPhone]);
+  }, [canAccessFullOrderHistory, currentPhone]);
 
   useEffect(() => {
     setVisibleOrderCount(ORDER_HISTORY_PAGE_SIZE);
@@ -180,7 +194,7 @@ export default function Tracking({
   useEffect(() => {
     let disposed = false;
     async function loadHistoryOrders() {
-      if (!currentPhone) {
+      if (!canAccessFullOrderHistory) {
         setLoadedHistoryOrders([]);
         return;
       }
@@ -199,12 +213,12 @@ export default function Tracking({
     return () => {
       disposed = true;
     };
-  }, [currentPhone, orderQueryLimit]);
+  }, [canAccessFullOrderHistory, currentPhone, orderQueryLimit]);
 
   useEffect(() => {
     let disposed = false;
     async function loadPartnerOrders() {
-      if (!currentPhone) {
+      if (!canAccessFullOrderHistory) {
         setPartnerOrders([]);
         return;
       }
@@ -223,13 +237,13 @@ export default function Tracking({
     return () => {
       disposed = true;
     };
-  }, [currentPhone, orderQueryLimit]);
+  }, [canAccessFullOrderHistory, currentPhone, orderQueryLimit]);
 
   useEffect(() => {
     let disposed = false;
 
     async function loadCurrentOrderPointStatuses() {
-      if (!currentPhone) {
+      if (!canAccessFullOrderHistory) {
         setCurrentOrderPointStatusMap(new Map());
         return;
       }
@@ -253,12 +267,12 @@ export default function Tracking({
     return () => {
       disposed = true;
     };
-  }, [currentPhone, summaryRefreshKey]);
+  }, [canAccessFullOrderHistory, currentPhone, summaryRefreshKey]);
 
   const mergedOrders = useMemo(
     () => {
       const uniqueOrders = new Map();
-      [...baseHistoryOrders, ...(currentPhone && currentOrder ? [currentOrder] : [])]
+      [...baseHistoryOrders, ...(canAccessFullOrderHistory && currentOrder ? [currentOrder] : [])]
         .filter(Boolean)
         .forEach((item) => {
           const key = String(item?.id || item?.orderCode || "").trim();
@@ -266,7 +280,7 @@ export default function Tracking({
         });
       return mergeCustomerLookupOrders([...uniqueOrders.values()], partnerOrders);
     },
-    [baseHistoryOrders, currentOrder, currentPhone, partnerOrders]
+    [baseHistoryOrders, canAccessFullOrderHistory, currentOrder, partnerOrders]
   );
   const loyaltyLookup = useMemo(
     () => buildLoyaltyOrderPointLookup(demoLoyalty?.pointHistory || []),
@@ -277,14 +291,20 @@ export default function Tracking({
     [currentOrderPointStatusMap, loyaltyLookup, mergedOrders]
   );
 
+  const guestOrders = useMemo(
+    () => guestLookup.lookupPhone
+      ? guestLookup.orders
+      : (currentDeviceActiveOrder ? [currentDeviceActiveOrder] : []),
+    [currentDeviceActiveOrder, guestLookup.lookupPhone, guestLookup.orders]
+  );
   const orders = useMemo(
-    () => [...(currentPhone ? resolvedCurrentOrders : guestLookup.orders)].sort(
+    () => [...(canAccessFullOrderHistory ? resolvedCurrentOrders : guestOrders)].sort(
       (a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0)
     ),
-    [currentPhone, guestLookup.orders, resolvedCurrentOrders]
+    [canAccessFullOrderHistory, guestOrders, resolvedCurrentOrders]
   );
   const searchedOrders = useMemo(() => {
-    if (!currentPhone || !deferredOrderSearch) return orders;
+    if (!canAccessFullOrderHistory || !deferredOrderSearch) return orders;
     const keyword = deferredOrderSearch.toLowerCase();
     return orders.filter((order) => {
       const haystack = [
@@ -298,7 +318,7 @@ export default function Tracking({
       ].map((value) => String(value || "").toLowerCase()).join(" ");
       return haystack.includes(keyword);
     });
-  }, [currentPhone, deferredOrderSearch, orders]);
+  }, [canAccessFullOrderHistory, deferredOrderSearch, orders]);
   const orderFilterCounts = useMemo(
     () => searchedOrders.reduce((counts, order) => {
       const key = getOrderFilterKey(order);
@@ -323,7 +343,7 @@ export default function Tracking({
   const displayedOrderCount = !hasOrderSearch && orderFilter === "all"
     ? Number(orderSummary.totalOrders || filteredOrders.length)
     : filteredOrders.length;
-  const canViewFullOrderCode = Boolean(currentPhone);
+  const canViewFullOrderCode = canAccessFullOrderHistory || Boolean(currentDeviceActiveOrder && !guestLookup.lookupPhone);
   const maskOrderCode = (code) => String(code || "GHR-****").replace(/GHR-\d{4}/i, "GHR-****");
 
   useEffect(() => {
@@ -373,8 +393,8 @@ export default function Tracking({
     return () => window.removeEventListener("ghr:open-order-detail", handleOpenOrderDetail);
   }, [orders]);
 
-  const shouldShowLoading = (currentPhone ? (isOrdersLoading || isHistoryOrdersLoading || isPartnerOrdersLoading) : guestLookup.isLoading) && orders.length === 0;
-  const shouldShowEmpty = !shouldShowLoading && orders.length === 0 && (currentPhone || guestLookup.lookupPhone);
+  const shouldShowLoading = (canAccessFullOrderHistory ? (isOrdersLoading || isHistoryOrdersLoading || isPartnerOrdersLoading) : guestLookup.isLoading) && orders.length === 0;
+  const shouldShowEmpty = !shouldShowLoading && orders.length === 0 && (canAccessFullOrderHistory || guestLookup.lookupPhone);
   const isOrderListRefreshing = shouldLoadFullHistory && (isHistoryOrdersLoading || isPartnerOrdersLoading);
   const shouldShowFilteredEmpty = !shouldShowLoading && !isOrderListRefreshing && orders.length > 0 && filteredOrders.length === 0;
 
@@ -441,7 +461,7 @@ export default function Tracking({
   useEffect(() => {
     let disposed = false;
     async function loadOrderSummary() {
-      if (!currentPhone) {
+      if (!canAccessFullOrderHistory) {
         setOrderSummary({
           totalOrders: 0,
           totalSpent: 0,
@@ -465,7 +485,7 @@ export default function Tracking({
     return () => {
       disposed = true;
     };
-  }, [currentPhone, summaryRefreshKey]);
+  }, [canAccessFullOrderHistory, currentPhone, summaryRefreshKey]);
 
   const updateClaimedPartnerOrder = (orderId, patch = {}) => {
     setPartnerOrders((items) => items.map((order) => (
@@ -477,7 +497,7 @@ export default function Tracking({
 
   const handleClaimPartnerPoints = async (event, order) => {
     event.stopPropagation();
-    if (!currentPhone || !order?.id) return;
+    if (!canAccessFullOrderHistory || !currentPhone || !order?.id) return;
 
     const claimKey = order.id || order.orderCode;
     setClaimingOrderId(claimKey);
@@ -611,7 +631,7 @@ export default function Tracking({
   return (
     <section className="orders-page">
       <div className="tracking-page-content space-y-4 px-4 pb-6 pt-4">
-        {!currentPhone ? (
+        {!canAccessFullOrderHistory ? (
           <CustomerCard className="space-y-4">
             <div>
               <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-orange-50 text-orange-600">
@@ -662,7 +682,7 @@ export default function Tracking({
           </CustomerCard>
         ) : null}
 
-        {currentPhone ? (
+        {canAccessFullOrderHistory ? (
           <div className="orders-toolbar">
             <label className="orders-search">
               <Icon name="search" size={16} className="shrink-0 text-orange-600" />
@@ -754,12 +774,12 @@ export default function Tracking({
             icon="bag"
             title="Chưa có đơn hàng"
             message={
-              currentPhone
+              canAccessFullOrderHistory
                 ? "Các đơn đã đặt sẽ hiển thị ở đây để bạn dễ mua lại và theo dõi."
                 : "Nếu bạn vừa mua bằng số đã đăng ký, hãy đăng nhập để xem lịch sử đơn đầy đủ."
             }
-            actionText={currentPhone ? "Đặt món ngay" : "Đăng nhập để xem đơn"}
-            onAction={() => (currentPhone ? navigate("menu", "menu") : navigate("account", "account"))}
+            actionText={canAccessFullOrderHistory ? "Đặt món ngay" : "Đăng nhập để xem đơn"}
+            onAction={() => (canAccessFullOrderHistory ? navigate("menu", "menu") : navigate("account", "account"))}
             center
           />
         )}
@@ -788,7 +808,7 @@ export default function Tracking({
             const isPartnerOrder = order?.sourceType === "partner";
             const sourceBadge = getOrderSourceBadge(order);
             const pointBadge = getPointLabel(order);
-            const canClaimPoints = currentPhone && isPartnerOrder && String(order.pointStatus || "").toLowerCase() === "pending";
+            const canClaimPoints = canAccessFullOrderHistory && isPartnerOrder && String(order.pointStatus || "").toLowerCase() === "pending";
             const isClaiming = String(claimingOrderId) === String(order.id || order.orderCode);
             const rewardPoints = getOrderRewardPoints(order);
             const branchName = getOrderBranchName(order);
@@ -800,7 +820,7 @@ export default function Tracking({
             const isActiveOrder = getOrderFilterKey(order) === "active";
             const canTrackJourney = isActiveOrder && !isPartnerOrder;
 
-            if (!currentPhone) {
+            if (!canAccessFullOrderHistory) {
               return (
                 <CustomerCard as="article" key={order.orderCode || order.id}>
                   <div className="flex items-start gap-3">
@@ -840,13 +860,23 @@ export default function Tracking({
                           </button>
                         ) : null}
                       </div>
+                      {canTrackJourney ? (
+                        <button
+                          type="button"
+                          onClick={() => openOrderDetails(order)}
+                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-black text-orange-600"
+                        >
+                          <Icon name="clock" size={16} />
+                          Theo dõi hành trình
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </CustomerCard>
               );
             }
 
-            if (currentPhone) {
+            if (canAccessFullOrderHistory) {
               return (
                 <CustomerCard
                   as="article"

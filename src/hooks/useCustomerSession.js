@@ -75,7 +75,12 @@ export default function useCustomerSession({
   const [currentPhone, setCurrentPhoneState] = useState(() => getCurrentRegisteredPhone());
   const [hasCustomerAuthSession, setHasCustomerAuthSession] = useState(false);
   const isSupabaseSource = getDataSource() === "supabase";
-  const orderLookupPhone = currentPhone || getCustomerKey(guestOrderPhone);
+  const canLoadProtectedCustomerData = Boolean(
+    currentPhone && (!isSupabaseSource || hasCustomerAuthSession)
+  );
+  const orderLookupPhone = canLoadProtectedCustomerData
+    ? currentPhone
+    : (!isSupabaseSource ? getCustomerKey(guestOrderPhone) : "");
 
   useEffect(() => {
     setHasFetchedOrdersOnce(false);
@@ -185,7 +190,7 @@ export default function useCustomerSession({
 
   useEffect(() => {
     if (!enabled) return;
-    if (!currentPhone) {
+    if (!canLoadProtectedCustomerData) {
       if (!isSessionRestoring) setIsSessionBootstrapping(false);
       return;
     }
@@ -229,7 +234,7 @@ export default function useCustomerSession({
     return () => {
       disposed = true;
     };
-  }, [addressStorage, currentPhone, defaultLoyaltyData, enabled, isSessionRestoring, loyaltyByPhoneStorage, orderStorage, userStorage]);
+  }, [addressStorage, canLoadProtectedCustomerData, currentPhone, defaultLoyaltyData, enabled, isSessionRestoring, orderStorage, userStorage]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -314,7 +319,7 @@ export default function useCustomerSession({
 
   useEffect(() => {
     if (!enabled) return undefined;
-    if (!currentPhone) return undefined;
+    if (!canLoadProtectedCustomerData) return undefined;
     let refreshTimer = null;
 
     const refreshCustomerData = () => {
@@ -354,7 +359,7 @@ export default function useCustomerSession({
       }
       window.removeEventListener("ghr:orders-changed", scheduleRefreshCustomerData);
     };
-  }, [addressStorage, currentPhone, defaultLoyaltyData, enabled, getCustomerKey, orderStorage, userStorage]);
+  }, [addressStorage, canLoadProtectedCustomerData, currentPhone, defaultLoyaltyData, enabled, getCustomerKey, orderStorage, userStorage]);
 
   const saveDemoUser = useCallback((nextUser) => {
     const saved = userStorage.upsertUser(nextUser);
