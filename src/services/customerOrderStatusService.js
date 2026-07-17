@@ -91,8 +91,16 @@ function getPartnerStatus(order = {}) {
 
 function getWebsiteStatus(order = {}) {
   const pickupLike = isPickupLike(order);
+  const metadata = getRawData(order);
   const status = normalizeStatusText(order.status || order.orderStatus || order.order_status);
   const kitchenStatus = normalizeStatusText(order.kitchenStatus || order.kitchen_status);
+  const paymentMethod = normalizeStatusText(
+    order.paymentMethod || order.payment_method || metadata.paymentMethod || metadata.payment_method
+  );
+  const paymentStatus = normalizeStatusText(
+    order.paymentStatus || order.payment_status || metadata.paymentStatus || metadata.payment_status
+  );
+  const isWaitingForQrPayment = paymentMethod === "bankqr" && !["paid", "converted"].includes(paymentStatus);
 
   if (["cancel", "canceled", "cancelled", "huy", "dahuy", "refunded"].includes(status)) {
     return {
@@ -115,7 +123,7 @@ function getWebsiteStatus(order = {}) {
   if (["readyforpickup", "readyfordelivery"].includes(status)) {
     return {
       key: "ready",
-      label: pickupLike ? "Sẵn sàng nhận món" : "Sẵn sàng giao hàng",
+      label: pickupLike ? "Món đã làm xong" : "Sẵn sàng giao hàng",
       tone: "ready",
       step: pickupLike ? 2 : 1
     };
@@ -142,9 +150,18 @@ function getWebsiteStatus(order = {}) {
   if (["ready"].includes(kitchenStatus)) {
     return {
       key: "ready",
-      label: pickupLike ? "Sẵn sàng nhận món" : "Sẵn sàng giao hàng",
+      label: pickupLike ? "Món đã làm xong" : "Sẵn sàng giao hàng",
       tone: "ready",
       step: pickupLike ? 2 : 1
+    };
+  }
+
+  if (isWaitingForQrPayment || status === "pendingpayment" || kitchenStatus === "waitingpayment") {
+    return {
+      key: "awaiting_payment",
+      label: "Chờ thanh toán QR",
+      tone: "pending",
+      step: 0
     };
   }
 
@@ -159,10 +176,10 @@ function getWebsiteStatus(order = {}) {
 
   if (["pendingzalo", "pending", "new", ""].includes(status)) {
     return {
-      key: "pending",
-      label: "Chờ xác nhận",
-      tone: "pending",
-      step: 0
+      key: "preparing",
+      label: "Đang chuẩn bị",
+      tone: "active",
+      step: 1
     };
   }
 
@@ -172,6 +189,182 @@ function getWebsiteStatus(order = {}) {
     tone: "active",
     step: 1
   };
+}
+
+const ACTIVE_CUSTOMER_ORDER_STATUS_KEYS = new Set([
+  "awaiting_payment",
+  "pending",
+  "preparing",
+  "active",
+  "ready",
+  "delivering"
+]);
+
+function getOrderActivityTime(order = {}) {
+  const rawValue =
+    order.updatedAt ||
+    order.updated_at ||
+    order.kitchenDoneAt ||
+    order.kitchen_done_at ||
+    order.createdAt ||
+    order.created_at ||
+    order.orderTime ||
+    order.order_time ||
+    "";
+  const parsed = new Date(rawValue).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getJourneyCopy(statusKey = "", pickupLike = false) {
+  if (statusKey === "awaiting_payment") {
+    return {
+      title: "Chờ thanh toán QR",
+      description: "Thanh toán xong là bếp lên món ngay nha."
+    };
+  }
+
+  if (statusKey === "cancelled") {
+    return {
+      title: "Đơn hàng đã được hủy",
+      description: "Đơn này không còn được quán tiếp tục xử lý."
+    };
+  }
+
+  if (statusKey === "completed") {
+    return {
+      title: "Đơn hàng đã hoàn thành",
+      description: pickupLike
+        ? "Cảm ơn bạn đã ghé Gánh nhận món."
+        : "Cảm ơn bạn đã đặt món tại Gánh."
+    };
+  }
+
+  if (statusKey === "delivering") {
+    return {
+      title: "Đơn hàng đang trên đường",
+      description: "Món ngon đang tới, để ý điện thoại nha."
+    };
+  }
+
+  if (statusKey === "ready") {
+    return pickupLike
+      ? {
+          title: "Món đã làm xong",
+          description: "Ghé quầy rước món thôi."
+        }
+      : {
+          title: "Món đã xong, đang chờ shipper",
+          description: "Có shipper là Gánh giao ngay."
+        };
+  }
+
+  if (["preparing", "active"].includes(statusKey)) {
+    return {
+      title: "Đơn hàng đang được chuẩn bị",
+      description: "Bếp đang lên món, chờ xíu nha."
+    };
+  }
+
+  if (statusKey === "preorder") {
+    return {
+      title: "Đơn đã được hẹn giờ",
+      description: "Gánh sẽ bắt đầu chuẩn bị theo thời gian bạn đã chọn."
+    };
+  }
+
+  return {
+    title: "Quán đã nhận đơn",
+    description: "Gánh nhận được đơn rồi nha."
+  };
+}
+
+export function getCustomerOrderJourney(order = {}) {
+  const pickupLike = isPickupLike(order);
+  const statusMeta = getCustomerOrderDisplayStatus(order);
+  const statusKey = statusMeta.key || "pending";
+  const steps = pickupLike
+    ? [
+        { key: "received", label: "Đã nhận đơn", icon: "bag" },
+        { key: "preparing", label: "Đang làm món", icon: "dish" },
+        { key: "ready", label: "Đã làm xong", icon: "store" },
+        { key: "completed", label: "Hoàn thành", icon: "check" }
+      ]
+    : [
+        { key: "received", label: "Đã nhận đơn", icon: "bag" },
+        { key: "preparing", label: "Đang làm món", icon: "dish" },
+        { key: "ready", label: "Chờ shipper", icon: "clock" },
+        { key: "delivering", label: "Đang giao", icon: "bike" },
+        { key: "completed", label: "Hoàn thành", icon: "check" }
+      ];
+
+  let currentStepIndex = 0;
+  if (["preparing", "active"].includes(statusKey)) currentStepIndex = 1;
+  if (statusKey === "ready") currentStepIndex = 2;
+  if (statusKey === "delivering") currentStepIndex = pickupLike ? 2 : 3;
+  if (statusKey === "completed") currentStepIndex = steps.length - 1;
+  if (statusKey === "cancelled") currentStepIndex = 0;
+
+  const copy = getJourneyCopy(statusKey, pickupLike);
+  return {
+    ...copy,
+    statusKey,
+    statusLabel: statusMeta.label,
+    pickupLike,
+    steps,
+    currentStepIndex,
+    progressRatio: steps.length > 1 ? currentStepIndex / (steps.length - 1) : 0,
+    cancelled: statusKey === "cancelled",
+    completed: statusKey === "completed"
+  };
+}
+
+export function isCustomerOrderInProgress(order = {}) {
+  const sourceType = normalizeStatusText(order.sourceType || order.source_type);
+  if (sourceType === "partner") return false;
+  const rawData = getRawData(order);
+  const sourceTokens = [
+    sourceType,
+    order.source,
+    order.channel,
+    order.orderSource,
+    order.order_source,
+    order.platform,
+    order.partnerSource,
+    order.partner_source,
+    rawData.source,
+    rawData.channel,
+    rawData.platform
+  ].map(normalizeStatusText).filter(Boolean);
+  const excludedSources = new Set([
+    "partner",
+    "grab",
+    "grabfood",
+    "shopeefood",
+    "xanhngon",
+    "nexpos",
+    "pos"
+  ]);
+  if (sourceTokens.some((source) => excludedSources.has(source))) return false;
+  return ACTIVE_CUSTOMER_ORDER_STATUS_KEYS.has(getCustomerOrderDisplayStatus(order).key);
+}
+
+export function findLatestActiveCustomerOrder(orders = []) {
+  const uniqueOrders = new Map();
+  (Array.isArray(orders) ? orders : []).forEach((order) => {
+    const orderId = toText(order?.id || order?.orderCode || order?.order_code);
+    if (!orderId) return;
+    uniqueOrders.set(orderId, order);
+  });
+
+  return Array.from(uniqueOrders.values())
+    .filter(isCustomerOrderInProgress)
+    .sort((first, second) => getOrderActivityTime(second) - getOrderActivityTime(first))[0] || null;
+}
+
+export function getCustomerOrderJourneySignature(order = {}) {
+  const orderId = toText(order.id || order.orderCode || order.order_code);
+  if (!orderId) return "";
+  return `${orderId}:${getCustomerOrderDisplayStatus(order).key}`;
 }
 
 export function getCustomerOrderDisplayStatus(order = {}) {

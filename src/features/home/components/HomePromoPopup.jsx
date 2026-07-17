@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 
 export default function HomePromoPopup({
@@ -8,7 +9,7 @@ export default function HomePromoPopup({
 }) {
   if (!open || !popup) return null;
 
-  return (
+  const popupContent = (
     <CustomerBottomSheet
       ariaLabel={popup.title || "Popup khuyến mãi"}
       onClose={onClose}
@@ -19,7 +20,14 @@ export default function HomePromoPopup({
       showHandle={false}
     >
       <section className="home-popup-image-only">
-        <button type="button" className="home-popup-close" onClick={onClose}>×</button>
+        <button
+          type="button"
+          className="home-popup-close"
+          onClick={onClose}
+          aria-label="Đóng khuyến mãi"
+        >
+          ×
+        </button>
         <button
           type="button"
           className="home-popup-image-wrap"
@@ -30,4 +38,8 @@ export default function HomePromoPopup({
       </section>
     </CustomerBottomSheet>
   );
+
+  return typeof document === "undefined"
+    ? popupContent
+    : createPortal(popupContent, document.body);
 }

@@ -1,6 +1,4 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
 import {
   BRANCH_LOCATION,
   getGoongMapTilesKey,
@@ -12,6 +10,19 @@ import {
 } from "../services/goongService.js";
 import { calculateBaseShippingFeeByConfig } from "../services/shippingService.js";
 import { formatMoney } from "../utils/format.js";
+
+let mapLibreModulePromise = null;
+
+function loadMapLibre() {
+  if (!mapLibreModulePromise) {
+    mapLibreModulePromise = Promise.all([
+      import("maplibre-gl"),
+      import("maplibre-gl/dist/maplibre-gl.css")
+    ]).then(([module]) => module.default || module);
+  }
+
+  return mapLibreModulePromise;
+}
 
 export function calculateDeliveryFee(distanceKm, shippingConfig) {
   if (!distanceKm) return null;
@@ -135,30 +146,56 @@ export default function GoongAddressPicker({
   }, [hasDeliveryOrigin, keyword, requireOrigin]);
 
   useEffect(() => {
-    if (!showMap) return;
-    setTimeout(() => {
+    if (!showMap) return undefined;
+
+    let disposed = false;
+    const resizeTimer = window.setTimeout(() => {
       mapNode.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       mapRef.current?.resize();
     }, 80);
-    if (mapRef.current || !mapNode.current) return;
-    const center = selected.lng && selected.lat ? [selected.lng, selected.lat] : defaultCenter;
-    const map = new maplibregl.Map({
-      container: mapNode.current,
-      style: getMapStyle(),
-      center,
-      zoom: selected.lng && selected.lat ? 15 : 13
-    });
-    const marker = new maplibregl.Marker({ draggable: true, color: "#FF6A00" }).setLngLat(center).addTo(map);
-    marker.on("dragend", () => {
-      const point = marker.getLngLat();
-      updateFromCoordinate(point.lat, point.lng);
-    });
-    map.on("click", (event) => {
-      marker.setLngLat(event.lngLat);
-      updateFromCoordinate(event.lngLat.lat, event.lngLat.lng);
-    });
-    mapRef.current = map;
-    markerRef.current = marker;
+
+    async function initializeMap() {
+      if (mapRef.current || !mapNode.current) return;
+
+      try {
+        const maplibregl = await loadMapLibre();
+        if (disposed || mapRef.current || !mapNode.current) return;
+
+        const center = selected.lng && selected.lat ? [selected.lng, selected.lat] : defaultCenter;
+        const map = new maplibregl.Map({
+          container: mapNode.current,
+          style: getMapStyle(),
+          center,
+          zoom: selected.lng && selected.lat ? 15 : 13
+        });
+        const marker = new maplibregl.Marker({ draggable: true, color: "#FF6A00" }).setLngLat(center).addTo(map);
+        marker.on("dragend", () => {
+          const point = marker.getLngLat();
+          updateFromCoordinate(point.lat, point.lng);
+        });
+        map.on("click", (event) => {
+          marker.setLngLat(event.lngLat);
+          updateFromCoordinate(event.lngLat.lat, event.lngLat.lng);
+        });
+        mapRef.current = map;
+        markerRef.current = marker;
+      } catch (error) {
+        if (!disposed) {
+          console.warn("[goong-map] map unavailable", error);
+          setStatusText("Chưa mở được bản đồ. Bạn vẫn có thể nhập địa chỉ bằng tay.");
+        }
+      }
+    }
+
+    initializeMap();
+
+    return () => {
+      disposed = true;
+      window.clearTimeout(resizeTimer);
+      mapRef.current?.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
   }, [showMap]);
 
   async function emitChange(next) {

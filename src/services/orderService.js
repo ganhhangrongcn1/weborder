@@ -360,6 +360,9 @@ export async function createOrderAsync(params) {
   const loyaltyRule = await getLoyaltyRuleConfigAsync();
   const pointsEarned = calculateOrderPoints(pointsAmount, loyaltyRule);
   const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
+  const isBankQrPayment = String(paymentMethod || "").trim().toLowerCase() === "bank_qr";
+  const initialOrderStatus = isBankQrPayment ? "pending_payment" : "preparing";
+  const initialKitchenStatus = isBankQrPayment ? "waiting_payment" : "pending";
   const order = {
     id: orderCode,
     orderCode,
@@ -386,7 +389,8 @@ export async function createOrderAsync(params) {
     total: totalAmount,
     totalAmount,
     createdAt,
-    status: "new",
+    status: initialOrderStatus,
+    kitchenStatus: initialKitchenStatus,
     customerName: deliveryInfo?.name || userProfile.name,
     orderCustomerName: deliveryInfo?.name || userProfile.name,
     customerPhone: deliveryInfo?.phone || userProfile.phone,
@@ -406,8 +410,8 @@ export async function createOrderAsync(params) {
     pickupTimeText,
     deliveryAddress: fulfillmentType === "pickup" ? "Khách tự đến lấy" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
     paymentMethod,
-    paymentStatus: String(paymentMethod || "").toLowerCase() === "bank_qr" ? "unpaid" : "pending",
-    paymentReference: String(paymentMethod || "").toLowerCase() === "bank_qr" ? orderCode : "",
+    paymentStatus: isBankQrPayment ? "unpaid" : "pending",
+    paymentReference: isBankQrPayment ? orderCode : "",
     paymentAmount: totalAmount,
     source: orderSource,
     channel: orderSource,

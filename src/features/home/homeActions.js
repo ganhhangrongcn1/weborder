@@ -9,7 +9,6 @@ export function createHomeActionHandlers({
       deliveryApps: refs.deliveryAppsRef,
       fulfillment: refs.fulfillmentRef,
       flashSale: refs.flashSaleRef,
-      categorySection: refs.categorySectionRef,
       featuredProducts: refs.featuredProductsRef
     };
     return map[target] || null;
@@ -22,6 +21,10 @@ export function createHomeActionHandlers({
       return;
     }
     const target = item?.actionTarget || "home";
+    if (target === "categorySection") {
+      navigate("menu", "menu");
+      return;
+    }
     if (["menu", "checkout", "loyalty", "account", "tracking"].includes(target)) {
       navigate(target, target);
       return;

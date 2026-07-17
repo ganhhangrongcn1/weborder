@@ -1,14 +1,39 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import AppAdminRoutes from "../features/app/AppAdminRoutes.jsx";
 import AppCustomerRoutes from "../features/app/AppCustomerRoutes.jsx";
-import KitchenPage from "../features/kitchen/KitchenPage.jsx";
-import DownloadPage from "../pages/DownloadPage.jsx";
-import BanhKemBanhTrangPage from "../pages/BanhKemBanhTrangPage.jsx";
-import QrCodeToolPage from "../pages/QrCodeToolPage.jsx";
+
+const AppAdminRoutes = lazy(() => import("../features/app/AppAdminRoutes.jsx"));
+const KitchenPage = lazy(() => import("../features/kitchen/KitchenPage.jsx"));
+const DownloadPage = lazy(() => import("../pages/DownloadPage.jsx"));
+const BanhKemBanhTrangPage = lazy(() => import("../pages/BanhKemBanhTrangPage.jsx"));
+const QrCodeToolPage = lazy(() => import("../pages/QrCodeToolPage.jsx"));
+
+function RouteLoadingFallback() {
+  return (
+    <main
+      aria-live="polite"
+      aria-label="Đang mở trang"
+      style={{
+        minHeight: "100dvh",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        background: "#fff7ec",
+        color: "#3d2414",
+        fontFamily: "Inter, system-ui, Arial, sans-serif",
+        fontWeight: 700,
+        textAlign: "center"
+      }}
+    >
+      Đang mở trang…
+    </main>
+  );
+}
 
 export default function AppRoutes({ adminAppProps, customerRouteProps }) {
   return (
-    <Routes>
+    <Suspense fallback={<RouteLoadingFallback />}>
+      <Routes>
       <Route path="/" element={<Navigate to="/home" replace />} />
 
       <Route path="/home" element={<AppCustomerRoutes {...customerRouteProps} />} />
@@ -48,6 +73,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/admin/cakes" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
 
       <Route path="*" element={<Navigate to="/home" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

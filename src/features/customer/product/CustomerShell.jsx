@@ -1,13 +1,15 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import "../../../styles/customer.css";
-import Icon from "../../../components/Icon.jsx";
 import BottomNav from "../../../components/BottomNav.jsx";
 import StoreStatusModal from "../../../components/customer/StoreStatusModal.jsx";
+import ActiveOrderJourneySheet from "../../../components/customer/ActiveOrderJourneySheet.jsx";
+import ActiveOrderFloatboard from "../../../components/customer/ActiveOrderFloatboard.jsx";
 import CustomerOptionModal from "../../../components/customer/OptionModal.jsx";
 import CustomerFloatingCartBar from "../../../components/customer/FloatingCartBar.jsx";
 import CustomerToast from "../../../components/customer/Toast.jsx";
 import PwaInstallBanner from "../../../components/customer/PwaInstallBanner.jsx";
-import { CustomerButton, CustomerLoadingState, CustomerModalFrame } from "../../../components/customer/CustomerUI.jsx";
+import QrCounterGuideModal from "../../../components/customer/QrCounterGuideModal.jsx";
+import { CustomerLoadingState } from "../../../components/customer/CustomerUI.jsx";
 import HomePage from "../home/HomePage.jsx";
 import MenuPage from "./MenuPage.jsx";
 import ProductDetailPage from "./ProductDetailPage.jsx";
@@ -18,106 +20,16 @@ import LoyaltyPage from "../loyalty/LoyaltyPage.jsx";
 import AccountPage from "../account/AccountPage.jsx";
 import QrOrderEntryPage from "../../../pages/customer/qr/QrOrderEntryPage.jsx";
 import QrMiniHomePage from "../../../pages/customer/qr/QrMiniHomePage.jsx";
+import useActiveOrderFloatboard from "../../../hooks/useActiveOrderFloatboard.js";
 import { orderRepository } from "../../../services/repositories/orderRepository.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
+import {
+  findLatestActiveCustomerOrder,
+  getCustomerOrderJourneySignature
+} from "../../../services/customerOrderStatusService.js";
 
-const orderStatusPopupPersistedKeys = new Set();
 const qrMemberPromptSessionKeys = new Set();
-
-function normalizeOrderStatusText(value = "") {
-  return String(value || "")
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/đ/g, "d")
-    .replace(/[^a-z0-9]+/g, "");
-}
-
-function hasPersistedOrderStatusPopup(key = "") {
-  const normalizedKey = String(key || "").trim();
-  if (!normalizedKey) return false;
-  if (orderStatusPopupPersistedKeys.has(normalizedKey)) return true;
-  try {
-    const stored = window.localStorage.getItem(normalizedKey);
-    if (stored === "1") {
-      orderStatusPopupPersistedKeys.add(normalizedKey);
-      return true;
-    }
-  } catch {
-  }
-  return false;
-}
-
-function persistOrderStatusPopupSeen(key = "") {
-  const normalizedKey = String(key || "").trim();
-  if (!normalizedKey) return;
-  orderStatusPopupPersistedKeys.add(normalizedKey);
-  try {
-    window.localStorage.setItem(normalizedKey, "1");
-  } catch {
-  }
-}
-
-function isWebsiteCustomerOrder(order = {}) {
-  const sourceType = normalizeOrderStatusText(order.sourceType || order.source_type);
-  return sourceType !== "partner";
-}
-
-function isQrCounterOrderSource(value = "") {
-  const source = normalizeOrderStatusText(value);
-  return ["qrcounter", "qrorder", "qrtaiquay", "customerqr"].includes(source);
-}
-
-function getOrderStatusPopupCandidate(order = {}, phone = "") {
-  if (!order || !isWebsiteCustomerOrder(order)) return null;
-
-  const status = normalizeOrderStatusText(order.status || order.orderStatus || order.order_status);
-  const kitchenStatus = normalizeOrderStatusText(order.kitchenStatus || order.kitchen_status);
-  const fulfillmentType = normalizeOrderStatusText(order.fulfillmentType || order.fulfillment_type);
-  const sourceValues = [
-    order.source,
-    order.channel,
-    order.orderSource,
-    order.order_source,
-    order.sourceType,
-    order.source_type,
-    order.platform
-  ];
-  const isQrCounterSource = sourceValues.some(isQrCounterOrderSource);
-  const orderId = String(order.id || order.orderCode || "").trim();
-  const phoneKey = String(phone || order.phone || order.customerPhone || "").replace(/\D/g, "");
-  if (!orderId || !phoneKey) return null;
-
-  if (
-    (status === "readyforpickup" || kitchenStatus === "ready") &&
-    (fulfillmentType === "pickup" || isQrCounterSource)
-  ) {
-    return {
-      key: `ghr_order_status_popup_${phoneKey}_${orderId}_ready_pickup`,
-      notice: {
-        type: "order_ready_pickup",
-        badge: "Món đã xong",
-        title: "Món của bạn đã sẵn sàng",
-        description: `Đơn ${order.orderCode || orderId} đã chuẩn bị xong. Bạn có thể đến quầy để nhận món nhé.`
-      }
-    };
-  }
-
-  if (status === "delivering" && fulfillmentType === "delivery") {
-    return {
-      key: `ghr_order_status_popup_${phoneKey}_${orderId}_delivering`,
-      notice: {
-        type: "order_delivering",
-        badge: "Đang giao",
-        title: "Đơn hàng đang được giao",
-        description: `Đơn ${order.orderCode || orderId} đã được giao cho shipper. Bạn để ý điện thoại để shipper liên hệ khi tới nơi nhé.`
-      }
-    };
-  }
-
-  return null;
-}
+const ORDER_DETAIL_INTENT_KEY = "ghr_open_order_detail_intent";
 
 function resolveQrLockedBranch(branches = [], checkoutPreset = {}) {
   const key = String(checkoutPreset?.qrBranchId || checkoutPreset?.selectedBranch || "").trim().toLowerCase();
@@ -201,6 +113,9 @@ export default function CustomerShell({
     [pageProps?.checkoutPreset?.qrBranchId, qrLockedBranch?.id]
   );
   const [showQrMemberPrompt, setShowQrMemberPrompt] = useState(false);
+  const [journeyOrder, setJourneyOrder] = useState(null);
+  const [isJourneyOpen, setIsJourneyOpen] = useState(false);
+  const [isTrackingOrderSheetOpen, setIsTrackingOrderSheetOpen] = useState(false);
 
   const lastCreatedOrderId = orderRepository.getLastCreatedOrderId();
   const forcedLatestOrder = (Array.isArray(profileOrders) ? profileOrders : []).find((order) => {
@@ -211,8 +126,29 @@ export default function CustomerShell({
   const currentOrderTime = new Date(currentOrder?.createdAt || 0).getTime();
   const latestProfileOrderTime = new Date(latestProfileOrder?.createdAt || 0).getTime();
   const successOrder = forcedLatestOrder || (latestProfileOrderTime > currentOrderTime ? latestProfileOrder : (currentOrder || latestProfileOrder));
+  const customerOrdersForJourney = useMemo(
+    () => [
+      ...(currentOrder ? [currentOrder] : []),
+      ...(Array.isArray(profileOrders) ? profileOrders : [])
+    ],
+    [currentOrder, profileOrders]
+  );
+  const activeCustomerOrder = useMemo(
+    () => findLatestActiveCustomerOrder(customerOrdersForJourney),
+    [customerOrdersForJourney]
+  );
+  const activeOrderJourneySignature = activeCustomerOrder
+    ? getCustomerOrderJourneySignature(activeCustomerOrder)
+    : "";
+  const {
+    isCollapsed: isActiveOrderFloatboardCollapsed,
+    hasUnreadUpdate: hasActiveOrderUpdate,
+    collapse: collapseActiveOrderFloatboard,
+    expand: expandActiveOrderFloatboard
+  } = useActiveOrderFloatboard(activeCustomerOrder, activeOrderJourneySignature);
   const isChoosingProduct = isOptionModalOpen || page === "detail";
-  const shouldHideBottomNav = isChoosingProduct || page === "success" || page === "qr-entry";
+  const shouldHideBottomNav = isChoosingProduct || ["success", "qr-entry"].includes(page);
+  const shouldBlockSessionPage = isSessionBootstrapping && ["tracking", "loyalty", "account"].includes(page);
 
   const trackingOrderHistory = forcedLatestOrder
     ? [forcedLatestOrder, ...(Array.isArray(composedUserProfile?.orderHistory) ? composedUserProfile.orderHistory : []).filter((order) => {
@@ -227,27 +163,15 @@ export default function CustomerShell({
   };
 
   useEffect(() => {
-    if (serviceNotice) return;
-    const orders = [
-      ...(Array.isArray(profileOrders) ? profileOrders : []),
-      ...(currentOrder ? [currentOrder] : [])
-    ];
-    const seenOrderIds = new Set();
-    const uniqueOrders = orders.filter((order) => {
-      const id = String(order?.id || order?.orderCode || "").trim();
-      if (!id || seenOrderIds.has(id)) return false;
-      seenOrderIds.add(id);
-      return true;
-    });
-
-    const candidate = uniqueOrders
-      .map((order) => getOrderStatusPopupCandidate(order, currentPhone))
-      .find((item) => item && !hasPersistedOrderStatusPopup(item.key));
-
-    if (!candidate) return;
-    persistOrderStatusPopupSeen(candidate.key);
-    setServiceNotice?.(candidate.notice);
-  }, [currentPhone, currentOrder, profileOrders, serviceNotice, setServiceNotice]);
+    if (!isJourneyOpen || !journeyOrder) return;
+    const journeyOrderId = String(journeyOrder.id || journeyOrder.orderCode || journeyOrder.order_code || "").trim();
+    const refreshedOrder = [...customerOrdersForJourney].reverse().find((order) => (
+      String(order?.id || order?.orderCode || order?.order_code || "").trim() === journeyOrderId
+    ));
+    if (!refreshedOrder) return;
+    if (getCustomerOrderJourneySignature(refreshedOrder) === getCustomerOrderJourneySignature(journeyOrder)) return;
+    setJourneyOrder(refreshedOrder);
+  }, [customerOrdersForJourney, isJourneyOpen, journeyOrder]);
 
   useEffect(() => {
     if (!isQrCounterFlow) return;
@@ -261,7 +185,14 @@ export default function CustomerShell({
   }, [isQrCounterFlow, navigate, page, qrLockedBranch]);
 
   useEffect(() => {
-    if (!isQrCounterFlow || !qrLockedBranch || isChoosingProduct) {
+    if (
+      !isQrCounterFlow ||
+      !qrLockedBranch ||
+      isChoosingProduct ||
+      !["home", "qr-entry"].includes(page) ||
+      cartCount > 0 ||
+      activeCustomerOrder
+    ) {
       setShowQrMemberPrompt(false);
       return;
     }
@@ -273,21 +204,12 @@ export default function CustomerShell({
 
     if (qrMemberPromptSessionKeys.has(qrMemberPromptKey)) return;
 
-    try {
-      if (window.sessionStorage.getItem(qrMemberPromptKey) === "1") return;
-    } catch {
-    }
-
-    const timer = window.setTimeout(() => setShowQrMemberPrompt(true), page === "qr-entry" ? 420 : 900);
+    const timer = window.setTimeout(() => setShowQrMemberPrompt(true), page === "qr-entry" ? 420 : 760);
     return () => window.clearTimeout(timer);
-  }, [hasCustomerAuthSession, isChoosingProduct, isQrCounterFlow, isRegisteredCustomer, page, qrLockedBranch, qrMemberPromptKey]);
+  }, [activeCustomerOrder, cartCount, hasCustomerAuthSession, isChoosingProduct, isQrCounterFlow, isRegisteredCustomer, page, qrLockedBranch, qrMemberPromptKey]);
 
   const dismissQrMemberPrompt = () => {
     qrMemberPromptSessionKeys.add(qrMemberPromptKey);
-    try {
-      window.sessionStorage.setItem(qrMemberPromptKey, "1");
-    } catch {
-    }
     setShowQrMemberPrompt(false);
   };
 
@@ -298,6 +220,32 @@ export default function CustomerShell({
       return;
     }
     navigate("checkout", "orders");
+  };
+
+  const closeOrderJourney = () => {
+    setIsJourneyOpen(false);
+  };
+
+  const openActiveOrderJourney = () => {
+    if (!activeCustomerOrder) return;
+    setJourneyOrder(activeCustomerOrder);
+    setIsJourneyOpen(true);
+  };
+
+  const openOrdersFromJourney = () => {
+    const orderId = String(journeyOrder?.id || journeyOrder?.orderCode || journeyOrder?.order_code || "").trim();
+    if (typeof window !== "undefined" && orderId) {
+      const intent = { orderId, showDetails: true };
+      try {
+        window.sessionStorage.setItem(ORDER_DETAIL_INTENT_KEY, JSON.stringify(intent));
+      } catch {
+      }
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("ghr:open-order-detail", { detail: intent }));
+      }, 0);
+    }
+    setIsJourneyOpen(false);
+    if (page !== "tracking") navigate("tracking", "orders");
   };
 
   const handleQrBottomNav = (tab) => {
@@ -333,25 +281,27 @@ export default function CustomerShell({
     <div className="customer-shell min-h-screen bg-app text-brown">
       <main className="mx-auto min-h-screen w-full max-w-[430px] bg-cream pb-24 shadow-preview">
         {!isQrCounterFlow && <PwaInstallBanner />}
-        {isSessionBootstrapping ? (
+        {shouldBlockSessionPage ? (
           <section className="px-4 pt-6">
             <CustomerLoadingState message="Đang đồng bộ tài khoản và lịch sử đơn hàng..." />
           </section>
         ) : (
           <>
-            {page === "home" && (
-              isQrCounterFlow
-                ? <QrMiniHomePage {...pageProps} isRegisteredCustomer={isRegisteredCustomer} />
-                : <HomePage render={pageProps.Home} {...pageProps} coupons={pageProps.homeCoupons || pageProps.coupons} smartPromotions={pageProps.homeSmartPromotions || pageProps.smartPromotions} openProduct={openOptionModalFromHome} openOptionModal={openOptionModalFromHome} />
-            )}
-            {page === "qr-entry" && <QrOrderEntryPage branches={pageProps.branches} checkoutPreset={pageProps.checkoutPreset} setCheckoutPreset={pageProps.setCheckoutPreset} navigate={pageProps.navigate} isBranchOpenNow={pageProps.isBranchOpenNow} buildOutOfHoursNotice={pageProps.buildOutOfHoursNotice} setServiceNotice={pageProps.setServiceNotice} />}
-            {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
-            {page === "detail" && <ProductDetailPage render={pageProps.Detail} {...pageProps} />}
-            {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
-            {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} />}
-            {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} />}
-            {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
-            {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}
+            <div key={page} className="customer-page-stage">
+              {page === "home" && (
+                isQrCounterFlow
+                  ? <QrMiniHomePage {...pageProps} isRegisteredCustomer={isRegisteredCustomer} />
+                  : <HomePage render={pageProps.Home} {...pageProps} coupons={pageProps.homeCoupons || pageProps.coupons} smartPromotions={pageProps.homeSmartPromotions || pageProps.smartPromotions} openProduct={openOptionModalFromHome} openOptionModal={openOptionModalFromHome} />
+              )}
+              {page === "qr-entry" && <QrOrderEntryPage branches={pageProps.branches} checkoutPreset={pageProps.checkoutPreset} setCheckoutPreset={pageProps.setCheckoutPreset} navigate={pageProps.navigate} isBranchOpenNow={pageProps.isBranchOpenNow} buildOutOfHoursNotice={pageProps.buildOutOfHoursNotice} setServiceNotice={pageProps.setServiceNotice} />}
+              {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
+              {page === "detail" && <ProductDetailPage render={pageProps.Detail} {...pageProps} />}
+              {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
+              {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} />}
+              {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} onOrderSheetVisibilityChange={setIsTrackingOrderSheetOpen} />}
+              {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
+              {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}
+            </div>
 
             {isOptionModalOpen && (
               <CustomerOptionModal
@@ -387,6 +337,19 @@ export default function CustomerShell({
               />
             )}
 
+            {activeCustomerOrder && !isJourneyOpen && !isTrackingOrderSheetOpen && !isChoosingProduct && !["checkout", "success", "qr-entry"].includes(page) ? (
+              <ActiveOrderFloatboard
+                key={activeOrderJourneySignature}
+                order={activeCustomerOrder}
+                raised={cartCount > 0}
+                collapsed={isActiveOrderFloatboardCollapsed}
+                hasUnreadUpdate={hasActiveOrderUpdate}
+                onCollapse={collapseActiveOrderFloatboard}
+                onExpand={expandActiveOrderFloatboard}
+                onOpenJourney={openActiveOrderJourney}
+              />
+            ) : null}
+
             {cartCount > 0 && !isChoosingProduct && !["checkout", "success"].includes(page) && (
               <CustomerFloatingCartBar
                 count={cartCount}
@@ -399,55 +362,25 @@ export default function CustomerShell({
             )}
 
             {toastVisible && <CustomerToast message="Đã thêm vào giỏ" />}
-            {showQrMemberPrompt ? (
-              <CustomerModalFrame className="qr-member-popup" onBackdropClick={dismissQrMemberPrompt}>
-                <div className="qr-member-popup__badge">
-                  <Icon name="star" size={17} />
-                  <span>Đặt món QR</span>
-                </div>
-                <h2>Đặt món QR tiện hơn</h2>
-                <p>
-                  Quét QR để tự chọn món, dùng ưu đãi và theo dõi đơn ngay trên điện thoại.
-                </p>
-                <div className="qr-member-popup__list">
-                  <div className="qr-member-popup__item">
-                    <span><Icon name="dish" size={17} /></span>
-                    <strong>Tự chọn món</strong>
-                    <small>Thoải mái xem menu, chọn topping, không cần chờ nhân viên ghi món.</small>
-                  </div>
-                  <div className="qr-member-popup__item">
-                    <span><Icon name="tag" size={17} /></span>
-                    <strong>Nhập voucher</strong>
-                    <small>Dùng mã ưu đãi phù hợp trước khi xác nhận đơn.</small>
-                  </div>
-                  <div className="qr-member-popup__item">
-                    <span><Icon name="star" size={17} /></span>
-                    <strong>Tích điểm</strong>
-                    <small>Nhập số điện thoại để quán ghi nhận điểm; đăng ký giúp xem điểm và nhận ưu đãi.</small>
-                  </div>
-                  <div className="qr-member-popup__item">
-                    <span><Icon name="bag" size={17} /></span>
-                    <strong>Theo dõi đơn</strong>
-                    <small>Xem trạng thái đơn đang làm và lịch sử mua hàng trên điện thoại.</small>
-                  </div>
-                </div>
-                <div className={`qr-member-popup__actions${shouldShowQrSignupAction ? "" : " qr-member-popup__actions--single"}`}>
-                  {shouldShowQrSignupAction ? (
-                    <CustomerButton onClick={handleQrMemberPromptSignup}>
-                      Đăng ký ngay
-                    </CustomerButton>
-                  ) : null}
-                  <CustomerButton variant={shouldShowQrSignupAction ? "secondary" : "primary"} onClick={dismissQrMemberPrompt}>
-                    Tiếp tục
-                  </CustomerButton>
-                </div>
-              </CustomerModalFrame>
-            ) : null}
+            <QrCounterGuideModal
+              open={showQrMemberPrompt}
+              showSignupAction={shouldShowQrSignupAction}
+              onClose={dismissQrMemberPrompt}
+              onSignup={handleQrMemberPromptSignup}
+              onStart={dismissQrMemberPrompt}
+            />
             {!shouldHideBottomNav && (
               isQrCounterFlow
                 ? <BottomNav activeTab={activeTab} onChange={handleQrBottomNav} items={qrBottomNavItems} />
                 : <BottomNav activeTab={activeTab} onChange={handleBottomNav} />
             )}
+            {isJourneyOpen && journeyOrder && !serviceNotice ? (
+              <ActiveOrderJourneySheet
+                order={journeyOrder}
+                onClose={closeOrderJourney}
+                onOpenOrders={openOrdersFromJourney}
+              />
+            ) : null}
             <StoreStatusModal notice={serviceNotice} onClose={() => setServiceNotice?.(null)} />
           </>
         )}

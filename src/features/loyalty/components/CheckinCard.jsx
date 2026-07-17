@@ -2,6 +2,11 @@ import Icon from "../../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import { getLoyaltyBonusDisplay, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 
+function formatCheckinDate(dateKey = "") {
+  const [, month = "", day = ""] = String(dateKey || "").split("-");
+  return day && month ? `${day}/${month}` : dateKey;
+}
+
 export default function CheckinCard({
   loyalty,
   today,
@@ -50,8 +55,15 @@ export default function CheckinCard({
             <span className="text-sm font-black text-orange-600">{loyaltyText.milestoneTop}</span>
           ) : null}
         </div>
-        <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
-          <div className="h-full rounded-full bg-gradient-main transition-all" style={{ width: `${progressPercent}%` }} />
+        <div
+          className="mt-3 h-3 overflow-hidden rounded-full bg-white"
+          role="progressbar"
+          aria-label="Tiến độ chuỗi điểm danh"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow={Math.round(Number(progressPercent || 0))}
+        >
+          <div className="checkin-progress__bar h-full rounded-full bg-gradient-main" style={{ width: `${progressPercent}%` }} />
         </div>
       </div>
 
@@ -116,7 +128,7 @@ export function CheckinDetails({ loyalty, today, recentDays }) {
 
             return (
               <div key={day} className={isToday ? "is-today" : ""}>
-                <span>{day.slice(5).replace("-", "/")}</span>
+                <span>{formatCheckinDate(day)}</span>
                 <strong className={checked ? "is-checked" : ""}>{checked ? "✓" : "•"}</strong>
               </div>
             );

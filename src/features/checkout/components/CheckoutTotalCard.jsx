@@ -1,5 +1,10 @@
 ﻿import { formatMoney } from "../../../utils/format.js";
+import Icon from "../../../components/Icon.jsx";
 import CheckoutCard from "./CheckoutCard.jsx";
+
+const DISTANCE_FORMATTER = new Intl.NumberFormat("vi-VN", {
+  maximumFractionDigits: 1
+});
 
 export default function CheckoutTotalCard({
   subtotal,
@@ -41,20 +46,22 @@ export default function CheckoutTotalCard({
           <strong>{formatMoney(displayedSubtotal)}</strong>
         </div>
 
-        <div className="summary-line">
-          <span>
-            Phí ship bạn trả {!isPickup && distanceKm ? `(${distanceKm.toFixed(1)}km)` : ""}{" "}
-            <button
-              type="button"
-              onClick={onShowDeliveryFee}
-              className="fee-info-btn"
-              aria-label="Xem cách tính phí giao hàng"
-            >
-              i
-            </button>
-          </span>
-          <strong>{isPickup ? "0đ" : formatMoney(effectiveShippingPaid)}</strong>
-        </div>
+        {!isPickup ? (
+          <div className="summary-line">
+            <span>
+              Phí ship bạn trả {distanceKm ? `(${DISTANCE_FORMATTER.format(distanceKm)} km)` : ""}{" "}
+              <button
+                type="button"
+                onClick={onShowDeliveryFee}
+                className="fee-info-btn"
+                aria-label="Xem cách tính phí giao hàng"
+              >
+                i
+              </button>
+            </span>
+            <strong>{formatMoney(effectiveShippingPaid)}</strong>
+          </div>
+        ) : null}
 
         {shippingSupportDiscount > 0 ? (
           <div className="summary-line discount-line">
@@ -64,7 +71,7 @@ export default function CheckoutTotalCard({
         ) : null}
 
         {!isPickup && supportShippingEnabled && appliedSupportMax > 0 ? (
-          <div className="mt-[-4px] mb-1 text-[10px] leading-4 text-brown/45">
+          <div className="shipping-support-note">
             <span>Mức hỗ trợ tối đa: </span>
             <span className="font-medium">{formatMoney(appliedSupportMax)}</span>
           </div>
@@ -91,7 +98,10 @@ export default function CheckoutTotalCard({
 
         {savedAmount > 0 ? (
           <div className="summary-saving">
-            <span><span aria-hidden="true">🎉</span> Bạn tiết kiệm được {formatMoney(savedAmount)}</span>
+            <span className="summary-saving__label">
+              <Icon name="gift" size={15} />
+              Bạn tiết kiệm được {formatMoney(savedAmount)}
+            </span>
             <del>{formatMoney(savingOriginalTotal)}</del>
           </div>
         ) : null}

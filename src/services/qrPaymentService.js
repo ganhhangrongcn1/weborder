@@ -20,16 +20,35 @@ function normalizeKey(value = "") {
 }
 
 export function isQrBankPaymentOrder(order = {}) {
-  const metadata = getObject(order.metadata);
-  return toText(order.paymentMethod || metadata.paymentMethod || metadata.payment_method).toLowerCase() === "bank_qr";
+  const safeOrder = getObject(order);
+  const metadata = getObject(safeOrder.metadata);
+  return toText(safeOrder.paymentMethod || metadata.paymentMethod || metadata.payment_method).toLowerCase() === "bank_qr";
+}
+
+export function isQrCounterBankPaymentOrder(order = {}) {
+  if (!isQrBankPaymentOrder(order)) return false;
+  const safeOrder = getObject(order);
+  const metadata = getObject(safeOrder.metadata);
+  const source = toText(
+    safeOrder.orderSource ||
+      safeOrder.source ||
+      safeOrder.channel ||
+      safeOrder.platform ||
+      metadata.orderSource ||
+      metadata.order_source ||
+      metadata.source ||
+      metadata.channel
+  ).toLowerCase();
+  return source === "qr_counter";
 }
 
 export function getQrOrderPaymentStatus(order = {}, session = null) {
-  const metadata = getObject(order.metadata);
+  const safeOrder = getObject(order);
+  const metadata = getObject(safeOrder.metadata);
   const sessionStatus = toText(session?.status).toLowerCase();
   return toText(
     ["paid", "converted"].includes(sessionStatus) ? sessionStatus :
-      order.paymentStatus ||
+      safeOrder.paymentStatus ||
       metadata.paymentStatus ||
       metadata.payment_status ||
       ""
@@ -41,43 +60,46 @@ export function isQrOrderPaid(order = {}, session = null) {
 }
 
 export function isQrOrderPaymentExpired(order = {}, session = null) {
-  const metadata = getObject(order.metadata);
+  const safeOrder = getObject(order);
+  const metadata = getObject(safeOrder.metadata);
   const status = getQrOrderPaymentStatus(order, session);
-  const orderStatus = toText(order.status || metadata.status || metadata.orderStatus).toLowerCase();
-  const kitchenStatus = toText(order.kitchenStatus || metadata.kitchenStatus || metadata.kitchen_status).toLowerCase();
+  const orderStatus = toText(safeOrder.status || metadata.status || metadata.orderStatus).toLowerCase();
+  const kitchenStatus = toText(safeOrder.kitchenStatus || metadata.kitchenStatus || metadata.kitchen_status).toLowerCase();
   return ["expired", "cancelled", "canceled"].includes(status) ||
     ["cancelled", "canceled"].includes(orderStatus) ||
     ["cancelled", "canceled"].includes(kitchenStatus);
 }
 
 export function getQrOrderPaymentReference(order = {}, session = null) {
-  const metadata = getObject(order.metadata);
+  const safeOrder = getObject(order);
+  const metadata = getObject(safeOrder.metadata);
   return toText(
     session?.payment_reference ||
       session?.paymentReference ||
-      order.paymentReference ||
-      order.payment_reference ||
+      safeOrder.paymentReference ||
+      safeOrder.payment_reference ||
       metadata.paymentReference ||
       metadata.payment_reference ||
-      order.orderCode ||
-      order.id
+      safeOrder.orderCode ||
+      safeOrder.id
   ).toUpperCase();
 }
 
 export function findQrOrderPaymentBranch(order = {}, branches = []) {
+  const safeOrder = getObject(order);
   const branchCandidates = [
-    order.pickupBranchUuid,
-    order.pickup_branch_uuid,
-    order.branchUuid,
-    order.branch_uuid,
-    order.pickupBranchId,
-    order.pickup_branch_id,
-    order.branchId,
-    order.branch_id,
-    order.pickupBranchName,
-    order.pickup_branch_name,
-    order.branchName,
-    order.branch_name
+    safeOrder.pickupBranchUuid,
+    safeOrder.pickup_branch_uuid,
+    safeOrder.branchUuid,
+    safeOrder.branch_uuid,
+    safeOrder.pickupBranchId,
+    safeOrder.pickup_branch_id,
+    safeOrder.branchId,
+    safeOrder.branch_id,
+    safeOrder.pickupBranchName,
+    safeOrder.pickup_branch_name,
+    safeOrder.branchName,
+    safeOrder.branch_name
   ].map(normalizeKey).filter(Boolean);
 
   return (Array.isArray(branches) ? branches : []).find((branch) => {
@@ -95,13 +117,14 @@ export function findQrOrderPaymentBranch(order = {}, branches = []) {
 }
 
 export function buildQrOrderPaymentImageUrl({ order = {}, branch = {}, session = null } = {}) {
+  const safeOrder = getObject(order);
   return buildPosQrImageUrl({
     branch,
-    amount: session?.amount_expected || order.totalAmount || order.total,
+    amount: session?.amount_expected || safeOrder.totalAmount || safeOrder.total,
     orderIdentity: {
-      orderCode: order.orderCode || order.id,
-      displayOrderCode: order.orderCode || order.id,
-      paymentReference: getQrOrderPaymentReference(order, session)
+      orderCode: safeOrder.orderCode || safeOrder.id,
+      displayOrderCode: safeOrder.orderCode || safeOrder.id,
+      paymentReference: getQrOrderPaymentReference(safeOrder, session)
     }
   });
 }
@@ -164,7 +187,8 @@ async function invokeQrPaymentFunction(payload) {
 }
 
 export async function createQrOrderPaymentSession({ order = {} } = {}) {
-  const orderId = toText(order.id || order.orderCode);
+  const safeOrder = getObject(order);
+  const orderId = toText(safeOrder.id || safeOrder.orderCode);
   if (!orderId) {
     return { ok: false, message: "Thiếu mã đơn để tạo QR thanh toán." };
   }
@@ -172,15 +196,16 @@ export async function createQrOrderPaymentSession({ order = {} } = {}) {
   return invokeQrPaymentFunction({
     action: "create",
     order_id: orderId,
-    payment_reference: getQrOrderPaymentReference(order)
+    payment_reference: getQrOrderPaymentReference(safeOrder)
   });
 }
 
 export async function readQrOrderPaymentSession({ order = {}, sessionId = "" } = {}) {
+  const safeOrder = getObject(order);
   return invokeQrPaymentFunction({
     action: "read",
     session_id: sessionId,
-    order_id: toText(order.id || order.orderCode),
-    payment_reference: getQrOrderPaymentReference(order)
+    order_id: toText(safeOrder.id || safeOrder.orderCode),
+    payment_reference: getQrOrderPaymentReference(safeOrder)
   });
 }

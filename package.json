@@ -2,12 +2,13 @@
     "type": "module",
     "scripts": {
         "dev": "node scripts/patch-vite.mjs && vite",
-        "build": "node scripts/check-encoding.mjs && node scripts/patch-vite.mjs && vite build --minify false --target es2020",
+        "build": "node scripts/check-encoding.mjs && node scripts/patch-vite.mjs && vite build --minify esbuild --target es2020",
         "smoke:loyalty": "node scripts/smoke-loyalty-config.mjs",
         "smoke:loyalty-v2": "node scripts/smoke-loyalty-v2-sql.mjs",
         "smoke:vouchers": "node scripts/smoke-checkout-voucher.mjs",
         "smoke:flows": "node scripts/smoke-main-flows.mjs",
-        "smoke": "npm run smoke:loyalty && npm run smoke:flows && npm run smoke:supabase-config && npm run smoke:vouchers",
+        "smoke:success": "node scripts/smoke-order-success-payment.mjs",
+        "smoke": "npm run smoke:loyalty && npm run smoke:flows && npm run smoke:supabase-config && npm run smoke:vouchers && npm run smoke:success",
         "fix:encoding": "node scripts/fix-encoding.mjs",
         "check:encoding": "node scripts/check-encoding.mjs",
         "preview": "vite preview",
@@ -20,6 +21,7 @@
         "smoke:kitchen": "node scripts/smoke-kitchen-order-items.mjs"
     },
     "dependencies": {
+        "@phosphor-icons/react": "^2.1.10",
         "@supabase/supabase-js": "^2.105.3",
         "@vitejs/plugin-react": "4.3.4",
         "autoprefixer": "10.4.21",
@@ -29,6 +31,7 @@
         "react-dom": "18.2.0",
         "react-router-dom": "^6.30.3",
         "tailwindcss": "3.4.17",
+        "tus-js-client": "^4.3.1",
         "vite": "5.4.19"
     },
     "devDependencies": {

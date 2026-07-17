@@ -124,6 +124,7 @@ export function CustomerLoadingState({
 export function CustomerModalFrame({
   children,
   className = "",
+  ariaLabel = "Hộp thoại",
   onBackdropClick
 }) {
   return (
@@ -133,6 +134,9 @@ export function CustomerModalFrame({
         className={joinClassNames("customer-modal-frame__panel", className)}
         padding="lg"
         onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={ariaLabel}
       >
         {children}
       </CustomerCard>

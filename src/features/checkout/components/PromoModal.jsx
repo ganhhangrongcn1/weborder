@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import CustomerOfferCard from "../../../components/customer/CustomerOfferCard.jsx";
 import { formatMoney } from "../../../utils/format.js";
@@ -8,7 +9,7 @@ export default function PromoModal({
   onSelect,
   onClose
 }) {
-  return (
+  const modalContent = (
     <CustomerBottomSheet
       title="Mã khuyến mãi"
       subtitle="Chọn 1 mã phù hợp cho đơn hàng"
@@ -49,4 +50,8 @@ export default function PromoModal({
       </div>
     </CustomerBottomSheet>
   );
+
+  return typeof document === "undefined"
+    ? modalContent
+    : createPortal(modalContent, document.body);
 }

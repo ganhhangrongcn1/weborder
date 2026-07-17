@@ -18,6 +18,13 @@
   --customer-shadow-orange: 0 12px 24px rgba(255, 90, 31, 0.24);
   --customer-bottom-safe: env(safe-area-inset-bottom, 0px);
   --customer-bottom-nav-height: calc(74px + var(--customer-bottom-safe));
+  --customer-motion-fast: 160ms;
+  --customer-motion-base: 180ms;
+  --customer-motion-page: 220ms;
+  --customer-motion-sheet: 260ms;
+  --customer-motion-attention: 1200ms;
+  --customer-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --customer-ease-enter: cubic-bezier(0.22, 0.82, 0.22, 1);
   width: 100%;
   min-height: 100dvh;
   overflow-x: hidden;

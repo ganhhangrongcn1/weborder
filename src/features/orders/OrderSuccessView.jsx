@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
-import { CustomerButton, CustomerCard, CustomerModalFrame } from "../../components/customer/CustomerUI.jsx";
+import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
 import { formatMoney } from "../../utils/format.js";
 import {
   buildQrOrderPaymentImageUrl,
@@ -8,7 +8,7 @@ import {
   findQrOrderPaymentBranch,
   getQrOrderPaymentConfig,
   getQrOrderPaymentReference,
-  isQrBankPaymentOrder,
+  isQrCounterBankPaymentOrder,
   isQrOrderPaymentExpired,
   isQrOrderPaid,
   readQrOrderPaymentSession
@@ -64,8 +64,7 @@ export default function OrderSuccess({
   branches = []
 }) {
   const orderId = order?.id || order?.orderCode || "";
-  const isQrPaymentOrder = isQrBankPaymentOrder(order);
-  const [showSuccessPopup, setShowSuccessPopup] = useState(() => !isQrPaymentOrder);
+  const isQrPaymentOrder = isQrCounterBankPaymentOrder(order);
   const [paymentSession, setPaymentSession] = useState(null);
   const [paymentMessage, setPaymentMessage] = useState("");
   const orderCode = order?.orderCode || order?.id || "Đơn mới";
@@ -77,9 +76,17 @@ export default function OrderSuccess({
   const paymentConfig = useMemo(() => getQrOrderPaymentConfig(paymentBranch), [paymentBranch]);
   const paymentReference = getQrOrderPaymentReference(order, paymentSession);
   const qrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
-  const qrPaymentPaid = isQrOrderPaid(order, paymentSession);
-  const qrPaymentExpired = isQrOrderPaymentExpired(order, paymentSession);
+  const qrPaymentPaid = isQrPaymentOrder && isQrOrderPaid(order, paymentSession);
+  const qrPaymentExpired = isQrPaymentOrder && isQrOrderPaymentExpired(order, paymentSession);
   const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid && !qrPaymentExpired;
+  const isPickup = String(order?.fulfillmentType || "").toLowerCase() === "pickup";
+  const paymentText = isQrPaymentOrder
+    ? qrPaymentPaid
+      ? "Đã thanh toán QR"
+      : qrPaymentExpired
+        ? "QR đã hết hạn"
+        : "QR tại quầy"
+    : "Tiền mặt khi nhận món";
   const statusEyebrow = qrPaymentExpired
     ? "Đã quá hạn"
     : isQrPaymentWaiting
@@ -88,13 +95,17 @@ export default function OrderSuccess({
   const statusTitle = qrPaymentExpired
     ? "Đơn đã quá hạn thanh toán"
     : isQrPaymentWaiting
-      ? "Quét QR để thanh toán"
-      : "Đơn hàng đã được ghi nhận";
+      ? "Quét QR để Gánh lên món"
+      : "Gánh nhận được đơn rồi nha";
   const statusDescription = qrPaymentExpired
-    ? "Đơn chưa được thanh toán trong 10 phút nên đã tự hủy. Anh/chị vui lòng đặt lại giúp em."
+    ? "Đơn chưa được thanh toán trong 10 phút nên đã tự hủy. Bạn đặt lại món giúp Gánh nha."
     : isQrPaymentWaiting
-    ? "Quán sẽ bắt đầu làm món sau khi nhận được thanh toán."
-    : "Theo dõi đơn để biết khi nào món sẵn sàng. Đăng nhập thành viên để nhận thông báo và ưu đãi cho lần sau.";
+      ? "Gánh sẽ bắt đầu chuẩn bị ngay khi hệ thống xác nhận thanh toán."
+      : isQrPaymentOrder && qrPaymentPaid
+        ? "Gánh đã nhận tiền và bắt đầu lên món. Bạn theo dõi hành trình để biết khi nào món sẵn sàng nha."
+        : isPickup
+          ? "Bếp sẽ cập nhật hành trình. Khi món sẵn sàng, bạn ghé quầy rước món thôi."
+          : "Bếp sẽ cập nhật hành trình. Khi bàn giao shipper, bạn để ý điện thoại giúp Gánh nha.";
   const statusIcon = qrPaymentExpired ? "warning" : isQrPaymentWaiting ? "qr" : "check";
   const statusIconClass = qrPaymentExpired
     ? "bg-red-50 text-red-600"
@@ -104,27 +115,8 @@ export default function OrderSuccess({
   const statusTextClass = qrPaymentExpired ? "text-red-600" : isQrPaymentWaiting ? "text-orange-600" : "text-green-700";
   const statusTitleClass = qrPaymentExpired ? "text-red-700" : isQrPaymentWaiting ? "text-orange-700" : "text-green-800";
 
-  const memberBenefits = useMemo(() => ([
-    {
-      icon: "star",
-      title: "Tích điểm từ đơn đầu",
-      text: "Mỗi đơn hợp lệ đều được cộng điểm để đổi ưu đãi lần sau."
-    },
-    {
-      icon: "gift",
-      title: "Nhận voucher thành viên",
-      text: "Ưu đãi mở theo hạng và lịch sử mua hàng của bạn."
-    },
-    {
-      icon: "clock",
-      title: "Nhận thông báo khi món xong",
-      text: "Đăng nhập để theo dõi trạng thái và nhận nhắc hoàn tất."
-    }
-  ]), []);
-
   useEffect(() => {
     if (!isQrPaymentOrder || !orderId || qrPaymentPaid || qrPaymentExpired) return undefined;
-    setShowSuccessPopup(false);
 
     let isActive = true;
     let timerId = null;
@@ -170,14 +162,19 @@ export default function OrderSuccess({
 
   const handleTrackOrder = () => openTrackingRoute(orderCode, navigate);
   const handleMemberAction = () => {
-    setShowSuccessPopup(false);
     navigate?.(isRegisteredCustomer ? "loyalty" : "account", isRegisteredCustomer ? "rewards" : "account");
   };
   const memberActionText = isRegisteredCustomer
-    ? "Xem ưu đãi thành viên"
+    ? "Xem điểm & ưu đãi"
     : currentPhone
-      ? "Đăng nhập nhận thông báo"
-      : "Đăng ký nhận ưu đãi";
+      ? "Đăng nhập xem điểm"
+      : "Tham gia thành viên";
+  const memberPromptTitle = isRegisteredCustomer
+    ? "Ăn ngon rồi, điểm cũng tự về"
+    : "Gom điểm cho những lần ăn sau";
+  const memberPromptText = isRegisteredCustomer
+    ? "Đơn hoàn tất là điểm được cộng theo hạng thành viên của bạn."
+    : "Đăng nhập để theo dõi điểm và nhận ưu đãi dành riêng cho bạn.";
 
   if (!order) {
     return (
@@ -201,8 +198,12 @@ export default function OrderSuccess({
   return (
     <section className="order-success-page px-4 py-5">
       <div className="mx-auto grid w-full max-w-[430px] gap-4">
-        <CustomerCard tone={isQrPaymentWaiting ? "default" : "success"} padding="lg" className={`text-center${isQrPaymentWaiting ? " order-success-card--waiting" : ""}`}>
-          <div className={`mx-auto grid h-20 w-20 place-items-center rounded-[24px] ${statusIconClass}`}>
+        <CustomerCard
+          tone={isQrPaymentWaiting || qrPaymentExpired ? "default" : "success"}
+          padding="lg"
+          className={`text-center${isQrPaymentWaiting ? " order-success-card--waiting" : ""}${qrPaymentExpired ? " order-success-card--expired" : ""}`}
+        >
+          <div className={`order-success-status-icon mx-auto grid h-20 w-20 place-items-center rounded-[24px] ${statusIconClass}`} aria-hidden="true">
             <Icon name={statusIcon} size={30} />
           </div>
           <p className={`mt-5 customer-caption uppercase ${statusTextClass}`}>{statusEyebrow}</p>
@@ -213,26 +214,15 @@ export default function OrderSuccess({
             {statusDescription}
           </p>
 
-          {!isQrPaymentOrder ? (
-            <div className="success-member-prompt mt-5">
-              <div>
-                <span>Thành viên GHR</span>
-                <strong>Tích điểm, nhận voucher và thông báo khi món hoàn tất.</strong>
-              </div>
-              <button type="button" onClick={handleMemberAction}>
-                {isRegisteredCustomer ? "Xem ngay" : "Tham gia"}
-              </button>
-            </div>
-          ) : null}
-
-          <div className="mt-5 rounded-3xl border border-green-100 bg-white p-4 text-left shadow-soft">
+          <div className={`order-success-order-card mt-5 rounded-3xl border bg-white p-4 text-left shadow-soft${isQrPaymentWaiting ? " is-waiting" : ""}${qrPaymentExpired ? " is-expired" : ""}`}>
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <span className="text-xs font-black uppercase text-brown/45">Mã đơn</span>
-                <strong className="mt-1 block text-2xl font-black text-brown">{orderCode}</strong>
+                <strong className="mt-1 block break-words text-2xl font-black text-brown" translate="no">{orderCode}</strong>
+                <small className="mt-1 block text-xs font-bold text-brown/50">{itemCount} món</small>
               </div>
-              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-600">
-                {isQrPaymentWaiting ? "Chờ thanh toán" : "Đơn mới"}
+              <span className="order-success-state-badge rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-600">
+                {qrPaymentExpired ? "Đã hủy" : isQrPaymentWaiting ? "Chờ thanh toán" : "Đã tiếp nhận"}
               </span>
             </div>
 
@@ -242,8 +232,8 @@ export default function OrderSuccess({
                 <strong className="mt-1 block text-base font-black text-orange-600">{formatMoney(orderTotal)}</strong>
               </div>
               <div className="rounded-2xl bg-cream px-3 py-3">
-                <span className="block text-[11px] font-black uppercase text-brown/45">Món đã đặt</span>
-                <strong className="mt-1 block text-base font-black text-brown">{itemCount} món</strong>
+                <span className="block text-[11px] font-black uppercase text-brown/45">Thanh toán</span>
+                <strong className="mt-1 block text-sm font-black leading-5 text-brown">{paymentText}</strong>
               </div>
               <div className="rounded-2xl bg-cream px-3 py-3">
                 <span className="block text-[11px] font-black uppercase text-brown/45">Hình thức</span>
@@ -251,10 +241,26 @@ export default function OrderSuccess({
               </div>
               <div className="rounded-2xl bg-cream px-3 py-3">
                 <span className="block text-[11px] font-black uppercase text-brown/45">Chi nhánh</span>
-                <strong className="mt-1 block truncate text-base font-black text-brown">{branchText}</strong>
+                <strong className="mt-1 block break-words text-sm font-black leading-5 text-brown">{branchText}</strong>
               </div>
             </div>
           </div>
+
+          {!qrPaymentExpired ? (
+            <div className={`order-success-next-step mt-4 text-left${isQrPaymentWaiting ? " is-waiting" : ""}`}>
+              <span aria-hidden="true"><Icon name={isPickup ? "bag" : "bike"} size={18} /></span>
+              <div>
+                <small>Bước tiếp theo</small>
+                <strong>
+                  {isQrPaymentWaiting
+                    ? "Thanh toán QR để quán bắt đầu làm món"
+                    : isPickup
+                      ? "Theo dõi đến khi món sẵn sàng nhận"
+                      : "Theo dõi lúc quán bàn giao cho shipper"}
+                </strong>
+              </div>
+            </div>
+          ) : null}
 
           {isQrPaymentOrder ? (
             <div className={`qr-payment-wait-card${qrPaymentPaid ? " is-paid" : ""}`}>
@@ -277,7 +283,7 @@ export default function OrderSuccess({
                   {qrPaymentImageUrl ? (
                     <>
                       <div className="qr-payment-wait-card__qr">
-                        <img src={qrPaymentImageUrl} alt="QR thanh toán ngân hàng" />
+                        <img src={qrPaymentImageUrl} alt="QR thanh toán ngân hàng" width="210" height="210" />
                       </div>
                       <p className="qr-payment-wait-card__save-hint">
                         Muốn lưu mã QR: nhấn giữ ảnh QR rồi chọn Lưu ảnh.
@@ -325,7 +331,7 @@ export default function OrderSuccess({
                 </p>
               )}
 
-              {paymentMessage ? <p className="qr-payment-wait-card__message">{paymentMessage}</p> : null}
+              {paymentMessage ? <p className="qr-payment-wait-card__message" role="status" aria-live="polite">{paymentMessage}</p> : null}
             </div>
           ) : null}
 
@@ -336,80 +342,28 @@ export default function OrderSuccess({
           ) : !isQrPaymentWaiting ? (
             <>
               <CustomerButton full size="lg" className="mt-5" onClick={handleTrackOrder}>
-                Theo dõi đúng đơn này
+                Xem hành trình đơn
               </CustomerButton>
-              <CustomerButton full variant="secondary" className="mt-3" onClick={() => navigate?.("menu", "menu")}>
-                Đặt thêm món
+              <CustomerButton full variant="secondary" className="mt-3" onClick={() => navigate?.("home", "home")}>
+                Về trang chủ
               </CustomerButton>
             </>
           ) : null}
-        </CustomerCard>
 
-        {!isQrPaymentOrder ? (
-          <CustomerCard padding="lg" className="member-benefit-card">
-            <div className="flex items-start gap-3">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                <Icon name="bag" size={20} />
+          {!isQrPaymentWaiting && !qrPaymentExpired ? (
+            <button type="button" className="success-member-prompt mt-4" onClick={handleMemberAction}>
+              <span className="success-member-prompt__icon" aria-hidden="true">
+                <Icon name={isRegisteredCustomer ? "star" : "gift"} size={18} />
               </span>
-              <div className="min-w-0">
-                <p className="text-xs font-bold text-brown/55">Thành viên GHR</p>
-                <h2 className="text-lg font-black leading-tight text-brown">Quyền lợi khi quay lại</h2>
-              </div>
-            </div>
-
-            <div className="mt-4 divide-y divide-orange-100">
-              {memberBenefits.map((benefit) => (
-                <div key={benefit.title} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                    <Icon name={benefit.icon} size={18} />
-                  </span>
-                  <div className="min-w-0">
-                    <strong className="block text-sm font-black text-brown">{benefit.title}</strong>
-                    <span className="mt-1 block text-xs font-semibold leading-5 text-brown/60">{benefit.text}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <CustomerButton full variant={isRegisteredCustomer ? "soft" : "primary"} className="mt-5" onClick={handleMemberAction}>
-              {memberActionText}
-            </CustomerButton>
-          </CustomerCard>
-        ) : null}
+              <span className="success-member-prompt__copy">
+                <strong>{memberPromptTitle}</strong>
+                <small>{memberPromptText}</small>
+              </span>
+              <span className="success-member-prompt__action">{memberActionText}</span>
+            </button>
+          ) : null}
+        </CustomerCard>
       </div>
-
-      {showSuccessPopup && (
-        <CustomerModalFrame className="text-center order-success-modal">
-          <div className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-green-100 text-green-700">
-            <Icon name="check" size={28} />
-          </div>
-          <p className="mt-4 customer-caption uppercase text-green-700">Đặt món thành công</p>
-          <h3 className="mt-2 customer-title-lg">Đơn {orderCode} đã được ghi nhận</h3>
-          <p className="mt-2 customer-body">
-            Theo dõi đơn để biết khi nào món sẵn sàng.
-          </p>
-
-          <button type="button" className="success-member-banner" onClick={handleMemberAction}>
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-              <Icon name="star" size={18} />
-            </span>
-            <span>
-              <strong>{isRegisteredCustomer ? "Ưu đãi thành viên đang chờ bạn" : "Đăng nhập để nhận thông báo khi món xong"}</strong>
-              <small>Tích điểm và nhận voucher cho những lần đặt tiếp theo.</small>
-            </span>
-          </button>
-
-          <CustomerButton full size="lg" className="mt-4" onClick={handleTrackOrder}>
-            Theo dõi đơn
-          </CustomerButton>
-          <CustomerButton full variant="secondary" className="mt-3" onClick={handleMemberAction}>
-            {memberActionText}
-          </CustomerButton>
-          <button type="button" className="success-popup-link" onClick={() => setShowSuccessPopup(false)}>
-            Xem chi tiết đơn hàng
-          </button>
-        </CustomerModalFrame>
-      )}
     </section>
   );
 }

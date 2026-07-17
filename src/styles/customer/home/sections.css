@@ -1,7 +1,7 @@
 .home2026-shell {
   display: grid;
-  gap: 14px;
-  padding: 14px 16px 128px;
+  gap: 12px;
+  padding: 12px 16px 124px;
 }
 
 .home2026-program-grid {
@@ -47,7 +47,7 @@
 
 .home2026-section {
   display: grid;
-  gap: 10px;
+  gap: 9px;
 }
 
 .home2026-section-head {
@@ -104,8 +104,8 @@
 
 @media (max-width: 380px) {
   .home2026-shell {
-    gap: 14px;
-    padding: 12px 14px 142px;
+    gap: 12px;
+    padding: 10px 14px 138px;
   }
 
   .home2026-program-grid,

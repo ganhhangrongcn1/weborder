@@ -16,6 +16,13 @@ export default function CouponList({
     };
     const diff = score(a) - score(b);
     if (diff !== 0) return diff;
+
+    if (score(a) === 0) {
+      const aExpiry = new Date(a?.expiredAt || a?.endAt || a?.expiry || "9999-12-31").getTime();
+      const bExpiry = new Date(b?.expiredAt || b?.endAt || b?.expiry || "9999-12-31").getTime();
+      if (aExpiry !== bExpiry) return aExpiry - bExpiry;
+    }
+
     return new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime();
   });
 

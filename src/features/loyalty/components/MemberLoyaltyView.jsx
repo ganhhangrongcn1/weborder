@@ -7,6 +7,7 @@ import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
 import CouponList from "../../../pages/customer/loyalty/CouponList.jsx";
 import { isVoucherExpired } from "../../../utils/pureHelpers.js";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
+import { saveCheckoutVoucherIntent } from "../../../services/checkoutVoucherIntentService.js";
 import useLoyaltyEntryPopup from "../hooks/useLoyaltyEntryPopup.js";
 import useTierUpgradeCelebration from "../hooks/useTierUpgradeCelebration.js";
 import LuckyVoucherModal from "./LuckyVoucherModal.jsx";
@@ -81,6 +82,10 @@ export default function MemberLoyaltyView({
     { label: "Mức dùng tối đa", value: `${tierJourney?.maxRedemptionPercent || 50}% giá trị đơn` },
     { label: "Hạn điểm", value: "12 tháng từ lần mua cuối" }
   ];
+  const exampleMaxPoints = Math.floor(
+    exampleSpend * Number(tierJourney?.maxRedemptionPercent || 50) / 100
+  );
+  const pointRulesExample = `Ví dụ: Đơn ${exampleSpend.toLocaleString("vi-VN")}đ có thể dùng tối đa ${exampleMaxPoints.toLocaleString("vi-VN")} điểm; phần còn lại thanh toán như bình thường.`;
   const [activeSheet, setActiveSheet] = useState("");
   const usableVouchers = useMemo(
     () =>
@@ -94,10 +99,11 @@ export default function MemberLoyaltyView({
     const total = usableVouchers.length;
     return total > 0 ? `Bạn có ${total} voucher` : "Chưa có voucher mới";
   }, [usableVouchers.length]);
+  const estimatedOrdersToNext = tierJourney?.estimatedOrdersToNext;
   const progressMessage = tierJourney?.nextTier
-    ? tierJourney?.estimatedOrdersToNext
-      ? `Còn khoảng ${tierJourney.estimatedOrdersToNext} đơn để lên ${tierJourney.nextTier.name}`
-      : `Thêm vài món nữa để lên ${tierJourney.nextTier.name}`
+    ? Number.isFinite(estimatedOrdersToNext) && estimatedOrdersToNext > 0
+      ? `Khoảng ${estimatedOrdersToNext.toLocaleString("vi-VN")} đơn nữa để lên ${tierJourney.nextTier.name}`
+      : `Tiếp tục tích hạng để lên ${tierJourney.nextTier.name}`
     : "Bạn đã chạm tới hạng cao nhất của Gánh rồi đó";
   const tierMessages = {
     new_customer: "Mới chớm thôi, nhưng Gánh thấy có tín hiệu ghiền rồi đó",
@@ -116,10 +122,14 @@ export default function MemberLoyaltyView({
     vouchers: safeVoucherHistory,
     blocked: Boolean(!canShowLoyaltyPopups || celebratedTier || luckyVoucher || activeSheet)
   });
-  const handleUseVoucher = () => navigate("menu", "menu");
+  const handleUseVoucher = (voucher) => {
+    if (voucher) saveCheckoutVoucherIntent(voucher);
+    setActiveSheet("");
+    navigate("menu", "menu");
+  };
   const handleEntryVoucherAction = () => {
     closeEntryPopup();
-    handleUseVoucher();
+    handleUseVoucher(entryPopup?.voucher);
   };
   const handleEntryPointsAction = () => {
     closeEntryPopup();
@@ -141,6 +151,8 @@ export default function MemberLoyaltyView({
         progressPercent={tierJourney?.progressPercent}
         progressMessage={progressMessage}
         metaSecondaryNote={`Dùng tối đa ${tierJourney?.maxRedemptionPercent || 50}% giá trị đơn`}
+        metaDisclosureLabel="Quyền lợi hạng"
+        metaSummaryText={`Tích ${Number(currentTier.earnPercent || 10).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}% · Hạn ${formatCustomerDate(tierJourney?.pointsExpiresAt)}`}
         onOpenTierDetails={() => setActiveSheet("tiers")}
       />
 
@@ -216,6 +228,7 @@ export default function MemberLoyaltyView({
         vouchers={safeVoucherHistory}
         pointHistory={safePointHistory}
         pointRulesRows={pointRulesRows}
+        pointRulesExample={pointRulesExample}
         onUseVoucher={handleUseVoucher}
       />
 

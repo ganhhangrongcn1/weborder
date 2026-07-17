@@ -314,10 +314,16 @@ export default function useProductList({
   const [lazyLoadedKeys, setLazyLoadedKeys] = useState(() => new Set());
   const supabaseConfigSyncEnabled = isSupabaseConfigSyncEnabled();
   const shouldForceSupabaseCatalogRead = getDataSource() === "supabase";
+  const shouldLoadInitialCatalog = supabaseConfigSyncEnabled || shouldForceSupabaseCatalogRead;
+  const [isCatalogLoading, setIsCatalogLoading] = useState(() => shouldLoadInitialCatalog);
 
   useEffect(() => {
-    if (!supabaseConfigSyncEnabled && !shouldForceSupabaseCatalogRead) return;
+    if (!shouldLoadInitialCatalog) {
+      setIsCatalogLoading(false);
+      return undefined;
+    }
     let disposed = false;
+    setIsCatalogLoading(true);
 
     catalogConfigRepository
       .getManyAsync([
@@ -359,7 +365,10 @@ export default function useProductList({
         }
         if (Array.isArray(remoteCategories)) setAdminCategories(remoteCategories);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!disposed) setIsCatalogLoading(false);
+      });
 
     return () => {
       disposed = true;
@@ -373,9 +382,9 @@ export default function useProductList({
     defaultHomeContent,
     defaultSmartPromotions,
     categories,
-    normalizeSmartPromotion
-    ,
-    isStrictSupabaseMode
+    normalizeSmartPromotion,
+    isStrictSupabaseMode,
+    shouldLoadInitialCatalog
   ]);
 
   useEffect(() => {
@@ -644,6 +653,7 @@ export default function useProductList({
     setAdminCategories,
     filteredProducts,
     customerCategories,
-    customerPromoCards
+    customerPromoCards,
+    isCatalogLoading
   };
 }

@@ -167,22 +167,12 @@
 .customer-shell .account-overview__header > span,
 .customer-shell .account-overview-metric > span,
 .customer-shell .account-overview-metric strong small,
-.customer-shell .account-shortcut small,
-.customer-shell .account-recent-order__top p,
-.customer-shell .account-recent-order__summary span,
 .customer-shell .account-sync-notice p,
 .customer-shell .account-auth-field > small {
   font-size: var(--customer-type-supporting);
   line-height: 1.4;
 }
 
-.customer-shell .account-order-source,
-.customer-shell .account-order-status {
-  font-size: var(--customer-type-compact);
-}
-
-.customer-shell .account-shortcut strong,
-.customer-shell .account-recent-order__top strong,
 .customer-shell .account-overview-metric strong {
   font-size: var(--customer-type-body);
 }

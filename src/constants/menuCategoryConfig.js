@@ -1,5 +1,5 @@
 export const ALL_MENU_CATEGORY_LABEL = "Tất cả";
-export const DEFAULT_MENU_CATEGORY_LABEL = "Set Bánh Tráng";
+export const DEFAULT_MENU_CATEGORY_LABEL = ALL_MENU_CATEGORY_LABEL;
 
 export function normalizeMenuCategoryLabel(value = "") {
   return String(value || "")
@@ -38,13 +38,12 @@ export function sortCustomerMenuCategories(categories = []) {
 
   const allCategory = cleaned.find(isAllMenuCategory);
   const regularCategories = cleaned.filter((category) => !isAllMenuCategory(category));
-  return allCategory ? [...regularCategories, allCategory] : regularCategories;
+  return allCategory ? [allCategory, ...regularCategories] : [ALL_MENU_CATEGORY_LABEL, ...regularCategories];
 }
 
 export function resolveDefaultMenuCategory(categories = []) {
   const preferredCategory = findMenuCategory(categories, DEFAULT_MENU_CATEGORY_LABEL);
   if (preferredCategory) return preferredCategory;
 
-  const firstRegularCategory = (categories || []).find((category) => category && !isAllMenuCategory(category));
-  return firstRegularCategory || findMenuCategory(categories, ALL_MENU_CATEGORY_LABEL) || ALL_MENU_CATEGORY_LABEL;
+  return ALL_MENU_CATEGORY_LABEL;
 }

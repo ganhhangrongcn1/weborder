@@ -55,7 +55,7 @@ function getToppingTotal(toppings = []) {
   );
 }
 
-export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate, catalogProducts = [], smartPromotions = [] }) {
+export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate, onPrepareReorder, catalogProducts = [], smartPromotions = [] }) {
   const [cart, setCartState] = useState(() => orderRepository.getCartDraft(initialCart));
   const cartRef = useRef(cart);
 
@@ -264,6 +264,7 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
   function reorderOrder(order) {
     const items = repriceCartItems(reorder(order, catalogProducts));
     if (!items.length) return;
+    onPrepareReorder?.(order);
     setCart(items);
     navigate("checkout", "orders");
   }

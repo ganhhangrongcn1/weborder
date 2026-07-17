@@ -29,7 +29,12 @@ export default function CheckoutFulfillmentSection({
   pickupDate,
   setPickupDate,
   pickupClock,
-  setPickupClock
+  setPickupClock,
+  pickupDateLimit = "",
+  pickupTimeMin = "",
+  pickupTimeMax = "",
+  fieldErrors = {},
+  onClearFieldError
 }) {
   const deliveryLocked = forcePickupOnly || !deliveryAvailable;
 
@@ -40,7 +45,13 @@ export default function CheckoutFulfillmentSection({
     }
 
     if (forcePickupOnly) return;
+    onClearFieldError?.();
     setFulfillmentType("delivery");
+  };
+
+  const handleSelectPickup = () => {
+    onClearFieldError?.();
+    setFulfillmentType("pickup");
   };
 
   return (
@@ -51,25 +62,46 @@ export default function CheckoutFulfillmentSection({
             type="button"
             onClick={handleSelectDelivery}
             disabled={deliveryLocked}
+            aria-pressed={fulfillmentType === "delivery"}
             className={`${fulfillmentType === "delivery" ? "active" : ""} ${deliveryLocked ? "is-unavailable" : ""}`}
           >
             Giao tận nơi
           </button>
-          <button type="button" onClick={() => setFulfillmentType("pickup")} className={fulfillmentType === "pickup" ? "active" : ""}>Đến lấy</button>
+          <button
+            type="button"
+            onClick={handleSelectPickup}
+            aria-pressed={fulfillmentType === "pickup"}
+            className={fulfillmentType === "pickup" ? "active" : ""}
+          >
+            Đến lấy
+          </button>
         </div>
       ) : null}
 
       {fulfillmentType === "delivery" ? (
-        <CheckoutCard title={checkoutText.deliveryTo} action="Đổi" onAction={() => setIsAddressModalOpen(true)}>
-          <div className="delivery-info-box">
-            <InfoLine icon="user" label={checkoutText.customerName} value={deliveryInfo.name} />
+        <CheckoutCard
+          title={checkoutText.deliveryTo}
+          action="Đổi"
+          onAction={() => setIsAddressModalOpen(true)}
+          className={fieldErrors.delivery ? "checkout-card--error" : ""}
+        >
+          <div className="delivery-info-box delivery-info-box--compact">
+            <div className="checkout-delivery-contact-row">
+              <InfoLine icon="user" label={checkoutText.customerName} value={deliveryInfo.name} />
+              <InfoLine icon="phone" label={checkoutText.phone} value={deliveryInfo.phone} />
+            </div>
             <InfoLine icon="home" label={checkoutText.address} value={deliveryInfo.address} />
-            <InfoLine icon="phone" label={checkoutText.phone} value={deliveryInfo.phone} />
           </div>
           {deliverySourceBranch?.name ? (
             <div className="checkout-inline-note">
               <strong>Chi nhánh giao:</strong> <span>{deliverySourceBranch.name}</span>
             </div>
+          ) : null}
+          {fieldErrors.delivery ? (
+            <p id="checkout-delivery-error" className="checkout-field-error" role="alert" tabIndex="-1">
+              <Icon name="warning" size={15} />
+              <span>{fieldErrors.delivery}</span>
+            </p>
           ) : null}
         </CheckoutCard>
       ) : (
@@ -90,25 +122,47 @@ export default function CheckoutFulfillmentSection({
                 <label className="pickup-field">
                   <span>Tên của bạn</span>
                   <input
+                    id="checkout-pickup-name"
                     type="text"
                     name="pickupName"
                     autoComplete="name"
                     value={pickupContact.name}
-                    onChange={(event) => setPickupContact((current) => ({ ...current, name: event.target.value }))}
+                    aria-invalid={Boolean(fieldErrors.pickupName)}
+                    aria-describedby={fieldErrors.pickupName ? "checkout-pickup-name-error" : undefined}
+                    onChange={(event) => {
+                      onClearFieldError?.("pickupName");
+                      setPickupContact((current) => ({ ...current, name: event.target.value }));
+                    }}
                     placeholder="Ví dụ: Anh Minh…"
                   />
+                  {fieldErrors.pickupName ? (
+                    <small id="checkout-pickup-name-error" className="checkout-field-error" role="alert">
+                      {fieldErrors.pickupName}
+                    </small>
+                  ) : null}
                 </label>
                 <label className="pickup-field">
                   <span>Số điện thoại</span>
                   <input
+                    id="checkout-pickup-phone"
                     type="tel"
                     name="pickupPhone"
                     autoComplete="tel"
                     value={pickupContact.phone}
-                    onChange={(event) => setPickupContact((current) => ({ ...current, phone: event.target.value.replace(/\D/g, "") }))}
+                    aria-invalid={Boolean(fieldErrors.pickupPhone)}
+                    aria-describedby={fieldErrors.pickupPhone ? "checkout-pickup-phone-error" : undefined}
+                    onChange={(event) => {
+                      onClearFieldError?.("pickupPhone");
+                      setPickupContact((current) => ({ ...current, phone: event.target.value.replace(/\D/g, "") }));
+                    }}
                     inputMode="tel"
                     placeholder="Ví dụ: 0901 234 567…"
                   />
+                  {fieldErrors.pickupPhone ? (
+                    <small id="checkout-pickup-phone-error" className="checkout-field-error" role="alert">
+                      {fieldErrors.pickupPhone}
+                    </small>
+                  ) : null}
                 </label>
               </div>
             </div>
@@ -131,9 +185,11 @@ export default function CheckoutFulfillmentSection({
                     type="button"
                     key={branch.id}
                     onClick={() => {
+                      onClearFieldError?.();
                       setSelectedBranch(branch.id);
                       setIsChangingBranch(false);
                     }}
+                    aria-pressed={selectedBranch === branch.id}
                     className={`branch-card ${selectedBranch === branch.id ? "branch-card-active" : ""}`}
                   >
                     <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
@@ -144,7 +200,7 @@ export default function CheckoutFulfillmentSection({
                       <small>{branch.address}</small>
                       <em>{branch.time}</em>
                     </span>
-                    <span className="branch-radio">{selectedBranch === branch.id ? "✓" : ""}</span>
+                    <span className="branch-radio" aria-hidden="true">{selectedBranch === branch.id ? "✓" : ""}</span>
                   </button>
                 ))}
                 {selectedBranchInfo && !isChangingBranch ? (
@@ -174,8 +230,26 @@ export default function CheckoutFulfillmentSection({
 
                 <div className="pickup-time-card">
                   <div className="pickup-mode-tabs">
-                    <button type="button" onClick={() => setPickupMode("soon")} className={pickupMode === "soon" ? "active" : ""}>Sớm nhất</button>
-                    <button type="button" onClick={() => setPickupMode("schedule")} className={pickupMode === "schedule" ? "active" : ""}>Chọn giờ</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClearFieldError?.("pickupDate");
+                        onClearFieldError?.("pickupTime");
+                        setPickupMode("soon");
+                      }}
+                      aria-pressed={pickupMode === "soon"}
+                      className={pickupMode === "soon" ? "active" : ""}
+                    >
+                      Sớm nhất
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPickupMode("schedule")}
+                      aria-pressed={pickupMode === "schedule"}
+                      className={pickupMode === "schedule" ? "active" : ""}
+                    >
+                      Chọn giờ
+                    </button>
                   </div>
                   {pickupMode === "soon" ? (
                     <div className="pickup-soon">
@@ -186,11 +260,47 @@ export default function CheckoutFulfillmentSection({
                     <div className="grid grid-cols-2 gap-3">
                       <label className="pickup-field">
                         <span>Ngày lấy</span>
-                        <input name="pickupDate" type="date" value={pickupDate} onChange={(event) => setPickupDate(event.target.value)} />
+                        <input
+                          id="checkout-pickup-date"
+                          name="pickupDate"
+                          type="date"
+                          min={pickupDateLimit || undefined}
+                          max={pickupDateLimit || undefined}
+                          value={pickupDate}
+                          aria-invalid={Boolean(fieldErrors.pickupDate)}
+                          aria-describedby={fieldErrors.pickupDate ? "checkout-pickup-date-error" : undefined}
+                          onChange={(event) => {
+                            onClearFieldError?.("pickupDate");
+                            setPickupDate(event.target.value);
+                          }}
+                        />
+                        {fieldErrors.pickupDate ? (
+                          <small id="checkout-pickup-date-error" className="checkout-field-error" role="alert">
+                            {fieldErrors.pickupDate}
+                          </small>
+                        ) : null}
                       </label>
                       <label className="pickup-field">
                         <span>Giờ lấy</span>
-                        <input name="pickupTime" type="time" value={pickupClock} onChange={(event) => setPickupClock(event.target.value)} />
+                        <input
+                          id="checkout-pickup-time"
+                          name="pickupTime"
+                          type="time"
+                          min={pickupTimeMin || undefined}
+                          max={pickupTimeMax || undefined}
+                          value={pickupClock}
+                          aria-invalid={Boolean(fieldErrors.pickupTime)}
+                          aria-describedby={fieldErrors.pickupTime ? "checkout-pickup-time-error" : undefined}
+                          onChange={(event) => {
+                            onClearFieldError?.("pickupTime");
+                            setPickupClock(event.target.value);
+                          }}
+                        />
+                        {fieldErrors.pickupTime ? (
+                          <small id="checkout-pickup-time-error" className="checkout-field-error" role="alert">
+                            {fieldErrors.pickupTime}
+                          </small>
+                        ) : null}
                       </label>
                     </div>
                   )}

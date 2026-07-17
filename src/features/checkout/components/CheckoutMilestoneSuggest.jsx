@@ -150,7 +150,7 @@ export default function CheckoutMilestoneSuggest({
   });
 
   return (
-    <CheckoutCard title={suggestText.title}>
+    <CheckoutCard title="Ưu đãi tiếp theo" className="checkout-milestone-card">
       {showMilestoneBox && (
         <button type="button" onClick={() => setIsMilestoneModalOpen(true)} className="milestone-box milestone-box-v2 w-full text-left">
           <div className="milestone-copy">

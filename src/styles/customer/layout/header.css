@@ -257,6 +257,12 @@
   background: #ffffff;
   color: #ff6a00;
   box-shadow: 0 8px 22px rgba(58, 31, 20, 0.06);
+  touch-action: manipulation;
+}
+
+.home2026-action-btn:focus-visible {
+  outline: 3px solid rgba(255, 106, 0, 0.32);
+  outline-offset: 2px;
 }
 
 .home2026-voucher-badge {

@@ -33,6 +33,7 @@ import { resolveBranchFromCandidates } from "../../services/branchIdentityServic
 import { filterProductsForAvailability } from "../../services/productAvailabilityService.js";
 import { isPromotionAllowedForChannel } from "../../services/promotionChannelService.js";
 import { hasMenuCategory, isAllMenuCategory, resolveDefaultMenuCategory } from "../../constants/menuCategoryConfig.js";
+import { buildReorderCheckoutPreset } from "../checkout/checkoutDomain.js";
 
 const userStorage = createUserStorage({
   getCustomerKey,
@@ -119,6 +120,28 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
       (product) => product.category === effectiveCategory || product.badge === effectiveCategory
     );
   }, [availableCustomerProducts, productState.customerCategories, resolvedDefaultMenuCategory, uiState.activeCategory]);
+  const isMenuLoading =
+    (productState.isCatalogLoading && availableCustomerProducts.length === 0) ||
+    (menuChannel === "qr" && Boolean(selectedMenuBranchValue) && !selectedMenuBranch);
+
+  const prepareReorderCheckout = useCallback((order) => {
+    const { preset, branchUnavailable } = buildReorderCheckoutPreset({
+      order,
+      branches: productState.branches,
+      pathname: typeof window !== "undefined" ? window.location.pathname : ""
+    });
+    coreState.setCheckoutPreset((current) => ({
+      ...(current || {}),
+      ...preset
+    }));
+    if (branchUnavailable) {
+      setServiceNotice({
+        badge: "Đặt lại đơn",
+        title: "Chi nhánh cũ đang tạm ngưng",
+        description: "Món đã được đưa vào giỏ. Bạn chọn lại chi nhánh đang hoạt động trước khi đặt nhé."
+      });
+    }
+  }, [coreState.setCheckoutPreset, productState.branches]);
 
   const {
     navigate,
@@ -220,6 +243,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     discount,
     reorder,
     navigate,
+    onPrepareReorder: prepareReorderCheckout,
     catalogProducts: availableCustomerProducts,
     smartPromotions: customerSmartPromotionsForChannel
   });
@@ -255,6 +279,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     setActiveCategory: uiState.setActiveCategory,
     customerCategories: productState.customerCategories,
     filteredProducts: availableFilteredProducts,
+    isMenuLoading,
     customerProducts: availableCustomerProducts,
     storeToppings: productState.storeToppings,
     customerPromoCards: productState.customerPromoCards,

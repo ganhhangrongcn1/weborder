@@ -63,6 +63,7 @@ export default function LoyaltyDetailSheet({
   vouchers,
   pointHistory,
   pointRulesRows,
+  pointRulesExample,
   onUseVoucher
 }) {
   if (!activeSheet) return null;
@@ -78,12 +79,14 @@ export default function LoyaltyDetailSheet({
       {activeSheet === "checkin" ? (
         <CheckinDetails loyalty={loyalty} today={today} recentDays={recentDays} />
       ) : null}
-      {activeSheet === "rules" ? <PointsCard rows={pointRulesRows} /> : null}
+      {activeSheet === "rules" ? (
+        <PointsCard rows={pointRulesRows} example={pointRulesExample} showTitle={false} />
+      ) : null}
       {activeSheet === "vouchers" ? (
         <VoucherLibrary vouchers={vouchers} onUseVoucher={onUseVoucher} />
       ) : null}
       {activeSheet === "history" ? (
-        <PointHistoryList entries={pointHistory} limit={Math.max(pointHistory.length, 5)} />
+        <PointHistoryList entries={pointHistory} pageSize={12} />
       ) : null}
     </CustomerBottomSheet>
   );

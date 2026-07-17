@@ -1,8 +1,14 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isToppingAlreadyShownInSpice } from "../../utils/orderItemDisplay.js";
 
 export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableItem, CheckoutCard, addonCategory, formatMoney, Icon }) {
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+  const [removedItem, setRemovedItem] = useState(null);
+  const undoTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+  }, []);
 
   const isSpiceOption = (item, topping) => {
     return isToppingAlreadyShownInSpice(item, topping);
@@ -17,6 +23,41 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
       rows[key].quantity += Number(topping.quantity || 1);
     });
     return Object.values(rows);
+  };
+
+  const clearUndoState = () => {
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+    undoTimerRef.current = null;
+    setRemovedItem(null);
+  };
+
+  const handleRemoveItem = (item) => {
+    if (cart.length <= 1) {
+      setIsConfirmingClear(true);
+      return;
+    }
+
+    const itemIndex = cart.findIndex((cartItem) => cartItem.cartId === item.cartId);
+    if (itemIndex < 0) return;
+
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+    setRemovedItem({ item, itemIndex });
+    setCart((items) => items.filter((cartItem) => cartItem.cartId !== item.cartId));
+    undoTimerRef.current = window.setTimeout(() => {
+      undoTimerRef.current = null;
+      setRemovedItem(null);
+    }, 4000);
+  };
+
+  const handleUndoRemove = () => {
+    if (!removedItem) return;
+    setCart((items) => {
+      if (items.some((item) => item.cartId === removedItem.item.cartId)) return items;
+      const next = [...items];
+      next.splice(Math.min(removedItem.itemIndex, next.length), 0, removedItem.item);
+      return next;
+    });
+    clearUndoState();
   };
 
   return (
@@ -37,6 +78,7 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
               type="button"
               className="is-danger"
               onClick={() => {
+                clearUndoState();
                 setCart([]);
                 setIsConfirmingClear(false);
               }}
@@ -52,6 +94,7 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
           const originalLineTotal = Number(item.originalLineTotal || 0);
           const lineTotal = Number(item.lineTotal || 0);
           const hasDiscountPrice = originalLineTotal > lineTotal;
+          const toppingRows = getToppingRows(item);
 
           return (
             <article
@@ -72,16 +115,16 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
                   />
                 ) : (
                   <div className="grid h-[70px] w-[70px] place-items-center rounded-[18px] bg-cream text-brown/40 text-xs font-bold">
-                    No image
+                    Chưa có ảnh
                   </div>
                 )
               ) : null}
               <div className="min-w-0 flex-1">
                 <h3>{item.name}</h3>
                 <span className="checkout-spice-pill">{item.autoGiftByPromo ? "Quà tặng" : item.spice}</span>
-                {getToppingRows(item).length > 0 && (
+                {toppingRows.length > 0 && (
                   <div className="checkout-topping-list">
-                    {getToppingRows(item).map((topping) => (
+                    {toppingRows.map((topping) => (
                       <span key={topping.name}><em>{topping.name}</em><strong>x{topping.quantity}</strong></span>
                     ))}
                   </div>
@@ -131,7 +174,7 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
               {item.autoGiftByPromo ? null : (
                 <button
                   type="button"
-                  onClick={() => setCart((items) => items.filter((cartItem) => cartItem.cartId !== item.cartId))}
+                  onClick={() => handleRemoveItem(item)}
                   className="checkout-remove"
                   aria-label={`Xóa ${item.name}`}
                 >
@@ -142,6 +185,16 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
           );
         })}
       </div>
+
+      {removedItem ? (
+        <div className="checkout-undo" role="status" aria-live="polite">
+          <span>
+            <strong>Đã xóa món</strong>
+            <small>{removedItem.item.name}</small>
+          </span>
+          <button type="button" onClick={handleUndoRemove}>Hoàn tác</button>
+        </div>
+      ) : null}
     </CheckoutCard>
   );
 }

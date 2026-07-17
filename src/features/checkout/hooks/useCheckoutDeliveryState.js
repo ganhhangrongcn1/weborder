@@ -51,6 +51,7 @@ export default function useCheckoutDeliveryState({
   currentPhone,
   demoUser,
   demoAddresses,
+  initialDeliveryInfo = null,
   setDemoAddresses,
   deliveryFee
 }) {
@@ -60,7 +61,8 @@ export default function useCheckoutDeliveryState({
     createInitialDeliveryInfo({
       currentPhone,
       demoUser,
-      demoAddresses
+      demoAddresses,
+      initialDeliveryInfo
     })
   );
 

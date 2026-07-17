@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
-import AppHeader from "../../components/app/Header.jsx";
 import AppEmptyState from "../../components/app/EmptyState.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
 import OrderStatusSheet from "../../pages/customer/tracking/OrderStatusSheet.jsx";
 import { formatMoney } from "../../utils/format.js";
-import { formatTime } from "../../utils/pureHelpers.js";
 import {
   claimPartnerOrderPoints,
   getCanonicalOrderBranchName,
@@ -33,6 +31,35 @@ import useGuestOrderLookup from "./hooks/useGuestOrderLookup.js";
 
 const ORDER_HISTORY_PAGE_SIZE = 4;
 const POST_LOGIN_REDIRECT_KEY = "ghr_post_login_redirect";
+const ORDER_DETAIL_INTENT_KEY = "ghr_open_order_detail_intent";
+const ORDER_FILTERS = [
+  { key: "all", label: "Tất cả" },
+  { key: "active", label: "Đang xử lý" },
+  { key: "completed", label: "Hoàn tất" },
+  { key: "cancelled", label: "Đã hủy" }
+];
+const ORDER_DATE_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  day: "2-digit",
+  month: "2-digit"
+});
+const ORDER_TIME_FORMATTER = new Intl.DateTimeFormat("vi-VN", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false
+});
+
+function getOrderFilterKey(order = {}) {
+  const statusKey = getCustomerOrderDisplayStatus(order).key;
+  if (statusKey === "completed") return "completed";
+  if (statusKey === "cancelled") return "cancelled";
+  return "active";
+}
+
+function formatOrderDateTime(value) {
+  const date = new Date(value || 0);
+  if (Number.isNaN(date.getTime())) return "--";
+  return `${ORDER_DATE_FORMATTER.format(date)} · ${ORDER_TIME_FORMATTER.format(date)}`;
+}
 
 function markOrdersPointStatus(orders = [], loyaltyLookup = {}) {
   return (orders || []).map((order) => ({
@@ -90,10 +117,13 @@ export default function Tracking({
   demoLoyalty,
   setDemoLoyalty,
   onReorder,
+  onOrderSheetVisibilityChange,
   getStoreBlockNotice,
-  setServiceNotice
+  setServiceNotice,
+  checkoutPreset = {}
 }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showSelectedOrderDetails, setShowSelectedOrderDetails] = useState(false);
   const [visibleOrderCount, setVisibleOrderCount] = useState(ORDER_HISTORY_PAGE_SIZE);
   const [loadedHistoryOrders, setLoadedHistoryOrders] = useState([]);
   const [isHistoryOrdersLoading, setIsHistoryOrdersLoading] = useState(false);
@@ -101,6 +131,7 @@ export default function Tracking({
   const [isPartnerOrdersLoading, setIsPartnerOrdersLoading] = useState(false);
   const [claimingOrderId, setClaimingOrderId] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
+  const [orderFilter, setOrderFilter] = useState("all");
   const [summaryRefreshKey, setSummaryRefreshKey] = useState(0);
   const [orderSummary, setOrderSummary] = useState({
     totalOrders: 0,
@@ -111,16 +142,40 @@ export default function Tracking({
   const [currentOrderPointStatusMap, setCurrentOrderPointStatusMap] = useState(() => new Map());
   const guestLookup = useGuestOrderLookup();
 
-  const historyOrders = Array.isArray(userProfile?.orderHistory) ? userProfile.orderHistory : [];
+  useEffect(() => {
+    onOrderSheetVisibilityChange?.(Boolean(selectedOrder));
+  }, [onOrderSheetVisibilityChange, selectedOrder]);
+
+  useEffect(() => () => {
+    onOrderSheetVisibilityChange?.(false);
+  }, [onOrderSheetVisibilityChange]);
+
+  const isQrCounterFlow =
+    String(checkoutPreset?.orderSource || checkoutPreset?.source || "").toLowerCase() === "qr_counter" ||
+    (typeof window !== "undefined" && /^\/qr\/[^/]+/i.test(window.location.pathname || ""));
+
+  const historyOrders = useMemo(
+    () => (Array.isArray(userProfile?.orderHistory) ? userProfile.orderHistory : []),
+    [userProfile?.orderHistory]
+  );
   const baseHistoryOrders = loadedHistoryOrders.length ? loadedHistoryOrders : historyOrders;
-  const fallbackOrder = currentPhone && currentOrder ? [currentOrder] : [];
+  const deferredOrderSearch = useDeferredValue(orderSearch.trim());
+  const hasOrderSearch = Boolean(deferredOrderSearch);
+  const shouldLoadFullHistory = hasOrderSearch || orderFilter !== "all";
+  const orderQueryLimit = shouldLoadFullHistory ? 0 : visibleOrderCount + 1;
 
   useEffect(() => {
     setVisibleOrderCount(ORDER_HISTORY_PAGE_SIZE);
     setLoadedHistoryOrders([]);
     setPartnerOrders([]);
     setCurrentOrderPointStatusMap(new Map());
+    setOrderSearch("");
+    setOrderFilter("all");
   }, [currentPhone]);
+
+  useEffect(() => {
+    setVisibleOrderCount(ORDER_HISTORY_PAGE_SIZE);
+  }, [hasOrderSearch, orderFilter]);
 
   useEffect(() => {
     let disposed = false;
@@ -132,7 +187,7 @@ export default function Tracking({
       setIsHistoryOrdersLoading(true);
       try {
         const nextOrders = await orderStorage.getByPhoneAsync(currentPhone, {
-          limit: visibleOrderCount + 1
+          limit: orderQueryLimit
         });
         if (!disposed) setLoadedHistoryOrders(nextOrders);
       } finally {
@@ -144,7 +199,7 @@ export default function Tracking({
     return () => {
       disposed = true;
     };
-  }, [currentPhone, visibleOrderCount]);
+  }, [currentPhone, orderQueryLimit]);
 
   useEffect(() => {
     let disposed = false;
@@ -156,7 +211,7 @@ export default function Tracking({
       setIsPartnerOrdersLoading(true);
       try {
         const nextOrders = await getPartnerOrdersByPhone(currentPhone, {
-          limit: visibleOrderCount + 1
+          limit: orderQueryLimit
         });
         if (!disposed) setPartnerOrders(nextOrders);
       } finally {
@@ -168,7 +223,7 @@ export default function Tracking({
     return () => {
       disposed = true;
     };
-  }, [currentPhone, visibleOrderCount]);
+  }, [currentPhone, orderQueryLimit]);
 
   useEffect(() => {
     let disposed = false;
@@ -200,18 +255,18 @@ export default function Tracking({
     };
   }, [currentPhone, summaryRefreshKey]);
 
-  const mergedOrders = mergeCustomerLookupOrders(
-    [...baseHistoryOrders, ...fallbackOrder]
-    .filter(Boolean)
-    .reduce((acc, item) => {
-      const key = String(item?.id || item?.orderCode || "").trim();
-      if (!key) return acc;
-      if (!acc.some((order) => String(order?.id || order?.orderCode || "").trim() === key)) {
-        acc.push(item);
-      }
-      return acc;
-    }, []),
-    partnerOrders
+  const mergedOrders = useMemo(
+    () => {
+      const uniqueOrders = new Map();
+      [...baseHistoryOrders, ...(currentPhone && currentOrder ? [currentOrder] : [])]
+        .filter(Boolean)
+        .forEach((item) => {
+          const key = String(item?.id || item?.orderCode || "").trim();
+          if (key && !uniqueOrders.has(key)) uniqueOrders.set(key, item);
+        });
+      return mergeCustomerLookupOrders([...uniqueOrders.values()], partnerOrders);
+    },
+    [baseHistoryOrders, currentOrder, currentPhone, partnerOrders]
   );
   const loyaltyLookup = useMemo(
     () => buildLoyaltyOrderPointLookup(demoLoyalty?.pointHistory || []),
@@ -222,43 +277,108 @@ export default function Tracking({
     [currentOrderPointStatusMap, loyaltyLookup, mergedOrders]
   );
 
-  const orders = [...(currentPhone ? resolvedCurrentOrders : guestLookup.orders)].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0));
-  const searchedOrders = currentPhone && orderSearch.trim()
-    ? orders.filter((order) => {
-        const keyword = orderSearch.trim().toLowerCase();
-        const haystack = [
-          order?.orderCode,
-          order?.displayOrderCode,
-          order?.branchName,
-          order?.pickupBranchName,
-          order?.deliveryBranchName,
-          order?.source,
-          order?.partnerSource
-        ].map((value) => String(value || "").toLowerCase()).join(" ");
-        return haystack.includes(keyword);
-      })
-    : orders;
-  const visibleOrders = searchedOrders.slice(0, visibleOrderCount);
-  const canLoadMoreOrders = searchedOrders.length > visibleOrderCount;
+  const orders = useMemo(
+    () => [...(currentPhone ? resolvedCurrentOrders : guestLookup.orders)].sort(
+      (a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0)
+    ),
+    [currentPhone, guestLookup.orders, resolvedCurrentOrders]
+  );
+  const searchedOrders = useMemo(() => {
+    if (!currentPhone || !deferredOrderSearch) return orders;
+    const keyword = deferredOrderSearch.toLowerCase();
+    return orders.filter((order) => {
+      const haystack = [
+        order?.orderCode,
+        order?.displayOrderCode,
+        order?.branchName,
+        order?.pickupBranchName,
+        order?.deliveryBranchName,
+        order?.source,
+        order?.partnerSource
+      ].map((value) => String(value || "").toLowerCase()).join(" ");
+      return haystack.includes(keyword);
+    });
+  }, [currentPhone, deferredOrderSearch, orders]);
+  const orderFilterCounts = useMemo(
+    () => searchedOrders.reduce((counts, order) => {
+      const key = getOrderFilterKey(order);
+      counts.all += 1;
+      counts[key] += 1;
+      return counts;
+    }, { all: 0, active: 0, completed: 0, cancelled: 0 }),
+    [searchedOrders]
+  );
+  const filteredOrders = useMemo(
+    () => searchedOrders
+      .filter((order) => orderFilter === "all" || getOrderFilterKey(order) === orderFilter)
+      .sort((a, b) => {
+        const activeDifference = Number(getOrderFilterKey(a) !== "active") - Number(getOrderFilterKey(b) !== "active");
+        if (activeDifference !== 0) return activeDifference;
+        return new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0);
+      }),
+    [orderFilter, searchedOrders]
+  );
+  const visibleOrders = filteredOrders.slice(0, visibleOrderCount);
+  const canLoadMoreOrders = filteredOrders.length > visibleOrderCount;
+  const displayedOrderCount = !hasOrderSearch && orderFilter === "all"
+    ? Number(orderSummary.totalOrders || filteredOrders.length)
+    : filteredOrders.length;
   const canViewFullOrderCode = Boolean(currentPhone);
   const maskOrderCode = (code) => String(code || "GHR-****").replace(/GHR-\d{4}/i, "GHR-****");
 
   useEffect(() => {
     if (selectedOrder || !orders.length || typeof window === "undefined") return;
-    const targetCode = new URLSearchParams(window.location.search).get("orderCode");
+    let targetCode = new URLSearchParams(window.location.search).get("orderCode");
+    let shouldShowDetails = false;
+    try {
+      const storedIntent = JSON.parse(window.sessionStorage.getItem(ORDER_DETAIL_INTENT_KEY) || "null");
+      if (storedIntent?.orderId) {
+        targetCode = String(storedIntent.orderId);
+        shouldShowDetails = storedIntent.showDetails === true;
+        window.sessionStorage.removeItem(ORDER_DETAIL_INTENT_KEY);
+      }
+    } catch {
+    }
     if (!targetCode) return;
     const matchedOrder = orders.find((order) => {
       const id = String(order?.id || "").trim().toLowerCase();
       const code = String(order?.orderCode || "").trim().toLowerCase();
       return id === targetCode.trim().toLowerCase() || code === targetCode.trim().toLowerCase();
     });
-    if (matchedOrder) setSelectedOrder(matchedOrder);
+    if (matchedOrder) {
+      setShowSelectedOrderDetails(shouldShowDetails);
+      setSelectedOrder(matchedOrder);
+    }
   }, [orders, selectedOrder]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleOpenOrderDetail = (event) => {
+      const targetCode = String(event?.detail?.orderId || "").trim().toLowerCase();
+      if (!targetCode) return;
+      const matchedOrder = orders.find((order) => {
+        const id = String(order?.id || "").trim().toLowerCase();
+        const code = String(order?.orderCode || "").trim().toLowerCase();
+        return id === targetCode || code === targetCode;
+      });
+      if (!matchedOrder) return;
+      try {
+        window.sessionStorage.removeItem(ORDER_DETAIL_INTENT_KEY);
+      } catch {
+      }
+      setShowSelectedOrderDetails(event?.detail?.showDetails === true);
+      setSelectedOrder(matchedOrder);
+    };
+    window.addEventListener("ghr:open-order-detail", handleOpenOrderDetail);
+    return () => window.removeEventListener("ghr:open-order-detail", handleOpenOrderDetail);
+  }, [orders]);
 
   const shouldShowLoading = (currentPhone ? (isOrdersLoading || isHistoryOrdersLoading || isPartnerOrdersLoading) : guestLookup.isLoading) && orders.length === 0;
   const shouldShowEmpty = !shouldShowLoading && orders.length === 0 && (currentPhone || guestLookup.lookupPhone);
+  const isOrderListRefreshing = shouldLoadFullHistory && (isHistoryOrdersLoading || isPartnerOrdersLoading);
+  const shouldShowFilteredEmpty = !shouldShowLoading && !isOrderListRefreshing && orders.length > 0 && filteredOrders.length === 0;
 
-  const formatOrderTime = (value) => (value ? formatTime(value) : "--");
+  const formatOrderTime = (value) => formatOrderDateTime(value);
 
   const getDisplayOrderCode = (order) => {
     if (order?.sourceType === "partner") return order.displayOrderCode || order.orderCode || "FoodApp";
@@ -268,9 +388,13 @@ export default function Tracking({
   const getOrderTotal = (order) => Number(order?.totalAmount || order?.total || 0);
   const getOrderDisplayAmount = (order) => {
     if (order?.sourceType !== "partner") return getOrderTotal(order);
-    return Number(order?.netReceivedAmount ?? order?.loyaltyEligibleAmount ?? 0);
+    const receivedAmount = Number(order?.netReceivedAmount ?? order?.loyaltyEligibleAmount ?? 0);
+    return receivedAmount > 0 ? receivedAmount : getOrderTotal(order);
   };
-  const getOrderAmountLabel = (order) => order?.sourceType === "partner" ? "Thực nhận" : "Tổng tiền";
+  const getOrderAmountLabel = (order) => {
+    const receivedAmount = Number(order?.netReceivedAmount ?? order?.loyaltyEligibleAmount ?? 0);
+    return order?.sourceType === "partner" && receivedAmount > 0 ? "Thực nhận" : "Tổng tiền";
+  };
   const getClaimablePoints = (order) => {
     const isPartnerOrder = order?.sourceType === "partner";
     const amount = Number(
@@ -450,7 +574,21 @@ export default function Tracking({
         window.history.replaceState(window.history.state, "", nextUrl);
       }
     }
+    setShowSelectedOrderDetails(false);
     setSelectedOrder(null);
+  };
+
+  const openOrderDetails = (order) => {
+    const isPartnerOrder = order?.sourceType === "partner";
+    setShowSelectedOrderDetails(isPartnerOrder || getOrderFilterKey(order) !== "active");
+    setSelectedOrder(order);
+  };
+
+  const handleReorderSelectedOrder = () => {
+    if (!selectedOrder || typeof onReorder !== "function") return;
+    const orderToReorder = selectedOrder;
+    closeSelectedOrder();
+    onReorder(orderToReorder);
   };
 
   const handleGuestPointLogin = (order) => {
@@ -471,10 +609,8 @@ export default function Tracking({
   };
 
   return (
-    <section>
-      <AppHeader title="Đơn hàng" subtitle="Theo dõi trạng thái và đặt lại món cũ" onBack={() => navigate("home", "home")} />
-
-      <div className="tracking-page-content space-y-4 px-4 pb-6">
+    <section className="orders-page">
+      <div className="tracking-page-content space-y-4 px-4 pb-6 pt-4">
         {!currentPhone ? (
           <CustomerCard className="space-y-4">
             <div>
@@ -483,7 +619,9 @@ export default function Tracking({
               </div>
               <h2 className="mt-3 text-center text-lg font-black text-brown">Tra cứu đơn và tích điểm</h2>
               <p className="mt-2 text-center text-sm leading-6 text-brown/60">
-                Nhập số điện thoại để xem đơn và nhận điểm từ Grab, ShopeeFood, Xanh Ngon.
+                {isQrCounterFlow
+                  ? "Nhập số điện thoại để xem đơn QR tại quầy và đơn website của bạn."
+                  : "Nhập số điện thoại để xem đơn và nhận điểm từ Grab, ShopeeFood, Xanh Ngon."}
               </p>
             </div>
 
@@ -491,8 +629,12 @@ export default function Tracking({
               <input
                 value={guestLookup.phone}
                 onChange={(event) => guestLookup.setPhone(event.target.value)}
-                placeholder="Nhập số điện thoại"
+                name="guestOrderPhone"
+                type="tel"
                 inputMode="tel"
+                autoComplete="tel"
+                aria-label="Số điện thoại tra cứu đơn"
+                placeholder="Ví dụ: 0901 234 567…"
                 className="min-w-0 flex-1 rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none"
               />
               <button
@@ -521,43 +663,79 @@ export default function Tracking({
         ) : null}
 
         {currentPhone ? (
-          <div className="space-y-3">
-            <label className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-white px-4 py-3 shadow-soft">
+          <div className="orders-toolbar">
+            <label className="orders-search">
               <Icon name="search" size={16} className="shrink-0 text-orange-600" />
-              <span className="shrink-0 text-sm font-black text-orange-600">Tìm đơn</span>
-              <div className="h-5 w-px bg-orange-100" />
+              <span>Tìm đơn</span>
+              <i aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <input
                   value={orderSearch}
                   onChange={(event) => setOrderSearch(event.target.value)}
-                  placeholder="Mã đơn hoặc chi nhánh"
-                  className="min-w-0 w-full flex-1 bg-transparent text-sm font-bold text-brown outline-none placeholder:text-brown/40"
+                  name="orderSearch"
+                  autoComplete="off"
+                  aria-label="Tìm đơn theo mã hoặc chi nhánh"
+                  placeholder="Mã đơn hoặc chi nhánh…"
                 />
               </div>
             </label>
 
-            <div className="grid grid-cols-3 divide-x divide-orange-300 rounded-2xl border border-orange-300 bg-orange-100 px-2 py-3 shadow-soft">
-              <div className="px-2">
-                <p className="flex items-center gap-1 text-[11px] font-black uppercase text-brown/60">
-                  <Icon name="bag" size={12} className="text-orange-500" />
-                  Tổng {orderSummary.totalOrders} đơn
+            <div className="orders-summary-strip" aria-label="Tổng quan đơn hàng và điểm thưởng">
+              <div>
+                <p>
+                  <Icon name="bag" size={14} />
+                  Đã chi
                 </p>
-                <strong className="mt-1 block text-lg font-black text-orange-600">{formatMoney(orderSummary.totalSpent)}</strong>
+                <strong>{formatMoney(orderSummary.totalSpent)}</strong>
+                <small>{orderSummary.totalOrders.toLocaleString("vi-VN")} đơn ghi nhận</small>
               </div>
-              <div className="px-2 text-center">
-                <p className="flex items-center justify-center gap-1 text-[11px] font-black uppercase text-brown/60">
-                  <Icon name="star" size={12} className="text-green-600" />
-                  Đã nhận
+              <div>
+                <p>
+                  <Icon name="star" size={14} />
+                  Điểm đã nhận
                 </p>
-                <strong className="mt-1 block text-lg font-black text-green-600">+{orderSummary.claimedPoints.toLocaleString("vi-VN")}</strong>
+                <strong>+{orderSummary.claimedPoints.toLocaleString("vi-VN")}</strong>
+                <small>điểm Gánh</small>
               </div>
-              <div className="px-2 text-right">
-                <p className="flex items-center justify-end gap-1 text-[11px] font-black uppercase text-brown/60">
-                  <Icon name="clock" size={12} className="text-orange-600" />
-                  Chờ nhận
+              <div>
+                <p>
+                  <Icon name="clock" size={14} />
+                  Điểm chờ nhận
                 </p>
-                <strong className="mt-1 block text-lg font-black text-orange-600">+{orderSummary.pendingPoints.toLocaleString("vi-VN")}</strong>
+                <strong>+{orderSummary.pendingPoints.toLocaleString("vi-VN")}</strong>
+                <small>đang đối soát</small>
               </div>
+            </div>
+
+            <div className="orders-filter-tabs" role="group" aria-label="Lọc đơn hàng theo trạng thái">
+              {ORDER_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  aria-pressed={orderFilter === filter.key}
+                  className="orders-filter-tab"
+                  onClick={() => setOrderFilter(filter.key)}
+                >
+                  <span>{filter.label}</span>
+                  {filter.key === "all" || (shouldLoadFullHistory && !isOrderListRefreshing) ? (
+                    <strong>{(
+                      filter.key === "all" && shouldLoadFullHistory && !isOrderListRefreshing
+                        ? orderFilterCounts.all
+                        : filter.key === "all"
+                          ? displayedOrderCount
+                          : orderFilterCounts[filter.key]
+                    ).toLocaleString("vi-VN")}</strong>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+
+            <div className="orders-list-heading" aria-live="polite">
+              <div>
+                <strong>{orderFilter === "all" ? "Đơn gần đây" : ORDER_FILTERS.find((item) => item.key === orderFilter)?.label}</strong>
+                <span>{displayedOrderCount.toLocaleString("vi-VN")} đơn phù hợp</span>
+              </div>
+              {isOrderListRefreshing ? <em>Đang cập nhật…</em> : null}
             </div>
           </div>
         ) : null}
@@ -586,6 +764,23 @@ export default function Tracking({
           />
         )}
 
+        {shouldShowFilteredEmpty ? (
+          <CustomerCard className="orders-no-result" padding="lg" aria-live="polite">
+            <span className="orders-no-result__icon"><Icon name="search" size={22} /></span>
+            <h2>Không tìm thấy đơn phù hợp</h2>
+            <p>Thử nhập mã đơn khác, tên chi nhánh hoặc chọn trạng thái khác.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setOrderSearch("");
+                setOrderFilter("all");
+              }}
+            >
+              Xóa bộ lọc
+            </button>
+          </CustomerCard>
+        ) : null}
+
         {!shouldShowLoading &&
           visibleOrders.map((order) => {
             const statusMeta = getCustomerOrderDisplayStatus(order);
@@ -597,6 +792,13 @@ export default function Tracking({
             const isClaiming = String(claimingOrderId) === String(order.id || order.orderCode);
             const rewardPoints = getOrderRewardPoints(order);
             const branchName = getOrderBranchName(order);
+            const orderItems = Array.isArray(order?.items) ? order.items : [];
+            const firstItemName = String(orderItems[0]?.name || "").trim();
+            const itemPreview = firstItemName
+              ? `${firstItemName}${orderItems.length > 1 ? ` và ${orderItems.length - 1} món khác` : ""}`
+              : `${Number(order?.itemCount || 0) || "Chưa rõ"} món`;
+            const isActiveOrder = getOrderFilterKey(order) === "active";
+            const canTrackJourney = isActiveOrder && !isPartnerOrder;
 
             if (!currentPhone) {
               return (
@@ -649,53 +851,56 @@ export default function Tracking({
                 <CustomerCard
                   as="article"
                   key={order.orderCode || order.id}
-                  onClick={() => setSelectedOrder(order)}
-                  interactive
+                  className={`orders-card ${isActiveOrder ? "orders-card--active" : ""}`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="customer-caption">{formatOrderTime(order.createdAt)}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <h2 className="truncate customer-title-md">
-                          {getDisplayOrderCode(order)}
-                        </h2>
-                        <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-black ${sourceBadge.className}`}>
-                          {sourceBadge.label}
-                        </span>
-                      </div>
-                      {branchName ? (
-                        <p className="mt-2 truncate text-xs font-black uppercase text-brown/70">{branchName}</p>
-                      ) : null}
+                  <div className="orders-card__head">
+                    <div>
+                      <span>{formatOrderTime(order.createdAt || order.orderTime)}</span>
+                      <em className={sourceBadge.className}>{sourceBadge.label}</em>
                     </div>
-
-                    <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${getCustomerOrderStatusToneClass(statusMeta)}`}>
+                    <span className={`orders-card__status ${getCustomerOrderStatusToneClass(statusMeta)}`}>
                       {status}
                     </span>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      {isPartnerOrder ? <span className="block text-[11px] font-bold text-brown/55">Thực nhận</span> : null}
-                      <strong className="block text-lg font-black text-orange-600">
-                        {formatMoney(getOrderDisplayAmount(order))}
-                      </strong>
+                  <div className="orders-card__body">
+                    <h2>{getDisplayOrderCode(order)}</h2>
+                    {branchName ? <p>{branchName}</p> : null}
+                    <span>{itemPreview}</span>
+                  </div>
+
+                  <div className="orders-card__footer">
+                    <div className="orders-card__amount">
+                      <span>{getOrderAmountLabel(order)}</span>
+                      <strong>{formatMoney(getOrderDisplayAmount(order))}</strong>
                     </div>
+                    <div className="orders-card__actions">
                     {canClaimPoints ? (
                       <button
                         type="button"
                         disabled={isClaiming}
                         onClick={(event) => handleClaimPartnerPoints(event, order)}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-main px-4 py-2 text-sm font-black text-white shadow-orange disabled:opacity-60"
+                        className="orders-card__claim"
                       >
                         <Icon name="gift" size={14} className="shrink-0" />
-                        {isClaiming ? "Đang nhận..." : `Nhận +${rewardPoints.toLocaleString("vi-VN")}`}
+                        {isClaiming ? "Đang nhận…" : `Nhận +${rewardPoints.toLocaleString("vi-VN")}`}
                       </button>
                     ) : pointBadge ? (
-                      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-black ${pointBadge.className}`}>
+                      <span className={`orders-card__points ${pointBadge.className}`}>
                         <Icon name={String(order.pointStatus || "").toLowerCase() === "claimed" ? "check" : "clock"} size={14} className="shrink-0" />
                         {pointBadge.label}
                       </span>
                     ) : null}
+                      <button
+                        type="button"
+                        className="orders-card__detail"
+                        aria-label={`${canTrackJourney ? "Theo dõi hành trình" : "Xem chi tiết"} đơn ${getDisplayOrderCode(order)}`}
+                        onClick={() => openOrderDetails(order)}
+                      >
+                        <Icon name={canTrackJourney ? "clock" : "eye"} size={16} />
+                        {canTrackJourney ? "Theo dõi hành trình" : "Chi tiết"}
+                      </button>
+                    </div>
                   </div>
                 </CustomerCard>
               );
@@ -717,13 +922,16 @@ export default function Tracking({
       </div>
 
       {selectedOrder && (
-            <OrderStatusSheet
-              order={selectedOrder}
-              step={getCustomerOrderDisplayStatus(selectedOrder).step}
+        <OrderStatusSheet
+          key={`${selectedOrder.id || selectedOrder.orderCode}:${showSelectedOrderDetails ? "detail" : "journey"}`}
+          order={selectedOrder}
           formatOrderTime={formatOrderTime}
           branches={branches}
           canViewFullOrderCode={canViewFullOrderCode}
           maskOrderCode={maskOrderCode}
+          initialShowDetails={showSelectedOrderDetails}
+          canReorder={getCustomerOrderDisplayStatus(selectedOrder).key === "completed" && typeof onReorder === "function"}
+          onReorder={handleReorderSelectedOrder}
           onClose={closeSelectedOrder}
         />
       )}

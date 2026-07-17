@@ -24,11 +24,17 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyalt
   const minTierRate = Math.min(...tierRates);
   const maxTierRate = Math.max(...tierRates);
   const exampleSpend = 100000;
+  const configuredMaxRedemption = Number(loyaltyRule?.maxRedemptionPercent || 50);
+  const maxRedemptionPercent = Number.isFinite(configuredMaxRedemption)
+    ? Math.min(100, Math.max(0, configuredMaxRedemption))
+    : 50;
   const minExamplePoints = Math.round((exampleSpend * minTierRate) / 100);
   const maxExamplePoints = Math.round((exampleSpend * maxTierRate) / 100);
+  const maxExampleRedeem = Math.floor((exampleSpend * maxRedemptionPercent) / 100);
+  const pointRulesExample = `Ví dụ: Đơn ${exampleSpend.toLocaleString("vi-VN")}đ có thể dùng tối đa ${maxExampleRedeem.toLocaleString("vi-VN")} điểm; phần còn lại thanh toán như bình thường.`;
   const loyaltyRulesRows = [
     { label: "Tích điểm theo hạng", value: `${minTierRate}% đến ${maxTierRate}%` },
-    { label: "Dùng điểm", value: `1 điểm = 1đ, tối đa ${loyaltyRule?.maxRedemptionPercent || 50}%` },
+    { label: "Dùng điểm", value: `1 điểm = 1đ, tối đa ${maxRedemptionPercent}%` },
     { label: "Hạn điểm", value: "12 tháng từ lần mua cuối" }
   ];
   const safeBonusDisplay = Array.isArray(loyaltyBonusDisplay) ? loyaltyBonusDisplay : [];
@@ -41,13 +47,13 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyalt
       <LoyaltySummary
         title="Hội mê Gánh"
         tierName="Quà ngon đang chờ bạn"
-        pointsValue="--"
-        subtitle="điểm của bạn"
+        pointsValue="Đăng nhập"
+        subtitle="để xem điểm"
         tierMessage="Đăng nhập để Gánh giữ điểm sau mỗi lần ăn ngon"
         tierRateText={`Tích ${minTierRate}% đến ${maxTierRate}%`}
         ratioText={`${exampleSpend.toLocaleString("vi-VN")}đ = ${minExamplePoints.toLocaleString("vi-VN")} đến ${maxExamplePoints.toLocaleString("vi-VN")} điểm`}
         expiryText="1 điểm = 1đ"
-        metaSecondaryNote={`Dùng tối đa ${loyaltyRule?.maxRedemptionPercent || 50}% giá trị đơn`}
+        metaSecondaryNote={`Dùng tối đa ${maxRedemptionPercent}% giá trị đơn`}
         ctaLabel="Đăng nhập để bắt đầu tích điểm"
         onCta={openAccount}
         isGuest
@@ -87,7 +93,7 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyalt
               <div className="loyalty-section-head__title">
                 <span><Icon name="gift" size={18} /></span>
                 <div>
-                  <small>5 hạng thành viên</small>
+                  <small>{tiers.length} hạng thành viên</small>
                   <h2>Đi từ Chớm Ghiền tới Huyền Thoại</h2>
                 </div>
               </div>
@@ -112,14 +118,14 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyalt
             </span>
             <Icon name="back" size={16} className="loyalty-action-row__arrow" />
           </button>
-          <button type="button" className="loyalty-action-row" onClick={openAccount}>
+          <div className="loyalty-action-row loyalty-action-row--locked">
             <span className="loyalty-action-row__icon is-orange"><Icon name="clock" size={17} /></span>
             <span className="loyalty-action-row__copy">
               <strong>Voucher và nhật ký điểm</strong>
-              <small>Đăng nhập để xem quà và điểm của riêng bạn</small>
+              <small>Mở sau khi đăng nhập để xem quà và điểm của riêng bạn</small>
             </span>
-            <Icon name="back" size={16} className="loyalty-action-row__arrow" />
-          </button>
+            <span className="loyalty-action-row__status">Khóa</span>
+          </div>
         </CustomerCard>
 
         <CustomerButton full variant="secondary" onClick={openAccount}>
@@ -133,7 +139,7 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyalt
           onClose={() => setShowRules(false)}
           className="loyalty-detail-sheet"
         >
-          <PointsCard rows={loyaltyRulesRows} />
+          <PointsCard rows={loyaltyRulesRows} example={pointRulesExample} />
         </CustomerBottomSheet>
       ) : null}
     </section>

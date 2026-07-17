@@ -50,6 +50,38 @@
     order-status-alert-shake 0.62s ease-in-out 0.24s 2;
 }
 
+.customer-sheet-backdrop.order-status-sheet-backdrop {
+  align-items: center;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(14px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
+}
+
+.customer-bottom-sheet.order-status-sheet {
+  width: min(100%, 402px);
+  max-height: min(calc(100dvh - 32px), 760px);
+  border-radius: 26px;
+  box-shadow: 0 24px 64px rgba(58, 31, 20, 0.24);
+}
+
+.order-status-sheet .customer-sheet-scroll {
+  padding-top: 0;
+}
+
+.order-status-sheet__header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 -2px;
+  border-bottom: 1px solid transparent;
+  background: rgba(255, 250, 243, 0.96);
+  padding: 4px 2px 12px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
 .order-status-alert-icon {
   animation: order-status-alert-pulse 1.2s ease-in-out 0.18s 2;
 }

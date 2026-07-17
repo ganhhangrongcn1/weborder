@@ -53,6 +53,9 @@ export default function CheckoutPricingSection({
     : hasPromoCodes
       ? "Chọn mã phù hợp với đơn"
       : "Hiện chưa có voucher áp dụng";
+  const formattedAvailablePoints = Number(availablePoints || 0).toLocaleString("vi-VN");
+  const formattedEarnedPoints = Number(earnedPreviewPoints || 0).toLocaleString("vi-VN");
+  const canUsePoints = availablePoints > 0 && maxPointDiscount > 0;
 
   return (
     <>
@@ -84,16 +87,18 @@ export default function CheckoutPricingSection({
               </span>
             </button>
 
-            <label className="points-row">
+            <label className={`points-row${canUsePoints ? "" : " is-disabled"}`}>
               <div>
-                <strong>Bạn có {availablePoints.toLocaleString("vi-VN")} điểm</strong>
+                <strong>{usePoints ? `Đã giảm ${formatMoney(pointsDiscount)} bằng điểm` : "Dùng điểm Gánh"}</strong>
                 <span>
                   {usePoints
-                    ? `Đã áp dụng -${formatMoney(pointsDiscount)} vào đơn hàng`
-                    : `Bạn sẽ nhận được +${earnedPreviewPoints} điểm khi đặt đơn`}
+                    ? `Đơn hàng đã được trừ ${formatMoney(pointsDiscount)}.`
+                    : canUsePoints
+                      ? `Bạn có ${formattedAvailablePoints} điểm • Giảm tối đa ${formatMoney(maxPointDiscount)}`
+                      : `Bạn có ${formattedAvailablePoints} điểm`}
                 </span>
                 <small className="points-limit-note">
-                  Dùng tối đa {maxRedemptionPercent}% tiền món sau ưu đãi{maxPointDiscount > 0 ? ` (${formatMoney(maxPointDiscount)})` : ""}.
+                  Đặt đơn này nhận thêm +{formattedEarnedPoints} điểm. Có thể dùng điểm cho tối đa {maxRedemptionPercent}% tiền món sau ưu đãi.
                 </small>
               </div>
               <input
@@ -102,6 +107,7 @@ export default function CheckoutPricingSection({
                 onChange={(event) => setUsePoints(event.target.checked)}
                 className="toggle-input"
                 aria-label="Dùng điểm thưởng cho đơn hàng"
+                disabled={!canUsePoints}
               />
             </label>
           </div>
@@ -171,6 +177,7 @@ export default function CheckoutPricingSection({
               onClick={() => setPaymentMethod?.("bank_qr")}
               className={`payment-card${isBankQrSelected ? " active" : ""}`}
               aria-label="Phương thức thanh toán: Quét QR chuyển khoản"
+              aria-pressed={isBankQrSelected}
             >
               <Icon name="qr" size={18} />
               <span>
@@ -184,6 +191,7 @@ export default function CheckoutPricingSection({
               onClick={() => setPaymentMethod?.("counter")}
               className={`payment-card${!isBankQrSelected ? " active" : ""}`}
               aria-label="Phương thức thanh toán: Thanh toán tại quầy"
+              aria-pressed={!isBankQrSelected}
             >
               <Icon name="bag" size={18} />
               <span>

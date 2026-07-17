@@ -230,18 +230,19 @@ export function buildQrCouponOffers({
     .filter(Boolean);
 }
 
-export function buildQrPromotionOffers({
+export function buildPromotionOffersForChannel({
   smartPromotions = [],
   products = [],
+  channel = "qr",
   now = new Date()
 } = {}) {
   const activeFlashPromotions = getActiveFlashSalePromotions(smartPromotions, now)
-    .filter((promotion) => isPromotionAllowedForChannel(promotion, "qr"))
+    .filter((promotion) => isPromotionAllowedForChannel(promotion, channel))
     .filter((promotion) => hasDisplayPlace(promotion, ["menu", "checkout", "loyalty", "home"]));
   const activeRegularPromotions = getActivePromotions(smartPromotions)
     .filter((promotion) => promotion.type !== "flash_sale")
     .filter((promotion) => promotion.reward?.type !== "shipping_discount")
-    .filter((promotion) => isPromotionAllowedForChannel(promotion, "qr"))
+    .filter((promotion) => isPromotionAllowedForChannel(promotion, channel))
     .filter((promotion) => hasDisplayPlace(promotion, ["menu", "checkout", "loyalty", "home"]));
 
   const flashOffers = activeFlashPromotions.flatMap((promotion) =>
@@ -255,6 +256,10 @@ export function buildQrPromotionOffers({
   });
 
   return [...flashOffers, ...regularOffers];
+}
+
+export function buildQrPromotionOffers(args = {}) {
+  return buildPromotionOffersForChannel({ ...args, channel: "qr" });
 }
 
 export function buildQrOfferItems({

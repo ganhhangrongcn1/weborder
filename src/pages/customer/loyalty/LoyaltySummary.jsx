@@ -15,6 +15,8 @@ export default function LoyaltySummary({
   progressPercent = 0,
   progressMessage = "",
   metaSecondaryNote = "",
+  metaDisclosureLabel = "",
+  metaSummaryText = "",
   onOpenTierDetails,
   actionLabel,
   onAction,
@@ -85,7 +87,33 @@ export default function LoyaltySummary({
         </div>
       ) : null}
 
-      {(tierRateText || expiryText || ratioText) ? (
+      {(tierRateText || expiryText || ratioText) && metaDisclosureLabel ? (
+        <details className="loyalty-summary__meta-disclosure">
+          <summary>
+            <span>{metaDisclosureLabel}</span>
+            <small>{metaSummaryText}</small>
+            <Icon name="back" size={14} />
+          </summary>
+          <div className="loyalty-summary__meta">
+            {tierRateText ? (
+              <div>
+                <b>{tierRateText}</b>
+                <small>{ratioText}</small>
+              </div>
+            ) : (
+              <div>
+                <b>{ratioText}</b>
+              </div>
+            )}
+            {expiryText ? (
+              <div>
+                <b>{expiryText}</b>
+                <small>{metaSecondaryNote}</small>
+              </div>
+            ) : null}
+          </div>
+        </details>
+      ) : (tierRateText || expiryText || ratioText) ? (
         <div className="loyalty-summary__meta">
           {tierRateText ? (
             <div>

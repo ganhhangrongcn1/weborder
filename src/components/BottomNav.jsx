@@ -16,10 +16,15 @@ export default function BottomNav({ activeTab, onChange, items = defaultItems })
           key={item.id}
           type="button"
           onClick={() => onChange(item.id)}
+          aria-current={activeTab === item.id ? "page" : undefined}
           className={`customer-bottom-nav__item ${activeTab === item.id ? "customer-bottom-nav__item--active" : ""}`}
         >
           <span className={`customer-bottom-nav__icon ${activeTab === item.id ? "customer-bottom-nav__icon--active" : ""}`}>
-            <Icon name={item.icon} size={18} />
+            <Icon
+              name={item.icon}
+              size={20}
+              weight={activeTab === item.id ? "fill" : "regular"}
+            />
           </span>
           <span className="customer-bottom-nav__label">{item.label}</span>
         </button>

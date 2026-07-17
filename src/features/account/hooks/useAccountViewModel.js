@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { createUserStorage, isRegisteredUser } from "../../../services/customerService.js";
 import { customerRepository } from "../../../services/repositories/customerRepository.js";
@@ -17,8 +17,11 @@ import { grantWelcomeVoucherToNewMemberIfEligible } from "../../../services/loya
 import { addAddress, updateAddress, deleteAddress, setDefaultAddress } from "../../../services/addressService.js";
 import { orderStorage } from "../../../services/orderService.js";
 import { getPartnerOrdersByPhone, mergeCustomerLookupOrders } from "../../../services/partnerOrderService.js";
-import { getMemberRank } from "../../../utils/profile.js";
-import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
+import { loyaltyRepository } from "../../../services/repositories/loyaltyRepository.js";
+import {
+  buildLoyaltyTierJourney,
+  DEFAULT_LOYALTY_PROGRAM_CONFIG
+} from "../../../services/loyaltyProgramConfigService.js";
 import { defaultUserDemo } from "../../../data/defaultData.js";
 import useAccountOverview from "./useAccountOverview.js";
 
@@ -154,9 +157,16 @@ export default function useAccountViewModel({
   const [isLookupLoading, setIsLookupLoading] = useState(false);
   const [lookupUser, setLookupUser] = useState(null);
   const [authNotice, setAuthNotice] = useState("");
+  const [authErrors, setAuthErrors] = useState({});
+  const [authErrorFocus, setAuthErrorFocus] = useState({ field: "", nonce: 0 });
+  const [authBusy, setAuthBusy] = useState("");
+  const authBusyRef = useRef("");
   const [showAllAddresses, setShowAllAddresses] = useState(false);
   const [remoteUser, setRemoteUser] = useState(null);
   const [authSessionUser, setAuthSessionUser] = useState(null);
+  const [loyaltyRule, setLoyaltyRule] = useState(() => (
+    loyaltyRepository.getLoyaltyRule(DEFAULT_LOYALTY_PROGRAM_CONFIG)
+  ));
   const remoteUserRequestRef = useRef(0);
   const shouldUseSupabaseAuth = getDataSource() === "supabase";
   const accountUser = remoteUser || demoUser || {};
@@ -178,9 +188,66 @@ export default function useAccountViewModel({
     totalSpent: accountOverview.summary.totalSpent,
     latestOrder: accountOverview.latestOrder
   };
-  const rank = getMemberRank(stats.totalSpent);
-  const showCustomerTier = rewardFeatureFlags.enableCustomerTier;
+  const tierJourney = useMemo(
+    () => buildLoyaltyTierJourney(accountOverview.loyalty || demoLoyalty || {}, loyaltyRule),
+    [accountOverview.loyalty, demoLoyalty, loyaltyRule]
+  );
   const displayName = pickCustomerDisplayName(accountUser, authSessionUser);
+
+  useEffect(() => {
+    let active = true;
+
+    async function hydrateLoyaltyRule() {
+      try {
+        const remoteRule = await loyaltyRepository.getLoyaltyRuleAsync(DEFAULT_LOYALTY_PROGRAM_CONFIG);
+        if (active && remoteRule) setLoyaltyRule(remoteRule);
+      } catch {
+      }
+    }
+
+    hydrateLoyaltyRule();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function applyAuthErrors(errors = {}) {
+    const nextErrors = Object.fromEntries(
+      Object.entries(errors).filter(([, message]) => String(message || "").trim())
+    );
+    setAuthErrors(nextErrors);
+    const firstField = Object.keys(nextErrors).find((field) => field !== "form") || "";
+    if (firstField) {
+      setAuthErrorFocus((current) => ({ field: firstField, nonce: current.nonce + 1 }));
+    }
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  function clearAuthError(field = "") {
+    setAuthErrors((current) => {
+      if (!current[field] && !current.form) return current;
+      const next = { ...current };
+      delete next[field];
+      delete next.form;
+      return next;
+    });
+  }
+
+  function clearAuthErrors() {
+    setAuthErrors({});
+  }
+
+  function beginAuthRequest(requestName) {
+    if (authBusyRef.current) return false;
+    authBusyRef.current = requestName;
+    setAuthBusy(requestName);
+    return true;
+  }
+
+  function endAuthRequest() {
+    authBusyRef.current = "";
+    setAuthBusy("");
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -303,8 +370,9 @@ export default function useAccountViewModel({
         { writeRemote: !shouldSyncViaAuth }
       );
       if (!saved) {
-        setAuthNotice("Không xác định được số điện thoại để lưu hồ sơ.");
-        return;
+        const message = "Không xác định được số điện thoại để lưu hồ sơ.";
+        setAuthNotice(message);
+        return { ok: false, message };
       }
 
       let refreshed = saved;
@@ -327,8 +395,11 @@ export default function useAccountViewModel({
       setDemoUser(refreshed);
       setAuthNotice("Đã lưu hồ sơ.");
       setProfileOpen(false);
+      return { ok: true };
     } catch {
-      setAuthNotice("Không thể lưu hồ sơ lúc này.");
+      const message = "Không thể lưu hồ sơ lúc này.";
+      setAuthNotice(message);
+      return { ok: false, message };
     }
   }
 
@@ -371,13 +442,7 @@ export default function useAccountViewModel({
   }
 
   function handleDeleteAddress(addressId) {
-    if (addresses.length <= 1) {
-      alert("Cần giữ ít nhất 1 địa chỉ");
-      return;
-    }
-    if (typeof window !== "undefined" && !window.confirm("Bạn có chắc muốn xóa địa chỉ này?")) {
-      return;
-    }
+    if (addresses.length <= 1) return;
     setDemoAddresses(deleteAddress(addresses, addressId));
   }
 
@@ -506,206 +571,214 @@ export default function useAccountViewModel({
 
   async function handleDirectLogin() {
     const phone = getCustomerKey(loginDraft.phone);
-    if (!phone || phone.length < 9) {
-      alert("Vui lòng nhập số điện thoại hợp lệ.");
-      return;
-    }
-    if (shouldUseSupabaseAuth) {
-      const authResult = await loginPhonePasswordAuth({
-        phone,
-        password: loginDraft.password
-      });
-      if (!authResult.ok) {
-        alert(authResult.message || "Đăng nhập thất bại.");
+    const isValid = applyAuthErrors({
+      loginPhone: !phone || phone.length < 9 ? "Vui lòng nhập số điện thoại hợp lệ." : "",
+      loginPassword: !loginDraft.password ? "Vui lòng nhập mật khẩu." : ""
+    });
+    if (!isValid || !beginAuthRequest("login")) return;
+
+    setAuthNotice("");
+    try {
+      if (shouldUseSupabaseAuth) {
+        const authResult = await loginPhonePasswordAuth({
+          phone,
+          password: loginDraft.password
+        });
+        if (!authResult.ok) {
+          applyAuthErrors({ form: "Số điện thoại hoặc mật khẩu chưa đúng. Bạn kiểm tra và thử lại nhé." });
+          return;
+        }
+        const authSyncResult = await syncAuthProfileToCustomerRow();
+        if (!authSyncResult.ok && import.meta?.env?.DEV) {
+          console.warn("[account] syncAuthProfileToCustomerRow failed", authSyncResult.message);
+        }
+        const result = loginOrRegisterByPhone(phone, "", "", false, {
+          hasCustomerAuthSession: Boolean(authResult?.data?.session),
+          authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || ""
+        });
+        if (!result) return;
+        const freshUser = await resolveFreshUserAfterLogin(phone, result?.user || null);
+        if (freshUser) {
+          setDemoUser(freshUser);
+          setRemoteUser(freshUser);
+        }
+        customerRepository.saveSessionPointer?.({
+          phone,
+          customerId: freshUser?.id || result?.user?.id || phone,
+          authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || freshUser?.authUserId || ""
+        });
+        setAuthNotice("Đăng nhập thành công.");
+        setLoginDraft({ phone: "", password: "" });
+        setAuthPhone("");
+        navigateAfterLogin();
         return;
       }
-      const authSyncResult = await syncAuthProfileToCustomerRow();
-      if (!authSyncResult.ok && import.meta?.env?.DEV) {
-        console.warn("[account] syncAuthProfileToCustomerRow failed", authSyncResult.message);
+      const user = userStorage.findByPhone(phone);
+      if (!isRegisteredUser(user)) {
+        setAccountEntryTab("lookup");
+        setAuthPhone(phone);
+        setAuthNotice(
+          "Số này chưa có tài khoản. Bạn có thể tạo tài khoản mới bằng số điện thoại này."
+        );
+        return;
       }
-      const result = loginOrRegisterByPhone(phone, "", "", false, {
-        hasCustomerAuthSession: Boolean(authResult?.data?.session),
-        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || ""
-      });
-      if (!result) return;
-      const freshUser = await resolveFreshUserAfterLogin(phone, result?.user || null);
-      if (freshUser) {
-        setDemoUser(freshUser);
-        setRemoteUser(freshUser);
-      }
-      customerRepository.saveSessionPointer?.({
-        phone,
-        customerId: freshUser?.id || result?.user?.id || phone,
-        authUserId: authResult?.data?.user?.id || authResult?.data?.session?.user?.id || freshUser?.authUserId || ""
-      });
-      setAuthNotice("Đăng nhập thành công.");
-      setLoginDraft({ phone: "", password: "" });
-      setAuthPhone("");
-      navigateAfterLogin();
-      return;
+      applyAuthErrors({ form: "Số điện thoại hoặc mật khẩu chưa đúng. Bạn kiểm tra và thử lại nhé." });
+    } finally {
+      endAuthRequest();
     }
-    const user = userStorage.findByPhone(phone);
-    if (!isRegisteredUser(user)) {
-      setAccountEntryTab("lookup");
-      setAuthPhone(phone);
-      setAuthNotice(
-        "Số này chưa có tài khoản. Bạn có thể tạo tài khoản mới bằng số điện thoại này."
-      );
-      return;
-    }
-    if (true) {
-      alert("Số điện thoại hoặc mật khẩu chưa đúng.");
-      return;
-    }
-    const result = loginOrRegisterByPhone(phone);
-    if (!result) return;
-    setAuthNotice("Đăng nhập thành công.");
-    setLoginDraft({ phone: "", password: "" });
-    setAuthPhone("");
-    navigateAfterLogin();
   }
 
   async function handleForgotPassword() {
-    const result = await requestCustomerPasswordResetEmailAuth({
-      email: forgotEmail
+    const isValid = applyAuthErrors({
+      forgotEmail: !isRealEmail(forgotEmail) ? "Vui lòng nhập đúng email đã đăng ký." : ""
     });
-    if (!result.ok) {
-      alert(result.message || "Không thể gửi email đặt lại mật khẩu.");
-      return;
+    if (!isValid || !beginAuthRequest("forgot")) return;
+
+    setAuthNotice("");
+    try {
+      const result = await requestCustomerPasswordResetEmailAuth({
+        email: forgotEmail
+      });
+      if (!result.ok) {
+        applyAuthErrors({ form: "Chưa thể gửi email lúc này. Bạn kiểm tra địa chỉ email hoặc thử lại sau." });
+        return;
+      }
+      setAuthNotice("Đã gửi link đặt lại mật khẩu. Bạn kiểm tra hộp thư email nhé.");
+    } finally {
+      endAuthRequest();
     }
-    setAuthNotice("Đã gửi link đặt lại mật khẩu. Bạn kiểm tra hộp thư email nhé.");
   }
 
   async function handleRecoveryPasswordUpdate() {
-    if (resetPasswordDraft.password.length < 6) {
-      alert("Mật khẩu mới tối thiểu 6 ký tự.");
-      return;
-    }
-    if (resetPasswordDraft.password !== resetPasswordDraft.confirmPassword) {
-      alert("Nhập lại mật khẩu mới chưa khớp.");
-      return;
-    }
-    const result = await updateRecoveryPasswordAuth({
-      password: resetPasswordDraft.password
+    const isValid = applyAuthErrors({
+      resetPassword: resetPasswordDraft.password.length < 6 ? "Mật khẩu mới cần tối thiểu 6 ký tự." : "",
+      resetConfirmPassword: resetPasswordDraft.password !== resetPasswordDraft.confirmPassword
+        ? "Mật khẩu nhập lại chưa khớp."
+        : ""
     });
-    if (!result.ok) {
-      alert(result.message || "Không thể cập nhật mật khẩu mới.");
-      return;
-    }
-    setResetPasswordDraft({
-      password: "",
-      confirmPassword: ""
-    });
-    setAccountEntryTab("login");
-    setAuthNotice("Đã cập nhật mật khẩu mới. Bạn đăng nhập lại bằng số điện thoại và mật khẩu mới nhé.");
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("authFlow");
-      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    if (!isValid || !beginAuthRequest("reset")) return;
+
+    setAuthNotice("");
+    try {
+      const result = await updateRecoveryPasswordAuth({
+        password: resetPasswordDraft.password
+      });
+      if (!result.ok) {
+        applyAuthErrors({ form: "Chưa thể cập nhật mật khẩu mới. Bạn thử lại sau nhé." });
+        return;
+      }
+      setResetPasswordDraft({
+        password: "",
+        confirmPassword: ""
+      });
+      setAccountEntryTab("login");
+      setAuthNotice("Đã cập nhật mật khẩu mới. Bạn đăng nhập lại bằng số điện thoại và mật khẩu mới nhé.");
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("authFlow");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    } finally {
+      endAuthRequest();
     }
   }
 
   async function handleRegister() {
     const registerPhone = getCustomerKey(accountEntryTab === "register" ? authPhone : lookupPhone || authPhone);
-    if (!registerPhone || registerPhone.length < 9) {
-      alert("Vui lòng nhập số điện thoại hợp lệ.");
-      return;
-    }
-    const localUser = userStorage.findByPhone(registerPhone);
-    const existingUser = shouldUseSupabaseAuth
-      ? (await customerRepository.getUserByPhoneAsync(registerPhone)) || localUser
-      : localUser;
-    if (hasMemberAccount(existingUser)) {
-      setLoginDraft((draft) => ({ ...draft, phone: registerPhone }));
-      setAccountEntryTab("login");
-      setAuthNotice("Số này đã có tài khoản. Bạn đăng nhập bằng mật khẩu đã tạo nhé.");
-      return;
-    }
-    if (!registerDraft.name.trim()) {
-      alert("Vui lòng nhập tên khách.");
-      return;
-    }
-    if (!isRealEmail(registerDraft.email)) {
-      alert("Vui lòng nhập email thật để lấy lại mật khẩu khi cần.");
-      return;
-    }
-    if (registerDraft.password.length < 6) {
-      alert("Mật khẩu tối thiểu 6 ký tự.");
-      return;
-    }
-    if (registerDraft.password !== registerDraft.confirmPassword) {
-      alert("Nhập lại mật khẩu chưa khớp.");
-      return;
-    }
-    let registerAuthResult = null;
-    if (shouldUseSupabaseAuth) {
-      const authResult = await registerPhonePasswordAuth({
-        phone: registerPhone,
-        password: registerDraft.password,
-        name: registerDraft.name.trim(),
-        email: registerDraft.email
-      });
-      registerAuthResult = authResult;
-      if (!authResult.ok) {
-        alert(authResult.message || "Không thể tạo tài khoản Supabase.");
+    const isValid = applyAuthErrors({
+      registerPhone: !registerPhone || registerPhone.length < 9 ? "Vui lòng nhập số điện thoại hợp lệ." : "",
+      registerName: !registerDraft.name.trim() ? "Vui lòng nhập tên của bạn." : "",
+      registerEmail: !isRealEmail(registerDraft.email) ? "Vui lòng nhập email thật để lấy lại mật khẩu khi cần." : "",
+      registerPassword: registerDraft.password.length < 6 ? "Mật khẩu cần tối thiểu 6 ký tự." : "",
+      registerConfirmPassword: registerDraft.password !== registerDraft.confirmPassword
+        ? "Mật khẩu nhập lại chưa khớp."
+        : ""
+    });
+    if (!isValid || !beginAuthRequest("register")) return;
+
+    setAuthNotice("");
+    try {
+      const localUser = userStorage.findByPhone(registerPhone);
+      const existingUser = shouldUseSupabaseAuth
+        ? (await customerRepository.getUserByPhoneAsync(registerPhone)) || localUser
+        : localUser;
+      if (hasMemberAccount(existingUser)) {
+        setLoginDraft((draft) => ({ ...draft, phone: registerPhone }));
+        setAccountEntryTab("login");
+        setAuthNotice("Số này đã có tài khoản. Bạn đăng nhập bằng mật khẩu đã tạo nhé.");
         return;
       }
-    }
-    const result = loginOrRegisterByPhone(
-      registerPhone,
-      registerDraft.name.trim(),
-      "",
-      true,
-      {
-        hasCustomerAuthSession: Boolean(registerAuthResult?.data?.session),
-        authUserId: shouldUseSupabaseAuth ? (registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "") : ""
-      }
-    );
-    if (!result) return;
-    customerRepository.saveSessionPointer?.({
-      phone: registerPhone,
-      customerId: result?.user?.id || registerPhone,
-      authUserId: shouldUseSupabaseAuth ? (registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "") : ""
-    });
-    if (shouldUseSupabaseAuth) {
-      const syncResult = await syncRegisteredCustomerProfile({
-        phone: registerPhone,
-        name: registerDraft.name.trim(),
-        email: normalizeEmail(registerDraft.email),
-        authUserId: registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || ""
-      });
-      if (!syncResult.ok) {
-        const message = syncResult.message || "Tạo tài khoản local thành công nhưng chưa đồng bộ customer lên Supabase.";
-        setAuthNotice(message);
-        if (import.meta?.env?.DEV) {
-          console.warn("[account] register sync customer failed", message);
+      let registerAuthResult = null;
+      if (shouldUseSupabaseAuth) {
+        const authResult = await registerPhonePasswordAuth({
+          phone: registerPhone,
+          password: registerDraft.password,
+          name: registerDraft.name.trim(),
+          email: registerDraft.email
+        });
+        registerAuthResult = authResult;
+        if (!authResult.ok) {
+          applyAuthErrors({ form: "Không thể tạo tài khoản lúc này. Bạn kiểm tra lại thông tin hoặc thử lại sau." });
+          return;
         }
-      } else if (import.meta?.env?.DEV) {
-        console.info("[account] register sync customer ok", registerPhone);
       }
-      const refreshedUser = syncResult.user || (await refreshCustomerUserFromRemote(registerPhone)) || result.user || null;
-      if (refreshedUser) {
-        setDemoUser(refreshedUser);
-        setRemoteUser(refreshedUser);
+      const result = loginOrRegisterByPhone(
+        registerPhone,
+        registerDraft.name.trim(),
+        "",
+        true,
+        {
+          hasCustomerAuthSession: Boolean(registerAuthResult?.data?.session),
+          authUserId: shouldUseSupabaseAuth ? (registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "") : ""
+        }
+      );
+      if (!result) return;
+      customerRepository.saveSessionPointer?.({
+        phone: registerPhone,
+        customerId: result?.user?.id || registerPhone,
+        authUserId: shouldUseSupabaseAuth ? (registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || "") : ""
+      });
+      if (shouldUseSupabaseAuth) {
+        const syncResult = await syncRegisteredCustomerProfile({
+          phone: registerPhone,
+          name: registerDraft.name.trim(),
+          email: normalizeEmail(registerDraft.email),
+          authUserId: registerAuthResult?.data?.user?.id || registerAuthResult?.data?.session?.user?.id || ""
+        });
+        if (!syncResult.ok) {
+          setAuthNotice("Tài khoản đã tạo nhưng dữ liệu thành viên chưa đồng bộ đầy đủ. Bạn vui lòng đăng nhập lại sau.");
+          if (import.meta?.env?.DEV) {
+            console.warn("[account] register sync customer failed", syncResult.message);
+          }
+        } else if (import.meta?.env?.DEV) {
+          console.info("[account] register sync customer ok", registerPhone);
+        }
+        const refreshedUser = syncResult.user || (await refreshCustomerUserFromRemote(registerPhone)) || result.user || null;
+        if (refreshedUser) {
+          setDemoUser(refreshedUser);
+          setRemoteUser(refreshedUser);
+        }
       }
+      let grantedWelcomeVoucher = false;
+      try {
+        const welcomeResult = await grantWelcomeVoucherToNewMemberIfEligible(registerPhone);
+        grantedWelcomeVoucher = welcomeResult?.granted === true ||
+          welcomeResult?.reason === "welcome_voucher_already_granted";
+      } catch (error) {
+        console.warn("[account] welcome voucher grant failed", error);
+      }
+      setAuthNotice(
+        grantedWelcomeVoucher
+          ? "Đăng ký thành công. Khách đã nhận voucher chào thành viên mới trong mục ưu đãi."
+          : "Đăng ký thành công. Dữ liệu cũ theo số điện thoại đã được liên kết."
+      );
+      setAuthPhone("");
+      setAuthPassword("");
+      setAuthMode("lookup");
+      navigateAfterRegisterIfNeeded();
+    } finally {
+      endAuthRequest();
     }
-    let grantedWelcomeVoucher = false;
-    try {
-      const welcomeResult = await grantWelcomeVoucherToNewMemberIfEligible(registerPhone);
-      grantedWelcomeVoucher = welcomeResult?.granted === true ||
-        welcomeResult?.reason === "welcome_voucher_already_granted";
-    } catch (error) {
-      console.warn("[account] welcome voucher grant failed", error);
-    }
-    setAuthNotice(
-      grantedWelcomeVoucher
-        ? "Đăng ký thành công. Khách đã nhận voucher chào thành viên mới trong mục ưu đãi."
-        : "Đăng ký thành công. Dữ liệu cũ theo số điện thoại đã được liên kết."
-    );
-    setAuthPhone("");
-    setAuthPassword("");
-    setAuthMode("lookup");
-    navigateAfterRegisterIfNeeded();
   }
 
   return {
@@ -738,6 +811,11 @@ export default function useAccountViewModel({
     setLookupUser,
     authNotice,
     setAuthNotice,
+    authErrors,
+    authErrorFocus,
+    authBusy,
+    clearAuthError,
+    clearAuthErrors,
     showAllAddresses,
     setShowAllAddresses,
     addresses,
@@ -745,8 +823,7 @@ export default function useAccountViewModel({
     visibleAddresses,
     stats,
     accountOverview,
-    rank,
-    showCustomerTier,
+    tierJourney,
     accountUser,
     displayName,
     handleSaveUser,

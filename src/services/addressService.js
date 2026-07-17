@@ -35,8 +35,8 @@ export function addAddress(addresses, address) {
   const now = new Date().toISOString();
   const nextAddress = {
     id: address.id || `addr_${Date.now()}`,
-    label: address.label || "Dia chi moi",
-    receiverName: address.receiverName || "Khach",
+    label: address.label || "Địa chỉ mới",
+    receiverName: address.receiverName || "Khách hàng",
     phone: address.phone || "",
     address: address.address || "",
     lat: address.lat ?? null,

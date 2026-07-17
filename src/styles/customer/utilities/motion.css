@@ -1,0 +1,479 @@
+.customer-page-stage {
+  min-width: 0;
+  animation: customer-page-enter var(--customer-motion-page) var(--customer-ease-enter) both;
+  transform-origin: center top;
+}
+
+.customer-shell .floating-cart-stack {
+  animation: customer-floating-enter var(--customer-motion-sheet) var(--customer-ease-enter) both;
+  transform-origin: center bottom;
+}
+
+.customer-shell .floating-cart-combo-card {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    border-color var(--customer-motion-base) ease,
+    box-shadow var(--customer-motion-base) ease;
+}
+
+.customer-shell .floating-cart-bar {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    background-color var(--customer-motion-fast) ease,
+    box-shadow var(--customer-motion-fast) ease,
+    opacity var(--customer-motion-fast) ease;
+}
+
+.customer-shell :where(.cart-glass-icon, .cart-glass-cta) {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    box-shadow var(--customer-motion-base) ease,
+    filter var(--customer-motion-base) ease;
+}
+
+.customer-shell .floating-cart-combo-card:focus-within {
+  border-color: rgba(255, 106, 0, 0.34);
+  box-shadow: 0 20px 48px rgba(58, 31, 20, 0.22);
+}
+
+.customer-shell .customer-modal-frame,
+.customer-shell .option-modal-overlay {
+  animation: customer-backdrop-enter var(--customer-motion-base) ease-out both;
+}
+
+.customer-shell .customer-modal-frame__panel {
+  animation: customer-modal-enter var(--customer-motion-sheet) var(--customer-ease-enter) both;
+  transform-origin: center;
+}
+
+/* Home branch picker is rendered through a portal, outside .customer-shell. */
+.branch-picker-overlay {
+  animation: customer-backdrop-enter var(--customer-motion-base, 180ms) ease-out both;
+}
+
+.branch-picker-panel {
+  animation: customer-modal-enter var(--customer-motion-sheet, 260ms) var(--customer-ease-enter, cubic-bezier(0.22, 0.82, 0.22, 1)) both;
+  transform-origin: center bottom;
+}
+
+.branch-picker-overlay :where(button, [role="button"]) {
+  touch-action: manipulation;
+}
+
+.branch-picker-overlay :where(button, [role="button"]):focus-visible {
+  outline: 3px solid rgba(255, 106, 0, 0.32);
+  outline-offset: 2px;
+}
+
+.branch-picker-overlay :where(.branch-card, .branch-picker-close) {
+  transition:
+    transform var(--customer-motion-fast, 160ms) cubic-bezier(0.2, 0, 0, 1),
+    opacity var(--customer-motion-fast, 160ms) ease,
+    color var(--customer-motion-fast, 160ms) ease,
+    border-color var(--customer-motion-fast, 160ms) ease,
+    background-color var(--customer-motion-fast, 160ms) ease,
+    box-shadow var(--customer-motion-fast, 160ms) ease;
+}
+
+.branch-picker-overlay :where(.branch-card, .branch-picker-close):not(:disabled):active {
+  opacity: 0.82;
+  transform: scale(0.98);
+}
+
+.customer-shell .customer-button,
+.customer-shell .customer-card--interactive,
+.customer-shell .customer-bottom-nav__item,
+.customer-shell .floating-cart-bar {
+  transition-duration: var(--customer-motion-fast);
+  transition-timing-function: var(--customer-ease-standard);
+}
+
+.customer-shell :where(button, a, summary, [role="button"]) {
+  touch-action: manipulation;
+}
+
+.customer-shell :where(button, a, summary, [role="button"]):focus-visible {
+  outline: 3px solid rgba(255, 106, 0, 0.32);
+  outline-offset: 2px;
+}
+
+.customer-shell button:disabled,
+.customer-shell [aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.customer-shell button:not(:disabled):active,
+.customer-shell a:active,
+.customer-shell summary:active,
+.customer-shell [role="button"]:not([aria-disabled="true"]):active {
+  opacity: 0.82;
+}
+
+.customer-shell :where(
+  .product-card,
+  .product-row,
+  .menu-promo-card,
+  .home2026-flash-card,
+  .home2026-flash-main-card,
+  .qr-mini-offer-image-card,
+  .qr-mini-home__voucher-hint,
+  .suggestion-chip,
+  .milestone-box,
+  .loyalty-action-row,
+  .order-journey-detail-trigger
+) {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    border-color var(--customer-motion-base) ease,
+    background-color var(--customer-motion-base) ease,
+    box-shadow var(--customer-motion-base) ease;
+}
+
+.customer-shell :where(
+  .product-image-wrap img,
+  .product-row-image img,
+  .menu-promo-card__image img,
+  .home2026-flash-image img,
+  .home2026-flash-main-image img,
+  .qr-mini-offer-image-card img,
+  .suggestion-chip img
+) {
+  transition: transform var(--customer-motion-page) var(--customer-ease-enter);
+  transform-origin: center;
+}
+
+/* Voucher cards are informational: add visual richness without a click affordance. */
+.customer-shell .home-voucher-card {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    box-shadow var(--customer-motion-base) ease,
+    filter var(--customer-motion-base) ease;
+}
+
+.customer-shell .home-voucher-icon,
+.customer-shell .home-voucher-content h3 {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    color var(--customer-motion-fast) ease;
+}
+
+.customer-shell :where(
+  .home2026-category-bubble,
+  .chip,
+  .orders-filter-tab,
+  .loyalty-point-history__filters button,
+  .fulfillment-tabs button,
+  .pickup-mode-tabs button,
+  .option,
+  .modal-topping,
+  .topping-card,
+  .menu-addon-toggle
+) {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    color var(--customer-motion-fast) ease,
+    border-color var(--customer-motion-fast) ease,
+    background-color var(--customer-motion-fast) ease,
+    box-shadow var(--customer-motion-fast) ease;
+}
+
+.customer-shell :where(
+  .customer-button,
+  .cta,
+  .cta-small,
+  .ghost-small,
+  .float-btn,
+  .customer-icon-button,
+  .customer-sheet-close,
+  .home2026-action-btn,
+  .customer-install-primary,
+  .customer-install-later,
+  .loyalty-voucher-close,
+  .branch-picker-close,
+  .product-add-btn,
+  .product-card-stepper button,
+  .addon-plus,
+  .addon-stepper button,
+  .qty-btn,
+  .promo-select,
+  .payment-card,
+  .checkout-inline-action,
+  .fee-info-btn
+) {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    opacity var(--customer-motion-fast) ease,
+    color var(--customer-motion-fast) ease,
+    border-color var(--customer-motion-fast) ease,
+    background-color var(--customer-motion-fast) ease,
+    box-shadow var(--customer-motion-fast) ease;
+}
+
+.customer-shell :where(
+  .home2026-section-head button,
+  .home2026-deal-head > button,
+  .loyalty-section-head__action,
+  .loyalty-summary__route,
+  .loyalty-text-action,
+  .loyalty-point-history__more,
+  .qr-member-checkout-note__cta
+) {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    color var(--customer-motion-fast) ease,
+    background-color var(--customer-motion-fast) ease,
+    opacity var(--customer-motion-fast) ease;
+}
+
+.customer-shell :where(
+  .customer-bottom-sheet button,
+  .customer-modal-frame button,
+  .option-modal-overlay button
+) {
+  transition:
+    transform var(--customer-motion-fast) var(--customer-ease-standard),
+    opacity var(--customer-motion-fast) ease,
+    color var(--customer-motion-fast) ease,
+    border-color var(--customer-motion-fast) ease,
+    background-color var(--customer-motion-fast) ease,
+    box-shadow var(--customer-motion-fast) ease;
+}
+
+.customer-shell :where(
+  .product-card,
+  .product-row,
+  .menu-promo-card,
+  .home2026-flash-card,
+  .home2026-flash-main-card,
+  .qr-mini-offer-image-card,
+  .qr-mini-home__voucher-hint,
+  .suggestion-chip,
+  .milestone-box,
+  .loyalty-action-row,
+  .order-journey-detail-trigger
+):active {
+  transform: scale(0.99);
+}
+
+.customer-shell :where(
+  .home2026-category-bubble,
+  .chip,
+  .orders-filter-tab,
+  .loyalty-point-history__filters button,
+  .fulfillment-tabs button,
+  .pickup-mode-tabs button,
+  .option,
+  .modal-topping,
+  .topping-card,
+  .menu-addon-toggle
+):active {
+  transform: scale(0.98);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .customer-shell .floating-cart-combo-card:has(.floating-cart-bar:hover) {
+    border-color: rgba(255, 106, 0, 0.3);
+    box-shadow: 0 22px 50px rgba(58, 31, 20, 0.22);
+    transform: translateY(-2px);
+  }
+
+  .customer-shell .floating-cart-bar:hover {
+    background-color: rgba(255, 106, 0, 0.045);
+  }
+
+  .customer-shell .floating-cart-bar:hover .cart-glass-icon {
+    box-shadow: 0 12px 24px rgba(255, 106, 0, 0.28);
+    transform: rotate(-4deg) scale(1.06);
+  }
+
+  .customer-shell .floating-cart-bar:hover .cart-glass-cta {
+    box-shadow: 0 12px 26px rgba(255, 106, 0, 0.28);
+    filter: saturate(1.06);
+    transform: translateX(2px);
+  }
+
+  .branch-picker-overlay :where(.branch-card, .branch-picker-close):not(:disabled):hover {
+    border-color: rgba(255, 106, 0, 0.3);
+    box-shadow: 0 12px 24px rgba(58, 31, 20, 0.12);
+    transform: translateY(-1px);
+  }
+
+  .customer-shell :where(
+    .product-card,
+    .product-row,
+    .menu-promo-card,
+    .home2026-flash-card,
+    .home2026-flash-main-card,
+    .qr-mini-offer-image-card,
+    .qr-mini-home__voucher-hint,
+    .suggestion-chip,
+    .milestone-box,
+    .loyalty-action-row,
+    .order-journey-detail-trigger
+  ):hover {
+    border-color: rgba(255, 106, 0, 0.28);
+    box-shadow: 0 14px 28px rgba(58, 31, 20, 0.12);
+    transform: translateY(-2px);
+  }
+
+  .customer-shell :where(
+    .product-card,
+    .product-row,
+    .menu-promo-card,
+    .home2026-flash-card,
+    .home2026-flash-main-card,
+    .qr-mini-offer-image-card,
+    .suggestion-chip
+  ):hover img {
+    transform: scale(1.025);
+  }
+
+  .customer-shell .home-voucher-card:hover {
+    box-shadow:
+      inset 0 0 0 1px var(--voucher-border-color, #ffd09a),
+      0 14px 30px rgba(58, 31, 20, 0.11);
+    filter: saturate(1.035);
+    transform: translateY(-2px);
+  }
+
+  .customer-shell .home-voucher-card:hover .home-voucher-icon {
+    transform: rotate(-3deg) scale(1.06);
+  }
+
+  .customer-shell .home-voucher-card:hover .home-voucher-content h3 {
+    transform: translateX(2px);
+  }
+
+  .customer-shell :where(
+    .home2026-category-bubble,
+    .chip,
+    .orders-filter-tab,
+    .loyalty-point-history__filters button,
+    .fulfillment-tabs button,
+    .pickup-mode-tabs button,
+    .option,
+    .modal-topping,
+    .topping-card,
+    .menu-addon-toggle
+  ):not(.active):not(.chip-active):not(.option-active):not(.topping-active):not(.is-active):not([aria-pressed="true"]):hover {
+    border-color: rgba(255, 106, 0, 0.34);
+    background-color: #fff3e4;
+    color: #d95700;
+    box-shadow: 0 8px 18px rgba(255, 106, 0, 0.09);
+    transform: translateY(-1px);
+  }
+
+  .customer-shell :where(
+    .customer-button,
+    .cta,
+    .cta-small,
+    .ghost-small,
+    .float-btn,
+    .customer-icon-button,
+    .customer-sheet-close,
+    .home2026-action-btn,
+    .customer-install-primary,
+    .customer-install-later,
+    .loyalty-voucher-close,
+    .branch-picker-close,
+    .product-add-btn,
+    .product-card-stepper button,
+    .addon-plus,
+    .addon-stepper button,
+    .qty-btn,
+    .promo-select,
+    .payment-card,
+    .checkout-inline-action,
+    .fee-info-btn
+  ):not(:disabled):hover {
+    box-shadow: 0 10px 22px rgba(58, 31, 20, 0.12);
+    transform: translateY(-1px);
+  }
+
+  .customer-shell :where(
+    .home2026-section-head button,
+    .home2026-deal-head > button,
+    .loyalty-section-head__action,
+    .loyalty-summary__route,
+    .loyalty-text-action,
+    .loyalty-point-history__more,
+    .qr-member-checkout-note__cta
+  ):hover {
+    color: #d95700;
+    transform: translateX(2px);
+  }
+
+  .customer-shell :where(
+    .customer-bottom-sheet button,
+    .customer-modal-frame button,
+    .option-modal-overlay button
+  ):not(:disabled):hover {
+    opacity: 0.94;
+  }
+}
+
+@keyframes customer-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes customer-floating-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes customer-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes customer-modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .customer-page-stage,
+  .customer-shell .floating-cart-stack,
+  .customer-shell .customer-modal-frame,
+  .customer-shell .option-modal-overlay,
+  .customer-shell .customer-modal-frame__panel,
+  .branch-picker-overlay,
+  .branch-picker-panel {
+    animation: none;
+  }
+
+  .branch-picker-overlay *,
+  .branch-picker-overlay *::before,
+  .branch-picker-overlay *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

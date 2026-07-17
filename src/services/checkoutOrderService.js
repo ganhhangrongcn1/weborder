@@ -90,8 +90,14 @@ export async function validateCheckoutVoucherBeforeOrder({
 
 export function validateCheckoutContact({ deliveryInfo, fulfillmentType }) {
   if (!deliveryInfo.name || !deliveryInfo.phone || (fulfillmentType === "delivery" && !deliveryInfo.address)) {
+    const field = !deliveryInfo.name
+      ? "name"
+      : !deliveryInfo.phone
+        ? "phone"
+        : "address";
     return {
       ok: false,
+      field,
       message: fulfillmentType === "pickup"
         ? "Vui lòng nhập tên và số điện thoại để quán xác nhận người đến lấy và tích điểm."
         : "Vui lòng nhập đủ tên, số điện thoại và địa chỉ giao hàng."
@@ -102,6 +108,7 @@ export function validateCheckoutContact({ deliveryInfo, fulfillmentType }) {
   if (!phoneKey || phoneKey.length < 9) {
     return {
       ok: false,
+      field: "phone",
       message: "Vui lòng nhập số điện thoại hợp lệ để quán lưu đơn và tích điểm."
     };
   }

@@ -134,7 +134,16 @@ function OfferImageCard({ offer, fallbackImage, onClick, actionLabel = "Mua nhan
   return (
     <button type="button" className="qr-mini-offer-image-card" onClick={onClick}>
       <span className="qr-mini-offer-image-card__photo">
-        {offer.image || fallbackImage ? <img src={offer.image || fallbackImage} alt={displayTitle} /> : null}
+        {offer.image || fallbackImage ? (
+          <img
+            src={offer.image || fallbackImage}
+            alt={displayTitle}
+            width="320"
+            height="320"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : null}
         <small className="qr-mini-offer-image-card__badge">{getOfferLabel(offer)}</small>
       </span>
       <span className="qr-mini-offer-image-card__copy">
@@ -367,7 +376,16 @@ export default function QrMiniHomePage({
         </div>
 
         <div className="qr-mini-home__hero-photo">
-          {heroImage ? <img src={heroImage} alt={primaryOffer?.productName || primaryOffer?.title || "Món đang ưu đãi"} /> : null}
+          {heroImage ? (
+            <img
+              src={heroImage}
+              alt={primaryOffer?.productName || primaryOffer?.title || "Món đang ưu đãi"}
+              width="228"
+              height="304"
+              fetchPriority="high"
+              decoding="async"
+            />
+          ) : null}
         </div>
       </div>
 

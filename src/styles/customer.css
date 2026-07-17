@@ -11,6 +11,8 @@
 @import "./customer/components/form.css";
 @import "./customer/components/product-card.css";
 @import "./customer/pages/menu.css";
+@import "./customer/pages/orders.css";
+@import "./customer/pages/order-cards.css";
 @import "./customer-checkout.css";
 @import "./customer/components/modal.css";
 @import "./customer/pages/account.css";
@@ -27,6 +29,8 @@
 @import "./customer/components/option-modal.css";
 @import "./customer/components/loyalty-voucher-popup.css";
 @import "./customer/components/bottom-sheet.css";
+@import "./customer/components/order-journey.css";
 @import "./customer/components/pwa-install-banner.css";
 @import "./customer/home/popup.css";
 @import "./customer/utilities/mobile-type-scale.css";
+@import "./customer/utilities/motion.css";

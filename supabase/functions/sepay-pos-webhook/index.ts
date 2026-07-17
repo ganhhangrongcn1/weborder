@@ -156,6 +156,22 @@ function isPosQrOrder(order: JsonRecord) {
   return paymentMethod === "bank_qr" && (source === "pos" || hasPosReference);
 }
 
+function isQrCounterOrder(order: JsonRecord) {
+  const metadata = getObject(order.metadata);
+  const sources = [
+    order.source,
+    order.order_source,
+    metadata.source,
+    metadata.orderSource,
+    metadata.order_source,
+    metadata.channel,
+    metadata.sourceType,
+    metadata.source_type
+  ].map((value) => toText(value).toLowerCase()).filter(Boolean);
+
+  return sources.some((source) => source === "qr_order" || source === "qr_counter");
+}
+
 function isCancelledOrExpiredOrder(order: JsonRecord) {
   const metadata = getObject(order.metadata);
   const status = toText(order.status || metadata.status || metadata.orderStatus).toLowerCase();
@@ -727,7 +743,8 @@ async function markOrderPaidFromPaymentSession(
     const nextMetadata = {
       ...metadata,
       ...shiftMetadata,
-      status: "pending_zalo",
+      status: "preparing",
+      orderStatus: "preparing",
       kitchenStatus: "pending",
       paymentMethod: "bank_qr",
       paymentStatus: "paid",
@@ -749,7 +766,7 @@ async function markOrderPaidFromPaymentSession(
       }
     };
     const orderPatch: JsonRecord = {
-      status: "pending_zalo",
+      status: "preparing",
       kitchen_status: "pending",
       payment_method: "bank_qr",
       updated_at: new Date().toISOString(),
@@ -770,7 +787,7 @@ async function markOrderPaidFromPaymentSession(
       };
     }
 
-    order.status = "pending_zalo";
+    order.status = "preparing";
     order.kitchen_status = "pending";
     order.payment_method = "bank_qr";
     order.metadata = nextMetadata;
@@ -1195,12 +1212,15 @@ Deno.serve(async (request) => {
         pos_shift_id: posShiftId
       }
     : {};
+  const shouldStartQrCounterKitchen = isQrCounterOrder(matchedOrder);
+  const paidOrderStatus = shouldStartQrCounterKitchen ? "preparing" : "pending_zalo";
 
   if (!alreadyPaid) {
     const nextMetadata = {
       ...metadata,
       ...shiftMetadata,
-      status: "pending_zalo",
+      status: paidOrderStatus,
+      ...(shouldStartQrCounterKitchen ? { orderStatus: "preparing" } : {}),
       kitchenStatus: "pending",
       paymentMethod: "bank_qr",
       paymentStatus: "paid",
@@ -1220,7 +1240,7 @@ Deno.serve(async (request) => {
       }
     };
     const orderPatch: JsonRecord = {
-      status: "pending_zalo",
+      status: paidOrderStatus,
       kitchen_status: "pending",
       payment_method: "bank_qr",
       updated_at: new Date().toISOString(),
@@ -1251,7 +1271,7 @@ Deno.serve(async (request) => {
 
     matchedOrder = {
       ...matchedOrder,
-      status: "pending_zalo",
+      status: paidOrderStatus,
       kitchen_status: "pending",
       payment_method: "bank_qr",
       pos_shift_id: posShiftId || matchedOrder.pos_shift_id,

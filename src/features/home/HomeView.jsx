@@ -3,7 +3,6 @@ import React from "react";
 import Icon from "../../components/Icon.jsx";
 import HomeHero from "../../pages/customer/home/HomeHero.jsx";
 import HomeFlashSale from "../../pages/customer/home/HomeFlashSale.jsx";
-import HomeCategorySection from "../../pages/customer/home/HomeCategorySection.jsx";
 import HomeFeaturedProducts from "../../pages/customer/home/HomeFeaturedProducts.jsx";
 import HomeVoucherCarousel from "../../pages/customer/home/HomeVoucherCarousel.jsx";
 import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
@@ -12,7 +11,6 @@ import { homeText, optionModalText } from "../../data/uiText.js";
 import { closeOnlyOnBackdrop } from "../../utils/uiEvents.js";
 import { normalizePickupClock, normalizePickupDate } from "../../utils/dateTimeDefaults.js";
 import {
-  buildHomeCategories,
   formatCountdown,
   getCountdownParts
 } from "../../utils/pureHelpers.js";
@@ -29,7 +27,6 @@ import useHomePopularProducts from "./useHomePopularProducts.js";
 const FALLBACK_HOME_BLOCK_ORDER = [
   "hero",
   "fulfillment",
-  "categorySection",
   "promoVouchers",
   "flashSale",
   "featuredProducts",
@@ -38,7 +35,6 @@ const FALLBACK_HOME_BLOCK_ORDER = [
 
 const HOME_ORDERING_BLOCKS = [
   "fulfillment",
-  "categorySection",
   "promoVouchers",
   "flashSale",
   "featuredProducts"
@@ -122,8 +118,7 @@ export default function Home({
   buildStoreOfflineNotice,
   buildDeliveryDisabledNotice,
   buildPickupDisabledNotice,
-  buildOutOfHoursNotice,
-  setActiveCategory
+  buildOutOfHoursNotice
 }) {
   const t = homeText;
   const bannerRef = useRef(null);
@@ -138,7 +133,6 @@ export default function Home({
   const [pickupMode, setPickupMode] = useState(checkoutPreset?.pickupMode || "soon");
   const [pickupDate, setPickupDate] = useState(() => normalizePickupDate(checkoutPreset?.pickupDate));
   const [pickupClock, setPickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
-  const [homeCategory, setHomeCategory] = useState("");
   const [homePopupOpen, setHomePopupOpen] = useState(false);
   const [homeClockTick, setHomeClockTick] = useState(() => Date.now());
   const popularProductIds = useHomePopularProducts({
@@ -151,7 +145,6 @@ export default function Home({
   const deliveryAppsRef = useRef(null);
   const fulfillmentRef = useRef(null);
   const flashSaleRef = useRef(null);
-  const categorySectionRef = useRef(null);
   const featuredProductsRef = useRef(null);
 
   useEffect(() => {
@@ -173,7 +166,6 @@ export default function Home({
     showDeliveryApps,
     showFulfillment,
     showFlashSale,
-    showCategorySection,
     showFeaturedProducts,
     popupDelaySeconds,
     showHomePopup,
@@ -182,8 +174,6 @@ export default function Home({
     popupCooldownHours,
     deliveryAppsList,
     deliveryAppBranches,
-    homeCategories,
-    activeHomeCategory,
     featuredProducts,
     pickupBranches,
     deliveryBranches,
@@ -199,7 +189,7 @@ export default function Home({
     homeContent,
     homeText: t,
     categories,
-    homeCategory,
+    homeCategory: "",
     popularProductIds,
     showAllHomeProducts: false,
     branches,
@@ -230,7 +220,6 @@ export default function Home({
       deliveryAppsRef,
       fulfillmentRef,
       flashSaleRef,
-      categorySectionRef,
       featuredProductsRef
     }
   });
@@ -272,12 +261,6 @@ export default function Home({
     if (!slideWidth) return;
     const nextIndex = Math.round(track.scrollLeft / slideWidth);
     setActiveBanner((current) => (current === nextIndex ? current : nextIndex));
-  };
-
-  const openMenuCategory = (category) => {
-    setHomeCategory(category);
-    setActiveCategory?.(category);
-    navigate("menu", "menu");
   };
 
   const homeBlockRenderers = {
@@ -346,16 +329,6 @@ export default function Home({
         flashProducts={flashProducts}
         getCountdownParts={getCountdownParts}
         formatCountdown={formatCountdown}
-      /></section>
-    ) : null,
-    categorySection: () => showCategorySection ? (
-      <section ref={categorySectionRef} className="home2026-order-anchor"><HomeCategorySection
-        categoryTitle={t.categoryTitle}
-        viewAll={t.viewAll}
-        homeCategories={homeCategories}
-        activeHomeCategory={activeHomeCategory}
-        onSelectCategory={openMenuCategory}
-        onViewAll={() => openMenuCategory(homeCategories[0]?.value || categories[0] || t.all)}
       /></section>
     ) : null,
     featuredProducts: () => showFeaturedProducts ? (

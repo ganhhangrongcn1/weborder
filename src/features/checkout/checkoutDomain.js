@@ -3,6 +3,7 @@ import { storeOrigin } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { getDefaultAddress, estimateDistanceKm } from "./checkoutHelpers.js";
 import { calculateBaseShippingFeeByConfig } from "../../services/shippingService.js";
+import { resolveBranchFromCandidates, resolveOrderBranch } from "../../services/branchIdentityService.js";
 
 function parseBranchLocation(branch) {
   if (!branch) return null;
@@ -52,14 +53,15 @@ export function getSavedAddressesForPhone(demoAddresses = [], currentPhone = "")
 export function createInitialDeliveryInfo({
   currentPhone,
   demoUser,
-  demoAddresses
+  demoAddresses,
+  initialDeliveryInfo = null
 }) {
   const savedForPhone = getSavedAddressesForPhone(demoAddresses, currentPhone);
   const defaultAddress = currentPhone
     ? getDefaultAddress(savedForPhone.length ? savedForPhone : demoAddresses)
     : null;
 
-  return {
+  const defaultInfo = {
     name: defaultAddress?.receiverName || demoUser?.name || "Khách",
     phone: defaultAddress?.phone || currentPhone || "",
     address: defaultAddress?.address || "",
@@ -69,6 +71,97 @@ export function createInitialDeliveryInfo({
     deliveryFee: defaultAddress?.deliveryFee ?? null,
     shippingStatus: defaultAddress?.deliveryFee ? "OK" : "NEED_CONFIRM",
     saveToAccount: false
+  };
+
+  if (!String(initialDeliveryInfo?.address || "").trim()) return defaultInfo;
+  return {
+    ...defaultInfo,
+    ...initialDeliveryInfo,
+    shippingStatus: "NEED_CONFIRM",
+    saveToAccount: false
+  };
+}
+
+function getQrBranchKeyFromPath(pathname = "") {
+  const match = String(pathname || "").match(/^\/qr\/([^/]+)(?:\/|$)/i);
+  if (!match) return "";
+  try {
+    return decodeURIComponent(match[1] || "").trim();
+  } catch {
+    return String(match[1] || "").trim();
+  }
+}
+
+function isQrCounterOrder(order = {}) {
+  const source = String(
+    order?.orderSource || order?.order_source || order?.source || order?.channel || order?.platform || ""
+  ).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return ["qrcounter", "qrorder", "qrtaiquay", "customerqr"].includes(source);
+}
+
+function buildReorderDeliveryInfo(order = {}) {
+  const address = String(order?.deliveryAddress || order?.delivery_address || "").trim();
+  if (!address || address.toLowerCase() === "khách tự đến lấy") return null;
+  return {
+    name: String(order?.customerName || order?.orderCustomerName || "").trim(),
+    phone: String(order?.customerPhone || order?.rawCustomerPhone || order?.phone || "").trim(),
+    address,
+    lat: order?.lat ?? null,
+    lng: order?.lng ?? null,
+    distanceKm: order?.distanceKm ?? order?.distance_km ?? null,
+    deliveryFee: null
+  };
+}
+
+export function buildReorderCheckoutPreset({ order = {}, branches = [], pathname = "" }) {
+  const branchList = Array.isArray(branches) ? branches.filter(Boolean) : [];
+  const pickupBranches = branchList.filter((branch) => branch?.pickupEnabled !== false);
+  const qrBranchKey = getQrBranchKeyFromPath(pathname);
+  const qrRouteBranch = qrBranchKey
+    ? resolveBranchFromCandidates([qrBranchKey], pickupBranches)
+    : null;
+
+  if (qrRouteBranch) {
+    return {
+      branchUnavailable: false,
+      preset: {
+        fulfillmentType: "pickup",
+        selectedBranch: qrRouteBranch.id,
+        selectedDeliveryBranch: "",
+        pickupMode: "soon",
+        orderSource: "qr_counter",
+        source: "qr_counter",
+        qrBranchId: String(qrRouteBranch.branch_code || qrRouteBranch.branchCode || qrRouteBranch.id || ""),
+        qrBranchLocked: true,
+        qrAutoPickupNow: true,
+        reorderDeliveryInfo: null
+      }
+    };
+  }
+
+  const fulfillmentType = String(order?.fulfillmentType || order?.fulfillment_type || "").toLowerCase() === "pickup" || isQrCounterOrder(order)
+    ? "pickup"
+    : "delivery";
+  const eligibleBranches = fulfillmentType === "pickup"
+    ? pickupBranches
+    : branchList.filter((branch) => branch?.shipEnabled !== false);
+  const matchedBranch = resolveOrderBranch(order, eligibleBranches);
+  const selectedBranchId = String(matchedBranch?.id || "");
+
+  return {
+    branchUnavailable: branchList.length > 0 && !matchedBranch,
+    preset: {
+      fulfillmentType,
+      selectedBranch: fulfillmentType === "pickup" ? selectedBranchId : "",
+      selectedDeliveryBranch: fulfillmentType === "delivery" ? selectedBranchId : "",
+      pickupMode: "soon",
+      orderSource: "online",
+      source: "online",
+      qrBranchId: "",
+      qrBranchLocked: false,
+      qrAutoPickupNow: false,
+      reorderDeliveryInfo: fulfillmentType === "delivery" ? buildReorderDeliveryInfo(order) : null
+    }
   };
 }
 
