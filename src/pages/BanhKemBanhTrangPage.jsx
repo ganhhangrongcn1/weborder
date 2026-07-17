@@ -1,4 +1,5 @@
 ﻿import { useMemo, useState } from "react";
+import { useEffect, useRef } from "react";
 import Icon from "../components/Icon.jsx";
 import GoongAddressPicker from "../components/GoongAddressPicker.jsx";
 import { resolveDeliveryContext, resolvePickupBranches } from "../features/checkout/checkoutDomain.js";
@@ -95,13 +96,19 @@ function combineDateAndTime(dateValue, timeValue) {
   return `${dateValue}T${timeValue}`;
 }
 
-function buildPickupTimeOptions({ selectedDate, minDateTimeValue, stepMinutes = 15 }) {
+function buildPickupTimeOptions({
+  selectedDate,
+  minDateTimeValue,
+  stepMinutes = 15,
+  openMinutes = CAKE_PICKUP_OPEN_MINUTES,
+  closeMinutes = CAKE_PICKUP_CLOSE_MINUTES
+}) {
   const minDate = formatDateValue(minDateTimeValue);
   const minTime = formatTimeValue(minDateTimeValue);
   const options = [];
   const step = Math.max(1, Number(stepMinutes || 15));
 
-  for (let totalMinutes = CAKE_PICKUP_OPEN_MINUTES; totalMinutes <= CAKE_PICKUP_CLOSE_MINUTES; totalMinutes += step) {
+  for (let totalMinutes = openMinutes; totalMinutes <= closeMinutes; totalMinutes += step) {
     const hour = Math.floor(totalMinutes / 60);
     const minute = totalMinutes % 60;
     const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
@@ -113,6 +120,57 @@ function buildPickupTimeOptions({ selectedDate, minDateTimeValue, stepMinutes = 
   }
 
   return options;
+}
+
+function getBranchOperatingWindow(branch = {}) {
+  const scheduleText = String(branch.time || branch.openingHours || branch.opening_hours || "").trim();
+  const match = scheduleText.match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/);
+  if (!match) {
+    return {
+      openMinutes: CAKE_PICKUP_OPEN_MINUTES,
+      closeMinutes: CAKE_PICKUP_CLOSE_MINUTES,
+      label: "10:00 - 22:00"
+    };
+  }
+
+  const openMinutes = Number(match[1]) * 60 + Number(match[2]);
+  const closeMinutes = Number(match[3]) * 60 + Number(match[4]);
+  return {
+    openMinutes,
+    closeMinutes,
+    label: `${String(match[1]).padStart(2, "0")}:${match[2]} - ${String(match[3]).padStart(2, "0")}:${match[4]}`
+  };
+}
+
+function resolveAvailablePickupSelection({ dateValue, timeValue, minDateTimeValue, operatingWindow }) {
+  let selectedDate = dateValue || formatDateValue(minDateTimeValue);
+  let options = buildPickupTimeOptions({
+    selectedDate,
+    minDateTimeValue,
+    stepMinutes: 15,
+    ...operatingWindow
+  });
+
+  if (!options.length) {
+    const nextDate = new Date(`${selectedDate}T12:00:00`);
+    nextDate.setDate(nextDate.getDate() + 1);
+    selectedDate = formatDateTimeLocal(nextDate).slice(0, 10);
+    options = buildPickupTimeOptions({
+      selectedDate,
+      minDateTimeValue,
+      stepMinutes: 15,
+      ...operatingWindow
+    });
+  }
+
+  const selectedTime = options.some((item) => item.value === timeValue)
+    ? timeValue
+    : options[0]?.value || formatTimeValue(minDateTimeValue);
+
+  return {
+    pickupTime: combineDateAndTime(selectedDate, selectedTime),
+    options
+  };
 }
 
 function getCakeAddonMode(product) {
@@ -146,6 +204,35 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   const [addonInfoPopup, setAddonInfoPopup] = useState("");
   const [pickupTimeWarningOpen, setPickupTimeWarningOpen] = useState(false);
   const [successOrder, setSuccessOrder] = useState(null);
+  const modalRootRef = useRef(null);
+  const hasOpenModal = Boolean(selectedProduct || orderingProduct || successOrder || pickupTimeWarningOpen || addonInfoPopup);
+
+  useEffect(() => {
+    if (!hasOpenModal) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const previouslyFocused = document.activeElement;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => {
+      modalRootRef.current?.querySelector(".cake-modal__close")?.focus();
+    });
+
+    const handleKeyDown = (event) => {
+      if (event.key !== "Escape") return;
+      if (addonInfoPopup) setAddonInfoPopup("");
+      else if (pickupTimeWarningOpen) setPickupTimeWarningOpen(false);
+      else if (successOrder) setSuccessOrder(null);
+      else if (orderingProduct) closeOrderForm();
+      else if (selectedProduct) setSelectedProduct(null);
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [addonInfoPopup, hasOpenModal, orderingProduct, pickupTimeWarningOpen, selectedProduct, successOrder]);
 
   const featuredProducts = useMemo(() => {
     const ids = Array.isArray(settings.featuredProductIds) ? settings.featuredProductIds : [];
@@ -169,14 +256,6 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   const minPickupTimeValue = useMemo(() => getMinPickupDateTimeValue(minPickupLeadMinutes), [minPickupLeadMinutes]);
   const selectedPickupDateValue = formatDateValue(form.pickupTime) || formatDateValue(minPickupTimeValue);
   const selectedPickupTimeValue = formatTimeValue(form.pickupTime) || formatTimeValue(minPickupTimeValue);
-  const pickupTimeOptions = useMemo(
-    () => buildPickupTimeOptions({
-      selectedDate: selectedPickupDateValue,
-      minDateTimeValue: minPickupTimeValue,
-      stepMinutes: 15
-    }),
-    [minPickupTimeValue, selectedPickupDateValue]
-  );
   const shippingConfig = useMemo(() => ({
     ...(settings.shippingConfig || {}),
     sourceBranchId: cakeDeliverySourceBranchId
@@ -204,6 +283,22 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     }
     return pickupBranches[0] || null;
   }, [form.pickupBranchId, pickupBranches]);
+  const activeServiceBranch = form.fulfillmentType === "delivery"
+    ? deliveryContext.deliverySourceBranch
+    : selectedPickupBranch;
+  const activeOperatingWindow = useMemo(
+    () => getBranchOperatingWindow(activeServiceBranch || {}),
+    [activeServiceBranch]
+  );
+  const pickupTimeOptions = useMemo(
+    () => buildPickupTimeOptions({
+      selectedDate: selectedPickupDateValue,
+      minDateTimeValue: minPickupTimeValue,
+      stepMinutes: 15,
+      ...activeOperatingWindow
+    }),
+    [activeOperatingWindow, minPickupTimeValue, selectedPickupDateValue]
+  );
 
   const addOnTotal = useMemo(() => {
     const chibiPrice = canSelectChibi && form.chibiSelected ? Number(chibiAddon.price || 0) : 0;
@@ -223,7 +318,8 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     const options = buildPickupTimeOptions({
       selectedDate: nextDate,
       minDateTimeValue: minPickupTimeValue,
-      stepMinutes: 15
+      stepMinutes: 15,
+      ...activeOperatingWindow
     });
     const nextTime = options.some((item) => item.value === selectedPickupTimeValue)
       ? selectedPickupTimeValue
@@ -233,6 +329,29 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
   const updatePickupClock = (value) => {
     updateForm("pickupTime", combineDateAndTime(selectedPickupDateValue, value || pickupTimeOptions[0]?.value || selectedPickupTimeValue));
+  };
+
+  const updateFulfillmentType = (fulfillmentType) => {
+    const nextBranch = fulfillmentType === "delivery" ? deliveryContext.deliverySourceBranch : selectedPickupBranch;
+    const selection = resolveAvailablePickupSelection({
+      dateValue: selectedPickupDateValue,
+      timeValue: selectedPickupTimeValue,
+      minDateTimeValue: minPickupTimeValue,
+      operatingWindow: getBranchOperatingWindow(nextBranch || {})
+    });
+    setForm((current) => ({ ...current, fulfillmentType, pickupTime: selection.pickupTime }));
+    setMessage("");
+  };
+
+  const selectPickupBranch = (branch, branchId) => {
+    const selection = resolveAvailablePickupSelection({
+      dateValue: selectedPickupDateValue,
+      timeValue: selectedPickupTimeValue,
+      minDateTimeValue: minPickupTimeValue,
+      operatingWindow: getBranchOperatingWindow(branch)
+    });
+    setForm((current) => ({ ...current, pickupBranchId: branchId, pickupTime: selection.pickupTime }));
+    setMessage("");
   };
 
   const openOrderForm = (product) => {
@@ -279,6 +398,10 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     if (!orderingProduct || submitting) return;
     if (isPickupTimeTooSoon(form.pickupTime, minPickupLeadMinutes)) {
       setPickupTimeWarningOpen(true);
+      return;
+    }
+    if (form.fulfillmentType === "delivery" && !String(addressInfo?.addressText || form.deliveryAddress || "").trim()) {
+      setMessage("Vui lòng chọn địa chỉ giao hàng để quán kiểm tra khoảng cách và phí ship.");
       return;
     }
     setSubmitting(true);
@@ -440,7 +563,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       </section>
 
       {selectedProduct && (
-        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-detail-title">
+        <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-detail-title">
           <button type="button" className="cake-modal__backdrop" aria-label="Đóng chi tiết bánh" tabIndex="-1" onClick={() => setSelectedProduct(null)} />
           <div className="cake-detail">
             <button className="cake-modal__close" type="button" onClick={() => setSelectedProduct(null)} aria-label="Đóng chi tiết bánh">×</button>
@@ -481,7 +604,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       )}
 
       {orderingProduct && (
-        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-order-title">
+        <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-order-title">
           <button type="button" className="cake-modal__backdrop" aria-label="Đóng form đặt bánh" tabIndex="-1" onClick={closeOrderForm} />
           <form className="cake-order-form" onSubmit={submitOrder}>
             <button className="cake-modal__close" type="button" onClick={closeOrderForm} aria-label="Đóng form đặt bánh">×</button>
@@ -495,8 +618,13 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             </div>
 
             {canSelectChibi || canSelectDecoration ? (
-            <div className="cake-addon-order-box">
-              <h3>Phụ kiện theo yêu cầu</h3>
+            <details className="cake-addon-disclosure">
+              <summary>
+                <span>Thêm phụ kiện theo yêu cầu</span>
+                <small>Chibi, phụ kiện trang trí và ghi chú riêng</small>
+              </summary>
+              <div className="cake-addon-order-box">
+              <h3>Tùy chọn phụ kiện</h3>
               {canSelectChibi ? (
                 <label className="cake-addon-check">
                   <input
@@ -563,142 +691,175 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                   placeholder="VD: Chọn mẫu 2, đổi màu nơ vàng…"
                 />
               </label>
-            </div>
+              </div>
+            </details>
             ) : null}
 
-            <div className="cake-form-grid">
-              <label>
-                <span>Tên người nhận</span>
-                <input
-                  name="customerName"
-                  value={form.customerName}
-                  onChange={(event) => updateForm("customerName", event.target.value)}
-                  required
-                  autoComplete="name"
-                  placeholder="Tên người nhận bánh"
-                />
-              </label>
-              <label>
-                <span>Số điện thoại</span>
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  name="customerPhone"
-                  value={form.customerPhone}
-                  onChange={(event) => updateForm("customerPhone", event.target.value)}
-                  required
-                  autoComplete="tel"
-                  placeholder="09xxxxxxxx"
-                />
-              </label>
-              <div className="cake-time-picker">
-                <div>
-                  <span>Ngày giờ muốn lấy</span>
-                  <small>
-                    Vì là món quà tặng người thân yêu, quán cần ít nhất 120 phút để chuẩn bị bánh đẹp và chỉn chu.
-                  </small>
-                </div>
+            <section className="cake-form-section" aria-labelledby="cake-contact-section">
+              <h3 id="cake-contact-section"><span>1</span> Thông tin người nhận</h3>
+              <div className="cake-form-grid">
                 <label>
-                  <span>Ngày lấy</span>
+                  <span>Tên người nhận</span>
                   <input
-                    type="date"
-                    name="pickupDate"
-                    min={formatDateValue(minPickupTimeValue)}
-                    value={selectedPickupDateValue}
-                    onChange={(event) => updatePickupDate(event.target.value)}
+                    name="customerName"
+                    value={form.customerName}
+                    onChange={(event) => updateForm("customerName", event.target.value)}
                     required
+                    autoComplete="name"
+                    placeholder="VD: Nguyễn Minh An…"
                   />
                 </label>
                 <label>
-                  <span>Giờ lấy</span>
-                  <select
-                    name="pickupTime"
-                    value={pickupTimeOptions.some((item) => item.value === selectedPickupTimeValue) ? selectedPickupTimeValue : pickupTimeOptions[0]?.value || ""}
-                    onChange={(event) => updatePickupClock(event.target.value)}
+                  <span>Số điện thoại</span>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    name="customerPhone"
+                    value={form.customerPhone}
+                    onChange={(event) => updateForm("customerPhone", event.target.value)}
                     required
-                  >
-                    {pickupTimeOptions.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
+                    autoComplete="tel"
+                    pattern="0[0-9]{9}"
+                    title="Nhập số điện thoại Việt Nam gồm 10 chữ số và bắt đầu bằng số 0."
+                    placeholder="VD: 0901234567…"
+                  />
                 </label>
               </div>
-              <label>
-                <span>Chữ ghi trên bánh</span>
-                <input
-                  name="cakeMessage"
-                  value={form.cakeMessage}
-                  onChange={(event) => updateForm("cakeMessage", event.target.value)}
-                  autoComplete="off"
-                  placeholder="VD: Chúc mừng sinh nhật An"
+            </section>
+
+            <section className="cake-form-section" aria-labelledby="cake-fulfillment-section">
+              <h3 id="cake-fulfillment-section"><span>2</span> Cách nhận bánh</h3>
+              <div className="cake-segmented" role="group" aria-label="Hình thức nhận bánh">
+                {pickupEnabled ? (
+                  <button
+                    type="button"
+                    className={form.fulfillmentType === "pickup" ? "is-active" : ""}
+                    aria-pressed={form.fulfillmentType === "pickup"}
+                    onClick={() => updateFulfillmentType("pickup")}
+                  >
+                    <Icon name="home" size={17} />
+                    <span>Tự đến lấy</span>
+                  </button>
+                ) : null}
+                {deliveryEnabled ? (
+                  <button
+                    type="button"
+                    className={form.fulfillmentType === "delivery" ? "is-active" : ""}
+                    aria-pressed={form.fulfillmentType === "delivery"}
+                    onClick={() => updateFulfillmentType("delivery")}
+                  >
+                    <Icon name="bike" size={17} />
+                    <span>Giao hàng</span>
+                  </button>
+                ) : null}
+              </div>
+
+              {form.fulfillmentType === "delivery" && deliveryEnabled ? (
+                <GoongAddressPicker
+                  value={addressInfo || { addressText: form.deliveryAddress }}
+                  onChange={(value) => {
+                    setAddressInfo(value);
+                    updateForm("deliveryAddress", value.addressText || "");
+                  }}
+                  origin={deliveryOrigin}
+                  originLabel={deliveryContext.deliverySourceBranch?.name || ""}
+                  originAddress={deliveryContext.deliverySourceBranch?.address || ""}
+                  requireOrigin
+                  shippingConfig={shippingConfig}
+                />
+              ) : (
+                <div className="cake-pickup-branches">
+                  <p className="cake-pickup-title">Chọn chi nhánh ghé lấy</p>
+                  {(pickupBranches.length ? pickupBranches : [{ id: "default", name: settings.pickupAddress, address: "", time: "" }]).map((branch) => {
+                    const branchId = getBranchRuntimeId(branch) || branch.id;
+                    const isSelected = branchMatchesRuntimeId(selectedPickupBranch, branchId);
+                    return (
+                      <button
+                        key={branchId}
+                        type="button"
+                        className={`branch-card ${isSelected ? "branch-card-active" : ""}`}
+                        aria-pressed={isSelected}
+                        onClick={() => selectPickupBranch(branch, branchId)}
+                      >
+                        <span className="cake-branch-icon">
+                          <Icon name="home" size={18} />
+                        </span>
+                        <span className="min-w-0 flex-1 text-left">
+                          <strong>{branch.name}</strong>
+                          {branch.address ? <small>{branch.address}</small> : null}
+                          {branch.time ? <em>{branch.time}</em> : null}
+                        </span>
+                        <span className="branch-radio">{isSelected ? "✓" : ""}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="cake-form-section" aria-labelledby="cake-time-section">
+              <h3 id="cake-time-section"><span>3</span> Thời gian và lời nhắn</h3>
+              <div className="cake-form-grid">
+                <div className="cake-time-picker">
+                  <div>
+                    <span>Ngày giờ muốn lấy</span>
+                    <small>
+                      Quán cần ít nhất {minPickupLeadMinutes} phút để chuẩn bị. Khung giờ hiện tại: {activeOperatingWindow.label}.
+                    </small>
+                  </div>
+                  <label>
+                    <span>Ngày lấy</span>
+                    <input
+                      type="date"
+                      name="pickupDate"
+                      min={formatDateValue(minPickupTimeValue)}
+                      value={selectedPickupDateValue}
+                      onChange={(event) => updatePickupDate(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    <span>Giờ lấy</span>
+                    <select
+                      name="pickupTime"
+                      value={pickupTimeOptions.some((item) => item.value === selectedPickupTimeValue) ? selectedPickupTimeValue : pickupTimeOptions[0]?.value || ""}
+                      onChange={(event) => updatePickupClock(event.target.value)}
+                      required
+                    >
+                      {pickupTimeOptions.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  <span>Chữ ghi trên bánh</span>
+                  <input
+                    name="cakeMessage"
+                    value={form.cakeMessage}
+                    onChange={(event) => updateForm("cakeMessage", event.target.value)}
+                    autoComplete="off"
+                    placeholder="VD: Chúc mừng sinh nhật An"
+                  />
+                </label>
+              </div>
+
+              <label className="cake-note-field">
+                <span>Ghi chú cho quán</span>
+                <textarea
+                  rows="3"
+                  name="note"
+                  value={form.note}
+                  onChange={(event) => updateForm("note", event.target.value)}
+                  placeholder="Ví dụ: ít cay, gọi trước khi giao…"
                 />
               </label>
-            </div>
-
-            <div className="cake-segmented">
-              {pickupEnabled ? (
-                <button type="button" className={form.fulfillmentType === "pickup" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "pickup")}>Tự đến lấy</button>
-              ) : null}
-              {deliveryEnabled ? (
-                <button type="button" className={form.fulfillmentType === "delivery" ? "is-active" : ""} onClick={() => updateForm("fulfillmentType", "delivery")}>Giao hàng</button>
-              ) : null}
-            </div>
-
-            {form.fulfillmentType === "delivery" && deliveryEnabled ? (
-              <GoongAddressPicker
-                value={addressInfo || { addressText: form.deliveryAddress }}
-                onChange={(value) => {
-                  setAddressInfo(value);
-                  updateForm("deliveryAddress", value.addressText || "");
-                }}
-                origin={deliveryOrigin}
-                originLabel={deliveryContext.deliverySourceBranch?.name || ""}
-                originAddress={deliveryContext.deliverySourceBranch?.address || ""}
-                requireOrigin
-                shippingConfig={shippingConfig}
-              />
-            ) : (
-              <div className="cake-pickup-branches">
-                <p className="cake-pickup-title">Chọn chi nhánh ghé lấy</p>
-                {(pickupBranches.length ? pickupBranches : [{ id: "default", name: settings.pickupAddress, address: "", time: "" }]).map((branch) => {
-                  const branchId = getBranchRuntimeId(branch) || branch.id;
-                  const isSelected = branchMatchesRuntimeId(selectedPickupBranch, branchId);
-                  return (
-                    <button
-                      key={branchId}
-                      type="button"
-                      className={`branch-card ${isSelected ? "branch-card-active" : ""}`}
-                      onClick={() => updateForm("pickupBranchId", branchId)}
-                    >
-                      <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                        <Icon name="home" size={18} />
-                      </span>
-                      <span className="min-w-0 flex-1 text-left">
-                        <strong>{branch.name}</strong>
-                        {branch.address ? <small>{branch.address}</small> : null}
-                        {branch.time ? <em>{branch.time}</em> : null}
-                      </span>
-                      <span className="branch-radio">{isSelected ? "✓" : ""}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <label className="cake-note-field">
-              <span>Ghi chú cho quán</span>
-              <textarea
-                rows="3"
-                name="note"
-                value={form.note}
-                onChange={(event) => updateForm("note", event.target.value)}
-                placeholder="Ví dụ: ít cay, gọi trước khi giao…"
-              />
-            </label>
+            </section>
 
             <button className="cake-primary-btn cake-order-submit" type="submit" disabled={submitting} aria-busy={submitting ? "true" : "false"}>
               {submitting ? "Đang tạo đơn…" : "Tạo đơn và gửi Zalo"}
             </button>
+            {message ? <p className="cake-form-message" role="status" aria-live="polite">{message}</p> : null}
             <p className="cake-zalo-copy-note">
               App sẽ chuẩn bị nội dung đơn để bạn gửi Zalo cho quán xác nhận.
             </p>
@@ -707,7 +868,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       )}
 
       {successOrder ? (
-        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-success-title">
+        <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-success-title">
           <button type="button" className="cake-modal__backdrop" aria-label="Đóng thông báo đặt bánh" tabIndex="-1" onClick={() => setSuccessOrder(null)} />
           <div className="cake-success-popup">
             <button className="cake-modal__close" type="button" onClick={() => setSuccessOrder(null)} aria-label="Đóng thông báo đặt bánh">×</button>
@@ -772,7 +933,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       ) : null}
 
       {pickupTimeWarningOpen ? (
-        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-time-warning-title">
+        <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-time-warning-title">
           <button type="button" className="cake-modal__backdrop" aria-label="Đóng cảnh báo giờ lấy bánh" tabIndex="-1" onClick={() => setPickupTimeWarningOpen(false)} />
           <div className="cake-addon-popup">
             <button className="cake-modal__close" type="button" onClick={() => setPickupTimeWarningOpen(false)} aria-label="Đóng cảnh báo giờ lấy bánh">×</button>
@@ -786,7 +947,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       ) : null}
 
       {addonInfoPopup ? (
-        <div className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-addon-popup-title">
+        <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-addon-popup-title">
           <button type="button" className="cake-modal__backdrop" aria-label="Đóng thông tin phụ kiện" tabIndex="-1" onClick={() => setAddonInfoPopup("")} />
           <div className="cake-addon-popup">
             <button className="cake-modal__close" type="button" onClick={() => setAddonInfoPopup("")} aria-label="Đóng thông tin phụ kiện">×</button>

@@ -323,8 +323,8 @@ export default function AdminCakesPage({ branches = [] }) {
         </div>
       </div>
 
-      {configLoading ? <p className="admin-cakes-message">Đang tải cấu hình bánh từ Supabase...</p> : null}
-      {message ? <p className="admin-cakes-message">{message}</p> : null}
+      {configLoading ? <p className="admin-cakes-message" role="status" aria-live="polite">Đang tải cấu hình bánh từ Supabase…</p> : null}
+      {message ? <p className="admin-cakes-message" role="status" aria-live="polite">{message}</p> : null}
 
       <div className="admin-cakes-tabs">
         <button type="button" className={activeTab === "orders" ? "is-active" : ""} onClick={() => setActiveTab("orders")}>
