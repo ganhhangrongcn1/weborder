@@ -81,7 +81,7 @@ export default function CheckoutFulfillmentSection({
       {fulfillmentType === "delivery" ? (
         <CheckoutCard
           title={checkoutText.deliveryTo}
-          action="Đổi"
+          action="Thay đổi địa chỉ"
           onAction={() => setIsAddressModalOpen(true)}
           className={fieldErrors.delivery ? "checkout-card--error" : ""}
         >

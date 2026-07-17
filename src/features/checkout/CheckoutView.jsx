@@ -684,6 +684,7 @@ export default function Checkout({
         setIsAddressModalOpen={setIsAddressModalOpen}
         deliveryOrigin={deliveryOrigin}
         shippingConfig={shippingConfig}
+        canSaveAddressToAccount={Boolean(isRegisteredCustomer)}
         handleSaveAddress={(nextInfo) => {
           clearCheckoutFieldError("delivery");
           return handleSaveAddress(nextInfo);

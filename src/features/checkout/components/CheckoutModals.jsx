@@ -20,6 +20,7 @@ export default function CheckoutModals({
   setIsAddressModalOpen,
   deliveryOrigin,
   shippingConfig,
+  canSaveAddressToAccount = false,
   handleSaveAddress,
   isDeliveryFeeModalOpen,
   shippingZonesFromConfig,
@@ -62,6 +63,7 @@ export default function CheckoutModals({
           onClose={() => setIsAddressModalOpen(false)}
           deliveryOrigin={deliveryOrigin}
           shippingConfig={shippingConfig}
+          canSaveToAccount={canSaveAddressToAccount}
           onSave={async (nextInfo) => {
             await handleSaveAddress(nextInfo);
             setIsAddressModalOpen(false);

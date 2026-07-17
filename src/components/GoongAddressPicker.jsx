@@ -82,7 +82,11 @@ export default function GoongAddressPicker({
   originAddress = "",
   requireOrigin = false,
   showOriginSummary = false,
-  shippingConfig
+  shippingConfig,
+  inputId,
+  inputName = "deliveryAddress",
+  inputRef,
+  inputError = ""
 }) {
   const hasDeliveryOrigin = Boolean(origin?.lat && origin?.lng);
   const deliveryOrigin = hasDeliveryOrigin ? origin : BRANCH_LOCATION;
@@ -280,9 +284,24 @@ export default function GoongAddressPicker({
         </div>
       ) : null}
       <div className="relative z-20">
-        <label className="address-field">
+        <label className={`address-field ${inputError ? "has-error" : ""}`.trim()}>
           <span>Địa chỉ giao hàng</span>
-          <input value={keyword} onChange={(event) => handleManualChange(event.target.value)} placeholder="Nhập số nhà, tên đường, phường..." autoComplete="off" />
+          <input
+            ref={inputRef}
+            id={inputId}
+            name={inputName}
+            value={keyword}
+            onChange={(event) => handleManualChange(event.target.value)}
+            placeholder="Nhập số nhà, tên đường, phường…"
+            autoComplete="off"
+            aria-invalid={Boolean(inputError)}
+            aria-describedby={inputError && inputId ? `${inputId}-error` : undefined}
+          />
+          {inputError ? (
+            <small id={inputId ? `${inputId}-error` : undefined} className="checkout-address-field-error" role="alert">
+              {inputError}
+            </small>
+          ) : null}
         </label>
         {suggestions.length > 0 && (
           <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-64 overflow-y-auto rounded-[22px] border border-orange-100 bg-white p-1 shadow-[0_18px_44px_rgba(58,31,20,0.18)]">
@@ -292,9 +311,8 @@ export default function GoongAddressPicker({
                 type="button"
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  event.stopPropagation();
-                  chooseSuggestion(item);
                 }}
+                onClick={() => chooseSuggestion(item)}
                 className="w-full rounded-[18px] px-3 py-2 text-left text-xs hover:bg-orange-50"
               >
                 <strong className="block text-brown">{item.structured_formatting?.main_text || item.description}</strong>
@@ -304,12 +322,21 @@ export default function GoongAddressPicker({
           </div>
         )}
       </div>
-      <div className="flex items-center justify-between gap-2 rounded-2xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700">
+      <div
+        className="flex items-center justify-between gap-2 rounded-2xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700"
+        role="status"
+        aria-live="polite"
+      >
         <span className="min-w-0 flex-1">
-          {isTyping ? "Đợi bạn nhập xong rồi gợi ý..." : isSearching ? "Đang tìm địa chỉ..." : isCalculating ? "Đang tính khoảng cách..." : statusText}
+          {isTyping ? "Đợi bạn nhập xong rồi gợi ý…" : isSearching ? "Đang tìm địa chỉ…" : isCalculating ? "Đang tính khoảng cách…" : statusText}
         </span>
-        <button type="button" onClick={() => setShowMap(true)} className="shrink-0 rounded-xl bg-white px-2 py-1 text-orange-600 shadow-sm">
-          Thả ghim
+        <button
+          type="button"
+          onClick={() => setShowMap((current) => !current)}
+          className="shrink-0 rounded-xl bg-white px-2 py-1 text-orange-600 shadow-sm"
+          aria-expanded={showMap}
+        >
+          {showMap ? "Thu gọn bản đồ" : "Mở bản đồ"}
         </button>
       </div>
       {showMap && (

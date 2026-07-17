@@ -1,6 +1,6 @@
 .customer-page-stage {
   min-width: 0;
-  animation: customer-page-enter var(--customer-motion-page) var(--customer-ease-enter) both;
+  animation: customer-page-enter var(--customer-motion-page) var(--customer-ease-enter) backwards;
   transform-origin: center top;
 }
 
