@@ -53,11 +53,20 @@ assert.equal(isQrCounterBankPaymentOrder(momoQrCounterOrder), false);
 const momoSession = {
   provider_payload: {
     qrCodeUrl: "000201010212TESTMOMO6304ABCD",
-    payUrl: "https://test-payment.momo.vn/v2/gateway/pay?t=test"
+    payUrl: "https://test-payment.momo.vn/v2/gateway/pay?t=test",
+    deeplink: "momo://app?action=payWithApp"
+  }
+};
+const momoSessionWithoutDirectQr = {
+  provider_payload: {
+    payUrl: "https://payment.momo.vn/v2/gateway/pay?t=production",
+    deeplink: "momo://app?action=payWithApp"
   }
 };
 assert.equal(buildQrOrderPaymentImageUrl({ order: momoQrCounterOrder, session: momoSession }), "");
 assert.match(await buildMomoPaymentQrImageUrl(momoSession), /^data:image\/png;base64,/);
+assert.equal(await buildMomoPaymentQrImageUrl(momoSessionWithoutDirectQr), "");
 assert.equal(getMomoPaymentLinks(momoSession).payUrl, momoSession.provider_payload.payUrl);
+assert.equal(getMomoPaymentLinks(momoSession).deeplink, momoSession.provider_payload.deeplink);
 
 console.log("Order Success payment smoke test passed (cash website + SePay/MoMo QR counter).");

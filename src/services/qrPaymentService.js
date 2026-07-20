@@ -164,8 +164,8 @@ export function getMomoPaymentLinks(session = null) {
 }
 
 export async function buildMomoPaymentQrImageUrl(session = null) {
-  const { payUrl, qrCodeUrl } = getMomoPaymentLinks(session);
-  const qrPayload = qrCodeUrl || payUrl;
+  const { qrCodeUrl } = getMomoPaymentLinks(session);
+  const qrPayload = qrCodeUrl;
   if (!qrPayload) return "";
 
   const qrCodeModule = await import("qrcode");

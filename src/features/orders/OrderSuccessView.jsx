@@ -81,7 +81,8 @@ export default function OrderSuccess({
   const paymentConfig = useMemo(() => getQrOrderPaymentConfig(paymentBranch), [paymentBranch]);
   const paymentReference = getQrOrderPaymentReference(order, paymentSession);
   const momoPaymentLinks = getMomoPaymentLinks(paymentSession);
-  const momoQrPayload = momoPaymentLinks.qrCodeUrl || momoPaymentLinks.payUrl;
+  const momoQrPayload = momoPaymentLinks.qrCodeUrl;
+  const momoDirectPaymentUrl = momoPaymentLinks.deeplink || momoPaymentLinks.payUrl;
   const bankQrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
   const qrPaymentImageUrl = isMomoPayment ? momoQrImageUrl : bankQrPaymentImageUrl;
   const qrPaymentPaid = isQrPaymentOrder && isQrOrderPaid(order, paymentSession);
@@ -320,7 +321,7 @@ export default function OrderSuccess({
                       </div>
                       <p className="qr-payment-wait-card__save-hint">
                         {isMomoPayment
-                          ? "Dùng camera trong ứng dụng MoMo để quét mã, hoặc bấm Mở MoMo trên điện thoại này."
+                          ? "Mở ứng dụng MoMo và chọn Quét mã, hoặc bấm Mở MoMo trên điện thoại này."
                           : "Muốn lưu mã QR: nhấn giữ ảnh QR rồi chọn Lưu ảnh."}
                       </p>
                     </>
@@ -329,7 +330,7 @@ export default function OrderSuccess({
                       <Icon name="warning" size={20} />
                       <span>
                         {isMomoPayment
-                          ? "MoMo chưa trả về mã thanh toán. Anh/chị thử lại hoặc chọn thanh toán tại quầy giúp em."
+                          ? "MoMo chưa bật QR trực tiếp cho tài khoản này. Anh/chị bấm Mở MoMo để vào thẳng bước xác nhận thanh toán."
                           : "Chi nhánh này chưa có cấu hình tài khoản ngân hàng. Anh/chị thanh toán tại quầy giúp em."}
                       </span>
                     </div>
@@ -358,8 +359,8 @@ export default function OrderSuccess({
                   </div>
 
                   <div className="qr-payment-wait-card__actions">
-                    {isMomoPayment && momoPaymentLinks.payUrl ? (
-                      <a href={momoPaymentLinks.payUrl} rel="noreferrer">
+                    {isMomoPayment && momoDirectPaymentUrl ? (
+                      <a href={momoDirectPaymentUrl} rel="noreferrer">
                         Mở MoMo để thanh toán
                       </a>
                     ) : (
@@ -369,6 +370,11 @@ export default function OrderSuccess({
                       <button type="button" onClick={handleShowQrSaveGuide}>
                         Cách lưu QR
                       </button>
+                    ) : null}
+                    {isMomoPayment && momoPaymentLinks.deeplink && momoPaymentLinks.payUrl ? (
+                      <a href={momoPaymentLinks.payUrl} rel="noreferrer">
+                        Mở cổng thanh toán MoMo
+                      </a>
                     ) : null}
                   </div>
                 </>
