@@ -72,6 +72,7 @@ export default function OrderSuccess({
   const [paymentSession, setPaymentSession] = useState(null);
   const [paymentMessage, setPaymentMessage] = useState("");
   const [momoQrImageUrl, setMomoQrImageUrl] = useState("");
+  const [momoLaunchAttempted, setMomoLaunchAttempted] = useState(false);
   const orderCode = order?.orderCode || order?.id || "Đơn mới";
   const itemCount = getOrderItemsCount(order);
   const orderTotal = getOrderTotal(order);
@@ -104,12 +105,16 @@ export default function OrderSuccess({
   const statusTitle = qrPaymentExpired
     ? "Đơn đã quá hạn thanh toán"
     : isQrPaymentWaiting
-      ? "Quét QR để Gánh lên món"
+      ? isMomoPayment
+        ? "Mở MoMo để hoàn tất thanh toán"
+        : "Quét QR để Gánh lên món"
       : "Gánh nhận được đơn rồi nha";
   const statusDescription = qrPaymentExpired
     ? "Đơn chưa được thanh toán trong 10 phút nên đã tự hủy. Bạn đặt lại món giúp Gánh nha."
     : isQrPaymentWaiting
-      ? "Gánh sẽ bắt đầu chuẩn bị ngay khi hệ thống xác nhận thanh toán."
+      ? isMomoPayment
+        ? "Kiểm tra số tiền trong MoMo, thanh toán rồi quay lại đây. Đơn sẽ tự chuyển xuống bếp."
+        : "Gánh sẽ bắt đầu chuẩn bị ngay khi hệ thống xác nhận thanh toán."
       : isQrPaymentOrder && qrPaymentPaid
         ? "Gánh đã nhận tiền và bắt đầu lên món. Bạn theo dõi hành trình để biết khi nào món sẵn sàng nha."
         : isPickup
@@ -187,6 +192,10 @@ export default function OrderSuccess({
 
   const handleShowQrSaveGuide = () => {
     setPaymentMessage("Nhấn giữ hình QR rồi chọn Lưu ảnh. Nếu Zalo không hiện nút lưu, anh/chị mở bằng Chrome rồi lưu lại giúp em nhé.");
+  };
+
+  const handleMomoLaunch = () => {
+    setMomoLaunchAttempted(true);
   };
 
   const handleTrackOrder = () => openTrackingRoute(orderCode, navigate);
@@ -282,7 +291,9 @@ export default function OrderSuccess({
                 <small>Bước tiếp theo</small>
                 <strong>
                   {isQrPaymentWaiting
-                    ? "Thanh toán QR để quán bắt đầu làm món"
+                    ? isMomoPayment
+                      ? `Mở MoMo và xác nhận ${formatMoney(paymentSession?.amountExpected || orderTotal)}`
+                      : "Thanh toán QR để quán bắt đầu làm món"
                     : isPickup
                       ? "Theo dõi đến khi món sẵn sàng nhận"
                       : "Theo dõi lúc quán bàn giao cho shipper"}
@@ -299,7 +310,13 @@ export default function OrderSuccess({
                 </span>
                 <div>
                   <small>{qrPaymentPaid ? "Đã nhận thanh toán" : isMomoPayment ? "Thanh toán MoMo" : "Thanh toán QR"}</small>
-                  <strong>{qrPaymentPaid ? "Quán đã nhận tiền" : isMomoPayment ? "Quét mã hoặc mở MoMo" : "Quét mã bên dưới"}</strong>
+                  <strong>
+                    {qrPaymentPaid
+                      ? "Quán đã nhận tiền"
+                      : isMomoPayment
+                        ? qrPaymentImageUrl ? "Quét mã hoặc mở MoMo" : "Xác nhận trong ứng dụng MoMo"
+                        : "Quét mã bên dưới"}
+                  </strong>
                 </div>
               </div>
 
@@ -308,8 +325,58 @@ export default function OrderSuccess({
                   Mã QR của đơn này đã hết hiệu lực. Anh/chị vui lòng đặt lại đơn mới để thanh toán.
                 </p>
               ) : !qrPaymentPaid ? (
-                <>
-                  {qrPaymentImageUrl ? (
+                isMomoPayment && !qrPaymentImageUrl ? (
+                  <div className="momo-app-payment">
+                    <div className="momo-app-payment__brand" aria-hidden="true">M</div>
+                    <p className="momo-app-payment__eyebrow">Thanh toán trên ứng dụng</p>
+                    <h2>Mở MoMo để xác nhận {formatMoney(paymentSession?.amountExpected || orderTotal)}</h2>
+                    <p className="momo-app-payment__intro">
+                      Không cần quét thêm mã. MoMo sẽ mở sẵn giao dịch của đơn này.
+                    </p>
+
+                    <ol className="momo-app-payment__steps">
+                      <li><span>1</span><strong>Bấm “Mở ứng dụng MoMo”</strong></li>
+                      <li><span>2</span><strong>Kiểm tra số tiền và thanh toán</strong></li>
+                      <li><span>3</span><strong>Quay lại đây, Gánh tự xác nhận</strong></li>
+                    </ol>
+
+                    {momoDirectPaymentUrl ? (
+                      <a
+                        className="momo-app-payment__primary"
+                        href={momoDirectPaymentUrl}
+                        rel="noreferrer"
+                        onClick={handleMomoLaunch}
+                      >
+                        Mở ứng dụng MoMo
+                      </a>
+                    ) : (
+                      <button className="momo-app-payment__primary" type="button" disabled>
+                        Đang chuẩn bị giao dịch...
+                      </button>
+                    )}
+
+                    {momoLaunchAttempted ? (
+                      <p className="momo-app-payment__return-note" role="status" aria-live="polite">
+                        Thanh toán xong, anh/chị quay lại màn hình này. Hệ thống đang tự kiểm tra giao dịch.
+                      </p>
+                    ) : null}
+
+                    {momoPaymentLinks.deeplink && momoPaymentLinks.payUrl ? (
+                      <a
+                        className="momo-app-payment__fallback"
+                        href={momoPaymentLinks.payUrl}
+                        rel="noreferrer"
+                        onClick={handleMomoLaunch}
+                      >
+                        MoMo không mở? Dùng cổng thanh toán
+                      </a>
+                    ) : null}
+
+                    <p className="momo-app-payment__expiry">Giao dịch có hiệu lực trong 10 phút.</p>
+                  </div>
+                ) : (
+                  <>
+                    {qrPaymentImageUrl ? (
                     <>
                       <div className="qr-payment-wait-card__qr">
                         <img
@@ -336,7 +403,7 @@ export default function OrderSuccess({
                     </div>
                   )}
                   <p className="qr-payment-wait-card__note">
-                    Mã QR có hiệu lực trong 10 phút.
+                    {isMomoPayment ? "Giao dịch có hiệu lực trong 10 phút." : "Mã QR có hiệu lực trong 10 phút."}
                   </p>
 
                   <div className="qr-payment-wait-card__info">
@@ -360,7 +427,7 @@ export default function OrderSuccess({
 
                   <div className="qr-payment-wait-card__actions">
                     {isMomoPayment && momoDirectPaymentUrl ? (
-                      <a href={momoDirectPaymentUrl} rel="noreferrer">
+                      <a href={momoDirectPaymentUrl} rel="noreferrer" onClick={handleMomoLaunch}>
                         Mở MoMo để thanh toán
                       </a>
                     ) : (
@@ -372,12 +439,13 @@ export default function OrderSuccess({
                       </button>
                     ) : null}
                     {isMomoPayment && momoPaymentLinks.deeplink && momoPaymentLinks.payUrl ? (
-                      <a href={momoPaymentLinks.payUrl} rel="noreferrer">
+                      <a href={momoPaymentLinks.payUrl} rel="noreferrer" onClick={handleMomoLaunch}>
                         Mở cổng thanh toán MoMo
                       </a>
                     ) : null}
                   </div>
-                </>
+                  </>
+                )
               ) : (
                 <p className="qr-payment-wait-card__paid-text">
                   Đơn đã được xác nhận thanh toán. Quán sẽ ưu tiên làm món ngay cho anh/chị.
