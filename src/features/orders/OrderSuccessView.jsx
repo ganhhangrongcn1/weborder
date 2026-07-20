@@ -3,12 +3,15 @@ import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
 import { formatMoney } from "../../utils/format.js";
 import {
+  buildMomoPaymentQrImageUrl,
   buildQrOrderPaymentImageUrl,
   createQrOrderPaymentSession,
   findQrOrderPaymentBranch,
+  getMomoPaymentLinks,
   getQrOrderPaymentConfig,
   getQrOrderPaymentReference,
-  isQrCounterBankPaymentOrder,
+  isMomoPaymentOrder,
+  isQrCounterPrepaidOrder,
   isQrOrderPaymentExpired,
   isQrOrderPaid,
   readQrOrderPaymentSession
@@ -64,9 +67,11 @@ export default function OrderSuccess({
   branches = []
 }) {
   const orderId = order?.id || order?.orderCode || "";
-  const isQrPaymentOrder = isQrCounterBankPaymentOrder(order);
+  const isQrPaymentOrder = isQrCounterPrepaidOrder(order);
+  const isMomoPayment = isMomoPaymentOrder(order);
   const [paymentSession, setPaymentSession] = useState(null);
   const [paymentMessage, setPaymentMessage] = useState("");
+  const [momoQrImageUrl, setMomoQrImageUrl] = useState("");
   const orderCode = order?.orderCode || order?.id || "Đơn mới";
   const itemCount = getOrderItemsCount(order);
   const orderTotal = getOrderTotal(order);
@@ -75,17 +80,20 @@ export default function OrderSuccess({
   const paymentBranch = useMemo(() => findQrOrderPaymentBranch(order, branches), [branches, order]);
   const paymentConfig = useMemo(() => getQrOrderPaymentConfig(paymentBranch), [paymentBranch]);
   const paymentReference = getQrOrderPaymentReference(order, paymentSession);
-  const qrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
+  const momoPaymentLinks = getMomoPaymentLinks(paymentSession);
+  const momoQrPayload = momoPaymentLinks.qrCodeUrl || momoPaymentLinks.payUrl;
+  const bankQrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
+  const qrPaymentImageUrl = isMomoPayment ? momoQrImageUrl : bankQrPaymentImageUrl;
   const qrPaymentPaid = isQrPaymentOrder && isQrOrderPaid(order, paymentSession);
   const qrPaymentExpired = isQrPaymentOrder && isQrOrderPaymentExpired(order, paymentSession);
   const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid && !qrPaymentExpired;
   const isPickup = String(order?.fulfillmentType || "").toLowerCase() === "pickup";
   const paymentText = isQrPaymentOrder
     ? qrPaymentPaid
-      ? "Đã thanh toán QR"
+      ? isMomoPayment ? "Đã thanh toán MoMo" : "Đã thanh toán QR"
       : qrPaymentExpired
         ? "QR đã hết hạn"
-        : "QR tại quầy"
+        : isMomoPayment ? "Ví MoMo" : "QR ngân hàng"
     : "Tiền mặt khi nhận món";
   const statusEyebrow = qrPaymentExpired
     ? "Đã quá hạn"
@@ -145,6 +153,26 @@ export default function OrderSuccess({
       if (timerId) window.clearInterval(timerId);
     };
   }, [isQrPaymentOrder, order, orderId, qrPaymentExpired, qrPaymentPaid]);
+
+  useEffect(() => {
+    if (!isMomoPayment || !momoQrPayload) {
+      setMomoQrImageUrl("");
+      return undefined;
+    }
+
+    let isActive = true;
+    buildMomoPaymentQrImageUrl({ providerPayload: { qrCodeUrl: momoQrPayload } })
+      .then((imageUrl) => {
+        if (isActive) setMomoQrImageUrl(imageUrl);
+      })
+      .catch(() => {
+        if (isActive) setMomoQrImageUrl("");
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [isMomoPayment, momoQrPayload]);
 
   const handleCopyPaymentReference = async () => {
     if (!paymentReference) return;
@@ -269,8 +297,8 @@ export default function OrderSuccess({
                   <Icon name={qrPaymentPaid ? "check" : "qr"} size={20} />
                 </span>
                 <div>
-                  <small>{qrPaymentPaid ? "Đã nhận thanh toán" : "Thanh toán QR"}</small>
-                  <strong>{qrPaymentPaid ? "Quán đã nhận tiền" : "Quét mã bên dưới"}</strong>
+                  <small>{qrPaymentPaid ? "Đã nhận thanh toán" : isMomoPayment ? "Thanh toán MoMo" : "Thanh toán QR"}</small>
+                  <strong>{qrPaymentPaid ? "Quán đã nhận tiền" : isMomoPayment ? "Quét mã hoặc mở MoMo" : "Quét mã bên dưới"}</strong>
                 </div>
               </div>
 
@@ -283,16 +311,27 @@ export default function OrderSuccess({
                   {qrPaymentImageUrl ? (
                     <>
                       <div className="qr-payment-wait-card__qr">
-                        <img src={qrPaymentImageUrl} alt="QR thanh toán ngân hàng" width="210" height="210" />
+                        <img
+                          src={qrPaymentImageUrl}
+                          alt={isMomoPayment ? "QR thanh toán MoMo" : "QR thanh toán ngân hàng"}
+                          width="210"
+                          height="210"
+                        />
                       </div>
                       <p className="qr-payment-wait-card__save-hint">
-                        Muốn lưu mã QR: nhấn giữ ảnh QR rồi chọn Lưu ảnh.
+                        {isMomoPayment
+                          ? "Dùng camera trong ứng dụng MoMo để quét mã, hoặc bấm Mở MoMo trên điện thoại này."
+                          : "Muốn lưu mã QR: nhấn giữ ảnh QR rồi chọn Lưu ảnh."}
                       </p>
                     </>
                   ) : (
                     <div className="qr-payment-wait-card__empty">
                       <Icon name="warning" size={20} />
-                      <span>Chi nhánh này chưa có cấu hình tài khoản ngân hàng. Anh/chị thanh toán tại quầy giúp em.</span>
+                      <span>
+                        {isMomoPayment
+                          ? "MoMo chưa trả về mã thanh toán. Anh/chị thử lại hoặc chọn thanh toán tại quầy giúp em."
+                          : "Chi nhánh này chưa có cấu hình tài khoản ngân hàng. Anh/chị thanh toán tại quầy giúp em."}
+                      </span>
                     </div>
                   )}
                   <p className="qr-payment-wait-card__note">
@@ -304,11 +343,13 @@ export default function OrderSuccess({
                       <small>Số tiền</small>
                       <strong>{formatMoney(paymentSession?.amountExpected || orderTotal)}</strong>
                     </span>
-                    <span>
-                      <small>Nội dung chuyển khoản</small>
-                      <strong>{paymentReference}</strong>
-                    </span>
-                    {paymentConfig.ready ? (
+                    {!isMomoPayment ? (
+                      <span>
+                        <small>Nội dung chuyển khoản</small>
+                        <strong>{paymentReference}</strong>
+                      </span>
+                    ) : null}
+                    {!isMomoPayment && paymentConfig.ready ? (
                       <span>
                         <small>Tài khoản nhận</small>
                         <strong>{paymentConfig.bankName} · {paymentConfig.accountNumber}</strong>
@@ -317,8 +358,14 @@ export default function OrderSuccess({
                   </div>
 
                   <div className="qr-payment-wait-card__actions">
-                    <button type="button" onClick={handleCopyPaymentReference}>Sao chép nội dung</button>
-                    {qrPaymentImageUrl ? (
+                    {isMomoPayment && momoPaymentLinks.payUrl ? (
+                      <a href={momoPaymentLinks.payUrl} rel="noreferrer">
+                        Mở MoMo để thanh toán
+                      </a>
+                    ) : (
+                      <button type="button" onClick={handleCopyPaymentReference}>Sao chép nội dung</button>
+                    )}
+                    {!isMomoPayment && qrPaymentImageUrl ? (
                       <button type="button" onClick={handleShowQrSaveGuide}>
                         Cách lưu QR
                       </button>

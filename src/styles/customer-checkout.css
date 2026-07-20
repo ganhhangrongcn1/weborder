@@ -1302,6 +1302,29 @@ button.payment-card {
   font-weight: 750;
 }
 
+.payment-card__brand {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.payment-card__brand--momo {
+  background: #a50064;
+  box-shadow: 0 7px 16px rgba(165, 0, 100, 0.2);
+}
+
+.payment-card--momo.active {
+  border-color: rgba(165, 0, 100, 0.4);
+  background: #fff7fc;
+  box-shadow: 0 12px 28px rgba(165, 0, 100, 0.1);
+}
+
 .summary-saving__label {
   display: inline-flex;
   align-items: center;

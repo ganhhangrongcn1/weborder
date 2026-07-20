@@ -657,7 +657,13 @@ export default function Checkout({
             className={`cta ${isPlacingOrder ? "is-loading" : ""}`}
             disabled={isPlacingOrder}
           >
-            {isPlacingOrder ? "Đang xác nhận…" : paymentMethod === "bank_qr" ? "Đặt & thanh toán QR" : "Đặt món"}
+            {isPlacingOrder
+              ? "Đang xác nhận…"
+              : paymentMethod === "bank_qr"
+                ? "Đặt & thanh toán QR"
+                : paymentMethod === "momo"
+                  ? "Đặt & thanh toán MoMo"
+                  : "Đặt món"}
           </button>
         </div>
       </div>

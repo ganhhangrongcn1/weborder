@@ -30,6 +30,7 @@ const SESSION_COLUMNS = [
   "amount_expected",
   "amount_paid",
   "checkout_snapshot",
+  "provider_payload",
   "order_id",
   "failure_reason",
   "expires_at",
@@ -146,7 +147,11 @@ async function findActivePosShift(serviceClient: ReturnType<typeof createClient>
   return data || null;
 }
 
-function buildPaymentReference(order: JsonRecord, body: JsonRecord) {
+function buildPaymentReference(order: JsonRecord, body: JsonRecord, provider = "sepay") {
+  if (provider === "momo") {
+    const orderCode = normalizePaymentReference(order.order_code || order.id).replace(/-/g, "").slice(0, 20);
+    return normalizePaymentReference(`MM${orderCode}${Date.now().toString(36).toUpperCase()}`);
+  }
   const explicit = normalizePaymentReference(body.payment_reference || body.paymentReference);
   if (explicit && /^[A-Z0-9-]{6,80}$/.test(explicit)) return explicit;
 
@@ -159,7 +164,121 @@ function isQrPayableOrder(order: JsonRecord) {
   const metadata = getObject(order.metadata);
   const paymentMethod = toText(order.payment_method || metadata.paymentMethod || metadata.payment_method).toLowerCase();
   const source = toText(metadata.orderSource || metadata.source || metadata.channel).toLowerCase();
-  return paymentMethod === "bank_qr" || source === "qr_counter";
+  return source === "qr_counter" && ["bank_qr", "momo"].includes(paymentMethod);
+}
+
+function getPaymentProvider(order: JsonRecord, body: JsonRecord) {
+  const metadata = getObject(order.metadata);
+  const paymentMethod = toText(order.payment_method || metadata.paymentMethod || metadata.payment_method).toLowerCase();
+  const requestedProvider = toText(body.provider).toLowerCase();
+  if (paymentMethod === "momo" && requestedProvider === "momo") return "momo";
+  return "sepay";
+}
+
+function bytesToHex(buffer: ArrayBuffer) {
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function signHmacSha256(rawData: string, secretKey: string) {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secretKey),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return bytesToHex(await crypto.subtle.sign("HMAC", key, encoder.encode(rawData)));
+}
+
+async function createMomoPayment(
+  serviceClient: ReturnType<typeof createClient>,
+  session: JsonRecord,
+  order: JsonRecord,
+  supabaseUrl: string
+) {
+  const partnerCode = toText(Deno.env.get("MOMO_PARTNER_CODE"));
+  const accessKey = toText(Deno.env.get("MOMO_ACCESS_KEY"));
+  const secretKey = toText(Deno.env.get("MOMO_SECRET_KEY"));
+  const apiEndpoint = toText(Deno.env.get("MOMO_API_ENDPOINT"));
+  const redirectUrl = toText(Deno.env.get("MOMO_REDIRECT_URL"));
+  if (!partnerCode || !accessKey || !secretKey || !apiEndpoint || !redirectUrl) {
+    throw new Error("MoMo chưa được cấu hình đầy đủ trên Supabase.");
+  }
+  if (!["https://test-payment.momo.vn/v2/gateway/api/create", "https://payment.momo.vn/v2/gateway/api/create"].includes(apiEndpoint)) {
+    throw new Error("MOMO_API_ENDPOINT không hợp lệ.");
+  }
+
+  const amount = toMoney(session.amount_expected);
+  const orderId = toText(session.payment_reference);
+  const requestId = orderId;
+  const requestType = "captureWallet";
+  const ipnUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/momo-payment-webhook`;
+  const orderInfo = `Thanh toan don ${toText(order.order_code || order.id)} tai Ganh Hang Rong`;
+  const extraData = btoa(JSON.stringify({ orderId: toText(order.id), source: "qr_order" }));
+  const rawSignature = [
+    `accessKey=${accessKey}`,
+    `amount=${amount}`,
+    `extraData=${extraData}`,
+    `ipnUrl=${ipnUrl}`,
+    `orderId=${orderId}`,
+    `orderInfo=${orderInfo}`,
+    `partnerCode=${partnerCode}`,
+    `redirectUrl=${redirectUrl}`,
+    `requestId=${requestId}`,
+    `requestType=${requestType}`
+  ].join("&");
+  const signature = await signHmacSha256(rawSignature, secretKey);
+
+  const momoResponse = getObject(await fetch(apiEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      partnerCode,
+      partnerName: "Ganh Hang Rong",
+      storeId: toText(session.branch_uuid || session.branch_name || "GHR"),
+      requestId,
+      amount,
+      orderId,
+      orderInfo,
+      redirectUrl,
+      ipnUrl,
+      lang: "vi",
+      requestType,
+      autoCapture: true,
+      extraData,
+      signature
+    })
+  }).then(async (result) => {
+    const payload = getObject(await result.json().catch(() => ({})));
+    if (!result.ok) throw new Error(toText(payload.message) || `MoMo HTTP ${result.status}`);
+    return payload;
+  }));
+
+  if (Number(momoResponse.resultCode) !== 0 || !toText(momoResponse.payUrl)) {
+    throw new Error(toText(momoResponse.message) || "MoMo không tạo được giao dịch.");
+  }
+
+  const providerPayload = {
+    momoOrderId: orderId,
+    requestId,
+    resultCode: Number(momoResponse.resultCode),
+    message: toText(momoResponse.message),
+    payUrl: toText(momoResponse.payUrl),
+    deeplink: toText(momoResponse.deeplink),
+    qrCodeUrl: toText(momoResponse.qrCodeUrl),
+    responseTime: Number(momoResponse.responseTime || 0)
+  };
+  const { data, error } = await serviceClient
+    .from("pos_payment_sessions")
+    .update({ provider_payload: providerPayload, updated_at: new Date().toISOString() })
+    .eq("id", toText(session.id))
+    .select(SESSION_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 async function findSession(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
@@ -180,7 +299,7 @@ async function findSession(serviceClient: ReturnType<typeof createClient>, body:
       .select(SESSION_COLUMNS)
       .eq("source", "qr_order")
       .eq("order_id", orderId)
-      .in("status", ["pending_payment", "paid", "converting", "converted", "expired"])
+      .in("status", ["pending_payment", "paid", "converting", "converted", "expired", "cancelled", "failed"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -204,7 +323,8 @@ async function cancelExpiredQrOrder(
   serviceClient: ReturnType<typeof createClient>,
   orderId = "",
   session: JsonRecord,
-  now: string
+  now: string,
+  options: JsonRecord = {}
 ) {
   const safeOrderId = toText(orderId);
   if (!safeOrderId) return;
@@ -219,17 +339,20 @@ async function cancelExpiredQrOrder(
 
   const metadata = getObject(order.metadata);
   if (isPaidMetadata(metadata)) return;
+  const cancelReason = toText(options.cancelReason) || "payment_timeout";
+  const cancelledBy = toText(options.cancelledBy) || "qr_payment_timeout";
+  const paymentStatus = toText(options.paymentStatus) || "expired";
 
   const nextMetadata = {
     ...metadata,
     status: "cancelled",
     orderStatus: "cancelled",
     kitchenStatus: "cancelled",
-    paymentMethod: "bank_qr",
-    paymentStatus: "expired",
+    paymentMethod: toText(order.payment_method || metadata.paymentMethod) || "bank_qr",
+    paymentStatus,
     paymentExpiredAt: now,
-    cancelReason: "payment_timeout",
-    cancelledBy: "qr_payment_timeout",
+    cancelReason,
+    cancelledBy,
     qrPaymentSessionId: toText(session.id) || metadata.qrPaymentSessionId,
     paymentReference: toText(session.payment_reference) || metadata.paymentReference || metadata.payment_reference
   };
@@ -239,7 +362,7 @@ async function cancelExpiredQrOrder(
     .update({
       status: "cancelled",
       kitchen_status: "cancelled",
-      payment_method: "bank_qr",
+      payment_method: toText(order.payment_method || metadata.paymentMethod) || "bank_qr",
       metadata: nextMetadata,
       updated_at: now
     })
@@ -286,6 +409,8 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
   }
 
   const metadata = getObject(order.metadata);
+  const paymentMethod = toText(order.payment_method || metadata.paymentMethod || metadata.payment_method).toLowerCase();
+  const provider = getPaymentProvider(order, body);
   const branchUuid = toText(order.pickup_branch_uuid || order.branch_uuid) || null;
   const branchName = toText(order.pickup_branch_name || order.branch_name);
   const activeShift = await findActivePosShift(serviceClient, branchUuid || "");
@@ -333,6 +458,17 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
         })
         .eq("id", toText(order.id));
     }
+    if (
+      provider === "momo" &&
+      toText(nextSession?.status).toLowerCase() === "pending_payment" &&
+      !toText(getObject(nextSession?.provider_payload).payUrl)
+    ) {
+      try {
+        nextSession = await createMomoPayment(serviceClient, nextSession as JsonRecord, order, toText(Deno.env.get("SUPABASE_URL")));
+      } catch (error) {
+        return response({ ok: false, message: error instanceof Error ? error.message : "Không tạo được giao dịch MoMo.", session: nextSession }, 502);
+      }
+    }
     return response({ ok: true, session: nextSession, reused: true });
   }
 
@@ -341,7 +477,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     return response({ ok: false, message: "Đơn chưa có số tiền thanh toán hợp lệ." }, 400);
   }
 
-  const paymentReference = buildPaymentReference(order, body);
+  const paymentReference = buildPaymentReference(order, body, provider);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + QR_ORDER_PAYMENT_TIMEOUT_MS).toISOString();
 
@@ -349,7 +485,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     .from("pos_payment_sessions")
     .insert({
       payment_reference: paymentReference,
-      provider: "sepay",
+      provider,
       source: "qr_order",
       status: "pending_payment",
       branch_uuid: branchUuid,
@@ -385,7 +521,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
 
   const nextMetadata = {
     ...metadata,
-    paymentMethod: "bank_qr",
+    paymentMethod,
     paymentStatus: "unpaid",
     paymentAmount: amountExpected,
     paymentReference,
@@ -396,7 +532,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     } : {})
   };
   const orderPatch: JsonRecord = {
-    payment_method: "bank_qr",
+    payment_method: paymentMethod,
     metadata: nextMetadata,
     updated_at: now.toISOString()
   };
@@ -406,6 +542,28 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     .from("orders")
     .update(orderPatch)
     .eq("id", toText(order.id));
+
+  if (provider === "momo") {
+    try {
+      const momoSession = await createMomoPayment(serviceClient, data, order, toText(Deno.env.get("SUPABASE_URL")));
+      return response({ ok: true, session: momoSession, reused: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không tạo được giao dịch MoMo.";
+      const failedAt = new Date().toISOString();
+      const { data: failedSession } = await serviceClient
+        .from("pos_payment_sessions")
+        .update({ status: "failed", failure_reason: message, cancelled_at: failedAt, updated_at: failedAt })
+        .eq("id", toText(data.id))
+        .select(SESSION_COLUMNS)
+        .maybeSingle();
+      await cancelExpiredQrOrder(serviceClient, toText(order.id), failedSession || data, failedAt, {
+        cancelReason: "momo_create_failed",
+        cancelledBy: "momo_payment_create",
+        paymentStatus: "failed"
+      });
+      return response({ ok: false, message, session: failedSession || data }, 502);
+    }
+  }
 
   return response({ ok: true, session: data, reused: false });
 }

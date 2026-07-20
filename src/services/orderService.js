@@ -360,9 +360,10 @@ export async function createOrderAsync(params) {
   const loyaltyRule = await getLoyaltyRuleConfigAsync();
   const pointsEarned = calculateOrderPoints(pointsAmount, loyaltyRule);
   const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
-  const isBankQrPayment = String(paymentMethod || "").trim().toLowerCase() === "bank_qr";
-  const initialOrderStatus = isBankQrPayment ? "pending_payment" : "preparing";
-  const initialKitchenStatus = isBankQrPayment ? "waiting_payment" : "pending";
+  const normalizedPaymentMethod = String(paymentMethod || "").trim().toLowerCase();
+  const isPrepaidPayment = ["bank_qr", "momo"].includes(normalizedPaymentMethod);
+  const initialOrderStatus = isPrepaidPayment ? "pending_payment" : "preparing";
+  const initialKitchenStatus = isPrepaidPayment ? "waiting_payment" : "pending";
   const order = {
     id: orderCode,
     orderCode,
@@ -410,8 +411,8 @@ export async function createOrderAsync(params) {
     pickupTimeText,
     deliveryAddress: fulfillmentType === "pickup" ? "Khách tự đến lấy" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
     paymentMethod,
-    paymentStatus: isBankQrPayment ? "unpaid" : "pending",
-    paymentReference: isBankQrPayment ? orderCode : "",
+    paymentStatus: isPrepaidPayment ? "unpaid" : "pending",
+    paymentReference: isPrepaidPayment ? orderCode : "",
     paymentAmount: totalAmount,
     source: orderSource,
     channel: orderSource,

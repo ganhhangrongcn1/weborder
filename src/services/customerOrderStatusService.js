@@ -100,7 +100,7 @@ function getWebsiteStatus(order = {}) {
   const paymentStatus = normalizeStatusText(
     order.paymentStatus || order.payment_status || metadata.paymentStatus || metadata.payment_status
   );
-  const isWaitingForQrPayment = paymentMethod === "bankqr" && !["paid", "converted"].includes(paymentStatus);
+  const isWaitingForQrPayment = ["bankqr", "momo"].includes(paymentMethod) && !["paid", "converted"].includes(paymentStatus);
 
   if (["cancel", "canceled", "cancelled", "huy", "dahuy", "refunded"].includes(status)) {
     return {

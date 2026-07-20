@@ -416,7 +416,7 @@ function shouldHideWebsiteOrderUntilPaid(order = {}) {
     return true;
   }
 
-  if (paymentMethod === "bank_qr" && paymentStatus && paymentStatus !== "paid") {
+  if (["bank_qr", "momo"].includes(paymentMethod) && paymentStatus && paymentStatus !== "paid") {
     return true;
   }
 

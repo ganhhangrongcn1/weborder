@@ -19,17 +19,21 @@ function normalizeKey(value = "") {
   return toText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function isQrBankPaymentOrder(order = {}) {
+function getOrderPaymentMethod(order = {}) {
   const safeOrder = getObject(order);
   const metadata = getObject(safeOrder.metadata);
-  return toText(safeOrder.paymentMethod || metadata.paymentMethod || metadata.payment_method).toLowerCase() === "bank_qr";
+  return toText(
+    safeOrder.paymentMethod ||
+      safeOrder.payment_method ||
+      metadata.paymentMethod ||
+      metadata.payment_method
+  ).toLowerCase();
 }
 
-export function isQrCounterBankPaymentOrder(order = {}) {
-  if (!isQrBankPaymentOrder(order)) return false;
+function getOrderSource(order = {}) {
   const safeOrder = getObject(order);
   const metadata = getObject(safeOrder.metadata);
-  const source = toText(
+  return toText(
     safeOrder.orderSource ||
       safeOrder.source ||
       safeOrder.channel ||
@@ -39,7 +43,23 @@ export function isQrCounterBankPaymentOrder(order = {}) {
       metadata.source ||
       metadata.channel
   ).toLowerCase();
-  return source === "qr_counter";
+}
+
+export function isQrBankPaymentOrder(order = {}) {
+  return getOrderPaymentMethod(order) === "bank_qr";
+}
+
+export function isMomoPaymentOrder(order = {}) {
+  return getOrderPaymentMethod(order) === "momo";
+}
+
+export function isQrCounterBankPaymentOrder(order = {}) {
+  if (!isQrBankPaymentOrder(order)) return false;
+  return getOrderSource(order) === "qr_counter";
+}
+
+export function isQrCounterPrepaidOrder(order = {}) {
+  return getOrderSource(order) === "qr_counter" && ["bank_qr", "momo"].includes(getOrderPaymentMethod(order));
 }
 
 export function getQrOrderPaymentStatus(order = {}, session = null) {
@@ -65,7 +85,7 @@ export function isQrOrderPaymentExpired(order = {}, session = null) {
   const status = getQrOrderPaymentStatus(order, session);
   const orderStatus = toText(safeOrder.status || metadata.status || metadata.orderStatus).toLowerCase();
   const kitchenStatus = toText(safeOrder.kitchenStatus || metadata.kitchenStatus || metadata.kitchen_status).toLowerCase();
-  return ["expired", "cancelled", "canceled"].includes(status) ||
+  return ["expired", "cancelled", "canceled", "failed"].includes(status) ||
     ["cancelled", "canceled"].includes(orderStatus) ||
     ["cancelled", "canceled"].includes(kitchenStatus);
 }
@@ -118,6 +138,7 @@ export function findQrOrderPaymentBranch(order = {}, branches = []) {
 
 export function buildQrOrderPaymentImageUrl({ order = {}, branch = {}, session = null } = {}) {
   const safeOrder = getObject(order);
+  if (isMomoPaymentOrder(safeOrder)) return "";
   return buildPosQrImageUrl({
     branch,
     amount: session?.amount_expected || safeOrder.totalAmount || safeOrder.total,
@@ -133,13 +154,41 @@ export function getQrOrderPaymentConfig(branch = {}) {
   return getPosQrPaymentConfig(branch);
 }
 
+export function getMomoPaymentLinks(session = null) {
+  const providerPayload = getObject(session?.providerPayload || session?.provider_payload);
+  return {
+    payUrl: toText(providerPayload.payUrl || providerPayload.pay_url),
+    deeplink: toText(providerPayload.deeplink),
+    qrCodeUrl: toText(providerPayload.qrCodeUrl || providerPayload.qr_code_url)
+  };
+}
+
+export async function buildMomoPaymentQrImageUrl(session = null) {
+  const { payUrl, qrCodeUrl } = getMomoPaymentLinks(session);
+  const qrPayload = qrCodeUrl || payUrl;
+  if (!qrPayload) return "";
+
+  const qrCodeModule = await import("qrcode");
+  const qrCode = qrCodeModule.default || qrCodeModule;
+  return qrCode.toDataURL(qrPayload, {
+    width: 420,
+    margin: 2,
+    errorCorrectionLevel: "M",
+    color: {
+      dark: "#24170f",
+      light: "#ffffff"
+    }
+  });
+}
+
 function normalizeSession(session = null) {
   if (!session || typeof session !== "object") return null;
   return {
     ...session,
     amountExpected: toAmount(session.amount_expected || session.amountExpected),
     amountPaid: toAmount(session.amount_paid || session.amountPaid),
-    paymentReference: getQrOrderPaymentReference({}, session)
+    paymentReference: getQrOrderPaymentReference({}, session),
+    providerPayload: getObject(session.provider_payload || session.providerPayload)
   };
 }
 
@@ -196,7 +245,8 @@ export async function createQrOrderPaymentSession({ order = {} } = {}) {
   return invokeQrPaymentFunction({
     action: "create",
     order_id: orderId,
-    payment_reference: getQrOrderPaymentReference(safeOrder)
+    payment_reference: getQrOrderPaymentReference(safeOrder),
+    provider: isMomoPaymentOrder(safeOrder) ? "momo" : "sepay"
   });
 }
 

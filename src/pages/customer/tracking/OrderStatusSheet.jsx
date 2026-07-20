@@ -20,6 +20,7 @@ const PAYMENT_METHOD_LABELS = {
   bankqr: "Chuyển khoản QR",
   qr: "Chuyển khoản QR",
   sepay: "Chuyển khoản QR",
+  momo: "Ví MoMo",
   counter: "Thanh toán tại quầy"
 };
 

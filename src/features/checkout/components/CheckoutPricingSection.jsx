@@ -45,6 +45,8 @@ export default function CheckoutPricingSection({
 }) {
   const showMemberBenefits = !isQrCounterOrder || isRegisteredCustomer;
   const isBankQrSelected = String(paymentMethod || "").toLowerCase() === "bank_qr";
+  const isMomoSelected = String(paymentMethod || "").toLowerCase() === "momo";
+  const isCounterSelected = !isBankQrSelected && !isMomoSelected;
   const hasPromoCodes = promoCodes.length > 0;
   const promoSummary = selectedPromo
     ? selectedPromo.freeShip
@@ -182,23 +184,37 @@ export default function CheckoutPricingSection({
               <Icon name="qr" size={18} />
               <span>
                 <strong>Quét QR thanh toán</strong>
-                <small>Thanh toán trước và nhận món tại quầy</small>
+                <small>Chuyển khoản ngân hàng · SePay tự xác nhận</small>
               </span>
               {isBankQrSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
             </button>
             <button
               type="button"
+              onClick={() => setPaymentMethod?.("momo")}
+              className={`payment-card payment-card--momo${isMomoSelected ? " active" : ""}`}
+              aria-label="Phương thức thanh toán: Ví MoMo"
+              aria-pressed={isMomoSelected}
+            >
+              <span className="payment-card__brand payment-card__brand--momo" aria-hidden="true">M</span>
+              <span>
+                <strong>Ví MoMo</strong>
+                <small>Quét QR hoặc mở ứng dụng MoMo để thanh toán</small>
+              </span>
+              {isMomoSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
+            </button>
+            <button
+              type="button"
               onClick={() => setPaymentMethod?.("counter")}
-              className={`payment-card${!isBankQrSelected ? " active" : ""}`}
+              className={`payment-card${isCounterSelected ? " active" : ""}`}
               aria-label="Phương thức thanh toán: Thanh toán tại quầy"
-              aria-pressed={!isBankQrSelected}
+              aria-pressed={isCounterSelected}
             >
               <Icon name="bag" size={18} />
               <span>
                 <strong>Thanh toán tại quầy</strong>
                 <small>Thanh toán tiền mặt tại quầy khi nhận món</small>
               </span>
-              {!isBankQrSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
+              {isCounterSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
             </button>
           </div>
         ) : (
