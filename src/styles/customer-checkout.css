@@ -1515,26 +1515,6 @@ button.payment-card {
   line-height: 1.5;
 }
 
-.checkout-placing-steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 16px;
-}
-
-.checkout-placing-steps em {
-  display: grid;
-  min-height: 44px;
-  place-items: center;
-  border-radius: 15px;
-  background: #fff2df;
-  color: #b94c00;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 950;
-  line-height: 1.2;
-}
-
 @keyframes checkout-placing-pulse {
   0%,
   100% {
@@ -2048,6 +2028,12 @@ button.payment-card {
     box-shadow 180ms ease;
 }
 
+.qr-payment-wait-card.is-momo-app {
+  border-color: rgba(165, 0, 100, 0.16);
+  background: #fffafd;
+  box-shadow: 0 16px 32px rgba(165, 0, 100, 0.09);
+}
+
 .qr-payment-wait-card__actions button:first-child {
   background: #fff1e8;
   color: #d95600;
@@ -2076,11 +2062,7 @@ button.payment-card {
 }
 
 .momo-app-payment {
-  margin-top: 14px;
-  border: 1px solid rgba(165, 0, 100, 0.14);
-  border-radius: 20px;
-  background: #fff6fb;
-  padding: 18px 14px 14px;
+  padding: 6px 0 2px;
   text-align: center;
 }
 
@@ -2088,7 +2070,7 @@ button.payment-card {
   display: grid;
   width: 52px;
   height: 52px;
-  margin: 0 auto;
+  margin: 0 auto 14px;
   place-items: center;
   border-radius: 17px;
   background: #a50064;
@@ -2098,76 +2080,11 @@ button.payment-card {
   box-shadow: 0 10px 22px rgba(165, 0, 100, 0.18);
 }
 
-.momo-app-payment__eyebrow {
-  margin-top: 11px;
-  color: #a50064;
-  font-size: 10px;
-  font-weight: 950;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.momo-app-payment h2 {
-  margin-top: 4px;
-  color: #351525;
-  font-size: 18px;
-  font-weight: 950;
-  line-height: 1.3;
-}
-
-.momo-app-payment__intro {
-  margin: 7px auto 0;
-  max-width: 310px;
-  color: rgba(53, 21, 37, 0.64);
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1.5;
-}
-
-.momo-app-payment__steps {
-  display: grid;
-  gap: 8px;
-  margin-top: 15px;
-  padding: 0;
-  list-style: none;
-  text-align: left;
-}
-
-.momo-app-payment__steps li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  border-radius: 14px;
-  background: #ffffff;
-  padding: 8px 10px;
-}
-
-.momo-app-payment__steps span {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 50%;
-  background: #fce7f3;
-  color: #a50064;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.momo-app-payment__steps strong {
-  color: #351525;
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1.35;
-}
-
 .momo-app-payment__primary {
   display: grid;
   width: 100%;
   min-height: 52px;
-  margin-top: 15px;
+  margin-top: 0;
   place-items: center;
   border: 0;
   border-radius: 16px;
@@ -2224,11 +2141,8 @@ button.payment-card {
   text-underline-offset: 3px;
 }
 
-.momo-app-payment__expiry {
-  margin-top: 11px;
-  color: rgba(53, 21, 37, 0.5);
-  font-size: 10px;
-  font-weight: 750;
+.order-success-loading-icon {
+  animation: checkout-placing-pulse 1.15s ease-in-out infinite;
 }
 
 .success-member-prompt {

@@ -64,7 +64,8 @@ export default function OrderSuccess({
   order,
   isRegisteredCustomer = false,
   currentPhone = "",
-  branches = []
+  branches = [],
+  isOrderRestoring = false
 }) {
   const orderId = order?.id || order?.orderCode || "";
   const isQrPaymentOrder = isQrCounterPrepaidOrder(order);
@@ -89,6 +90,7 @@ export default function OrderSuccess({
   const qrPaymentPaid = isQrPaymentOrder && isQrOrderPaid(order, paymentSession);
   const qrPaymentExpired = isQrPaymentOrder && isQrOrderPaymentExpired(order, paymentSession);
   const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid && !qrPaymentExpired;
+  const isMomoAppHandoff = isQrPaymentWaiting && isMomoPayment && !qrPaymentImageUrl;
   const isPickup = String(order?.fulfillmentType || "").toLowerCase() === "pickup";
   const paymentText = isQrPaymentOrder
     ? qrPaymentPaid
@@ -106,14 +108,14 @@ export default function OrderSuccess({
     ? "Đơn đã quá hạn thanh toán"
     : isQrPaymentWaiting
       ? isMomoPayment
-        ? "Mở MoMo để hoàn tất thanh toán"
+        ? "Hoàn tất thanh toán"
         : "Quét QR để Gánh lên món"
       : "Gánh nhận được đơn rồi nha";
   const statusDescription = qrPaymentExpired
     ? "Đơn chưa được thanh toán trong 10 phút nên đã tự hủy. Bạn đặt lại món giúp Gánh nha."
     : isQrPaymentWaiting
       ? isMomoPayment
-        ? "Kiểm tra số tiền trong MoMo, thanh toán rồi quay lại đây. Đơn sẽ tự chuyển xuống bếp."
+        ? "Mở MoMo và xác nhận giao dịch."
         : "Gánh sẽ bắt đầu chuẩn bị ngay khi hệ thống xác nhận thanh toán."
       : isQrPaymentOrder && qrPaymentPaid
         ? "Gánh đã nhận tiền và bắt đầu lên món. Bạn theo dõi hành trình để biết khi nào món sẵn sàng nha."
@@ -214,6 +216,22 @@ export default function OrderSuccess({
     ? "Đơn hoàn tất là điểm được cộng theo hạng thành viên của bạn."
     : "Đăng nhập để theo dõi điểm và nhận ưu đãi dành riêng cho bạn.";
 
+  if (!order && isOrderRestoring) {
+    return (
+      <section className="order-success-page grid min-h-[calc(100vh-96px)] place-items-center px-4 py-6">
+        <CustomerCard padding="lg" className="text-center">
+          <div className="order-success-loading-icon mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-orange-50 text-orange-600">
+            <Icon name="bag" size={24} />
+          </div>
+          <h1 className="mt-4 text-2xl font-black leading-tight text-brown">Đang mở đơn hàng</h1>
+          <p className="mt-2 text-sm font-bold leading-6 text-brown/65">
+            Gánh đang kiểm tra thanh toán, bạn chờ một chút nhé.
+          </p>
+        </CustomerCard>
+      </section>
+    );
+  }
+
   if (!order) {
     return (
       <section className="order-success-page grid min-h-[calc(100vh-96px)] place-items-center px-4 py-6">
@@ -284,7 +302,7 @@ export default function OrderSuccess({
             </div>
           </div>
 
-          {!qrPaymentExpired ? (
+          {!qrPaymentExpired && !isMomoAppHandoff ? (
             <div className={`order-success-next-step mt-4 text-left${isQrPaymentWaiting ? " is-waiting" : ""}`}>
               <span aria-hidden="true"><Icon name={isPickup ? "bag" : "bike"} size={18} /></span>
               <div>
@@ -303,8 +321,8 @@ export default function OrderSuccess({
           ) : null}
 
           {isQrPaymentOrder ? (
-            <div className={`qr-payment-wait-card${qrPaymentPaid ? " is-paid" : ""}`}>
-              <div className="qr-payment-wait-card__head">
+            <div className={`qr-payment-wait-card${qrPaymentPaid ? " is-paid" : ""}${isMomoAppHandoff ? " is-momo-app" : ""}`}>
+              {!isMomoAppHandoff ? <div className="qr-payment-wait-card__head">
                 <span className="qr-payment-wait-card__icon">
                   <Icon name={qrPaymentPaid ? "check" : "qr"} size={20} />
                 </span>
@@ -318,7 +336,7 @@ export default function OrderSuccess({
                         : "Quét mã bên dưới"}
                   </strong>
                 </div>
-              </div>
+              </div> : null}
 
               {qrPaymentExpired ? (
                 <p className="qr-payment-wait-card__paid-text">
@@ -328,18 +346,6 @@ export default function OrderSuccess({
                 isMomoPayment && !qrPaymentImageUrl ? (
                   <div className="momo-app-payment">
                     <div className="momo-app-payment__brand" aria-hidden="true">M</div>
-                    <p className="momo-app-payment__eyebrow">Thanh toán trên ứng dụng</p>
-                    <h2>Mở MoMo để xác nhận {formatMoney(paymentSession?.amountExpected || orderTotal)}</h2>
-                    <p className="momo-app-payment__intro">
-                      Không cần quét thêm mã. MoMo sẽ mở sẵn giao dịch của đơn này.
-                    </p>
-
-                    <ol className="momo-app-payment__steps">
-                      <li><span>1</span><strong>Bấm “Mở ứng dụng MoMo”</strong></li>
-                      <li><span>2</span><strong>Kiểm tra số tiền và thanh toán</strong></li>
-                      <li><span>3</span><strong>Quay lại đây, Gánh tự xác nhận</strong></li>
-                    </ol>
-
                     {momoDirectPaymentUrl ? (
                       <a
                         className="momo-app-payment__primary"
@@ -347,7 +353,7 @@ export default function OrderSuccess({
                         rel="noreferrer"
                         onClick={handleMomoLaunch}
                       >
-                        Mở ứng dụng MoMo
+                        Mở MoMo
                       </a>
                     ) : (
                       <button className="momo-app-payment__primary" type="button" disabled>
@@ -357,7 +363,7 @@ export default function OrderSuccess({
 
                     {momoLaunchAttempted ? (
                       <p className="momo-app-payment__return-note" role="status" aria-live="polite">
-                        Thanh toán xong, anh/chị quay lại màn hình này. Hệ thống đang tự kiểm tra giao dịch.
+                        Đang chờ xác nhận thanh toán…
                       </p>
                     ) : null}
 
@@ -368,11 +374,9 @@ export default function OrderSuccess({
                         rel="noreferrer"
                         onClick={handleMomoLaunch}
                       >
-                        MoMo không mở? Dùng cổng thanh toán
+                        Không mở được? Thanh toán trên trình duyệt
                       </a>
                     ) : null}
-
-                    <p className="momo-app-payment__expiry">Giao dịch có hiệu lực trong 10 phút.</p>
                   </div>
                 ) : (
                   <>

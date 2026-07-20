@@ -132,7 +132,7 @@ export default function Checkout({
   const [checkoutFieldErrors, setCheckoutFieldErrors] = useState({});
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
-  const [paymentMethod, setPaymentMethod] = useState(isQrCounterOrder ? "bank_qr" : "COD");
+  const [paymentMethod, setPaymentMethod] = useState(isQrCounterOrder ? "momo" : "COD");
   const [pickupContact, setPickupContact] = useState(() => ({
     name: pickCheckoutCustomerName(userProfile, demoUser),
     phone: currentPhone || demoUser?.phone || userProfile?.phone || ""
@@ -418,8 +418,7 @@ export default function Checkout({
   }, [isQrCounterOrder, isRegisteredCustomer, selectedPromo, usePoints]);
 
   useEffect(() => {
-    if (isQrCounterOrder) return;
-    setPaymentMethod("COD");
+    setPaymentMethod(isQrCounterOrder ? "momo" : "COD");
   }, [isQrCounterOrder]);
 
   const handleCheckoutPlaceOrder = async () => {
@@ -662,7 +661,7 @@ export default function Checkout({
               : paymentMethod === "bank_qr"
                 ? "Đặt & thanh toán QR"
                 : paymentMethod === "momo"
-                  ? "Đặt & thanh toán MoMo"
+                  ? "Tiếp tục với MoMo"
                   : "Đặt món"}
           </button>
         </div>

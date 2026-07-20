@@ -340,16 +340,19 @@ export async function createOrderAsync(params) {
   const subtotalAmount = Number(
     subtotal ?? cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
   );
-  const validatedVoucher = await validateCheckoutVoucherBeforeOrder({
-    orderId: orderCode,
-    customerPhone: deliveryInfo?.phone || userProfile.phone,
-    subtotal: subtotalAmount,
-    promoDiscount,
-    promoCode,
-    promoSource,
-    promoVoucherId,
-    at: createdAt
-  });
+  const [validatedVoucher, loyaltyRule] = await Promise.all([
+    validateCheckoutVoucherBeforeOrder({
+      orderId: orderCode,
+      customerPhone: deliveryInfo?.phone || userProfile.phone,
+      subtotal: subtotalAmount,
+      promoDiscount,
+      promoCode,
+      promoSource,
+      promoVoucherId,
+      at: createdAt
+    }),
+    getLoyaltyRuleConfigAsync()
+  ]);
   const appliedPromoDiscount = validatedVoucher.promoDiscount;
   const appliedPromoCode = validatedVoucher.promoCode;
   const appliedPromoSource = validatedVoucher.promoSource;
@@ -357,7 +360,6 @@ export async function createOrderAsync(params) {
   const pointsAmount = Number(
     pointsBaseAmount ?? Math.max(subtotalAmount - Number(appliedPromoDiscount || 0), 0)
   );
-  const loyaltyRule = await getLoyaltyRuleConfigAsync();
   const pointsEarned = calculateOrderPoints(pointsAmount, loyaltyRule);
   const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
   const normalizedPaymentMethod = String(paymentMethod || "").trim().toLowerCase();
@@ -426,19 +428,7 @@ export async function createOrderAsync(params) {
     console.warn("[order] web order webhook failed", error);
   });
   saveCreatedOrderCustomerMarker({ order, currentPhone, saveDemoUser });
-  await syncCreatedOrderListAsync({ order, currentPhone, setDemoOrdersState });
-  const nextPhoneLoyalty = await applyCreatedOrderLoyaltyAsync({
-    order,
-    pointsAmount,
-    createdAt,
-    promoSource: appliedPromoSource,
-    promoVoucherId: appliedPromoVoucherId,
-    promoCode: appliedPromoCode,
-    pointsSpent,
-    pointsDiscount,
-    currentPhone,
-    setDemoLoyaltyState
-  });
+  finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, setCart });
   saveCreatedOrderAddress({
     order,
     deliveryInfo,
@@ -450,17 +440,38 @@ export async function createOrderAsync(params) {
     setDefaultAddress,
     setDemoAddressesState
   });
-  updateCreatedOrderProfile({
-    savedOrder,
-    totalAmount,
-    deliveryInfo,
-    fulfillmentType,
-    nextPhoneLoyalty,
-    setUserProfile,
-    getMemberRank
+
+  syncCreatedOrderListAsync({ order, currentPhone, setDemoOrdersState }).catch((error) => {
+    console.warn("[order] post-create order list sync failed", error);
   });
-  finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, setCart });
-  return order;
+  applyCreatedOrderLoyaltyAsync({
+    order,
+    pointsAmount,
+    createdAt,
+    promoSource: appliedPromoSource,
+    promoVoucherId: appliedPromoVoucherId,
+    promoCode: appliedPromoCode,
+    pointsSpent,
+    pointsDiscount,
+    currentPhone,
+    setDemoLoyaltyState
+  })
+    .then((nextPhoneLoyalty) => {
+      updateCreatedOrderProfile({
+        savedOrder,
+        totalAmount,
+        deliveryInfo,
+        fulfillmentType,
+        nextPhoneLoyalty,
+        setUserProfile,
+        getMemberRank
+      });
+    })
+    .catch((error) => {
+      console.warn("[order] post-create loyalty sync failed", error);
+    });
+
+  return savedOrder;
 }
 
 export function reorder(order, catalogProducts = []) {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   buildMomoPaymentQrImageUrl,
   buildQrOrderPaymentImageUrl,
@@ -68,5 +69,15 @@ assert.match(await buildMomoPaymentQrImageUrl(momoSession), /^data:image\/png;ba
 assert.equal(await buildMomoPaymentQrImageUrl(momoSessionWithoutDirectQr), "");
 assert.equal(getMomoPaymentLinks(momoSession).payUrl, momoSession.provider_payload.payUrl);
 assert.equal(getMomoPaymentLinks(momoSession).deeplink, momoSession.provider_payload.deeplink);
+
+const checkoutViewSource = await readFile(new URL("../src/features/checkout/CheckoutView.jsx", import.meta.url), "utf8");
+const checkoutPricingSource = await readFile(new URL("../src/features/checkout/components/CheckoutPricingSection.jsx", import.meta.url), "utf8");
+const orderSuccessSource = await readFile(new URL("../src/features/orders/OrderSuccessView.jsx", import.meta.url), "utf8");
+
+assert.match(checkoutViewSource, /useState\(isQrCounterOrder \? "momo" : "COD"\)/);
+assert.ok(checkoutPricingSource.indexOf('setPaymentMethod?.("momo")') < checkoutPricingSource.indexOf('setPaymentMethod?.("bank_qr")'));
+assert.doesNotMatch(checkoutPricingSource, /SePay tự xác nhận/);
+assert.doesNotMatch(orderSuccessSource, /Không cần quét thêm mã/);
+assert.match(orderSuccessSource, /Đang mở đơn hàng/);
 
 console.log("Order Success payment smoke test passed (cash website + SePay/MoMo QR counter).");

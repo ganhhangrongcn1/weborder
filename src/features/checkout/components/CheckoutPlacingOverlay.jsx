@@ -10,14 +10,9 @@ export default function CheckoutPlacingOverlay({ open }) {
         <div className="checkout-placing-icon">
           <Icon name="check" size={26} />
         </div>
-        <span>Đang xác nhận đơn</span>
-        <h3>Quán đang nhận thông tin đặt món</h3>
-        <p>Hệ thống đang lưu đơn và gửi thông báo nội bộ. Bạn chờ một chút nhé.</p>
-        <div className="checkout-placing-steps">
-          <em>Kiểm tra món</em>
-          <em>Lưu đơn</em>
-          <em>Báo cho quán</em>
-        </div>
+        <span>Đang tạo đơn</span>
+        <h3>Gần xong rồi</h3>
+        <p>Bạn giữ màn hình này trong giây lát nhé.</p>
       </div>
     </div>
   );
