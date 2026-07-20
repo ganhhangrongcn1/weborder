@@ -2063,14 +2063,24 @@ button.payment-card {
 
 .momo-app-payment {
   padding: 6px 0 2px;
-  text-align: center;
+  text-align: left;
+}
+
+.momo-app-payment__header {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid rgba(165, 0, 100, 0.1);
+  border-radius: 17px;
+  background: #fff5fb;
+  padding: 11px;
 }
 
 .momo-app-payment__brand {
   display: grid;
   width: 52px;
   height: 52px;
-  margin: 0 auto 14px;
   place-items: center;
   border-radius: 17px;
   background: #a50064;
@@ -2080,11 +2090,45 @@ button.payment-card {
   box-shadow: 0 10px 22px rgba(165, 0, 100, 0.18);
 }
 
+.momo-app-payment__copy {
+  min-width: 0;
+}
+
+.momo-app-payment__copy small,
+.momo-app-payment__copy strong {
+  display: block;
+}
+
+.momo-app-payment__copy small {
+  color: rgba(53, 21, 37, 0.5);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.momo-app-payment__copy strong {
+  margin-top: 2px;
+  color: #351525;
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.momo-app-payment__selected {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: #a50064;
+  color: #ffffff;
+}
+
 .momo-app-payment__primary {
   display: grid;
   width: 100%;
   min-height: 52px;
-  margin-top: 0;
+  margin-top: 12px;
   place-items: center;
   border: 0;
   border-radius: 16px;
@@ -2128,10 +2172,25 @@ button.payment-card {
   font-size: 11px;
   font-weight: 850;
   line-height: 1.45;
+  text-align: center;
+}
+
+.momo-app-payment__trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: rgba(53, 21, 37, 0.62);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .momo-app-payment__fallback {
   display: inline-block;
+  width: 100%;
   margin-top: 13px;
   color: #7a3159;
   font-size: 11px;
@@ -2139,6 +2198,7 @@ button.payment-card {
   text-decoration: underline;
   text-decoration-color: rgba(122, 49, 89, 0.34);
   text-underline-offset: 3px;
+  text-align: center;
 }
 
 .order-success-loading-icon {

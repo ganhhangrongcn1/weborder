@@ -74,6 +74,7 @@ export default function OrderSuccess({
   const [paymentMessage, setPaymentMessage] = useState("");
   const [momoQrImageUrl, setMomoQrImageUrl] = useState("");
   const [momoLaunchAttempted, setMomoLaunchAttempted] = useState(false);
+  const [isOrderRecoveryGraceActive, setIsOrderRecoveryGraceActive] = useState(() => !order);
   const orderCode = order?.orderCode || order?.id || "Đơn mới";
   const itemCount = getOrderItemsCount(order);
   const orderTotal = getOrderTotal(order);
@@ -130,6 +131,17 @@ export default function OrderSuccess({
       : "bg-green-100 text-green-700";
   const statusTextClass = qrPaymentExpired ? "text-red-600" : isQrPaymentWaiting ? "text-orange-600" : "text-green-700";
   const statusTitleClass = qrPaymentExpired ? "text-red-700" : isQrPaymentWaiting ? "text-orange-700" : "text-green-800";
+
+  useEffect(() => {
+    if (order) {
+      setIsOrderRecoveryGraceActive(false);
+      return undefined;
+    }
+
+    setIsOrderRecoveryGraceActive(true);
+    const timerId = window.setTimeout(() => setIsOrderRecoveryGraceActive(false), 10000);
+    return () => window.clearTimeout(timerId);
+  }, [order]);
 
   useEffect(() => {
     if (!isQrPaymentOrder || !orderId || qrPaymentPaid || qrPaymentExpired) return undefined;
@@ -216,7 +228,7 @@ export default function OrderSuccess({
     ? "Đơn hoàn tất là điểm được cộng theo hạng thành viên của bạn."
     : "Đăng nhập để theo dõi điểm và nhận ưu đãi dành riêng cho bạn.";
 
-  if (!order && isOrderRestoring) {
+  if (!order && (isOrderRestoring || isOrderRecoveryGraceActive)) {
     return (
       <section className="order-success-page grid min-h-[calc(100vh-96px)] place-items-center px-4 py-6">
         <CustomerCard padding="lg" className="text-center">
@@ -239,9 +251,9 @@ export default function OrderSuccess({
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] bg-orange-50 text-orange-600">
             <Icon name="bag" size={24} />
           </div>
-          <h1 className="mt-4 text-2xl font-black leading-tight text-brown">Chưa tìm thấy đơn hàng</h1>
+          <h1 className="mt-4 text-2xl font-black leading-tight text-brown">Đang kiểm tra đơn hàng</h1>
           <p className="mt-2 text-sm font-bold leading-6 text-brown/65">
-            Bạn có thể vào mục theo dõi đơn để kiểm tra lại lịch sử đặt món.
+            Nếu bạn vừa thanh toán, đơn sẽ tự hiển thị ngay khi Gánh nhận được xác nhận.
           </p>
           <CustomerButton full size="lg" className="mt-5" onClick={() => navigate?.("tracking", "orders")}>
             Theo dõi đơn hàng
@@ -345,7 +357,16 @@ export default function OrderSuccess({
               ) : !qrPaymentPaid ? (
                 isMomoPayment && !qrPaymentImageUrl ? (
                   <div className="momo-app-payment">
-                    <div className="momo-app-payment__brand" aria-hidden="true">M</div>
+                    <div className="momo-app-payment__header">
+                      <div className="momo-app-payment__brand" aria-hidden="true">M</div>
+                      <div className="momo-app-payment__copy">
+                        <small>Phương thức thanh toán</small>
+                        <strong>Ứng dụng MoMo</strong>
+                      </div>
+                      <span className="momo-app-payment__selected" aria-label="Đã chọn">
+                        <Icon name="check" size={15} />
+                      </span>
+                    </div>
                     {momoDirectPaymentUrl ? (
                       <a
                         className="momo-app-payment__primary"
@@ -364,6 +385,13 @@ export default function OrderSuccess({
                     {momoLaunchAttempted ? (
                       <p className="momo-app-payment__return-note" role="status" aria-live="polite">
                         Đang chờ xác nhận thanh toán…
+                      </p>
+                    ) : null}
+
+                    {!momoLaunchAttempted ? (
+                      <p className="momo-app-payment__trust">
+                        <Icon name="check" size={14} />
+                        <span>Chỉ xác nhận đơn khi thanh toán thành công</span>
                       </p>
                     ) : null}
 

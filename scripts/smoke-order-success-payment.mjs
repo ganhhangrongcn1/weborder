@@ -79,5 +79,7 @@ assert.ok(checkoutPricingSource.indexOf('setPaymentMethod?.("momo")') < checkout
 assert.doesNotMatch(checkoutPricingSource, /SePay tự xác nhận/);
 assert.doesNotMatch(orderSuccessSource, /Không cần quét thêm mã/);
 assert.match(orderSuccessSource, /Đang mở đơn hàng/);
+assert.doesNotMatch(orderSuccessSource, /Chưa tìm thấy đơn hàng/);
+assert.match(orderSuccessSource, /Chỉ xác nhận đơn khi thanh toán thành công/);
 
 console.log("Order Success payment smoke test passed (cash website + SePay/MoMo QR counter).");
