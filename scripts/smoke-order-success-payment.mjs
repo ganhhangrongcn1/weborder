@@ -171,6 +171,7 @@ const trackingViewSource = await readFile(new URL("../src/features/orders/Tracki
 const orderActionPanelSource = await readFile(new URL("../src/components/customer/CustomerOrderActionPanel.jsx", import.meta.url), "utf8");
 const momoWebhookSource = await readFile(new URL("../supabase/functions/momo-payment-webhook/index.ts", import.meta.url), "utf8");
 const sepayWebhookSource = await readFile(new URL("../supabase/functions/sepay-pos-webhook/index.ts", import.meta.url), "utf8");
+const orderRepositorySource = await readFile(new URL("../src/services/repositories/orderRepository.js", import.meta.url), "utf8");
 
 assert.match(checkoutViewSource, /fulfillmentType === "pickup" \? paymentMethod : "COD"/);
 assert.match(checkoutPricingSource, /isQrCounterOrder \|\| fulfillmentType === "pickup"/);
@@ -203,5 +204,8 @@ assert.match(momoWebhookSource, /payment_received_after_cancel/);
 assert.doesNotMatch(momoWebhookSource, /kitchen_status:\s*"cancelled"/);
 assert.match(sepayWebhookSource, /paid_after_cancel/);
 assert.match(sepayWebhookSource, /shouldStartPickupKitchen/);
+assert.match(orderRepositorySource, /verifyOrderWasPersistedAfterError/);
+assert.match(orderRepositorySource, /remote-write:verified-after-error/);
+assert.match(orderRepositorySource, /expectedItemCount === 0 \|\| remoteItemCount >= expectedItemCount/);
 
 console.log("Order Success payment smoke test passed (cash + SePay/MoMo for QR counter and website pickup).");

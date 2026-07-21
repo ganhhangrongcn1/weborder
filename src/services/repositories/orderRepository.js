@@ -251,6 +251,34 @@ function sameOrderIdentity(order = {}, targetId = "") {
   return [order.id, order.orderCode].map((value) => String(value || "").trim()).includes(safeTargetId);
 }
 
+function hasCompleteRemoteOrder(remoteOrders = [], order = {}) {
+  const orderId = String(order.id || order.orderCode || "").trim();
+  if (!orderId) return false;
+  const remoteOrder = (Array.isArray(remoteOrders) ? remoteOrders : []).find(
+    (candidate) => sameOrderIdentity(candidate, orderId)
+  );
+  if (!remoteOrder) return false;
+
+  const expectedItemCount = Array.isArray(order.items) ? order.items.length : 0;
+  const remoteItemCount = Array.isArray(remoteOrder.items) ? remoteOrder.items.length : 0;
+  return expectedItemCount === 0 || remoteItemCount >= expectedItemCount;
+}
+
+async function verifyOrderWasPersistedAfterError(order = {}) {
+  const phone = getCustomerKey(order.phone || order.customerPhone);
+  if (!phone) return false;
+  try {
+    const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(
+      phone,
+      { limit: 20, includeItems: true }
+    );
+    return hasCompleteRemoteOrder(remoteOrders, order);
+  } catch (verificationError) {
+    console.warn("[orderRepository] verify persisted order after write error failed", verificationError);
+    return false;
+  }
+}
+
 async function persistOrderLocalAsync(nextOrder, phoneKey) {
   await repository.setAsync(STORAGE_KEYS.lastCreatedOrderId, String(nextOrder.id || nextOrder.orderCode || "").trim());
   await repository.setAsync(STORAGE_KEYS.currentOrder, nextOrder || null);
@@ -537,38 +565,59 @@ export const orderRepository = {
       shouldWriteOrders
     });
     if (shouldWriteOrders) {
+      let remoteWriteConfirmed = false;
       try {
         console.info("[order-debug] upsertOrderAsync:remote-write:start", {
           orderId: nextOrder.id,
           orderCode: nextOrder.orderCode
         });
         await coreSupabaseRepository.upsertOrderToTable(nextOrder);
+        remoteWriteConfirmed = true;
         console.info("[order-debug] upsertOrderAsync:remote-write:ok", {
           orderId: nextOrder.id
         });
+      } catch (error) {
+        remoteWriteConfirmed = await verifyOrderWasPersistedAfterError(nextOrder);
+        if (remoteWriteConfirmed) {
+          console.warn("[orderRepository] write response failed but order is already complete in Supabase", {
+            orderId: nextOrder.id || nextOrder.orderCode || ""
+          });
+          console.info("[order-debug] upsertOrderAsync:remote-write:verified-after-error", {
+            orderId: nextOrder.id || nextOrder.orderCode || ""
+          });
+        } else {
+          console.warn("[orderRepository] upsert single order failed", error);
+          console.error("[order-debug] upsertOrderAsync:remote-write:failed", {
+            message: error?.message || String(error || ""),
+            code: error?.code || "",
+            details: error?.details || "",
+            hint: error?.hint || ""
+          });
+          if (isCashPaidPosOrder(nextOrder)) {
+            const pendingOrder = withOrderSyncStatus(
+              nextOrder,
+              ORDER_SYNC_STATUS.pending,
+              error?.message || "Supabase write failed"
+            );
+            await persistOrderLocalAsync(pendingOrder, key);
+            enqueuePosOfflineOrder(pendingOrder, error?.message || "Supabase write failed");
+            return pendingOrder;
+          }
+          throw error;
+        }
+      }
+
+      if (remoteWriteConfirmed) {
         const syncedOrder = withOrderSyncStatus(nextOrder, ORDER_SYNC_STATUS.synced);
-        await persistOrderLocalAsync(syncedOrder, key);
+        if (syncedOrder !== nextOrder) {
+          try {
+            await persistOrderLocalAsync(syncedOrder, key);
+          } catch (localSyncError) {
+            console.warn("[orderRepository] order was saved remotely but local sync failed", localSyncError);
+          }
+        }
         removePosOfflineOrder(syncedOrder);
         return syncedOrder;
-      } catch (error) {
-        console.warn("[orderRepository] upsert single order failed", error);
-        console.error("[order-debug] upsertOrderAsync:remote-write:failed", {
-          message: error?.message || String(error || ""),
-          code: error?.code || "",
-          details: error?.details || "",
-          hint: error?.hint || ""
-        });
-        if (isCashPaidPosOrder(nextOrder)) {
-          const pendingOrder = withOrderSyncStatus(
-            nextOrder,
-            ORDER_SYNC_STATUS.pending,
-            error?.message || "Supabase write failed"
-          );
-          await persistOrderLocalAsync(pendingOrder, key);
-          enqueuePosOfflineOrder(pendingOrder, error?.message || "Supabase write failed");
-          return pendingOrder;
-        }
-        throw error;
       }
     } else {
       console.warn("[order-debug] upsertOrderAsync:remote-write:skipped");
