@@ -7,9 +7,12 @@ import {
   buildQrOrderPaymentImageUrl,
   createQrOrderPaymentSession,
   findQrOrderPaymentBranch,
+  getFallbackMomoPaymentUrl,
   getMomoPaymentLinks,
+  getPreferredMomoPaymentUrl,
   getQrOrderPaymentConfig,
   getQrOrderPaymentReference,
+  isZaloInAppBrowser,
   isMomoPaymentOrder,
   isQrCounterPrepaidOrder,
   isQrOrderPaymentExpired,
@@ -85,7 +88,9 @@ export default function OrderSuccess({
   const paymentReference = getQrOrderPaymentReference(order, paymentSession);
   const momoPaymentLinks = getMomoPaymentLinks(paymentSession);
   const momoQrPayload = momoPaymentLinks.qrCodeUrl;
-  const momoDirectPaymentUrl = momoPaymentLinks.deeplink || momoPaymentLinks.payUrl;
+  const isZaloBrowser = useMemo(() => isZaloInAppBrowser(), []);
+  const momoDirectPaymentUrl = getPreferredMomoPaymentUrl(paymentSession);
+  const momoFallbackPaymentUrl = getFallbackMomoPaymentUrl(paymentSession);
   const bankQrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
   const qrPaymentImageUrl = isMomoPayment ? momoQrImageUrl : bankQrPaymentImageUrl;
   const qrPaymentPaid = isQrPaymentOrder && isQrOrderPaid(order, paymentSession);
@@ -374,7 +379,7 @@ export default function OrderSuccess({
                         rel="noreferrer"
                         onClick={handleMomoLaunch}
                       >
-                        Mở MoMo
+                        {isZaloBrowser ? "Tiếp tục với MoMo" : "Mở MoMo"}
                       </a>
                     ) : (
                       <button className="momo-app-payment__primary" type="button" disabled>
@@ -395,14 +400,16 @@ export default function OrderSuccess({
                       </p>
                     ) : null}
 
-                    {momoPaymentLinks.deeplink && momoPaymentLinks.payUrl ? (
+                    {momoFallbackPaymentUrl ? (
                       <a
                         className="momo-app-payment__fallback"
-                        href={momoPaymentLinks.payUrl}
+                        href={momoFallbackPaymentUrl}
                         rel="noreferrer"
                         onClick={handleMomoLaunch}
                       >
-                        Không mở được? Thanh toán trên trình duyệt
+                        {isZaloBrowser
+                          ? "Mở trực tiếp ứng dụng MoMo"
+                          : "Không mở được? Thanh toán trên trình duyệt"}
                       </a>
                     ) : null}
                   </div>
@@ -470,9 +477,9 @@ export default function OrderSuccess({
                         Cách lưu QR
                       </button>
                     ) : null}
-                    {isMomoPayment && momoPaymentLinks.deeplink && momoPaymentLinks.payUrl ? (
-                      <a href={momoPaymentLinks.payUrl} rel="noreferrer" onClick={handleMomoLaunch}>
-                        Mở cổng thanh toán MoMo
+                    {isMomoPayment && momoFallbackPaymentUrl ? (
+                      <a href={momoFallbackPaymentUrl} rel="noreferrer" onClick={handleMomoLaunch}>
+                        {isZaloBrowser ? "Mở ứng dụng MoMo" : "Mở cổng thanh toán MoMo"}
                       </a>
                     ) : null}
                   </div>

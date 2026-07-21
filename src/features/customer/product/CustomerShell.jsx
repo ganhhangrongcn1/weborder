@@ -21,6 +21,7 @@ import AccountPage from "../account/AccountPage.jsx";
 import QrOrderEntryPage from "../../../pages/customer/qr/QrOrderEntryPage.jsx";
 import QrMiniHomePage from "../../../pages/customer/qr/QrMiniHomePage.jsx";
 import useActiveOrderFloatboard from "../../../hooks/useActiveOrderFloatboard.js";
+import useMomoReturnRecovery from "../../../hooks/useMomoReturnRecovery.js";
 import { orderRepository } from "../../../services/repositories/orderRepository.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 import {
@@ -116,22 +117,27 @@ export default function CustomerShell({
   const [journeyOrder, setJourneyOrder] = useState(null);
   const [isJourneyOpen, setIsJourneyOpen] = useState(false);
   const [isTrackingOrderSheetOpen, setIsTrackingOrderSheetOpen] = useState(false);
+  const {
+    order: recoveredMomoOrder,
+    isRecovering: isMomoReturnRecovering
+  } = useMomoReturnRecovery({ enabled: page === "success" });
+  const resolvedCurrentOrder = recoveredMomoOrder || currentOrder;
 
   const lastCreatedOrderId = orderRepository.getLastCreatedOrderId();
   const forcedLatestOrder = (Array.isArray(profileOrders) ? profileOrders : []).find((order) => {
     const id = String(order?.id || order?.orderCode || "").trim();
     return Boolean(lastCreatedOrderId) && id === lastCreatedOrderId;
-  }) || (String(currentOrder?.id || currentOrder?.orderCode || "").trim() === lastCreatedOrderId ? currentOrder : null);
+  }) || (String(resolvedCurrentOrder?.id || resolvedCurrentOrder?.orderCode || "").trim() === lastCreatedOrderId ? resolvedCurrentOrder : null);
   const latestProfileOrder = Array.isArray(profileOrders) && profileOrders.length ? profileOrders[0] : null;
-  const currentOrderTime = new Date(currentOrder?.createdAt || 0).getTime();
+  const currentOrderTime = new Date(resolvedCurrentOrder?.createdAt || 0).getTime();
   const latestProfileOrderTime = new Date(latestProfileOrder?.createdAt || 0).getTime();
-  const successOrder = forcedLatestOrder || (latestProfileOrderTime > currentOrderTime ? latestProfileOrder : (currentOrder || latestProfileOrder));
+  const successOrder = recoveredMomoOrder || forcedLatestOrder || (latestProfileOrderTime > currentOrderTime ? latestProfileOrder : (resolvedCurrentOrder || latestProfileOrder));
   const customerOrdersForJourney = useMemo(
     () => [
-      ...(currentOrder ? [currentOrder] : []),
+      ...(resolvedCurrentOrder ? [resolvedCurrentOrder] : []),
       ...(Array.isArray(profileOrders) ? profileOrders : [])
     ],
-    [currentOrder, profileOrders]
+    [profileOrders, resolvedCurrentOrder]
   );
   const activeCustomerOrder = useMemo(
     () => findLatestActiveCustomerOrder(customerOrdersForJourney),
@@ -297,7 +303,7 @@ export default function CustomerShell({
               {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
               {page === "detail" && <ProductDetailPage render={pageProps.Detail} {...pageProps} />}
               {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
-              {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} isOrderRestoring={isSessionRestoring || isSessionBootstrapping} />}
+              {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} isOrderRestoring={isSessionRestoring || isSessionBootstrapping || isMomoReturnRecovering} />}
               {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} onOrderSheetVisibilityChange={setIsTrackingOrderSheetOpen} />}
               {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
               {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}

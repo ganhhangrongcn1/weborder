@@ -296,6 +296,29 @@ export const orderRepository = {
   saveCurrentOrder(nextOrder) {
     return repository.set(STORAGE_KEYS.currentOrder, nextOrder || null);
   },
+  hydrateRecoveredOrder(order = {}) {
+    const nextOrder = normalizeOrderForRead(order);
+    const orderId = String(nextOrder.id || nextOrder.orderCode || "").trim();
+    if (!orderId) return null;
+
+    const storageKey = resolveOrderStorageKey(nextOrder);
+    this.saveLastCreatedOrderId(orderId);
+    this.saveCurrentOrder(nextOrder);
+
+    if (storageKey) {
+      const all = this.getAllByPhone();
+      const current = Array.isArray(all[storageKey]) ? all[storageKey] : [];
+      const withoutRecoveredOrder = current.filter((item) => !sameOrderIdentity(item, orderId));
+      this.saveAllByPhone(
+        { ...all, [storageKey]: [nextOrder, ...withoutRecoveredOrder] },
+        { skipRemote: true }
+      );
+    } else {
+      notifyOrdersChanged({ source: "momo-return-recovery" });
+    }
+
+    return nextOrder;
+  },
   saveLastCreatedOrderId(orderId) {
     const id = String(orderId || "").trim();
     return repository.set(STORAGE_KEYS.lastCreatedOrderId, id || "");

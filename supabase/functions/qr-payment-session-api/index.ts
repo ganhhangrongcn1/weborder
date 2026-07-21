@@ -14,6 +14,8 @@ const jsonHeaders = {
 };
 
 const QR_ORDER_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
+const MOMO_RETURN_TOKEN_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+const MOMO_RETURN_TOKEN_PARAM = "momoReturnToken";
 
 const SESSION_COLUMNS = [
   "id",
@@ -181,6 +183,26 @@ function bytesToHex(buffer: ArrayBuffer) {
     .join("");
 }
 
+async function hashSha256(value: string) {
+  return bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+}
+
+function createMomoReturnToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function buildMomoReturnUrl(baseUrl: string, returnToken: string) {
+  const url = new URL(baseUrl);
+  if (url.protocol !== "https:") throw new Error("MOMO_REDIRECT_URL phải sử dụng HTTPS.");
+  url.searchParams.set("momoReturn", "1");
+  url.searchParams.set(MOMO_RETURN_TOKEN_PARAM, returnToken);
+  return url.toString();
+}
+
 async function signHmacSha256(rawData: string, secretKey: string) {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -216,6 +238,9 @@ async function createMomoPayment(
   const requestId = orderId;
   const requestType = "captureWallet";
   const ipnUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/momo-payment-webhook`;
+  const returnToken = createMomoReturnToken();
+  const returnTokenHash = await hashSha256(returnToken);
+  const momoRedirectUrl = buildMomoReturnUrl(redirectUrl, returnToken);
   const orderInfo = `Thanh toan don ${toText(order.order_code || order.id)} tai Ganh Hang Rong`;
   const extraData = btoa(JSON.stringify({ orderId: toText(order.id), source: "qr_order" }));
   const rawSignature = [
@@ -226,7 +251,7 @@ async function createMomoPayment(
     `orderId=${orderId}`,
     `orderInfo=${orderInfo}`,
     `partnerCode=${partnerCode}`,
-    `redirectUrl=${redirectUrl}`,
+    `redirectUrl=${momoRedirectUrl}`,
     `requestId=${requestId}`,
     `requestType=${requestType}`
   ].join("&");
@@ -243,7 +268,7 @@ async function createMomoPayment(
       amount,
       orderId,
       orderInfo,
-      redirectUrl,
+      redirectUrl: momoRedirectUrl,
       ipnUrl,
       lang: "vi",
       requestType,
@@ -269,7 +294,9 @@ async function createMomoPayment(
     payUrl: toText(momoResponse.payUrl),
     deeplink: toText(momoResponse.deeplink),
     qrCodeUrl: toText(momoResponse.qrCodeUrl),
-    responseTime: Number(momoResponse.responseTime || 0)
+    responseTime: Number(momoResponse.responseTime || 0),
+    returnTokenHash,
+    returnTokenCreatedAt: new Date().toISOString()
   };
   const { data, error } = await serviceClient
     .from("pos_payment_sessions")
@@ -574,6 +601,108 @@ async function readSession(serviceClient: ReturnType<typeof createClient>, body:
   return response({ ok: true, session });
 }
 
+function sanitizeSessionForCustomer(session: JsonRecord) {
+  const providerPayload = { ...getObject(session.provider_payload) };
+  delete providerPayload.returnTokenHash;
+  delete providerPayload.returnTokenCreatedAt;
+  return {
+    ...session,
+    provider_payload: providerPayload
+  };
+}
+
+function buildRecoveredOrder(order: JsonRecord, session: JsonRecord) {
+  const metadata = getObject(order.metadata);
+  const customerPhone = normalizePhone(order.customer_phone || metadata.customerPhone || metadata.phone);
+  const totalAmount = toMoney(order.total_amount || metadata.totalAmount || metadata.total);
+  const paymentStatus = ["paid", "converted"].includes(toText(session.status).toLowerCase())
+    ? "paid"
+    : toText(metadata.paymentStatus || metadata.payment_status) || "unpaid";
+
+  return {
+    id: toText(order.id),
+    orderCode: toText(order.order_code || order.id),
+    displayOrderCode: toText(metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id),
+    phone: customerPhone,
+    customerPhone,
+    customerName: toText(order.customer_name || metadata.customerName),
+    status: toText(order.status || metadata.status || metadata.orderStatus) || "pending_zalo",
+    orderStatus: toText(metadata.orderStatus || order.status) || "pending_zalo",
+    kitchenStatus: toText(order.kitchen_status || metadata.kitchenStatus || metadata.kitchen_status),
+    fulfillmentType: toText(metadata.fulfillmentType || metadata.fulfillment_type) || "pickup",
+    paymentMethod: "momo",
+    paymentStatus,
+    paymentAmount: toMoney(metadata.paymentAmount || metadata.payment_amount || totalAmount),
+    paymentReference: toText(session.payment_reference || metadata.paymentReference || metadata.payment_reference),
+    paidAt: toText(session.paid_at || metadata.paidAt || metadata.paid_at),
+    source: toText(metadata.source || metadata.orderSource || metadata.channel) || "qr_counter",
+    channel: toText(metadata.channel || metadata.source || metadata.orderSource) || "qr_counter",
+    orderSource: toText(metadata.orderSource || metadata.source || metadata.channel) || "qr_counter",
+    subtotal: toMoney(metadata.subtotal || totalAmount),
+    shippingFee: toMoney(metadata.shippingFee || metadata.shipping_fee),
+    originalShippingFee: toMoney(metadata.originalShippingFee || metadata.original_shipping_fee),
+    shippingSupportDiscount: toMoney(metadata.shippingSupportDiscount || metadata.shipping_support_discount),
+    promoDiscount: toMoney(metadata.promoDiscount || metadata.promo_discount),
+    promoCode: toText(metadata.promoCode || metadata.promo_code),
+    pointsDiscount: toMoney(metadata.pointsDiscount || metadata.points_discount),
+    pointsEarned: toMoney(metadata.pointsEarned || metadata.points_earned),
+    totalAmount,
+    total: totalAmount,
+    branchId: toText(metadata.branchId || metadata.branch_id),
+    branchUuid: toText(order.branch_uuid || metadata.branchUuid || metadata.branch_uuid),
+    branchName: toText(order.branch_name || metadata.branchName || metadata.branch_name),
+    branchAddress: toText(metadata.branchAddress || metadata.branch_address),
+    pickupBranchId: toText(metadata.pickupBranchId || metadata.pickup_branch_id),
+    pickupBranchUuid: toText(order.pickup_branch_uuid || metadata.pickupBranchUuid || metadata.pickup_branch_uuid),
+    pickupBranchName: toText(order.pickup_branch_name || metadata.pickupBranchName || metadata.pickup_branch_name),
+    pickupBranchAddress: toText(metadata.pickupBranchAddress || metadata.pickup_branch_address),
+    pickupTimeText: toText(metadata.pickupTimeText || metadata.pickup_time_text),
+    posShiftId: toText(order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id),
+    createdAt: toText(order.created_at || metadata.createdAt || metadata.created_at),
+    items: Array.isArray(metadata.items) ? metadata.items : []
+  };
+}
+
+async function recoverMomoReturn(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
+  const returnToken = toText(body.return_token || body.returnToken);
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(returnToken)) {
+    return response({ ok: false, message: "Liên kết trở lại đơn hàng không hợp lệ." }, 400);
+  }
+
+  const returnTokenHash = await hashSha256(returnToken);
+  const { data: rawSession, error: sessionError } = await serviceClient
+    .from("pos_payment_sessions")
+    .select(SESSION_COLUMNS)
+    .eq("source", "qr_order")
+    .eq("provider", "momo")
+    .eq("provider_payload->>returnTokenHash", returnTokenHash)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (sessionError) {
+    console.error("[qr-payment-session-api] momo return lookup failed", sessionError.message);
+    return response({ ok: false, message: "Chưa thể mở lại đơn hàng lúc này." }, 500);
+  }
+  if (!rawSession) return response({ ok: false, message: "Không tìm thấy đơn hàng từ liên kết MoMo." }, 404);
+
+  const providerPayload = getObject(rawSession.provider_payload);
+  const tokenCreatedAt = new Date(toText(providerPayload.returnTokenCreatedAt || rawSession.created_at)).getTime();
+  if (!Number.isFinite(tokenCreatedAt) || Date.now() - tokenCreatedAt > MOMO_RETURN_TOKEN_MAX_AGE_MS) {
+    return response({ ok: false, message: "Liên kết trở lại đơn hàng đã hết hạn." }, 410);
+  }
+
+  const session = await expireQrOrderSessionIfNeeded(serviceClient, rawSession);
+  const order = await readOrder(serviceClient, { order_id: toText(session?.order_id) });
+  if (!session || !order) return response({ ok: false, message: "Không tìm thấy đơn hàng cần khôi phục." }, 404);
+
+  return response({
+    ok: true,
+    session: sanitizeSessionForCustomer(session),
+    order: buildRecoveredOrder(order, session)
+  });
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return response({ ok: false, message: "Method not allowed." }, 405);
@@ -595,5 +724,6 @@ Deno.serve(async (request) => {
 
   if (action === "create") return createSession(serviceClient, payload);
   if (action === "read") return readSession(serviceClient, payload);
+  if (action === "recover_momo_return") return recoverMomoReturn(serviceClient, payload);
   return response({ ok: false, message: "Thao tác không được hỗ trợ." }, 400);
 });
