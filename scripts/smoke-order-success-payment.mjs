@@ -13,7 +13,10 @@ import {
   isQrCounterBankPaymentOrder,
   isQrCounterPrepaidOrder
 } from "../src/services/qrPaymentService.js";
-import { getCustomerOrderDisplayStatus } from "../src/services/customerOrderStatusService.js";
+import {
+  getCustomerOrderDisplayStatus,
+  getCustomerOrderJourney
+} from "../src/services/customerOrderStatusService.js";
 
 const cashWebsiteOrder = {
   orderSource: "online",
@@ -75,6 +78,41 @@ assert.deepEqual(getCustomerOrderDisplayStatus(expiredMomoOrder), {
   step: 0,
   paymentExpired: true
 });
+
+function formatScheduledPickup(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${hour}:${minute} - ${year}-${month}-${day}`;
+}
+
+const scheduledPickupOrder = {
+  id: "GHR-SCHEDULED",
+  source: "online",
+  fulfillmentType: "pickup",
+  paymentMethod: "COD",
+  paymentStatus: "pending",
+  status: "preparing",
+  kitchenStatus: "pending",
+  pickupTimeText: formatScheduledPickup(new Date(Date.now() + 60 * 60 * 1000))
+};
+const scheduledPickupStatus = getCustomerOrderDisplayStatus(scheduledPickupOrder);
+const scheduledPickupJourney = getCustomerOrderJourney(scheduledPickupOrder);
+assert.equal(scheduledPickupStatus.key, "scheduled");
+assert.equal(scheduledPickupStatus.label, "Quán đã nhận đơn");
+assert.equal(scheduledPickupJourney.title, "Quán đã nhận đơn");
+assert.match(scheduledPickupJourney.description, /bắt đầu làm lúc/);
+assert.deepEqual(scheduledPickupJourney.steps.map((step) => step.label), ["Đã nhận", "Chờ giờ làm", "Đang làm", "Nhận món"]);
+
+const readyPickupJourney = getCustomerOrderJourney({
+  ...scheduledPickupOrder,
+  status: "ready_for_pickup",
+  kitchenStatus: "ready"
+});
+assert.equal(readyPickupJourney.title, "Món đã sẵn sàng");
+assert.match(readyPickupJourney.description, /ghé quầy nhận món ngay/);
 const momoSession = {
   provider_payload: {
     qrCodeUrl: "000201010212TESTMOMO6304ABCD",

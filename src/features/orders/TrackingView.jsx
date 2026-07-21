@@ -890,10 +890,33 @@ export default function Tracking({
             const canTrackJourney = isActiveOrder && !isPartnerOrder;
             const isAwaitingPayment = statusMeta.key === "awaiting_payment" && !isPartnerOrder;
             const isExpiredPayment = Boolean(statusMeta.paymentExpired) && !isPartnerOrder;
+            const fulfillmentKey = String(order.fulfillmentType || order.fulfillment_type || "").trim().toLowerCase();
+            const sourceKey = String(order.source || order.channel || order.orderSource || "").trim().toLowerCase();
+            const isReadyForPickup = statusMeta.key === "ready" && !isPartnerOrder && (
+              ["pickup", "qr_counter", "qrcounter"].includes(fulfillmentKey) ||
+              ["qr_counter", "qrcounter"].includes(sourceKey)
+            );
+            const isScheduledPickup = statusMeta.key === "scheduled" && !isPartnerOrder;
+            const journeyActionLabel = isExpiredPayment
+              ? "Đặt lại đơn"
+              : isAwaitingPayment
+                ? "Thanh toán tiếp"
+                : isReadyForPickup
+                  ? "Nhận món tại quầy"
+                  : isScheduledPickup
+                    ? "Xem giờ nhận món"
+                    : "Theo dõi hành trình";
+            const journeyActionIcon = isExpiredPayment
+              ? "plus"
+              : isAwaitingPayment
+                ? "qr"
+                : isReadyForPickup
+                  ? "store"
+                  : "clock";
 
             if (!canAccessFullOrderHistory) {
               return (
-                <CustomerCard as="article" key={order.orderCode || order.id}>
+                <CustomerCard as="article" key={order.orderCode || order.id} className={isReadyForPickup ? "orders-card--ready" : ""}>
                   <div className="flex items-start gap-3">
                     <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl border text-sm font-black ${sourceBadge.className}`}>
                       {sourceBadge.label}
@@ -943,8 +966,8 @@ export default function Tracking({
                           )}
                           className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-black text-orange-600"
                         >
-                          <Icon name={isExpiredPayment ? "plus" : isAwaitingPayment ? "qr" : "clock"} size={16} />
-                          {isExpiredPayment ? "Đặt lại đơn" : isAwaitingPayment ? "Tiếp tục thanh toán" : "Theo dõi hành trình"}
+                          <Icon name={journeyActionIcon} size={16} />
+                          {journeyActionLabel}
                         </button>
                       ) : null}
                     </div>
@@ -958,7 +981,7 @@ export default function Tracking({
                 <CustomerCard
                   as="article"
                   key={order.orderCode || order.id}
-                  className={`orders-card ${isActiveOrder ? "orders-card--active" : ""}`}
+                  className={`orders-card ${isActiveOrder ? "orders-card--active" : ""}${isReadyForPickup ? " orders-card--ready" : ""}${isScheduledPickup ? " orders-card--scheduled" : ""}`}
                 >
                   <div className="orders-card__head">
                     <div>
@@ -974,6 +997,18 @@ export default function Tracking({
                     <h2>{getDisplayOrderCode(order)}</h2>
                     {branchName ? <p>{branchName}</p> : null}
                     <span>{itemPreview}</span>
+                    {isReadyForPickup ? (
+                      <strong className="orders-card__ready-callout">
+                        <Icon name="check" size={15} />
+                        Món đã xong, ghé quầy nhận ngay
+                      </strong>
+                    ) : null}
+                    {isScheduledPickup ? (
+                      <strong className="orders-card__scheduled-callout">
+                        <Icon name="clock" size={15} />
+                        Quán đã nhận, sẽ làm trước giờ lấy 20 phút
+                      </strong>
+                    ) : null}
                   </div>
 
                   <div className="orders-card__footer">
@@ -1001,7 +1036,7 @@ export default function Tracking({
                       <button
                         type="button"
                         className="orders-card__detail"
-                        aria-label={`${isExpiredPayment ? "Đặt lại" : isAwaitingPayment ? "Tiếp tục thanh toán" : canTrackJourney ? "Theo dõi hành trình" : "Xem chi tiết"} đơn ${getDisplayOrderCode(order)}`}
+                        aria-label={`${canTrackJourney || isExpiredPayment ? journeyActionLabel : "Xem chi tiết"} đơn ${getDisplayOrderCode(order)}`}
                         onClick={() => (
                           isExpiredPayment
                             ? handleReorderOrder(order)
@@ -1010,8 +1045,8 @@ export default function Tracking({
                               : openOrderDetails(order)
                         )}
                       >
-                        <Icon name={isExpiredPayment ? "plus" : isAwaitingPayment ? "qr" : canTrackJourney ? "clock" : "eye"} size={16} />
-                        {isExpiredPayment ? "Đặt lại đơn" : isAwaitingPayment ? "Thanh toán tiếp" : canTrackJourney ? "Theo dõi hành trình" : "Chi tiết"}
+                        <Icon name={canTrackJourney || isExpiredPayment ? journeyActionIcon : "eye"} size={16} />
+                        {canTrackJourney || isExpiredPayment ? journeyActionLabel : "Chi tiết"}
                       </button>
                     </div>
                   </div>

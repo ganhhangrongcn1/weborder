@@ -123,6 +123,30 @@
   line-height: 1.5;
 }
 
+.order-journey--scheduled .order-journey__message {
+  border: 1px solid rgba(217, 88, 0, 0.14);
+  background: #fff6e8;
+  color: #713512;
+}
+
+.order-journey--scheduled .order-journey__message > span {
+  background: #ffe5c4;
+  color: #d95800;
+}
+
+.order-journey--ready {
+  border-color: rgba(28, 139, 69, 0.28);
+  background: linear-gradient(145deg, #ffffff 0%, #effcf3 100%);
+  box-shadow: 0 16px 36px rgba(27, 126, 62, 0.14);
+}
+
+.order-journey--ready .order-journey__message {
+  border: 1px solid rgba(28, 139, 69, 0.2);
+  background: #def7e7;
+  color: #176b35;
+  font-weight: 800;
+}
+
 .order-journey__loyalty-hint {
   display: flex;
   align-items: center;
@@ -410,6 +434,62 @@
   line-height: 1;
 }
 
+.active-order-floatboard-wrap.is-ready .active-order-floatboard {
+  border: 2px solid rgba(31, 154, 74, 0.55);
+  background: linear-gradient(135deg, #f6fff8 0%, #ddf8e7 100%);
+  box-shadow: 0 20px 46px rgba(23, 117, 55, 0.28);
+}
+
+.active-order-floatboard-wrap.is-ready .active-order-floatboard__copy strong {
+  color: #11632d;
+  font-size: 14px;
+}
+
+.active-order-floatboard-wrap.is-ready .active-order-floatboard__step-label {
+  color: #176b35;
+  font-weight: 900;
+}
+
+.active-order-floatboard-wrap.is-ready .active-order-floatboard__action {
+  background: #208d47;
+  color: #ffffff;
+  box-shadow: 0 9px 20px rgba(32, 141, 71, 0.24);
+}
+
+.active-order-floatboard-wrap.is-ready .active-order-floatboard__compact-button {
+  width: 66px;
+  height: 66px;
+  border: 3px solid #ffffff;
+  background: linear-gradient(145deg, #30ad5b, #147535);
+  box-shadow: 0 0 0 6px rgba(48, 173, 91, 0.18), 0 16px 34px rgba(20, 117, 53, 0.36);
+  animation: active-order-ready-pulse 1.35s ease-in-out 0.25s 3;
+}
+
+.active-order-floatboard-wrap.is-ready .active-order-floatboard__compact-status {
+  right: -7px;
+  bottom: -5px;
+  min-width: 46px;
+  border-color: #ffffff;
+  background: #126d32;
+  color: #ffffff;
+  font-size: 9px;
+}
+
+.active-order-floatboard-wrap.is-scheduled .active-order-floatboard__icon {
+  background: linear-gradient(145deg, #ff8a21, #df5c00);
+  box-shadow: 0 10px 22px rgba(217, 88, 0, 0.24);
+}
+
+.active-order-floatboard-wrap.is-scheduled .active-order-floatboard__action {
+  background: #fff0dc;
+  color: #b94b00;
+}
+
+.active-order-floatboard-wrap.is-scheduled .active-order-floatboard__compact-button {
+  background: linear-gradient(145deg, #ff8a21, #d95800);
+  box-shadow: 0 14px 30px rgba(217, 88, 0, 0.3);
+}
+
 .active-order-floatboard__unread-dot {
   position: absolute;
   top: 5px;
@@ -486,6 +566,56 @@
   font-size: 24px;
   line-height: 1;
   transition: transform 0.16s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.order-journey-sheet__status {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 12px;
+  border: 1px solid rgba(103, 58, 26, 0.09);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 8px 10px;
+  color: #6f3818;
+}
+
+.order-journey-sheet__status > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border-radius: 9px;
+  background: #fff0dc;
+  color: #d95800;
+}
+
+.order-journey-sheet__status strong {
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.order-journey-sheet__status small {
+  flex: none;
+  color: rgba(58, 31, 20, 0.58);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.order-journey-sheet__status--ready {
+  border-color: rgba(31, 154, 74, 0.22);
+  background: #e9f9ee;
+  color: #176b35;
+}
+
+.order-journey-sheet__status--ready > span {
+  background: #208d47;
+  color: #ffffff;
 }
 
 .order-journey-sheet__summary {
@@ -775,6 +905,16 @@
   }
 }
 
+@keyframes active-order-ready-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 10px rgba(48, 173, 91, 0.12), 0 18px 38px rgba(20, 117, 53, 0.4);
+  }
+}
+
 @media (max-width: 374px) {
   .active-order-floatboard-wrap {
     bottom: calc(82px + env(safe-area-inset-bottom));
@@ -878,6 +1018,10 @@
   .active-order-floatboard-wrap,
   .active-order-floatboard__icon,
   .active-order-floatboard__unread-dot {
+    animation: none;
+  }
+
+  .active-order-floatboard-wrap.is-ready .active-order-floatboard__compact-button {
     animation: none;
   }
 

@@ -18,7 +18,7 @@ export default function OrderJourneyTimeline({ order, compact = false }) {
 
   return (
     <section
-      className={`order-journey${compact ? " order-journey--compact" : ""}`}
+      className={`order-journey order-journey--${journey.statusKey}${compact ? " order-journey--compact" : ""}`}
       aria-label={`Hành trình đơn hàng: ${journey.statusLabel}`}
       style={{
         "--journey-step-count": journey.steps.length,

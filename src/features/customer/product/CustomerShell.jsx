@@ -120,7 +120,7 @@ export default function CustomerShell({
   const [journeyOrder, setJourneyOrder] = useState(null);
   const [isJourneyOpen, setIsJourneyOpen] = useState(false);
   const [isTrackingOrderSheetOpen, setIsTrackingOrderSheetOpen] = useState(false);
-  const [paymentExpiryNow, setPaymentExpiryNow] = useState(() => Date.now());
+  const [orderStatusNow, setOrderStatusNow] = useState(() => Date.now());
   const {
     order: recoveredMomoOrder,
     isRecovering: isMomoReturnRecovering
@@ -145,7 +145,7 @@ export default function CustomerShell({
   );
   const activeCustomerOrder = useMemo(
     () => findLatestActiveCustomerOrder(customerOrdersForJourney),
-    [customerOrdersForJourney, paymentExpiryNow]
+    [customerOrdersForJourney, orderStatusNow]
   );
   const activeOrderJourneySignature = activeCustomerOrder
     ? getCustomerOrderJourneySignature(activeCustomerOrder)
@@ -173,10 +173,10 @@ export default function CustomerShell({
   };
 
   useEffect(() => {
-    if (!isQrCounterFlow) return undefined;
-    const timerId = window.setInterval(() => setPaymentExpiryNow(Date.now()), 5000);
+    if (!customerOrdersForJourney.length) return undefined;
+    const timerId = window.setInterval(() => setOrderStatusNow(Date.now()), 15000);
     return () => window.clearInterval(timerId);
-  }, [isQrCounterFlow]);
+  }, [customerOrdersForJourney.length]);
 
   useEffect(() => {
     if (!isJourneyOpen || !journeyOrder) return;

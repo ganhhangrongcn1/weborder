@@ -3,6 +3,9 @@ import {
   isQrOrderPaid,
   isQrOrderPaymentExpired
 } from "./qrPaymentService.js";
+import { parsePickupTimeText } from "../utils/dateTimeDefaults.js";
+
+const SCHEDULED_PICKUP_PREPARE_MINUTES = 20;
 
 function toText(value = "") {
   return String(value || "").trim();
@@ -29,6 +32,39 @@ function getOrderMetadata(order = {}) {
   return order?.metadata && typeof order.metadata === "object" && !Array.isArray(order.metadata)
     ? order.metadata
     : {};
+}
+
+function getPickupScheduleInfo(order = {}, now = Date.now()) {
+  const metadata = getOrderMetadata(order);
+  const pickup = parsePickupTimeText(
+    order.pickupTimeText ||
+      order.pickup_time_text ||
+      metadata.pickupTimeText ||
+      metadata.pickup_time_text ||
+      ""
+  );
+
+  if (!pickup.scheduled) {
+    return {
+      scheduled: false,
+      prepareMinutes: SCHEDULED_PICKUP_PREPARE_MINUTES
+    };
+  }
+
+  const pickupTimeValue = pickup.dateTime.getTime();
+  const prepareTimeValue = pickupTimeValue - SCHEDULED_PICKUP_PREPARE_MINUTES * 60 * 1000;
+  const prepareDate = new Date(prepareTimeValue);
+
+  return {
+    ...pickup,
+    scheduled: true,
+    pickupTimeValue,
+    prepareTimeValue,
+    prepareClock: `${String(prepareDate.getHours()).padStart(2, "0")}:${String(prepareDate.getMinutes()).padStart(2, "0")}`,
+    minutesUntilPickup: Math.ceil((pickupTimeValue - now) / 60000),
+    prepareMinutes: SCHEDULED_PICKUP_PREPARE_MINUTES,
+    waitingForPrepareTime: now < prepareTimeValue
+  };
 }
 
 function isPickupLike(order = {}) {
@@ -104,6 +140,7 @@ function getPartnerStatus(order = {}) {
 function getWebsiteStatus(order = {}) {
   const pickupLike = isPickupLike(order);
   const metadata = getOrderMetadata(order);
+  const pickupSchedule = getPickupScheduleInfo(order);
   const status = normalizeStatusText(order.status || order.orderStatus || order.order_status);
   const kitchenStatus = normalizeStatusText(order.kitchenStatus || order.kitchen_status);
   const paymentMethod = normalizeStatusText(
@@ -112,6 +149,7 @@ function getWebsiteStatus(order = {}) {
   const paymentStatus = normalizeStatusText(
     order.paymentStatus || order.payment_status || metadata.paymentStatus || metadata.payment_status
   );
+  const kitchenHasStarted = ["preparing", "cooking", "doing", "active", "processing"].includes(kitchenStatus);
   const isWaitingForQrPayment = ["bankqr", "momo"].includes(paymentMethod) && !["paid", "converted"].includes(paymentStatus);
   const isPaidAfterCancel = paymentStatus === "paidaftercancel";
   const cancelReason = normalizeStatusText(
@@ -150,7 +188,7 @@ function getWebsiteStatus(order = {}) {
   if (["readyforpickup", "readyfordelivery"].includes(status)) {
     return {
       key: "ready",
-      label: pickupLike ? "Món đã làm xong" : "Sẵn sàng giao hàng",
+      label: pickupLike ? "Sẵn sàng nhận món" : "Sẵn sàng giao hàng",
       tone: "ready",
       step: pickupLike ? 2 : 1
     };
@@ -177,7 +215,7 @@ function getWebsiteStatus(order = {}) {
   if (["ready"].includes(kitchenStatus)) {
     return {
       key: "ready",
-      label: pickupLike ? "Món đã làm xong" : "Sẵn sàng giao hàng",
+      label: pickupLike ? "Sẵn sàng nhận món" : "Sẵn sàng giao hàng",
       tone: "ready",
       step: pickupLike ? 2 : 1
     };
@@ -198,6 +236,16 @@ function getWebsiteStatus(order = {}) {
       label: paymentMethod === "momo" ? "Chờ thanh toán MoMo" : "Chờ thanh toán QR",
       tone: "pending",
       step: 0
+    };
+  }
+
+  if (pickupLike && pickupSchedule.waitingForPrepareTime && !kitchenHasStarted) {
+    return {
+      key: "scheduled",
+      label: "Quán đã nhận đơn",
+      tone: "scheduled",
+      step: 1,
+      pickupSchedule
     };
   }
 
@@ -230,6 +278,7 @@ function getWebsiteStatus(order = {}) {
 const ACTIVE_CUSTOMER_ORDER_STATUS_KEYS = new Set([
   "awaiting_payment",
   "pending",
+  "scheduled",
   "preparing",
   "active",
   "ready",
@@ -251,7 +300,7 @@ function getOrderActivityTime(order = {}) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function getJourneyCopy(statusKey = "", pickupLike = false) {
+function getJourneyCopy(statusKey = "", pickupLike = false, pickupSchedule = {}) {
   if (statusKey === "awaiting_payment") {
     return {
       title: "Chờ thanh toán",
@@ -285,8 +334,8 @@ function getJourneyCopy(statusKey = "", pickupLike = false) {
   if (statusKey === "ready") {
     return pickupLike
       ? {
-          title: "Món đã làm xong",
-          description: "Ghé quầy rước món thôi."
+          title: "Món đã sẵn sàng",
+          description: "Món đã làm xong. Bạn ghé quầy nhận món ngay nha."
         }
       : {
           title: "Món đã xong, đang chờ shipper",
@@ -295,13 +344,25 @@ function getJourneyCopy(statusKey = "", pickupLike = false) {
   }
 
   if (["preparing", "active"].includes(statusKey)) {
+    if (pickupLike && pickupSchedule.scheduled) {
+      return {
+        title: "Bếp đang làm món",
+        description: `Gánh đang chuẩn bị để bạn nhận món mới lúc ${pickupSchedule.clock}.`
+      };
+    }
     return {
       title: "Đơn hàng đang được chuẩn bị",
       description: "Bếp đang lên món, chờ xíu nha."
     };
   }
 
-  if (statusKey === "preorder") {
+  if (["preorder", "scheduled"].includes(statusKey)) {
+    if (pickupSchedule.scheduled) {
+      return {
+        title: "Quán đã nhận đơn",
+        description: `Gánh sẽ bắt đầu làm lúc ${pickupSchedule.prepareClock}, để món vừa mới vừa ngon khi bạn ghé lúc ${pickupSchedule.clock}.`
+      };
+    }
     return {
       title: "Đơn đã được hẹn giờ",
       description: "Gánh sẽ bắt đầu chuẩn bị theo thời gian bạn đã chọn."
@@ -318,7 +379,20 @@ export function getCustomerOrderJourney(order = {}) {
   const pickupLike = isPickupLike(order);
   const statusMeta = getCustomerOrderDisplayStatus(order);
   const statusKey = statusMeta.key || "pending";
-  const steps = pickupLike
+  const pickupSchedule = getPickupScheduleInfo(order);
+  const usesScheduledPickupSteps = pickupLike && pickupSchedule.scheduled && ![
+    "awaiting_payment",
+    "cancelled",
+    "completed"
+  ].includes(statusKey);
+  const steps = usesScheduledPickupSteps
+    ? [
+        { key: "received", label: "Đã nhận", icon: "bag" },
+        { key: "scheduled", label: "Chờ giờ làm", icon: "clock" },
+        { key: "preparing", label: "Đang làm", icon: "dish" },
+        { key: "ready", label: "Nhận món", icon: "store" }
+      ]
+    : pickupLike
     ? [
         { key: "received", label: "Đã nhận đơn", icon: "bag" },
         { key: "preparing", label: "Đang làm món", icon: "dish" },
@@ -334,18 +408,20 @@ export function getCustomerOrderJourney(order = {}) {
       ];
 
   let currentStepIndex = 0;
-  if (["preparing", "active"].includes(statusKey)) currentStepIndex = 1;
-  if (statusKey === "ready") currentStepIndex = 2;
+  if (statusKey === "scheduled") currentStepIndex = 1;
+  if (["preparing", "active"].includes(statusKey)) currentStepIndex = usesScheduledPickupSteps ? 2 : 1;
+  if (statusKey === "ready") currentStepIndex = usesScheduledPickupSteps ? 3 : 2;
   if (statusKey === "delivering") currentStepIndex = pickupLike ? 2 : 3;
   if (statusKey === "completed") currentStepIndex = steps.length - 1;
   if (statusKey === "cancelled") currentStepIndex = 0;
 
-  const copy = getJourneyCopy(statusKey, pickupLike);
+  const copy = getJourneyCopy(statusKey, pickupLike, pickupSchedule);
   return {
     ...copy,
     statusKey,
     statusLabel: statusMeta.label,
     pickupLike,
+    pickupSchedule,
     steps,
     currentStepIndex,
     progressRatio: steps.length > 1 ? currentStepIndex / (steps.length - 1) : 0,
@@ -411,7 +487,8 @@ export function getCustomerOrderDisplayStatus(order = {}) {
 
 export function getCustomerOrderStatusToneClass(statusMeta = {}) {
   const tone = statusMeta.tone || statusMeta.key;
-  if (tone === "done" || tone === "ready") return "bg-green-50 text-green-700";
+  if (tone === "ready") return "bg-green-600 text-white";
+  if (tone === "done") return "bg-green-50 text-green-700";
   if (tone === "delivering") return "bg-blue-50 text-blue-600";
   if (tone === "cancelled") return "bg-red-50 text-red-600";
   return "bg-orange-50 text-orange-600";

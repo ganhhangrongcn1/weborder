@@ -8,6 +8,11 @@ export default function ActiveOrderJourneySheet({ order, onClose, onOpenOrders }
 
   const journey = getCustomerOrderJourney(order);
   const orderCode = String(order.orderCode || order.order_code || order.id || "Đơn hàng");
+  const statusIcon = journey.statusKey === "ready"
+    ? "check"
+    : journey.statusKey === "awaiting_payment"
+      ? "qr"
+      : "clock";
 
   return (
     <CustomerBottomSheet
@@ -28,17 +33,25 @@ export default function ActiveOrderJourneySheet({ order, onClose, onOpenOrders }
         </div>
       )}
     >
-      <header className="order-journey-sheet__header">
+      <header className={`order-journey-sheet__header order-journey-sheet__header--${journey.statusKey}`}>
         <div>
           <span className="order-journey-sheet__eyebrow">
             <Icon name={journey.pickupLike ? "store" : "bike"} size={14} />
             {journey.pickupLike ? "Đơn tự lấy" : "Đơn giao tận nơi"}
           </span>
           <h2>{journey.title}</h2>
-          <p>{journey.statusLabel} · {orderCode}</p>
+          <p>{orderCode}</p>
         </div>
         <button type="button" onClick={onClose} aria-label="Đóng hành trình đơn hàng">×</button>
       </header>
+
+      <div className={`order-journey-sheet__status order-journey-sheet__status--${journey.statusKey}`} role="status">
+        <span><Icon name={statusIcon} size={15} /></span>
+        <strong>{journey.statusLabel}</strong>
+        {journey.statusKey === "scheduled" && journey.pickupSchedule?.clock ? (
+          <small>Nhận lúc {journey.pickupSchedule.clock}</small>
+        ) : null}
+      </div>
 
       <OrderJourneyTimeline order={order} />
     </CustomerBottomSheet>
