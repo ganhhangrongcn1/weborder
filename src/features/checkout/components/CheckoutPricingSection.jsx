@@ -178,12 +178,19 @@ export default function CheckoutPricingSection({
               type="button"
               onClick={() => setPaymentMethod?.("momo")}
               className={`payment-card payment-card--momo${isMomoSelected ? " active" : ""}`}
-              aria-label="Phương thức thanh toán: MoMo"
+              aria-label="Phương thức thanh toán: Thanh toán ví MoMo"
               aria-pressed={isMomoSelected}
             >
-              <span className="payment-card__brand payment-card__brand--momo" aria-hidden="true">M</span>
+              <img
+                className="payment-card__brand payment-card__brand--momo"
+                src="/brand/momo-logo-app.png"
+                alt=""
+                width="32"
+                height="32"
+                decoding="async"
+              />
               <span>
-                <strong>MoMo</strong>
+                <strong>Thanh toán ví MoMo</strong>
                 <small>Mở ứng dụng MoMo</small>
               </span>
               {isMomoSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}

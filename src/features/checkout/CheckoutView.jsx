@@ -661,7 +661,7 @@ export default function Checkout({
               : paymentMethod === "bank_qr"
                 ? "Đặt & thanh toán QR"
                 : paymentMethod === "momo"
-                  ? "Tiếp tục với MoMo"
+                  ? "Thanh toán bằng MoMo"
                   : "Đặt món"}
           </button>
         </div>

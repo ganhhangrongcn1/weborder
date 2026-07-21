@@ -114,7 +114,7 @@ export default function OrderSuccess({
     ? "Đơn đã quá hạn thanh toán"
     : isQrPaymentWaiting
       ? isMomoPayment
-        ? "Hoàn tất thanh toán"
+        ? "Xác nhận thanh toán trên MoMo"
         : "Quét QR để Gánh lên món"
       : "Gánh nhận được đơn rồi nha";
   const statusDescription = qrPaymentExpired
@@ -363,7 +363,14 @@ export default function OrderSuccess({
                 isMomoPayment && !qrPaymentImageUrl ? (
                   <div className="momo-app-payment">
                     <div className="momo-app-payment__header">
-                      <div className="momo-app-payment__brand" aria-hidden="true">M</div>
+                      <img
+                        className="momo-app-payment__brand"
+                        src="/brand/momo-logo-app.png"
+                        alt=""
+                        width="52"
+                        height="52"
+                        decoding="async"
+                      />
                       <div className="momo-app-payment__copy">
                         <small>Phương thức thanh toán</small>
                         <strong>Ứng dụng MoMo</strong>
@@ -379,7 +386,7 @@ export default function OrderSuccess({
                         rel="noreferrer"
                         onClick={handleMomoLaunch}
                       >
-                        {isZaloBrowser ? "Tiếp tục với MoMo" : "Mở MoMo"}
+                        {isZaloBrowser ? "Tiếp tục thanh toán MoMo" : "Mở ứng dụng MoMo"}
                       </a>
                     ) : (
                       <button className="momo-app-payment__primary" type="button" disabled>

@@ -1303,19 +1303,15 @@ button.payment-card {
 }
 
 .payment-card__brand {
-  display: grid;
-  width: 28px;
-  height: 28px;
+  display: block;
+  width: 32px;
+  height: 32px;
   flex: 0 0 auto;
-  place-items: center;
-  border-radius: 9px;
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 950;
+  border-radius: 10px;
+  object-fit: cover;
 }
 
 .payment-card__brand--momo {
-  background: #a50064;
   box-shadow: 0 7px 16px rgba(165, 0, 100, 0.2);
 }
 
@@ -2078,15 +2074,11 @@ button.payment-card {
 }
 
 .momo-app-payment__brand {
-  display: grid;
+  display: block;
   width: 52px;
   height: 52px;
-  place-items: center;
   border-radius: 17px;
-  background: #a50064;
-  color: #ffffff;
-  font-size: 25px;
-  font-weight: 950;
+  object-fit: cover;
   box-shadow: 0 10px 22px rgba(165, 0, 100, 0.18);
 }
 

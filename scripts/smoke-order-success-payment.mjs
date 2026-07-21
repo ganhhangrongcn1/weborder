@@ -87,7 +87,13 @@ const qrPaymentFunctionSource = await readFile(new URL("../supabase/functions/qr
 assert.match(checkoutViewSource, /useState\(isQrCounterOrder \? "momo" : "COD"\)/);
 assert.ok(checkoutPricingSource.indexOf('setPaymentMethod?.("momo")') < checkoutPricingSource.indexOf('setPaymentMethod?.("bank_qr")'));
 assert.doesNotMatch(checkoutPricingSource, /SePay tự xác nhận/);
+assert.match(checkoutPricingSource, /Thanh toán ví MoMo/);
+assert.match(checkoutPricingSource, /\/brand\/momo-logo-app\.png/);
+assert.match(checkoutViewSource, /Thanh toán bằng MoMo/);
 assert.doesNotMatch(orderSuccessSource, /Không cần quét thêm mã/);
+assert.match(orderSuccessSource, /Xác nhận thanh toán trên MoMo/);
+assert.match(orderSuccessSource, /Mở ứng dụng MoMo/);
+assert.doesNotMatch(orderSuccessSource, /Hoàn tất thanh toán/);
 assert.match(orderSuccessSource, /Đang mở đơn hàng/);
 assert.doesNotMatch(orderSuccessSource, /Chưa tìm thấy đơn hàng/);
 assert.match(orderSuccessSource, /Chỉ xác nhận đơn khi thanh toán thành công/);
