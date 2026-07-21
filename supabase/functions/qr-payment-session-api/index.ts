@@ -94,7 +94,9 @@ function isExpiredTime(value: unknown = "", now = Date.now()) {
 }
 
 function isPaidMetadata(metadata: JsonRecord) {
-  return toText(metadata.paymentStatus || metadata.payment_status).toLowerCase() === "paid";
+  return ["paid", "paid_after_cancel"].includes(
+    toText(metadata.paymentStatus || metadata.payment_status).toLowerCase()
+  );
 }
 
 function response(body: JsonRecord, status = 200) {
@@ -432,16 +434,19 @@ async function cancelExpiredQrOrder(
     paymentReference: toText(session.payment_reference) || metadata.paymentReference || metadata.payment_reference
   };
 
-  await serviceClient
+  const { error: orderCancelError } = await serviceClient
     .from("orders")
     .update({
       status: "cancelled",
-      kitchen_status: "cancelled",
+      kitchen_status: "pending",
       payment_method: toText(order.payment_method || metadata.paymentMethod) || "bank_qr",
       metadata: nextMetadata,
       updated_at: now
     })
     .eq("id", safeOrderId);
+  if (orderCancelError) {
+    console.error("[qr-payment-session-api] order expiration sync failed", safeOrderId, orderCancelError.message);
+  }
 }
 
 async function expireQrOrderSessionIfNeeded(
@@ -451,9 +456,28 @@ async function expireQrOrderSessionIfNeeded(
   if (!session) return null;
   const source = toText(session.source).toLowerCase();
   const status = toText(session.status).toLowerCase();
-  if (source !== "qr_order" || status !== "pending_payment" || !isExpiredTime(session.expires_at)) {
+  if (source !== "qr_order") {
     return session;
   }
+
+  if (["expired", "cancelled", "canceled", "failed"].includes(status)) {
+    const isCustomerCancelled = status === "cancelled" &&
+      toText(session.failure_reason).toLowerCase() === "customer_cancelled_unpaid";
+    await cancelExpiredQrOrder(
+      serviceClient,
+      toText(session.order_id),
+      session,
+      toText(session.cancelled_at || session.updated_at) || new Date().toISOString(),
+      {
+        cancelReason: isCustomerCancelled ? "customer_cancelled_unpaid" : status === "failed" ? "payment_failed" : "payment_timeout",
+        cancelledBy: isCustomerCancelled ? "customer" : status === "failed" ? "payment_provider" : "qr_payment_timeout",
+        paymentStatus: isCustomerCancelled ? "cancelled" : status
+      }
+    );
+    return session;
+  }
+
+  if (status !== "pending_payment" || !isExpiredTime(session.expires_at)) return session;
 
   const now = new Date().toISOString();
   const { data: expiredSession } = await serviceClient
@@ -564,7 +588,7 @@ async function cancelCustomerUnpaidOrder(
     .from("orders")
     .update({
       status: "cancelled",
-      kitchen_status: "cancelled",
+      kitchen_status: "pending",
       metadata: nextMetadata,
       updated_at: now
     })
@@ -767,7 +791,12 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
 async function readSession(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
   const session = await expireQrOrderSessionIfNeeded(serviceClient, await findSession(serviceClient, body));
   if (!session) return response({ ok: false, message: "Chưa có phiên thanh toán cho đơn này." }, 404);
-  return response({ ok: true, session });
+  const order = await readOrder(serviceClient, { order_id: toText(session.order_id) });
+  return response({
+    ok: true,
+    session: sanitizeSessionForCustomer(session),
+    order: order ? buildRecoveredOrder(order, session) : null
+  });
 }
 
 function sanitizeSessionForCustomer(session: JsonRecord) {

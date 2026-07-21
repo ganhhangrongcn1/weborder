@@ -671,6 +671,15 @@ export default function Tracking({
     onReorder(orderToReorder);
   };
 
+  const handleReorderOrder = (order) => {
+    if (!order) return;
+    if (typeof onReorder === "function") {
+      onReorder(order);
+      return;
+    }
+    navigate("menu", "menu");
+  };
+
   const handleGuestPointLogin = (order) => {
     if (typeof window !== "undefined") {
       try {
@@ -880,6 +889,7 @@ export default function Tracking({
             const isActiveOrder = getOrderFilterKey(order) === "active";
             const canTrackJourney = isActiveOrder && !isPartnerOrder;
             const isAwaitingPayment = statusMeta.key === "awaiting_payment" && !isPartnerOrder;
+            const isExpiredPayment = Boolean(statusMeta.paymentExpired) && !isPartnerOrder;
 
             if (!canAccessFullOrderHistory) {
               return (
@@ -921,14 +931,20 @@ export default function Tracking({
                           </button>
                         ) : null}
                       </div>
-                      {canTrackJourney ? (
+                      {canTrackJourney || isExpiredPayment ? (
                         <button
                           type="button"
-                          onClick={() => (isAwaitingPayment ? handleContinuePayment(order) : openOrderDetails(order))}
+                          onClick={() => (
+                            isExpiredPayment
+                              ? handleReorderOrder(order)
+                              : isAwaitingPayment
+                                ? handleContinuePayment(order)
+                                : openOrderDetails(order)
+                          )}
                           className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-black text-orange-600"
                         >
-                          <Icon name={isAwaitingPayment ? "qr" : "clock"} size={16} />
-                          {isAwaitingPayment ? "Tiếp tục thanh toán" : "Theo dõi hành trình"}
+                          <Icon name={isExpiredPayment ? "plus" : isAwaitingPayment ? "qr" : "clock"} size={16} />
+                          {isExpiredPayment ? "Đặt lại đơn" : isAwaitingPayment ? "Tiếp tục thanh toán" : "Theo dõi hành trình"}
                         </button>
                       ) : null}
                     </div>
@@ -985,11 +1001,17 @@ export default function Tracking({
                       <button
                         type="button"
                         className="orders-card__detail"
-                        aria-label={`${isAwaitingPayment ? "Tiếp tục thanh toán" : canTrackJourney ? "Theo dõi hành trình" : "Xem chi tiết"} đơn ${getDisplayOrderCode(order)}`}
-                        onClick={() => (isAwaitingPayment ? handleContinuePayment(order) : openOrderDetails(order))}
+                        aria-label={`${isExpiredPayment ? "Đặt lại" : isAwaitingPayment ? "Tiếp tục thanh toán" : canTrackJourney ? "Theo dõi hành trình" : "Xem chi tiết"} đơn ${getDisplayOrderCode(order)}`}
+                        onClick={() => (
+                          isExpiredPayment
+                            ? handleReorderOrder(order)
+                            : isAwaitingPayment
+                              ? handleContinuePayment(order)
+                              : openOrderDetails(order)
+                        )}
                       >
-                        <Icon name={isAwaitingPayment ? "qr" : canTrackJourney ? "clock" : "eye"} size={16} />
-                        {isAwaitingPayment ? "Thanh toán tiếp" : canTrackJourney ? "Theo dõi hành trình" : "Chi tiết"}
+                        <Icon name={isExpiredPayment ? "plus" : isAwaitingPayment ? "qr" : canTrackJourney ? "clock" : "eye"} size={16} />
+                        {isExpiredPayment ? "Đặt lại đơn" : isAwaitingPayment ? "Thanh toán tiếp" : canTrackJourney ? "Theo dõi hành trình" : "Chi tiết"}
                       </button>
                     </div>
                   </div>

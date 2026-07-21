@@ -247,7 +247,7 @@ Deno.serve(async (request) => {
       if (failedOrder && toText(failedMetadata.paymentStatus || failedMetadata.payment_status).toLowerCase() !== "paid") {
         await supabase.from("orders").update({
           status: "cancelled",
-          kitchen_status: "cancelled",
+          kitchen_status: "pending",
           payment_method: "momo",
           metadata: {
             ...failedMetadata,

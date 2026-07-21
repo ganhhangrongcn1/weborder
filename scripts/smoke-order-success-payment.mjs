@@ -9,9 +9,11 @@ import {
   isZaloInAppBrowser,
   isMomoPaymentOrder,
   isQrOrderPaid,
+  isQrOrderPaymentExpired,
   isQrCounterBankPaymentOrder,
   isQrCounterPrepaidOrder
 } from "../src/services/qrPaymentService.js";
+import { getCustomerOrderDisplayStatus } from "../src/services/customerOrderStatusService.js";
 
 const cashWebsiteOrder = {
   orderSource: "online",
@@ -56,6 +58,23 @@ assert.equal(isQrCounterPrepaidOrder(momoQrCounterOrder), true);
 assert.equal(isMomoPaymentOrder(momoQrCounterOrder), true);
 assert.equal(isQrCounterBankPaymentOrder(momoQrCounterOrder), false);
 assert.equal(isQrOrderPaid({ ...momoQrCounterOrder, paymentStatus: "paid_after_cancel" }), true);
+const expiredMomoOrder = {
+  ...momoQrCounterOrder,
+  status: "pending_payment",
+  kitchenStatus: "waiting_payment",
+  paymentStatus: "unpaid",
+  createdAt: new Date(Date.now() - (11 * 60 * 1000)).toISOString()
+};
+assert.equal(isQrOrderPaymentExpired(expiredMomoOrder), true);
+assert.equal(isQrOrderPaymentExpired({ ...expiredMomoOrder, paymentStatus: "paid" }), false);
+assert.equal(isQrOrderPaymentExpired(momoQrCounterOrder, { status: "expired" }), true);
+assert.deepEqual(getCustomerOrderDisplayStatus(expiredMomoOrder), {
+  key: "cancelled",
+  label: "Đã hết hạn thanh toán",
+  tone: "cancelled",
+  step: 0,
+  paymentExpired: true
+});
 const momoSession = {
   provider_payload: {
     qrCodeUrl: "000201010212TESTMOMO6304ABCD",
@@ -110,11 +129,14 @@ assert.match(qrPaymentFunctionSource, /returnTokenHash/);
 assert.doesNotMatch(qrPaymentFunctionSource, /provider_payload:\s*\{[^}]*returnToken/s);
 assert.match(qrPaymentFunctionSource, /cancel_unpaid/);
 assert.match(qrPaymentFunctionSource, /customerActionTokenHash/);
+assert.doesNotMatch(qrPaymentFunctionSource, /kitchen_status:\s*"cancelled"/);
 assert.match(customerOrderActionSource, /https:\/\/zalo\.me\/\$\{CUSTOMER_SUPPORT_ZALO_PHONE\}/);
+assert.match(trackingViewSource, /handleReorderOrder/);
 assert.match(trackingViewSource, /Thanh toán tiếp/);
 assert.match(orderActionPanelSource, /Xác nhận hủy/);
 assert.match(orderActionPanelSource, /Liên hệ Zalo/);
 assert.match(momoWebhookSource, /payment_received_after_cancel/);
+assert.doesNotMatch(momoWebhookSource, /kitchen_status:\s*"cancelled"/);
 assert.match(sepayWebhookSource, /paid_after_cancel/);
 
 console.log("Order Success payment smoke test passed (cash website + SePay/MoMo QR counter).");

@@ -1,6 +1,8 @@
 import { initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
 import { buildPosQrImageUrl, getPosQrPaymentConfig } from "./posPaymentService.js";
 
+export const QR_ORDER_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
+
 function toText(value = "") {
   return String(value || "").trim();
 }
@@ -67,7 +69,9 @@ export function getQrOrderPaymentStatus(order = {}, session = null) {
   const metadata = getObject(safeOrder.metadata);
   const sessionStatus = toText(session?.status).toLowerCase();
   return toText(
-    ["paid", "converted"].includes(sessionStatus) ? sessionStatus :
+    ["paid", "converted", "expired", "cancelled", "canceled", "failed"].includes(sessionStatus)
+      ? sessionStatus
+      :
       safeOrder.paymentStatus ||
       metadata.paymentStatus ||
       metadata.payment_status ||
@@ -83,11 +87,35 @@ export function isQrOrderPaymentExpired(order = {}, session = null) {
   const safeOrder = getObject(order);
   const metadata = getObject(safeOrder.metadata);
   const status = getQrOrderPaymentStatus(order, session);
+  if (["paid", "converted", "paid_after_cancel"].includes(status)) return false;
   const orderStatus = toText(safeOrder.status || metadata.status || metadata.orderStatus).toLowerCase();
   const kitchenStatus = toText(safeOrder.kitchenStatus || metadata.kitchenStatus || metadata.kitchen_status).toLowerCase();
-  return ["expired", "cancelled", "canceled", "failed"].includes(status) ||
+  const explicitlyExpired = ["expired", "cancelled", "canceled", "failed"].includes(status) ||
     ["cancelled", "canceled"].includes(orderStatus) ||
     ["cancelled", "canceled"].includes(kitchenStatus);
+  if (explicitlyExpired) return true;
+  if (!isQrCounterPrepaidOrder(safeOrder)) return false;
+
+  const expiresAt = new Date(
+    session?.expires_at ||
+      session?.expiresAt ||
+      safeOrder.paymentExpiresAt ||
+      safeOrder.payment_expires_at ||
+      metadata.paymentExpiresAt ||
+      metadata.payment_expires_at ||
+      ""
+  ).getTime();
+  if (Number.isFinite(expiresAt)) return expiresAt <= Date.now();
+
+  const createdAt = new Date(
+    safeOrder.createdAt ||
+      safeOrder.created_at ||
+      safeOrder.orderTime ||
+      metadata.createdAt ||
+      metadata.created_at ||
+      ""
+  ).getTime();
+  return Number.isFinite(createdAt) && createdAt + QR_ORDER_PAYMENT_TIMEOUT_MS <= Date.now();
 }
 
 export function getQrOrderPaymentReference(order = {}, session = null) {

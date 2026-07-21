@@ -1,3 +1,9 @@
+import {
+  isQrCounterPrepaidOrder,
+  isQrOrderPaid,
+  isQrOrderPaymentExpired
+} from "./qrPaymentService.js";
+
 function toText(value = "") {
   return String(value || "").trim();
 }
@@ -17,6 +23,12 @@ function getRawData(order = {}) {
     : order?.raw_data && typeof order.raw_data === "object"
       ? order.raw_data
       : {};
+}
+
+function getOrderMetadata(order = {}) {
+  return order?.metadata && typeof order.metadata === "object" && !Array.isArray(order.metadata)
+    ? order.metadata
+    : {};
 }
 
 function isPickupLike(order = {}) {
@@ -91,7 +103,7 @@ function getPartnerStatus(order = {}) {
 
 function getWebsiteStatus(order = {}) {
   const pickupLike = isPickupLike(order);
-  const metadata = getRawData(order);
+  const metadata = getOrderMetadata(order);
   const status = normalizeStatusText(order.status || order.orderStatus || order.order_status);
   const kitchenStatus = normalizeStatusText(order.kitchenStatus || order.kitchen_status);
   const paymentMethod = normalizeStatusText(
@@ -101,13 +113,28 @@ function getWebsiteStatus(order = {}) {
     order.paymentStatus || order.payment_status || metadata.paymentStatus || metadata.payment_status
   );
   const isWaitingForQrPayment = ["bankqr", "momo"].includes(paymentMethod) && !["paid", "converted"].includes(paymentStatus);
+  const isPaidAfterCancel = paymentStatus === "paidaftercancel";
+  const cancelReason = normalizeStatusText(
+    order.cancelReason || order.cancel_reason || metadata.cancelReason || metadata.cancel_reason
+  );
+  const isPaymentTimeout = !isPaidAfterCancel && (
+    ["expired", "failed"].includes(paymentStatus) ||
+    ["paymenttimeout", "momocreatefailed"].includes(cancelReason) ||
+    (
+      isQrCounterPrepaidOrder(order) &&
+      isWaitingForQrPayment &&
+      isQrOrderPaymentExpired(order)
+    )
+  );
 
   if (["cancel", "canceled", "cancelled", "huy", "dahuy", "refunded"].includes(status)) {
     return {
       key: "cancelled",
-      label: "Đã hủy",
+      label: isPaymentTimeout ? "Đã hết hạn thanh toán" : "Đã hủy",
       tone: "cancelled",
-      step: 0
+      step: 0,
+      paymentExpired: isPaymentTimeout,
+      needsPaymentSupport: isPaidAfterCancel
     };
   }
 
@@ -157,6 +184,15 @@ function getWebsiteStatus(order = {}) {
   }
 
   if (isWaitingForQrPayment || status === "pendingpayment" || kitchenStatus === "waitingpayment") {
+    if (isPaymentTimeout && !isQrOrderPaid(order)) {
+      return {
+        key: "cancelled",
+        label: "Đã hết hạn thanh toán",
+        tone: "cancelled",
+        step: 0,
+        paymentExpired: true
+      };
+    }
     return {
       key: "awaiting_payment",
       label: paymentMethod === "momo" ? "Chờ thanh toán MoMo" : "Chờ thanh toán QR",

@@ -175,7 +175,7 @@ export default function OrderSuccess({
   }, [order]);
 
   useEffect(() => {
-    if (!isQrPaymentOrder || !orderId || qrPaymentPaid || qrPaymentExpired) return undefined;
+    if (!isQrPaymentOrder || !orderId || qrPaymentPaid) return undefined;
 
     let isActive = true;
     let timerId = null;
@@ -186,6 +186,17 @@ export default function OrderSuccess({
         ? await createQrOrderPaymentSession({ order })
         : await readQrOrderPaymentSession({ order });
       if (!isActive) return;
+      const returnedSessionStatus = String(result.session?.status || "").toLowerCase();
+      const returnedOrderStatus = String(result.order?.status || result.order?.orderStatus || "").toLowerCase();
+      const currentOrderStatus = String(order?.status || order?.orderStatus || "").toLowerCase();
+      if (
+        result.order &&
+        ["expired", "cancelled", "canceled", "failed"].includes(returnedSessionStatus) &&
+        returnedOrderStatus !== currentOrderStatus
+      ) {
+        setOrderOverride(result.order);
+        setCurrentOrder?.(result.order);
+      }
       if (result.ok && result.session) {
         setPaymentSession(result.session);
         setPaymentMessage("");
@@ -195,10 +206,12 @@ export default function OrderSuccess({
       }
     }
 
-    syncPaymentSession({ create: true });
-    timerId = window.setInterval(() => {
-      syncPaymentSession({ create: false });
-    }, 3500);
+    syncPaymentSession({ create: !qrPaymentExpired });
+    if (!qrPaymentExpired) {
+      timerId = window.setInterval(() => {
+        syncPaymentSession({ create: false });
+      }, 3500);
+    }
 
     return () => {
       isActive = false;
