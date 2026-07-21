@@ -3,7 +3,10 @@ import { readFile } from "node:fs/promises";
 import {
   buildMomoPaymentQrImageUrl,
   buildQrOrderPaymentImageUrl,
+  getFallbackMomoPaymentUrl,
   getMomoPaymentLinks,
+  getPreferredMomoPaymentUrl,
+  isZaloInAppBrowser,
   isMomoPaymentOrder,
   isQrCounterBankPaymentOrder,
   isQrCounterPrepaidOrder
@@ -69,10 +72,17 @@ assert.match(await buildMomoPaymentQrImageUrl(momoSession), /^data:image\/png;ba
 assert.equal(await buildMomoPaymentQrImageUrl(momoSessionWithoutDirectQr), "");
 assert.equal(getMomoPaymentLinks(momoSession).payUrl, momoSession.provider_payload.payUrl);
 assert.equal(getMomoPaymentLinks(momoSession).deeplink, momoSession.provider_payload.deeplink);
+assert.equal(isZaloInAppBrowser("Mozilla/5.0 Zalo/25.07.01"), true);
+assert.equal(isZaloInAppBrowser("Mozilla/5.0 Chrome/138.0"), false);
+assert.equal(getPreferredMomoPaymentUrl(momoSession, "Mozilla/5.0 Zalo/25.07.01"), momoSession.provider_payload.payUrl);
+assert.equal(getFallbackMomoPaymentUrl(momoSession, "Mozilla/5.0 Zalo/25.07.01"), momoSession.provider_payload.deeplink);
+assert.equal(getPreferredMomoPaymentUrl(momoSession, "Mozilla/5.0 Chrome/138.0"), momoSession.provider_payload.deeplink);
 
 const checkoutViewSource = await readFile(new URL("../src/features/checkout/CheckoutView.jsx", import.meta.url), "utf8");
 const checkoutPricingSource = await readFile(new URL("../src/features/checkout/components/CheckoutPricingSection.jsx", import.meta.url), "utf8");
 const orderSuccessSource = await readFile(new URL("../src/features/orders/OrderSuccessView.jsx", import.meta.url), "utf8");
+const momoReturnHookSource = await readFile(new URL("../src/hooks/useMomoReturnRecovery.js", import.meta.url), "utf8");
+const qrPaymentFunctionSource = await readFile(new URL("../supabase/functions/qr-payment-session-api/index.ts", import.meta.url), "utf8");
 
 assert.match(checkoutViewSource, /useState\(isQrCounterOrder \? "momo" : "COD"\)/);
 assert.ok(checkoutPricingSource.indexOf('setPaymentMethod?.("momo")') < checkoutPricingSource.indexOf('setPaymentMethod?.("bank_qr")'));
@@ -81,5 +91,9 @@ assert.doesNotMatch(orderSuccessSource, /Không cần quét thêm mã/);
 assert.match(orderSuccessSource, /Đang mở đơn hàng/);
 assert.doesNotMatch(orderSuccessSource, /Chưa tìm thấy đơn hàng/);
 assert.match(orderSuccessSource, /Chỉ xác nhận đơn khi thanh toán thành công/);
+assert.match(momoReturnHookSource, /recoverMomoReturnOrder/);
+assert.match(qrPaymentFunctionSource, /momoReturnToken/);
+assert.match(qrPaymentFunctionSource, /returnTokenHash/);
+assert.doesNotMatch(qrPaymentFunctionSource, /provider_payload:\s*\{[^}]*returnToken/s);
 
 console.log("Order Success payment smoke test passed (cash website + SePay/MoMo QR counter).");

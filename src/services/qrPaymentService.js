@@ -163,6 +163,27 @@ export function getMomoPaymentLinks(session = null) {
   };
 }
 
+export function isZaloInAppBrowser(userAgent = "") {
+  const safeUserAgent = toText(
+    userAgent || (typeof navigator !== "undefined" ? navigator.userAgent : "")
+  );
+  return /zalo/i.test(safeUserAgent);
+}
+
+export function getPreferredMomoPaymentUrl(session = null, userAgent = "") {
+  const links = getMomoPaymentLinks(session);
+  return isZaloInAppBrowser(userAgent)
+    ? links.payUrl || links.deeplink
+    : links.deeplink || links.payUrl;
+}
+
+export function getFallbackMomoPaymentUrl(session = null, userAgent = "") {
+  const links = getMomoPaymentLinks(session);
+  const preferredUrl = getPreferredMomoPaymentUrl(session, userAgent);
+  const fallbackUrl = preferredUrl === links.payUrl ? links.deeplink : links.payUrl;
+  return fallbackUrl && fallbackUrl !== preferredUrl ? fallbackUrl : "";
+}
+
 export async function buildMomoPaymentQrImageUrl(session = null) {
   const { qrCodeUrl } = getMomoPaymentLinks(session);
   const qrPayload = qrCodeUrl;
@@ -189,6 +210,25 @@ function normalizeSession(session = null) {
     amountPaid: toAmount(session.amount_paid || session.amountPaid),
     paymentReference: getQrOrderPaymentReference({}, session),
     providerPayload: getObject(session.provider_payload || session.providerPayload)
+  };
+}
+
+function normalizeRecoveredOrder(order = null) {
+  if (!order || typeof order !== "object") return null;
+  const safeOrder = getObject(order);
+  const orderId = toText(safeOrder.id || safeOrder.orderCode);
+  if (!orderId) return null;
+
+  return {
+    ...safeOrder,
+    id: orderId,
+    orderCode: toText(safeOrder.orderCode || orderId),
+    displayOrderCode: toText(safeOrder.displayOrderCode || safeOrder.orderCode || orderId),
+    phone: toText(safeOrder.phone || safeOrder.customerPhone),
+    customerPhone: toText(safeOrder.customerPhone || safeOrder.phone),
+    totalAmount: toAmount(safeOrder.totalAmount || safeOrder.total),
+    total: toAmount(safeOrder.total || safeOrder.totalAmount),
+    items: Array.isArray(safeOrder.items) ? safeOrder.items : []
   };
 }
 
@@ -231,6 +271,7 @@ async function invokeQrPaymentFunction(payload) {
   return {
     ok: true,
     session: normalizeSession(data.session),
+    order: normalizeRecoveredOrder(data.order),
     reused: Boolean(data.reused)
   };
 }
@@ -257,5 +298,17 @@ export async function readQrOrderPaymentSession({ order = {}, sessionId = "" } =
     session_id: sessionId,
     order_id: toText(safeOrder.id || safeOrder.orderCode),
     payment_reference: getQrOrderPaymentReference(safeOrder)
+  });
+}
+
+export async function recoverMomoReturnOrder({ returnToken = "" } = {}) {
+  const safeReturnToken = toText(returnToken);
+  if (!safeReturnToken) {
+    return { ok: false, message: "Thiếu mã mở lại đơn hàng MoMo." };
+  }
+
+  return invokeQrPaymentFunction({
+    action: "recover_momo_return",
+    return_token: safeReturnToken
   });
 }
