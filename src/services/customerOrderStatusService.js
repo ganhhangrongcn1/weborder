@@ -1,5 +1,5 @@
 import {
-  isQrCounterPrepaidOrder,
+  isPrepaidPickupOrder,
   isQrOrderPaid,
   isQrOrderPaymentExpired
 } from "./qrPaymentService.js";
@@ -159,7 +159,7 @@ function getWebsiteStatus(order = {}) {
     ["expired", "failed"].includes(paymentStatus) ||
     ["paymenttimeout", "momocreatefailed"].includes(cancelReason) ||
     (
-      isQrCounterPrepaidOrder(order) &&
+      isPrepaidPickupOrder(order) &&
       isWaitingForQrPayment &&
       isQrOrderPaymentExpired(order)
     )

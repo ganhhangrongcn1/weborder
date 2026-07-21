@@ -9,7 +9,7 @@ import { formatMoney } from "../../../utils/format.js";
 import { getOrderItemOptionLabels } from "../../../utils/orderItemDisplay.js";
 import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 import { getCustomerOrderJourney } from "../../../services/customerOrderStatusService.js";
-import { isQrCounterPrepaidOrder, isQrOrderPaid } from "../../../services/qrPaymentService.js";
+import { isPrepaidPickupOrder, isQrOrderPaid } from "../../../services/qrPaymentService.js";
 import CustomerOrderActionPanel from "../../../components/customer/CustomerOrderActionPanel.jsx";
 
 const DISTANCE_FORMATTER = new Intl.NumberFormat("vi-VN", {
@@ -66,7 +66,7 @@ export default function OrderStatusSheet({
   const isPickupOrder = order.fulfillmentType === "pickup";
   const isPartnerOrder = order.sourceType === "partner";
   const journey = getCustomerOrderJourney(order);
-  const isPrepaidOrder = isQrCounterPrepaidOrder(order);
+  const isPrepaidOrder = isPrepaidPickupOrder(order);
   const isPaidOrder = isPrepaidOrder && isQrOrderPaid(order);
   const isAwaitingPayment = isPrepaidOrder && journey.statusKey === "awaiting_payment";
   const sourceBadge = getOrderSourceBadge(order);

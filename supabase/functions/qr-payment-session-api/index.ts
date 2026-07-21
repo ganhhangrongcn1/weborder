@@ -168,7 +168,12 @@ function isQrPayableOrder(order: JsonRecord) {
   const metadata = getObject(order.metadata);
   const paymentMethod = toText(order.payment_method || metadata.paymentMethod || metadata.payment_method).toLowerCase();
   const source = toText(metadata.orderSource || metadata.source || metadata.channel).toLowerCase();
-  return source === "qr_counter" && ["bank_qr", "momo"].includes(paymentMethod);
+  const fulfillmentType = toText(
+    order.fulfillment_type || metadata.fulfillmentType || metadata.fulfillment_type
+  ).toLowerCase();
+  const isQrCounterPickup = source === "qr_counter";
+  const isWebsitePickup = ["online", "website", "web"].includes(source) && fulfillmentType === "pickup";
+  return ["bank_qr", "momo"].includes(paymentMethod) && (isQrCounterPickup || isWebsitePickup);
 }
 
 function getPaymentProvider(order: JsonRecord, body: JsonRecord) {
@@ -623,9 +628,9 @@ async function cancelCustomerUnpaidOrder(
 
 async function createSession(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
   const order = await readOrder(serviceClient, body);
-  if (!order) return response({ ok: false, message: "Không tìm thấy đơn QR để tạo thanh toán." }, 404);
+  if (!order) return response({ ok: false, message: "Không tìm thấy đơn để tạo thanh toán." }, 404);
   if (!isQrPayableOrder(order)) {
-    return response({ ok: false, message: "Đơn này không phải đơn thanh toán QR." }, 400);
+    return response({ ok: false, message: "Đơn này không hỗ trợ thanh toán trước." }, 400);
   }
 
   const metadata = getObject(order.metadata);

@@ -172,7 +172,7 @@ export default function CheckoutPricingSection({
       )}
 
       <CheckoutCard title="Phương thức thanh toán">
-        {isQrCounterOrder ? (
+        {isQrCounterOrder || fulfillmentType === "pickup" ? (
           <div className="payment-choice-stack">
             <button
               type="button"

@@ -19,11 +19,12 @@ import {
   getQrOrderPaymentReference,
   isZaloInAppBrowser,
   isMomoPaymentOrder,
-  isQrCounterPrepaidOrder,
+  isPrepaidPickupOrder,
   isQrOrderPaymentExpired,
   isQrOrderPaid,
   readQrOrderPaymentSession
 } from "../../services/qrPaymentService.js";
+import { getCustomerOrderJourney } from "../../services/customerOrderStatusService.js";
 
 function buildOrderTrackingPath(orderCode = "") {
   const code = String(orderCode || "").trim();
@@ -80,7 +81,7 @@ export default function OrderSuccess({
   const [orderOverride, setOrderOverride] = useState(null);
   const order = orderOverride || initialOrder;
   const orderId = order?.id || order?.orderCode || "";
-  const isQrPaymentOrder = isQrCounterPrepaidOrder(order);
+  const isQrPaymentOrder = isPrepaidPickupOrder(order);
   const isMomoPayment = isMomoPaymentOrder(order);
   const [paymentSession, setPaymentSession] = useState(null);
   const [paymentMessage, setPaymentMessage] = useState("");
@@ -113,6 +114,7 @@ export default function OrderSuccess({
   const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid && !qrPaymentExpired;
   const isMomoAppHandoff = isQrPaymentWaiting && isMomoPayment && !qrPaymentImageUrl;
   const isPickup = String(order?.fulfillmentType || "").toLowerCase() === "pickup";
+  const customerJourney = getCustomerOrderJourney(order || {});
   const paymentText = isQrPaymentOrder
     ? qrPaymentPaid
       ? isMomoPayment ? "Đã thanh toán MoMo" : "Đã thanh toán QR"
@@ -145,7 +147,7 @@ export default function OrderSuccess({
         ? "Mở MoMo và xác nhận giao dịch."
         : "Gánh sẽ bắt đầu chuẩn bị ngay khi hệ thống xác nhận thanh toán."
       : isQrPaymentOrder && qrPaymentPaid
-        ? "Gánh đã nhận tiền và bắt đầu lên món. Bạn theo dõi hành trình để biết khi nào món sẵn sàng nha."
+        ? `Gánh đã nhận tiền. ${customerJourney.description}`
         : isPickup
           ? "Bếp sẽ cập nhật hành trình. Khi món sẵn sàng, bạn ghé quầy rước món thôi."
           : "Bếp sẽ cập nhật hành trình. Khi bàn giao shipper, bạn để ý điện thoại giúp Gánh nha.";

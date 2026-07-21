@@ -8,6 +8,7 @@ import {
   getPreferredMomoPaymentUrl,
   isZaloInAppBrowser,
   isMomoPaymentOrder,
+  isPrepaidPickupOrder,
   isQrOrderPaid,
   isQrOrderPaymentExpired,
   isQrCounterBankPaymentOrder,
@@ -50,6 +51,24 @@ const momoQrCounterOrder = {
   paymentMethod: "momo"
 };
 
+const websitePickupBankOrder = {
+  source: "online",
+  fulfillmentType: "pickup",
+  paymentMethod: "bank_qr"
+};
+
+const websitePickupMomoOrder = {
+  source: "online",
+  fulfillmentType: "pickup",
+  paymentMethod: "momo"
+};
+
+const websiteDeliveryMomoOrder = {
+  source: "online",
+  fulfillmentType: "delivery",
+  paymentMethod: "momo"
+};
+
 assert.equal(isQrCounterBankPaymentOrder(null), false);
 assert.equal(isQrCounterBankPaymentOrder(cashWebsiteOrder), false);
 assert.equal(isQrCounterBankPaymentOrder(accidentalWebsiteQrOrder), false);
@@ -58,6 +77,11 @@ assert.equal(isQrCounterBankPaymentOrder(qrCounterOrder), true);
 assert.equal(isQrCounterBankPaymentOrder(qrCounterMetadataOrder), true);
 assert.equal(isQrCounterPrepaidOrder(qrCounterOrder), true);
 assert.equal(isQrCounterPrepaidOrder(momoQrCounterOrder), true);
+assert.equal(isPrepaidPickupOrder(qrCounterOrder), true);
+assert.equal(isPrepaidPickupOrder(websitePickupBankOrder), true);
+assert.equal(isPrepaidPickupOrder(websitePickupMomoOrder), true);
+assert.equal(isPrepaidPickupOrder(websiteDeliveryMomoOrder), false);
+assert.equal(isPrepaidPickupOrder(accidentalWebsiteQrOrder), false);
 assert.equal(isMomoPaymentOrder(momoQrCounterOrder), true);
 assert.equal(isQrCounterBankPaymentOrder(momoQrCounterOrder), false);
 assert.equal(isQrOrderPaid({ ...momoQrCounterOrder, paymentStatus: "paid_after_cancel" }), true);
@@ -148,7 +172,8 @@ const orderActionPanelSource = await readFile(new URL("../src/components/custome
 const momoWebhookSource = await readFile(new URL("../supabase/functions/momo-payment-webhook/index.ts", import.meta.url), "utf8");
 const sepayWebhookSource = await readFile(new URL("../supabase/functions/sepay-pos-webhook/index.ts", import.meta.url), "utf8");
 
-assert.match(checkoutViewSource, /useState\(isQrCounterOrder \? "momo" : "COD"\)/);
+assert.match(checkoutViewSource, /fulfillmentType === "pickup" \? paymentMethod : "COD"/);
+assert.match(checkoutPricingSource, /isQrCounterOrder \|\| fulfillmentType === "pickup"/);
 assert.ok(checkoutPricingSource.indexOf('setPaymentMethod?.("momo")') < checkoutPricingSource.indexOf('setPaymentMethod?.("bank_qr")'));
 assert.doesNotMatch(checkoutPricingSource, /SePay tự xác nhận/);
 assert.match(checkoutPricingSource, /Thanh toán ví MoMo/);
@@ -163,6 +188,7 @@ assert.doesNotMatch(orderSuccessSource, /Chưa tìm thấy đơn hàng/);
 assert.match(orderSuccessSource, /Chỉ xác nhận đơn khi thanh toán thành công/);
 assert.match(momoReturnHookSource, /recoverMomoReturnOrder/);
 assert.match(qrPaymentFunctionSource, /momoReturnToken/);
+assert.match(qrPaymentFunctionSource, /isWebsitePickup/);
 assert.match(qrPaymentFunctionSource, /returnTokenHash/);
 assert.doesNotMatch(qrPaymentFunctionSource, /provider_payload:\s*\{[^}]*returnToken/s);
 assert.match(qrPaymentFunctionSource, /cancel_unpaid/);
@@ -176,5 +202,6 @@ assert.match(orderActionPanelSource, /Liên hệ Zalo/);
 assert.match(momoWebhookSource, /payment_received_after_cancel/);
 assert.doesNotMatch(momoWebhookSource, /kitchen_status:\s*"cancelled"/);
 assert.match(sepayWebhookSource, /paid_after_cancel/);
+assert.match(sepayWebhookSource, /shouldStartPickupKitchen/);
 
-console.log("Order Success payment smoke test passed (cash website + SePay/MoMo QR counter).");
+console.log("Order Success payment smoke test passed (cash + SePay/MoMo for QR counter and website pickup).");

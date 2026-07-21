@@ -47,6 +47,17 @@ function getOrderSource(order = {}) {
   ).toLowerCase();
 }
 
+function getOrderFulfillmentType(order = {}) {
+  const safeOrder = getObject(order);
+  const metadata = getObject(safeOrder.metadata);
+  return toText(
+    safeOrder.fulfillmentType ||
+      safeOrder.fulfillment_type ||
+      metadata.fulfillmentType ||
+      metadata.fulfillment_type
+  ).toLowerCase();
+}
+
 export function isQrBankPaymentOrder(order = {}) {
   return getOrderPaymentMethod(order) === "bank_qr";
 }
@@ -62,6 +73,16 @@ export function isQrCounterBankPaymentOrder(order = {}) {
 
 export function isQrCounterPrepaidOrder(order = {}) {
   return getOrderSource(order) === "qr_counter" && ["bank_qr", "momo"].includes(getOrderPaymentMethod(order));
+}
+
+export function isPrepaidPickupOrder(order = {}) {
+  const paymentMethod = getOrderPaymentMethod(order);
+  if (!["bank_qr", "momo"].includes(paymentMethod)) return false;
+
+  const source = getOrderSource(order);
+  if (source === "qr_counter") return true;
+
+  return ["online", "website", "web"].includes(source) && getOrderFulfillmentType(order) === "pickup";
 }
 
 export function getQrOrderPaymentStatus(order = {}, session = null) {
@@ -94,7 +115,7 @@ export function isQrOrderPaymentExpired(order = {}, session = null) {
     ["cancelled", "canceled"].includes(orderStatus) ||
     ["cancelled", "canceled"].includes(kitchenStatus);
   if (explicitlyExpired) return true;
-  if (!isQrCounterPrepaidOrder(safeOrder)) return false;
+  if (!isPrepaidPickupOrder(safeOrder)) return false;
 
   const expiresAt = new Date(
     session?.expires_at ||

@@ -132,7 +132,11 @@ export default function Checkout({
   const [checkoutFieldErrors, setCheckoutFieldErrors] = useState({});
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
-  const [paymentMethod, setPaymentMethod] = useState(isQrCounterOrder ? "momo" : "COD");
+  const [paymentMethod, setPaymentMethod] = useState(
+    isQrCounterOrder || String(checkoutPreset?.fulfillmentType || "").toLowerCase() === "pickup"
+      ? "momo"
+      : "COD"
+  );
   const [pickupContact, setPickupContact] = useState(() => ({
     name: pickCheckoutCustomerName(userProfile, demoUser),
     phone: currentPhone || demoUser?.phone || userProfile?.phone || ""
@@ -337,7 +341,7 @@ export default function Checkout({
     deliverySourceBranch,
     pickupTimeText,
     orderSource: isQrCounterOrder ? "qr_counter" : "online",
-    paymentMethod: isQrCounterOrder ? paymentMethod : "COD",
+    paymentMethod: fulfillmentType === "pickup" ? paymentMethod : "COD",
     navigate,
     onNotice: setCheckoutNotice,
     onVoucherRejected: () => setSelectedPromo(null)
@@ -418,8 +422,8 @@ export default function Checkout({
   }, [isQrCounterOrder, isRegisteredCustomer, selectedPromo, usePoints]);
 
   useEffect(() => {
-    setPaymentMethod(isQrCounterOrder ? "momo" : "COD");
-  }, [isQrCounterOrder]);
+    setPaymentMethod(isQrCounterOrder || fulfillmentType === "pickup" ? "momo" : "COD");
+  }, [fulfillmentType, isQrCounterOrder]);
 
   const handleCheckoutPlaceOrder = async () => {
     if (isPlacingOrder) return;

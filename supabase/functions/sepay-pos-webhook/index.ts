@@ -172,6 +172,25 @@ function isQrCounterOrder(order: JsonRecord) {
   return sources.some((source) => source === "qr_order" || source === "qr_counter");
 }
 
+function isPrepaidPickupOrder(order: JsonRecord) {
+  if (isQrCounterOrder(order)) return true;
+
+  const metadata = getObject(order.metadata);
+  const source = toText(
+    order.source ||
+    order.order_source ||
+    metadata.source ||
+    metadata.orderSource ||
+    metadata.order_source ||
+    metadata.channel
+  ).toLowerCase();
+  const fulfillmentType = toText(
+    order.fulfillment_type || metadata.fulfillmentType || metadata.fulfillment_type
+  ).toLowerCase();
+
+  return ["online", "website", "web"].includes(source) && fulfillmentType === "pickup";
+}
+
 function isCancelledOrExpiredOrder(order: JsonRecord) {
   const metadata = getObject(order.metadata);
   const status = toText(order.status || metadata.status || metadata.orderStatus).toLowerCase();
@@ -1229,15 +1248,15 @@ Deno.serve(async (request) => {
         pos_shift_id: posShiftId
       }
     : {};
-  const shouldStartQrCounterKitchen = isQrCounterOrder(matchedOrder);
-  const paidOrderStatus = shouldStartQrCounterKitchen ? "preparing" : "pending_zalo";
+  const shouldStartPickupKitchen = isPrepaidPickupOrder(matchedOrder);
+  const paidOrderStatus = shouldStartPickupKitchen ? "preparing" : "pending_zalo";
 
   if (!alreadyPaid) {
     const nextMetadata = {
       ...metadata,
       ...shiftMetadata,
       status: paidOrderStatus,
-      ...(shouldStartQrCounterKitchen ? { orderStatus: "preparing" } : {}),
+      ...(shouldStartPickupKitchen ? { orderStatus: "preparing" } : {}),
       kitchenStatus: "pending",
       paymentMethod: "bank_qr",
       paymentStatus: "paid",
