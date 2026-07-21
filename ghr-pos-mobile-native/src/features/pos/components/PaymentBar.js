@@ -31,6 +31,10 @@ export default function PaymentBar({
   return (
     <View style={styles.wrap}>
       <View style={styles.infoCard}>
+        <View style={styles.paymentHead}>
+          <Text style={styles.paymentTitle}>Thanh toán</Text>
+          <Text style={styles.paymentStep}>{paymentConfirmed ? "Bước 2/2 · Xác nhận đơn" : "Bước 1/2 · Chọn hình thức"}</Text>
+        </View>
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Tạm tính</Text>
@@ -45,7 +49,10 @@ export default function PaymentBar({
             <Text style={styles.totalValue}>{formatMoney(total)}</Text>
           </View>
         </View>
-        <Text style={styles.status}>{buildPaymentStatus(paymentConfirmed)}</Text>
+        <View style={[styles.statusBox, paymentConfirmed && styles.statusBoxReady]}>
+          <View style={[styles.statusDot, paymentConfirmed && styles.statusDotReady]} />
+          <Text style={styles.status}>{buildPaymentStatus(paymentConfirmed)}</Text>
+        </View>
       </View>
 
       <View style={styles.actions}>
@@ -93,7 +100,7 @@ export default function PaymentBar({
               color={!readyToCreate ? POS_COLORS.muted : POS_COLORS.surface}
             />
             <Text style={[styles.primaryText, !readyToCreate && styles.disabledText]}>
-              {paymentConfirmed ? "Tạo đơn" : "Chờ thanh toán"}
+              {paymentConfirmed ? "Hoàn tất & tạo đơn" : "Chọn thanh toán"}
             </Text>
           </View>
         </Pressable>
@@ -106,7 +113,7 @@ const styles = StyleSheet.create({
   wrap: {
     flexShrink: 0,
     gap: 8,
-    padding: 8,
+    padding: 10,
     borderTopWidth: 1,
     borderTopColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface
@@ -116,9 +123,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.subtleSurface,
-    borderRadius: POS_RADIUS.md,
-    padding: 9
+    borderRadius: POS_RADIUS.lg,
+    padding: 11
   },
+  paymentHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  paymentTitle: { color: POS_COLORS.heading, fontSize: 15, fontWeight: "900" },
+  paymentStep: { color: POS_COLORS.muted, fontSize: 10, fontWeight: "800" },
   summaryRow: {
     flexDirection: "row",
     alignItems: "stretch",
@@ -155,17 +165,30 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   status: {
+    flex: 1,
     color: POS_COLORS.slate,
     fontSize: 12,
     fontWeight: "700"
   },
+  statusBox: {
+    minHeight: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: POS_RADIUS.sm,
+    backgroundColor: POS_COLORS.surface,
+    paddingHorizontal: 9
+  },
+  statusBoxReady: { backgroundColor: POS_COLORS.primarySoft },
+  statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: POS_COLORS.muted },
+  statusDotReady: { backgroundColor: POS_COLORS.primary },
   actions: {
     flexDirection: "row",
     gap: 8
   },
   benefitButton: {
     width: 46,
-    minHeight: 42,
+    minHeight: 52,
     borderRadius: POS_RADIUS.md,
     borderWidth: 1,
     borderColor: "#c7d2fe",
@@ -194,7 +217,7 @@ const styles = StyleSheet.create({
   },
   secondary: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 52,
     borderRadius: POS_RADIUS.md,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
@@ -204,7 +227,7 @@ const styles = StyleSheet.create({
   },
   primary: {
     flex: 1.35,
-    minHeight: 42,
+    minHeight: 52,
     borderRadius: POS_RADIUS.md,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,

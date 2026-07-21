@@ -5,7 +5,7 @@ import { POS_COLORS, POS_RADIUS } from "../../../styles/posTheme";
 import PosIcon from "./PosIcon";
 
 function toDigits(value = "") {
-  return String(value || "").replace(/\D+/g, "").slice(0, 11);
+  return String(value || "").replace(/\D+/g, "").slice(0, 10);
 }
 
 export default function PosCustomerSummaryCard({
@@ -19,6 +19,9 @@ export default function PosCustomerSummaryCard({
   rightAction = null
 }) {
   const customer = lookup?.result;
+  const hasInput = Boolean(customerName || customerPhone);
+  const isRegistered = Boolean(customer?.registeredCustomer);
+  const availablePoints = Number(customer?.loyalty?.totalPoints || 0);
   const statusDetail = customer?.customerStatusDetail || "";
   const statusText = lookup?.loading
     ? "Đang tra khách..."
@@ -31,60 +34,81 @@ export default function PosCustomerSummaryCard({
             statusDetail
           ].filter(Boolean).join(" · ")
         : customerPhone
-          ? "Đã nhập SĐT"
+          ? "Số điện thoại không hợp lệ, vui lòng nhập lại."
           : "Chưa nhập SĐT";
 
   return (
     <View style={styles.panel}>
       <View style={styles.headRow}>
-        <View style={styles.headLabels}>
-          <Text style={styles.label}>Tên khách</Text>
-          <Text style={styles.label}>SĐT</Text>
+        <View style={styles.titleWrap}>
+          <View style={styles.titleIcon}>
+            <PosIcon name="customer" size={16} color={POS_COLORS.primaryDark} />
+          </View>
+          <View style={styles.flexOne}>
+            <Text style={styles.title}>Khách hàng</Text>
+            <Text style={styles.subtitle}>{customer ? "Đã nhận diện quyền lợi" : "Không bắt buộc"}</Text>
+          </View>
         </View>
         {rightAction ? <View style={styles.headAction}>{rightAction}</View> : null}
       </View>
 
-      <View style={styles.inputRow}>
-        <TextInput
-          value={customerName}
-          onChangeText={setCustomerName}
-          placeholder="Tên khách"
-          placeholderTextColor="#94a3b8"
-          style={[styles.fieldInput, styles.flexOne]}
-        />
-
+      {customer ? (
+        <View style={styles.memberRow}>
+          <View style={styles.memberCopy}>
+            <Text style={styles.memberName} numberOfLines={1}>{customerName || customer.customerName || "Khách thành viên"}</Text>
+            <Text style={styles.memberDetail} numberOfLines={1}>
+              {customerPhone} · {isRegistered ? `${availablePoints.toLocaleString("vi-VN")} điểm` : "Khách mới"}
+            </Text>
+          </View>
+          <Pressable style={styles.openButton} onPress={onOpen}>
+            <View style={styles.actionRow}>
+              <PosIcon name="customer" size={14} color={POS_COLORS.primaryDark} />
+              <Text style={styles.openText}>Quyền lợi</Text>
+            </View>
+          </Pressable>
+          <Pressable style={styles.clearButton} onPress={onClear}>
+            <PosIcon name="clear" size={14} color={POS_COLORS.danger} />
+          </Pressable>
+        </View>
+      ) : <><View style={styles.inputRow}>
         <TextInput
           value={customerPhone}
           onChangeText={(value) => setCustomerPhone(toDigits(value))}
-          placeholder="Số điện thoại"
+          placeholder="Nhập số điện thoại"
           placeholderTextColor="#94a3b8"
           keyboardType="number-pad"
-          maxLength={11}
-          style={[styles.fieldInput, styles.flexOne]}
+          maxLength={10}
+          style={[styles.fieldInput, styles.phoneInput]}
         />
 
         <Pressable style={styles.openButton} onPress={onOpen}>
           <View style={styles.actionRow}>
             <PosIcon name="customer" size={14} color="#6366f1" />
-            <Text style={styles.openText}>Xem</Text>
+            <Text style={styles.openText}>Tra cứu</Text>
           </View>
         </Pressable>
 
-        <Pressable style={styles.clearButton} onPress={onClear} disabled={!customerName && !customerPhone}>
+        <Pressable style={[styles.clearButton, !hasInput && styles.clearButtonDisabled]} onPress={onClear} disabled={!hasInput}>
           <PosIcon name="clear" size={14} color={POS_COLORS.danger} />
         </Pressable>
       </View>
 
-      <Text
-        style={[
-          styles.statusText,
-          customer && styles.statusReadyText,
-          lookup?.error && styles.statusErrorText
-        ]}
-        numberOfLines={1}
-      >
-        {statusText}
-      </Text>
+      {hasInput ? (
+        <TextInput
+          value={customerName}
+          onChangeText={setCustomerName}
+          placeholder="Tên khách (không bắt buộc)"
+          placeholderTextColor="#94a3b8"
+          style={styles.fieldInput}
+        />
+      ) : null}
+
+      {hasInput || lookup?.loading || lookup?.error ? <View style={[styles.statusBar, customer && styles.statusBarReady, lookup?.error && styles.statusBarError]}>
+        <View style={[styles.statusDot, customer && styles.statusDotReady, lookup?.error && styles.statusDotError]} />
+        <Text style={[styles.statusText, customer && styles.statusReadyText, lookup?.error && styles.statusErrorText]} numberOfLines={1}>
+          {statusText}
+        </Text>
+      </View> : null}</>}
     </View>
   );
 }
@@ -92,65 +116,77 @@ export default function PosCustomerSummaryCard({
 const styles = StyleSheet.create({
   panel: {
     gap: 8,
-    borderWidth: 1,
-    borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
-    padding: 9
+    borderRadius: POS_RADIUS.lg,
+    padding: 10
   },
   headRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8
   },
-  headLabels: {
+  titleWrap: {
     flex: 1,
     flexDirection: "row",
-    gap: 8
+    alignItems: "center",
+    gap: 9
   },
+  titleIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: POS_COLORS.primarySoft,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  flexOne: { flex: 1 },
+  title: { color: POS_COLORS.heading, fontSize: 14, fontWeight: "900" },
+  subtitle: { marginTop: 2, color: POS_COLORS.muted, fontSize: 10, fontWeight: "700" },
   headAction: {
     width: 38,
     alignItems: "center"
-  },
-  label: {
-    flex: 1,
-    color: POS_COLORS.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    textTransform: "uppercase"
   },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8
   },
-  flexOne: {
-    flex: 1
-  },
   fieldInput: {
-    minHeight: 38,
+    minHeight: 46,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
+    borderRadius: POS_RADIUS.sm,
     paddingHorizontal: 10,
     color: POS_COLORS.heading,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800"
   },
+  memberRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  memberCopy: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: POS_RADIUS.sm,
+    backgroundColor: POS_COLORS.primarySoft,
+    justifyContent: "center",
+    paddingHorizontal: 11
+  },
+  memberName: { color: POS_COLORS.heading, fontSize: 14, fontWeight: "900" },
+  memberDetail: { marginTop: 2, color: POS_COLORS.primaryDark, fontSize: 10, fontWeight: "800" },
+  phoneInput: { flex: 1 },
   openButton: {
-    minWidth: 58,
-    minHeight: 38,
+    minWidth: 88,
+    minHeight: 46,
     borderWidth: 1,
     borderColor: "#c7d2fe",
     backgroundColor: "#f8fafc",
-    borderRadius: 999,
+    borderRadius: POS_RADIUS.sm,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 10
   },
   openText: {
-    color: "#6366f1",
+    color: POS_COLORS.primaryDark,
     fontSize: 13,
     fontWeight: "900"
   },
@@ -160,16 +196,32 @@ const styles = StyleSheet.create({
     gap: 4
   },
   clearButton: {
-    width: 38,
-    height: 38,
+    width: 46,
+    height: 46,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
-    borderRadius: 999,
+    borderRadius: POS_RADIUS.sm,
     alignItems: "center",
     justifyContent: "center"
   },
+  clearButtonDisabled: { opacity: 0.35 },
+  statusBar: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: POS_RADIUS.sm,
+    backgroundColor: POS_COLORS.subtleSurface,
+    paddingHorizontal: 10
+  },
+  statusBarReady: { backgroundColor: POS_COLORS.primarySoft },
+  statusBarError: { backgroundColor: POS_COLORS.dangerSoft },
+  statusDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: POS_COLORS.muted },
+  statusDotReady: { backgroundColor: POS_COLORS.primary },
+  statusDotError: { backgroundColor: POS_COLORS.danger },
   statusText: {
+    flex: 1,
     color: POS_COLORS.muted,
     fontSize: 11,
     fontWeight: "800"
@@ -179,5 +231,6 @@ const styles = StyleSheet.create({
   },
   statusErrorText: {
     color: POS_COLORS.danger
-  }
+  },
+  memberMeta: { color: POS_COLORS.primaryDark, fontSize: 11, fontWeight: "900" }
 });

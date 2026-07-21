@@ -1,34 +1,34 @@
 export const POS_COLORS = {
-  background: "#eef2f6",
+  background: "#f2f3ee",
   surface: "#ffffff",
-  subtleSurface: "#f8fafc",
-  border: "#dce3ec",
-  softBorder: "#e2e8f0",
-  inputBorder: "#d7dee8",
-  primary: "#156b3a",
-  primaryDark: "#14532d",
-  primarySoft: "#dcfce7",
-  text: "#172033",
-  heading: "#111827",
-  muted: "#64748b",
-  slate: "#334155",
-  danger: "#b91c1c",
-  dangerSoft: "#fff1f2",
-  warning: "#a16207",
-  warningSoft: "#fff7df",
-  disabled: "#e2e8f0"
+  subtleSurface: "#f7f8f4",
+  border: "#dfe3d9",
+  softBorder: "#e8ebe3",
+  inputBorder: "#d7ddd2",
+  primary: "#1f6a43",
+  primaryDark: "#164c32",
+  primarySoft: "#e3f2e8",
+  text: "#1c2922",
+  heading: "#142019",
+  muted: "#718078",
+  slate: "#405048",
+  danger: "#b23b32",
+  dangerSoft: "#fff0ed",
+  warning: "#9a6415",
+  warningSoft: "#fff5dc",
+  disabled: "#e4e8e1"
 };
 
 export const POS_RADIUS = {
-  sm: 6,
-  md: 8,
-  lg: 10
+  sm: 8,
+  md: 12,
+  lg: 18
 };
 
 export const POS_SHADOW = {
-  shadowColor: "#0f172a",
-  shadowOffset: { width: 0, height: 12 },
-  shadowOpacity: 0.08,
-  shadowRadius: 24,
-  elevation: 3
+  shadowColor: "#173524",
+  shadowOffset: { width: 0, height: 8 },
+  shadowOpacity: 0.07,
+  shadowRadius: 18,
+  elevation: 2
 };

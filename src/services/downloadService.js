@@ -4,6 +4,7 @@ import {
   initSupabaseAdminAuthClient,
   initSupabaseRuntimeClient
 } from "./supabase/supabaseRuntimeClient.js";
+import * as tus from "tus-js-client";
 
 export const APP_DOWNLOADS_CONFIG_KEY = "ghr_app_downloads";
 export const APP_DOWNLOADS_BUCKET = "app-downloads";
@@ -65,11 +66,20 @@ function normalizeDownloads(value) {
       id: String(item?.id || `app-${index + 1}`).trim(),
       appName: String(item?.appName || item?.app_name || DEFAULT_APP_NAME).trim(),
       version: String(item?.version || "").trim(),
+      versionName: String(item?.versionName || item?.version_name || item?.version || "").trim(),
+      versionCode: Math.max(0, Math.floor(Number(item?.versionCode || item?.version_code || 0))),
       updatedAt: String(item?.updatedAt || item?.updated_at || "").trim(),
+      publishedAt: String(item?.publishedAt || item?.published_at || item?.updatedAt || item?.updated_at || "").trim(),
       platform: String(item?.platform || DEFAULT_PLATFORM).trim(),
       printerSupport: String(item?.printerSupport || item?.printer_support || DEFAULT_PRINTER_SUPPORT).trim(),
       fileName: String(item?.fileName || item?.file_name || "").trim(),
       url: normalizeDownloadUrl(item?.url),
+      sha256: String(item?.sha256 || "").trim().toLowerCase(),
+      sizeBytes: Math.max(0, Math.floor(Number(item?.sizeBytes || item?.size_bytes || 0))),
+      mandatory: Boolean(item?.mandatory),
+      releaseNotes: Array.isArray(item?.releaseNotes || item?.release_notes)
+        ? (item?.releaseNotes || item?.release_notes || []).map((note) => String(note || "").trim()).filter(Boolean)
+        : [],
       notes: Array.isArray(item?.notes) ? item.notes.map((note) => String(note || "").trim()).filter(Boolean) : []
     }))
     .filter((item) => item.url);
@@ -90,7 +100,7 @@ function sanitizeFileName(value = "") {
     .replace(/\s+/g, " ") || `${DEFAULT_APP_NAME}.apk`;
 }
 
-function buildStoragePath({ version = "", fileName = "" } = {}) {
+function buildStoragePath({ version = "", versionCode = 0, fileName = "" } = {}) {
   const safeVersion = String(version || "latest")
     .trim()
     .toLowerCase()
@@ -98,7 +108,18 @@ function buildStoragePath({ version = "", fileName = "" } = {}) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "") || "latest";
   const safeName = sanitizeFileName(fileName || `${version || DEFAULT_APP_NAME}.apk`);
-  return `pos-printer/${safeVersion}/${safeName}`;
+  const safeVersionCode = Math.max(1, Math.floor(Number(versionCode || 0)));
+  return `pos-printer/releases/${safeVersionCode}-${safeVersion}/${safeName}`;
+}
+
+async function calculateFileSha256(file) {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("Trình duyệt này chưa hỗ trợ tính mã kiểm tra SHA-256.");
+  }
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 async function getRuntimeClientOrThrow() {
@@ -115,6 +136,50 @@ async function getAdminClientOrThrow() {
   const initialized = await initSupabaseAdminAuthClient();
   if (initialized) return initialized;
   throw new Error("Supabase admin client chưa sẵn sàng.");
+}
+
+async function uploadApkResumable({ client, file, path, onStage }) {
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  const accessToken = String(sessionData?.session?.access_token || "").trim();
+  if (sessionError || !accessToken) {
+    throw new Error("Phiên đăng nhập admin đã hết hạn. Hãy đăng nhập lại trước khi phát hành.");
+  }
+
+  const projectUrl = String(client.supabaseUrl || "").replace(/\/$/, "");
+  if (!projectUrl) throw new Error("Không xác định được địa chỉ Supabase Storage.");
+
+  await new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint: `${projectUrl}/storage/v1/upload/resumable`,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "x-upsert": "false"
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: 6 * 1024 * 1024,
+      metadata: {
+        bucketName: APP_DOWNLOADS_BUCKET,
+        objectName: path,
+        contentType: "application/vnd.android.package-archive",
+        cacheControl: "31536000"
+      },
+      onError: (error) => reject(error),
+      onProgress: (bytesUploaded, bytesTotal) => {
+        const percent = bytesTotal > 0 ? Math.floor((bytesUploaded / bytesTotal) * 100) : 0;
+        onStage?.(`Đang upload APK lên Supabase Storage... ${percent}%`);
+      },
+      onSuccess: () => resolve()
+    });
+
+    upload.findPreviousUploads()
+      .then((previousUploads) => {
+        if (previousUploads.length) upload.resumeFromPreviousUpload(previousUploads[0]);
+        upload.start();
+      })
+      .catch(reject);
+  });
 }
 
 async function saveDownloadConfig(client, download) {
@@ -137,7 +202,12 @@ async function saveDownloadConfig(client, download) {
 function buildDownloadMetadata({
   url,
   version,
+  versionCode = 0,
   fileName,
+  sha256 = "",
+  sizeBytes = 0,
+  mandatory = false,
+  releaseNotes = [],
   appName = DEFAULT_APP_NAME,
   platform = DEFAULT_PLATFORM,
   printerSupport = DEFAULT_PRINTER_SUPPORT,
@@ -148,11 +218,20 @@ function buildDownloadMetadata({
     id: "ghr-pos-printer",
     appName: String(appName || DEFAULT_APP_NAME).trim(),
     version: cleanVersion,
+    versionName: cleanVersion,
+    versionCode: Math.max(0, Math.floor(Number(versionCode || 0))),
     updatedAt: new Date().toISOString(),
+    publishedAt: new Date().toISOString(),
     platform,
     printerSupport,
     fileName: sanitizeFileName(fileName || `${cleanVersion}.apk`),
     url: normalizeDownloadUrl(url),
+    sha256: String(sha256 || "").trim().toLowerCase(),
+    sizeBytes: Math.max(0, Math.floor(Number(sizeBytes || 0))),
+    mandatory: Boolean(mandatory),
+    releaseNotes: Array.isArray(releaseNotes)
+      ? releaseNotes.map((note) => String(note || "").trim()).filter(Boolean)
+      : [],
     notes: Array.isArray(notes) && notes.length ? notes : buildDefaultNotes()
   };
 }
@@ -209,6 +288,10 @@ export async function saveGoogleDriveDownload({
 export async function uploadApkDownload({
   file,
   version,
+  versionCode,
+  mandatory = false,
+  releaseNotes = [],
+  onStage,
   appName = DEFAULT_APP_NAME,
   platform = DEFAULT_PLATFORM,
   printerSupport = DEFAULT_PRINTER_SUPPORT,
@@ -218,32 +301,39 @@ export async function uploadApkDownload({
   if (!String(file.name || "").toLowerCase().endsWith(".apk")) {
     throw new Error("File tải lên phải là file .apk.");
   }
+  if (Number(file.size || 0) <= 0 || Number(file.size || 0) > 157286400) {
+    throw new Error("File APK phải nhỏ hơn 150 MB.");
+  }
+
+  const safeVersionCode = Math.floor(Number(versionCode || 0));
+  if (!Number.isInteger(safeVersionCode) || safeVersionCode <= 0) {
+    throw new Error("Mã phiên bản Android phải là số nguyên lớn hơn 0.");
+  }
 
   const client = await getAdminClientOrThrow();
   const cleanVersion = String(version || "").trim() || `GHR VER ${new Date().toLocaleDateString("vi-VN")}`;
   const fileName = sanitizeFileName(file.name || `${cleanVersion}.apk`);
-  const path = buildStoragePath({ version: cleanVersion, fileName });
+  const path = buildStoragePath({ version: cleanVersion, versionCode: safeVersionCode, fileName });
+  onStage?.("Đang tính mã kiểm tra SHA-256...");
+  const sha256 = await calculateFileSha256(file);
+  onStage?.("Đang upload APK lên Supabase Storage...");
 
-  const { error: uploadError } = await client.storage
-    .from(APP_DOWNLOADS_BUCKET)
-    .upload(path, file, {
-      cacheControl: "3600",
-      contentType: file.type || "application/vnd.android.package-archive",
-      upsert: true
-    });
-
-  if (uploadError) {
-    throw new Error(uploadError.message || "Upload APK lên Supabase Storage thất bại.");
-  }
+  await uploadApkResumable({ client, file, path, onStage });
 
   const { data: publicData } = client.storage.from(APP_DOWNLOADS_BUCKET).getPublicUrl(path);
   const publicUrl = String(publicData?.publicUrl || "").trim();
   if (!publicUrl) throw new Error("Không lấy được link public của APK.");
 
+  onStage?.("Đang công bố phiên bản mới cho các máy POS...");
   const download = buildDownloadMetadata({
     url: publicUrl,
     version: cleanVersion,
+    versionCode: safeVersionCode,
     fileName,
+    sha256,
+    sizeBytes: file.size,
+    mandatory,
+    releaseNotes,
     appName,
     platform,
     printerSupport,

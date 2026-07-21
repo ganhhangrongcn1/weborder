@@ -234,6 +234,10 @@ function normalizeReceiptOrder(order = {}, config = {}) {
   };
 }
 
+function buildReceiptRow(label = "", value = "", strong = false) {
+  return `${strong ? "@@BOLDROW:" : "@@ROW:"}${toText(label)}\t${toText(value)}`;
+}
+
 function getReceiptTotal(order = {}) {
   if (order.totalAmount > 0) return order.totalAmount;
   const itemTotal = getArray(order.items).reduce((total, item) => {
@@ -262,17 +266,12 @@ function pushItemsText(lines, receipt, width, showMoney) {
     return;
   }
 
-  receipt.items.forEach((item, index) => {
-    if (index > 0) lines.push(buildLine("-", width));
+  receipt.items.forEach((item) => {
     const lineTotal = item.total > 0 ? item.total : item.price * item.quantity;
-    const itemLabel = `${item.quantity} x ${item.name}`;
-    splitText(itemLabel, width).forEach((line, lineIndex) => {
-      if (showMoney && lineIndex === 0) {
-        lines.push(alignMoneyLine(line, lineTotal ? toMoney(lineTotal) : "", width));
-      } else {
-        lines.push(line);
-      }
-    });
+    const itemLabel = `${item.quantity} × ${item.name}`;
+    lines.push(showMoney
+      ? buildReceiptRow(itemLabel, lineTotal ? toMoney(lineTotal) : "")
+      : itemLabel);
     item.options.forEach((option) => lines.push(`  + ${option}`));
     if (item.note) splitText(`  Ghi chú: ${item.note}`, width).forEach((line) => lines.push(line));
   });
@@ -280,15 +279,15 @@ function pushItemsText(lines, receipt, width, showMoney) {
 
 function pushBranchFooter(lines, receipt, width) {
   if (!receipt.branchName && !receipt.branchAddress && !receipt.branchPhone) return;
-  lines.push(buildLine("-", width));
+  lines.push("@@RULE");
   lines.push("@@CENTER:Thông tin chi nhánh");
   if (receipt.branchName) splitText(receipt.branchName, width).forEach((line) => lines.push(`@@CENTER:${line}`));
   if (receipt.branchAddress) splitText(receipt.branchAddress, width).forEach((line) => lines.push(`@@CENTER:${line}`));
   if (receipt.branchPhone) lines.push(`@@CENTER:${receipt.branchPhone}`);
 }
 
-function pushLoyaltyFooter(lines, width) {
-  lines.push(buildLine("-", width));
+function pushLoyaltyFooter(lines) {
+  lines.push("@@RULE");
   lines.push("@@CENTER:Quét QR tích điểm ngay");
   lines.push("@@QR");
   lines.push("@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon");
@@ -306,31 +305,31 @@ function buildReceiptText(order = {}, options = {}) {
   const includeLoyaltyFooter = options.includeLoyaltyFooter !== false;
   const lines = [
     "@@CENTER:GÁNH HÀNG RONG",
-    "@@CENTER:MÃ ĐƠN",
+    "@@CENTER:HÓA ĐƠN BÁN HÀNG",
     `@@BIG:${receipt.orderCode || "CHƯA CÓ MÃ"}`,
-    buildLine("-", width)
+    "@@RULE"
   ];
 
   pushOrderMeta(lines, receipt, width);
-  lines.push(buildLine("-", width));
+  lines.push("@@RULE");
   pushItemsText(lines, receipt, width, showMoney);
 
   if (showMoney) {
-    lines.push(buildLine("-", width));
-    if (receipt.subtotal > 0) lines.push(alignMoneyLine("Tạm tính", toMoney(receipt.subtotal), width));
-    if (receipt.promoCode) lines.push(alignMoneyLine("Mã giảm giá", receipt.promoCode, width));
-    if (receipt.discount > 0) lines.push(alignMoneyLine("Giảm giá", `-${toMoney(receipt.discount)}`, width));
-    if (receipt.shippingFee > 0) lines.push(alignMoneyLine("Phí ship", toMoney(receipt.shippingFee), width));
-    lines.push(alignMoneyLine("TỔNG CẦN THU", toMoney(getReceiptTotal(receipt)), width));
+    lines.push("@@RULE");
+    if (receipt.subtotal > 0) lines.push(buildReceiptRow("Tạm tính", toMoney(receipt.subtotal)));
+    if (receipt.promoCode) lines.push(buildReceiptRow("Mã giảm giá", receipt.promoCode));
+    if (receipt.discount > 0) lines.push(buildReceiptRow("Giảm giá", `-${toMoney(receipt.discount)}`));
+    if (receipt.shippingFee > 0) lines.push(buildReceiptRow("Phí ship", toMoney(receipt.shippingFee)));
+    lines.push(buildReceiptRow("TỔNG CẦN THU", toMoney(getReceiptTotal(receipt)), true));
   }
 
   if (receipt.note) {
-    lines.push(buildLine("-", width));
+    lines.push("@@RULE");
     splitText(`Ghi chú đơn: ${receipt.note}`, width).forEach((line) => lines.push(line));
   }
 
   pushBranchFooter(lines, receipt, width);
-  if (includeLoyaltyFooter) pushLoyaltyFooter(lines, width);
+  if (includeLoyaltyFooter) pushLoyaltyFooter(lines);
 
   return lines.join("\n");
 }

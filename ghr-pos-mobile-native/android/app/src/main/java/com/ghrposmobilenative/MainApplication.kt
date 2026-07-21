@@ -19,6 +19,7 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
               add(PosPrinterPackage())
+              add(PosAppUpdatePackage())
             }
 
         override fun getJSMainModuleName(): String = "index"

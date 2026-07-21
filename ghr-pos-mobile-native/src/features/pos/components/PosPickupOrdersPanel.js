@@ -6,10 +6,12 @@ import { formatMoney } from "../../../utils/format";
 import PosIcon from "./PosIcon";
 
 const FILTERS = [
-  { id: "all", label: "Tất cả" },
-  { id: "unpaid", label: "Chưa thanh toán" },
-  { id: "paid", label: "Đã thanh toán" }
+  { id: "action", label: "Cần làm ngay" },
+  { id: "scheduled", label: "Đơn hẹn" },
+  { id: "all", label: "Tất cả" }
 ];
+
+const PREP_LEAD_TIME_MS = 20 * 60 * 1000;
 
 const SEGMENTS = [
   { id: "pickup", label: "Hẹn lấy" },
@@ -50,57 +52,101 @@ function getOrderAmount(order = {}) {
   return Number(order.collectAmount || order.totalAmount || order.paymentAmount || 0);
 }
 
-function WebsiteOrderCard({ order, loading, onPayCash, onPayQr }) {
+function parsePickupTime(value = "") {
+  const text = String(value || "").trim();
+  const match = text.match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!match) return null;
+  const [, hour, minute, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getScheduleInfo(order = {}) {
+  if (order.fulfillmentType !== "pickup") return { scheduled: false, pickupAt: null, workAt: null };
+  const pickupAt = parsePickupTime(order.pickupTimeText);
+  if (!pickupAt) return { scheduled: false, pickupAt: null, workAt: null };
+  const workAt = new Date(pickupAt.getTime() - PREP_LEAD_TIME_MS);
+  return { scheduled: workAt.getTime() > Date.now(), pickupAt, workAt };
+}
+
+function formatClock(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return "";
+  return value.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function getNextAction(order = {}) {
+  const schedule = getScheduleInfo(order);
+  if (schedule.scheduled) return `Chưa tới giờ làm · Bắt đầu ${formatClock(schedule.workAt)}`;
+  const paid = order.paymentStatus === "paid";
+  const kitchenLabel = getKitchenLabel(order);
+  if (!paid) return order.fulfillmentType === "delivery" ? "Cần thu tiền từ shipper" : "Cần thu tiền khách";
+  if (kitchenLabel === "Bếp đã xong") return order.fulfillmentType === "delivery" ? "Sẵn sàng giao shipper" : "Sẵn sàng trả khách";
+  return kitchenLabel;
+}
+
+function getOrderPriority(order = {}) {
+  if (getScheduleInfo(order).scheduled) return -100;
+  let score = order.paymentStatus === "paid" ? 0 : 100;
+  if (getKitchenLabel(order) === "Bếp đã xong") score += 40;
+  return score;
+}
+
+function getCrossShiftInfo(order = {}, activeShiftId = "", shiftOpenedAt = "") {
+  const currentShiftId = String(activeShiftId || "").trim();
+  const paymentShiftId = String(order.posShiftId || "").trim();
+  const shiftStartedAt = new Date(shiftOpenedAt || "").getTime();
+  const orderCreatedAt = new Date(order.createdAt || "").getTime();
+  const paidAt = new Date(order.paidAt || "").getTime();
+  const placedBeforeShift = Number.isFinite(shiftStartedAt)
+    && Number.isFinite(orderCreatedAt)
+    && orderCreatedAt < shiftStartedAt;
+  const paidBeforeShift = order.paymentStatus === "paid" && (
+    (paymentShiftId && currentShiftId && paymentShiftId !== currentShiftId)
+    || (!paymentShiftId && Number.isFinite(shiftStartedAt) && Number.isFinite(paidAt) && paidAt < shiftStartedAt)
+  );
+
+  if (paidBeforeShift) {
+    return { label: "Đã thu tiền ca trước", tone: "paid_previous" };
+  }
+  if (placedBeforeShift) {
+    return { label: "Đặt từ ca trước", tone: "placed_previous" };
+  }
+  return null;
+}
+
+function WebsiteOrderCard({ order, activeShiftId, shiftOpenedAt, loading, onPayCash, onPayQr }) {
   const paid = order.paymentStatus === "paid";
   const isDelivery = order.fulfillmentType === "delivery";
   const amount = getOrderAmount(order);
+  const nextAction = getNextAction(order);
+  const schedule = getScheduleInfo(order);
+  const crossShiftInfo = getCrossShiftInfo(order, activeShiftId, shiftOpenedAt);
 
   return (
     <View style={styles.card}>
       <View style={styles.cardHead}>
         <View style={styles.flexOne}>
-          <Text style={styles.orderCode} numberOfLines={1}>
-            {order.displayOrderCode || order.orderCode}
-          </Text>
-
-          <View style={styles.highlightGrid}>
-            <View style={styles.highlightCard}>
-              <Text style={styles.highlightLabel}>Tên khách</Text>
-              <Text style={styles.highlightValue} numberOfLines={1}>
-                {order.customerName || "Khách đặt web"}
-              </Text>
-              <Text style={styles.highlightMeta} numberOfLines={1}>
-                {order.customerPhone || "Không có SĐT"}
-              </Text>
-            </View>
-
-            <View style={styles.highlightCard}>
-              <Text style={styles.highlightLabel}>
-                {isDelivery ? "Giao tới" : "Hẹn ghé lấy"}
-              </Text>
-              <Text style={styles.highlightValue} numberOfLines={2}>
-                {isDelivery
-                  ? order.deliveryAddress || "Chưa có địa chỉ giao hàng"
-                  : order.pickupTimeText || "Khách ghé lấy khi tới"}
-              </Text>
-              <Text style={styles.highlightMeta} numberOfLines={1}>
-                Đặt lúc {formatTime(order.createdAt)}
-              </Text>
-            </View>
+          <View style={styles.orderTitleRow}>
+            <Text style={styles.orderCode} numberOfLines={1}>{order.displayOrderCode || order.orderCode}</Text>
+            {schedule.scheduled ? <View style={styles.scheduleBadge}><Text style={styles.scheduleBadgeText}>ĐƠN HẸN</Text></View> : null}
+            {crossShiftInfo ? (
+              <View style={[
+                styles.crossShiftBadge,
+                crossShiftInfo.tone === "paid_previous" && styles.crossShiftBadgePaid
+              ]}>
+                <Text style={styles.crossShiftBadgeText}>{crossShiftInfo.label}</Text>
+              </View>
+            ) : null}
           </View>
-
-          {isDelivery ? (
-            <View style={styles.deliveryMoneyRow}>
-              <View style={styles.moneyMetaPill}>
-                <Text style={styles.moneyMetaLabel}>Tiền món</Text>
-                <Text style={styles.moneyMetaValue}>{formatMoney(order.subtotal || 0)}</Text>
-              </View>
-              <View style={styles.moneyMetaPill}>
-                <Text style={styles.moneyMetaLabel}>Phí ship</Text>
-                <Text style={styles.moneyMetaValue}>{formatMoney(order.shippingFee || 0)}</Text>
-              </View>
-            </View>
-          ) : null}
+          <Text style={styles.customerLine} numberOfLines={1}>
+            {order.customerName || "Khách đặt web"} · {order.customerPhone || "Không có SĐT"}
+          </Text>
+          <Text style={styles.fulfillmentLine} numberOfLines={2}>
+            {isDelivery
+              ? `Giao tới: ${order.deliveryAddress || "Chưa có địa chỉ"}`
+              : `Hẹn lấy: ${order.pickupTimeText || "Khách ghé lấy khi tới"}`}
+          </Text>
+          <Text style={styles.createdLine}>Đặt lúc {formatTime(order.createdAt)}</Text>
         </View>
 
         <View style={styles.amountCol}>
@@ -111,37 +157,45 @@ function WebsiteOrderCard({ order, loading, onPayCash, onPayQr }) {
         </View>
       </View>
 
+      <View style={[styles.nextActionBar, paid && styles.nextActionBarReady, schedule.scheduled && styles.nextActionBarScheduled]}>
+        <View style={[styles.nextActionDot, paid && styles.nextActionDotReady]} />
+        <Text style={[styles.nextActionText, paid && styles.nextActionTextReady, schedule.scheduled && styles.nextActionTextScheduled]}>{nextAction}</Text>
+      </View>
+
       <View style={styles.footer}>
         <View style={styles.kitchenStatus}>
           <PosIcon name="order" size={13} color={POS_COLORS.slate} />
           <Text style={styles.kitchenText}>{getKitchenLabel(order)}</Text>
         </View>
 
-        <View style={styles.paymentActions}>
+        {paid ? (
+          <View style={styles.paidConfirmation}>
+            <PosIcon name="cash" size={14} color={POS_COLORS.primaryDark} />
+            <Text style={styles.paidConfirmationText}>Thanh toán hoàn tất</Text>
+          </View>
+        ) : <View style={styles.paymentActions}>
           <Pressable
-            style={[styles.qrButton, (paid || loading) && styles.disabledButton]}
+            style={[styles.qrButton, loading && styles.disabledButton]}
             hitSlop={8}
             onPress={() => onPayQr?.(order)}
-            disabled={paid || loading}
+            disabled={loading}
           >
-            <PosIcon name="qr" size={14} color={paid ? POS_COLORS.muted : POS_COLORS.slate} />
-            <Text style={[styles.qrButtonText, paid && styles.disabledText]}>
-              {paid ? "Đã thu" : "QR"}
-            </Text>
+            <PosIcon name="qr" size={14} color={POS_COLORS.slate} />
+            <Text style={styles.qrButtonText}>QR</Text>
           </Pressable>
 
           <Pressable
-            style={[styles.cashButton, (paid || loading) && styles.disabledButton]}
+            style={[styles.cashButton, loading && styles.disabledButton]}
             hitSlop={8}
             onPress={() => onPayCash?.(order)}
-            disabled={paid || loading}
+            disabled={loading}
           >
-            <PosIcon name="cash" size={14} color={paid ? POS_COLORS.muted : POS_COLORS.primaryDark} />
-            <Text style={[styles.cashButtonText, paid && styles.disabledText]}>
-              {paid ? "Đã thu" : isDelivery ? "Thu shipper" : "Tiền mặt"}
+            <PosIcon name="cash" size={14} color={POS_COLORS.primaryDark} />
+            <Text style={styles.cashButtonText}>
+              {isDelivery ? "Thu shipper" : "Tiền mặt"}
             </Text>
           </Pressable>
-        </View>
+        </View>}
       </View>
     </View>
   );
@@ -150,6 +204,8 @@ function WebsiteOrderCard({ order, loading, onPayCash, onPayQr }) {
 const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
   pickupOrders = [],
   deliveryOrders = [],
+  activeShiftId = "",
+  shiftOpenedAt = "",
   loading = false,
   error = "",
   onRefresh,
@@ -157,7 +213,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
   onPayQr
 }) {
   const [segment, setSegment] = useState("pickup");
-  const [filter, setFilter] = useState("unpaid");
+  const [filter, setFilter] = useState("action");
 
   const pickupUnpaidCount = useMemo(
     () => (Array.isArray(pickupOrders) ? pickupOrders : []).filter((order) => order.paymentStatus !== "paid").length,
@@ -170,14 +226,28 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
   const totalUnpaidCount = pickupUnpaidCount + deliveryUnpaidCount;
 
   const sourceOrders = segment === "delivery" ? deliveryOrders : pickupOrders;
-  const activeUnpaidCount = segment === "delivery" ? deliveryUnpaidCount : pickupUnpaidCount;
+  const activeActionCount = useMemo(
+    () => (Array.isArray(sourceOrders) ? sourceOrders : []).filter((order) => !getScheduleInfo(order).scheduled).length,
+    [sourceOrders]
+  );
+  const scheduledCount = useMemo(
+    () => (Array.isArray(sourceOrders) ? sourceOrders : []).filter((order) => getScheduleInfo(order).scheduled).length,
+    [sourceOrders]
+  );
 
   const filteredOrders = useMemo(
-    () => (Array.isArray(sourceOrders) ? sourceOrders : []).filter((order) => {
-      if (filter === "unpaid") return order.paymentStatus !== "paid";
-      if (filter === "paid") return order.paymentStatus === "paid";
-      return true;
-    }),
+    () => (Array.isArray(sourceOrders) ? sourceOrders : [])
+      .filter((order) => {
+        const scheduled = getScheduleInfo(order).scheduled;
+        if (filter === "scheduled") return scheduled;
+        if (filter === "action") return !scheduled;
+        return true;
+      })
+      .sort((left, right) => {
+        const priorityDiff = getOrderPriority(right) - getOrderPriority(left);
+        if (priorityDiff) return priorityDiff;
+        return new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime();
+      }),
     [filter, sourceOrders]
   );
 
@@ -189,10 +259,10 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
     >
       <View style={styles.header}>
         <View style={styles.titleWrap}>
-          <Text style={styles.eyebrow}>Website</Text>
+          <Text style={styles.eyebrow}>Hàng đợi xử lý</Text>
           <Text style={styles.title}>Đơn website</Text>
           <Text style={styles.subtitle}>
-            Gom chung đơn tự lấy và giao hàng để nhân viên theo dõi trong một chỗ.
+            Đơn cần thu tiền và đơn bếp đã xong luôn được đưa lên trước.
           </Text>
         </View>
         <View style={styles.countPill}>
@@ -204,7 +274,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
       <View style={styles.segmentRow}>
         {SEGMENTS.map((item) => {
           const active = item.id === segment;
-          const count = item.id === "delivery" ? deliveryUnpaidCount : pickupUnpaidCount;
+          const count = item.id === "delivery" ? deliveryOrders.length : pickupOrders.length;
           return (
             <Pressable
               key={item.id}
@@ -239,7 +309,11 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
                 onPress={() => setFilter(item.id)}
               >
                 <Text style={[styles.filterText, active && styles.filterTextActive]}>
-                  {item.id === "unpaid" && activeUnpaidCount > 0 ? `${item.label} (${activeUnpaidCount})` : item.label}
+                  {item.id === "action" && activeActionCount > 0
+                    ? `${item.label} (${activeActionCount})`
+                    : item.id === "scheduled" && scheduledCount > 0
+                      ? `${item.label} (${scheduledCount})`
+                      : item.label}
                 </Text>
               </Pressable>
             );
@@ -256,9 +330,11 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
       <View style={styles.listFrame}>
         {filteredOrders.length ? (
           filteredOrders.map((order) => (
-            <WebsiteOrderCard
-              key={order.id}
-              order={order}
+              <WebsiteOrderCard
+                key={order.id}
+                order={order}
+                activeShiftId={activeShiftId}
+                shiftOpenedAt={shiftOpenedAt}
               loading={loading}
               onPayCash={onPayCash}
               onPayQr={onPayQr}
@@ -287,25 +363,22 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
     minHeight: 0,
-    borderWidth: 1,
-    borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md
+    borderRadius: POS_RADIUS.lg
   },
   panel: {
-    gap: 10,
-    padding: 8
+    gap: 8,
+    padding: 10
   },
   header: {
-    minHeight: 96,
+    minHeight: 72,
     flexDirection: "row",
     alignItems: "stretch",
     gap: 10,
-    borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.subtleSurface,
-    borderRadius: POS_RADIUS.md,
-    padding: 12
+    borderRadius: POS_RADIUS.lg,
+    paddingHorizontal: 14,
+    paddingVertical: 10
   },
   titleWrap: {
     flex: 1,
@@ -319,8 +392,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: POS_COLORS.heading,
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 20,
+    lineHeight: 23,
     fontWeight: "900"
   },
   subtitle: {
@@ -330,9 +403,7 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   countPill: {
-    width: 96,
-    borderWidth: 1,
-    borderColor: "#86efac",
+    width: 82,
     backgroundColor: POS_COLORS.primarySoft,
     borderRadius: POS_RADIUS.md,
     alignItems: "center",
@@ -356,7 +427,7 @@ const styles = StyleSheet.create({
   },
   segmentButton: {
     flex: 1,
-    minHeight: 48,
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -403,14 +474,14 @@ const styles = StyleSheet.create({
     color: POS_COLORS.primaryDark
   },
   toolbar: {
-    minHeight: 52,
+    minHeight: 46,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
-    borderRadius: POS_RADIUS.md,
-    padding: 8
+    borderBottomWidth: 1,
+    borderBottomColor: POS_COLORS.softBorder,
+    paddingHorizontal: 2,
+    paddingBottom: 8
   },
   filterRow: {
     gap: 8,
@@ -468,20 +539,16 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minHeight: 430,
     gap: 8,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
-    padding: 10
+    paddingTop: 4
   },
   card: {
     gap: 10,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
-    padding: 10
+    borderRadius: POS_RADIUS.lg,
+    padding: 12
   },
   cardHead: {
     flexDirection: "row",
@@ -497,6 +564,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900"
   },
+  orderTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  scheduleBadge: {
+    borderRadius: 6,
+    backgroundColor: "#e8eefb",
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  scheduleBadgeText: { color: "#36598a", fontSize: 9, fontWeight: "900" },
+  crossShiftBadge: {
+    borderWidth: 1,
+    borderColor: "#fdba74",
+    borderRadius: 6,
+    backgroundColor: "#fff7ed",
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  crossShiftBadgePaid: {
+    borderColor: "#a7c7e7",
+    backgroundColor: "#eef4ff"
+  },
+  crossShiftBadgeText: { color: "#36598a", fontSize: 9, fontWeight: "900" },
+  customerLine: { marginTop: 5, color: POS_COLORS.heading, fontSize: 13, fontWeight: "900" },
+  fulfillmentLine: { marginTop: 4, color: POS_COLORS.slate, fontSize: 12, lineHeight: 16, fontWeight: "800" },
+  createdLine: { marginTop: 3, color: POS_COLORS.muted, fontSize: 10, fontWeight: "700" },
   highlightGrid: {
     marginTop: 8,
     gap: 8
@@ -585,6 +676,22 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "right"
   },
+  nextActionBar: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: POS_RADIUS.sm,
+    backgroundColor: POS_COLORS.warningSoft,
+    paddingHorizontal: 10
+  },
+  nextActionBarReady: { backgroundColor: POS_COLORS.primarySoft },
+  nextActionBarScheduled: { backgroundColor: "#eef4ff" },
+  nextActionDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: POS_COLORS.warning },
+  nextActionDotReady: { backgroundColor: POS_COLORS.primary },
+  nextActionText: { color: POS_COLORS.warning, fontSize: 12, fontWeight: "900" },
+  nextActionTextReady: { color: POS_COLORS.primaryDark },
+  nextActionTextScheduled: { color: "#36598a" },
   footer: {
     flexDirection: "row",
     alignItems: "center",
@@ -609,6 +716,22 @@ const styles = StyleSheet.create({
   paymentActions: {
     flexDirection: "row",
     gap: 8
+  },
+  paidConfirmation: {
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#9fd5ae",
+    backgroundColor: POS_COLORS.primarySoft,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12
+  },
+  paidConfirmationText: {
+    color: POS_COLORS.primaryDark,
+    fontSize: 11,
+    fontWeight: "900"
   },
   qrButton: {
     minHeight: 36,

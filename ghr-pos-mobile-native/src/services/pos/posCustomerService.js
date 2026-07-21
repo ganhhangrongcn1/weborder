@@ -28,6 +28,13 @@ export function normalizeCustomerPhone(value = "") {
   return digits;
 }
 
+const VIETNAM_MOBILE_PHONE_PATTERN = /^0(?:3[2-9]|5[25689]|7[06789]|8[1-9]|9[0-46-9])\d{7}$/;
+
+export function isValidVietnamMobilePhone(value = "") {
+  const digits = toText(value).replace(/\D/g, "");
+  return VIETNAM_MOBILE_PHONE_PATTERN.test(digits);
+}
+
 function buildPhoneVariants(phone = "") {
   const phoneKey = normalizeCustomerPhone(phone);
   const variants = new Set([phoneKey]);
@@ -480,7 +487,7 @@ function buildCustomerDisplayName(profile = null, stats = {}, latestOrderName = 
 
 export async function lookupPosCustomerByPhone(rawPhone = "") {
   const phone = normalizeCustomerPhone(rawPhone);
-  if (!/^0\d{9}$/.test(phone)) {
+  if (!isValidVietnamMobilePhone(phone)) {
     return {
       ok: false,
       reason: "invalid_phone",

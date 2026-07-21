@@ -26,6 +26,8 @@ const WEBSITE_ORDER_SELECT = [
   "created_at"
 ].join(",");
 
+const WEBSITE_QR_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
+
 function toText(value = "") {
   return String(value ?? "").normalize("NFC").trim();
 }
@@ -136,6 +138,31 @@ function isPaid(row = {}) {
   return getPaymentStatus(row) === "paid" || Boolean(toText(row.paid_at || metadata.paidAt || metadata.paid_at));
 }
 
+function isPrepaidWebsitePickup(row = {}) {
+  const metadata = getObject(row.metadata);
+  const paymentMethod = normalizeToken(row.payment_method || metadata.paymentMethod || metadata.payment_method);
+  if (!["bank_qr", "momo"].includes(paymentMethod) || !isPickupOrder(row)) return false;
+  const source = normalizeToken(
+    row.source || row.channel || metadata.orderSource || metadata.order_source || metadata.source || metadata.channel
+  );
+  return ["online", "website", "web", "qr_order", "qr_counter"].includes(source);
+}
+
+function isWebsitePaymentExpired(row = {}) {
+  if (isPaid(row)) return false;
+  const metadata = getObject(row.metadata);
+  const paymentStatus = normalizeToken(metadata.paymentStatus || metadata.payment_status);
+  if (["expired", "cancelled", "canceled", "failed"].includes(paymentStatus)) return true;
+
+  const expiresAt = new Date(metadata.paymentExpiresAt || metadata.payment_expires_at || "").getTime();
+  if (Number.isFinite(expiresAt)) return expiresAt <= Date.now();
+
+  if (!isPrepaidWebsitePickup(row)) return false;
+
+  const createdAt = new Date(row.created_at || metadata.createdAt || metadata.created_at || "").getTime();
+  return Number.isFinite(createdAt) && createdAt + WEBSITE_QR_PAYMENT_TIMEOUT_MS <= Date.now();
+}
+
 function getWebsiteOrderLabel(order = {}) {
   return order.fulfillmentType === "delivery" ? "đơn giao hàng" : "đơn hẹn lấy";
 }
@@ -174,6 +201,7 @@ function normalizeWebsiteOrder(row = {}) {
     collectAmount: totalAmount,
     paymentMethod: toText(row.payment_method || metadata.paymentMethod || metadata.payment_method || "cash"),
     paymentStatus: paid ? "paid" : "unpaid",
+    paymentExpired: isWebsitePaymentExpired(row),
     paymentAmount: Math.max(0, toNumber(row.payment_amount || metadata.paymentAmount || metadata.payment_amount || totalAmount)),
     paymentReference: toText(row.payment_reference || metadata.paymentReference || metadata.payment_reference),
     paidAt: toText(row.paid_at || metadata.paidAt || metadata.paid_at),
@@ -191,12 +219,13 @@ function normalizeWebsiteOrder(row = {}) {
 
 function shouldShowInWebsiteQueue(row = {}) {
   if (isCancelled(row)) return false;
+  if (isWebsitePaymentExpired(row)) return false;
   if (!isPaid(row)) return true;
   return !isKitchenCompleted(row);
 }
 
 function shouldShowInWebsiteHistory(row = {}) {
-  return isPaid(row) || isCancelled(row);
+  return isCancelled(row) || isWebsitePaymentExpired(row) || (isPaid(row) && isKitchenCompleted(row));
 }
 
 function splitWebsiteOrders(rows = []) {
@@ -279,7 +308,7 @@ export async function getPosWebsiteHistoryOrders({ branchUuid = "", limit = 20 }
         pagerNumber: "",
         totalAmount: order.totalAmount,
         paymentMethod: order.paymentMethod,
-        status: order.status,
+        status: order.paymentExpired ? "expired" : order.status,
         kitchenStatus: order.kitchenStatus,
         posShiftId: order.posShiftId,
         createdAt: order.createdAt,

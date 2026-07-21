@@ -16,8 +16,10 @@ import {
   House,
   List,
   MagnifyingGlass,
+  Minus,
   PencilSimple,
   Phone,
+  Plus,
   QrCode,
   SealPercent,
   ShareNetwork,
@@ -62,6 +64,8 @@ const iconComponents = {
   qr: QrCode,
   download: DownloadSimple,
   warning: WarningCircle,
+  minus: Minus,
+  plus: Plus,
   close: X
 };
 

@@ -204,6 +204,36 @@ export async function listPosPaymentSessions(branchUuid = "") {
   return result.sessions;
 }
 
+export function subscribePosPaymentSessions(branchUuid = "", onChange) {
+  const safeBranchUuid = toText(branchUuid);
+  if (!supabase || !safeBranchUuid || typeof onChange !== "function") {
+    return () => {};
+  }
+
+  const channel = supabase
+    .channel(`pos-payment-sessions-${safeBranchUuid}-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "pos_payment_sessions",
+        filter: `branch_uuid=eq.${safeBranchUuid}`
+      },
+      (payload) => {
+        const row = payload?.new || payload?.old || {};
+        const session = normalizeSessionRow(row);
+        if (!session.id) return;
+        onChange(session, payload);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+
 export function cancelPosPaymentSession(sessionId = "", reason = "") {
   return invokeSessionAction({
     action: "cancel",

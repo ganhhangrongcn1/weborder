@@ -2,6 +2,24 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+def releaseSigningPropertiesPath = System.getenv("GHR_POS_RELEASE_SIGNING_PROPERTIES")
+        ?: "${System.properties['user.home']}/.ghr-pos-signing/signing.properties"
+def releaseSigningPropertiesFile = file(releaseSigningPropertiesPath)
+def releaseSigningProperties = new Properties()
+if (releaseSigningPropertiesFile.exists()) {
+    releaseSigningPropertiesFile.withInputStream { releaseSigningProperties.load(it) }
+}
+def hasReleaseSigningConfig = ["storeFile", "storePassword", "keyAlias", "keyPassword"]
+        .every { releaseSigningProperties.getProperty(it)?.trim() }
+def isReleaseTaskRequested = gradle.startParameter.taskNames.any {
+    it.toLowerCase().contains("release")
+}
+if (isReleaseTaskRequested && !hasReleaseSigningConfig) {
+    throw new GradleException(
+            "Thiếu cấu hình ký release POS tại ${releaseSigningPropertiesFile.absolutePath}"
+    )
+}
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -82,8 +100,8 @@ android {
         applicationId "vn.ghr.posmobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "0.1.2"
+        versionCode 8
+        versionName "0.1.7"
     }
     signingConfigs {
         debug {
@@ -92,15 +110,23 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (hasReleaseSigningConfig) {
+                storeFile file(releaseSigningProperties.getProperty("storeFile"))
+                storePassword releaseSigningProperties.getProperty("storePassword")
+                keyAlias releaseSigningProperties.getProperty("keyAlias")
+                keyPassword releaseSigningProperties.getProperty("keyPassword")
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            if (hasReleaseSigningConfig) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

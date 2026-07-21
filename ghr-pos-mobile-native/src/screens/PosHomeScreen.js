@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions
 
 import CashPaymentModal from "../features/pos/components/CashPaymentModal";
 import PosBenefitCard from "../features/pos/components/PosBenefitCard";
+import PosAppUpdateCard from "../features/pos/components/PosAppUpdateCard";
 import PaymentBar from "../features/pos/components/PaymentBar";
 import PosCashCountModal from "../features/pos/components/PosCashCountModal";
 import PosCartPanel from "../features/pos/components/PosCartPanel";
@@ -17,6 +18,7 @@ import PosShiftCloseModal from "../features/pos/components/PosShiftCloseModal";
 import ProductOptionsModal from "../features/pos/components/ProductOptionsModal";
 import QrPaymentModal from "../features/pos/components/QrPaymentModal";
 import usePosComposer from "../features/pos/hooks/usePosComposer";
+import usePosAppUpdate from "../hooks/usePosAppUpdate";
 import {
   getLocalPrinterConfig,
   listLocalUsbPrinters,
@@ -72,6 +74,8 @@ export default function PosHomeScreen() {
   const [usbDevices, setUsbDevices] = useState([]);
   const [printerBusy, setPrinterBusy] = useState(false);
   const [printerMessage, setPrinterMessage] = useState("");
+  const [printerAdvancedOpen, setPrinterAdvancedOpen] = useState(false);
+  const appUpdate = usePosAppUpdate();
   const { width } = useWindowDimensions();
   const isWide = width >= 820;
   const orderColumnWidth = isWide ? Math.min(480, Math.max(420, Math.round(width * 0.36))) : "100%";
@@ -181,6 +185,34 @@ export default function PosHomeScreen() {
       loyaltyBenefit?.selectedVoucher ||
       Number(loyaltyBenefit?.voucherDiscount || 0) > 0
   );
+  const websiteShiftSignals = useMemo(() => {
+    const orders = [...(Array.isArray(pickupOrders) ? pickupOrders : []), ...(Array.isArray(deliveryOrders) ? deliveryOrders : [])];
+    const activeShiftId = String(shift?.id || "").trim();
+    const shiftOpenedAt = new Date(shift?.openedAt || "").getTime();
+    const isFromPreviousShift = (order) => {
+      const createdAt = new Date(order?.createdAt || "").getTime();
+      return Number.isFinite(shiftOpenedAt) && Number.isFinite(createdAt) && createdAt < shiftOpenedAt;
+    };
+    const wasPaidBeforeShift = (order) => {
+      if (order?.paymentStatus !== "paid") return false;
+      const paymentShiftId = String(order?.posShiftId || "").trim();
+      if (paymentShiftId && activeShiftId) return paymentShiftId !== activeShiftId;
+      const paidAt = new Date(order?.paidAt || "").getTime();
+      return Number.isFinite(shiftOpenedAt) && Number.isFinite(paidAt) && paidAt < shiftOpenedAt;
+    };
+
+    return {
+      paidPreviousShift: orders.filter(wasPaidBeforeShift).length,
+      placedPreviousCollectedThisShift: orders.filter((order) => (
+        order?.paymentStatus === "paid"
+        && isFromPreviousShift(order)
+        && String(order?.posShiftId || "").trim() === activeShiftId
+      )).length,
+      placedPreviousAwaitingPayment: orders.filter((order) => (
+        order?.paymentStatus !== "paid" && isFromPreviousShift(order)
+      )).length
+    };
+  }, [deliveryOrders, pickupOrders, shift?.id, shift?.openedAt]);
 
   const continueAddProduct = (product) => {
     if (!product) return;
@@ -260,19 +292,24 @@ export default function PosHomeScreen() {
   };
 
   const openingCashAmount = Number(openingCash || 0);
-  const pickupUnpaidCount = useMemo(
-    () => (Array.isArray(pickupOrders) ? pickupOrders : []).filter((order) => order.paymentStatus !== "paid").length,
-    [pickupOrders]
-  );
-  const deliveryUnpaidCount = useMemo(
-    () => (Array.isArray(deliveryOrders) ? deliveryOrders : []).filter((order) => order.paymentStatus !== "paid").length,
-    [deliveryOrders]
-  );
-  const websiteUnpaidCount = pickupUnpaidCount + deliveryUnpaidCount;
+  const websiteAttentionCount = pickupOrders.length + deliveryOrders.length;
   const historyPaymentBadgeCount = useMemo(
     () => (Array.isArray(pendingPaymentSessions) ? pendingPaymentSessions : []).filter(shouldCountHistoryPaymentSession).length,
     [pendingPaymentSessions]
   );
+  const historyProcessingBadgeCount = useMemo(
+    () => (Array.isArray(recentOrders) ? recentOrders : []).filter((order) => {
+      const status = String(order?.status || "").trim().toLowerCase();
+      const kitchenStatus = String(order?.kitchenStatus || "").trim().toLowerCase();
+      const finished = ["done", "completed", "complete"].includes(status)
+        || ["done", "completed", "complete"].includes(kitchenStatus);
+      const cancelled = ["cancelled", "canceled", "cancel", "expired"].includes(status)
+        || ["cancelled", "canceled", "cancel"].includes(kitchenStatus);
+      return !finished && !cancelled;
+    }).length,
+    [recentOrders]
+  );
+  const historyAttentionCount = historyPaymentBadgeCount + historyProcessingBadgeCount;
 
   useEffect(() => {
     let active = true;
@@ -487,6 +524,8 @@ export default function PosHomeScreen() {
               </View>
             </View>
 
+            <PosAppUpdateCard update={appUpdate} compact />
+
             <View style={styles.openingShiftPanel}>
               <View style={styles.openingCashHead}>
                 <View style={styles.openingCashHeading}>
@@ -686,7 +725,7 @@ export default function PosHomeScreen() {
           <Text style={styles.sectionCaption}>Tình trạng đơn</Text>
           <View style={styles.shiftSummary}>
             <View style={styles.summaryCell}>
-              <Text style={styles.summaryLabel}>Đơn đã trả</Text>
+              <Text style={styles.summaryLabel}>Đơn đã thu</Text>
               <Text style={styles.summaryValue}>{shiftSummary?.orderCount || 0}</Text>
             </View>
             <View style={styles.summaryCell}>
@@ -696,6 +735,28 @@ export default function PosHomeScreen() {
             <View style={styles.summaryCell}>
               <Text style={styles.summaryLabel}>CK đang chờ</Text>
               <Text style={styles.summaryValue}>{shiftSummary?.pendingQrCount || 0}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.summaryCard}>
+          <Text style={styles.sectionCaption}>Đơn website giao giữa các ca</Text>
+          <Text style={styles.noticeText}>Doanh thu luôn thuộc ca thực tế nhận tiền, không phụ thuộc ca làm món.</Text>
+          <View style={styles.shiftSummary}>
+            <View style={styles.summaryCell}>
+              <Text style={styles.summaryLabel}>Đã thu ca trước</Text>
+              <Text style={styles.summaryValue}>{websiteShiftSignals.paidPreviousShift}</Text>
+              <Text style={styles.summaryHint}>Ca này tiếp tục làm</Text>
+            </View>
+            <View style={styles.summaryCell}>
+              <Text style={styles.summaryLabel}>Thu trong ca này</Text>
+              <Text style={styles.summaryValue}>{websiteShiftSignals.placedPreviousCollectedThisShift}</Text>
+              <Text style={styles.summaryHint}>Đơn đặt từ ca trước</Text>
+            </View>
+            <View style={styles.summaryCell}>
+              <Text style={styles.summaryLabel}>Chưa thu tiền</Text>
+              <Text style={styles.summaryValue}>{websiteShiftSignals.placedPreviousAwaitingPayment}</Text>
+              <Text style={styles.summaryHint}>Đơn đặt từ ca trước</Text>
             </View>
           </View>
         </View>
@@ -710,6 +771,7 @@ export default function PosHomeScreen() {
                 <Text style={styles.summaryHint}>Giảm làm tròn {formatMoney(cashRoundingTotal)}</Text>
               ) : null}
             </View>
+
             <View style={styles.summaryCell}>
               <Text style={styles.summaryLabel}>CK chưa xử lý</Text>
               <Text style={styles.summaryValue}>{shiftSummary?.pendingQrCount || 0}</Text>
@@ -767,6 +829,8 @@ export default function PosHomeScreen() {
           <Text style={styles.label}>Thiết lập</Text>
           <Text style={styles.secondaryTitle}>POS chi nhánh</Text>
 
+          <PosAppUpdateCard update={appUpdate} />
+
           <View style={styles.closeShiftBox}>
             <Text style={styles.sectionCaption}>Tổng quan</Text>
             <View style={styles.shiftSummary}>
@@ -801,6 +865,20 @@ export default function PosHomeScreen() {
               </View>
             </View>
 
+            <Pressable
+              style={styles.advancedSettingsToggle}
+              onPress={() => setPrinterAdvancedOpen((current) => !current)}
+            >
+              <View style={styles.flexOne}>
+                <Text style={styles.printerStatusTitle}>Cấu hình máy in</Text>
+                <Text style={styles.placeholderText}>Chỉ mở khi cần đổi máy, cổng USB hoặc địa chỉ mạng.</Text>
+              </View>
+              <Text style={styles.advancedSettingsToggleText}>
+                {printerAdvancedOpen ? "Thu gọn" : "Thiết lập nâng cao"}
+              </Text>
+            </Pressable>
+
+            {printerAdvancedOpen ? <>
             <View style={styles.modeRow}>
               <Pressable
                 style={[styles.modeButton, printerConfig?.mode !== "lan" && styles.modeButtonActive]}
@@ -913,6 +991,7 @@ export default function PosHomeScreen() {
                 )}
               </View>
             )}
+            </> : null}
 
             <View style={styles.printerStatusCard}>
               <View style={styles.printerStatusHead}>
@@ -1023,12 +1102,23 @@ export default function PosHomeScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.shell}>
+        {appUpdate.available ? (
+          <Pressable style={styles.updateBanner} onPress={() => setActiveTab("settings")}>
+            <View style={styles.flexOne}>
+              <Text style={styles.updateBannerTitle}>Có bản cập nhật POS {appUpdate.release?.versionName}</Text>
+              <Text style={styles.updateBannerText}>Mở Thiết lập để tải và cài đặt.</Text>
+            </View>
+            <Text style={styles.updateBannerAction}>Xem</Text>
+          </Pressable>
+        ) : null}
         <View style={styles.workspaceFrame}>
           {activeTab === "sale" && renderSaleWorkspace()}
           {activeTab === "pickup" && (
             <PosPickupOrdersPanel
               pickupOrders={pickupOrders}
               deliveryOrders={deliveryOrders}
+              activeShiftId={shift?.id || ""}
+              shiftOpenedAt={shift?.openedAt || ""}
               loading={pickupOrdersLoading}
               error={pickupOrdersError}
               onRefresh={refreshCurrentPosRuntime}
@@ -1061,8 +1151,8 @@ export default function PosHomeScreen() {
           </View>
           {POS_TABS.map((tab) => {
             const active = tab.key === activeTab;
-            const showHistoryBadge = tab.key === "history" && historyPaymentBadgeCount > 0;
-            const showPickupBadge = tab.key === "pickup" && websiteUnpaidCount > 0;
+            const showHistoryBadge = tab.key === "history" && historyAttentionCount > 0;
+            const showPickupBadge = tab.key === "pickup" && websiteAttentionCount > 0;
             return (
               <Pressable
                 key={tab.key}
@@ -1082,7 +1172,7 @@ export default function PosHomeScreen() {
                 {(showHistoryBadge || showPickupBadge) && (
                   <View style={styles.navBadge}>
                     <Text style={styles.navBadgeText}>
-                      {showPickupBadge ? websiteUnpaidCount : historyPaymentBadgeCount}
+                      {showPickupBadge ? websiteAttentionCount : historyAttentionCount}
                     </Text>
                   </View>
                 )}
@@ -1250,6 +1340,34 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexDirection: "row",
     gap: 8
+  },
+  updateBanner: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#86efac",
+    backgroundColor: POS_COLORS.primarySoft,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  updateBannerTitle: {
+    color: POS_COLORS.primaryDark,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  updateBannerText: {
+    marginTop: 2,
+    color: POS_COLORS.slate,
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  updateBannerAction: {
+    color: POS_COLORS.primaryDark,
+    fontSize: 12,
+    fontWeight: "900"
   },
   workspaceStack: {
     flexDirection: "column"
@@ -1430,6 +1548,23 @@ const styles = StyleSheet.create({
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     padding: 12
+  },
+  advancedSettingsToggle: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: POS_COLORS.softBorder,
+    backgroundColor: POS_COLORS.subtleSurface,
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  advancedSettingsToggleText: {
+    color: POS_COLORS.primaryDark,
+    fontSize: 11,
+    fontWeight: "900"
   },
   usbSetupPanel: {
     gap: 8

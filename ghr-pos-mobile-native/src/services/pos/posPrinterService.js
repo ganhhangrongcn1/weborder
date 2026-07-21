@@ -11,7 +11,7 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
   "pos_shift_close"
 ]);
 const DEFAULT_RECEIPT_FOOTER_TEXT = [
-  "------------------------------------------",
+  "@@RULE",
   "@@CENTER:Quét QR tích điểm ngay",
   "@@QR",
   "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon",
@@ -42,6 +42,10 @@ function alignReceiptLine(label = "", value = "", width = 42) {
   return `${left}${" ".repeat(gap)}${right}`;
 }
 
+function buildReceiptRow(label = "", value = "", strong = false) {
+  return `${strong ? "@@BOLDROW:" : "@@ROW:"}${toText(label)}\t${toText(value)}`;
+}
+
 function formatDateTime(value = "") {
   const date = value ? new Date(value) : new Date();
   if (Number.isNaN(date.getTime())) return "";
@@ -57,14 +61,16 @@ function formatDateTime(value = "") {
 function buildCartLines(cart = []) {
   const lines = [];
   (Array.isArray(cart) ? cart : []).forEach((item) => {
-    lines.push(`${Math.max(1, toNumber(item.quantity, 1))} x ${toText(item.name)}`);
+    lines.push(buildReceiptRow(
+      `${Math.max(1, toNumber(item.quantity, 1))} × ${toText(item.name)}`,
+      formatMoney(item.lineTotal || 0)
+    ));
     (Array.isArray(item.selectedOptions) ? item.selectedOptions : []).forEach((option) => {
       lines.push(`  + ${toText(option.name)}`);
     });
     if (toText(item.note)) {
-      lines.push(`  Ghi chu: ${toText(item.note)}`);
+      lines.push(`  Ghi chú: ${toText(item.note)}`);
     }
-    lines.push(alignReceiptLine("  Thanh tien", formatMoney(item.lineTotal || 0), 42));
   });
   return lines;
 }
@@ -176,61 +182,57 @@ export function buildPosCustomerBillText({
   orderNote = "",
   paymentConfirmed = null
 } = {}) {
-  const width = 42;
   const lines = [
-    "@@CENTER:GANH HANG RONG",
-    "@@CENTER:HOA DON BAN HANG",
+    "@@CENTER:GÁNH HÀNG RONG",
+    "@@CENTER:HÓA ĐƠN BÁN HÀNG",
     `@@BIG:${toText(order.displayOrderCode || order.orderCode || order.id || "POS")}`,
-    buildLine("-", width),
-    `Chi nhanh: ${toText(branchName) || "POS mobile"}`,
-    `Thu ngan: ${toText(cashierName) || "Thu ngan"}`,
-    `Gio in: ${formatDateTime(new Date().toISOString())}`
+    "@@RULE",
+    `Chi nhánh: ${toText(branchName) || "POS mobile"}`,
+    `Thu ngân: ${toText(cashierName) || "Thu ngân"}`,
+    `Giờ in: ${formatDateTime(new Date().toISOString())}`
   ];
 
-  if (toText(customerName)) lines.push(`Khach: ${toText(customerName)}`);
-  if (toText(customerPhone)) lines.push(`SDT: ${toText(customerPhone)}`);
-  if (toText(pagerNumber)) lines.push(`The rung: ${toText(pagerNumber)}`);
+  if (toText(customerName)) lines.push(`Khách: ${toText(customerName)}`);
+  if (toText(customerPhone)) lines.push(`SĐT: ${toText(customerPhone)}`);
+  if (toText(pagerNumber)) lines.push(`Thẻ rung: ${toText(pagerNumber)}`);
 
-  lines.push(buildLine("-", width));
+  lines.push("@@RULE");
   lines.push(...buildCartLines(cart));
-  lines.push(buildLine("-", width));
-  lines.push(alignReceiptLine("Tam tinh", formatMoney(totals.subtotal || 0), width));
+  lines.push("@@RULE");
+  lines.push(buildReceiptRow("Tạm tính", formatMoney(totals.subtotal || 0)));
 
   if (toNumber(totals.voucherDiscount, 0) > 0) {
-    lines.push(alignReceiptLine("Giam voucher", `-${formatMoney(totals.voucherDiscount || 0)}`, width));
+    lines.push(buildReceiptRow("Giảm voucher", `-${formatMoney(totals.voucherDiscount || 0)}`));
   }
   if (toNumber(totals.pointsDiscount, 0) > 0) {
-    lines.push(alignReceiptLine("Giam diem", `-${formatMoney(totals.pointsDiscount || 0)}`, width));
+    lines.push(buildReceiptRow("Giảm điểm", `-${formatMoney(totals.pointsDiscount || 0)}`));
   }
 
   const cashRoundingDiscount = paymentConfirmed?.method === "cash"
     ? toNumber(paymentConfirmed.cashRoundingDiscount, 0)
     : 0;
   if (cashRoundingDiscount > 0) {
-    lines.push(alignReceiptLine("Lam tron tien mat", `-${formatMoney(cashRoundingDiscount)}`, width));
+    lines.push(buildReceiptRow("Làm tròn tiền mặt", `-${formatMoney(cashRoundingDiscount)}`));
   }
 
   const amountDue = paymentConfirmed?.method === "cash" && toNumber(paymentConfirmed.amount, 0) > 0
     ? toNumber(paymentConfirmed.amount, 0)
     : toNumber(totals.total, 0);
-  lines.push(alignReceiptLine("Tong can thu", formatMoney(amountDue), width));
-  lines.push(buildLine("-", width));
-  lines.push(`Thanh toan: ${paymentConfirmed?.method === "bank_qr" ? "QR" : "Tien mat"}`);
+  lines.push(buildReceiptRow("TỔNG CẦN THU", formatMoney(amountDue), true));
+  lines.push("@@RULE");
+  lines.push(buildReceiptRow("Thanh toán", paymentConfirmed?.method === "bank_qr" ? "QR" : "Tiền mặt"));
 
   if (paymentConfirmed?.method === "cash") {
-    lines.push(alignReceiptLine("Khach dua", formatMoney(paymentConfirmed.received || 0), width));
-    lines.push(alignReceiptLine("Tien thoi", formatMoney(paymentConfirmed.change || 0), width));
+    lines.push(buildReceiptRow("Khách đưa", formatMoney(paymentConfirmed.received || 0)));
+    lines.push(buildReceiptRow("Tiền thối", formatMoney(paymentConfirmed.change || 0)));
   }
   if (paymentConfirmed?.reference) {
-    lines.push(`Ma TT: ${toText(paymentConfirmed.reference)}`);
+    lines.push(`Mã TT: ${toText(paymentConfirmed.reference)}`);
   }
   if (toText(orderNote)) {
-    lines.push(buildLine("-", width));
-    lines.push(`Ghi chu: ${toText(orderNote)}`);
+    lines.push("@@RULE");
+    lines.push(`Ghi chú: ${toText(orderNote)}`);
   }
-
-  lines.push(buildLine("-", width));
-  lines.push("@@CENTER:Cam on quy khach!");
   return lines.join("\n");
 }
 

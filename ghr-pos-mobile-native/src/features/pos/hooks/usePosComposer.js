@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
 
 import {
   restorePosSession,
@@ -6,7 +7,11 @@ import {
   signOutPosOperator,
   subscribePosAuthState
 } from "../../../services/auth/posAuthService";
-import { lookupPosCustomerByPhone, normalizeCustomerPhone } from "../../../services/pos/posCustomerService";
+import {
+  isValidVietnamMobilePhone,
+  lookupPosCustomerByPhone,
+  normalizeCustomerPhone
+} from "../../../services/pos/posCustomerService";
 import { createPosTakeawayOrderMobile } from "../../../services/pos/posOrderService";
 import {
   buildPosCustomerBillText,
@@ -45,7 +50,8 @@ import {
   markPosPaymentSessionConverted,
   readRememberedPosPaymentSession,
   readPosPaymentSession,
-  rememberPosPaymentSession
+  rememberPosPaymentSession,
+  subscribePosPaymentSessions
 } from "../../../services/pos/posPaymentSessionService";
 import { fetchPosCatalogConfig } from "../../../services/pos/posCatalogConfigService";
 import { startPosPrintStation } from "../../../services/pos/posPrintStationService";
@@ -69,6 +75,24 @@ import {
 import { buildPosLoyaltyBenefit, buildVoucherSelectionKey } from "../../../shared/pos/posLoyalty";
 import { calculateCashChange, getCashPaymentSummary, normalizeCashReceived } from "../../../shared/pos/posPayment";
 import { applyPosPricePromotionToProduct, buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
+
+const POS_PAYMENT_POLL_FALLBACK_MS = 30000;
+const POS_RUNTIME_REFRESH_MS = 30000;
+
+function mergeRealtimePaymentSession(currentSessions = [], nextSession = {}) {
+  const sessions = Array.isArray(currentSessions) ? currentSessions : [];
+  if (!nextSession?.id) return sessions;
+  if (isPosPaymentSessionTerminal(nextSession)) {
+    return sessions.filter((session) => session?.id !== nextSession.id);
+  }
+
+  const existingIndex = sessions.findIndex((session) => session?.id === nextSession.id);
+  if (existingIndex < 0) return [nextSession, ...sessions];
+
+  return sessions.map((session, index) => (
+    index === existingIndex ? nextSession : session
+  ));
+}
 
 export default function usePosComposer() {
   const announcedQrPaymentIdsRef = useRef(new Set());
@@ -330,7 +354,7 @@ export default function usePosComposer() {
     try {
       const [nextBusyPagers, nextRecentOrders, nextWebsiteOrders, nextWebsiteHistoryOrders, nextPaymentSessions] = await Promise.all([
         getBusyPosPagerNumbers({ branchUuid }),
-        includeRecentOrders ? getPosRecentOrders({ branchUuid, limit: 8 }) : Promise.resolve(null),
+        includeRecentOrders ? getPosRecentOrders({ branchUuid, shiftId: shift?.id || "", limit: 120 }) : Promise.resolve(null),
         includeRecentOrders
           ? getPosWebsiteOrders({ branchUuid, limit: 80 }).catch((error) => {
               setPickupOrdersError(error?.message || "Không tải được đơn hẹn lấy.");
@@ -351,7 +375,7 @@ export default function usePosComposer() {
       const activePaymentSessions = await cleanupExpiredPaymentSessions(branchUuid, nextPaymentSessions);
       setBusyPagers(nextBusyPagers);
       if (includeRecentOrders && Array.isArray(nextRecentOrders)) {
-        setRecentOrders(mergeRecentHistoryOrders(nextRecentOrders, nextWebsiteHistoryOrders, 16));
+        setRecentOrders(mergeRecentHistoryOrders(nextRecentOrders, nextWebsiteHistoryOrders, 160));
       }
       if (includeRecentOrders && nextWebsiteOrders && typeof nextWebsiteOrders === "object") {
         if (Array.isArray(nextWebsiteOrders)) {
@@ -809,6 +833,7 @@ export default function usePosComposer() {
       const stop = await startPosPrintStation({
         branchUuid,
         deviceId,
+        pollFallback: false,
         onStatus: (status) => {
           if (active) setPrintStationStatus(status);
         }
@@ -837,12 +862,40 @@ export default function usePosComposer() {
   }, [profile?.branchName, profile?.branchUuid, session?.user?.id]);
 
   useEffect(() => {
-    const phoneKey = normalizeCustomerPhone(customerPhone);
-    if (!phoneKey) {
+    const branchUuid = String(profile?.branchUuid || "").trim();
+    if (!branchUuid) return undefined;
+
+    return subscribePosPaymentSessions(branchUuid, (nextSession) => {
+      setPendingPaymentSessions((currentSessions) => (
+        mergeRealtimePaymentSession(currentSessions, nextSession)
+      ));
+
+      if (nextSession.id === qrSession?.id) {
+        setQrSession(nextSession);
+      }
+      if (nextSession.id === pickupQrSession?.id) {
+        setPickupQrSession(nextSession);
+      }
+    });
+  }, [pickupQrSession?.id, profile?.branchUuid, qrSession?.id]);
+
+  useEffect(() => {
+    const phoneDigits = String(customerPhone || "").replace(/\D+/g, "");
+    const phoneKey = normalizeCustomerPhone(phoneDigits);
+    if (!phoneDigits) {
       setCustomerLookup({
         loading: false,
         result: null,
-        error: customerPhone.trim().length >= 8 ? "Số điện thoại chưa hợp lệ." : ""
+        error: ""
+      });
+      return undefined;
+    }
+
+    if (!isValidVietnamMobilePhone(phoneDigits)) {
+      setCustomerLookup({
+        loading: false,
+        result: null,
+        error: "Số điện thoại không hợp lệ, vui lòng nhập lại."
       });
       return undefined;
     }
@@ -853,6 +906,14 @@ export default function usePosComposer() {
       lookupPosCustomerByPhone(phoneKey)
         .then((result) => {
           if (!alive) return;
+          if (!result?.ok) {
+            setCustomerLookup({
+              loading: false,
+              result: null,
+              error: result?.message || "Không tra được thông tin khách."
+            });
+            return;
+          }
           setCustomerLookup({ loading: false, result, error: "" });
         })
         .catch((error) => {
@@ -914,6 +975,7 @@ export default function usePosComposer() {
 
     let active = true;
     let finalizing = false;
+    let checking = false;
     const handleSession = async (session) => {
       if (!active || !session || finalizing) return;
       if (isPosPaymentSessionExpired(session)) {
@@ -953,27 +1015,32 @@ export default function usePosComposer() {
     };
 
     const checkPaymentSession = async () => {
+      if (!active || checking || finalizing) return;
+      checking = true;
       try {
         const session = await readPosPaymentSession(qrSession.id);
         await handleSession(session);
       } catch (error) {
         setQrError(error?.message || "Không kiểm tra được phiên QR.");
+      } finally {
+        checking = false;
       }
     };
 
     checkPaymentSession();
-    const timer = globalThis.setInterval(checkPaymentSession, 12000);
+    const timer = globalThis.setInterval(checkPaymentSession, POS_PAYMENT_POLL_FALLBACK_MS);
     return () => {
       active = false;
       globalThis.clearInterval(timer);
     };
-  }, [qrSession?.id, qrSession?.isPaymentSession]);
+  }, [qrSession?.id, qrSession?.isPaymentSession, qrSession?.status, qrSession?.updatedAt]);
 
   useEffect(() => {
     if (!pickupQrSession?.id || !pickupQrSession.isPaymentSession) return undefined;
 
     let active = true;
     let finalizing = false;
+    let checking = false;
     const handleSession = async (session) => {
       if (!active || !session || finalizing) return;
       if (isPosPaymentSessionExpired(session)) {
@@ -1002,29 +1069,40 @@ export default function usePosComposer() {
     };
 
     const checkPaymentSession = async () => {
+      if (!active || checking || finalizing) return;
+      checking = true;
       try {
         const session = await readPosPaymentSession(pickupQrSession.id);
         await handleSession(session);
       } catch (error) {
         setPickupQrError(error?.message || "Không kiểm tra được phiên QR đơn hẹn lấy.");
+      } finally {
+        checking = false;
       }
     };
 
     checkPaymentSession();
-    const timer = globalThis.setInterval(checkPaymentSession, 12000);
+    const timer = globalThis.setInterval(checkPaymentSession, POS_PAYMENT_POLL_FALLBACK_MS);
     return () => {
       active = false;
       globalThis.clearInterval(timer);
     };
-  }, [pickupQrSession?.id, pickupQrSession?.isPaymentSession, pickupQrOrder?.id]);
+  }, [
+    pickupQrOrder?.id,
+    pickupQrSession?.id,
+    pickupQrSession?.isPaymentSession,
+    pickupQrSession?.status,
+    pickupQrSession?.updatedAt
+  ]);
 
   useEffect(() => {
     if (!profile?.branchUuid || !shift?.id) return undefined;
 
     const timer = globalThis.setInterval(() => {
+      if (AppState.currentState !== "active") return;
       refreshPosRuntime(profile.branchUuid, { includeRecentOrders: true, silent: true });
       refreshShiftSummary(shift);
-    }, 15000);
+    }, POS_RUNTIME_REFRESH_MS);
 
     return () => {
       globalThis.clearInterval(timer);
@@ -1176,6 +1254,7 @@ export default function usePosComposer() {
     setQrSession(null);
     setQrPreviewIdentity(null);
     setQrError("");
+    setPagerNumber("");
     setSelectedVoucherId("");
     setPointsInput("");
     if (profile?.branchUuid) {

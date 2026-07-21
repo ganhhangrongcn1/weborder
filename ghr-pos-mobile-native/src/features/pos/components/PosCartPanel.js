@@ -17,6 +17,7 @@ function buildOptionSummary(options = []) {
 
 const PosCartPanel = memo(function PosCartPanel({
   cart = [],
+  totals = {},
   onChangeQuantity,
   onEditItem,
   onClear,
@@ -38,9 +39,16 @@ const PosCartPanel = memo(function PosCartPanel({
 
   return (
     <View style={styles.panel}>
-      <Pressable style={styles.clearButton} onPress={onClear}>
-        <PosIcon name="clear" size={14} color={POS_COLORS.danger} />
-      </Pressable>
+      <View style={styles.panelHead}>
+        <View>
+          <Text style={styles.panelTitle}>Đơn hiện tại</Text>
+          <Text style={styles.panelMeta}>{cart.length} món · {formatMoney(totals.subtotal || 0)}</Text>
+        </View>
+        <Pressable style={styles.clearButton} onPress={onClear}>
+          <PosIcon name="clear" size={14} color={POS_COLORS.danger} />
+          <Text style={styles.clearText}>Xóa đơn</Text>
+        </Pressable>
+      </View>
 
       <ScrollView
         style={styles.list}
@@ -119,33 +127,42 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
+    borderRadius: POS_RADIUS.lg,
     position: "relative",
-    paddingHorizontal: 8,
-    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingTop: 12,
     paddingBottom: 6
   },
+  panelHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: POS_COLORS.softBorder,
+    paddingBottom: 10
+  },
+  panelTitle: { color: POS_COLORS.heading, fontSize: 15, fontWeight: "900" },
+  panelMeta: { marginTop: 2, color: POS_COLORS.muted, fontSize: 11, fontWeight: "700" },
   clearButton: {
-    position: "absolute",
-    top: -10,
-    right: 10,
-    zIndex: 2,
-    width: 30,
-    height: 30,
+    minHeight: 38,
+    flexDirection: "row",
+    gap: 5,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
-    borderRadius: 15,
+    borderRadius: POS_RADIUS.sm,
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    paddingHorizontal: 10
   },
+  clearText: { color: POS_COLORS.danger, fontSize: 11, fontWeight: "900" },
   list: {
     flex: 1,
     minHeight: 0
   },
   listContent: {
     gap: 4,
-    paddingTop: 8,
+    paddingTop: 2,
     paddingBottom: 2
   },
   itemRow: {
@@ -154,7 +171,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderBottomWidth: 1,
     borderBottomColor: POS_COLORS.softBorder,
-    paddingVertical: 8
+    paddingVertical: 11
   },
   itemMain: {
     flex: 1,
@@ -190,8 +207,8 @@ const styles = StyleSheet.create({
     gap: 4
   },
   qtyButton: {
-    width: 31,
-    height: 31,
+    width: 38,
+    height: 38,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: POS_COLORS.inputBorder,
@@ -212,8 +229,8 @@ const styles = StyleSheet.create({
     color: POS_COLORS.primaryDark
   },
   qtyValueBox: {
-    minWidth: 24,
-    height: 31,
+    minWidth: 28,
+    height: 38,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",

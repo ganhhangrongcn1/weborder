@@ -30,6 +30,16 @@ final class EscPosRasterPrinter {
     private static final int BIG_LINE_HEIGHT = 100;
     private static final int NORMAL_TEXT_SIZE = 24;
     private static final int NORMAL_LINE_HEIGHT = 34;
+    private static final int BOLD_ROW_TEXT_SIZE = 28;
+    private static final int BOLD_ROW_LINE_HEIGHT = 38;
+    private static final int RULE_LINE_HEIGHT = 22;
+    private static final float RULE_STROKE_WIDTH = 2.5f;
+    private static final int ROW_COLUMN_GAP = 20;
+    private static final int ROW_CONTINUATION_INDENT = 24;
+    private static final String RULE_MARKER = "@@RULE";
+    private static final String ROW_PREFIX = "@@ROW:";
+    private static final String BOLD_ROW_PREFIX = "@@BOLDROW:";
+    private static final String ROW_CONTINUATION_PREFIX = "@@ROWCONT:";
     private static final int PAYMENT_QR_SIZE_DOTS = 384;
     private static final int FOOTER_QR_SIZE_DOTS = 220;
 
@@ -180,6 +190,10 @@ final class EscPosRasterPrinter {
                 height += qrBitmap.getHeight() + 20;
             } else if (line.startsWith("@@BIG:")) {
                 height += BIG_LINE_HEIGHT;
+            } else if (line.startsWith(BOLD_ROW_PREFIX)) {
+                height += BOLD_ROW_LINE_HEIGHT;
+            } else if (RULE_MARKER.equals(line)) {
+                height += RULE_LINE_HEIGHT;
             } else {
                 height += NORMAL_LINE_HEIGHT;
             }
@@ -188,15 +202,41 @@ final class EscPosRasterPrinter {
     }
 
     private static int drawReceiptLine(Canvas canvas, Paint paint, String line, int padding, int y, int width) {
+        if (RULE_MARKER.equals(line)) {
+            paint.setColor(Color.BLACK);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(RULE_STROKE_WIDTH);
+            float lineY = y + RULE_LINE_HEIGHT / 2f;
+            canvas.drawLine(padding, lineY, width - padding, lineY, paint);
+            paint.setStyle(Paint.Style.FILL);
+            return y + RULE_LINE_HEIGHT;
+        }
+
+        boolean boldRow = line.startsWith(BOLD_ROW_PREFIX);
+        boolean row = boldRow || line.startsWith(ROW_PREFIX);
+        if (row) {
+            ReceiptRow receiptRow = parseReceiptRow(line);
+            configureTextPaint(paint, boldRow ? BOLD_ROW_TEXT_SIZE : NORMAL_TEXT_SIZE, boldRow);
+            Paint.FontMetrics metrics = paint.getFontMetrics();
+            int baseline = y + Math.round(-metrics.ascent);
+            canvas.drawText(receiptRow.left, padding, baseline, paint);
+            if (!receiptRow.right.isEmpty()) {
+                float rightX = width - padding - paint.measureText(receiptRow.right);
+                canvas.drawText(receiptRow.right, Math.max(padding, rightX), baseline, paint);
+            }
+            return y + (boldRow ? BOLD_ROW_LINE_HEIGHT : NORMAL_LINE_HEIGHT);
+        }
+
+        boolean rowContinuation = line.startsWith(ROW_CONTINUATION_PREFIX);
         boolean big = line.startsWith("@@BIG:");
         boolean center = line.startsWith("@@CENTER:");
         String text = line;
+        if (rowContinuation) text = line.substring(ROW_CONTINUATION_PREFIX.length());
         if (big) text = line.substring(6);
         if (center) text = line.substring(9);
         if ("@@QR".equals(line)) return y;
 
-        paint.setTextSize(big ? BIG_TEXT_SIZE : NORMAL_TEXT_SIZE);
-        paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, big ? Typeface.BOLD : Typeface.NORMAL));
+        configureTextPaint(paint, big ? BIG_TEXT_SIZE : NORMAL_TEXT_SIZE, big);
         if (big) fitTextToWidth(paint, text, width - padding * 2, BIG_TEXT_SIZE, BIG_TEXT_MIN_SIZE);
         Paint.FontMetrics metrics = paint.getFontMetrics();
         int baseline = y + Math.round(-metrics.ascent);
@@ -205,10 +245,18 @@ final class EscPosRasterPrinter {
           float x = (width - paint.measureText(text)) / 2f;
           canvas.drawText(text, Math.max(padding, x), baseline, paint);
         } else {
-          canvas.drawText(text, padding, baseline, paint);
+          canvas.drawText(text, padding + (rowContinuation ? ROW_CONTINUATION_INDENT : 0), baseline, paint);
         }
 
         return y + (big ? BIG_LINE_HEIGHT : NORMAL_LINE_HEIGHT);
+    }
+
+    private static void configureTextPaint(Paint paint, int textSize, boolean bold) {
+        paint.setColor(Color.BLACK);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setStrokeWidth(1f);
+        paint.setTextSize(textSize);
+        paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, bold ? Typeface.BOLD : Typeface.NORMAL));
     }
 
     private static void fitTextToWidth(Paint paint, String text, int maxWidth, int maxTextSize, int minTextSize) {
@@ -227,13 +275,45 @@ final class EscPosRasterPrinter {
                 result.add("");
                 continue;
             }
+            if (RULE_MARKER.equals(line) || line.matches("-{8,}")) {
+                result.add(RULE_MARKER);
+                continue;
+            }
+            if (line.startsWith(ROW_PREFIX) || line.startsWith(BOLD_ROW_PREFIX)) {
+                boolean boldRow = line.startsWith(BOLD_ROW_PREFIX);
+                String prefix = boldRow ? BOLD_ROW_PREFIX : ROW_PREFIX;
+                ReceiptRow row = parseReceiptRow(line);
+                configureTextPaint(paint, boldRow ? BOLD_ROW_TEXT_SIZE : NORMAL_TEXT_SIZE, boldRow);
+                int rightWidth = row.right.isEmpty() ? 0 : Math.round(paint.measureText(row.right)) + ROW_COLUMN_GAP;
+                int leftWidth = Math.max(80, maxWidth - rightWidth);
+                List<String> leftLines = wrapLines(row.left, paint, leftWidth);
+                if (leftLines.isEmpty()) leftLines.add("");
+                result.add(prefix + leftLines.get(0) + "\t" + row.right);
+                for (int index = 1; index < leftLines.size(); index++) {
+                    result.add(ROW_CONTINUATION_PREFIX + leftLines.get(index));
+                }
+                continue;
+            }
             if (line.startsWith("@@BIG:") || line.startsWith("@@CENTER:") || "@@QR".equals(line)) {
                 result.add(line);
                 continue;
             }
+            configureTextPaint(paint, NORMAL_TEXT_SIZE, false);
             result.addAll(wrapLines(line, paint, maxWidth));
         }
         return result;
+    }
+
+    private static ReceiptRow parseReceiptRow(String line) {
+        String body = line.startsWith(BOLD_ROW_PREFIX)
+                ? line.substring(BOLD_ROW_PREFIX.length())
+                : line.substring(ROW_PREFIX.length());
+        int separatorIndex = body.lastIndexOf('\t');
+        if (separatorIndex < 0) return new ReceiptRow(body.trim(), "");
+        return new ReceiptRow(
+                body.substring(0, separatorIndex).trim(),
+                body.substring(separatorIndex + 1).trim()
+        );
     }
 
     private static Bitmap createQrBitmap(String qrUrl, int size, boolean requireRemoteQr) {
@@ -345,6 +425,16 @@ final class EscPosRasterPrinter {
         ReceiptRasterParts(String bodyText, String footerText) {
             this.bodyText = bodyText == null ? "" : bodyText;
             this.footerText = footerText == null ? "" : footerText;
+        }
+    }
+
+    private static class ReceiptRow {
+        final String left;
+        final String right;
+
+        ReceiptRow(String left, String right) {
+            this.left = left == null ? "" : left;
+            this.right = right == null ? "" : right;
         }
     }
 }

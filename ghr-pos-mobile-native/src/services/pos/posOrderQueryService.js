@@ -115,16 +115,19 @@ export async function getBusyPosPagerNumbers({ branchUuid = "" } = {}) {
   );
 }
 
-export async function getPosRecentOrders({ branchUuid = "", limit = 8 } = {}) {
+export async function getPosRecentOrders({ branchUuid = "", shiftId = "", limit = 80 } = {}) {
   if (!supabase) return [];
 
-  const safeLimit = Math.max(1, Math.min(30, Math.floor(Number(limit || 8))));
-  const fetchLimit = Math.max(24, safeLimit * 3);
-  const { data, error } = await supabase
+  const safeLimit = Math.max(1, Math.min(160, Math.floor(Number(limit || 80))));
+  const safeShiftId = toText(shiftId);
+  const fetchLimit = safeShiftId ? safeLimit : Math.max(24, safeLimit * 3);
+  let query = supabase
     .from("orders")
     .select("id,order_code,customer_name,customer_phone,total_amount,payment_method,status,kitchen_status,branch_uuid,pickup_branch_uuid,metadata,created_at,pos_shift_id")
-    .order("created_at", { ascending: false })
-    .limit(fetchLimit);
+    .order("created_at", { ascending: false });
+
+  if (safeShiftId) query = query.eq("pos_shift_id", safeShiftId);
+  const { data, error } = await query.limit(fetchLimit);
 
   if (error || !Array.isArray(data)) return [];
 

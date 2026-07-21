@@ -25,6 +25,21 @@ const PosMenuPanel = memo(function PosMenuPanel({
 
   return (
     <View style={styles.panel}>
+      <View style={styles.panelHead}>
+        <View>
+          <Text style={styles.panelTitle}>Chọn món</Text>
+          <Text style={styles.panelMeta}>{products.length} món đang hiển thị</Text>
+        </View>
+        <Pressable
+          style={[styles.pagerInline, pagerSelected && !pagerBusy && styles.pagerReady, pagerBusy && styles.pagerBusy]}
+          onPress={onOpenPagerPicker}
+        >
+          <Text style={styles.pagerInlineLabel}>THẺ RUNG</Text>
+          <Text style={[styles.pagerInlineValue, pagerBusy && styles.pagerValueBusy]}>
+            {pagerSelected ? normalizedPager : "Chọn thẻ"}
+          </Text>
+        </Pressable>
+      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -46,34 +61,6 @@ const PosMenuPanel = memo(function PosMenuPanel({
           );
         })}
       </ScrollView>
-
-      <Pressable
-        style={[
-          styles.pagerCard,
-          pagerSelected && !pagerBusy && styles.pagerReady,
-          pagerBusy && styles.pagerBusy
-        ]}
-        onPress={onOpenPagerPicker}
-      >
-        <View style={styles.pagerTop}>
-          <Text style={[styles.pagerLabel, pagerSelected && styles.pagerLabelReady]}>Thẻ rung</Text>
-          <Text style={[styles.pagerAction, pagerBusy && styles.pagerActionBusy]}>
-            {pagerSelected ? "Đổi" : "Chọn thẻ"}
-          </Text>
-        </View>
-        <Text style={[styles.pagerValue, pagerBusy && styles.pagerValueBusy]} numberOfLines={1}>
-          {pagerSelected ? `Thẻ ${normalizedPager}` : "Chưa chọn"}
-        </Text>
-        <Text style={[styles.pagerHint, pagerBusy && styles.pagerHintBusy]} numberOfLines={1}>
-          {pagerSelected
-            ? pagerBusy
-              ? `Thẻ ${normalizedPager} đang có đơn chưa hoàn tất`
-              : `Thẻ ${normalizedPager} sẵn sàng`
-            : busyPagers.length
-              ? `${busyPagers.length} thẻ đang bận`
-              : "Chọn thẻ trước khi thêm món"}
-        </Text>
-      </Pressable>
 
       <ScrollView style={styles.productFrame} showsVerticalScrollIndicator={false}>
         <View style={styles.productGrid}>
@@ -122,11 +109,27 @@ const styles = StyleSheet.create({
     minHeight: 0,
     gap: 10,
     backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
+    borderRadius: POS_RADIUS.lg,
     padding: 12,
     borderWidth: 1,
     borderColor: POS_COLORS.border
   },
+  panelHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  panelTitle: { color: POS_COLORS.heading, fontSize: 18, fontWeight: "900" },
+  panelMeta: { marginTop: 2, color: POS_COLORS.muted, fontSize: 11, fontWeight: "700" },
+  pagerInline: {
+    minWidth: 108,
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: "#facc15",
+    backgroundColor: POS_COLORS.warningSoft,
+    borderRadius: POS_RADIUS.sm,
+    alignItems: "flex-end",
+    justifyContent: "center",
+    paddingHorizontal: 11
+  },
+  pagerInlineLabel: { color: POS_COLORS.muted, fontSize: 9, fontWeight: "900" },
+  pagerInlineValue: { marginTop: 1, color: POS_COLORS.heading, fontSize: 14, fontWeight: "900" },
   categoryScroller: {
     flexGrow: 0,
     maxHeight: 58,

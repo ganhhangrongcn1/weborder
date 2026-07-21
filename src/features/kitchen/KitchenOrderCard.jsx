@@ -298,7 +298,7 @@ function getPrintButtonConfig(printBillState = {}, printingBill = false) {
 
   if (status === "pending") {
     return {
-      label: "Đã gửi lệnh",
+      label: "Đã gửi · Chờ POS",
       disabled: true,
       background: "#e0f2fe",
       border: "#0284c7",

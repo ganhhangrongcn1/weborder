@@ -11,6 +11,7 @@ import {
 const JOB_TYPE = "customer_bill";
 const PRINTER_KEY = "cashier-80mm";
 const POLL_INTERVAL_MS = 30000;
+const EXPIRED_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const AUTO_PRINT_WINDOW_MS = 5 * 60 * 1000;
 const MAX_JOBS_PER_POLL = 3;
 const ALERT_GROUP_WINDOW_MS = 6500;
@@ -26,7 +27,7 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
 const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "counter", "tai_quay"]);
 const REMOTE_ORDER_SOURCE_TYPES = new Set(["web", "website", "qr_order", "customer_qr", "qr_tai_quay"]);
 const DEFAULT_FOOTER_TEXT = [
-  "------------------------------------------",
+  "@@RULE",
   "@@CENTER:Quét QR tích điểm ngay",
   "@@QR",
   "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon",
@@ -37,6 +38,7 @@ const DEFAULT_FOOTER_TEXT = [
 ].join("\n");
 const DEFAULT_FOOTER_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
 const recentAlertByOrderKey = new Map();
+const expiredCleanupStateByBranch = new Map();
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -161,8 +163,43 @@ async function expireOldPendingJobs(branchUuid) {
   if (error) throw error;
 }
 
+async function maybeExpireOldPendingJobs(branchUuid) {
+  const safeBranchUuid = toText(branchUuid);
+  if (!safeBranchUuid) return;
+
+  const currentState = expiredCleanupStateByBranch.get(safeBranchUuid) || {
+    lastRunAt: 0,
+    inFlight: null
+  };
+  if (currentState.inFlight) {
+    await currentState.inFlight;
+    return;
+  }
+  if (Date.now() - currentState.lastRunAt < EXPIRED_CLEANUP_INTERVAL_MS) return;
+
+  const cleanupTask = expireOldPendingJobs(safeBranchUuid);
+  expiredCleanupStateByBranch.set(safeBranchUuid, {
+    ...currentState,
+    inFlight: cleanupTask
+  });
+
+  try {
+    await cleanupTask;
+    expiredCleanupStateByBranch.set(safeBranchUuid, {
+      lastRunAt: Date.now(),
+      inFlight: null
+    });
+  } catch (error) {
+    expiredCleanupStateByBranch.set(safeBranchUuid, {
+      lastRunAt: currentState.lastRunAt,
+      inFlight: null
+    });
+    throw error;
+  }
+}
+
 async function readPendingJobs(branchUuid) {
-  await expireOldPendingJobs(branchUuid);
+  await maybeExpireOldPendingJobs(branchUuid);
   const { data, error } = await supabase
     .from("print_jobs")
     .select("id,branch_uuid,printer_key,job_type,status,order_code,source_type,payload,retry_count,created_at,requested_at")
@@ -391,7 +428,12 @@ export async function runPosPrintStationPoll({ branchUuid = "", deviceId = "", o
   return { processed };
 }
 
-export async function startPosPrintStation({ branchUuid = "", deviceId = "", onStatus } = {}) {
+export async function startPosPrintStation({
+  branchUuid = "",
+  deviceId = "",
+  onStatus,
+  pollFallback = true
+} = {}) {
   const safeBranchUuid = toText(branchUuid);
   const safeDeviceId = toText(deviceId) || `pos-native-${Date.now()}`;
   if (!supabase || !safeBranchUuid) return () => {};
@@ -399,6 +441,7 @@ export async function startPosPrintStation({ branchUuid = "", deviceId = "", onS
   let active = true;
   let polling = false;
   let pollTimer = null;
+  let appStateSubscription = null;
   const processingIds = new Set();
 
   const notify = (status) => {
@@ -437,8 +480,10 @@ export async function startPosPrintStation({ branchUuid = "", deviceId = "", onS
   };
 
   notify({ running: true, tone: "starting", message: "Đang khởi động trạm in..." });
-  await poll();
-  pollTimer = globalThis.setInterval(poll, POLL_INTERVAL_MS);
+  if (pollFallback) {
+    await poll();
+    pollTimer = globalThis.setInterval(poll, POLL_INTERVAL_MS);
+  }
 
   const channel = supabase
     .channel(`pos-native-print-${safeBranchUuid}-${safeDeviceId}`)
@@ -463,14 +508,16 @@ export async function startPosPrintStation({ branchUuid = "", deviceId = "", onS
     )
     .subscribe();
 
-  const appStateSubscription = AppState.addEventListener("change", (state) => {
-    if (state === "active") poll();
-  });
+  if (pollFallback) {
+    appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") poll();
+    });
+  }
 
   return () => {
     active = false;
     if (pollTimer) globalThis.clearInterval(pollTimer);
-    appStateSubscription.remove();
+    appStateSubscription?.remove();
     supabase.removeChannel(channel);
   };
 }

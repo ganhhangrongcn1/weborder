@@ -13,10 +13,7 @@ const STATUS_FILTERS = [
   { id: "cancelled", label: "Đã hủy" }
 ];
 
-const RANGE_FILTERS = [
-  { id: "shift", label: "Ca này" },
-  { id: "today", label: "Hôm nay" }
-];
+const PREP_LEAD_TIME_MS = 20 * 60 * 1000;
 
 function toText(value = "") {
   return String(value ?? "").trim();
@@ -61,6 +58,26 @@ function getSessionStatusGroup(status = "") {
   return "processing";
 }
 
+function parsePickupTime(value = "") {
+  const match = toText(value).match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!match) return null;
+  const [, hour, minute, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getOrderSchedule(order = {}) {
+  const pickupTimeText = toText(order.pickupTimeText || order.metadata?.pickupTimeText || order.metadata?.pickup_time_text);
+  const pickupAt = parsePickupTime(pickupTimeText);
+  if (!pickupAt) return null;
+  const workAt = new Date(pickupAt.getTime() - PREP_LEAD_TIME_MS);
+  if (workAt.getTime() <= Date.now()) return null;
+  return {
+    pickupLabel: pickupAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+    workLabel: workAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+  };
+}
+
 function isWebsitePaymentSession(session = {}) {
   return ["web", "qr_order"].includes(toText(session.source).toLowerCase());
 }
@@ -80,7 +97,7 @@ function getOrderStatusGroup(order = {}) {
   const status = toText(order.status).toLowerCase();
   const kitchenStatus = toText(order.kitchenStatus).toLowerCase();
 
-  if (["cancelled", "canceled", "cancel"].includes(status) || ["cancelled", "canceled", "cancel"].includes(kitchenStatus)) {
+  if (["cancelled", "canceled", "cancel", "expired"].includes(status) || ["cancelled", "canceled", "cancel"].includes(kitchenStatus)) {
     return "cancelled";
   }
   if (["done", "completed", "complete"].includes(status) || ["done", "completed", "complete"].includes(kitchenStatus)) {
@@ -90,6 +107,7 @@ function getOrderStatusGroup(order = {}) {
 }
 
 function getOrderStatusText(order = {}) {
+  if (toText(order.status).toLowerCase() === "expired") return "Hết hạn thanh toán";
   const group = getOrderStatusGroup(order);
   if (group === "cancelled") return "Đã hủy";
   if (group === "completed") return "Hoàn tất";
@@ -101,7 +119,7 @@ function getStatusTone(status = "") {
   if (["đã nhận tiền", "đã tạo đơn", "đang chốt", "hoàn tất"].includes(normalized)) {
     return styles.statusSuccess;
   }
-  if (["đã hủy", "hết hạn"].includes(normalized)) {
+  if (["đã hủy", "hết hạn", "hết hạn thanh toán"].includes(normalized)) {
     return styles.statusDanger;
   }
   return styles.statusNeutral;
@@ -118,6 +136,7 @@ function matchesRange(record = {}, rangeFilter = "shift", activeShiftId = "") {
 }
 
 function OrderCard({ order, loading, onOpen }) {
+  const schedule = getOrderSchedule(order);
   return (
     <Pressable
       style={({ pressed }) => [styles.card, styles.orderCard, pressed && styles.cardPressed]}
@@ -129,6 +148,14 @@ function OrderCard({ order, loading, onOpen }) {
           <Text style={styles.rowTitle} numberOfLines={1}>
             {order.displayOrderCode || order.id}
           </Text>
+          {schedule ? (
+            <View style={styles.scheduleRow}>
+              <View style={styles.scheduleBadge}>
+                <Text style={styles.scheduleBadgeText}>ĐƠN HẸN {schedule.pickupLabel}</Text>
+              </View>
+              <Text style={styles.scheduleHint}>Bắt đầu làm lúc {schedule.workLabel}</Text>
+            </View>
+          ) : null}
           <Text style={styles.rowMeta} numberOfLines={1}>
             {[
               order.pagerNumber ? `Thẻ ${order.pagerNumber}` : "Không có thẻ",
@@ -218,7 +245,7 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
   onOpenOrderDetail
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
-  const [rangeFilter, setRangeFilter] = useState("shift");
+  const rangeFilter = "shift";
   const [detailVisible, setDetailVisible] = useState(false);
   const [detailOrder, setDetailOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -246,6 +273,12 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
     )).length,
     [activeShiftId, paymentSessions, rangeFilter]
   );
+  const processingCount = useMemo(
+    () => (Array.isArray(recentOrders) ? recentOrders : []).filter((order) => (
+      matchesRange(order, rangeFilter, activeShiftId) && getOrderStatusGroup(order) === "processing"
+    )).length,
+    [activeShiftId, rangeFilter, recentOrders]
+  );
   const historyRecords = useMemo(
     () => [
       ...filteredPaymentSessions.map((session) => ({ kind: "session", id: `session-${session.id}`, session })),
@@ -253,10 +286,6 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
     ],
     [filteredOrders, filteredPaymentSessions]
   );
-  const activeRangeLabel = RANGE_FILTERS.find((filter) => filter.id === rangeFilter)?.label || "Ca này";
-  const toggleRangeFilter = () => {
-    setRangeFilter((current) => (current === "shift" ? "today" : "shift"));
-  };
 
   const handleOpenDetail = async (order) => {
     if (!order?.id || !onOpenOrderDetail) return;
@@ -289,9 +318,12 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
           >
             {STATUS_FILTERS.map((filter) => {
               const active = statusFilter === filter.id;
-              const label = filter.id === "pending_payment" && pendingPaymentCount > 0
-                ? `${filter.label} (${pendingPaymentCount})`
-                : filter.label;
+              const count = filter.id === "pending_payment"
+                ? pendingPaymentCount
+                : filter.id === "processing"
+                  ? processingCount
+                  : 0;
+              const label = count > 0 ? `${filter.label} (${count})` : filter.label;
               return (
                 <Pressable
                   key={filter.id}
@@ -305,10 +337,9 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
           </ScrollView>
 
           <View style={styles.toolbarActions}>
-            <Pressable style={styles.rangeSelect} onPress={toggleRangeFilter}>
-              <Text style={styles.rangeText}>{activeRangeLabel}</Text>
-              <Text style={styles.chevron}>⌄</Text>
-            </Pressable>
+            <View style={styles.rangeSelect}>
+              <Text style={styles.rangeText}>Ca hiện tại</Text>
+            </View>
             <Pressable style={styles.refreshButton} onPress={onRefresh} disabled={loading}>
               <Text style={styles.refreshText}>{loading ? "Đang tải" : "Tải lại"}</Text>
             </Pressable>
@@ -340,7 +371,7 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>Không có đơn phù hợp.</Text>
-              <Text style={styles.emptyCopy}>Đổi trạng thái hoặc phạm vi lọc.</Text>
+              <Text style={styles.emptyCopy}>Thử chọn trạng thái khác hoặc tải lại dữ liệu.</Text>
             </View>
           )}
         </View>
@@ -588,6 +619,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900"
   },
+  scheduleRow: { marginTop: 5, flexDirection: "row", alignItems: "center", gap: 7 },
+  scheduleBadge: { borderRadius: 6, backgroundColor: "#e8eefb", paddingHorizontal: 7, paddingVertical: 3 },
+  scheduleBadgeText: { color: "#36598a", fontSize: 9, fontWeight: "900" },
+  scheduleHint: { color: "#526b8f", fontSize: 10, fontWeight: "800" },
   rowMeta: {
     marginTop: 4,
     color: POS_COLORS.muted,

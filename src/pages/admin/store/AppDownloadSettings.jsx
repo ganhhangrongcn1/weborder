@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import {
   getAppDownloads,
   getFallbackAppDownloads,
-  saveGoogleDriveDownload,
   uploadApkDownload
 } from "../../../services/downloadService.js";
-import { AdminButton, AdminInput } from "../ui/index.js";
+import { AdminButton, AdminInput, AdminTextarea } from "../ui/index.js";
+
+const FIRST_SIGNED_RELEASE_CODE = 6;
 
 function formatDate(value = "") {
   const date = value ? new Date(value) : null;
@@ -19,23 +20,43 @@ function formatDate(value = "") {
   });
 }
 
+function formatFileSize(value = 0) {
+  const size = Math.max(0, Number(value || 0));
+  if (!size) return "Chưa có";
+  return `${(size / 1024 / 1024).toFixed(2)} MB`;
+}
+
 function guessNextVersion(currentVersion = "") {
-  const match = String(currentVersion || "").match(/(\d+)(?!.*\d)/);
-  if (!match) return "GHR VER 4";
-  const nextNumber = Number(match[1]) + 1;
-  return String(currentVersion).replace(/(\d+)(?!.*\d)/, String(nextNumber));
+  const value = String(currentVersion || "").trim();
+  const semanticMatch = value.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (semanticMatch) {
+    return `${semanticMatch[1]}.${semanticMatch[2]}.${Number(semanticMatch[3]) + 1}`;
+  }
+  return "0.1.5";
+}
+
+function getVersionFromFileName(fileName = "") {
+  const match = String(fileName || "").match(/(?:^|[^\d])(\d+\.\d+\.\d+)(?:[^\d]|$)/);
+  return String(match?.[1] || "");
+}
+
+function parseReleaseNotes(value = "") {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 export default function AppDownloadSettings() {
   const [downloads, setDownloads] = useState(() => getFallbackAppDownloads());
-  const [source, setSource] = useState("google-drive");
-  const [driveUrl, setDriveUrl] = useState("");
   const [file, setFile] = useState(null);
-  const [version, setVersion] = useState("");
+  const [versionName, setVersionName] = useState("");
+  const [versionCode, setVersionCode] = useState("");
+  const [releaseNotes, setReleaseNotes] = useState("");
+  const [mandatory, setMandatory] = useState(false);
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const latest = downloads[0] || null;
-  const suggestedVersion = guessNextVersion(latest?.version || "");
 
   useEffect(() => {
     let mounted = true;
@@ -43,8 +64,13 @@ export default function AppDownloadSettings() {
     async function loadDownloads() {
       const nextDownloads = await getAppDownloads();
       if (!mounted) return;
+      const current = nextDownloads?.[0] || null;
       setDownloads(nextDownloads);
-      setVersion((current) => current || guessNextVersion(nextDownloads?.[0]?.version || ""));
+      setVersionName((value) => value || guessNextVersion(current?.versionName || current?.version));
+      setVersionCode((value) => value || String(Math.max(
+        FIRST_SIGNED_RELEASE_CODE,
+        Number(current?.versionCode || 0) + 1
+      )));
     }
 
     loadDownloads();
@@ -53,35 +79,54 @@ export default function AppDownloadSettings() {
     };
   }, []);
 
+  function handleFileChange(event) {
+    const nextFile = event.target.files?.[0] || null;
+    setFile(nextFile);
+    const fileVersion = getVersionFromFileName(nextFile?.name);
+    if (fileVersion) setVersionName(fileVersion);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
+    const safeVersionCode = Math.floor(Number(versionCode || 0));
 
-    if (source === "google-drive" && !driveUrl.trim()) {
-      setNotice("Bạn hãy dán link chia sẻ Google Drive trước nha.");
+    if (!file) {
+      setNotice("Bạn hãy chọn file APK trước nha.");
       return;
     }
-    if (source === "supabase" && !file) {
-      setNotice("Bạn hãy chọn file APK trước nha.");
+    if (!versionName.trim()) {
+      setNotice("Bạn hãy nhập tên phiên bản, ví dụ 0.1.5.");
+      return;
+    }
+    if (safeVersionCode <= Number(latest?.versionCode || 0)) {
+      setNotice("Mã phiên bản Android phải lớn hơn bản đang phát hành.");
       return;
     }
 
     setLoading(true);
-    setNotice(source === "google-drive" ? "Đang lưu link Google Drive..." : "Đang upload APK lên Supabase Storage...");
+    setNotice("Đang chuẩn bị file APK...");
 
     try {
-      const updated = source === "google-drive"
-        ? await saveGoogleDriveDownload({ url: driveUrl, version: version || suggestedVersion })
-        : await uploadApkDownload({ file, version: version || suggestedVersion });
+      const updated = await uploadApkDownload({
+        file,
+        version: versionName,
+        versionCode: safeVersionCode,
+        mandatory,
+        releaseNotes: parseReleaseNotes(releaseNotes),
+        onStage: setNotice
+      });
 
       setDownloads([updated]);
-      setVersion(guessNextVersion(updated.version));
-      setDriveUrl("");
+      setVersionName(guessNextVersion(updated.versionName || updated.version));
+      setVersionCode(String(updated.versionCode + 1));
+      setReleaseNotes("");
+      setMandatory(false);
       setFile(null);
       form?.reset?.();
-      setNotice("Đã cập nhật bản mới. Trang /download sẽ tự dùng link tải mới nhất.");
+      setNotice("Đã phát hành. Các máy POS sẽ nhận thông báo khi kiểm tra phiên bản mới.");
     } catch (error) {
-      setNotice(error?.message || "Cập nhật APK thất bại.");
+      setNotice(error?.message || "Phát hành APK thất bại.");
     } finally {
       setLoading(false);
     }
@@ -92,17 +137,10 @@ export default function AppDownloadSettings() {
       <div className="admin-download-head">
         <div>
           <p className="admin-eyebrow">Ứng dụng POS</p>
-          <h2>Cập nhật file APK</h2>
-          <p>
-            Dùng Google Drive cho file lớn hoặc tiếp tục upload lên Supabase Storage.
-          </p>
+          <h2>Phát hành bản cập nhật</h2>
+          <p>APK được lưu trên Supabase và xác minh SHA-256 trước khi máy POS cài đặt.</p>
         </div>
-        <a
-          href="/download"
-          target="_blank"
-          rel="noreferrer"
-          className="admin-download-link"
-        >
+        <a href="/download" target="_blank" rel="noreferrer" className="admin-download-link">
           Mở trang download
         </a>
       </div>
@@ -111,85 +149,82 @@ export default function AppDownloadSettings() {
         <div className="admin-download-current">
           <strong>{latest.appName}</strong>
           <div>
-            <span>Phiên bản hiện tại: {latest.version}</span>
-            <span>Cập nhật: {formatDate(latest.updatedAt)}</span>
+            <span>Phiên bản: {latest.versionName || latest.version || "Chưa có"}</span>
+            <span>Mã Android: {latest.versionCode || "Bản cũ"}</span>
+            <span>Dung lượng: {formatFileSize(latest.sizeBytes)}</span>
+            <span>Cập nhật: {formatDate(latest.publishedAt || latest.updatedAt)}</span>
           </div>
-          <a href={latest.url} target="_blank" rel="noreferrer">
-            Kiểm tra link tải hiện tại
-          </a>
+          {latest.sha256 ? <code>SHA-256: {latest.sha256}</code> : null}
+          <a href={latest.url} target="_blank" rel="noreferrer">Kiểm tra APK đang phát hành</a>
         </div>
       ) : null}
 
       <form onSubmit={handleSubmit} className="admin-download-form">
-        <fieldset className="admin-download-source">
-          <legend>Nguồn file APK</legend>
-          <div className="admin-download-source-grid">
-            <label className={source === "google-drive" ? "is-active" : ""}>
-              <input type="radio" name="download-source" value="google-drive" checked={source === "google-drive"} onChange={() => setSource("google-drive")} />
-              <span>
-                <strong>Google Drive</strong>
-                <small>Khuyên dùng cho file APK lớn</small>
-              </span>
-            </label>
-            <label className={source === "supabase" ? "is-active" : ""}>
-              <input type="radio" name="download-source" value="supabase" checked={source === "supabase"} onChange={() => setSource("supabase")} />
-              <span>
-                <strong>Supabase Storage</strong>
-                <small>Giữ cách upload cũ</small>
-              </span>
-            </label>
-          </div>
-        </fieldset>
+        <div className="admin-download-version-grid">
+          <label className="admin-download-field">
+            Tên phiên bản
+            <AdminInput
+              value={versionName}
+              onChange={(event) => setVersionName(event.target.value)}
+              placeholder="0.1.5"
+            />
+          </label>
+
+          <label className="admin-download-field">
+            Mã phiên bản Android
+            <AdminInput
+              type="number"
+              min="1"
+              step="1"
+              value={versionCode}
+              onChange={(event) => setVersionCode(event.target.value)}
+              placeholder="6"
+            />
+          </label>
+        </div>
 
         <label className="admin-download-field">
-          Phiên bản mới
-          <AdminInput value={version} onChange={(event) => setVersion(event.target.value)} placeholder={suggestedVersion} />
+          File APK mới
+          <input
+            type="file"
+            accept=".apk,application/vnd.android.package-archive"
+            onChange={handleFileChange}
+            className="admin-download-file"
+          />
         </label>
 
-        {source === "google-drive" ? (
-          <label className="admin-download-field">
-            Link chia sẻ Google Drive
-            <AdminInput
-              type="url"
-              value={driveUrl}
-              onChange={(event) => setDriveUrl(event.target.value)}
-              placeholder="https://drive.google.com/file/d/.../view"
-            />
-            <small>
-              Trên Google Drive, chọn Chia sẻ → Quyền truy cập chung → Bất kỳ ai có đường liên kết.
-            </small>
-          </label>
-        ) : (
-          <label className="admin-download-field">
-            File APK mới
-            <input
-              type="file"
-              accept=".apk,application/vnd.android.package-archive"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
-              className="admin-download-file"
-            />
-          </label>
-        )}
-
-        {source === "supabase" && file ? (
+        {file ? (
           <div className="admin-download-file-note">
-            Đã chọn: {file.name} ({Math.max(1, Math.round(file.size / 1024 / 1024))} MB)
+            Đã chọn: {file.name} ({formatFileSize(file.size)})
           </div>
         ) : null}
 
-        {notice ? (
-          <div className="admin-download-notice">
-            {notice}
-          </div>
-        ) : null}
+        <label className="admin-download-field">
+          Nội dung cập nhật
+          <AdminTextarea
+            value={releaseNotes}
+            onChange={(event) => setReleaseNotes(event.target.value)}
+            placeholder={"Mỗi thay đổi một dòng\nVí dụ: Tối ưu tốc độ tải đơn"}
+            rows={4}
+          />
+        </label>
 
-        <AdminButton
-          type="submit"
-          disabled={loading}
-          variant="success"
-          className="admin-download-submit"
-        >
-          {loading ? "Đang cập nhật..." : source === "google-drive" ? "Lưu link Google Drive" : "Upload và cập nhật bản mới"}
+        <label className="admin-download-check">
+          <input
+            type="checkbox"
+            checked={mandatory}
+            onChange={(event) => setMandatory(event.target.checked)}
+          />
+          <span>
+            <strong>Bản cập nhật bắt buộc</strong>
+            <small>POS vẫn chờ người dùng xác nhận cài đặt theo quy định của Android.</small>
+          </span>
+        </label>
+
+        {notice ? <div className="admin-download-notice">{notice}</div> : null}
+
+        <AdminButton type="submit" disabled={loading} variant="success" className="admin-download-submit">
+          {loading ? "Đang phát hành..." : "Upload và phát hành"}
         </AdminButton>
       </form>
     </section>

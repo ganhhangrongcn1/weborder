@@ -384,6 +384,16 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
     .select(PRINT_JOB_STATUS_COLUMNS)
     .maybeSingle();
   if (error) {
+    if (error.code === "23505") {
+      const activeJob = await findExistingCustomerBillPrintJob(client, row);
+      if (activeJob) {
+        return {
+          ok: true,
+          job: activeJob,
+          message: "Bill đang có lệnh in, không tạo trùng."
+        };
+      }
+    }
     return {
       ok: false,
       message: error.message || "Không tạo được lệnh in bill."
@@ -399,7 +409,7 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
   return {
     ok: true,
     job: data || null,
-    message: "Đã gửi lệnh in bill tới máy POS."
+    message: "Đã gửi lệnh; đang chờ máy POS xác nhận in."
   };
 }
 

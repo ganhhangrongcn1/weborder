@@ -653,6 +653,13 @@ export default function KitchenPage() {
         deviceId,
         onJobChange: (job) => {
           setPrintJobsByOrderKey((currentMap) => upsertPrintJobIntoMap(currentMap, job));
+          const status = toText(job?.status).toLowerCase();
+          const orderCode = toText(job?.order_code || "bill");
+          if (status === "printed") {
+            setPrinterNotice(`Máy POS đã in ${orderCode}.`);
+          } else if (status === "failed") {
+            setPrinterNotice(`In ${orderCode} thất bại: ${toText(job?.error_message) || "Máy POS chưa in được."}`);
+          }
         }
       });
     }
