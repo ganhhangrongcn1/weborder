@@ -2,6 +2,7 @@ import Icon from "../Icon.jsx";
 import { getCustomerOrderJourney } from "../../services/customerOrderStatusService.js";
 
 function getJourneyIcon(journey = {}) {
+  if (journey.statusKey === "awaiting_payment") return "qr";
   if (journey.statusKey === "delivering") return "bike";
   if (journey.statusKey === "ready") return journey.pickupLike ? "store" : "clock";
   if (["preparing", "active"].includes(journey.statusKey)) return "dish";
@@ -9,6 +10,7 @@ function getJourneyIcon(journey = {}) {
 }
 
 function getMiniProgressLabel(journey = {}) {
+  if (journey.statusKey === "awaiting_payment") return "Thanh toán xong là bếp lên món";
   if (journey.statusKey === "delivering") return "Món ngon đang tới, để ý điện thoại nha";
   if (journey.statusKey === "ready") return journey.pickupLike ? "Ghé quầy rước món thôi" : "Có shipper là Gánh giao ngay";
   if (["preparing", "active"].includes(journey.statusKey)) return "Bếp đang lên món, chờ xíu nha";
@@ -46,6 +48,7 @@ export default function ActiveOrderFloatboard({
   if (!order) return null;
 
   const journey = getCustomerOrderJourney(order);
+  const isAwaitingPayment = journey.statusKey === "awaiting_payment";
   const orderCode = String(order.orderCode || order.order_code || order.id || "Đơn đang xử lý");
   const iconName = getJourneyIcon(journey);
 
@@ -81,8 +84,8 @@ export default function ActiveOrderFloatboard({
           <MiniStepProgress journey={journey} />
         </span>
         <button type="button" className="active-order-floatboard__action" onClick={onOpenJourney}>
-          <Icon name="eye" size={15} />
-          Theo dõi
+          <Icon name={isAwaitingPayment ? "qr" : "eye"} size={15} />
+          {isAwaitingPayment ? "Thanh toán tiếp" : "Theo dõi"}
         </button>
         <button
           type="button"

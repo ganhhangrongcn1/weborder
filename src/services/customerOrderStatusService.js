@@ -159,7 +159,7 @@ function getWebsiteStatus(order = {}) {
   if (isWaitingForQrPayment || status === "pendingpayment" || kitchenStatus === "waitingpayment") {
     return {
       key: "awaiting_payment",
-      label: "Chờ thanh toán QR",
+      label: paymentMethod === "momo" ? "Chờ thanh toán MoMo" : "Chờ thanh toán QR",
       tone: "pending",
       step: 0
     };
@@ -218,7 +218,7 @@ function getOrderActivityTime(order = {}) {
 function getJourneyCopy(statusKey = "", pickupLike = false) {
   if (statusKey === "awaiting_payment") {
     return {
-      title: "Chờ thanh toán QR",
+      title: "Chờ thanh toán",
       description: "Thanh toán xong là bếp lên món ngay nha."
     };
   }

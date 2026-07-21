@@ -26,8 +26,10 @@ import { orderRepository } from "../../../services/repositories/orderRepository.
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 import {
   findLatestActiveCustomerOrder,
+  getCustomerOrderDisplayStatus,
   getCustomerOrderJourneySignature
 } from "../../../services/customerOrderStatusService.js";
+import { prepareOrderForPaymentResume } from "../../../services/customerOrderActionService.js";
 
 const qrMemberPromptSessionKeys = new Set();
 const ORDER_DETAIL_INTENT_KEY = "ghr_open_order_detail_intent";
@@ -46,6 +48,7 @@ export default function CustomerShell({
   openOptionModalFromHome,
   openCartItemEditor,
   currentOrder,
+  setCurrentOrder,
   branches,
   composedUserProfile,
   currentPhone,
@@ -238,6 +241,23 @@ export default function CustomerShell({
     setIsJourneyOpen(true);
   };
 
+  const continueOrderPayment = (order) => {
+    if (!order) return;
+    const nextOrder = prepareOrderForPaymentResume(order);
+    setCurrentOrder?.(nextOrder);
+    setIsJourneyOpen(false);
+    navigate("success", "orders");
+  };
+
+  const handleActiveOrderAction = () => {
+    if (!activeCustomerOrder) return;
+    if (getCustomerOrderDisplayStatus(activeCustomerOrder).key === "awaiting_payment") {
+      continueOrderPayment(activeCustomerOrder);
+      return;
+    }
+    openActiveOrderJourney();
+  };
+
   const openOrdersFromJourney = () => {
     const orderId = String(journeyOrder?.id || journeyOrder?.orderCode || journeyOrder?.order_code || "").trim();
     if (typeof window !== "undefined" && orderId) {
@@ -303,8 +323,8 @@ export default function CustomerShell({
               {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
               {page === "detail" && <ProductDetailPage render={pageProps.Detail} {...pageProps} />}
               {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
-              {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} isOrderRestoring={isSessionRestoring || isSessionBootstrapping || isMomoReturnRecovering} />}
-              {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} onOrderSheetVisibilityChange={setIsTrackingOrderSheetOpen} />}
+              {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} setCurrentOrder={setCurrentOrder} onReorder={reorderOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} isOrderRestoring={isSessionRestoring || isSessionBootstrapping || isMomoReturnRecovering} />}
+              {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} setCurrentOrder={setCurrentOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} onOrderSheetVisibilityChange={setIsTrackingOrderSheetOpen} />}
               {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
               {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}
             </div>
@@ -352,7 +372,7 @@ export default function CustomerShell({
                 hasUnreadUpdate={hasActiveOrderUpdate}
                 onCollapse={collapseActiveOrderFloatboard}
                 onExpand={expandActiveOrderFloatboard}
-                onOpenJourney={openActiveOrderJourney}
+                onOpenJourney={handleActiveOrderAction}
               />
             ) : null}
 

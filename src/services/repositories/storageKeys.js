@@ -2,6 +2,7 @@ export const STORAGE_KEYS = {
   cartDraft: "ghr_cart",
   currentOrder: "ghr_current_order",
   lastCreatedOrderId: "ghr_last_created_order_id",
+  customerOrderActionTokens: "ghr_customer_order_action_tokens",
   users: "ghr_users",
   currentPhone: "ghr_current_phone",
   currentCustomerPhone: "ghr_current_customer_phone",
@@ -23,6 +24,7 @@ export const STORAGE_KEYS = {
 export const LOCAL_ONLY_STORAGE_KEYS = [
   STORAGE_KEYS.cartDraft,
   STORAGE_KEYS.currentOrder,
+  STORAGE_KEYS.customerOrderActionTokens,
   STORAGE_KEYS.currentPhone,
   STORAGE_KEYS.loyaltyDemo,
   STORAGE_KEYS.legacyOrderStatus,

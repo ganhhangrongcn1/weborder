@@ -76,7 +76,7 @@ export function getQrOrderPaymentStatus(order = {}, session = null) {
 }
 
 export function isQrOrderPaid(order = {}, session = null) {
-  return ["paid", "converted"].includes(getQrOrderPaymentStatus(order, session));
+  return ["paid", "converted", "paid_after_cancel"].includes(getQrOrderPaymentStatus(order, session));
 }
 
 export function isQrOrderPaymentExpired(order = {}, session = null) {
@@ -256,20 +256,35 @@ async function invokeQrPaymentFunction(payload) {
     };
   }
   if (error) {
+    let errorPayload = data;
+    if (!errorPayload && error?.context?.json) {
+      try {
+        errorPayload = await error.context.json();
+      } catch {
+        errorPayload = null;
+      }
+    }
     return {
       ok: false,
-      message: error.message || "Không gọi được dịch vụ thanh toán QR."
+      code: toText(errorPayload?.code),
+      message: errorPayload?.message || error.message || "Không gọi được dịch vụ thanh toán QR.",
+      session: normalizeSession(errorPayload?.session),
+      order: normalizeRecoveredOrder(errorPayload?.order)
     };
   }
   if (!data?.ok) {
     return {
       ok: false,
+      code: toText(data?.code),
       message: data?.message || "Không tạo được phiên thanh toán QR.",
-      session: normalizeSession(data?.session)
+      session: normalizeSession(data?.session),
+      order: normalizeRecoveredOrder(data?.order)
     };
   }
   return {
     ok: true,
+    code: toText(data.code),
+    message: toText(data.message),
     session: normalizeSession(data.session),
     order: normalizeRecoveredOrder(data.order),
     reused: Boolean(data.reused)
@@ -299,6 +314,25 @@ export async function readQrOrderPaymentSession({ order = {}, sessionId = "" } =
     order_id: toText(safeOrder.id || safeOrder.orderCode),
     payment_reference: getQrOrderPaymentReference(safeOrder)
   });
+}
+
+export async function cancelQrOrderPayment({ order = {}, customerActionToken = "" } = {}) {
+  const safeOrder = getObject(order);
+  const orderId = toText(safeOrder.id || safeOrder.orderCode);
+  if (!orderId) {
+    return { ok: false, code: "ORDER_REQUIRED", message: "Thiếu mã đơn cần hủy." };
+  }
+
+  const result = await invokeQrPaymentFunction({
+    action: "cancel_unpaid",
+    order_id: orderId,
+    customer_action_token: toText(customerActionToken)
+  });
+
+  return {
+    ...result,
+    code: toText(result?.code || result?.status).toUpperCase()
+  };
 }
 
 export async function recoverMomoReturnOrder({ returnToken = "" } = {}) {

@@ -175,6 +175,19 @@ function OrderStatusBadge({ status }) {
   return <span className={`admin-order-status-badge ${getStatusClass(status)}`}>{getStatusLabel(status)}</span>;
 }
 
+function getLatePaymentReview(order = {}) {
+  const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : order;
+  const latePayment = metadata?.latePayment && typeof metadata.latePayment === "object"
+    ? metadata.latePayment
+    : null;
+  const refundStatus = String(metadata?.refundStatus || metadata?.refund_status || "").toLowerCase();
+  if (!latePayment && refundStatus !== "manual_review") return null;
+  return {
+    amount: Number(latePayment?.amount || order?.paymentAmount || order?.totalAmount || 0),
+    provider: String(latePayment?.provider || order?.paymentMethod || "").toUpperCase()
+  };
+}
+
 function CancelOrderButton({ order, status, updateOrderStatus, compact = false }) {
   if (isReadOnlyPartnerOrder(order) || status === "cancelled") return null;
 
@@ -458,6 +471,7 @@ function OrderList({
           const branchName = getOrderBranchName(order);
           const shortBranchName = getShortBranchName(branchName);
           const fulfillmentMeta = getFulfillmentMeta(order);
+          const latePaymentReview = getLatePaymentReview(order);
 
           return (
             <article
@@ -468,6 +482,7 @@ function OrderList({
               <div className="admin-order-cell admin-order-code-cell">
                 <strong>{getDisplayOrderCode(order)}</strong>
                 <small>{waitingMinutes} phút</small>
+                {latePaymentReview ? <small className="font-black text-red-600">Tiền đến sau khi hủy</small> : null}
               </div>
               <div className="admin-order-cell">
                 <strong>{order.customerName || "Khách lẻ"}</strong>
@@ -762,6 +777,7 @@ function OrderDetailPanelV2({
     ? Number(partnerNetReceived || order.realReceived || order.netReceived || 0)
     : Number(settlement.netRevenue || 0);
   const highlightedReceived = netReceived > 0 ? netReceived : Math.max(totalValue - shippingFee, 0);
+  const latePaymentReview = getLatePaymentReview(order);
 
   return (
     <aside className={`admin-order-detail-panel ${isOpen ? "is-open" : ""}`}>
@@ -775,6 +791,14 @@ function OrderDetailPanelV2({
       </div>
 
       <div className="admin-order-detail-scroll">
+        {latePaymentReview ? (
+          <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-red-700">
+            <strong className="block text-sm font-black">Cần xử lý hoàn tiền thủ công</strong>
+            <p className="mt-1 text-xs font-bold leading-5">
+              Đơn đã hủy nhưng hệ thống nhận thêm {formatMoney(latePaymentReview.amount)} qua {latePaymentReview.provider || "thanh toán QR"}. Không gửi đơn vào bếp.
+            </p>
+          </section>
+        ) : null}
         <section className="admin-order-detail-summary-card">
           <div className="admin-order-detail-status-line">
             <OrderStatusBadge status={status} />

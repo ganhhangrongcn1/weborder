@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
+import CustomerOrderActionPanel from "../../components/customer/CustomerOrderActionPanel.jsx";
 import { formatMoney } from "../../utils/format.js";
+import {
+  cancelCustomerUnpaidOrder,
+  prepareOrderForPaymentResume
+} from "../../services/customerOrderActionService.js";
 import {
   buildMomoPaymentQrImageUrl,
   buildQrOrderPaymentImageUrl,
@@ -64,12 +69,16 @@ function openTrackingRoute(orderCode, navigate) {
 
 export default function OrderSuccess({
   navigate,
-  order,
+  order: initialOrder,
+  setCurrentOrder,
+  onReorder,
   isRegisteredCustomer = false,
   currentPhone = "",
   branches = [],
   isOrderRestoring = false
 }) {
+  const [orderOverride, setOrderOverride] = useState(null);
+  const order = orderOverride || initialOrder;
   const orderId = order?.id || order?.orderCode || "";
   const isQrPaymentOrder = isQrCounterPrepaidOrder(order);
   const isMomoPayment = isMomoPaymentOrder(order);
@@ -77,6 +86,8 @@ export default function OrderSuccess({
   const [paymentMessage, setPaymentMessage] = useState("");
   const [momoQrImageUrl, setMomoQrImageUrl] = useState("");
   const [momoLaunchAttempted, setMomoLaunchAttempted] = useState(false);
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+  const [cancelOrderMessage, setCancelOrderMessage] = useState("");
   const [isOrderRecoveryGraceActive, setIsOrderRecoveryGraceActive] = useState(() => !order);
   const orderCode = order?.orderCode || order?.id || "Đơn mới";
   const itemCount = getOrderItemsCount(order);
@@ -94,6 +105,10 @@ export default function OrderSuccess({
   const bankQrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
   const qrPaymentImageUrl = isMomoPayment ? momoQrImageUrl : bankQrPaymentImageUrl;
   const qrPaymentPaid = isQrPaymentOrder && isQrOrderPaid(order, paymentSession);
+  const orderMetadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : order || {};
+  const qrPaymentCancelled = isQrPaymentOrder &&
+    String(order?.status || orderMetadata?.status || "").toLowerCase() === "cancelled" &&
+    String(orderMetadata?.cancelledBy || orderMetadata?.cancelled_by || "").toLowerCase() === "customer";
   const qrPaymentExpired = isQrPaymentOrder && isQrOrderPaymentExpired(order, paymentSession);
   const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid && !qrPaymentExpired;
   const isMomoAppHandoff = isQrPaymentWaiting && isMomoPayment && !qrPaymentImageUrl;
@@ -102,23 +117,29 @@ export default function OrderSuccess({
     ? qrPaymentPaid
       ? isMomoPayment ? "Đã thanh toán MoMo" : "Đã thanh toán QR"
       : qrPaymentExpired
-        ? "QR đã hết hạn"
+        ? qrPaymentCancelled ? "Đã hủy" : "QR đã hết hạn"
         : isMomoPayment ? "Ví MoMo" : "QR ngân hàng"
     : "Tiền mặt khi nhận món";
-  const statusEyebrow = qrPaymentExpired
-    ? "Đã quá hạn"
+  const statusEyebrow = qrPaymentCancelled
+    ? "Đã hủy"
+    : qrPaymentExpired
+      ? "Đã quá hạn"
     : isQrPaymentWaiting
       ? "Chờ thanh toán"
       : "Đặt món thành công";
-  const statusTitle = qrPaymentExpired
-    ? "Đơn đã quá hạn thanh toán"
+  const statusTitle = qrPaymentCancelled
+    ? "Đơn đã được hủy"
+    : qrPaymentExpired
+      ? "Đơn đã quá hạn thanh toán"
     : isQrPaymentWaiting
       ? isMomoPayment
         ? "Xác nhận thanh toán trên MoMo"
         : "Quét QR để Gánh lên món"
       : "Gánh nhận được đơn rồi nha";
-  const statusDescription = qrPaymentExpired
-    ? "Đơn chưa được thanh toán trong 10 phút nên đã tự hủy. Bạn đặt lại món giúp Gánh nha."
+  const statusDescription = qrPaymentCancelled
+    ? "Đơn chưa thanh toán đã được hủy và không gửi vào bếp."
+    : qrPaymentExpired
+      ? "Đơn chưa được thanh toán trong 10 phút nên đã tự hủy. Bạn đặt lại món giúp Gánh nha."
     : isQrPaymentWaiting
       ? isMomoPayment
         ? "Mở MoMo và xác nhận giao dịch."
@@ -136,6 +157,11 @@ export default function OrderSuccess({
       : "bg-green-100 text-green-700";
   const statusTextClass = qrPaymentExpired ? "text-red-600" : isQrPaymentWaiting ? "text-orange-600" : "text-green-700";
   const statusTitleClass = qrPaymentExpired ? "text-red-700" : isQrPaymentWaiting ? "text-orange-700" : "text-green-800";
+
+  useEffect(() => {
+    setOrderOverride(null);
+    setCancelOrderMessage("");
+  }, [initialOrder?.id, initialOrder?.orderCode]);
 
   useEffect(() => {
     if (order) {
@@ -163,8 +189,9 @@ export default function OrderSuccess({
       if (result.ok && result.session) {
         setPaymentSession(result.session);
         setPaymentMessage("");
-      } else if (result.message) {
-        setPaymentMessage(result.message);
+      } else {
+        if (result.session) setPaymentSession(result.session);
+        if (result.message) setPaymentMessage(result.message);
       }
     }
 
@@ -215,6 +242,41 @@ export default function OrderSuccess({
 
   const handleMomoLaunch = () => {
     setMomoLaunchAttempted(true);
+  };
+
+  const handleCancelUnpaidOrder = async () => {
+    if (!order || isCancellingOrder) return;
+    setIsCancellingOrder(true);
+    setCancelOrderMessage("");
+    try {
+      const result = await cancelCustomerUnpaidOrder(order);
+      if (!result.ok) {
+        setCancelOrderMessage(result.message || "Chưa thể hủy đơn lúc này.");
+        return;
+      }
+      const nextOrder = prepareOrderForPaymentResume(result.order || {
+        ...order,
+        status: "cancelled",
+        kitchenStatus: "cancelled",
+        paymentStatus: "cancelled"
+      });
+      setOrderOverride(nextOrder);
+      setCurrentOrder?.(nextOrder);
+      setPaymentSession(result.session || paymentSession);
+      setPaymentMessage("");
+    } catch (error) {
+      setCancelOrderMessage(error?.message || "Chưa thể hủy đơn lúc này.");
+    } finally {
+      setIsCancellingOrder(false);
+    }
+  };
+
+  const handleReorder = () => {
+    if (typeof onReorder === "function") {
+      onReorder(order);
+      return;
+    }
+    navigate?.("menu", "menu");
   };
 
   const handleTrackOrder = () => openTrackingRoute(orderCode, navigate);
@@ -357,7 +419,9 @@ export default function OrderSuccess({
 
               {qrPaymentExpired ? (
                 <p className="qr-payment-wait-card__paid-text">
-                  Mã QR của đơn này đã hết hiệu lực. Anh/chị vui lòng đặt lại đơn mới để thanh toán.
+                  {qrPaymentCancelled
+                    ? "Đơn đã được hủy. Mã thanh toán không còn hiệu lực."
+                    : "Mã QR của đơn này đã hết hiệu lực. Anh/chị vui lòng đặt lại đơn mới để thanh toán."}
                 </p>
               ) : !qrPaymentPaid ? (
                 isMomoPayment && !qrPaymentImageUrl ? (
@@ -502,9 +566,19 @@ export default function OrderSuccess({
             </div>
           ) : null}
 
+          {isQrPaymentWaiting ? (
+            <CustomerOrderActionPanel
+              onCancel={handleCancelUnpaidOrder}
+              isCancelling={isCancellingOrder}
+              message={cancelOrderMessage}
+            />
+          ) : qrPaymentPaid ? (
+            <CustomerOrderActionPanel mode="paid" />
+          ) : null}
+
           {qrPaymentExpired ? (
-            <CustomerButton full size="lg" className="mt-5" onClick={() => navigate?.("menu", "menu")}>
-              Đặt lại món
+            <CustomerButton full size="lg" className="mt-5" onClick={handleReorder}>
+              Đặt lại đơn
             </CustomerButton>
           ) : !isQrPaymentWaiting ? (
             <>

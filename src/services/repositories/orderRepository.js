@@ -296,6 +296,33 @@ export const orderRepository = {
   saveCurrentOrder(nextOrder) {
     return repository.set(STORAGE_KEYS.currentOrder, nextOrder || null);
   },
+  saveCustomerActionToken(orderId, token) {
+    const id = String(orderId || "").trim();
+    const safeToken = String(token || "").trim();
+    if (!id || !safeToken) return "";
+    const current = repository.get(STORAGE_KEYS.customerOrderActionTokens, {});
+    repository.set(STORAGE_KEYS.customerOrderActionTokens, {
+      ...(current && typeof current === "object" ? current : {}),
+      [id]: safeToken
+    });
+    return safeToken;
+  },
+  getCustomerActionToken(orderId) {
+    const id = String(orderId || "").trim();
+    if (!id) return "";
+    const current = repository.get(STORAGE_KEYS.customerOrderActionTokens, {});
+    return String(current?.[id] || "").trim();
+  },
+  clearCustomerActionToken(orderId) {
+    const id = String(orderId || "").trim();
+    if (!id) return false;
+    const current = repository.get(STORAGE_KEYS.customerOrderActionTokens, {});
+    if (!current || typeof current !== "object" || !(id in current)) return false;
+    const next = { ...current };
+    delete next[id];
+    repository.set(STORAGE_KEYS.customerOrderActionTokens, next);
+    return true;
+  },
   hydrateRecoveredOrder(order = {}) {
     const nextOrder = normalizeOrderForRead(order);
     const orderId = String(nextOrder.id || nextOrder.orderCode || "").trim();

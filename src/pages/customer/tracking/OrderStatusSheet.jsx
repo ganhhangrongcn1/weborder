@@ -9,6 +9,8 @@ import { formatMoney } from "../../../utils/format.js";
 import { getOrderItemOptionLabels } from "../../../utils/orderItemDisplay.js";
 import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 import { getCustomerOrderJourney } from "../../../services/customerOrderStatusService.js";
+import { isQrCounterPrepaidOrder, isQrOrderPaid } from "../../../services/qrPaymentService.js";
+import CustomerOrderActionPanel from "../../../components/customer/CustomerOrderActionPanel.jsx";
 
 const DISTANCE_FORMATTER = new Intl.NumberFormat("vi-VN", {
   minimumFractionDigits: 0,
@@ -45,6 +47,10 @@ export default function OrderStatusSheet({
   initialShowDetails = false,
   canReorder = false,
   onReorder,
+  onContinuePayment,
+  onCancelUnpaid,
+  isCancelling = false,
+  cancelMessage = "",
   onClose
 }) {
   const [showDetails, setShowDetails] = useState(initialShowDetails);
@@ -60,6 +66,9 @@ export default function OrderStatusSheet({
   const isPickupOrder = order.fulfillmentType === "pickup";
   const isPartnerOrder = order.sourceType === "partner";
   const journey = getCustomerOrderJourney(order);
+  const isPrepaidOrder = isQrCounterPrepaidOrder(order);
+  const isPaidOrder = isPrepaidOrder && isQrOrderPaid(order);
+  const isAwaitingPayment = isPrepaidOrder && journey.statusKey === "awaiting_payment";
   const sourceBadge = getOrderSourceBadge(order);
   const branchName = getCanonicalOrderBranchName(order, branches);
   const displayOrderCode = isPartnerOrder
@@ -245,6 +254,17 @@ export default function OrderStatusSheet({
       ) : null}
         </>
       )}
+
+      {isAwaitingPayment ? (
+        <CustomerOrderActionPanel
+          onContinuePayment={onContinuePayment}
+          onCancel={onCancelUnpaid}
+          isCancelling={isCancelling}
+          message={cancelMessage}
+        />
+      ) : isPaidOrder ? (
+        <CustomerOrderActionPanel mode="paid" />
+      ) : null}
     </CustomerBottomSheet>
   );
 

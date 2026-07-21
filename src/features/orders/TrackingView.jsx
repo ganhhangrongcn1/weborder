@@ -29,6 +29,10 @@ import {
   resolveOrderPointStatus
 } from "../../services/loyaltyLedgerUtils.js";
 import useGuestOrderLookup from "./hooks/useGuestOrderLookup.js";
+import {
+  cancelCustomerUnpaidOrder,
+  prepareOrderForPaymentResume
+} from "../../services/customerOrderActionService.js";
 
 const ORDER_HISTORY_PAGE_SIZE = 4;
 const POST_LOGIN_REDIRECT_KEY = "ghr_post_login_redirect";
@@ -110,6 +114,7 @@ export default function Tracking({
   navigate,
   userProfile,
   currentOrder,
+  setCurrentOrder,
   currentPhone,
   hasCustomerAuthSession = false,
   requiresCustomerAuthSession = false,
@@ -133,6 +138,8 @@ export default function Tracking({
   const [partnerOrders, setPartnerOrders] = useState([]);
   const [isPartnerOrdersLoading, setIsPartnerOrdersLoading] = useState(false);
   const [claimingOrderId, setClaimingOrderId] = useState("");
+  const [cancellingOrderId, setCancellingOrderId] = useState("");
+  const [cancelOrderMessage, setCancelOrderMessage] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [orderFilter, setOrderFilter] = useState("all");
   const [summaryRefreshKey, setSummaryRefreshKey] = useState(0);
@@ -600,8 +607,61 @@ export default function Tracking({
 
   const openOrderDetails = (order) => {
     const isPartnerOrder = order?.sourceType === "partner";
+    setCancelOrderMessage("");
     setShowSelectedOrderDetails(isPartnerOrder || getOrderFilterKey(order) !== "active");
     setSelectedOrder(order);
+  };
+
+  const handleContinuePayment = (order) => {
+    if (!order) return;
+    const nextOrder = prepareOrderForPaymentResume(order);
+    setCurrentOrder?.(nextOrder);
+    closeSelectedOrder();
+    navigate("success", "orders");
+  };
+
+  const replaceOrderInView = (nextOrder) => {
+    const targetId = String(nextOrder?.id || nextOrder?.orderCode || "").trim();
+    if (!targetId) return;
+    setLoadedHistoryOrders((orders) => orders.map((item) => (
+      String(item?.id || item?.orderCode || "").trim() === targetId ? nextOrder : item
+    )));
+    setSelectedOrder((current) => (
+      String(current?.id || current?.orderCode || "").trim() === targetId ? nextOrder : current
+    ));
+    setCurrentOrder?.((current) => (
+      String(current?.id || current?.orderCode || "").trim() === targetId ? nextOrder : current
+    ));
+  };
+
+  const handleCancelSelectedOrder = async () => {
+    if (!selectedOrder || cancellingOrderId) return;
+    const targetId = String(selectedOrder.id || selectedOrder.orderCode || "").trim();
+    setCancellingOrderId(targetId);
+    setCancelOrderMessage("");
+    try {
+      const result = await cancelCustomerUnpaidOrder(selectedOrder);
+      if (!result.ok) {
+        setCancelOrderMessage(result.message || "Chưa thể hủy đơn lúc này.");
+        return;
+      }
+      const nextOrder = prepareOrderForPaymentResume(result.order || {
+        ...selectedOrder,
+        status: "cancelled",
+        kitchenStatus: "cancelled",
+        paymentStatus: "cancelled"
+      });
+      replaceOrderInView(nextOrder);
+      setServiceNotice?.({
+        badge: "Đã hủy",
+        title: "Đơn chưa thanh toán đã được hủy",
+        description: "Đơn không được gửi vào bếp và mã thanh toán không còn hiệu lực."
+      });
+    } catch (error) {
+      setCancelOrderMessage(error?.message || "Chưa thể hủy đơn lúc này.");
+    } finally {
+      setCancellingOrderId("");
+    }
   };
 
   const handleReorderSelectedOrder = () => {
@@ -819,6 +879,7 @@ export default function Tracking({
               : `${Number(order?.itemCount || 0) || "Chưa rõ"} món`;
             const isActiveOrder = getOrderFilterKey(order) === "active";
             const canTrackJourney = isActiveOrder && !isPartnerOrder;
+            const isAwaitingPayment = statusMeta.key === "awaiting_payment" && !isPartnerOrder;
 
             if (!canAccessFullOrderHistory) {
               return (
@@ -863,11 +924,11 @@ export default function Tracking({
                       {canTrackJourney ? (
                         <button
                           type="button"
-                          onClick={() => openOrderDetails(order)}
+                          onClick={() => (isAwaitingPayment ? handleContinuePayment(order) : openOrderDetails(order))}
                           className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-black text-orange-600"
                         >
-                          <Icon name="clock" size={16} />
-                          Theo dõi hành trình
+                          <Icon name={isAwaitingPayment ? "qr" : "clock"} size={16} />
+                          {isAwaitingPayment ? "Tiếp tục thanh toán" : "Theo dõi hành trình"}
                         </button>
                       ) : null}
                     </div>
@@ -924,11 +985,11 @@ export default function Tracking({
                       <button
                         type="button"
                         className="orders-card__detail"
-                        aria-label={`${canTrackJourney ? "Theo dõi hành trình" : "Xem chi tiết"} đơn ${getDisplayOrderCode(order)}`}
-                        onClick={() => openOrderDetails(order)}
+                        aria-label={`${isAwaitingPayment ? "Tiếp tục thanh toán" : canTrackJourney ? "Theo dõi hành trình" : "Xem chi tiết"} đơn ${getDisplayOrderCode(order)}`}
+                        onClick={() => (isAwaitingPayment ? handleContinuePayment(order) : openOrderDetails(order))}
                       >
-                        <Icon name={canTrackJourney ? "clock" : "eye"} size={16} />
-                        {canTrackJourney ? "Theo dõi hành trình" : "Chi tiết"}
+                        <Icon name={isAwaitingPayment ? "qr" : canTrackJourney ? "clock" : "eye"} size={16} />
+                        {isAwaitingPayment ? "Thanh toán tiếp" : canTrackJourney ? "Theo dõi hành trình" : "Chi tiết"}
                       </button>
                     </div>
                   </div>
@@ -960,8 +1021,12 @@ export default function Tracking({
           canViewFullOrderCode={canViewFullOrderCode}
           maskOrderCode={maskOrderCode}
           initialShowDetails={showSelectedOrderDetails}
-          canReorder={getCustomerOrderDisplayStatus(selectedOrder).key === "completed" && typeof onReorder === "function"}
+          canReorder={["completed", "cancelled"].includes(getCustomerOrderDisplayStatus(selectedOrder).key) && typeof onReorder === "function"}
           onReorder={handleReorderSelectedOrder}
+          onContinuePayment={() => handleContinuePayment(selectedOrder)}
+          onCancelUnpaid={handleCancelSelectedOrder}
+          isCancelling={String(cancellingOrderId) === String(selectedOrder.id || selectedOrder.orderCode)}
+          cancelMessage={cancelOrderMessage}
           onClose={closeSelectedOrder}
         />
       )}

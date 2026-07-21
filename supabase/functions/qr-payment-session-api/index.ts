@@ -187,6 +187,54 @@ async function hashSha256(value: string) {
   return bytesToHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
 }
 
+async function getAuthenticatedCustomerPhone(
+  request: Request,
+  serviceClient: ReturnType<typeof createClient>
+) {
+  const authorization = toText(request.headers.get("Authorization"));
+  const token = authorization.replace(/^Bearer\s+/i, "");
+  if (!token) return "";
+
+  const { data: authData, error: authError } = await serviceClient.auth.getUser(token);
+  const authUserId = toText(authData?.user?.id);
+  if (authError || !authUserId) return "";
+
+  const { data: profile } = await serviceClient
+    .from("profiles")
+    .select("phone,auth_user_id")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+
+  return normalizePhone(profile?.phone || "");
+}
+
+async function canCustomerManageOrder(
+  request: Request,
+  serviceClient: ReturnType<typeof createClient>,
+  order: JsonRecord,
+  body: JsonRecord
+) {
+  const metadata = getObject(order.metadata);
+  const expectedTokenHash = toText(
+    metadata.customerActionTokenHash || metadata.customer_action_token_hash
+  ).toLowerCase();
+  const customerActionToken = toText(
+    body.customer_action_token || body.customerActionToken
+  );
+
+  if (
+    expectedTokenHash &&
+    /^[A-Za-z0-9_-]{32,128}$/.test(customerActionToken) &&
+    (await hashSha256(customerActionToken)) === expectedTokenHash
+  ) {
+    return true;
+  }
+
+  const authenticatedPhone = await getAuthenticatedCustomerPhone(request, serviceClient);
+  const orderPhone = normalizePhone(order.customer_phone || metadata.customerPhone || metadata.phone);
+  return Boolean(authenticatedPhone && orderPhone && authenticatedPhone === orderPhone);
+}
+
 function createMomoReturnToken() {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return btoa(String.fromCharCode(...bytes))
@@ -428,6 +476,127 @@ async function expireQrOrderSessionIfNeeded(
   return nextSession;
 }
 
+async function cancelCustomerUnpaidOrder(
+  request: Request,
+  serviceClient: ReturnType<typeof createClient>,
+  body: JsonRecord
+) {
+  const order = await readOrder(serviceClient, body);
+  if (!order) {
+    return response({ ok: false, code: "ORDER_NOT_FOUND", message: "Không tìm thấy đơn cần hủy." }, 404);
+  }
+  if (!isQrPayableOrder(order)) {
+    return response({ ok: false, code: "ORDER_NOT_CANCELLABLE", message: "Đơn này không thuộc luồng thanh toán QR tại quầy." }, 400);
+  }
+  if (!(await canCustomerManageOrder(request, serviceClient, order, body))) {
+    return response({
+      ok: false,
+      code: "CUSTOMER_ACCESS_REQUIRED",
+      message: "Không thể xác nhận quyền hủy đơn. Anh/chị vui lòng đăng nhập hoặc liên hệ Gánh để được hỗ trợ."
+    }, 403);
+  }
+
+  const session = await expireQrOrderSessionIfNeeded(serviceClient, await findSession(serviceClient, {
+    ...body,
+    order_id: toText(order.id)
+  }));
+  if (!session) {
+    return response({ ok: false, code: "SESSION_NOT_FOUND", message: "Không tìm thấy phiên thanh toán của đơn này." }, 404);
+  }
+
+  const metadata = getObject(order.metadata);
+  const sessionStatus = toText(session.status).toLowerCase();
+  if (isPaidMetadata(metadata) || ["paid", "converting", "converted"].includes(sessionStatus)) {
+    return response({
+      ok: false,
+      code: "ALREADY_PAID",
+      message: "Đơn vừa được thanh toán. Anh/chị liên hệ Gánh qua Zalo để được hỗ trợ."
+    }, 409);
+  }
+  if (["expired", "cancelled", "canceled", "failed"].includes(sessionStatus)) {
+    return response({
+      ok: false,
+      code: "PAYMENT_CLOSED",
+      message: "Đơn này đã hết hiệu lực thanh toán."
+    }, 409);
+  }
+
+  const now = new Date().toISOString();
+  const { data: cancelledSession, error: sessionError } = await serviceClient
+    .from("pos_payment_sessions")
+    .update({
+      status: "cancelled",
+      failure_reason: "customer_cancelled_unpaid",
+      cancelled_at: now,
+      updated_at: now
+    })
+    .eq("id", toText(session.id))
+    .eq("status", "pending_payment")
+    .select(SESSION_COLUMNS)
+    .maybeSingle();
+
+  if (sessionError) {
+    return response({ ok: false, code: "CANCEL_FAILED", message: sessionError.message || "Chưa thể hủy đơn lúc này." }, 500);
+  }
+  if (!cancelledSession) {
+    const latestSession = await findSession(serviceClient, { session_id: toText(session.id) });
+    const latestStatus = toText(latestSession?.status).toLowerCase();
+    return response({
+      ok: false,
+      code: ["paid", "converting", "converted"].includes(latestStatus) ? "ALREADY_PAID" : "PAYMENT_CHANGED",
+      message: ["paid", "converting", "converted"].includes(latestStatus)
+        ? "Đơn vừa được thanh toán. Anh/chị liên hệ Gánh qua Zalo để được hỗ trợ."
+        : "Trạng thái thanh toán vừa thay đổi. Anh/chị tải lại đơn giúp Gánh."
+    }, 409);
+  }
+
+  const nextMetadata = {
+    ...metadata,
+    status: "cancelled",
+    orderStatus: "cancelled",
+    kitchenStatus: "cancelled",
+    paymentStatus: "cancelled",
+    cancelReason: "customer_cancelled_unpaid",
+    cancelledBy: "customer",
+    cancelledAt: now
+  };
+  const { data: cancelledOrder, error: orderError } = await serviceClient
+    .from("orders")
+    .update({
+      status: "cancelled",
+      kitchen_status: "cancelled",
+      metadata: nextMetadata,
+      updated_at: now
+    })
+    .eq("id", toText(order.id))
+    .eq("status", "pending_payment")
+    .select(ORDER_COLUMNS)
+    .maybeSingle();
+
+  if (orderError) {
+    return response({ ok: false, code: "CANCEL_FAILED", message: orderError.message || "Chưa thể hủy đơn lúc này." }, 500);
+  }
+  if (!cancelledOrder) {
+    const latestOrder = await readOrder(serviceClient, { order_id: toText(order.id) });
+    if (latestOrder && isPaidMetadata(getObject(latestOrder.metadata))) {
+      return response({
+        ok: false,
+        code: "ALREADY_PAID",
+        message: "Đơn vừa được thanh toán. Anh/chị liên hệ Gánh qua Zalo để được hỗ trợ."
+      }, 409);
+    }
+    return response({ ok: false, code: "PAYMENT_CHANGED", message: "Trạng thái đơn vừa thay đổi. Anh/chị tải lại giúp Gánh." }, 409);
+  }
+
+  return response({
+    ok: true,
+    code: "CANCELLED",
+    message: "Đã hủy đơn chưa thanh toán.",
+    session: sanitizeSessionForCustomer(cancelledSession),
+    order: buildRecoveredOrder(cancelledOrder, cancelledSession)
+  });
+}
+
 async function createSession(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
   const order = await readOrder(serviceClient, body);
   if (!order) return response({ ok: false, message: "Không tìm thấy đơn QR để tạo thanh toán." }, 404);
@@ -613,6 +782,9 @@ function sanitizeSessionForCustomer(session: JsonRecord) {
 
 function buildRecoveredOrder(order: JsonRecord, session: JsonRecord) {
   const metadata = getObject(order.metadata);
+  const safeMetadata = { ...metadata };
+  delete safeMetadata.customerActionTokenHash;
+  delete safeMetadata.customer_action_token_hash;
   const customerPhone = normalizePhone(order.customer_phone || metadata.customerPhone || metadata.phone);
   const totalAmount = toMoney(order.total_amount || metadata.totalAmount || metadata.total);
   const paymentStatus = ["paid", "converted"].includes(toText(session.status).toLowerCase())
@@ -630,7 +802,7 @@ function buildRecoveredOrder(order: JsonRecord, session: JsonRecord) {
     orderStatus: toText(metadata.orderStatus || order.status) || "pending_zalo",
     kitchenStatus: toText(order.kitchen_status || metadata.kitchenStatus || metadata.kitchen_status),
     fulfillmentType: toText(metadata.fulfillmentType || metadata.fulfillment_type) || "pickup",
-    paymentMethod: "momo",
+    paymentMethod: toText(order.payment_method || metadata.paymentMethod || metadata.payment_method) || toText(session.provider),
     paymentStatus,
     paymentAmount: toMoney(metadata.paymentAmount || metadata.payment_amount || totalAmount),
     paymentReference: toText(session.payment_reference || metadata.paymentReference || metadata.payment_reference),
@@ -659,6 +831,10 @@ function buildRecoveredOrder(order: JsonRecord, session: JsonRecord) {
     pickupTimeText: toText(metadata.pickupTimeText || metadata.pickup_time_text),
     posShiftId: toText(order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id),
     createdAt: toText(order.created_at || metadata.createdAt || metadata.created_at),
+    cancelledBy: toText(metadata.cancelledBy || metadata.cancelled_by),
+    cancelReason: toText(metadata.cancelReason || metadata.cancel_reason),
+    cancelledAt: toText(metadata.cancelledAt || metadata.cancelled_at),
+    metadata: safeMetadata,
     items: Array.isArray(metadata.items) ? metadata.items : []
   };
 }
@@ -724,6 +900,7 @@ Deno.serve(async (request) => {
 
   if (action === "create") return createSession(serviceClient, payload);
   if (action === "read") return readSession(serviceClient, payload);
+  if (action === "cancel_unpaid") return cancelCustomerUnpaidOrder(request, serviceClient, payload);
   if (action === "recover_momo_return") return recoverMomoReturn(serviceClient, payload);
   return response({ ok: false, message: "Thao tác không được hỗ trợ." }, 400);
 });

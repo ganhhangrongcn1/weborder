@@ -274,7 +274,7 @@ Deno.serve(async (request) => {
     ? new Date(Number(body.responseTime)).toISOString()
     : now;
   const providerTransactionId = toText(body.transId);
-  const { error: paidSessionError } = await supabase.from("pos_payment_sessions").update({
+  const { data: paidSession, error: paidSessionError } = await supabase.from("pos_payment_sessions").update({
     status: "paid",
     amount_paid: paidAmount,
     provider_transaction_id: providerTransactionId || null,
@@ -282,10 +282,56 @@ Deno.serve(async (request) => {
     paid_at: paidAt,
     failure_reason: "",
     updated_at: now
-  }).eq("id", sessionId).in("status", ["pending_payment", "paid", "converting", "converted"]);
+  }).eq("id", sessionId)
+    .in("status", ["pending_payment", "paid", "converting", "converted"])
+    .select("id,status")
+    .maybeSingle();
   if (paidSessionError) {
     await logWebhook(supabase, body, "session_update_failed", sessionId, orderId);
     return jsonResponse({ ok: false, message: paidSessionError.message }, 500);
+  }
+  if (!paidSession) {
+    const latePaymentMetadata = {
+      receivedAfterCancellation: true,
+      amount: paidAmount,
+      transactionId: providerTransactionId,
+      receivedAt: paidAt,
+      provider: "momo"
+    };
+    await supabase.from("pos_payment_sessions").update({
+      amount_paid: paidAmount,
+      provider_transaction_id: providerTransactionId || null,
+      paid_at: paidAt,
+      failure_reason: "payment_received_after_cancel",
+      provider_payload: {
+        ...getObject(session.provider_payload),
+        lastResult: safeIpnResult,
+        latePayment: latePaymentMetadata
+      },
+      updated_at: now
+    }).eq("id", sessionId).in("status", ["cancelled", "expired"]);
+
+    if (orderId) {
+      const { data: cancelledOrder } = await supabase
+        .from("orders")
+        .select("id,metadata")
+        .eq("id", orderId)
+        .maybeSingle();
+      if (cancelledOrder) {
+        await supabase.from("orders").update({
+          metadata: {
+            ...getObject(cancelledOrder.metadata),
+            paymentStatus: "paid_after_cancel",
+            refundStatus: "manual_review",
+            latePayment: latePaymentMetadata
+          },
+          updated_at: now
+        }).eq("id", orderId).eq("status", "cancelled");
+      }
+    }
+
+    await logWebhook(supabase, body, "payment_received_after_cancel", sessionId, orderId);
+    return new Response(null, { status: 204 });
   }
 
   const { data: order, error: orderError } = await supabase

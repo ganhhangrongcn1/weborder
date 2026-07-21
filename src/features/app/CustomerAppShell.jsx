@@ -249,6 +249,7 @@ export default function CustomerAppShell({
     openOptionModalFromHome,
     openCartItemEditor,
     currentOrder,
+    setCurrentOrder,
     branches,
     orderStatus,
     confirmCurrentOrder: confirmCurrentOrder || confirmCurrentOrderAction,

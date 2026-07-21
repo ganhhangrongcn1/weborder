@@ -5,6 +5,10 @@ import { composeMemberLoyaltySnapshot } from "./memberLoyaltySnapshotService.js"
 import { applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 import { validateCheckoutVoucherBeforeOrder } from "./checkoutOrderService.js";
 import { notifyWebOrderWebhook } from "./orderNotificationService.js";
+import {
+  createCustomerOrderActionProof,
+  saveCustomerOrderActionToken
+} from "./customerOrderActionService.js";
 
 function resolveBranchIdentifiers(branchInfo = null, fulfillmentType = "") {
   const branchId = String(
@@ -364,6 +368,9 @@ export async function createOrderAsync(params) {
   const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
   const normalizedPaymentMethod = String(paymentMethod || "").trim().toLowerCase();
   const isPrepaidPayment = ["bank_qr", "momo"].includes(normalizedPaymentMethod);
+  const customerActionProof = isPrepaidPayment
+    ? await createCustomerOrderActionProof()
+    : null;
   const initialOrderStatus = isPrepaidPayment ? "pending_payment" : "preparing";
   const initialKitchenStatus = isPrepaidPayment ? "waiting_payment" : "pending";
   const order = {
@@ -416,6 +423,7 @@ export async function createOrderAsync(params) {
     paymentStatus: isPrepaidPayment ? "unpaid" : "pending",
     paymentReference: isPrepaidPayment ? orderCode : "",
     paymentAmount: totalAmount,
+    customerActionTokenHash: customerActionProof?.tokenHash || "",
     source: orderSource,
     channel: orderSource,
     platform: orderSource,
@@ -424,6 +432,9 @@ export async function createOrderAsync(params) {
   };
 
   const savedOrder = await orderStorage.addOrderAsync(order);
+  if (customerActionProof?.token) {
+    saveCustomerOrderActionToken(savedOrder?.id || savedOrder?.orderCode || orderCode, customerActionProof.token);
+  }
   notifyWebOrderWebhook({ order: savedOrder }).catch((error) => {
     console.warn("[order] web order webhook failed", error);
   });

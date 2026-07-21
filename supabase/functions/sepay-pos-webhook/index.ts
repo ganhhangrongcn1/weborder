@@ -1118,6 +1118,23 @@ Deno.serve(async (request) => {
   }
 
   if (isCancelledOrExpiredOrder(matchedOrder)) {
+    const latePaymentMetadata = {
+      receivedAfterCancellation: true,
+      amount: transferAmount,
+      transactionId: toText(body.id || body.referenceCode || body.code),
+      receivedAt: transactionTime,
+      provider: "sepay"
+    };
+    await supabase.from("orders").update({
+      metadata: {
+        ...getObject(matchedOrder.metadata),
+        paymentStatus: "paid_after_cancel",
+        refundStatus: "manual_review",
+        latePayment: latePaymentMetadata
+      },
+      updated_at: new Date().toISOString()
+    }).eq("id", toText(matchedOrder.id)).eq("status", "cancelled");
+
     await tryInsertWebhookLog(supabase, {
       provider: "sepay",
       webhook_code: webhookCode,

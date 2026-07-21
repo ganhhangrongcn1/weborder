@@ -1098,6 +1098,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
       deliveryAddress: order.delivery_address || "",
       posShiftId: order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id || metadata.shiftId || "",
       createdAt: order.created_at,
+      metadata,
       items: itemMap.get(order.id) || []
     };
     map[phone] = [next, ...(map[phone] || [])];
@@ -1197,6 +1198,7 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
       deliveryAddress: order.delivery_address || "",
       posShiftId: order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id || metadata.shiftId || "",
       createdAt: order.created_at,
+      metadata,
       items: itemMap.get(order.id) || []
     };
   });
