@@ -180,9 +180,11 @@ Deno.serve(async (request) => {
 
     if (!nexposResponse.ok) {
       const responseText = sanitizeError(await nexposResponse.text().catch(() => ""));
-      const isAlreadyReady = nexposResponse.status === 400
-        && responseText.includes("order_not_confirmable")
-        && toText(order.nexpos_status).toUpperCase() === "PICK";
+      const currentNexposStatus = toText(order.nexpos_status).toUpperCase();
+      const isAlreadyReady = nexposResponse.status === 400 && (
+        currentNexposStatus === "FINISH"
+        || (currentNexposStatus === "PICK" && responseText.includes("order_not_confirmable"))
+      );
 
       if (isAlreadyReady) {
         const syncedAt = new Date().toISOString();
