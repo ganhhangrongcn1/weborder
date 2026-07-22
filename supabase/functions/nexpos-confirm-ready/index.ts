@@ -77,7 +77,7 @@ async function loginNexpos(serviceClient: ReturnType<typeof createClient>) {
       "Content-Type": "application/json",
       "x-source": "web"
     },
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify({ email: username, password })
   });
 
   if (!loginResponse.ok) throw new Error(`NexPOS từ chối đăng nhập (${loginResponse.status}).`);
