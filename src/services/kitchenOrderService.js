@@ -106,12 +106,18 @@ const PARTNER_ORDER_COLUMNS = [
   "updated_at",
   "raw_data",
   "nexpos_order_id",
+  "nexpos_hub_id",
   "nexpos_hub_name",
+  "nexpos_site_id",
   "nexpos_site_name",
   "branch_uuid",
   "nexpos_status",
   "kitchen_work_status",
-  "kitchen_done_at"
+  "kitchen_done_at",
+  "nexpos_ready_sync_status",
+  "nexpos_ready_synced_at",
+  "nexpos_ready_sync_attempts",
+  "nexpos_ready_sync_error"
 ].join(",");
 
 const PARTNER_ITEM_COLUMNS = [
@@ -1621,6 +1627,27 @@ export async function markKitchenOrderDone(order = {}) {
 
   if (order.sourceType === KITCHEN_SOURCE.partner) {
     const nextKitchenStatus = action.nextKitchenStatus || "done";
+    if (action.type === "partner_done") {
+      const { data, error } = await client.functions.invoke("nexpos-confirm-ready", {
+        body: { partner_order_id: id }
+      });
+      recordKitchenRequest("confirm partner ready in NexPOS", "nexpos-confirm-ready", "write");
+
+      if (error || !data?.ok) {
+        return {
+          ok: false,
+          message: data?.message || error?.message || "Không thể báo đơn sẵn sàng sang NexPOS."
+        };
+      }
+
+      return {
+        ok: true,
+        nexposSynced: Boolean(data.synced || data.already_synced),
+        warning: data.warning || "",
+        message: data.message || "Đã xác nhận xong đơn đối tác."
+      };
+    }
+
     const { error } = await client
       .from("partner_orders")
       .update({
