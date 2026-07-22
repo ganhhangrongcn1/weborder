@@ -127,7 +127,7 @@ Deno.serve(async (request) => {
 
   const { data: order, error: orderError } = await serviceClient
     .from("partner_orders")
-    .select("id,partner_source,nexpos_order_id,branch_uuid,kitchen_work_status,nexpos_ready_sync_status,nexpos_ready_sync_attempts")
+    .select("id,partner_source,nexpos_order_id,nexpos_status,branch_uuid,kitchen_work_status,nexpos_ready_sync_status,nexpos_ready_sync_attempts")
     .eq("id", partnerOrderId)
     .maybeSingle();
   if (orderError || !order) return response({ ok: false, message: "Không tìm thấy đơn đối tác." }, 404);
@@ -180,6 +180,26 @@ Deno.serve(async (request) => {
 
     if (!nexposResponse.ok) {
       const responseText = sanitizeError(await nexposResponse.text().catch(() => ""));
+      const isAlreadyReady = nexposResponse.status === 400
+        && responseText.includes("order_not_confirmable")
+        && toText(order.nexpos_status).toUpperCase() === "PICK";
+
+      if (isAlreadyReady) {
+        const syncedAt = new Date().toISOString();
+        await serviceClient.from("partner_orders").update({
+          nexpos_ready_sync_status: "success",
+          nexpos_ready_synced_at: syncedAt,
+          nexpos_ready_sync_error: null,
+          updated_at: syncedAt
+        }).eq("id", partnerOrderId);
+
+        return response({
+          ok: true,
+          already_synced: true,
+          message: "Đơn đã ở trạng thái sẵn sàng trên NexPOS/Grab."
+        });
+      }
+
       throw new Error(`NexPOS trả về ${nexposResponse.status}: ${responseText}`);
     }
 
