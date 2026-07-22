@@ -60,20 +60,20 @@ export default function CheckoutFulfillmentSection({
         <div className="fulfillment-tabs">
           <button
             type="button"
+            onClick={handleSelectPickup}
+            aria-pressed={fulfillmentType === "pickup"}
+            className={fulfillmentType === "pickup" ? "active" : ""}
+          >
+            Đến lấy
+          </button>
+          <button
+            type="button"
             onClick={handleSelectDelivery}
             disabled={deliveryLocked}
             aria-pressed={fulfillmentType === "delivery"}
             className={`${fulfillmentType === "delivery" ? "active" : ""} ${deliveryLocked ? "is-unavailable" : ""}`}
           >
             Giao tận nơi
-          </button>
-          <button
-            type="button"
-            onClick={handleSelectPickup}
-            aria-pressed={fulfillmentType === "pickup"}
-            className={fulfillmentType === "pickup" ? "active" : ""}
-          >
-            Đến lấy
           </button>
         </div>
       ) : null}
