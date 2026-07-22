@@ -125,7 +125,7 @@ export default function Home({
   const [activeBanner, setActiveBanner] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [flashModalOpen, setFlashModalOpen] = useState(false);
-  const [homeFulfillment, setHomeFulfillment] = useState(checkoutPreset?.fulfillmentType || "delivery");
+  const [homeFulfillment, setHomeFulfillment] = useState(checkoutPreset?.fulfillmentType || "pickup");
   const [deliveryPlannerOpen, setDeliveryPlannerOpen] = useState(false);
   const [pickupPlannerOpen, setPickupPlannerOpen] = useState(false);
   const [pickupBranch, setPickupBranch] = useState(checkoutPreset?.selectedBranch || "phu-hoa");

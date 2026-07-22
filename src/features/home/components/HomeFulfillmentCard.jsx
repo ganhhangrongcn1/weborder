@@ -11,19 +11,19 @@ export default function HomeFulfillmentCard({
       <div className="pickup-mode-tabs service-tabs" role="group" aria-label="Chọn hình thức nhận món">
         <button
           type="button"
-          onClick={onDelivery}
-          className={homeFulfillment === "delivery" ? "active" : ""}
-          aria-pressed={homeFulfillment === "delivery"}
-        >
-          <span>Giao hàng</span>
-        </button>
-        <button
-          type="button"
           onClick={onPickup}
           className={homeFulfillment === "pickup" ? "active" : ""}
           aria-pressed={homeFulfillment === "pickup"}
         >
           <span>Tự lấy</span>
+        </button>
+        <button
+          type="button"
+          onClick={onDelivery}
+          className={homeFulfillment === "delivery" ? "active" : ""}
+          aria-pressed={homeFulfillment === "delivery"}
+        >
+          <span>Giao hàng</span>
         </button>
       </div>
       <div className="home2026-fulfillment-note">

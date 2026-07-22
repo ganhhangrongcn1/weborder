@@ -48,7 +48,7 @@ export default function useAppCoreState({ normalizeUserProfile, defaultUserProfi
   const [currentOrder, setCurrentOrderState] = useState(() => orderRepository.getCurrentOrder(null));
   const [orderStatus, setOrderStatusState] = useState(() => orderRepository.getCurrentOrder(null)?.status || "confirmed");
   const [checkoutPreset, setCheckoutPresetState] = useState({
-    fulfillmentType: "delivery",
+    fulfillmentType: "pickup",
     selectedBranch: "phu-hoa",
     pickupMode: "soon",
     pickupDate: getTodayInputDate(),
