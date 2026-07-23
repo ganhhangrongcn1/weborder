@@ -429,6 +429,18 @@ Deno.serve(async (request) => {
     converted_at: now,
     updated_at: now
   }).eq("id", sessionId).in("status", ["paid", "converting", "converted"]);
+  if (orderId) {
+    await supabase.from("pos_payment_sessions").update({
+      status: "cancelled",
+      failure_reason: "superseded_by_paid_session",
+      cancelled_at: now,
+      updated_at: now
+    })
+      .eq("provider", "momo")
+      .eq("order_id", orderId)
+      .neq("id", sessionId)
+      .in("status", ["draft", "pending_payment"]);
+  }
   await logWebhook(supabase, body, alreadyPaid ? "already_paid" : "paid_and_sent_to_kitchen", sessionId, orderId);
   return new Response(null, { status: 204 });
 });
