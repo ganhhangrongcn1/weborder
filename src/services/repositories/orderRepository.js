@@ -610,11 +610,12 @@ export const orderRepository = {
       if (remoteWriteConfirmed) {
         const syncedOrder = withOrderSyncStatus(nextOrder, ORDER_SYNC_STATUS.synced);
         if (syncedOrder !== nextOrder) {
-          try {
-            await persistOrderLocalAsync(syncedOrder, key);
-          } catch (localSyncError) {
+          // Supabase is the source of truth at this point. Do not keep the
+          // checkout overlay waiting for browser storage, which can stall in
+          // mobile in-app browsers even though the order is already complete.
+          persistOrderLocalAsync(syncedOrder, key).catch((localSyncError) => {
             console.warn("[orderRepository] order was saved remotely but local sync failed", localSyncError);
-          }
+          });
         }
         removePosOfflineOrder(syncedOrder);
         return syncedOrder;
