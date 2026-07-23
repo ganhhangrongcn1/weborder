@@ -296,6 +296,34 @@ function finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, s
   setCart([]);
 }
 
+function createCustomerOrderIdentity(now = new Date()) {
+  const timestamp = now.getTime();
+  const pad = (value) => String(value).padStart(2, "0");
+  const datePart = [
+    String(now.getFullYear()).slice(-2),
+    pad(now.getMonth() + 1),
+    pad(now.getDate())
+  ].join("");
+  const timePart = [
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds())
+  ].join("");
+  let randomPart = "";
+  try {
+    const randomValues = new Uint16Array(1);
+    globalThis.crypto.getRandomValues(randomValues);
+    randomPart = String(randomValues[0] % 1000).padStart(3, "0");
+  } catch {
+    randomPart = String(Math.floor(Math.random() * 1000)).padStart(3, "0");
+  }
+
+  return {
+    orderCode: `GHR${datePart}${timePart}${randomPart}`,
+    displayOrderCode: `GHR-${String(timestamp).slice(-4)}`
+  };
+}
+
 export async function createOrderAsync(params) {
   const {
     cart,
@@ -339,8 +367,9 @@ export async function createOrderAsync(params) {
   } = params;
 
   if (!Array.isArray(cart) || !cart.length) return null;
-  const orderCode = `GHR-${Date.now().toString().slice(-4)}`;
-  const createdAt = new Date().toISOString();
+  const createdAtDate = new Date();
+  const createdAt = createdAtDate.toISOString();
+  const { orderCode, displayOrderCode } = createCustomerOrderIdentity(createdAtDate);
   const subtotalAmount = Number(
     subtotal ?? cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
   );
@@ -376,6 +405,7 @@ export async function createOrderAsync(params) {
   const order = {
     id: orderCode,
     orderCode,
+    displayOrderCode,
     phone: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
     customerPhoneKey: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
     rawCustomerPhone: deliveryInfo?.phone || userProfile.phone || "",
