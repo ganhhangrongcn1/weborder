@@ -1,5 +1,6 @@
 export const PAID_TOPPING_GROUP_PREFIXES = [
   "Ngon Hơn Khi Ăn Cùng",
+  "Ưu Đãi Khi Mua Kèm",
   "Topping thêm",
   "Thêm kèm"
 ];
