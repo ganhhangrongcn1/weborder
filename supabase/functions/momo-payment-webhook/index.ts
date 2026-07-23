@@ -132,7 +132,7 @@ function buildPreparationTicketText(order: JsonRecord) {
   const items = Array.isArray(order.items) ? order.items : [];
   const lines = [
     "@@CENTER:GANH HANG RONG",
-    "@@CENTER:PHIEU LAM MON",
+    "@@CENTER:PHIẾU LÀM MÓN",
     `@@BIG:${toText(order.displayOrderCode || order.orderCode || order.id || "GHR")}`,
     "------------------------------------------",
     `Chi nhanh: ${toText(order.branchName) || "Ganh Hang Rong"}`,
@@ -193,7 +193,7 @@ async function ensurePrintJob(supabase: ReturnType<typeof createClient>, order: 
     }
   ];
 
-  for (const job of jobs) {
+  for (const [jobIndex, job] of jobs.entries()) {
     const { data: existing } = await supabase
       .from("print_jobs")
       .select("id")
@@ -204,6 +204,7 @@ async function ensurePrintJob(supabase: ReturnType<typeof createClient>, order: 
       .limit(1);
     if (Array.isArray(existing) && existing[0]?.id) continue;
 
+    const jobTime = new Date(Date.now() + jobIndex * 100).toISOString();
     const { error } = await supabase.from("print_jobs").insert({
       branch_uuid: branchUuid,
       printer_key: "cashier-80mm",
@@ -219,9 +220,9 @@ async function ensurePrintJob(supabase: ReturnType<typeof createClient>, order: 
         order: printOrder
       },
       requested_by: "momo_webhook",
-      requested_at: now,
-      created_at: now,
-      updated_at: now
+      requested_at: jobTime,
+      created_at: jobTime,
+      updated_at: jobTime
     });
     if (error) console.error(`[momo-payment-webhook] ${job.sourceType} print job failed`, error.message);
   }

@@ -9,6 +9,7 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
   "pos_payment_momo_qr",
   "pickup_order_payment_qr",
   "delivery_order_payment_qr",
+  "qr_order_preparation",
   "pos_shift_close"
 ]);
 const DEFAULT_RECEIPT_FOOTER_TEXT = [

@@ -17,6 +17,7 @@ const MAX_JOBS_PER_POLL = 3;
 const ALERT_GROUP_WINDOW_MS = 6500;
 const NEW_ORDER_ALERT_GRACE_MS = 900;
 const QR_CUSTOMER_BILL_PRINT_DELAY_MS = 1500;
+const PRINT_RECEIPT_TIMEOUT_MS = 45 * 1000;
 const EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
 const NO_FOOTER_SOURCE_TYPES = new Set([
   "pos_payment_qr",
@@ -413,7 +414,15 @@ async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
     if (printPayload.shouldDelayPrint) {
       await wait(QR_CUSTOMER_BILL_PRINT_DELAY_MS);
     }
-    await printLocalReceipt(printPayload);
+    await Promise.race([
+      printLocalReceipt(printPayload),
+      new Promise((_, reject) => {
+        globalThis.setTimeout(
+          () => reject(new Error("Máy in phản hồi quá lâu. Hãy kiểm tra kết nối rồi bấm in lại.")),
+          PRINT_RECEIPT_TIMEOUT_MS
+        );
+      })
+    ]);
     void alertTask;
     await markPrinted(claimed.id);
     if (typeof onStatus === "function") {
@@ -461,22 +470,29 @@ export async function startPosPrintStation({
   let polling = false;
   let pollTimer = null;
   let appStateSubscription = null;
+  let printQueue = Promise.resolve();
   const processingIds = new Set();
 
   const notify = (status) => {
     if (active && typeof onStatus === "function") onStatus(status);
   };
 
-  const processJob = async (job) => {
-    if (!active || !job?.id || processingIds.has(job.id)) return;
+  const processJob = (job) => {
+    if (!active || !job?.id || processingIds.has(job.id)) return Promise.resolve(false);
     processingIds.add(job.id);
-    try {
-      await processPrintJobOnce(job, safeBranchUuid, safeDeviceId, notify);
-    } catch (error) {
-      notify({ running: true, tone: "error", message: error?.message || "Không in được bill tự động." });
-    } finally {
-      processingIds.delete(job.id);
-    }
+    const queuedJob = printQueue.then(async () => {
+      if (!active) return false;
+      try {
+        return await processPrintJobOnce(job, safeBranchUuid, safeDeviceId, notify);
+      } catch (error) {
+        notify({ running: true, tone: "error", message: error?.message || "Không in được bill tự động." });
+        return false;
+      } finally {
+        processingIds.delete(job.id);
+      }
+    });
+    printQueue = queuedJob.catch(() => false);
+    return queuedJob;
   };
 
   const poll = async () => {

@@ -661,7 +661,7 @@ function buildQrOrderPreparationText(printOrder: JsonRecord) {
   const items = Array.isArray(printOrder.items) ? printOrder.items : [];
   const lines = [
     "@@CENTER:GANH HANG RONG",
-    "@@CENTER:PHIEU LAM MON",
+    "@@CENTER:PHIẾU LÀM MÓN",
     `@@BIG:${toText(printOrder.displayOrderCode || printOrder.orderCode || printOrder.id || "GHR")}`,
     buildReceiptSeparator(width),
     `Chi nhanh: ${toText(printOrder.branchName) || "Ganh Hang Rong"}`,
@@ -718,13 +718,14 @@ async function ensureCustomerBillPrintJob(
   ];
   const results = [];
 
-  for (const job of jobs) {
+  for (const [jobIndex, job] of jobs.entries()) {
     const exists = await hasExistingPrintJob(supabase, orderId, orderCode, job.sourceType);
     if (exists) {
       results.push({ sourceType: job.sourceType, created: false, reason: "already_exists" });
       continue;
     }
 
+    const jobTime = new Date(Date.now() + jobIndex * 100).toISOString();
     const { error } = await supabase
       .from("print_jobs")
       .insert({
@@ -744,9 +745,9 @@ async function ensureCustomerBillPrintJob(
           order: printOrder
         },
         requested_by: "sepay_webhook",
-        requested_at: now,
-        created_at: now,
-        updated_at: now
+        requested_at: jobTime,
+        created_at: jobTime,
+        updated_at: jobTime
       });
     results.push({
       sourceType: job.sourceType,
