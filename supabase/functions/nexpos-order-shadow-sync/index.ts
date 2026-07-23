@@ -53,6 +53,13 @@ function orderIdentity(order: JsonRecord) {
 function orderCode(order: JsonRecord) {
   return toText(order.order_id || order.order_code || order.code || order.display_order_code);
 }
+function normalizedDisplayCode(source: string, rawCode: string) {
+  const digits = rawCode.replace(/\D/g, "");
+  if (source === "grabfood") return `GF-${digits.slice(-3).padStart(3, "0")}`;
+  if (source === "shopeefood") return `SF-${digits.slice(-4).padStart(4, "0")}`;
+  if (source === "xanhngon") return `XN-${digits.slice(-4).padStart(4, "0")}`;
+  return rawCode;
+}
 function orderStatus(order: JsonRecord) {
   return toText(order.status || order.order_status || order.state);
 }
@@ -62,6 +69,44 @@ function orderTime(order: JsonRecord) {
 function orderTotal(order: JsonRecord) {
   const finance = getObject(order.finance_data || order.financeData);
   return toNumber(order.total ?? order.total_amount ?? finance.original_price, 0);
+}
+function financeSnapshot(order: JsonRecord) {
+  const finance = getObject(order.finance_data || order.financeData);
+  return {
+    original_price: toNumber(finance.original_price, 0),
+    sell_price: toNumber(finance.sell_price, 0),
+    gross_received: toNumber(finance.gross_received, 0),
+    net_received: toNumber(finance.real_received ?? finance.net_received, 0),
+    total_promotion_price: toNumber(finance.total_promotion_price, 0),
+    co_fund_promotion_price: toNumber(finance.co_fund_promotion_price, 0),
+    other_promotion_price: toNumber(finance.other_promotion_price, 0),
+    commission: toNumber(finance.commission, 0),
+    commission_tax: toNumber(finance.commission_tax, 0),
+    transaction_fee: toNumber(finance.transaction_fee, 0),
+    tax: toNumber(finance.tax, 0),
+    other_fee: toNumber(finance.other_fee, 0),
+    adjustment_fee: toNumber(finance.adjustment_fee, 0),
+    additional_income: toNumber(finance.additional_income, 0),
+    shipping_discount: toNumber(finance.shipping_discount, 0),
+    shipping_fee: toNumber(finance.shipping_fee ?? order.shipment_fee, 0),
+    total_shipment: toNumber(finance.total_shipment ?? order.total_shipment, 0)
+  };
+}
+function promotionSnapshot(order: JsonRecord, items: JsonRecord[], finance: ReturnType<typeof financeSnapshot>) {
+  const promotions: JsonRecord[] = [];
+  const add = (promotionKey: string, promotionType: string, fundingSource: string, amount: number, rawData: unknown) => {
+    if (Math.abs(amount) < 1) return;
+    promotions.push({ promotion_key: promotionKey, promotion_type: promotionType, funding_source: fundingSource, discount_amount: amount, raw_data: rawData });
+  };
+  add("finance:total_promotion", "order", "mixed_or_unknown", finance.total_promotion_price, getObject(order.finance_data));
+  add("finance:cofund", "order", "platform_cofund", finance.co_fund_promotion_price, getObject(order.finance_data));
+  add("finance:other_promotion", "order", "platform_or_campaign", finance.other_promotion_price, getObject(order.finance_data));
+  items.forEach((item, index) => {
+    add(`item:${index}:discount`, "item", "unknown", toNumber(item.discount, 0), item);
+    add(`item:${index}:platform`, "item", "platform", toNumber(item.platform_discount, 0), item);
+    add(`item:${index}:seller`, "item", "merchant", toNumber(item.seller_discount, 0), item);
+  });
+  return promotions;
 }
 function stableValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stableValue);
@@ -125,6 +170,14 @@ function buildDifferences(shadow: JsonRecord, existing: JsonRecord | undefined) 
   if (Math.abs(toNumber(existing.total_amount) - toNumber(shadow.total_amount)) >= 1) differences.push("total_amount");
   return differences;
 }
+function buildBusinessDifferences(shadow: JsonRecord, existing: JsonRecord | undefined) {
+  if (!existing) return ["missing_in_n8n"];
+  const differences: string[] = [];
+  if (toText(existing.display_order_code || existing.order_code) !== toText(shadow.normalized_display_order_code)) differences.push("display_order_code");
+  if (toText(existing.nexpos_hub_id) !== toText(shadow.nexpos_hub_id)) differences.push("hub_id");
+  if (toText(existing.nexpos_site_id || existing.branch_id) !== toText(shadow.nexpos_site_id)) differences.push("site_id");
+  return differences;
+}
 
 Deno.serve(async (request) => {
   const supabaseUrl = toText(Deno.env.get("SUPABASE_URL"));
@@ -173,7 +226,7 @@ Deno.serve(async (request) => {
 
     const identities = observed.map(orderIdentity);
     const { data: existingRows } = identities.length ? await client.from("partner_orders")
-      .select("id,partner_source,nexpos_order_id,order_code,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount")
+      .select("id,partner_source,nexpos_order_id,order_code,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,payload_version,nexpos_enrichment_hash")
       .in("nexpos_order_id", identities) : { data: [] };
     const existingMap = new Map((existingRows || []).map((row) => [`${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`, row]));
 
@@ -185,30 +238,40 @@ Deno.serve(async (request) => {
       const source = normalizeSource(order.source || order.partner_source || order.platform);
       const identity = orderIdentity(order);
       const items = extractItems(order);
+      const finance = financeSnapshot(order);
+      const promotions = promotionSnapshot(order, items.map(getObject), finance);
+      const normalizedCode = normalizedDisplayCode(source, orderCode(order));
+      const payloadHash = await sha256(order);
       const shadow: JsonRecord = {
         partner_source: source,
         nexpos_order_id: identity,
         display_order_code: orderCode(order),
+        normalized_display_order_code: normalizedCode,
         nexpos_status: orderStatus(order),
         nexpos_hub_id: toText(order.hub_id || order.nexpos_hub_id),
         nexpos_site_id: toText(order.site_id || order.nexpos_site_id),
         order_time: orderTime(order),
         total_amount: orderTotal(order),
         item_count: items.length,
-        payload_hash: await sha256(order),
+        payload_hash: payloadHash,
         raw_data: order,
+        normalized_data: { finance, promotions, items },
         last_seen_at: now,
         updated_at: now
       };
       const existing = existingMap.get(`${source}:${identity}`);
       const differences = buildDifferences(shadow, existing);
       const comparisonStatus = !existing ? "missing_in_n8n" : differences.length ? "mismatch" : "matched";
+      const businessDifferences = buildBusinessDifferences(shadow, existing);
+      const businessComparisonStatus = !existing ? "missing_in_n8n" : businessDifferences.length ? "mismatch" : "matched";
       if (comparisonStatus === "matched") matchedCount += 1;
       else if (comparisonStatus === "mismatch") mismatchCount += 1;
       else missingCount += 1;
       Object.assign(shadow, {
         comparison_status: comparisonStatus,
         comparison_differences: differences,
+        business_comparison_status: businessComparisonStatus,
+        business_comparison_differences: businessDifferences,
         matched_partner_order_id: existing?.id || null,
         last_compared_at: now
       });
@@ -216,6 +279,74 @@ Deno.serve(async (request) => {
         onConflict: "partner_source,nexpos_order_id"
       });
       if (error) throw error;
+
+      if (existing?.id && toText(existing.nexpos_enrichment_hash) !== payloadHash) {
+        const { error: enrichmentError } = await client.from("partner_orders").update({
+          last_nexpos_observed_at: now,
+          payload_version: "n8n-v1+nexpos-shadow-v2",
+          sync_conflict: businessComparisonStatus === "mismatch",
+          nexpos_original_price: finance.original_price,
+          nexpos_sell_price: finance.sell_price,
+          nexpos_gross_received: finance.gross_received,
+          nexpos_net_received: finance.net_received,
+          nexpos_total_promotion: finance.total_promotion_price,
+          nexpos_cofund_promotion: finance.co_fund_promotion_price,
+          nexpos_other_promotion: finance.other_promotion_price,
+          nexpos_commission: finance.commission,
+          nexpos_commission_tax: finance.commission_tax,
+          nexpos_transaction_fee: finance.transaction_fee,
+          nexpos_tax: finance.tax,
+          nexpos_other_fee: finance.other_fee,
+          nexpos_adjustment_fee: finance.adjustment_fee,
+          nexpos_additional_income: finance.additional_income,
+          nexpos_shipping_discount: finance.shipping_discount,
+          nexpos_finance_data: finance,
+          nexpos_promotion_data: promotions
+        }).eq("id", existing.id);
+        if (enrichmentError) throw enrichmentError;
+
+        for (const promotion of promotions) {
+          const { error: promotionError } = await client.from("partner_order_promotions").upsert({
+            partner_order_id: existing.id,
+            ...promotion,
+            updated_at: now
+          }, { onConflict: "partner_order_id,promotion_key" });
+          if (promotionError) throw promotionError;
+        }
+
+        const { data: partnerItems, error: partnerItemsError } = await client.from("partner_order_items")
+          .select("id,line_index").eq("partner_order_id", existing.id);
+        if (partnerItemsError) throw partnerItemsError;
+        if (items.length > 0 && (partnerItems || []).length < items.length) continue;
+
+        const itemRowByIndex = new Map((partnerItems || []).map((item) => [toNumber(item.line_index, -1), item]));
+        for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
+          const item = getObject(items[itemIndex]);
+          const partnerItem = itemRowByIndex.get(itemIndex);
+          if (!partnerItem?.id) continue;
+          const { error: itemError } = await client.from("partner_order_items").update({
+            original_unit_price: toNumber(item.price, 0),
+            discounted_unit_price: toNumber(item.discount_price, 0),
+            item_discount_amount: toNumber(item.discount, 0),
+            platform_discount_amount: toNumber(item.platform_discount, 0),
+            seller_discount_amount: toNumber(item.seller_discount, 0),
+            promotion_data: {
+              discount: toNumber(item.discount, 0),
+              discount_price: toNumber(item.discount_price, 0),
+              platform_discount: toNumber(item.platform_discount, 0),
+              seller_discount: toNumber(item.seller_discount, 0),
+              is_gift: Boolean(item.is_gift)
+            },
+            updated_at: now
+          }).eq("id", partnerItem.id);
+          if (itemError) throw itemError;
+        }
+
+        const { error: hashError } = await client.from("partner_orders").update({
+          nexpos_enrichment_hash: payloadHash
+        }).eq("id", existing.id);
+        if (hashError) throw hashError;
+      }
     }
 
     const finishedAt = new Date().toISOString();

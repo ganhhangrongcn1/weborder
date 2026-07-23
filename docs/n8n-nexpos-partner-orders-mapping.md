@@ -2,6 +2,40 @@
 
 ## Order fields
 
+### Parallel NexPOS enrichment (shadow v2)
+
+During the transition, n8n remains the owner of existing order, status, settlement, and loyalty fields. The Supabase polling function may only enrich additive `nexpos_*` fields and promotion snapshots. It must not overwrite `total_amount`, `net_received_amount`, `points_base_amount`, `order_status`, `kitchen_status`, or `kitchen_work_status`.
+
+Display codes remain compatible with the current Kitchen contract:
+
+```txt
+grabfood   -> GF- + last 3 digits
+shopeefood -> SF- + last 4 digits
+xanhngon   -> XN- + last 4 digits
+```
+
+Identity and idempotency always use `partner_source + nexpos_order_id`; display codes are never keys.
+
+Additional reconciliation fields:
+
+| Supabase column | NexPOS field |
+| --- | --- |
+| `nexpos_original_price` | `finance_data.original_price` |
+| `nexpos_sell_price` | `finance_data.sell_price` |
+| `nexpos_gross_received` | `finance_data.gross_received` |
+| `nexpos_net_received` | `finance_data.real_received`, fallback `finance_data.net_received` |
+| `nexpos_total_promotion` | `finance_data.total_promotion_price` |
+| `nexpos_cofund_promotion` | `finance_data.co_fund_promotion_price` |
+| `nexpos_other_promotion` | `finance_data.other_promotion_price` |
+| `nexpos_commission` | `finance_data.commission` |
+| `nexpos_commission_tax` | `finance_data.commission_tax` |
+| `nexpos_transaction_fee` | `finance_data.transaction_fee` |
+| `nexpos_tax` | `finance_data.tax` |
+| `nexpos_finance_data` | normalized finance snapshot |
+| `nexpos_promotion_data` | normalized order/item discount snapshot |
+
+Item enrichment is additive: `original_unit_price`, `discounted_unit_price`, `item_discount_amount`, `platform_discount_amount`, `seller_discount_amount`, and `promotion_data`. Explicit voucher/campaign codes remain null when NexPOS does not expose them.
+
 | Supabase column | NexPOS field | Note |
 | --- | --- | --- |
 | `order_code` | `order_id` | Use `order_id` first. Example `GF-054`, `20056-494832040`. |
