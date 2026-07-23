@@ -40,6 +40,7 @@ export default function CheckoutPricingSection({
   setIsDeliveryFeeModalOpen,
   isRegisteredCustomer = false,
   isQrCounterOrder = false,
+  webBankQrEnabled = false,
   paymentMethod = "COD",
   setPaymentMethod
 }) {
@@ -195,20 +196,22 @@ export default function CheckoutPricingSection({
               </span>
               {isMomoSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
             </button>
-            <button
-              type="button"
-              onClick={() => setPaymentMethod?.("bank_qr")}
-              className={`payment-card${isBankQrSelected ? " active" : ""}`}
-              aria-label="Phương thức thanh toán: QR ngân hàng"
-              aria-pressed={isBankQrSelected}
-            >
-              <Icon name="qr" size={18} />
-              <span>
-                <strong>QR ngân hàng</strong>
-                <small>Quét mã bằng ứng dụng ngân hàng</small>
-              </span>
-              {isBankQrSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
-            </button>
+            {webBankQrEnabled ? (
+              <button
+                type="button"
+                onClick={() => setPaymentMethod?.("bank_qr")}
+                className={`payment-card${isBankQrSelected ? " active" : ""}`}
+                aria-label="Phương thức thanh toán: QR ngân hàng"
+                aria-pressed={isBankQrSelected}
+              >
+                <Icon name="qr" size={18} />
+                <span>
+                  <strong>QR ngân hàng</strong>
+                  <small>Quét mã bằng ứng dụng ngân hàng</small>
+                </span>
+                {isBankQrSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setPaymentMethod?.("counter")}

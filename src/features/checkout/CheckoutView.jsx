@@ -280,6 +280,13 @@ export default function Checkout({
   );
 
   const selectedBranchInfo = pickupBranches.find((branch) => branch.id === selectedBranch) || pickupBranches[0] || null;
+  const webBankQrEnabled = selectedBranchInfo?.paymentSettings?.webBankQrEnabled === true;
+
+  useEffect(() => {
+    if (!webBankQrEnabled && paymentMethod === "bank_qr") {
+      setPaymentMethod("momo");
+    }
+  }, [paymentMethod, webBankQrEnabled]);
   const pickupTimeText = isQrCounterOrder
     ? "Đặt liền tại quầy"
     : pickupMode === "soon"
@@ -640,6 +647,7 @@ export default function Checkout({
           setIsDeliveryFeeModalOpen={setIsDeliveryFeeModalOpen}
           isRegisteredCustomer={isRegisteredCustomer}
           isQrCounterOrder={isQrCounterOrder}
+          webBankQrEnabled={webBankQrEnabled}
           paymentMethod={paymentMethod}
           setPaymentMethod={setPaymentMethod}
         />

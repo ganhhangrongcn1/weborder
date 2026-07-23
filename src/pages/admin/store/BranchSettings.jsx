@@ -255,7 +255,7 @@ export default function BranchSettings({
               ...item,
               paymentSettings: {
                 ...(item?.paymentSettings && typeof item.paymentSettings === "object" ? item.paymentSettings : {}),
-                [field]: String(value || "").trim()
+                [field]: typeof value === "boolean" ? value : String(value || "").trim()
               }
             }
           : item
@@ -566,6 +566,23 @@ export default function BranchSettings({
 
                     <div className="admin-branch-subcard admin-branch-payment-card">
                       <span className="text-xs font-semibold text-brown/70">Tài khoản nhận chuyển khoản POS</span>
+                      <label className="admin-branch-field-card admin-branch-toggle-field">
+                        <span>
+                          <strong className="block text-xs font-semibold text-brown/80">
+                            Cho phép QR ngân hàng trên website
+                          </strong>
+                          <small className="mt-1 block text-[11px] text-brown/60">
+                            Tắt mục này chỉ ẩn QR ngân hàng với khách đặt trên website. POS vẫn dùng QR ngân hàng bình thường.
+                          </small>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={paymentSettings.webBankQrEnabled === true}
+                          onChange={(event) => updateBranchPaymentField(branch.id, "webBankQrEnabled", event.target.checked)}
+                          className="toggle-input"
+                          aria-label={`Cho phép QR ngân hàng trên website tại ${String(branch?.name || "chi nhánh")}`}
+                        />
+                      </label>
                       <div className="admin-edit-fields admin-branch-top-grid">
                         <label className="admin-branch-field-card admin-branch-select-field">
                           <span className="text-xs font-semibold text-brown/70">Kiểu QR POS</span>
