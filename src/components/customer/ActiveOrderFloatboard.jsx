@@ -57,7 +57,7 @@ export default function ActiveOrderFloatboard({
   const isAwaitingPayment = journey.statusKey === "awaiting_payment";
   const isReadyForPickup = journey.statusKey === "ready" && journey.pickupLike;
   const isScheduledPickup = journey.statusKey === "scheduled";
-  const orderCode = String(order.orderCode || order.order_code || order.id || "Đơn đang xử lý");
+  const orderCode = String(order.displayOrderCode || order.display_order_code || order.orderCode || order.order_code || order.id || "Đơn đang xử lý");
   const iconName = getJourneyIcon(journey);
 
   if (collapsed) {

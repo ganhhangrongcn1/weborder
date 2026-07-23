@@ -412,7 +412,8 @@ export default function Tracking({
 
   const getDisplayOrderCode = (order) => {
     if (order?.sourceType === "partner") return order.displayOrderCode || order.orderCode || "FoodApp";
-    return canViewFullOrderCode ? order.orderCode : maskOrderCode(order.orderCode);
+    const customerCode = order?.displayOrderCode || order?.orderCode || order?.id || "Đơn hàng";
+    return canViewFullOrderCode ? customerCode : maskOrderCode(customerCode);
   };
 
   const getOrderTotal = (order) => Number(order?.totalAmount || order?.total || 0);

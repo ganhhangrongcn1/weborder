@@ -73,7 +73,9 @@ export default function OrderStatusSheet({
   const branchName = getCanonicalOrderBranchName(order, branches);
   const displayOrderCode = isPartnerOrder
     ? order.displayOrderCode || order.orderCode || "FoodApp"
-    : canViewFullOrderCode ? order.orderCode : maskOrderCode(order.orderCode);
+    : canViewFullOrderCode
+      ? order.displayOrderCode || order.orderCode
+      : maskOrderCode(order.displayOrderCode || order.orderCode);
   const sheet = (
     <CustomerBottomSheet
       ariaLabel="Trạng thái đơn hàng"

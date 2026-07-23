@@ -7,7 +7,7 @@ export default function ActiveOrderJourneySheet({ order, onClose, onOpenOrders }
   if (!order) return null;
 
   const journey = getCustomerOrderJourney(order);
-  const orderCode = String(order.orderCode || order.order_code || order.id || "Đơn hàng");
+  const orderCode = String(order.displayOrderCode || order.display_order_code || order.orderCode || order.order_code || order.id || "Đơn hàng");
   const statusIcon = journey.statusKey === "ready"
     ? "check"
     : journey.statusKey === "awaiting_payment"

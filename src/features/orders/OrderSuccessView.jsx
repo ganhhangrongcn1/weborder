@@ -91,7 +91,7 @@ export default function OrderSuccess({
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [cancelOrderMessage, setCancelOrderMessage] = useState("");
   const [isOrderRecoveryGraceActive, setIsOrderRecoveryGraceActive] = useState(() => !order);
-  const orderCode = order?.orderCode || order?.id || "Đơn mới";
+  const orderCode = order?.displayOrderCode || order?.orderCode || order?.id || "Đơn mới";
   const itemCount = getOrderItemsCount(order);
   const orderTotal = getOrderTotal(order);
   const fulfillmentText = getFulfillmentText(order);
