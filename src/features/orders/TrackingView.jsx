@@ -29,6 +29,8 @@ import {
   resolveOrderPointStatus
 } from "../../services/loyaltyLedgerUtils.js";
 import useGuestOrderLookup from "./hooks/useGuestOrderLookup.js";
+import useCheckinPromoConfig from "./hooks/useCheckinPromoConfig.js";
+import CheckinPromoCard from "./components/CheckinPromoCard.jsx";
 import {
   cancelCustomerUnpaidOrder,
   prepareOrderForPaymentResume
@@ -151,6 +153,7 @@ export default function Tracking({
   });
   const [currentOrderPointStatusMap, setCurrentOrderPointStatusMap] = useState(() => new Map());
   const guestLookup = useGuestOrderLookup();
+  const checkinPromo = useCheckinPromoConfig();
   const canAccessFullOrderHistory = Boolean(
     currentPhone && (!requiresCustomerAuthSession || hasCustomerAuthSession)
   );
@@ -749,6 +752,17 @@ export default function Tracking({
               </div>
             ) : null}
           </CustomerCard>
+        ) : null}
+
+        {checkinPromo.enabled ? (
+          <CheckinPromoCard
+            dailyPoints={checkinPromo.dailyPoints}
+            cyclePoints={checkinPromo.cyclePoints}
+            onClick={() => navigate(
+              canAccessFullOrderHistory ? "loyalty" : "account",
+              canAccessFullOrderHistory ? "rewards" : "account"
+            )}
+          />
         ) : null}
 
         {canAccessFullOrderHistory ? (
