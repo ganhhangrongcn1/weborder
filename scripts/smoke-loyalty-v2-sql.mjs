@@ -95,6 +95,18 @@ const LOYALTY_VOUCHER_USAGE_SYNC_FILE = path.join(
   "migrations",
   "20260703131554_sync_loyalty_voucher_usage_from_orders.sql",
 );
+const CHECKIN_30_DAY_CYCLE_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260723013433_loyalty_checkin_30_day_cycle.sql",
+);
+const CHECKIN_ENABLED_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260723014215_enforce_loyalty_checkin_enabled.sql",
+);
 
 const assertIncludes = (content, expected, message) => {
   if (!content.includes(expected)) {
@@ -102,7 +114,7 @@ const assertIncludes = (content, expected, message) => {
   }
 };
 
-const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper, orderVoucherValidation, loyaltyVoucherValidity, loyaltyVoucherUsageSync] = await Promise.all([
+const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper, orderVoucherValidation, loyaltyVoucherValidity, loyaltyVoucherUsageSync, checkin30DayCycle, checkinEnabled] = await Promise.all([
   readFile(FOUNDATION_FILE, "utf8"),
   readFile(AUDIT_FILE, "utf8"),
   readFile(POSTCHECK_FILE, "utf8"),
@@ -120,6 +132,8 @@ const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived,
   readFile(ORDER_VOUCHER_VALIDATION_FILE, "utf8"),
   readFile(LOYALTY_VOUCHER_VALIDITY_FILE, "utf8"),
   readFile(LOYALTY_VOUCHER_USAGE_SYNC_FILE, "utf8"),
+  readFile(CHECKIN_30_DAY_CYCLE_FILE, "utf8"),
+  readFile(CHECKIN_ENABLED_FILE, "utf8"),
 ]);
 
 assertIncludes(foundation, "begin;", "Foundation migration must be transactional");
@@ -474,5 +488,14 @@ assertIncludes(
   "update public.loyalty_accounts as la",
   "Existing wallet vouchers must be backfilled from orders",
 );
+assertIncludes(checkin30DayCycle, "checkin_streak >= 30", "Check-in must restart after day 30");
+assertIncludes(checkin30DayCycle, "'checkinDailyPoints', 1000", "Daily check-in must award 1,000 points");
+assertIncludes(
+  checkin30DayCycle,
+  "jsonb_build_object('7', 5000, '15', 10000, '30', 15000)",
+  "Check-in milestone rewards must use days 7, 15 and 30",
+);
+assertIncludes(checkinEnabled, "source_config ->> 'checkinEnabled'", "Check-in toggle must be read from the active rule");
+assertIncludes(checkinEnabled, "if not found or not v_checkin_enabled", "Disabled check-in must be rejected by the database");
 
 console.log("Loyalty V2 SQL smoke test passed.");

@@ -76,14 +76,14 @@ export const DEFAULT_LOYALTY_PROGRAM_CONFIG = {
   tierCycleMonths: 12,
   tierCycleMode: "CALENDAR_YEAR",
   checkinEnabled: true,
-  checkinDailyPoints: 100,
+  checkinDailyPoints: 1000,
   welcomeVoucherEnabled: false,
   welcomeVoucherId: "",
   welcomeVoucherValidityDays: 7,
   streakRewards: {
-    7: 700,
-    14: 1500,
-    30: 3000
+    7: 5000,
+    15: 10000,
+    30: 15000
   },
   tiers: DEFAULT_LOYALTY_TIERS
 };
@@ -184,7 +184,7 @@ export function normalizeLoyaltyProgramConfig(config = {}) {
     ),
     streakRewards: {
       7: nonNegativeInteger(incomingStreakRewards?.[7], DEFAULT_LOYALTY_PROGRAM_CONFIG.streakRewards[7]),
-      14: nonNegativeInteger(incomingStreakRewards?.[14], DEFAULT_LOYALTY_PROGRAM_CONFIG.streakRewards[14]),
+      15: nonNegativeInteger(incomingStreakRewards?.[15], DEFAULT_LOYALTY_PROGRAM_CONFIG.streakRewards[15]),
       30: nonNegativeInteger(incomingStreakRewards?.[30], DEFAULT_LOYALTY_PROGRAM_CONFIG.streakRewards[30])
     },
     tiers: sortedTiers,

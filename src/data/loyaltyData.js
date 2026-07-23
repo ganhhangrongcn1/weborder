@@ -1,13 +1,13 @@
 export const loyaltyMilestoneDefaults = [
-  { id: "milestone-79k", days: 7, points: 700 },
-  { id: "milestone-freeship", freeshipBased: true, minDays: 8, divisor: 20000, points: 1500 },
-  { id: "milestone-secret", days: 30, points: 3000 }
+  { id: "milestone-7", days: 7, points: 5000 },
+  { id: "milestone-15", days: 15, points: 10000 },
+  { id: "milestone-30", days: 30, points: 15000 }
 ];
 
 export const loyaltyBonusDisplay = [
-  { days: 7, points: 700 },
-  { days: 14, points: 1500 },
-  { days: 30, points: 3000 }
+  { days: 7, points: 5000 },
+  { days: 15, points: 10000 },
+  { days: 30, points: 15000 }
 ];
 
 export const loyaltyRulesRows = [

@@ -1136,7 +1136,7 @@ export default function CustomerCRM({
           .filter((item) => ["ORDER_EARN", "PARTNER_ORDER_EARN"].includes(String(item?.type || "").toUpperCase()))
           .reduce((sum, item) => sum + Number(item?.points || 0), 0);
         const checkin = rows
-          .filter((item) => ["CHECKIN", "MILESTONE"].includes(String(item?.type || "").toUpperCase()))
+          .filter((item) => ["CHECKIN", "CHECKIN_V2", "MILESTONE"].includes(String(item?.type || "").toUpperCase()))
           .reduce((sum, item) => sum + Number(item?.points || 0), 0);
         const spend = Math.abs(
           rows

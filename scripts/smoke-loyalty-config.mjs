@@ -99,6 +99,17 @@ async function run() {
 
   const defaultRule = service.getLoyaltyRule();
   assert(defaultRule.currencyPerPoint === 100, "default currencyPerPoint mismatch");
+  assert(defaultRule.checkinDailyPoints === 1000, "default daily check-in points mismatch");
+  assert(defaultRule.streakRewards[7] === 5000, "day 7 check-in milestone mismatch");
+  assert(defaultRule.streakRewards[15] === 10000, "day 15 check-in milestone mismatch");
+  assert(defaultRule.streakRewards[30] === 15000, "day 30 check-in milestone mismatch");
+  assert(
+    defaultRule.checkinDailyPoints * 30
+      + defaultRule.streakRewards[7]
+      + defaultRule.streakRewards[15]
+      + defaultRule.streakRewards[30] === 60000,
+    "complete 30-day check-in cycle must award 60,000 points"
+  );
 
   const savedRule = await service.saveLoyaltyRuleAsync({ currencyPerPoint: 2000, pointPerUnit: 2 });
   assert(savedRule.currencyPerPoint === 2000, "save async rule failed");
@@ -110,7 +121,7 @@ async function run() {
   assert(Array.isArray(rows) && rows.length > 0, "rules rows missing");
 
   const milestones = await service.getLoyaltyMilestonesAsync();
-  assert(Array.isArray(milestones) && milestones.some((item) => item.id === "milestone-79k"), "milestones missing");
+  assert(Array.isArray(milestones) && milestones.some((item) => item.id === "milestone-15"), "milestones missing");
 
   console.log("Loyalty config smoke test passed.");
 }

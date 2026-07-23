@@ -57,11 +57,11 @@ export function createLoyaltyConfigService(repository = createLoyaltyConfigRepos
       return repository.get(LOYALTY_RULE_KEY, {
         currencyPerPoint: 100,
         pointPerUnit: 10,
-        checkinDailyPoints: 100,
+        checkinDailyPoints: 1000,
         streakRewards: {
-          7: 700,
-          14: 1500,
-          30: 3000
+          7: 5000,
+          15: 10000,
+          30: 15000
         },
         redeemPointUnit: 1,
         redeemValue: 1
@@ -104,11 +104,11 @@ export function createLoyaltyConfigService(repository = createLoyaltyConfigRepos
     getLoyaltyRuleAsync: async () => repository.getAsync(LOYALTY_RULE_KEY, {
       currencyPerPoint: 100,
       pointPerUnit: 10,
-      checkinDailyPoints: 100,
+      checkinDailyPoints: 1000,
       streakRewards: {
-        7: 700,
-        14: 1500,
-        30: 3000
+        7: 5000,
+        15: 10000,
+        30: 15000
       },
       redeemPointUnit: 1,
       redeemValue: 1

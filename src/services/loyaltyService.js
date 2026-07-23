@@ -62,8 +62,8 @@ export function getLoyaltyRuleConfig() {
   return loyaltyRepository.getCrmConfig({
     currencyPerPoint: 100,
     pointPerUnit: 10,
-    checkinDailyPoints: 100,
-    streakRewards: { 7: 700, 14: 1500, 30: 3000 },
+    checkinDailyPoints: 1000,
+    streakRewards: { 7: 5000, 15: 10000, 30: 15000 },
     redeemPointUnit: 1,
     redeemValue: 1,
     maxRedemptionPercent: 50
@@ -74,8 +74,8 @@ export async function getLoyaltyRuleConfigAsync() {
   return loyaltyRepository.getCrmConfigAsync({
     currencyPerPoint: 100,
     pointPerUnit: 10,
-    checkinDailyPoints: 100,
-    streakRewards: { 7: 700, 14: 1500, 30: 3000 },
+    checkinDailyPoints: 1000,
+    streakRewards: { 7: 5000, 15: 10000, 30: 15000 },
     redeemPointUnit: 1,
     redeemValue: 1,
     maxRedemptionPercent: 50

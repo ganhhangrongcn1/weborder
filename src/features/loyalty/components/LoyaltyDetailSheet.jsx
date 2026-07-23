@@ -58,6 +58,7 @@ export default function LoyaltyDetailSheet({
   onClose,
   journey,
   loyalty,
+  loyaltyRule,
   today,
   recentDays,
   vouchers,
@@ -77,7 +78,7 @@ export default function LoyaltyDetailSheet({
     >
       {activeSheet === "tiers" ? <TierJourneyCard journey={journey} /> : null}
       {activeSheet === "checkin" ? (
-        <CheckinDetails loyalty={loyalty} today={today} recentDays={recentDays} />
+        <CheckinDetails loyalty={loyalty} loyaltyRule={loyaltyRule} today={today} recentDays={recentDays} />
       ) : null}
       {activeSheet === "rules" ? (
         <PointsCard rows={pointRulesRows} example={pointRulesExample} showTitle={false} />

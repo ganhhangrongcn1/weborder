@@ -50,6 +50,7 @@ export default function MemberLoyaltyView({
   setLuckyVoucher,
   today,
   checkedInToday,
+  checkinEnabled,
   comebackStreak,
   comebackActive,
   checkinReward,
@@ -186,20 +187,22 @@ export default function MemberLoyaltyView({
           </div>
         </section>
 
-        <CheckinCard
-          loyalty={loyalty}
-          today={today}
-          checkedInToday={checkedInToday}
-          comebackStreak={comebackStreak}
-          comebackActive={comebackActive}
-          checkinReward={checkinReward}
-          nextMilestone={nextMilestone}
-          progressPercent={progressPercent}
-          handleCheckin={handleCheckin}
-          onOpenDetails={() => setActiveSheet("checkin")}
-          canCheckin={canCheckin}
-          checkinAuthNotice={checkinAuthNotice}
-        />
+        {checkinEnabled ? (
+          <CheckinCard
+            loyalty={loyalty}
+            today={today}
+            checkedInToday={checkedInToday}
+            comebackStreak={comebackStreak}
+            comebackActive={comebackActive}
+            checkinReward={checkinReward}
+            nextMilestone={nextMilestone}
+            progressPercent={progressPercent}
+            handleCheckin={handleCheckin}
+            onOpenDetails={() => setActiveSheet("checkin")}
+            canCheckin={canCheckin}
+            checkinAuthNotice={checkinAuthNotice}
+          />
+        ) : null}
 
         <CustomerCard className="loyalty-action-list" padding="none">
           <ActionRow
@@ -223,6 +226,7 @@ export default function MemberLoyaltyView({
         onClose={() => setActiveSheet("")}
         journey={tierJourney}
         loyalty={loyalty}
+        loyaltyRule={loyaltyRule}
         today={today}
         recentDays={recentDays}
         vouchers={safeVoucherHistory}

@@ -430,7 +430,7 @@ export default function LoyaltySettings({
           </label>
           <div className="admin-loyalty-checkin-badges">
             <span>Mỗi ngày: {config.checkinDailyPoints.toLocaleString("vi-VN")} điểm</span>
-            <span>Chuỗi 7 / 14 / 30 ngày</span>
+            <span>Chuỗi 7 / 15 / 30 ngày</span>
           </div>
         </div>
         <div className="admin-loyalty-checkin-grid">
@@ -446,7 +446,7 @@ export default function LoyaltySettings({
               })}
             />
           </label>
-          {[7, 14, 30].map((day) => (
+          {[7, 15, 30].map((day) => (
             <label className="admin-loyalty-field" key={day}>
               <span>Chuỗi {day} ngày</span>
               <AdminInput

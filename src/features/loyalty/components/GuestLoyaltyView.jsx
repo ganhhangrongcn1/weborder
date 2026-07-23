@@ -10,7 +10,7 @@ import {
   getLoyaltyTierIconSymbol
 } from "../../../services/loyaltyProgramConfigService.js";
 
-export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyaltyRule }) {
+export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
   const loyaltyText = getLoyaltyText();
   const [showRules, setShowRules] = useState(false);
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
@@ -37,9 +37,17 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyalt
     { label: "Dùng điểm", value: `1 điểm = 1đ, tối đa ${maxRedemptionPercent}%` },
     { label: "Hạn điểm", value: "12 tháng từ lần mua cuối" }
   ];
-  const safeBonusDisplay = Array.isArray(loyaltyBonusDisplay) ? loyaltyBonusDisplay : [];
+  const safeBonusDisplay = Object.entries(loyaltyRule?.streakRewards || {})
+    .map(([days, points]) => ({
+      days: Math.max(1, Math.floor(Number(days || 0))),
+      points: Math.max(0, Math.floor(Number(points || 0)))
+    }))
+    .filter((reward) => reward.days > 0 && reward.points > 0)
+    .sort((a, b) => a.days - b.days);
   const tiers = Array.isArray(loyaltyRule?.tiers) ? loyaltyRule.tiers.filter((tier) => tier.enabled !== false) : [];
   const firstMilestone = safeBonusDisplay[0];
+  const checkinEnabled = loyaltyRule?.checkinEnabled !== false
+    && Number(loyaltyRule?.checkinDailyPoints || 0) > 0;
   const openAccount = () => navigate("account", "account");
 
   return (
@@ -80,10 +88,12 @@ export default function GuestLoyaltyView({ navigate, loyaltyBonusDisplay, loyalt
               <span className="is-green"><Icon name="gift" size={17} /></span>
               <p><strong>Quà tự đến khi lên hạng</strong><small>Voucher được tặng đúng mốc, không cần săn mã</small></p>
             </div>
-            <div>
-              <span className="is-yellow"><Icon name="clock" size={17} /></span>
-              <p><strong>Ghé mỗi ngày, nhận thêm điểm</strong><small>{firstMilestone ? `${firstMilestone.days} ngày liên tiếp nhận +${firstMilestone.points} điểm` : "Điểm danh để giữ chuỗi vui"}</small></p>
-            </div>
+            {checkinEnabled ? (
+              <div>
+                <span className="is-yellow"><Icon name="clock" size={17} /></span>
+                <p><strong>Ghé mỗi ngày, nhận thêm điểm</strong><small>{firstMilestone ? `${firstMilestone.days} ngày liên tiếp nhận +${firstMilestone.points} điểm` : "Điểm danh để giữ chuỗi vui"}</small></p>
+              </div>
+            ) : null}
           </div>
         </CustomerCard>
 

@@ -1,6 +1,16 @@
 import Icon from "../../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
-import { getLoyaltyBonusDisplay, getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+import { getLoyaltyText } from "../../../services/loyaltyConfigService.js";
+
+function getConfiguredCheckinRewards(loyaltyRule = {}) {
+  return Object.entries(loyaltyRule?.streakRewards || {})
+    .map(([days, points]) => ({
+      days: Math.max(1, Math.floor(Number(days || 0))),
+      points: Math.max(0, Math.floor(Number(points || 0)))
+    }))
+    .filter((reward) => reward.days > 0 && reward.points > 0)
+    .sort((a, b) => a.days - b.days);
+}
 
 function formatCheckinDate(dateKey = "") {
   const [, month = "", day = ""] = String(dateKey || "").split("-");
@@ -90,9 +100,10 @@ export default function CheckinCard({
   );
 }
 
-export function CheckinDetails({ loyalty, today, recentDays }) {
+export function CheckinDetails({ loyalty, loyaltyRule, today, recentDays }) {
   const loyaltyText = getLoyaltyText();
-  const loyaltyBonusDisplay = getLoyaltyBonusDisplay();
+  const loyaltyBonusDisplay = getConfiguredCheckinRewards(loyaltyRule);
+  const receivedRewards = Array.isArray(loyalty?.rewardHistory) ? loyalty.rewardHistory : [];
 
   return (
     <div className="loyalty-checkin-details">
@@ -100,7 +111,7 @@ export function CheckinDetails({ loyalty, today, recentDays }) {
         <h3>Quà theo chuỗi điểm danh</h3>
         <div className="checkin-bonus-grid">
           {loyaltyBonusDisplay.map((reward) => {
-            const received = loyalty.rewardHistory.includes(`milestone-${reward.days}`);
+            const received = receivedRewards.includes(`milestone-${reward.days}`);
             const missing = Math.max(reward.days - loyalty.checkinStreak, 0);
 
             return (

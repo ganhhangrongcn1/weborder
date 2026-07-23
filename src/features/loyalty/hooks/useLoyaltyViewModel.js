@@ -14,11 +14,11 @@ import {
 const DEFAULT_LOYALTY_RULE = {
   currencyPerPoint: 100,
   pointPerUnit: 10,
-  checkinDailyPoints: 100,
+  checkinDailyPoints: 1000,
   streakRewards: {
-    7: 700,
-    14: 1500,
-    30: 3000
+    7: 5000,
+    15: 10000,
+    30: 15000
   },
   redeemPointUnit: 1,
   redeemValue: 1,
@@ -27,7 +27,7 @@ const DEFAULT_LOYALTY_RULE = {
 
 function getStreakRewards(loyaltyRule) {
   const source = loyaltyRule?.streakRewards || {};
-  const rows = [7, 14, 30]
+  const rows = [7, 15, 30]
     .map((days) => ({
       id: `milestone-${days}`,
       days,
@@ -36,14 +36,15 @@ function getStreakRewards(loyaltyRule) {
     .filter((item) => item.points > 0)
     .sort((a, b) => a.days - b.days);
   return rows.length ? rows : [
-    { id: "milestone-7", days: 7, points: 700 },
-    { id: "milestone-14", days: 14, points: 1500 },
-    { id: "milestone-30", days: 30, points: 3000 }
+    { id: "milestone-7", days: 7, points: 5000 },
+    { id: "milestone-15", days: 15, points: 10000 },
+    { id: "milestone-30", days: 30, points: 15000 }
   ];
 }
 
 function getDailyRewardByRule(loyaltyRule) {
-  return Math.max(1, Number(loyaltyRule?.checkinDailyPoints || 100));
+  const configuredPoints = Number(loyaltyRule?.checkinDailyPoints ?? 0);
+  return Number.isFinite(configuredPoints) ? Math.max(0, configuredPoints) : 0;
 }
 
 function getNextMilestoneByRule(streak, loyaltyRule) {
@@ -167,6 +168,7 @@ export default function useLoyaltyViewModel({
   }, [currentPhone, userProfile?.checkinStreak, userProfile?.points]);
 
   const today = getTodayKey();
+  const checkinEnabled = loyaltyRule?.checkinEnabled !== false && getDailyRewardByRule(loyaltyRule) > 0;
   const checkedInToday = loyalty.lastCheckinDate === today;
   const streakWillBreak = loyalty.lastCheckinDate && loyalty.lastCheckinDate !== today && !isYesterday(loyalty.lastCheckinDate);
   const comebackStreak = streakWillBreak ? loyalty.checkinStreak : loyalty.lastMissedStreak;
@@ -200,7 +202,7 @@ export default function useLoyaltyViewModel({
   }
 
   async function handleCheckin() {
-    if (checkedInToday) return;
+    if (!checkinEnabled || checkedInToday) return;
     const canUseLocalMemberCheckin = Boolean(currentPhone || isRegisteredCustomer);
     const shouldUseProtectedCheckin = Boolean(currentPhone) && requiresCustomerAuthSession;
     if (shouldUseProtectedCheckin && !hasCustomerAuthSession) {
@@ -209,9 +211,14 @@ export default function useLoyaltyViewModel({
     }
     if (!canUseLocalMemberCheckin && !shouldUseProtectedCheckin) return;
     const brokeChain = loyalty.lastCheckinDate && !isYesterday(loyalty.lastCheckinDate);
-    const baseRewardHistory = brokeChain ? [] : loyalty.rewardHistory;
+    const completedCycle = isYesterday(loyalty.lastCheckinDate) && loyalty.checkinStreak >= 30;
+    const baseRewardHistory = brokeChain || completedCycle ? [] : loyalty.rewardHistory;
     const missedStreak = brokeChain ? loyalty.checkinStreak : loyalty.lastMissedStreak;
-    const newStreak = brokeChain ? 1 : isYesterday(loyalty.lastCheckinDate) ? loyalty.checkinStreak + 1 : 1;
+    const newStreak = brokeChain || completedCycle
+      ? 1
+      : isYesterday(loyalty.lastCheckinDate)
+        ? loyalty.checkinStreak + 1
+        : 1;
     const basePoints = getDailyRewardByRule(loyaltyRule);
     const useComeback = missedStreak >= 3 && loyalty.comebackUsedDate !== today;
     const checkinPoints = useComeback ? basePoints * 2 : basePoints;
@@ -319,6 +326,7 @@ export default function useLoyaltyViewModel({
     setLuckyVoucher,
     today,
     checkedInToday,
+    checkinEnabled,
     comebackStreak,
     comebackActive,
     checkinReward,

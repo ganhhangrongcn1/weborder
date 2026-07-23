@@ -13,7 +13,7 @@ function createRuleActivationIdempotencyKey() {
 function normalizeStreakRewards(streakRewards = {}) {
   return {
     7: Math.max(0, Math.floor(Number(streakRewards?.[7] ?? streakRewards?.["7"] ?? 0))),
-    14: Math.max(0, Math.floor(Number(streakRewards?.[14] ?? streakRewards?.["14"] ?? 0))),
+    15: Math.max(0, Math.floor(Number(streakRewards?.[15] ?? streakRewards?.["15"] ?? 0))),
     30: Math.max(0, Math.floor(Number(streakRewards?.[30] ?? streakRewards?.["30"] ?? 0)))
   };
 }

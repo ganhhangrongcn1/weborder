@@ -583,6 +583,29 @@ function previousDateKey(dateKey) {
   return base.toISOString().slice(0, 10);
 }
 
+function getCheckinCycleRewardHistory(pointHistory = [], lastCheckinDate = "", checkinStreak = 0) {
+  const normalizedLastDate = normalizeDateKey(lastCheckinDate);
+  const safeStreak = Math.max(0, Math.floor(Number(checkinStreak || 0)));
+  if (!normalizedLastDate || safeStreak <= 0) return [];
+
+  let cycleStartDate = normalizedLastDate;
+  for (let index = 1; index < safeStreak; index += 1) {
+    cycleStartDate = previousDateKey(cycleStartDate);
+  }
+
+  return Array.from(new Set(
+    (pointHistory || [])
+      .filter((entry) => String(entry?.type || "").toUpperCase() === "MILESTONE")
+      .filter((entry) => {
+        const businessDate = getCheckinBusinessDateKey(entry);
+        return businessDate && businessDate >= cycleStartDate && businessDate <= normalizedLastDate;
+      })
+      .map((entry) => Math.max(0, Math.floor(Number(entry?.metadata?.streak || 0))))
+      .filter((streak) => streak > 0)
+      .map((streak) => `milestone-${streak}`)
+  ));
+}
+
 function buildCheckinStatsFromLedger(pointHistory = []) {
   const checkinDates = Array.from(
     new Set(
@@ -649,12 +672,21 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     accountLastCheckinDate
   ].filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b)));
   const accountCheckinStreak = Number(accountRow?.checkin_streak || 0);
+  const resolvedLastCheckinDate = accountLastCheckinDate || checkinStats.lastCheckinDate || null;
+  const resolvedCheckinStreak = accountLastCheckinDate
+    ? accountCheckinStreak
+    : Number(checkinStats.checkinStreak || 0);
+  const rewardHistory = getCheckinCycleRewardHistory(
+    pointHistory,
+    resolvedLastCheckinDate,
+    resolvedCheckinStreak
+  );
 
   return {
     phone,
     totalPoints: Math.max(0, Number(resolvedTotalPoints || 0)),
-    checkinStreak: accountLastCheckinDate ? accountCheckinStreak : Number(checkinStats.checkinStreak || 0),
-    lastCheckinDate: accountLastCheckinDate || checkinStats.lastCheckinDate || null,
+    checkinStreak: resolvedCheckinStreak,
+    lastCheckinDate: resolvedLastCheckinDate,
     lastMissedStreak: Number(accountRow?.last_missed_streak || 0),
     comebackUsedDate: accountRow?.comeback_used_date || null,
     voucherHistory: Array.isArray(accountRow?.vouchers) ? accountRow.vouchers : [],
@@ -666,7 +698,8 @@ function buildLoyaltySnapshotFromRows(accountRow = null, ledgerRows = [], phone 
     lastPurchaseAt: accountRow?.last_purchase_at || null,
     pointsExpiresAt: accountRow?.points_expires_at || null,
     pointHistory,
-    checkinHistory: accountCheckinHistory
+    checkinHistory: accountCheckinHistory,
+    rewardHistory
   };
 }
 

@@ -2,7 +2,6 @@ import useLoyaltyViewModel from "./hooks/useLoyaltyViewModel.js";
 import SimpleRewardsView from "./components/SimpleRewardsView.jsx";
 import GuestLoyaltyView from "./components/GuestLoyaltyView.jsx";
 import MemberLoyaltyView from "./components/MemberLoyaltyView.jsx";
-import { getLoyaltyBonusDisplay } from "../../services/loyaltyConfigService.js";
 
 export default function Loyalty(props) {
   const {
@@ -49,7 +48,6 @@ export default function Loyalty(props) {
     return (
       <GuestLoyaltyView
         navigate={navigate}
-        loyaltyBonusDisplay={getLoyaltyBonusDisplay()}
         loyaltyRule={vm.loyaltyRule}
       />
     );
@@ -68,6 +66,7 @@ export default function Loyalty(props) {
       setLuckyVoucher={vm.setLuckyVoucher}
       today={vm.today}
       checkedInToday={vm.checkedInToday}
+      checkinEnabled={vm.checkinEnabled}
       comebackStreak={vm.comebackStreak}
       comebackActive={vm.comebackActive}
       checkinReward={vm.checkinReward}
