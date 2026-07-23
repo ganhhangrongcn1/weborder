@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
 import CustomerOrderActionPanel from "../../components/customer/CustomerOrderActionPanel.jsx";
@@ -87,6 +87,7 @@ export default function OrderSuccess({
   const [paymentMessage, setPaymentMessage] = useState("");
   const [momoQrImageUrl, setMomoQrImageUrl] = useState("");
   const [momoLaunchAttempted, setMomoLaunchAttempted] = useState(false);
+  const momoAutoLaunchOrderRef = useRef("");
   const [isCancellingOrder, setIsCancellingOrder] = useState(false);
   const [cancelOrderMessage, setCancelOrderMessage] = useState("");
   const [isOrderRecoveryGraceActive, setIsOrderRecoveryGraceActive] = useState(() => !order);
@@ -240,6 +241,28 @@ export default function OrderSuccess({
       isActive = false;
     };
   }, [isMomoPayment, momoQrPayload]);
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      !isQrPaymentWaiting ||
+      !isMomoPayment ||
+      !orderId ||
+      !momoDirectPaymentUrl ||
+      momoAutoLaunchOrderRef.current === orderId
+    ) {
+      return;
+    }
+
+    momoAutoLaunchOrderRef.current = orderId;
+    setMomoLaunchAttempted(true);
+    window.location.assign(momoDirectPaymentUrl);
+  }, [
+    isMomoPayment,
+    isQrPaymentWaiting,
+    momoDirectPaymentUrl,
+    orderId
+  ]);
 
   const handleCopyPaymentReference = async () => {
     if (!paymentReference) return;
