@@ -42,6 +42,7 @@ final class EscPosRasterPrinter {
     private static final String SPACE_MARKER = "@@SPACE";
     private static final String ROW_PREFIX = "@@ROW:";
     private static final String BOLD_ROW_PREFIX = "@@BOLDROW:";
+    private static final String BOLD_CENTER_PREFIX = "@@BOLDCENTER:";
     private static final String ROW_CONTINUATION_PREFIX = "@@ROWCONT:";
     private static final int PAYMENT_QR_SIZE_DOTS = 384;
     private static final int FOOTER_QR_SIZE_DOTS = 220;
@@ -202,7 +203,7 @@ final class EscPosRasterPrinter {
                 height += qrBitmap.getHeight() + 20;
             } else if (line.startsWith("@@BIG:")) {
                 height += BIG_LINE_HEIGHT;
-            } else if (line.startsWith(BOLD_ROW_PREFIX)) {
+            } else if (line.startsWith(BOLD_ROW_PREFIX) || line.startsWith(BOLD_CENTER_PREFIX)) {
                 height += BOLD_ROW_LINE_HEIGHT;
             } else if (RULE_MARKER.equals(line)) {
                 height += RULE_LINE_HEIGHT;
@@ -248,25 +249,31 @@ final class EscPosRasterPrinter {
         boolean rowContinuation = line.startsWith(ROW_CONTINUATION_PREFIX);
         boolean big = line.startsWith("@@BIG:");
         boolean center = line.startsWith("@@CENTER:");
+        boolean boldCenter = line.startsWith(BOLD_CENTER_PREFIX);
         String text = line;
         if (rowContinuation) text = line.substring(ROW_CONTINUATION_PREFIX.length());
         if (big) text = line.substring(6);
         if (center) text = line.substring(9);
+        if (boldCenter) text = line.substring(BOLD_CENTER_PREFIX.length());
         if ("@@QR".equals(line)) return y;
 
-        configureTextPaint(paint, big ? BIG_TEXT_SIZE : NORMAL_TEXT_SIZE, big);
+        configureTextPaint(
+                paint,
+                big ? BIG_TEXT_SIZE : boldCenter ? BOLD_ROW_TEXT_SIZE : NORMAL_TEXT_SIZE,
+                big || boldCenter
+        );
         if (big) fitTextToWidth(paint, text, width - padding * 2, BIG_TEXT_SIZE, BIG_TEXT_MIN_SIZE);
         Paint.FontMetrics metrics = paint.getFontMetrics();
         int baseline = y + Math.round(-metrics.ascent);
 
-        if (big || center) {
+        if (big || center || boldCenter) {
           float x = (width - paint.measureText(text)) / 2f;
           canvas.drawText(text, Math.max(padding, x), baseline, paint);
         } else {
           canvas.drawText(text, padding + (rowContinuation ? ROW_CONTINUATION_INDENT : 0), baseline, paint);
         }
 
-        return y + (big ? BIG_LINE_HEIGHT : NORMAL_LINE_HEIGHT);
+        return y + (big ? BIG_LINE_HEIGHT : boldCenter ? BOLD_ROW_LINE_HEIGHT : NORMAL_LINE_HEIGHT);
     }
 
     private static void configureTextPaint(Paint paint, int textSize, boolean bold) {
@@ -316,7 +323,12 @@ final class EscPosRasterPrinter {
                 }
                 continue;
             }
-            if (line.startsWith("@@BIG:") || line.startsWith("@@CENTER:") || "@@QR".equals(line)) {
+            if (
+                    line.startsWith("@@BIG:")
+                    || line.startsWith("@@CENTER:")
+                    || line.startsWith(BOLD_CENTER_PREFIX)
+                    || "@@QR".equals(line)
+            ) {
                 result.add(line);
                 continue;
             }

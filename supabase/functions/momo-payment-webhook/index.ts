@@ -110,7 +110,7 @@ function buildReceiptText(order: JsonRecord) {
   for (const item of items) {
     const safeItem = getObject(item);
     const quantity = Math.max(1, Math.floor(Number(safeItem.quantity || 1)));
-    lines.push(`${quantity} x ${toText(safeItem.name || safeItem.productName || "Mon")}`);
+    lines.push(`@@BOLDROW:${quantity} x ${toText(safeItem.name || safeItem.productName || "Mon")}\t`);
     const options = Array.isArray(safeItem.options) ? safeItem.options : [];
     for (const option of options) {
       const optionText = typeof option === "string" ? option : toText(getObject(option).name);
@@ -125,7 +125,38 @@ function buildReceiptText(order: JsonRecord) {
   lines.push("@@CENTER:*** KHONG THU THEM TIEN ***");
   lines.push(`Ma TT: ${toText(order.paymentReference)}`);
   lines.push("------------------------------------------");
-  lines.push("@@CENTER:Cam on quy khach!");
+  return lines.join("\n");
+}
+
+function buildPreparationTicketText(order: JsonRecord) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  const lines = [
+    "@@CENTER:GANH HANG RONG",
+    "@@CENTER:PHIEU LAM MON",
+    `@@BIG:${toText(order.displayOrderCode || order.orderCode || order.id || "GHR")}`,
+    "------------------------------------------",
+    `Chi nhanh: ${toText(order.branchName) || "Ganh Hang Rong"}`,
+    "Nguon: Website - MoMo",
+    "------------------------------------------"
+  ];
+  for (const item of items) {
+    const safeItem = getObject(item);
+    const quantity = Math.max(1, Math.floor(Number(safeItem.quantity || 1)));
+    lines.push(`@@BOLDROW:${quantity} x ${toText(safeItem.name || safeItem.productName || "Mon")}\t`);
+    const options = Array.isArray(safeItem.options) ? safeItem.options : [];
+    for (const option of options) {
+      const optionText = typeof option === "string" ? option : toText(getObject(option).name);
+      if (optionText) lines.push(`  + ${optionText}`);
+    }
+    if (toText(safeItem.note)) lines.push(`  Ghi chu: ${toText(safeItem.note)}`);
+    lines.push("@@SPACE");
+  }
+  if (toText(order.note || order.orderNote)) {
+    lines.push("------------------------------------------");
+    lines.push(`Ghi chu don: ${toText(order.note || order.orderNote)}`);
+  }
+  lines.push("------------------------------------------");
+  lines.push("@@CENTER:KIEM TRA DU MON - TOPPING - GHI CHU");
   return lines.join("\n");
 }
 
@@ -133,15 +164,6 @@ async function ensurePrintJob(supabase: ReturnType<typeof createClient>, order: 
   const orderId = toText(order.id);
   const orderCode = toText(order.order_code || order.id);
   if (!orderId || !orderCode) return;
-
-  const { data: existing } = await supabase
-    .from("print_jobs")
-    .select("id")
-    .eq("job_type", "customer_bill")
-    .eq("order_id", orderId)
-    .in("status", ["pending", "printing", "printed"])
-    .limit(1);
-  if (Array.isArray(existing) && existing[0]?.id) return;
 
   const metadata = getObject(order.metadata);
   const now = new Date().toISOString();
@@ -159,26 +181,50 @@ async function ensurePrintJob(supabase: ReturnType<typeof createClient>, order: 
     paidAt: toText(metadata.paidAt || metadata.paid_at)
   };
 
-  const { error } = await supabase.from("print_jobs").insert({
-    branch_uuid: toText(order.pickup_branch_uuid || order.branch_uuid) || null,
-    printer_key: "cashier-80mm",
-    job_type: "customer_bill",
-    status: "pending",
-    order_id: orderId,
-    order_code: printOrder.displayOrderCode,
-    source_type: "qr_order",
-    payload: {
-      type: "qr_order",
-      sourceType: "qr_order",
-      text: buildReceiptText(printOrder),
-      order: printOrder
+  const branchUuid = toText(order.pickup_branch_uuid || order.branch_uuid) || null;
+  const jobs = [
+    {
+      sourceType: "qr_order_preparation",
+      text: buildPreparationTicketText(printOrder)
     },
-    requested_by: "momo_webhook",
-    requested_at: now,
-    created_at: now,
-    updated_at: now
-  });
-  if (error) console.error("[momo-payment-webhook] print job failed", error.message);
+    {
+      sourceType: "qr_order",
+      text: buildReceiptText(printOrder)
+    }
+  ];
+
+  for (const job of jobs) {
+    const { data: existing } = await supabase
+      .from("print_jobs")
+      .select("id")
+      .eq("job_type", "customer_bill")
+      .eq("order_id", orderId)
+      .eq("source_type", job.sourceType)
+      .in("status", ["pending", "printing", "printed"])
+      .limit(1);
+    if (Array.isArray(existing) && existing[0]?.id) continue;
+
+    const { error } = await supabase.from("print_jobs").insert({
+      branch_uuid: branchUuid,
+      printer_key: "cashier-80mm",
+      job_type: "customer_bill",
+      status: "pending",
+      order_id: orderId,
+      order_code: printOrder.displayOrderCode,
+      source_type: job.sourceType,
+      payload: {
+        type: job.sourceType,
+        sourceType: job.sourceType,
+        text: job.text,
+        order: printOrder
+      },
+      requested_by: "momo_webhook",
+      requested_at: now,
+      created_at: now,
+      updated_at: now
+    });
+    if (error) console.error(`[momo-payment-webhook] ${job.sourceType} print job failed`, error.message);
+  }
 }
 
 Deno.serve(async (request) => {

@@ -13,7 +13,7 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
 ]);
 const DEFAULT_RECEIPT_FOOTER_TEXT = [
   "@@RULE",
-  "@@CENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY",
+  "@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY",
   "@@QR",
   "@@CENTER:Quét QR để tích 10 - 15% giá trị đơn",
   "@@CENTER:ganhhangrong.vn",
@@ -62,7 +62,7 @@ function buildCartLines(cart = [], showMoney = true) {
   const lines = [];
   (Array.isArray(cart) ? cart : []).forEach((item) => {
     const itemLabel = `${Math.max(1, toNumber(item.quantity, 1))} × ${toText(item.name)}`;
-    lines.push(showMoney ? buildReceiptRow(itemLabel, formatMoney(item.lineTotal || 0)) : itemLabel);
+    lines.push(buildReceiptRow(itemLabel, showMoney ? formatMoney(item.lineTotal || 0) : "", true));
     (Array.isArray(item.selectedOptions) ? item.selectedOptions : []).forEach((option) => {
       lines.push(`  + ${toText(option.name)}`);
     });
@@ -255,6 +255,58 @@ export function buildPosCustomerBillText({
     lines.push("@@RULE");
     lines.push(`Ghi chú: ${toText(orderNote)}`);
   }
+  return lines.join("\n");
+}
+
+export function buildPosPreparationBillText({
+  order = {},
+  cart = [],
+  pagerNumber = "",
+  branchName = "",
+  orderNote = ""
+} = {}) {
+  const lines = [
+    "@@CENTER:GÁNH HÀNG RONG",
+    "@@CENTER:PHIẾU LÀM MÓN",
+    `@@BIG:${toText(order.displayOrderCode || order.orderCode || order.id || "POS")}`,
+    "@@RULE",
+    `Chi nhánh: ${toText(branchName) || "POS mobile"}`,
+    `Giờ in: ${formatDateTime(new Date().toISOString())}`
+  ];
+
+  if (toText(pagerNumber)) {
+    lines.push(`@@BOLDROW:THẺ RUNG\t${toText(pagerNumber)}`);
+  }
+
+  lines.push("@@RULE");
+  (Array.isArray(cart) ? cart : []).forEach((item) => {
+    const quantity = Math.max(1, toNumber(item.quantity, 1));
+      lines.push(`@@BOLDROW:${quantity} × ${toText(item.name)}\t`);
+
+    const options = Array.isArray(item.selectedOptions)
+      ? item.selectedOptions
+      : Array.isArray(item.options)
+        ? item.options
+        : Array.isArray(item.toppings)
+          ? item.toppings
+          : [];
+    options.forEach((option) => {
+      const optionName = toText(option?.name || option?.label || option);
+      if (optionName) lines.push(`  + TOPPING: ${optionName}`);
+    });
+
+    if (toText(item.note)) {
+      lines.push(`  Ghi chú: ${toText(item.note)}`);
+    }
+    lines.push("@@SPACE");
+  });
+
+  if (toText(orderNote)) {
+    lines.push("@@RULE");
+    lines.push(`@@BOLDROW:GHI CHÚ ĐƠN\t${toText(orderNote)}`);
+  }
+  lines.push("@@RULE");
+  lines.push("@@CENTER:KIỂM TRA ĐỦ MÓN - TOPPING - GHI CHÚ");
   return lines.join("\n");
 }
 

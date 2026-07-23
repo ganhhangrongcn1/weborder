@@ -289,9 +289,7 @@ function pushItemsText(lines, receipt, width, showMoney) {
   receipt.items.forEach((item) => {
     const lineTotal = item.total > 0 ? item.total : item.price * item.quantity;
     const itemLabel = `${item.quantity} × ${item.name}`;
-    lines.push(showMoney
-      ? buildReceiptRow(itemLabel, lineTotal ? toMoney(lineTotal) : "")
-      : itemLabel);
+    lines.push(buildReceiptRow(itemLabel, showMoney && lineTotal ? toMoney(lineTotal) : "", true));
     item.options.forEach((option) => lines.push(`  + ${option}`));
     if (item.note) splitText(`  Ghi chú: ${item.note}`, width).forEach((line) => lines.push(line));
   });
@@ -308,7 +306,7 @@ function pushBranchFooter(lines, receipt, width) {
 
 function pushLoyaltyFooter(lines) {
   lines.push("@@RULE");
-  lines.push("@@CENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY");
+  lines.push("@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY");
   lines.push("@@QR");
   lines.push("@@CENTER:Quét QR để tích 10 - 15% giá trị đơn");
   lines.push("@@CENTER:ganhhangrong.vn");
@@ -361,7 +359,7 @@ function buildReceiptText(order = {}, options = {}) {
     splitText(`Ghi chú đơn: ${receipt.note}`, width).forEach((line) => lines.push(line));
   }
 
-  pushBranchFooter(lines, receipt, width);
+  if (!isPartnerAppReceipt(receipt)) pushBranchFooter(lines, receipt, width);
   if (includeLoyaltyFooter && !isPreparationTicket) pushLoyaltyFooter(lines);
 
   return lines.join("\n");
@@ -545,7 +543,7 @@ function buildReceiptHtml(order = {}, options = {}) {
         `}
       ` : ""}
       ${receipt.note ? `<div class="line"></div><div><strong>Ghi chú đơn:</strong> ${escapeHtml(receipt.note)}</div>` : ""}
-      ${(receipt.branchName || receipt.branchAddress || receipt.branchPhone) ? `
+      ${!isPartnerAppReceipt(receipt) && (receipt.branchName || receipt.branchAddress || receipt.branchPhone) ? `
         <div class="line"></div>
         <div class="center"><strong>Thông tin chi nhánh</strong></div>
         ${receipt.branchName ? `<div class="center">${escapeHtml(receipt.branchName)}</div>` : ""}

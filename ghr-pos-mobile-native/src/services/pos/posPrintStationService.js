@@ -22,13 +22,14 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
   "pos_payment_qr",
   "pickup_order_payment_qr",
   "delivery_order_payment_qr",
+  "qr_order_preparation",
   "pos_shift_close"
 ]);
 const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "counter", "tai_quay"]);
 const REMOTE_ORDER_SOURCE_TYPES = new Set(["web", "website", "qr_order", "customer_qr", "qr_tai_quay"]);
 const DEFAULT_FOOTER_TEXT = [
   "@@RULE",
-  "@@CENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY",
+  "@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY",
   "@@QR",
   "@@CENTER:Quét QR để tích 10 - 15% giá trị đơn",
   "@@CENTER:ganhhangrong.vn",

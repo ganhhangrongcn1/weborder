@@ -15,6 +15,7 @@ import {
 import { createPosTakeawayOrderMobile } from "../../../services/pos/posOrderService";
 import {
   buildPosCustomerBillText,
+  buildPosPreparationBillText,
   buildPosQrReceiptText,
   buildPosShiftCloseReceiptText,
   openLocalCashDrawer,
@@ -278,6 +279,31 @@ export default function usePosComposer() {
         return secondTime - firstTime;
       })
       .slice(0, Math.max(1, Math.floor(Number(limit || 16))));
+  };
+
+  const printCounterOrderBills = async (billData = {}) => {
+    const failures = [];
+    try {
+      await printLocalReceipt({
+        text: buildPosPreparationBillText(billData),
+        sourceType: "preparation_ticket"
+      });
+    } catch (error) {
+      failures.push(`bill làm món: ${error?.message || "Lỗi máy in."}`);
+    }
+
+    try {
+      await printLocalReceipt({
+        text: buildPosCustomerBillText(billData),
+        sourceType: "customer_bill"
+      });
+    } catch (error) {
+      failures.push(`bill khách: ${error?.message || "Lỗi máy in."}`);
+    }
+
+    if (failures.length) {
+      throw new Error(failures.join("; "));
+    }
   };
 
   const printPickupCustomerBill = async ({ order = {}, paymentConfirmed = null } = {}) => {
@@ -625,7 +651,7 @@ export default function usePosComposer() {
 
     let printMessage = "";
     try {
-      const receiptText = buildPosCustomerBillText({
+      const billData = {
         order: result.order,
         cart: Array.isArray(session.cartSnapshot) && session.cartSnapshot.length ? session.cartSnapshot : cart,
         totals: sessionTotals,
@@ -636,12 +662,9 @@ export default function usePosComposer() {
         cashierName: session.cashierName || profile.name || profile.email,
         orderNote,
         paymentConfirmed: qrPaymentConfirmed
-      });
-      await printLocalReceipt({
-        text: receiptText,
-        sourceType: "customer_bill"
-      });
-      printMessage = " Đã tự động in bill tại máy POS.";
+      };
+      await printCounterOrderBills(billData);
+      printMessage = " Đã tự động in bill làm món và bill khách tại máy POS.";
     } catch (printError) {
       printMessage = ` Đã nhận chuyển khoản nhưng chưa in được bill: ${printError?.message || "Lỗi máy in."}`;
     }
@@ -2300,7 +2323,7 @@ export default function usePosComposer() {
 
     let printMessage = "";
     try {
-      const receiptText = buildPosCustomerBillText({
+      const billData = {
         order: result.order,
         cart,
         totals,
@@ -2311,12 +2334,9 @@ export default function usePosComposer() {
         cashierName: profile.name || profile.email,
         orderNote,
         paymentConfirmed
-      });
-      await printLocalReceipt({
-        text: receiptText,
-        sourceType: "customer_bill"
-      });
-      printMessage = " Đã in bill tại máy POS.";
+      };
+      await printCounterOrderBills(billData);
+      printMessage = " Đã in bill làm món và bill khách tại máy POS.";
     } catch (printError) {
       printMessage = ` Đã tạo đơn nhưng chưa in được bill: ${printError?.message || "Lỗi máy in."}`;
     }
