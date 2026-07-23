@@ -103,7 +103,8 @@ function buildReceiptText(order: JsonRecord) {
     "------------------------------------------",
     `Chi nhanh: ${toText(order.branchName) || "Ganh Hang Rong"}`,
     "Thu ngan: QR tai quay",
-    "Thanh toan: Vi MoMo",
+    "@@SPACE",
+    "Thanh toan: Vi MoMo - DA THANH TOAN",
     "------------------------------------------"
   ];
   for (const item of items) {
@@ -118,7 +119,10 @@ function buildReceiptText(order: JsonRecord) {
     if (toText(safeItem.note)) lines.push(`  Ghi chu: ${toText(safeItem.note)}`);
   }
   lines.push("------------------------------------------");
-  lines.push(`Tong can thu: ${formatReceiptMoney(order.totalAmount)}`);
+  lines.push(`@@ROW:TONG DON\t${formatReceiptMoney(order.totalAmount)}`);
+  lines.push(`@@BOLDROW:DA THANH TOAN MOMO\t${formatReceiptMoney(order.totalAmount)}`);
+  lines.push("@@BOLDROW:CON PHAI THU\t0d");
+  lines.push("@@CENTER:*** KHONG THU THEM TIEN ***");
   lines.push(`Ma TT: ${toText(order.paymentReference)}`);
   lines.push("------------------------------------------");
   lines.push("@@CENTER:Cam on quy khach!");
@@ -331,6 +335,11 @@ Deno.serve(async (request) => {
     }
 
     await logWebhook(supabase, body, "payment_received_after_cancel", sessionId, orderId);
+    return new Response(null, { status: 204 });
+  }
+
+  if (toText(session.source).toLowerCase() === "pos" && !orderId) {
+    await logWebhook(supabase, body, "payment_session_paid", sessionId, "");
     return new Response(null, { status: 204 });
   }
 

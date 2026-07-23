@@ -11,6 +11,7 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.common.BitMatrix;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -33,10 +34,12 @@ final class EscPosRasterPrinter {
     private static final int BOLD_ROW_TEXT_SIZE = 28;
     private static final int BOLD_ROW_LINE_HEIGHT = 38;
     private static final int RULE_LINE_HEIGHT = 22;
+    private static final int SPACE_LINE_HEIGHT = 12;
     private static final float RULE_STROKE_WIDTH = 2.5f;
     private static final int ROW_COLUMN_GAP = 20;
     private static final int ROW_CONTINUATION_INDENT = 24;
     private static final String RULE_MARKER = "@@RULE";
+    private static final String SPACE_MARKER = "@@SPACE";
     private static final String ROW_PREFIX = "@@ROW:";
     private static final String BOLD_ROW_PREFIX = "@@BOLDROW:";
     private static final String ROW_CONTINUATION_PREFIX = "@@ROWCONT:";
@@ -55,6 +58,7 @@ final class EscPosRasterPrinter {
     ) {
         String cleanText = cleanVietnamese(text);
         boolean paymentQrSource = isPaymentQrSource(sourceType);
+        boolean remotePaymentQrSource = isRemotePaymentQrSource(sourceType);
         ReceiptRasterParts parts = paymentQrSource
                 ? new ReceiptRasterParts(cleanText, "")
                 : splitReceiptFooter(cleanText);
@@ -66,7 +70,7 @@ final class EscPosRasterPrinter {
                 ? PAYMENT_QR_SIZE_DOTS
                 : FOOTER_QR_SIZE_DOTS;
 
-        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl, bodyQrSize, paymentQrSource));
+        writeRasterBitmap(output, renderTextBitmap(parts.bodyText, RECEIPT_WIDTH_DOTS_80MM, qrUrl, bodyQrSize, remotePaymentQrSource));
         if (footerText != null && !footerText.trim().isEmpty()) {
             writeRasterBitmap(output, renderTextBitmap(cleanVietnamese(footerText), RECEIPT_WIDTH_DOTS_80MM, footerQrUrl, FOOTER_QR_SIZE_DOTS, false));
         }
@@ -84,6 +88,14 @@ final class EscPosRasterPrinter {
     }
 
     private static boolean isPaymentQrSource(String sourceType) {
+        String normalized = normalizeSourceType(sourceType);
+        return "pos_payment_qr".equals(normalized)
+                || "pos_payment_momo_qr".equals(normalized)
+                || "pickup_order_payment_qr".equals(normalized)
+                || "delivery_order_payment_qr".equals(normalized);
+    }
+
+    private static boolean isRemotePaymentQrSource(String sourceType) {
         String normalized = normalizeSourceType(sourceType);
         return "pos_payment_qr".equals(normalized)
                 || "pickup_order_payment_qr".equals(normalized)
@@ -162,7 +174,7 @@ final class EscPosRasterPrinter {
         Bitmap qrBitmap = createQrBitmap(qrUrl, qrSize, requireRemoteQr);
         List<String> lines = expandReceiptLines(cleanVietnamese(text), paint, width - padding * 2);
         if (requireRemoteQr && lines.contains("@@QR") && qrBitmap == null) {
-            throw new IllegalStateException("Khong tai duoc anh VietQR de in.");
+            throw new IllegalStateException("Khong tao duoc ma QR de in.");
         }
         int height = Math.max(160, padding * 2 + estimateReceiptHeight(lines, qrBitmap));
 
@@ -194,6 +206,8 @@ final class EscPosRasterPrinter {
                 height += BOLD_ROW_LINE_HEIGHT;
             } else if (RULE_MARKER.equals(line)) {
                 height += RULE_LINE_HEIGHT;
+            } else if (SPACE_MARKER.equals(line)) {
+                height += SPACE_LINE_HEIGHT;
             } else {
                 height += NORMAL_LINE_HEIGHT;
             }
@@ -202,6 +216,10 @@ final class EscPosRasterPrinter {
     }
 
     private static int drawReceiptLine(Canvas canvas, Paint paint, String line, int padding, int y, int width) {
+        if (SPACE_MARKER.equals(line)) {
+            return y + SPACE_LINE_HEIGHT;
+        }
+
         if (RULE_MARKER.equals(line)) {
             paint.setColor(Color.BLACK);
             paint.setStyle(Paint.Style.STROKE);
@@ -279,6 +297,10 @@ final class EscPosRasterPrinter {
                 result.add(RULE_MARKER);
                 continue;
             }
+            if (SPACE_MARKER.equals(line)) {
+                result.add(SPACE_MARKER);
+                continue;
+            }
             if (line.startsWith(ROW_PREFIX) || line.startsWith(BOLD_ROW_PREFIX)) {
                 boolean boldRow = line.startsWith(BOLD_ROW_PREFIX);
                 String prefix = boldRow ? BOLD_ROW_PREFIX : ROW_PREFIX;
@@ -320,13 +342,16 @@ final class EscPosRasterPrinter {
         String value = String.valueOf(qrUrl == null ? "" : qrUrl).trim();
         if (value.isEmpty()) return null;
         try {
-            Bitmap remoteQrBitmap = loadRemoteQrBitmap(value, size);
-            if (remoteQrBitmap != null) return remoteQrBitmap;
-            if (requireRemoteQr && isRemoteUrl(value)) return null;
+            if (requireRemoteQr && isRemoteUrl(value)) {
+                Bitmap remoteQrBitmap = loadRemoteQrBitmap(value, size);
+                if (remoteQrBitmap != null) return remoteQrBitmap;
+                return null;
+            }
 
             Map<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
             hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
-            hints.put(EncodeHintType.MARGIN, 1);
+            hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
+            hints.put(EncodeHintType.MARGIN, 3);
             BitMatrix matrix = new MultiFormatWriter().encode(value, BarcodeFormat.QR_CODE, size, size, hints);
             Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
             for (int y = 0; y < size; y++) {

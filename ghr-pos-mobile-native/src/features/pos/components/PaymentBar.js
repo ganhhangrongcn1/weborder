@@ -99,8 +99,13 @@ export default function PaymentBar({
               size={16}
               color={!readyToCreate ? POS_COLORS.muted : POS_COLORS.surface}
             />
-            <Text style={[styles.primaryText, !readyToCreate && styles.disabledText]}>
-              {paymentConfirmed ? "Hoàn tất & tạo đơn" : "Chọn thanh toán"}
+            <Text
+              style={[styles.primaryText, !readyToCreate && styles.disabledText]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.82}
+            >
+              {paymentConfirmed ? "Hoàn tất & tạo đơn" : "Tạo đơn"}
             </Text>
           </View>
         </Pressable>
@@ -226,7 +231,7 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   primary: {
-    flex: 1.35,
+    flex: 1.7,
     minHeight: 52,
     borderRadius: POS_RADIUS.md,
     borderWidth: 1,
@@ -248,6 +253,7 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   primaryText: {
+    flexShrink: 1,
     color: POS_COLORS.surface,
     fontSize: 13,
     fontWeight: "900"

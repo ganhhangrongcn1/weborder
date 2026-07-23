@@ -76,7 +76,7 @@ import { buildPosLoyaltyBenefit, buildVoucherSelectionKey } from "../../../share
 import { calculateCashChange, getCashPaymentSummary, normalizeCashReceived } from "../../../shared/pos/posPayment";
 import { applyPosPricePromotionToProduct, buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
 
-const POS_PAYMENT_POLL_FALLBACK_MS = 30000;
+const POS_PAYMENT_POLL_FALLBACK_MS = 5000;
 const POS_RUNTIME_REFRESH_MS = 30000;
 
 function mergeRealtimePaymentSession(currentSessions = [], nextSession = {}) {
@@ -527,7 +527,7 @@ export default function usePosComposer() {
 
     if (isPosPaymentSessionPaid(session)) {
       setPaymentConfirmed({
-        method: "bank_qr",
+        method: session.provider === "momo" ? "momo" : "bank_qr",
         reference: session.paymentReference,
         paidAt: session.paidAt || new Date().toISOString(),
         amount: session.amountPaid || session.amountExpected,
@@ -544,6 +544,7 @@ export default function usePosComposer() {
 
   const finalizePaidQrSession = async (session) => {
     if (!session?.id || !session?.isPaymentSession) return false;
+    const paymentMethod = session.provider === "momo" ? "momo" : "bank_qr";
 
     if (!announcedQrPaymentIdsRef.current.has(session.id)) {
       announcedQrPaymentIdsRef.current.add(session.id);
@@ -558,7 +559,7 @@ export default function usePosComposer() {
     const sessionTotals = checkout.totals || totals;
     const sessionCustomer = checkout.customerLookup || customerLookup.result;
     const qrPaymentConfirmed = {
-      method: "bank_qr",
+      method: paymentMethod,
       reference: session.paymentReference,
       paidAt: session.paidAt || new Date().toISOString(),
       amount: session.amountPaid || session.amountExpected,
@@ -597,7 +598,7 @@ export default function usePosComposer() {
       pointsDiscount: checkout.pointsDiscount || checkout.pointsSpent || loyaltyBenefit.pointsSpent,
       pointsDiscountAmount: checkout.pointsDiscountAmount || loyaltyBenefit.pointsDiscount,
       pointRedeemRule: checkout.pointRedeemRule || loyaltyBenefit.loyaltyRule,
-      paymentMethod: "bank_qr",
+      paymentMethod,
       paymentStatus: "paid",
       paymentAmount: session.amountPaid || session.amountExpected,
       paymentReference: session.paymentReference,
@@ -640,9 +641,9 @@ export default function usePosComposer() {
         text: receiptText,
         sourceType: "customer_bill"
       });
-      printMessage = " Da in bill tai may POS.";
+      printMessage = " Đã tự động in bill tại máy POS.";
     } catch (printError) {
-      printMessage = ` Da tao don nhung chua in duoc bill: ${printError?.message || "Loi may in."}`;
+      printMessage = ` Đã nhận chuyển khoản nhưng chưa in được bill: ${printError?.message || "Lỗi máy in."}`;
     }
 
     await markPosPaymentSessionConverted(
@@ -666,7 +667,7 @@ export default function usePosComposer() {
       await refreshPosRuntime(profile.branchUuid);
       await refreshShiftSummary(shift);
     }
-    setShiftMessage(`${result.message || ""}${printMessage}`.trim());
+    setShiftMessage(`Đã chuyển khoản thành công.${printMessage}`.trim());
     return true;
   };
 
@@ -1029,9 +1030,13 @@ export default function usePosComposer() {
 
     checkPaymentSession();
     const timer = globalThis.setInterval(checkPaymentSession, POS_PAYMENT_POLL_FALLBACK_MS);
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") void checkPaymentSession();
+    });
     return () => {
       active = false;
       globalThis.clearInterval(timer);
+      appStateSubscription.remove();
     };
   }, [qrSession?.id, qrSession?.isPaymentSession, qrSession?.status, qrSession?.updatedAt]);
 
@@ -1083,9 +1088,13 @@ export default function usePosComposer() {
 
     checkPaymentSession();
     const timer = globalThis.setInterval(checkPaymentSession, POS_PAYMENT_POLL_FALLBACK_MS);
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") void checkPaymentSession();
+    });
     return () => {
       active = false;
       globalThis.clearInterval(timer);
+      appStateSubscription.remove();
     };
   }, [
     pickupQrOrder?.id,
@@ -1476,7 +1485,8 @@ export default function usePosComposer() {
       });
     return true;
   };
-  const openQrPayment = async () => {
+  const openQrPayment = async (provider = "sepay") => {
+    const paymentProvider = provider === "momo" ? "momo" : "sepay";
     if (!profile || !shift?.id) {
       setShiftMessage("Cần đăng nhập và mở ca trước khi tạo QR.");
       return false;
@@ -1512,9 +1522,9 @@ export default function usePosComposer() {
 
     const paymentReference = buildPosPaymentReference(orderIdentity, branch);
     const result = await createPosPaymentSession({
-      requestKey: `pos:${profile.branchUuid}:${orderIdentity.orderCode}`,
+      requestKey: `pos:${paymentProvider}:${profile.branchUuid}:${orderIdentity.orderCode}`,
       paymentReference,
-      provider: "sepay",
+      provider: paymentProvider,
       branchUuid: profile.branchUuid,
       posShiftId: shift.id,
       branchName: profile.branchName,
@@ -1683,12 +1693,20 @@ export default function usePosComposer() {
       return;
     }
 
+    const expiresAtMs = Date.parse(qrSession?.expiresAt || "");
+    if (qrSession?.provider === "momo" && Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+      setQrError("Mã MoMo đã hết hạn. Hãy hủy mã này và tạo mã MoMo mới.");
+      return;
+    }
+
     const identity = qrSession?.orderIdentity || qrPreviewIdentity || {};
-    const qrUrl = qrSession?.qrImageUrl || buildPosQrImageUrl({
-      branch,
-      amount: qrSession?.amountExpected || totals.total,
-      orderIdentity: identity
-    });
+    const qrUrl = qrSession?.provider === "momo"
+      ? qrSession?.momoQrValue
+      : qrSession?.qrImageUrl || buildPosQrImageUrl({
+          branch,
+          amount: qrSession?.amountExpected || totals.total,
+          orderIdentity: identity
+        });
     if (!qrUrl) {
       setQrError("Chưa tạo được mã QR để in. Kiểm tra cấu hình ngân hàng của chi nhánh.");
       return;
@@ -1707,7 +1725,7 @@ export default function usePosComposer() {
       await printLocalReceipt({
         text: receiptText,
         qrUrl,
-        sourceType: "pos_payment_qr"
+        sourceType: qrSession?.provider === "momo" ? "pos_payment_momo_qr" : "pos_payment_qr"
       });
       setShiftMessage("Đã in phiếu QR tại máy POS.");
     } catch (error) {
@@ -2046,7 +2064,11 @@ export default function usePosComposer() {
         cashierName: profile?.name || profile?.email || "Thu ngân",
         orderNote: printableOrder.orderNote,
         paymentConfirmed: {
-          method: printableOrder.paymentMethod === "bank_qr" ? "bank_qr" : "cash",
+          method: printableOrder.paymentMethod === "momo"
+            ? "momo"
+            : printableOrder.paymentMethod === "bank_qr"
+              ? "bank_qr"
+              : "cash",
           reference: printableOrder.paymentReference,
           paidAt: printableOrder.paidAt || printableOrder.createdAt
         }

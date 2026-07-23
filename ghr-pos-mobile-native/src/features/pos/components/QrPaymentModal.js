@@ -1,10 +1,13 @@
 import React from "react";
 import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import QRCode from "react-native-qrcode-svg";
 
 import { buildPosPaymentReference, buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/pos/posPaymentService";
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
 import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
+
+const MOMO_LOGO = require("../../../assets/momo-logo.png");
 
 export default function QrPaymentModal({
   visible,
@@ -22,16 +25,22 @@ export default function QrPaymentModal({
   onConfirmPaid,
   onPrint
 }) {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const identity = draftSession || previewIdentity || {};
   const sessionStatus = String(draftSession?.status || "").trim().toLowerCase();
   const sessionPaid = ["paid", "converting", "converted"].includes(sessionStatus);
+  const isMomo = String(draftSession?.provider || "").trim().toLowerCase() === "momo";
   const canRetryFinalize = sessionPaid && Boolean(errorMessage);
   const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
+  const momoQrValue = String(draftSession?.momoQrValue || "").trim();
   const config = getPosQrPaymentConfig(branch);
   const transferContent = draftSession?.paymentReference || buildPosPaymentReference(identity, branch);
-  const dialogWidth = getPosDialogWidth(width, 520);
-  const qrSize = Math.min(dialogWidth - 64, 280);
+  const dialogWidth = getPosDialogWidth(width, isMomo ? 440 : 500);
+  const qrSize = Math.min(
+    dialogWidth - 64,
+    isMomo ? 210 : 240,
+    Math.max(170, height - 390)
+  );
 
   const primaryLabel = processing
     ? "Đang xử lý..."
@@ -45,8 +54,9 @@ export default function QrPaymentModal({
       <View style={[styles.sheet, { width: dialogWidth }]}>
         <View style={styles.header}>
           <View style={styles.flexOne}>
-            <Text style={styles.eyebrow}>Chuyển khoản QR</Text>
-            <Text style={styles.title}>Quét mã thanh toán</Text>
+            {isMomo ? <Image source={MOMO_LOGO} style={styles.momoHeaderLogo} resizeMode="contain" /> : null}
+            <Text style={styles.eyebrow}>{isMomo ? "Ví MoMo" : "Chuyển khoản QR"}</Text>
+            <Text style={styles.title}>{isMomo ? "Quét mã thanh toán MoMo" : "Quét mã thanh toán"}</Text>
           </View>
           <View style={styles.headerActions}>
             {config.ready ? (
@@ -63,7 +73,9 @@ export default function QrPaymentModal({
         {config.ready ? (
           <View style={styles.body}>
             <View style={styles.qrBox}>
-              {qrUrl ? (
+              {isMomo && momoQrValue ? (
+                <QRCode value={momoQrValue} size={qrSize} backgroundColor="#ffffff" color="#111827" />
+              ) : qrUrl ? (
                 <Image source={{ uri: qrUrl }} style={{ width: qrSize, height: qrSize }} resizeMode="contain" />
               ) : (
                 <Text style={styles.qrFallback}>Chưa tạo được QR</Text>
@@ -88,7 +100,9 @@ export default function QrPaymentModal({
             {draftSession ? (
               <View style={styles.statusBox}>
                 <Text style={styles.statusLabel}>
-                  {sessionPaid ? "Đã nhận chuyển khoản" : "Đang chờ thanh toán"}
+                  {sessionPaid
+                    ? (isMomo ? "Đã nhận thanh toán MoMo" : "Đã nhận chuyển khoản")
+                    : (isMomo ? "Đang chờ MoMo" : "Đang chờ thanh toán")}
                 </Text>
                 <Text style={styles.statusValue} numberOfLines={1}>
                   {draftSession.displayOrderCode || draftSession.orderCode || draftSession.paymentReference}
@@ -159,12 +173,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(15, 23, 42, 0.42)"
   },
   sheet: {
-    gap: POS_MODAL.gap,
+    gap: 8,
     borderWidth: 1,
     borderColor: POS_COLORS.border,
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_MODAL.radius,
-    padding: POS_MODAL.padding,
+    padding: 14,
     ...POS_SHADOW
   },
   header: {
@@ -179,6 +193,12 @@ const styles = StyleSheet.create({
   },
   flexOne: {
     flex: 1
+  },
+  momoHeaderLogo: {
+    width: 36,
+    height: 36,
+    marginBottom: 4,
+    borderRadius: 8
   },
   eyebrow: {
     color: POS_COLORS.muted,
@@ -222,7 +242,7 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   body: {
-    gap: 10
+    gap: 7
   },
   qrBox: {
     borderWidth: 1,
@@ -231,7 +251,7 @@ const styles = StyleSheet.create({
     borderRadius: POS_RADIUS.md,
     alignItems: "center",
     justifyContent: "center",
-    padding: 10
+    padding: 7
   },
   qrFallback: {
     color: POS_COLORS.muted,
@@ -244,12 +264,13 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   summaryBox: {
-    gap: 8,
+    gap: 5,
     borderWidth: 1,
     borderColor: POS_COLORS.softBorder,
     backgroundColor: POS_COLORS.subtleSurface,
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    paddingVertical: 7,
+    paddingHorizontal: 10
   },
   summaryRow: {
     gap: 4
@@ -270,12 +291,13 @@ const styles = StyleSheet.create({
     fontWeight: "900"
   },
   statusBox: {
-    gap: 4,
+    gap: 2,
     borderWidth: 1,
     borderColor: "#bbf7d0",
     backgroundColor: POS_COLORS.primarySoft,
     borderRadius: POS_RADIUS.md,
-    padding: 10
+    paddingVertical: 7,
+    paddingHorizontal: 10
   },
   statusLabel: {
     color: POS_COLORS.primaryDark,
@@ -315,7 +337,7 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     flex: 1,
-    minHeight: 54,
+    minHeight: 46,
     borderWidth: 1,
     borderColor: "#fecaca",
     backgroundColor: POS_COLORS.dangerSoft,
@@ -325,7 +347,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1.15,
-    minHeight: 54,
+    minHeight: 46,
     borderWidth: 1,
     borderColor: POS_COLORS.primaryDark,
     backgroundColor: POS_COLORS.primary,

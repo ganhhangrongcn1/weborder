@@ -662,7 +662,8 @@ export default function PosHomeScreen() {
             hasBenefitSignal={hasBenefitSignal}
             onOpenBenefit={() => setBenefitModalOpen(true)}
             onConfirmCash={handleOpenCashModal}
-            onOpenQrPayment={openQrPayment}
+            onOpenQrPayment={() => openQrPayment("sepay")}
+            onOpenMomoPayment={() => openQrPayment("momo")}
             onCreateOrder={createCashOrder}
           />
         ) : null}

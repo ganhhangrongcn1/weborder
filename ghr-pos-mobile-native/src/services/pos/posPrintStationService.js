@@ -28,15 +28,14 @@ const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "count
 const REMOTE_ORDER_SOURCE_TYPES = new Set(["web", "website", "qr_order", "customer_qr", "qr_tai_quay"]);
 const DEFAULT_FOOTER_TEXT = [
   "@@RULE",
-  "@@CENTER:Quét QR tích điểm ngay",
+  "@@CENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY",
   "@@QR",
-  "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon",
-  "@@CENTER:đều được tích 10 - 15% điểm tại Gánh Hàng Rong",
-  "@@CENTER:Quét để xem đơn và dùng điểm",
-  "@@CENTER:Hotline: 0933 799 061",
+  "@@CENTER:Quét QR để tích 10 - 15% giá trị đơn",
+  "@@CENTER:ganhhangrong.vn",
+  "@@CENTER:Hotline: 0933799061",
   "@@CENTER:Cảm ơn quý khách!"
 ].join("\n");
-const DEFAULT_FOOTER_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
+const DEFAULT_FOOTER_QR_URL = "https://ganhhangrong.vn/orders";
 const recentAlertByOrderKey = new Map();
 const expiredCleanupStateByBranch = new Map();
 
@@ -274,9 +273,22 @@ async function markFailed(job, message) {
 function buildPrintPayload(job = {}) {
   const payload = getObject(job.payload);
   const sourceType = normalizeSourceToken(job.source_type || payload.type || payload.sourceType);
-  const skipFooter = NO_FOOTER_SOURCE_TYPES.has(sourceType);
   const order = getObject(payload.order);
-  const text = toText(payload.text) || buildReceiptTextFromOrder(order, sourceType);
+  const payloadText = toText(payload.text);
+  const paymentStatus = normalizeSourceToken(order.paymentStatus || order.payment_status);
+  const paidAt = toText(order.paidAt || order.paid_at);
+  const legacyUnpaidReceipt =
+    REMOTE_ORDER_SOURCE_TYPES.has(sourceType) &&
+    (payloadText.includes("TỔNG CẦN THU") || payloadText.includes("CHƯA THANH TOÁN"));
+  const shouldBuildPreparationTicket =
+    !paidAt &&
+    (["unpaid", "pending", "pendingpayment"].includes(paymentStatus) || legacyUnpaidReceipt);
+  const generatedText = shouldBuildPreparationTicket
+    ? buildReceiptTextFromOrder(order, sourceType)
+    : "";
+  const text = generatedText || payloadText || buildReceiptTextFromOrder(order, sourceType);
+  const isPreparationTicket = text.includes("@@CENTER:PHIẾU LÀM MÓN");
+  const skipFooter = NO_FOOTER_SOURCE_TYPES.has(sourceType) || isPreparationTicket;
 
   return {
     text,
@@ -316,6 +328,11 @@ function buildReceiptTextFromOrder(order = {}, sourceType = "") {
     };
   });
 
+  const paymentMethod = normalizeSourceToken(order.paymentMethod || order.payment_method);
+  const paymentStatus = normalizeSourceToken(order.paymentStatus || order.payment_status);
+  const paidAt = toText(order.paidAt || order.paid_at);
+  const paymentPaid = ["paid", "converted"].includes(paymentStatus) || Boolean(paidAt);
+
   return buildPosCustomerBillText({
     order: {
       id: toText(order.id),
@@ -335,11 +352,12 @@ function buildReceiptTextFromOrder(order = {}, sourceType = "") {
     branchName: toText(order.branchName || order.branch_name),
     cashierName: sourceType === "qr_order" ? "QR tại quầy" : toText(order.cashierName || order.cashier_name),
     orderNote: toText(order.note || order.orderNote || order.order_note),
-    paymentConfirmed: {
-      method: normalizeSourceToken(order.paymentMethod || order.payment_method).includes("qr") ? "bank_qr" : "cash",
+    paymentConfirmed: paymentPaid ? {
+      method: paymentMethod === "momo" ? "momo" : paymentMethod.includes("qr") ? "bank_qr" : "cash",
       reference: toText(order.paymentReference || order.payment_reference),
-      paidAt: toText(order.paidAt || order.paid_at)
-    }
+      paidAt,
+      paid: true
+    } : null
   });
 }
 

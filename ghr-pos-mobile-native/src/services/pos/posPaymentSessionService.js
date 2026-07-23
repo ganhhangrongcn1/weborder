@@ -35,6 +35,7 @@ function normalizeStatus(value = "") {
 
 function normalizeSessionRow(row = {}) {
   const checkoutSnapshot = getObject(row.checkout_snapshot);
+  const providerPayload = getObject(row.provider_payload);
   const orderIdentity = getObject(checkoutSnapshot.orderIdentity);
   return {
     id: toText(row.id),
@@ -56,6 +57,10 @@ function normalizeSessionRow(row = {}) {
     amountPaid: toMoney(row.amount_paid),
     cartSnapshot: Array.isArray(row.cart_snapshot) ? row.cart_snapshot : [],
     checkoutSnapshot,
+    providerPayload,
+    momoPayUrl: toText(providerPayload.payUrl || providerPayload.pay_url),
+    momoDeeplink: toText(providerPayload.deeplink),
+    momoQrValue: toText(providerPayload.qrCodeUrl || providerPayload.qr_code_url || providerPayload.payUrl || providerPayload.pay_url),
     orderIdentity,
     orderId: toText(row.order_id),
     expiresAt: toText(row.expires_at),

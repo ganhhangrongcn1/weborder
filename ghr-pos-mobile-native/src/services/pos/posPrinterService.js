@@ -6,21 +6,21 @@ import { formatMoney } from "../../utils/format";
 const printerModule = NativeModules.PosPrinter || null;
 const NO_FOOTER_SOURCE_TYPES = new Set([
   "pos_payment_qr",
+  "pos_payment_momo_qr",
   "pickup_order_payment_qr",
   "delivery_order_payment_qr",
   "pos_shift_close"
 ]);
 const DEFAULT_RECEIPT_FOOTER_TEXT = [
   "@@RULE",
-  "@@CENTER:Quét QR tích điểm ngay",
+  "@@CENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY",
   "@@QR",
-  "@@CENTER:Đơn từ Grab, ShopeeFood, Xanh Ngon",
-  "@@CENTER:đều được tích 10 - 15% điểm tại Gánh Hàng Rong",
-  "@@CENTER:Quét để xem đơn và dùng điểm",
-  "@@CENTER:Hotline: 0933 799 061",
+  "@@CENTER:Quét QR để tích 10 - 15% giá trị đơn",
+  "@@CENTER:ganhhangrong.vn",
+  "@@CENTER:Hotline: 0933799061",
   "@@CENTER:Cảm ơn quý khách!"
 ].join("\n");
-const DEFAULT_RECEIPT_FOOTER_QR_URL = "https://ganhhangrong.vn/loyalty?source=receipt";
+const DEFAULT_RECEIPT_FOOTER_QR_URL = "https://ganhhangrong.vn/orders";
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -58,13 +58,11 @@ function formatDateTime(value = "") {
   });
 }
 
-function buildCartLines(cart = []) {
+function buildCartLines(cart = [], showMoney = true) {
   const lines = [];
   (Array.isArray(cart) ? cart : []).forEach((item) => {
-    lines.push(buildReceiptRow(
-      `${Math.max(1, toNumber(item.quantity, 1))} × ${toText(item.name)}`,
-      formatMoney(item.lineTotal || 0)
-    ));
+    const itemLabel = `${Math.max(1, toNumber(item.quantity, 1))} × ${toText(item.name)}`;
+    lines.push(showMoney ? buildReceiptRow(itemLabel, formatMoney(item.lineTotal || 0)) : itemLabel);
     (Array.isArray(item.selectedOptions) ? item.selectedOptions : []).forEach((option) => {
       lines.push(`  + ${toText(option.name)}`);
     });
@@ -160,7 +158,8 @@ export async function stopLocalPrintStationService() {
 export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = "", footerText = "", footerQrUrl = "" } = {}) {
   if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
   const safeSourceType = toText(sourceType).toLowerCase();
-  const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType);
+  const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN");
+  const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType) && !isPreparationTicket;
   return printerModule.printReceipt({
     text,
     qrUrl,
@@ -182,22 +181,37 @@ export function buildPosCustomerBillText({
   orderNote = "",
   paymentConfirmed = null
 } = {}) {
+  const paymentPaid = Boolean(paymentConfirmed) && paymentConfirmed?.paid !== false;
   const lines = [
     "@@CENTER:GÁNH HÀNG RONG",
-    "@@CENTER:HÓA ĐƠN BÁN HÀNG",
+    `@@CENTER:${paymentPaid ? "HÓA ĐƠN BÁN HÀNG" : "PHIẾU LÀM MÓN"}`,
     `@@BIG:${toText(order.displayOrderCode || order.orderCode || order.id || "POS")}`,
     "@@RULE",
     `Chi nhánh: ${toText(branchName) || "POS mobile"}`,
     `Thu ngân: ${toText(cashierName) || "Thu ngân"}`,
-    `Giờ in: ${formatDateTime(new Date().toISOString())}`
+    `Giờ in: ${formatDateTime(new Date().toISOString())}`,
+    "@@SPACE"
   ];
 
   if (toText(customerName)) lines.push(`Khách: ${toText(customerName)}`);
   if (toText(customerPhone)) lines.push(`SĐT: ${toText(customerPhone)}`);
   if (toText(pagerNumber)) lines.push(`Thẻ rung: ${toText(pagerNumber)}`);
 
+  lines.push("@@SPACE");
+  if (!paymentPaid) {
+    lines.push("@@CENTER:*** CHƯA THANH TOÁN TẠI QUẦY ***");
+  }
   lines.push("@@RULE");
-  lines.push(...buildCartLines(cart));
+  lines.push(...buildCartLines(cart, paymentPaid));
+
+  if (!paymentPaid) {
+    if (toText(orderNote)) {
+      lines.push("@@RULE");
+      lines.push(`Ghi chú: ${toText(orderNote)}`);
+    }
+    return lines.join("\n");
+  }
+
   lines.push("@@RULE");
   lines.push(buildReceiptRow("Tạm tính", formatMoney(totals.subtotal || 0)));
 
@@ -218,9 +232,17 @@ export function buildPosCustomerBillText({
   const amountDue = paymentConfirmed?.method === "cash" && toNumber(paymentConfirmed.amount, 0) > 0
     ? toNumber(paymentConfirmed.amount, 0)
     : toNumber(totals.total, 0);
-  lines.push(buildReceiptRow("TỔNG CẦN THU", formatMoney(amountDue), true));
+  const paymentLabel = paymentConfirmed?.method === "momo"
+    ? "Ví MoMo"
+    : paymentConfirmed?.method === "bank_qr"
+      ? "QR"
+      : "Tiền mặt";
+  lines.push(buildReceiptRow("TỔNG ĐƠN", formatMoney(amountDue)));
+  lines.push(buildReceiptRow(`ĐÃ THANH TOÁN ${paymentLabel.toUpperCase()}`, formatMoney(amountDue), true));
+  lines.push(buildReceiptRow("CÒN PHẢI THU", formatMoney(0), true));
+  lines.push("@@CENTER:*** KHÔNG THU THÊM TIỀN ***");
   lines.push("@@RULE");
-  lines.push(buildReceiptRow("Thanh toán", paymentConfirmed?.method === "bank_qr" ? "QR" : "Tiền mặt"));
+  lines.push(buildReceiptRow("Thanh toán", `${paymentLabel} - Đã thanh toán`));
 
   if (paymentConfirmed?.method === "cash") {
     lines.push(buildReceiptRow("Khách đưa", formatMoney(paymentConfirmed.received || 0)));

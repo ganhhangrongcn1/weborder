@@ -80,6 +80,100 @@ function isSupportedSource(value: string) {
   return ["pos", "web", "qr_order"].includes(value);
 }
 
+async function signHmacSha256(rawData: string, secretKey: string) {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secretKey),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(rawData)));
+  return Array.from(signature).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function createMomoPayment(
+  serviceClient: ReturnType<typeof createClient>,
+  session: JsonRecord,
+  supabaseUrl: string
+) {
+  const partnerCode = toText(Deno.env.get("MOMO_PARTNER_CODE"));
+  const accessKey = toText(Deno.env.get("MOMO_ACCESS_KEY"));
+  const secretKey = toText(Deno.env.get("MOMO_SECRET_KEY"));
+  const apiEndpoint = toText(Deno.env.get("MOMO_API_ENDPOINT"));
+  const redirectUrl = toText(Deno.env.get("MOMO_REDIRECT_URL"));
+  if (!partnerCode || !accessKey || !secretKey || !apiEndpoint || !redirectUrl) {
+    throw new Error("MoMo chưa được cấu hình đầy đủ trên Supabase.");
+  }
+  if (!["https://test-payment.momo.vn/v2/gateway/api/create", "https://payment.momo.vn/v2/gateway/api/create"].includes(apiEndpoint)) {
+    throw new Error("MOMO_API_ENDPOINT không hợp lệ.");
+  }
+
+  const amount = toMoney(session.amount_expected);
+  const orderId = toText(session.payment_reference);
+  const requestId = orderId;
+  const requestType = "captureWallet";
+  const ipnUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/momo-payment-webhook`;
+  const orderInfo = `Thanh toan bill ${orderId} tai Ganh Hang Rong`;
+  const extraData = btoa(JSON.stringify({ sessionId: toText(session.id), source: "pos" }));
+  const rawSignature = [
+    `accessKey=${accessKey}`,
+    `amount=${amount}`,
+    `extraData=${extraData}`,
+    `ipnUrl=${ipnUrl}`,
+    `orderId=${orderId}`,
+    `orderInfo=${orderInfo}`,
+    `partnerCode=${partnerCode}`,
+    `redirectUrl=${redirectUrl}`,
+    `requestId=${requestId}`,
+    `requestType=${requestType}`
+  ].join("&");
+  const signature = await signHmacSha256(rawSignature, secretKey);
+  const result = await fetch(apiEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      partnerCode,
+      partnerName: "Ganh Hang Rong",
+      storeId: toText(session.branch_uuid || session.branch_name || "GHR"),
+      requestId,
+      amount,
+      orderId,
+      orderInfo,
+      redirectUrl,
+      ipnUrl,
+      lang: "vi",
+      requestType,
+      autoCapture: true,
+      extraData,
+      signature
+    })
+  });
+  const momoResponse = getObject(await result.json().catch(() => ({})));
+  if (!result.ok || Number(momoResponse.resultCode) !== 0 || !toText(momoResponse.payUrl)) {
+    throw new Error(toText(momoResponse.message) || `MoMo HTTP ${result.status}`);
+  }
+  const providerPayload = {
+    momoOrderId: orderId,
+    requestId,
+    resultCode: Number(momoResponse.resultCode),
+    message: toText(momoResponse.message),
+    payUrl: toText(momoResponse.payUrl),
+    deeplink: toText(momoResponse.deeplink),
+    qrCodeUrl: toText(momoResponse.qrCodeUrl),
+    responseTime: Number(momoResponse.responseTime || 0)
+  };
+  const { data, error } = await serviceClient
+    .from("pos_payment_sessions")
+    .update({ provider_payload: providerPayload, updated_at: new Date().toISOString() })
+    .eq("id", toText(session.id))
+    .select(SESSION_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 const POS_MANAGED_SESSION_SOURCES = ["pos", "web", "qr_order"];
 
 function response(body: JsonRecord, status = 200) {
@@ -369,6 +463,20 @@ async function createSession(
     return response({ ok: false, message: error.message || "Không tạo được phiên thanh toán." }, 500);
   }
 
+  if (toText(data.provider).toLowerCase() === "momo") {
+    try {
+      const momoSession = await createMomoPayment(serviceClient, data, toText(Deno.env.get("SUPABASE_URL")));
+      return response({ ok: true, session: momoSession, reused: false });
+    } catch (error) {
+      await serviceClient.from("pos_payment_sessions").update({
+        status: "failed",
+        failure_reason: error instanceof Error ? error.message : "Không tạo được giao dịch MoMo.",
+        updated_at: new Date().toISOString()
+      }).eq("id", toText(data.id));
+      return response({ ok: false, message: error instanceof Error ? error.message : "Không tạo được giao dịch MoMo." }, 502);
+    }
+  }
+
   return response({ ok: true, session: data, reused: false });
 }
 
@@ -642,7 +750,7 @@ Deno.serve(async (request) => {
   if (["cancel", "confirm_paid", "convert"].includes(action)) {
     if (
       action === "confirm_paid" &&
-      toText(access.profile.role).toLowerCase() !== "admin"
+      !["admin", "staff"].includes(toText(access.profile.role).toLowerCase())
     ) {
       return response({
         ok: false,
