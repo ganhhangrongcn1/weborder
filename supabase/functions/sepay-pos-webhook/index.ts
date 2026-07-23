@@ -501,7 +501,12 @@ async function readOrderItems(supabase: ReturnType<typeof createClient>, orderId
   return Array.isArray(data) ? data : [];
 }
 
-async function hasExistingPrintJob(supabase: ReturnType<typeof createClient>, orderId: string, orderCode: string) {
+async function hasExistingPrintJob(
+  supabase: ReturnType<typeof createClient>,
+  orderId: string,
+  orderCode: string,
+  sourceType: string
+) {
   const comparableKeys = [
     { column: "order_id", value: orderId },
     { column: "order_code", value: orderCode }
@@ -512,6 +517,7 @@ async function hasExistingPrintJob(supabase: ReturnType<typeof createClient>, or
       .from("print_jobs")
       .select("id,status")
       .eq("job_type", "customer_bill")
+      .eq("source_type", sourceType)
       .eq(item.column, item.value)
       .in("status", ["pending", "printing", "printed"])
       .order("created_at", { ascending: false })
@@ -621,7 +627,7 @@ function buildQrOrderReceiptText(printOrder: JsonRecord) {
   for (const item of items) {
     const itemObject = getObject(item);
     const quantity = Math.max(1, Math.floor(toNumber(itemObject.quantity || 1)));
-    lines.push(`${quantity} x ${toText(itemObject.name || "Mon")}`);
+    lines.push(`@@BOLDROW:${quantity} x ${toText(itemObject.name || "Mon")}\t`);
     const options = Array.isArray(itemObject.options) ? itemObject.options : [];
     for (const option of options) {
       if (toText(option)) lines.push(`  + ${toText(option)}`);
@@ -635,7 +641,10 @@ function buildQrOrderReceiptText(printOrder: JsonRecord) {
   if (toNumber(printOrder.discount) > 0) {
     lines.push(buildReceiptLine("Giam gia", `-${formatReceiptMoney(printOrder.discount)}`, width));
   }
-  lines.push(buildReceiptLine("Tong can thu", formatReceiptMoney(printOrder.totalAmount), width));
+  lines.push(buildReceiptLine("Tong don", formatReceiptMoney(printOrder.totalAmount), width));
+  lines.push(`@@BOLDROW:DA THANH TOAN QR\t${formatReceiptMoney(printOrder.totalAmount)}`);
+  lines.push("@@BOLDROW:CON PHAI THU\t0d");
+  lines.push("@@CENTER:*** KHONG THU THEM TIEN ***");
   lines.push(buildReceiptSeparator(width));
   lines.push("Thanh toan: QR");
   if (toText(printOrder.paymentReference)) lines.push(`Ma TT: ${toText(printOrder.paymentReference)}`);
@@ -644,7 +653,40 @@ function buildQrOrderReceiptText(printOrder: JsonRecord) {
     lines.push(`Ghi chu: ${toText(printOrder.note)}`);
   }
   lines.push(buildReceiptSeparator(width));
-  lines.push("@@CENTER:Cam on quy khach!");
+  return lines.join("\n");
+}
+
+function buildQrOrderPreparationText(printOrder: JsonRecord) {
+  const width = 42;
+  const items = Array.isArray(printOrder.items) ? printOrder.items : [];
+  const lines = [
+    "@@CENTER:GANH HANG RONG",
+    "@@CENTER:PHIEU LAM MON",
+    `@@BIG:${toText(printOrder.displayOrderCode || printOrder.orderCode || printOrder.id || "GHR")}`,
+    buildReceiptSeparator(width),
+    `Chi nhanh: ${toText(printOrder.branchName) || "Ganh Hang Rong"}`,
+    "Nguon: Website - SePay",
+    buildReceiptSeparator(width)
+  ];
+
+  for (const item of items) {
+    const itemObject = getObject(item);
+    const quantity = Math.max(1, Math.floor(toNumber(itemObject.quantity || 1)));
+    lines.push(`@@BOLDROW:${quantity} x ${toText(itemObject.name || "Mon")}\t`);
+    const options = Array.isArray(itemObject.options) ? itemObject.options : [];
+    for (const option of options) {
+      if (toText(option)) lines.push(`  + ${toText(option)}`);
+    }
+    if (toText(itemObject.note)) lines.push(`  Ghi chu: ${toText(itemObject.note)}`);
+    lines.push("@@SPACE");
+  }
+
+  if (toText(printOrder.note)) {
+    lines.push(buildReceiptSeparator(width));
+    lines.push(`Ghi chu don: ${toText(printOrder.note)}`);
+  }
+  lines.push(buildReceiptSeparator(width));
+  lines.push("@@CENTER:KIEM TRA DU MON - TOPPING - GHI CHU");
   return lines.join("\n");
 }
 
@@ -659,43 +701,64 @@ async function ensureCustomerBillPrintJob(
     return { created: false, reason: "missing_order_id" };
   }
 
-  const exists = await hasExistingPrintJob(supabase, orderId, orderCode);
-  if (exists) {
-    return { created: false, reason: "already_exists" };
-  }
-
   const items = await readOrderItems(supabase, orderId);
   const now = new Date().toISOString();
   const metadata = getObject(order.metadata);
   const printOrder = buildPrintOrder(order, items);
 
-  const { error } = await supabase
-    .from("print_jobs")
-    .insert({
-      branch_uuid: toText(order.branch_uuid),
-      printer_key: "cashier-80mm",
-      job_type: "customer_bill",
-      status: "pending",
-      order_id: orderId,
-      order_code: toText(metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id),
-      source_type: "qr_order",
-      payload: {
-        printerName: "Xprinter",
-        receiptWidthMm: 80,
-        type: "qr_order",
-        sourceType: "qr_order",
-        text: buildQrOrderReceiptText(printOrder),
-        order: printOrder
-      },
-      requested_by: "sepay_webhook",
-      requested_at: now,
-      created_at: now,
-      updated_at: now
+  const jobs = [
+    {
+      sourceType: "qr_order_preparation",
+      text: buildQrOrderPreparationText(printOrder)
+    },
+    {
+      sourceType: "qr_order",
+      text: buildQrOrderReceiptText(printOrder)
+    }
+  ];
+  const results = [];
+
+  for (const job of jobs) {
+    const exists = await hasExistingPrintJob(supabase, orderId, orderCode, job.sourceType);
+    if (exists) {
+      results.push({ sourceType: job.sourceType, created: false, reason: "already_exists" });
+      continue;
+    }
+
+    const { error } = await supabase
+      .from("print_jobs")
+      .insert({
+        branch_uuid: toText(order.branch_uuid),
+        printer_key: "cashier-80mm",
+        job_type: "customer_bill",
+        status: "pending",
+        order_id: orderId,
+        order_code: toText(metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id),
+        source_type: job.sourceType,
+        payload: {
+          printerName: "Xprinter",
+          receiptWidthMm: 80,
+          type: job.sourceType,
+          sourceType: job.sourceType,
+          text: job.text,
+          order: printOrder
+        },
+        requested_by: "sepay_webhook",
+        requested_at: now,
+        created_at: now,
+        updated_at: now
+      });
+    results.push({
+      sourceType: job.sourceType,
+      created: !error,
+      reason: error ? (error.message || "insert_failed") : "created"
     });
+  }
 
   return {
-    created: !error,
-    reason: error ? (error.message || "insert_failed") : "created"
+    created: results.some((result) => result.created),
+    reason: results.every((result) => result.reason === "already_exists") ? "already_exists" : "processed",
+    jobs: results
   };
 }
 
