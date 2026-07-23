@@ -24,6 +24,7 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
   "pickup_order_payment_qr",
   "delivery_order_payment_qr",
   "qr_order_preparation",
+  "qr_order_bundle",
   "pos_shift_close"
 ]);
 const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "counter", "tai_quay"]);
@@ -277,6 +278,7 @@ function buildPrintPayload(job = {}) {
   const sourceType = normalizeSourceToken(job.source_type || payload.type || payload.sourceType);
   const order = getObject(payload.order);
   const payloadText = toText(payload.text);
+  const secondaryText = toText(payload.secondaryText);
   const paymentStatus = normalizeSourceToken(order.paymentStatus || order.payment_status);
   const paidAt = toText(order.paidAt || order.paid_at);
   const legacyUnpaidReceipt =
@@ -300,7 +302,15 @@ function buildPrintPayload(job = {}) {
     isQrPayment: isQrPaymentPrintPayload(payload, sourceType),
     shouldDelayPrint: sourceType === "qr_order",
     footerText: skipFooter ? "" : toText(payload.footerText || DEFAULT_FOOTER_TEXT),
-    footerQrUrl: skipFooter ? "" : toText(payload.footerQrUrl || DEFAULT_FOOTER_QR_URL)
+    footerQrUrl: skipFooter ? "" : toText(payload.footerQrUrl || DEFAULT_FOOTER_QR_URL),
+    secondaryReceipt: secondaryText
+      ? {
+          text: secondaryText,
+          sourceType: "qr_order",
+          footerText: toText(payload.footerText || DEFAULT_FOOTER_TEXT),
+          footerQrUrl: toText(payload.footerQrUrl || DEFAULT_FOOTER_QR_URL)
+        }
+      : null
   };
 }
 
@@ -423,6 +433,18 @@ async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
         );
       })
     ]);
+    if (printPayload.secondaryReceipt) {
+      await wait(750);
+      await Promise.race([
+        printLocalReceipt(printPayload.secondaryReceipt),
+        new Promise((_, reject) => {
+          globalThis.setTimeout(
+            () => reject(new Error("Máy in phản hồi quá lâu khi in hóa đơn. Hãy kiểm tra kết nối rồi bấm in lại.")),
+            PRINT_RECEIPT_TIMEOUT_MS
+          );
+        })
+      ]);
+    }
     void alertTask;
     await markPrinted(claimed.id);
     if (typeof onStatus === "function") {

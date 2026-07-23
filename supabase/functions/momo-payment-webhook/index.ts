@@ -182,50 +182,38 @@ async function ensurePrintJob(supabase: ReturnType<typeof createClient>, order: 
   };
 
   const branchUuid = toText(order.pickup_branch_uuid || order.branch_uuid) || null;
-  const jobs = [
-    {
-      sourceType: "qr_order_preparation",
-      text: buildPreparationTicketText(printOrder)
+  const sourceType = "qr_order_bundle";
+  const { data: existing } = await supabase
+    .from("print_jobs")
+    .select("id")
+    .eq("job_type", "customer_bill")
+    .eq("order_id", orderId)
+    .eq("source_type", sourceType)
+    .in("status", ["pending", "printing", "printed"])
+    .limit(1);
+  if (Array.isArray(existing) && existing[0]?.id) return;
+
+  const { error } = await supabase.from("print_jobs").insert({
+    branch_uuid: branchUuid,
+    printer_key: "cashier-80mm",
+    job_type: "customer_bill",
+    status: "pending",
+    order_id: orderId,
+    order_code: printOrder.displayOrderCode,
+    source_type: sourceType,
+    payload: {
+      type: sourceType,
+      sourceType,
+      text: buildPreparationTicketText(printOrder),
+      secondaryText: buildReceiptText(printOrder),
+      order: printOrder
     },
-    {
-      sourceType: "qr_order",
-      text: buildReceiptText(printOrder)
-    }
-  ];
-
-  for (const [jobIndex, job] of jobs.entries()) {
-    const { data: existing } = await supabase
-      .from("print_jobs")
-      .select("id")
-      .eq("job_type", "customer_bill")
-      .eq("order_id", orderId)
-      .eq("source_type", job.sourceType)
-      .in("status", ["pending", "printing", "printed"])
-      .limit(1);
-    if (Array.isArray(existing) && existing[0]?.id) continue;
-
-    const jobTime = new Date(Date.now() + jobIndex * 100).toISOString();
-    const { error } = await supabase.from("print_jobs").insert({
-      branch_uuid: branchUuid,
-      printer_key: "cashier-80mm",
-      job_type: "customer_bill",
-      status: "pending",
-      order_id: orderId,
-      order_code: printOrder.displayOrderCode,
-      source_type: job.sourceType,
-      payload: {
-        type: job.sourceType,
-        sourceType: job.sourceType,
-        text: job.text,
-        order: printOrder
-      },
-      requested_by: "momo_webhook",
-      requested_at: jobTime,
-      created_at: jobTime,
-      updated_at: jobTime
-    });
-    if (error) console.error(`[momo-payment-webhook] ${job.sourceType} print job failed`, error.message);
-  }
+    requested_by: "momo_webhook",
+    requested_at: now,
+    created_at: now,
+    updated_at: now
+  });
+  if (error) console.error("[momo-payment-webhook] bundled print job failed", error.message);
 }
 
 Deno.serve(async (request) => {

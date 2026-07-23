@@ -706,60 +706,40 @@ async function ensureCustomerBillPrintJob(
   const metadata = getObject(order.metadata);
   const printOrder = buildPrintOrder(order, items);
 
-  const jobs = [
-    {
-      sourceType: "qr_order_preparation",
-      text: buildQrOrderPreparationText(printOrder)
-    },
-    {
-      sourceType: "qr_order",
-      text: buildQrOrderReceiptText(printOrder)
-    }
-  ];
-  const results = [];
-
-  for (const [jobIndex, job] of jobs.entries()) {
-    const exists = await hasExistingPrintJob(supabase, orderId, orderCode, job.sourceType);
-    if (exists) {
-      results.push({ sourceType: job.sourceType, created: false, reason: "already_exists" });
-      continue;
-    }
-
-    const jobTime = new Date(Date.now() + jobIndex * 100).toISOString();
-    const { error } = await supabase
-      .from("print_jobs")
-      .insert({
-        branch_uuid: toText(order.branch_uuid),
-        printer_key: "cashier-80mm",
-        job_type: "customer_bill",
-        status: "pending",
-        order_id: orderId,
-        order_code: toText(metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id),
-        source_type: job.sourceType,
-        payload: {
-          printerName: "Xprinter",
-          receiptWidthMm: 80,
-          type: job.sourceType,
-          sourceType: job.sourceType,
-          text: job.text,
-          order: printOrder
-        },
-        requested_by: "sepay_webhook",
-        requested_at: jobTime,
-        created_at: jobTime,
-        updated_at: jobTime
-      });
-    results.push({
-      sourceType: job.sourceType,
-      created: !error,
-      reason: error ? (error.message || "insert_failed") : "created"
-    });
+  const sourceType = "qr_order_bundle";
+  const exists = await hasExistingPrintJob(supabase, orderId, orderCode, sourceType);
+  if (exists) {
+    return { created: false, reason: "already_exists" };
   }
 
+  const { error } = await supabase
+    .from("print_jobs")
+    .insert({
+      branch_uuid: toText(order.branch_uuid),
+      printer_key: "cashier-80mm",
+      job_type: "customer_bill",
+      status: "pending",
+      order_id: orderId,
+      order_code: toText(metadata.displayOrderCode || metadata.display_order_code || order.order_code || order.id),
+      source_type: sourceType,
+      payload: {
+        printerName: "Xprinter",
+        receiptWidthMm: 80,
+        type: sourceType,
+        sourceType,
+        text: buildQrOrderPreparationText(printOrder),
+        secondaryText: buildQrOrderReceiptText(printOrder),
+        order: printOrder
+      },
+      requested_by: "sepay_webhook",
+      requested_at: now,
+      created_at: now,
+      updated_at: now
+    });
+
   return {
-    created: results.some((result) => result.created),
-    reason: results.every((result) => result.reason === "already_exists") ? "already_exists" : "processed",
-    jobs: results
+    created: !error,
+    reason: error ? (error.message || "insert_failed") : "created"
   };
 }
 
