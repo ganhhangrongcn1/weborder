@@ -34,6 +34,7 @@ import { filterProductsForAvailability } from "../../services/productAvailabilit
 import { isPromotionAllowedForChannel } from "../../services/promotionChannelService.js";
 import { hasMenuCategory, isAllMenuCategory, resolveDefaultMenuCategory } from "../../constants/menuCategoryConfig.js";
 import { buildReorderCheckoutPreset } from "../checkout/checkoutDomain.js";
+import { clearCheckoutVoucherIntent } from "../../services/checkoutVoucherIntentService.js";
 
 const userStorage = createUserStorage({
   getCustomerKey,
@@ -125,6 +126,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     (menuChannel === "qr" && Boolean(selectedMenuBranchValue) && !selectedMenuBranch);
 
   const prepareReorderCheckout = useCallback((order) => {
+    clearCheckoutVoucherIntent();
     const { preset, branchUnavailable } = buildReorderCheckoutPreset({
       order,
       branches: productState.branches,

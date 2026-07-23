@@ -20,6 +20,7 @@ const MOMO_RETURN_TOKEN_PARAM = "momoReturnToken";
 const SESSION_COLUMNS = [
   "id",
   "payment_reference",
+  "request_key",
   "provider",
   "source",
   "status",
@@ -162,6 +163,12 @@ function buildPaymentReference(order: JsonRecord, body: JsonRecord, provider = "
   const orderCode = normalizePaymentReference(order.order_code || order.id);
   if (orderCode) return orderCode;
   return normalizePaymentReference(`GHR-${Date.now().toString().slice(-8)}`);
+}
+
+function buildQrOrderRequestKey(orderId: unknown, provider: unknown) {
+  const safeOrderId = toText(orderId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80);
+  const safeProvider = toText(provider).toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 20);
+  return `qr_order:${safeProvider || "payment"}:${safeOrderId}`;
 }
 
 function isQrPayableOrder(order: JsonRecord) {
@@ -363,6 +370,220 @@ async function createMomoPayment(
   return data;
 }
 
+async function reconcilePendingMomoPayment(
+  serviceClient: ReturnType<typeof createClient>,
+  session: JsonRecord,
+  order: JsonRecord | null,
+  allowSiblingLookup = true
+) {
+  if (
+    toText(session.provider).toLowerCase() !== "momo" ||
+    !["pending_payment", "expired"].includes(toText(session.status).toLowerCase()) ||
+    !order
+  ) {
+    return session;
+  }
+
+  const providerPayload = getObject(session.provider_payload);
+  const lastQueryAt = new Date(toText(providerPayload.lastMomoQueryAt)).getTime();
+  if (Number.isFinite(lastQueryAt) && Date.now() - lastQueryAt < 10_000) return session;
+
+  const partnerCode = toText(Deno.env.get("MOMO_PARTNER_CODE"));
+  const accessKey = toText(Deno.env.get("MOMO_ACCESS_KEY"));
+  const secretKey = toText(Deno.env.get("MOMO_SECRET_KEY"));
+  const createEndpoint = toText(Deno.env.get("MOMO_API_ENDPOINT"));
+  const supabaseUrl = toText(Deno.env.get("SUPABASE_URL"));
+  if (!partnerCode || !accessKey || !secretKey || !createEndpoint || !supabaseUrl) return session;
+
+  const queryEndpoint = createEndpoint.replace(/\/create$/i, "/query");
+  if (!["https://test-payment.momo.vn/v2/gateway/api/query", "https://payment.momo.vn/v2/gateway/api/query"].includes(queryEndpoint)) {
+    return session;
+  }
+
+  const checkedAt = new Date().toISOString();
+  await serviceClient
+    .from("pos_payment_sessions")
+    .update({
+      provider_payload: {
+        ...providerPayload,
+        lastMomoQueryAt: checkedAt
+      },
+      updated_at: checkedAt
+    })
+    .eq("id", toText(session.id))
+    .in("status", ["pending_payment", "expired"]);
+
+  const momoOrderId = toText(session.payment_reference);
+  const queryRequestId = `${momoOrderId}Q${Date.now().toString(36).toUpperCase()}`.slice(0, 50);
+  const queryRawSignature = [
+    `accessKey=${accessKey}`,
+    `orderId=${momoOrderId}`,
+    `partnerCode=${partnerCode}`,
+    `requestId=${queryRequestId}`
+  ].join("&");
+  const querySignature = await signHmacSha256(queryRawSignature, secretKey);
+
+  let queryResult: JsonRecord;
+  try {
+    queryResult = getObject(await fetch(queryEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        partnerCode,
+        requestId: queryRequestId,
+        orderId: momoOrderId,
+        lang: "vi",
+        signature: querySignature
+      })
+    }).then(async (result) => {
+      const payload = getObject(await result.json().catch(() => ({})));
+      if (!result.ok) throw new Error(toText(payload.message) || `MoMo HTTP ${result.status}`);
+      return payload;
+    }));
+  } catch (error) {
+    console.warn("[qr-payment-session-api] momo reconciliation query failed", error);
+    return session;
+  }
+
+  await serviceClient
+    .from("pos_payment_sessions")
+    .update({
+      provider_payload: {
+        ...providerPayload,
+        lastMomoQueryAt: checkedAt,
+        lastMomoQueryResult: {
+          resultCode: Number(queryResult.resultCode ?? -1),
+          message: toText(queryResult.message),
+          transId: toText(queryResult.transId),
+          responseTime: Number(queryResult.responseTime || 0)
+        }
+      },
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", toText(session.id));
+
+  if (Number(queryResult.resultCode) !== 0 || !toText(queryResult.transId)) {
+    if (allowSiblingLookup && toText(session.order_id)) {
+      const { data: siblingSessions } = await serviceClient
+        .from("pos_payment_sessions")
+        .select(SESSION_COLUMNS)
+        .eq("source", "qr_order")
+        .eq("provider", "momo")
+        .eq("order_id", toText(session.order_id))
+        .in("status", ["pending_payment", "expired"])
+        .neq("id", toText(session.id))
+        .order("created_at", { ascending: false })
+        .limit(5);
+      for (const sibling of Array.isArray(siblingSessions) ? siblingSessions : []) {
+        const reconciledSibling = await reconcilePendingMomoPayment(
+          serviceClient,
+          sibling,
+          order,
+          false
+        );
+        if (["paid", "converting", "converted"].includes(toText(reconciledSibling.status).toLowerCase())) {
+          return reconciledSibling;
+        }
+      }
+    }
+    return session;
+  }
+
+  const amount = toMoney(queryResult.amount || session.amount_expected);
+  if (amount !== toMoney(session.amount_expected)) {
+    console.error("[qr-payment-session-api] momo reconciliation amount mismatch", {
+      sessionId: toText(session.id),
+      expected: toMoney(session.amount_expected),
+      received: amount
+    });
+    return session;
+  }
+
+  const currentStatus = toText(session.status).toLowerCase();
+  if (currentStatus === "expired") {
+    const restoredAt = new Date().toISOString();
+    const { data: restoredSession } = await serviceClient
+      .from("pos_payment_sessions")
+      .update({
+        status: "pending_payment",
+        failure_reason: "",
+        cancelled_at: null,
+        updated_at: restoredAt
+      })
+      .eq("id", toText(session.id))
+      .eq("status", "expired")
+      .select(SESSION_COLUMNS)
+      .maybeSingle();
+    if (restoredSession) session = restoredSession;
+  }
+
+  const extraData = btoa(JSON.stringify({ orderId: toText(order.id), source: "qr_order" }));
+  const orderInfo = `Thanh toan don ${toText(order.order_code || order.id)} tai Ganh Hang Rong`;
+  const ipnPayload: JsonRecord = {
+    partnerCode,
+    orderId: momoOrderId,
+    requestId: toText(queryResult.requestId || queryRequestId),
+    amount,
+    orderInfo,
+    orderType: "momo_wallet",
+    transId: toText(queryResult.transId),
+    resultCode: 0,
+    message: toText(queryResult.message || "Successful."),
+    payType: toText(queryResult.payType),
+    responseTime: Number(queryResult.responseTime || Date.now()),
+    extraData,
+    paymentOption: toText(queryResult.paymentOption || "momo")
+  };
+  const ipnRawSignature = [
+    `accessKey=${accessKey}`,
+    `amount=${toText(ipnPayload.amount)}`,
+    `extraData=${toText(ipnPayload.extraData)}`,
+    `message=${toText(ipnPayload.message)}`,
+    `orderId=${toText(ipnPayload.orderId)}`,
+    `orderInfo=${toText(ipnPayload.orderInfo)}`,
+    `orderType=${toText(ipnPayload.orderType)}`,
+    `partnerCode=${toText(ipnPayload.partnerCode)}`,
+    `payType=${toText(ipnPayload.payType)}`,
+    `requestId=${toText(ipnPayload.requestId)}`,
+    `responseTime=${toText(ipnPayload.responseTime)}`,
+    `resultCode=${toText(ipnPayload.resultCode)}`,
+    `transId=${toText(ipnPayload.transId)}`
+  ].join("&");
+  ipnPayload.signature = await signHmacSha256(ipnRawSignature, secretKey);
+
+  try {
+    const serviceRoleKey = toText(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+    const webhookResult = await fetch(
+      `${supabaseUrl.replace(/\/$/, "")}/functions/v1/momo-payment-webhook`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          ...(serviceRoleKey ? {
+            apikey: serviceRoleKey,
+            Authorization: `Bearer ${serviceRoleKey}`
+          } : {})
+        },
+        body: JSON.stringify(ipnPayload)
+      }
+    );
+    if (!webhookResult.ok && webhookResult.status !== 204) {
+      console.error("[qr-payment-session-api] momo reconciliation webhook failed", webhookResult.status);
+      return session;
+    }
+  } catch (error) {
+    console.error("[qr-payment-session-api] momo reconciliation webhook request failed", error);
+    return session;
+  }
+
+  const { data: reconciledSession } = await serviceClient
+    .from("pos_payment_sessions")
+    .select(SESSION_COLUMNS)
+    .eq("id", toText(session.id))
+    .maybeSingle();
+  return reconciledSession || session;
+}
+
 async function findSession(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
   const sessionId = toText(body.session_id || body.sessionId);
   if (sessionId) {
@@ -383,9 +604,16 @@ async function findSession(serviceClient: ReturnType<typeof createClient>, body:
       .eq("order_id", orderId)
       .in("status", ["pending_payment", "paid", "converting", "converted", "expired", "cancelled", "failed"])
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data) return data;
+      .limit(10);
+    const sessions = Array.isArray(data) ? data : [];
+    const statusPriority = (session: JsonRecord) => {
+      const status = toText(session.status).toLowerCase();
+      if (["paid", "converting", "converted"].includes(status)) return 0;
+      if (["draft", "pending_payment"].includes(status)) return 1;
+      return 2;
+    };
+    sessions.sort((left, right) => statusPriority(left) - statusPriority(right));
+    if (sessions[0]) return sessions[0];
   }
 
   const paymentReference = normalizePaymentReference(body.payment_reference || body.paymentReference);
@@ -636,6 +864,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
   const metadata = getObject(order.metadata);
   const paymentMethod = toText(order.payment_method || metadata.paymentMethod || metadata.payment_method).toLowerCase();
   const provider = getPaymentProvider(order, body);
+  const requestKey = buildQrOrderRequestKey(order.id, provider);
   const branchUuid = toText(order.pickup_branch_uuid || order.branch_uuid) || null;
   const branchName = toText(order.pickup_branch_name || order.branch_name);
   const activeShift = await findActivePosShift(serviceClient, branchUuid || "");
@@ -688,10 +917,28 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
       toText(nextSession?.status).toLowerCase() === "pending_payment" &&
       !toText(getObject(nextSession?.provider_payload).payUrl)
     ) {
-      try {
-        nextSession = await createMomoPayment(serviceClient, nextSession as JsonRecord, order, toText(Deno.env.get("SUPABASE_URL")));
-      } catch (error) {
-        return response({ ok: false, message: error instanceof Error ? error.message : "Không tạo được giao dịch MoMo.", session: nextSession }, 502);
+      if (toText(nextSession?.request_key)) {
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          const { data: refreshedSession } = await serviceClient
+            .from("pos_payment_sessions")
+            .select(SESSION_COLUMNS)
+            .eq("id", toText(nextSession?.id))
+            .maybeSingle();
+          if (refreshedSession) nextSession = refreshedSession;
+          if (
+            toText(getObject(nextSession?.provider_payload).payUrl) ||
+            toText(nextSession?.status).toLowerCase() !== "pending_payment"
+          ) {
+            break;
+          }
+        }
+      } else {
+        try {
+          nextSession = await createMomoPayment(serviceClient, nextSession as JsonRecord, order, toText(Deno.env.get("SUPABASE_URL")));
+        } catch (error) {
+          return response({ ok: false, message: error instanceof Error ? error.message : "Không tạo được giao dịch MoMo.", session: nextSession }, 502);
+        }
       }
     }
     return response({ ok: true, session: nextSession, reused: true });
@@ -710,6 +957,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     .from("pos_payment_sessions")
     .insert({
       payment_reference: paymentReference,
+      request_key: requestKey,
       provider,
       source: "qr_order",
       status: "pending_payment",
@@ -741,6 +989,20 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     .single();
 
   if (error) {
+    if (String(error.code || "") === "23505") {
+      const { data: reusedSession } = await serviceClient
+        .from("pos_payment_sessions")
+        .select(SESSION_COLUMNS)
+        .eq("request_key", requestKey)
+        .maybeSingle();
+      if (reusedSession) {
+        return response({
+          ok: true,
+          session: sanitizeSessionForCustomer(reusedSession),
+          reused: true
+        });
+      }
+    }
     return response({ ok: false, message: error.message || "Không tạo được phiên thanh toán QR." }, 500);
   }
 
@@ -794,9 +1056,14 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
 }
 
 async function readSession(serviceClient: ReturnType<typeof createClient>, body: JsonRecord) {
-  const session = await expireQrOrderSessionIfNeeded(serviceClient, await findSession(serviceClient, body));
+  let session = await findSession(serviceClient, body);
   if (!session) return response({ ok: false, message: "Chưa có phiên thanh toán cho đơn này." }, 404);
-  const order = await readOrder(serviceClient, { order_id: toText(session.order_id) });
+  let order = await readOrder(serviceClient, { order_id: toText(session.order_id) });
+  session = await reconcilePendingMomoPayment(serviceClient, session, order);
+  session = await expireQrOrderSessionIfNeeded(serviceClient, session);
+  if (["paid", "converting", "converted"].includes(toText(session.status).toLowerCase())) {
+    order = await readOrder(serviceClient, { order_id: toText(session.order_id) });
+  }
   return response({
     ok: true,
     session: sanitizeSessionForCustomer(session),
@@ -902,9 +1169,14 @@ async function recoverMomoReturn(serviceClient: ReturnType<typeof createClient>,
     return response({ ok: false, message: "Liên kết trở lại đơn hàng đã hết hạn." }, 410);
   }
 
-  const session = await expireQrOrderSessionIfNeeded(serviceClient, rawSession);
-  const order = await readOrder(serviceClient, { order_id: toText(session?.order_id) });
+  let session = rawSession;
+  let order = await readOrder(serviceClient, { order_id: toText(session?.order_id) });
   if (!session || !order) return response({ ok: false, message: "Không tìm thấy đơn hàng cần khôi phục." }, 404);
+  session = await reconcilePendingMomoPayment(serviceClient, session, order);
+  session = await expireQrOrderSessionIfNeeded(serviceClient, session);
+  if (["paid", "converting", "converted"].includes(toText(session.status).toLowerCase())) {
+    order = await readOrder(serviceClient, { order_id: toText(session.order_id) }) || order;
+  }
 
   return response({
     ok: true,

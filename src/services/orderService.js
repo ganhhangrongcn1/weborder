@@ -324,6 +324,17 @@ function createCustomerOrderIdentity(now = new Date()) {
   };
 }
 
+function isDuplicateOrderIdentityError(error) {
+  if (String(error?.code || "") !== "23505") return false;
+  const detail = [
+    error?.message,
+    error?.details,
+    error?.hint,
+    error?.constraint
+  ].filter(Boolean).join(" ").toLowerCase();
+  return detail.includes("orders_pkey") || detail.includes("order_code");
+}
+
 export async function createOrderAsync(params) {
   const {
     cart,
@@ -402,7 +413,7 @@ export async function createOrderAsync(params) {
     : null;
   const initialOrderStatus = isPrepaidPayment ? "pending_payment" : "preparing";
   const initialKitchenStatus = isPrepaidPayment ? "waiting_payment" : "pending";
-  const order = {
+  let order = {
     id: orderCode,
     orderCode,
     displayOrderCode,
@@ -461,9 +472,23 @@ export async function createOrderAsync(params) {
     pointsEarned
   };
 
-  const savedOrder = await orderStorage.addOrderAsync(order);
+  let savedOrder;
+  try {
+    savedOrder = await orderStorage.addOrderAsync(order);
+  } catch (error) {
+    if (!isDuplicateOrderIdentityError(error)) throw error;
+    const retryIdentity = createCustomerOrderIdentity(new Date(Date.now() + 1));
+    order = {
+      ...order,
+      id: retryIdentity.orderCode,
+      orderCode: retryIdentity.orderCode,
+      displayOrderCode: retryIdentity.displayOrderCode,
+      paymentReference: isPrepaidPayment ? retryIdentity.orderCode : ""
+    };
+    savedOrder = await orderStorage.addOrderAsync(order);
+  }
   if (customerActionProof?.token) {
-    saveCustomerOrderActionToken(savedOrder?.id || savedOrder?.orderCode || orderCode, customerActionProof.token);
+    saveCustomerOrderActionToken(savedOrder?.id || savedOrder?.orderCode || order.orderCode, customerActionProof.token);
   }
   notifyWebOrderWebhook({ order: savedOrder }).catch((error) => {
     console.warn("[order] web order webhook failed", error);
@@ -543,7 +568,7 @@ export function reorder(order, catalogProducts = []) {
   );
   const allNamedProducts = safeProducts.filter((product) => normalizeName(product?.name || ""));
 
-  return (order?.items || []).map((item, index) => {
+  return (order?.items || []).filter((item) => !item?.autoGiftByPromo).map((item, index) => {
     const quantity = item.quantity || 1;
     const unitTotal = item.unitTotal || Math.round((item.lineTotal || item.price || 0) / quantity);
     const normalizedItemName = normalizeName(item.name);
@@ -567,14 +592,27 @@ export function reorder(order, catalogProducts = []) {
       item.productImage ||
       "";
     const resolvedName = matchedProduct?.name || item.name;
+    const safeProduct = matchedProduct
+      ? { ...matchedProduct }
+      : {
+          id: item.id || item.productId || item.product_id,
+          productId: item.productId || item.product_id || item.id,
+          name: resolvedName,
+          image: resolvedImage,
+          category: item.category || "",
+          price: Number(item.price ?? unitTotal ?? 0),
+          originalPrice: Number(item.originalPrice || item.price || 0)
+        };
 
     return {
-      ...item,
+      ...safeProduct,
       cartId: `${item.id || "order"}-reorder-${now}-${index}`,
-      id: matchedProduct?.id || item.id,
+      id: matchedProduct?.id || item.id || item.productId || item.product_id,
       name: resolvedName,
       quantity,
+      spice: item.spice || "",
       toppings: item.toppings || [],
+      note: item.note || "",
       image: resolvedImage,
       unitTotal,
       lineTotal: unitTotal * quantity
