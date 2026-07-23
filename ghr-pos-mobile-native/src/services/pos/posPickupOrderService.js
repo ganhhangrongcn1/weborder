@@ -135,7 +135,25 @@ function getPaymentStatus(row = {}) {
 
 function isPaid(row = {}) {
   const metadata = getObject(row.metadata);
-  return getPaymentStatus(row) === "paid" || Boolean(toText(row.paid_at || metadata.paidAt || metadata.paid_at));
+  const paymentStatus = getPaymentStatus(row);
+  const paymentProvider = normalizeToken(metadata.paymentProvider || metadata.payment_provider);
+  const providerTransactionId = toText(
+    metadata.momoTransactionId ||
+      metadata.momo_transaction_id ||
+      metadata.sepayWebhook?.providerTransactionId ||
+      metadata.sepay_webhook?.provider_transaction_id
+  );
+  const providerConfirmed = ["momo", "sepay"].includes(paymentProvider) && Boolean(
+    providerTransactionId ||
+      toText(metadata.paidAt || metadata.paid_at) ||
+      toNumber(metadata.paymentAmount || metadata.payment_amount) > 0
+  );
+
+  return (
+    ["paid", "converted", "completed", "success"].includes(paymentStatus) ||
+    Boolean(toText(row.paid_at || metadata.paidAt || metadata.paid_at)) ||
+    providerConfirmed
+  );
 }
 
 function isPrepaidWebsitePickup(row = {}) {
@@ -275,6 +293,28 @@ async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = tr
 export async function getPosWebsiteOrders({ branchUuid = "", limit = 80 } = {}) {
   const rows = await readWebsiteOrders({ branchUuid, limit, includePaid: true });
   return splitWebsiteOrders(rows.filter(shouldShowInWebsiteQueue));
+}
+
+export function subscribePosWebsiteOrderChanges(branchUuid = "", onChange) {
+  const safeBranchUuid = toText(branchUuid);
+  if (!supabase || !safeBranchUuid || typeof onChange !== "function") return () => {};
+
+  const channel = supabase
+    .channel(`pos-website-orders-${safeBranchUuid}-${Date.now()}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "orders" },
+      (payload) => {
+        const row = payload?.new || payload?.old || {};
+        if (!matchesBranch(row, safeBranchUuid) || isPosSource(row)) return;
+        onChange(payload);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
 
 export async function getPosPickupOrders({ branchUuid = "", limit = 60 } = {}) {

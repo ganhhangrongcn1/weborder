@@ -36,7 +36,8 @@ import {
   getPosWebsiteHistoryOrders,
   getPosWebsiteOrders,
   markPickupOrderPaidCash,
-  markPickupOrderPaidQr
+  markPickupOrderPaidQr,
+  subscribePosWebsiteOrderChanges
 } from "../../../services/pos/posPickupOrderService";
 import { buildPosPaymentReference, buildPosQrImageUrl } from "../../../services/pos/posPaymentService";
 import {
@@ -884,6 +885,24 @@ export default function usePosComposer() {
       void stopLocalPrintStationService();
     };
   }, [profile?.branchName, profile?.branchUuid, session?.user?.id]);
+
+  useEffect(() => {
+    const branchUuid = String(profile?.branchUuid || "").trim();
+    if (!branchUuid) return undefined;
+
+    let refreshTimer = null;
+    const unsubscribe = subscribePosWebsiteOrderChanges(branchUuid, () => {
+      if (refreshTimer) globalThis.clearTimeout(refreshTimer);
+      refreshTimer = globalThis.setTimeout(() => {
+        void refreshPosRuntime(branchUuid, { includeRecentOrders: true, silent: true });
+      }, 250);
+    });
+
+    return () => {
+      if (refreshTimer) globalThis.clearTimeout(refreshTimer);
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, [profile?.branchUuid]);
 
   useEffect(() => {
     const branchUuid = String(profile?.branchUuid || "").trim();
