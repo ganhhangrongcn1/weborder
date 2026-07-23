@@ -280,13 +280,34 @@ export default function Checkout({
   );
 
   const selectedBranchInfo = pickupBranches.find((branch) => branch.id === selectedBranch) || pickupBranches[0] || null;
+  const webMomoEnabled = selectedBranchInfo?.paymentSettings?.webMomoEnabled !== false;
   const webBankQrEnabled = selectedBranchInfo?.paymentSettings?.webBankQrEnabled === true;
+  const webCounterPaymentEnabled = selectedBranchInfo?.paymentSettings?.webCounterPaymentEnabled !== false;
 
   useEffect(() => {
-    if (!webBankQrEnabled && paymentMethod === "bank_qr") {
+    if (!(isQrCounterOrder || fulfillmentType === "pickup")) return;
+
+    const selectedMethodEnabled =
+      (paymentMethod === "momo" && webMomoEnabled) ||
+      (paymentMethod === "bank_qr" && webBankQrEnabled) ||
+      (paymentMethod === "counter" && webCounterPaymentEnabled);
+    if (selectedMethodEnabled) return;
+
+    if (webMomoEnabled) {
       setPaymentMethod("momo");
+    } else if (webBankQrEnabled) {
+      setPaymentMethod("bank_qr");
+    } else if (webCounterPaymentEnabled) {
+      setPaymentMethod("counter");
     }
-  }, [paymentMethod, webBankQrEnabled]);
+  }, [
+    fulfillmentType,
+    isQrCounterOrder,
+    paymentMethod,
+    webBankQrEnabled,
+    webCounterPaymentEnabled,
+    webMomoEnabled
+  ]);
   const pickupTimeText = isQrCounterOrder
     ? "Đặt liền tại quầy"
     : pickupMode === "soon"
@@ -647,7 +668,9 @@ export default function Checkout({
           setIsDeliveryFeeModalOpen={setIsDeliveryFeeModalOpen}
           isRegisteredCustomer={isRegisteredCustomer}
           isQrCounterOrder={isQrCounterOrder}
+          webMomoEnabled={webMomoEnabled}
           webBankQrEnabled={webBankQrEnabled}
+          webCounterPaymentEnabled={webCounterPaymentEnabled}
           paymentMethod={paymentMethod}
           setPaymentMethod={setPaymentMethod}
         />

@@ -40,7 +40,9 @@ export default function CheckoutPricingSection({
   setIsDeliveryFeeModalOpen,
   isRegisteredCustomer = false,
   isQrCounterOrder = false,
+  webMomoEnabled = true,
   webBankQrEnabled = false,
+  webCounterPaymentEnabled = true,
   paymentMethod = "COD",
   setPaymentMethod
 }) {
@@ -175,27 +177,29 @@ export default function CheckoutPricingSection({
       <CheckoutCard title="Phương thức thanh toán">
         {isQrCounterOrder || fulfillmentType === "pickup" ? (
           <div className="payment-choice-stack">
-            <button
-              type="button"
-              onClick={() => setPaymentMethod?.("momo")}
-              className={`payment-card payment-card--momo${isMomoSelected ? " active" : ""}`}
-              aria-label="Phương thức thanh toán: Thanh toán ví MoMo"
-              aria-pressed={isMomoSelected}
-            >
-              <img
-                className="payment-card__brand payment-card__brand--momo"
-                src="/brand/momo-logo-app.png"
-                alt=""
-                width="32"
-                height="32"
-                decoding="async"
-              />
-              <span>
-                <strong>Thanh toán ví MoMo</strong>
-                <small>Mở ứng dụng MoMo</small>
-              </span>
-              {isMomoSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
-            </button>
+            {webMomoEnabled ? (
+              <button
+                type="button"
+                onClick={() => setPaymentMethod?.("momo")}
+                className={`payment-card payment-card--momo${isMomoSelected ? " active" : ""}`}
+                aria-label="Phương thức thanh toán: Thanh toán ví MoMo"
+                aria-pressed={isMomoSelected}
+              >
+                <img
+                  className="payment-card__brand payment-card__brand--momo"
+                  src="/brand/momo-logo-app.png"
+                  alt=""
+                  width="32"
+                  height="32"
+                  decoding="async"
+                />
+                <span>
+                  <strong>Thanh toán ví MoMo</strong>
+                  <small>Mở ứng dụng MoMo</small>
+                </span>
+                {isMomoSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
+              </button>
+            ) : null}
             {webBankQrEnabled ? (
               <button
                 type="button"
@@ -212,20 +216,22 @@ export default function CheckoutPricingSection({
                 {isBankQrSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setPaymentMethod?.("counter")}
-              className={`payment-card${isCounterSelected ? " active" : ""}`}
-              aria-label="Phương thức thanh toán: Thanh toán tại quầy"
-              aria-pressed={isCounterSelected}
-            >
-              <Icon name="bag" size={18} />
-              <span>
-                <strong>Thanh toán tại quầy</strong>
-                <small>Thanh toán khi nhận món</small>
-              </span>
-              {isCounterSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
-            </button>
+            {webCounterPaymentEnabled ? (
+              <button
+                type="button"
+                onClick={() => setPaymentMethod?.("counter")}
+                className={`payment-card${isCounterSelected ? " active" : ""}`}
+                aria-label="Phương thức thanh toán: Thanh toán tại quầy"
+                aria-pressed={isCounterSelected}
+              >
+                <Icon name="bag" size={18} />
+                <span>
+                  <strong>Thanh toán tại quầy</strong>
+                  <small>Thanh toán khi nhận món</small>
+                </span>
+                {isCounterSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="payment-card active" aria-label="Phương thức thanh toán: Tiền mặt">

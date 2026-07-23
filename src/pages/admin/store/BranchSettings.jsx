@@ -52,6 +52,9 @@ export default function BranchSettings({
   const [shippingSaving, setShippingSaving] = useState(false);
   const [previewBranchId, setPreviewBranchId] = useState("");
   const [qrModalBranchId, setQrModalBranchId] = useState("");
+  const [expandedBranchId, setExpandedBranchId] = useState("");
+  const [expandedPosBranchId, setExpandedPosBranchId] = useState("");
+  const [deleteBranchId, setDeleteBranchId] = useState("");
   const [qrRefreshVersionByBranchId, setQrRefreshVersionByBranchId] = useState({});
   const getSiteOrigin = () => {
     return QR_ORDER_PUBLIC_ORIGIN;
@@ -187,6 +190,11 @@ export default function BranchSettings({
   const qrModalBranch = useMemo(
     () => draftBranches.find((branch) => String(branch?.id || "") === String(qrModalBranchId || "")) || null,
     [draftBranches, qrModalBranchId]
+  );
+
+  const deleteBranch = useMemo(
+    () => draftBranches.find((branch) => String(branch?.id || "") === String(deleteBranchId || "")) || null,
+    [deleteBranchId, draftBranches]
   );
 
   const extractOpenCloseTime = (branch) => {
@@ -358,11 +366,48 @@ export default function BranchSettings({
     }
   };
 
+  const handleAddBranch = () => {
+    const nextBranch = {
+      id: `branch-${Date.now()}`,
+      branch_code: getNextBranchCode(),
+      branch_uuid: createStableBranchUuid(),
+      name: "Chi nhánh mới",
+      address: "",
+      phone: "",
+      map: "",
+      lat: "",
+      lng: "",
+      shipEnabled: true,
+      pickupEnabled: true,
+      paymentSettings: {
+        provider: "vietqr",
+        bankBin: "",
+        bankName: "",
+        accountNumber: "",
+        accountName: "",
+        sepayBankAccountId: "",
+        sepayMerchantCode: "",
+        webMomoEnabled: true,
+        webBankQrEnabled: false,
+        webCounterPaymentEnabled: true
+      },
+      openTime: "09:00",
+      closeTime: "21:00",
+      time: "09:00 - 21:00",
+      open: true
+    };
+    setDraftBranches((current) => [nextBranch, ...current]);
+    setExpandedBranchId(nextBranch.id);
+  };
+
   return (
     <>
       <AdminCard className="admin-panel admin-store-panel">
-        <div className="admin-panel-head">
-          <h2>Chi nhánh</h2>
+        <div className="admin-panel-head admin-branch-toolbar">
+          <div>
+            <h2>Chi nhánh</h2>
+            <p className="admin-branch-toolbar__hint">Chọn một chi nhánh để xem và chỉnh cấu hình.</p>
+          </div>
           <div className="flex items-center gap-2">
             <AdminButton
               variant={branchesDirty ? "primary" : "secondary"}
@@ -372,39 +417,7 @@ export default function BranchSettings({
             >
               {branchSaving ? "Đang lưu..." : "Lưu thay đổi"}
             </AdminButton>
-            <AdminButton
-              onClick={() =>
-                setDraftBranches([
-                  {
-                    id: `branch-${Date.now()}`,
-                    branch_code: getNextBranchCode(),
-                    branch_uuid: createStableBranchUuid(),
-                    name: "Chi nhánh mới",
-                    address: "",
-                    phone: "",
-                    map: "",
-                    lat: "",
-                    lng: "",
-                    shipEnabled: true,
-                    pickupEnabled: true,
-                    paymentSettings: {
-                      provider: "vietqr",
-                      bankBin: "",
-                      bankName: "",
-                      accountNumber: "",
-                      accountName: "",
-                      sepayBankAccountId: "",
-                      sepayMerchantCode: ""
-                    },
-                    openTime: "09:00",
-                    closeTime: "21:00",
-                    time: "09:00 - 21:00",
-                    open: true
-                  },
-                  ...draftBranches
-                ])
-              }
-            >
+            <AdminButton onClick={handleAddBranch}>
               Thêm chi nhánh
             </AdminButton>
           </div>
@@ -417,34 +430,107 @@ export default function BranchSettings({
             const paymentSettings = branch?.paymentSettings && typeof branch.paymentSettings === "object"
               ? branch.paymentSettings
               : {};
+            const webMomoEnabled = paymentSettings.webMomoEnabled !== false;
+            const webBankQrEnabled = paymentSettings.webBankQrEnabled === true;
+            const webCounterPaymentEnabled = paymentSettings.webCounterPaymentEnabled !== false;
+            const enabledWebPaymentCount = [
+              webMomoEnabled,
+              webBankQrEnabled,
+              webCounterPaymentEnabled
+            ].filter(Boolean).length;
             const qrPaymentConfig = getPosQrPaymentConfig(branch);
             const paymentPreviewOpen = previewBranchId === branch.id;
             const paymentPreviewUrl = paymentPreviewOpen && qrPaymentConfig.ready ? getBranchPaymentPreviewUrl(branch) : "";
             const qrRefreshKey = getQrRefreshKey(branch);
             const qrRefreshVersion = qrRefreshVersionByBranchId[qrRefreshKey] || 0;
+            const branchId = String(branch?.id || "");
+            const branchPanelId = `branch-settings-${branchId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+            const isExpanded = expandedBranchId === branchId;
+            const enabledPaymentLabels = [
+              webMomoEnabled ? "MoMo" : "",
+              webBankQrEnabled ? "QR ngân hàng" : "",
+              webCounterPaymentEnabled ? "Tại quầy" : ""
+            ].filter(Boolean);
 
             return (
-              <div key={branch.id} className="admin-edit-card admin-branch-card">
-                <div className="admin-branch-layout">
-                  <div className="admin-branch-main">
-                    <div className="admin-edit-fields admin-branch-top-grid">
-                      <AdminInput
-                        className="admin-input"
-                        placeholder="Mã chi nhánh (ví dụ: CN04)"
-                        value={branch.branch_code ?? branch.branchCode ?? ""}
-                        onChange={(event) => updateBranchField(branch.id, "branch_code", String(event.target.value || "").toUpperCase().trim())}
-                      />
-                      <AdminInput
-                        className="admin-input"
-                        placeholder="Tên chi nhánh"
-                        value={branch.name ?? ""}
-                        onChange={(event) => updateBranchField(branch.id, "name", event.target.value)}
-                      />
+              <section
+                key={branch.id}
+                className={`admin-edit-card admin-branch-card${isExpanded ? " is-expanded" : ""}`}
+              >
+                <button
+                  type="button"
+                  className="admin-branch-summary"
+                  aria-expanded={isExpanded}
+                  aria-controls={branchPanelId}
+                  onClick={() => setExpandedBranchId(isExpanded ? "" : branchId)}
+                >
+                  <span className="admin-branch-summary__identity">
+                    <span className="admin-branch-summary__code">
+                      {String(branch?.branch_code || branch?.branchCode || getQrBranchKey(branch) || "CN")}
+                    </span>
+                    <span className="admin-branch-summary__copy">
+                      <strong>{String(branch?.name || "Chi nhánh chưa đặt tên")}</strong>
+                      <small>{String(branch?.address || "Chưa cập nhật địa chỉ")}</small>
+                    </span>
+                  </span>
+                  <span className="admin-branch-summary__status">
+                    <span className={`admin-branch-badge${branch.open === false ? " is-muted" : " is-live"}`}>
+                      {branch.open === false ? "Tạm đóng" : "Đang mở"}
+                    </span>
+                    <span className={`admin-branch-badge${branch.shipEnabled === false ? " is-muted" : ""}`}>
+                      {branch.shipEnabled === false ? "Tắt giao hàng" : "Giao hàng"}
+                    </span>
+                    <span className={`admin-branch-badge${branch.pickupEnabled === false ? " is-muted" : ""}`}>
+                      {branch.pickupEnabled === false ? "Tắt đến lấy" : "Đến lấy"}
+                    </span>
+                  </span>
+                  <span className="admin-branch-summary__payment">
+                    <small>Website</small>
+                    <strong>{enabledPaymentLabels.join(" · ")}</strong>
+                  </span>
+                  <span className="admin-branch-summary__chevron" aria-hidden="true">⌄</span>
+                </button>
 
-                      <div className="relative">
+                {isExpanded ? (
+                <div id={branchPanelId} className="admin-branch-layout">
+                  <div className="admin-branch-main">
+                    <div className="admin-branch-section-heading">
+                      <div>
+                        <strong>Thông tin chi nhánh</strong>
+                        <small>Tên, địa chỉ, thời gian hoạt động và kênh phục vụ.</small>
+                      </div>
+                    </div>
+                    <div className="admin-edit-fields admin-branch-top-grid">
+                      <label className="admin-branch-field-card admin-branch-select-field">
+                        <span className="text-xs font-semibold text-brown/70">Mã chi nhánh</span>
                         <AdminInput
                           className="admin-input"
-                          placeholder="Địa chỉ"
+                          name={`branch-code-${branchId}`}
+                          autoComplete="off"
+                          placeholder="Ví dụ: CN04…"
+                          value={branch.branch_code ?? branch.branchCode ?? ""}
+                          onChange={(event) => updateBranchField(branch.id, "branch_code", String(event.target.value || "").toUpperCase().trim())}
+                        />
+                      </label>
+                      <label className="admin-branch-field-card admin-branch-select-field">
+                        <span className="text-xs font-semibold text-brown/70">Tên chi nhánh</span>
+                        <AdminInput
+                          className="admin-input"
+                          name={`branch-name-${branchId}`}
+                          autoComplete="off"
+                          placeholder="Nhập tên chi nhánh…"
+                          value={branch.name ?? ""}
+                          onChange={(event) => updateBranchField(branch.id, "name", event.target.value)}
+                        />
+                      </label>
+
+                      <label className="admin-branch-field-card admin-branch-select-field relative">
+                        <span className="text-xs font-semibold text-brown/70">Địa chỉ</span>
+                        <AdminInput
+                          className="admin-input"
+                          name={`branch-address-${branchId}`}
+                          autoComplete="street-address"
+                          placeholder="Nhập địa chỉ chi nhánh…"
                           value={branch.address ?? ""}
                           onChange={(event) => updateBranchAddress(branch.id, event.target.value)}
                         />
@@ -472,20 +558,27 @@ export default function BranchSettings({
                             )}
                           </div>
                         )}
-                      </div>
+                      </label>
 
-                      <AdminInput
-                        className="admin-input"
-                        placeholder="Số điện thoại"
-                        value={branch.phone ?? ""}
-                        onChange={(event) => updateBranchField(branch.id, "phone", event.target.value)}
-                      />
+                      <label className="admin-branch-field-card admin-branch-select-field">
+                        <span className="text-xs font-semibold text-brown/70">Số điện thoại</span>
+                        <AdminInput
+                          className="admin-input"
+                          type="tel"
+                          name={`branch-phone-${branchId}`}
+                          autoComplete="tel"
+                          placeholder="Nhập số điện thoại…"
+                          value={branch.phone ?? ""}
+                          onChange={(event) => updateBranchField(branch.id, "phone", event.target.value)}
+                        />
+                      </label>
 
                       <div className="admin-branch-time-grid">
                         <label className="admin-branch-field-card admin-branch-time-field">
                           <span className="text-xs font-semibold text-brown/70">Mở cửa</span>
                           <AdminInput
                             type="time"
+                            name={`branch-open-time-${branchId}`}
                             value={openTime}
                             onChange={(event) => updateBranchTime(branch.id, event.target.value, closeTime)}
                           />
@@ -494,6 +587,7 @@ export default function BranchSettings({
                           <span className="text-xs font-semibold text-brown/70">Đóng cửa</span>
                           <AdminInput
                             type="time"
+                            name={`branch-close-time-${branchId}`}
                             value={closeTime}
                             onChange={(event) => updateBranchTime(branch.id, openTime, event.target.value)}
                           />
@@ -501,11 +595,18 @@ export default function BranchSettings({
                       </div>
                     </div>
 
+                    <div className="admin-branch-section-heading is-compact">
+                      <div>
+                        <strong>Kênh phục vụ</strong>
+                        <small>Bật các hình thức nhận đơn đang hoạt động tại chi nhánh.</small>
+                      </div>
+                    </div>
                     <div className="admin-branch-bottom-grid">
                       <label className="admin-branch-field-card admin-branch-toggle-field">
                         <span className="text-xs font-semibold text-brown/70">Bật giao hàng chi nhánh này</span>
                         <input
                           type="checkbox"
+                          name={`branch-shipping-${branchId}`}
                           checked={branch.shipEnabled !== false}
                           onChange={(event) => updateBranchField(branch.id, "shipEnabled", event.target.checked)}
                           className="toggle-input"
@@ -515,12 +616,21 @@ export default function BranchSettings({
                         <span className="text-xs font-semibold text-brown/70">Bật đến lấy chi nhánh này</span>
                         <input
                           type="checkbox"
+                          name={`branch-pickup-${branchId}`}
                           checked={branch.pickupEnabled !== false}
                           onChange={(event) => updateBranchField(branch.id, "pickupEnabled", event.target.checked)}
                           className="toggle-input"
                         />
                       </label>
                     </div>
+
+                    <div className="admin-branch-section-heading">
+                      <div>
+                        <strong>Bán hàng trên website</strong>
+                        <small>QR order và các hình thức thanh toán khách được phép chọn.</small>
+                      </div>
+                    </div>
+                    <div className="admin-branch-website-grid">
                     <div className="admin-branch-subcard admin-branch-qr-card">
                       <span className="text-xs font-semibold text-brown/70">QR order tại quầy</span>
                       <div className="admin-branch-qr-preview">
@@ -565,29 +675,82 @@ export default function BranchSettings({
                     </div>
 
                     <div className="admin-branch-subcard admin-branch-payment-card">
-                      <span className="text-xs font-semibold text-brown/70">Tài khoản nhận chuyển khoản POS</span>
-                      <label className="admin-branch-field-card admin-branch-toggle-field">
+                      <div>
+                        <strong className="block text-sm font-bold text-brown">Thanh toán trên website</strong>
+                        <small className="mt-1 block text-xs text-brown/60">
+                          Áp dụng cho khách đặt đến lấy hoặc quét QR order tại chi nhánh này.
+                        </small>
+                      </div>
+                      <div className="admin-branch-bottom-grid admin-web-payment-grid">
+                        <label className="admin-branch-field-card admin-branch-toggle-field">
+                          <span className="text-xs font-semibold text-brown/70">Ví MoMo</span>
+                          <input
+                            type="checkbox"
+                            checked={webMomoEnabled}
+                            disabled={webMomoEnabled && enabledWebPaymentCount === 1}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "webMomoEnabled", event.target.checked)}
+                            className="toggle-input"
+                            aria-label={`Cho phép MoMo trên website tại ${String(branch?.name || "chi nhánh")}`}
+                          />
+                        </label>
+                        <label className="admin-branch-field-card admin-branch-toggle-field">
+                          <span className="text-xs font-semibold text-brown/70">QR ngân hàng</span>
+                          <input
+                            type="checkbox"
+                            checked={webBankQrEnabled}
+                            disabled={webBankQrEnabled && enabledWebPaymentCount === 1}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "webBankQrEnabled", event.target.checked)}
+                            className="toggle-input"
+                            aria-label={`Cho phép QR ngân hàng trên website tại ${String(branch?.name || "chi nhánh")}`}
+                          />
+                        </label>
+                        <label className="admin-branch-field-card admin-branch-toggle-field">
+                          <span className="text-xs font-semibold text-brown/70">Thanh toán tại quầy</span>
+                          <input
+                            type="checkbox"
+                            checked={webCounterPaymentEnabled}
+                            disabled={webCounterPaymentEnabled && enabledWebPaymentCount === 1}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "webCounterPaymentEnabled", event.target.checked)}
+                            className="toggle-input"
+                            aria-label={`Cho phép thanh toán tại quầy trên website tại ${String(branch?.name || "chi nhánh")}`}
+                          />
+                        </label>
+                      </div>
+                      <p className="text-xs text-brown/60">
+                        Website phải luôn có ít nhất một hình thức thanh toán. Các công tắc này không ảnh hưởng POS.
+                      </p>
+                    </div>
+                    </div>
+
+                    <div className={`admin-branch-subcard admin-branch-pos-card${expandedPosBranchId === branchId ? " is-expanded" : ""}`}>
+                      <button
+                        type="button"
+                        className="admin-branch-pos-toggle"
+                        aria-expanded={expandedPosBranchId === branchId}
+                        aria-controls={`branch-pos-${branchPanelId}`}
+                        onClick={() => setExpandedPosBranchId(expandedPosBranchId === branchId ? "" : branchId)}
+                      >
                         <span>
-                          <strong className="block text-xs font-semibold text-brown/80">
-                            Cho phép QR ngân hàng trên website
-                          </strong>
-                          <small className="mt-1 block text-[11px] text-brown/60">
-                            Tắt mục này chỉ ẩn QR ngân hàng với khách đặt trên website. POS vẫn dùng QR ngân hàng bình thường.
+                          <strong>QR chuyển khoản tại POS</strong>
+                          <small>
+                            {qrPaymentConfig.ready
+                              ? `${paymentSettings.bankName || "Đã cấu hình ngân hàng"} · ${paymentSettings.accountNumber || "Đã có tài khoản"}`
+                              : "Chưa đủ thông tin tạo QR chuyển khoản"}
                           </small>
                         </span>
-                        <input
-                          type="checkbox"
-                          checked={paymentSettings.webBankQrEnabled === true}
-                          onChange={(event) => updateBranchPaymentField(branch.id, "webBankQrEnabled", event.target.checked)}
-                          className="toggle-input"
-                          aria-label={`Cho phép QR ngân hàng trên website tại ${String(branch?.name || "chi nhánh")}`}
-                        />
-                      </label>
-                      <div className="admin-edit-fields admin-branch-top-grid">
+                        <span className="admin-branch-pos-toggle__action">
+                          {expandedPosBranchId === branchId ? "Thu gọn" : "Cấu hình nâng cao"}
+                          <span aria-hidden="true">⌄</span>
+                        </span>
+                      </button>
+                      {expandedPosBranchId === branchId ? (
+                      <div id={`branch-pos-${branchPanelId}`} className="admin-branch-pos-content">
+                      <div className="admin-edit-fields admin-pos-payment-grid">
                         <label className="admin-branch-field-card admin-branch-select-field">
                           <span className="text-xs font-semibold text-brown/70">Kiểu QR POS</span>
                           <select
                             className="admin-input"
+                            name={`pos-qr-provider-${branchId}`}
                             value={paymentSettings.provider ?? "vietqr"}
                             onChange={(event) => updateBranchPaymentField(branch.id, "provider", event.target.value)}
                           >
@@ -599,6 +762,7 @@ export default function BranchSettings({
                           <span className="text-xs font-semibold text-brown/70">Ngân hàng</span>
                           <select
                             className="admin-input"
+                            name={`pos-bank-${branchId}`}
                             value={paymentSettings.bankBin ?? ""}
                             onChange={(event) => updateBranchBankSelection(branch.id, event.target.value)}
                           >
@@ -610,36 +774,62 @@ export default function BranchSettings({
                             ))}
                           </select>
                         </label>
-                        <AdminInput
-                          className="admin-input"
-                          placeholder="Tên ngân hàng"
-                          value={paymentSettings.bankName ?? ""}
-                          onChange={(event) => updateBranchPaymentField(branch.id, "bankName", event.target.value)}
-                        />
-                        <AdminInput
-                          className="admin-input"
-                          placeholder="Số tài khoản"
-                          value={paymentSettings.accountNumber ?? ""}
-                          onChange={(event) => updateBranchPaymentField(branch.id, "accountNumber", event.target.value)}
-                        />
-                        <AdminInput
-                          className="admin-input"
-                          placeholder="Tên chủ tài khoản"
-                          value={paymentSettings.accountName ?? ""}
-                          onChange={(event) => updateBranchPaymentField(branch.id, "accountName", event.target.value)}
-                        />
-                        <AdminInput
-                          className="admin-input"
-                          placeholder="SePay Bank Account ID"
-                          value={paymentSettings.sepayBankAccountId ?? ""}
-                          onChange={(event) => updateBranchPaymentField(branch.id, "sepayBankAccountId", event.target.value)}
-                        />
-                        <AdminInput
-                          className="admin-input"
-                          placeholder="Mã cửa hàng SePay (ví dụ: CN02)"
-                          value={paymentSettings.sepayMerchantCode ?? ""}
-                          onChange={(event) => updateBranchPaymentField(branch.id, "sepayMerchantCode", event.target.value.toUpperCase())}
-                        />
+                        <label className="admin-branch-field-card admin-branch-select-field">
+                          <span className="text-xs font-semibold text-brown/70">Tên ngân hàng</span>
+                          <AdminInput
+                            className="admin-input"
+                            name={`pos-bank-name-${branchId}`}
+                            autoComplete="off"
+                            placeholder="Nhập tên ngân hàng…"
+                            value={paymentSettings.bankName ?? ""}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "bankName", event.target.value)}
+                          />
+                        </label>
+                        <label className="admin-branch-field-card admin-branch-select-field">
+                          <span className="text-xs font-semibold text-brown/70">Số tài khoản</span>
+                          <AdminInput
+                            className="admin-input"
+                            name={`pos-account-number-${branchId}`}
+                            inputMode="numeric"
+                            autoComplete="off"
+                            placeholder="Nhập số tài khoản…"
+                            value={paymentSettings.accountNumber ?? ""}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "accountNumber", event.target.value)}
+                          />
+                        </label>
+                        <label className="admin-branch-field-card admin-branch-select-field">
+                          <span className="text-xs font-semibold text-brown/70">Tên chủ tài khoản</span>
+                          <AdminInput
+                            className="admin-input"
+                            name={`pos-account-name-${branchId}`}
+                            autoComplete="off"
+                            placeholder="Nhập tên chủ tài khoản…"
+                            value={paymentSettings.accountName ?? ""}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "accountName", event.target.value)}
+                          />
+                        </label>
+                        <label className="admin-branch-field-card admin-branch-select-field">
+                          <span className="text-xs font-semibold text-brown/70">SePay Bank Account ID</span>
+                          <AdminInput
+                            className="admin-input"
+                            name={`pos-sepay-account-${branchId}`}
+                            autoComplete="off"
+                            placeholder="Nhập Account ID…"
+                            value={paymentSettings.sepayBankAccountId ?? ""}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "sepayBankAccountId", event.target.value)}
+                          />
+                        </label>
+                        <label className="admin-branch-field-card admin-branch-select-field">
+                          <span className="text-xs font-semibold text-brown/70">Mã cửa hàng SePay</span>
+                          <AdminInput
+                            className="admin-input"
+                            name={`pos-sepay-merchant-${branchId}`}
+                            autoComplete="off"
+                            placeholder="Ví dụ: CN02…"
+                            value={paymentSettings.sepayMerchantCode ?? ""}
+                            onChange={(event) => updateBranchPaymentField(branch.id, "sepayMerchantCode", event.target.value.toUpperCase())}
+                          />
+                        </label>
                       </div>
                       <p className="text-xs text-brown/60">
                         POS dùng các ô này để tạo QR chuyển khoản. Nếu chọn SePay tự động thì chi nhánh này sẽ dùng mã đơn đầy đủ để chờ webhook SePay tự xác nhận thanh toán. Lưu chi nhánh là sẽ cập nhật luôn lên Supabase.
@@ -696,15 +886,27 @@ export default function BranchSettings({
                           )}
                         </div>
                       ) : null}
+                      </div>
+                      ) : null}
+                    </div>
+
+                    <div className="admin-branch-danger-zone">
+                      <div>
+                        <strong>Xóa chi nhánh</strong>
+                        <small>Chỉ dùng khi chi nhánh này không còn hoạt động.</small>
+                      </div>
+                      <AdminButton
+                        variant="danger"
+                        className="admin-danger"
+                        onClick={() => setDeleteBranchId(branchId)}
+                      >
+                        Xóa chi nhánh
+                      </AdminButton>
                     </div>
                   </div>
-                  <div className="admin-branch-actions">
-                    <AdminButton variant="danger" className="admin-danger" onClick={() => setDraftBranches(draftBranches.filter((item) => item.id !== branch.id))}>
-                      Xóa
-                    </AdminButton>
-                  </div>
                 </div>
-              </div>
+                ) : null}
+              </section>
             );
           })}
         </div>
@@ -771,6 +973,45 @@ export default function BranchSettings({
           Khôi phục phí ship mặc định
         </AdminButton>
       </AdminCard>
+
+      {deleteBranch ? (
+        <div className="admin-qr-modal-backdrop" role="presentation" onClick={() => setDeleteBranchId("")}>
+          <div
+            className="admin-branch-delete-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-branch-title"
+            aria-describedby="delete-branch-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="admin-branch-delete-modal__eyebrow">Cài đặt nguy hiểm</span>
+            <h3 id="delete-branch-title">Xóa chi nhánh này?</h3>
+            <p id="delete-branch-description">
+              Bạn sắp xóa <strong>{String(deleteBranch?.name || "chi nhánh")}</strong> khỏi danh sách cấu hình.
+              Thay đổi chỉ được cập nhật lên hệ thống sau khi bấm Lưu thay đổi.
+            </p>
+            <div className="admin-branch-delete-modal__actions">
+              <AdminButton variant="secondary" onClick={() => setDeleteBranchId("")}>
+                Giữ lại
+              </AdminButton>
+              <AdminButton
+                variant="danger"
+                onClick={() => {
+                  const targetId = String(deleteBranch?.id || "");
+                  setDraftBranches((current) =>
+                    current.filter((item) => String(item?.id || "") !== targetId)
+                  );
+                  if (expandedBranchId === targetId) setExpandedBranchId("");
+                  if (expandedPosBranchId === targetId) setExpandedPosBranchId("");
+                  setDeleteBranchId("");
+                }}
+              >
+                Xác nhận xóa
+              </AdminButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {qrModalBranch ? (
         <div className="admin-qr-modal-backdrop" role="presentation" onClick={() => setQrModalBranchId("")}>
