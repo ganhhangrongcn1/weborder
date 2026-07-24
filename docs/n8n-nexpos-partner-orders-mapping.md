@@ -16,11 +16,12 @@ xanhngon   -> XN- + last 4 digits
 
 Identity and idempotency always use `partner_source + nexpos_order_id`; display codes are never keys.
 
-Polling coverage during cutover validation:
+Polling coverage during cutover validation (Asia/Bangkok, 10:00-22:30):
 
 ```txt
-Every minute: PRE_ORDER, DOING, CANCEL over the latest 6 hours.
+Every 15 seconds: PRE_ORDER, DOING, CANCEL over the latest 6 hours.
 Every 5 minutes: additionally PICK and FINISH over the latest 6 hours.
+Outside the active window: skip before acquiring the polling lock or calling NexPOS.
 ```
 
 The CANCEL sweep is mandatory because a Grab order can be cancelled before it is ever observed in DOING.
