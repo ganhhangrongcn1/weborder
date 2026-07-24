@@ -1848,6 +1848,52 @@ function notifyKitchenRealtimeStatus(onStatus, status = "", error = null) {
   });
 }
 
+export async function adjustKitchenPartnerPrepTime(order = {}, prepMinutes = 0) {
+  const client = await getClient();
+  if (!client) {
+    return {
+      ok: false,
+      message: "Chưa kết nối được Supabase."
+    };
+  }
+
+  const id = toText(order.id);
+  const minutes = Number(prepMinutes);
+  if (!id) {
+    return {
+      ok: false,
+      message: "Thiếu mã đơn để điều chỉnh thời gian."
+    };
+  }
+  if (!Number.isInteger(minutes) || minutes < 0 || minutes > 30) {
+    return {
+      ok: false,
+      message: "Thời gian làm đơn phải từ 0 đến 30 phút."
+    };
+  }
+
+  const { data, error } = await client.functions.invoke("nexpos-adjust-prep-time", {
+    body: {
+      partner_order_id: id,
+      prep_minutes: minutes
+    }
+  });
+  recordKitchenRequest("adjust Grab prep time in NexPOS", "nexpos-adjust-prep-time", "write");
+
+  if (error || !data?.ok) {
+    return {
+      ok: false,
+      message: data?.message || error?.message || "Không điều chỉnh được thời gian làm đơn Grab."
+    };
+  }
+
+  return {
+    ok: true,
+    prepMinutes: Number(data.prep_minutes ?? minutes),
+    message: data.message || `Đã cập nhật thời gian làm đơn thành ${minutes} phút.`
+  };
+}
+
 export async function subscribeKitchenOrderChanges(onChange, options = {}) {
   const onStatus = typeof options?.onStatus === "function" ? options.onStatus : null;
   const client = await getClient();

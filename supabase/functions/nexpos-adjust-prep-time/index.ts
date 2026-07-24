@@ -25,7 +25,7 @@ function response(body: JsonRecord, status = 200) {
 }
 
 function sanitizeError(value: unknown) {
-  return toText(value).slice(0, 500) || "Không xác nhận được đơn với NexPOS.";
+  return toText(value).slice(0, 500) || "Không điều chỉnh được thời gian làm đơn với NexPOS.";
 }
 
 function parseCookie(setCookie: string) {
@@ -49,7 +49,9 @@ async function requireKitchenAccess(request: Request, serviceClient: ReturnType<
 
   if (error || !profile) return { profile: null, error: "Không tìm thấy tài khoản Kitchen." };
   if (toText(profile.status).toLowerCase() !== "active") return { profile: null, error: "Tài khoản Kitchen đang bị khóa." };
-  if (!ALLOWED_ROLES.has(toText(profile.role).toLowerCase())) return { profile: null, error: "Tài khoản không có quyền cập nhật đơn." };
+  if (!ALLOWED_ROLES.has(toText(profile.role).toLowerCase())) {
+    return { profile: null, error: "Tài khoản không có quyền điều chỉnh đơn." };
+  }
   return { profile, error: "" };
 }
 
@@ -69,7 +71,9 @@ async function readCachedCookie(serviceClient: ReturnType<typeof createClient>) 
 async function loginNexpos(serviceClient: ReturnType<typeof createClient>) {
   const username = toText(Deno.env.get("NEXPOS_USERNAME"));
   const password = toText(Deno.env.get("NEXPOS_PASSWORD"));
-  if (!username || !password) throw new Error("Chưa cấu hình tài khoản tổng NexPOS trong Supabase Secrets.");
+  if (!username || !password) {
+    throw new Error("Chưa cấu hình tài khoản tổng NexPOS trong Supabase Secrets.");
+  }
 
   const loginResponse = await fetch(`${NEXPOS_BASE_URL}/user-service/v2/login`, {
     method: "POST",
@@ -95,19 +99,15 @@ async function loginNexpos(serviceClient: ReturnType<typeof createClient>) {
   return cookie;
 }
 
-async function confirmReady(nexposOrderId: string, cookie: string) {
-  return fetch(`${NEXPOS_BASE_URL}/order-service/site/orders/${encodeURIComponent(nexposOrderId)}/confirm`, {
+async function adjustPrepTime(nexposOrderId: string, prepMinutes: number, cookie: string) {
+  return fetch(`${NEXPOS_BASE_URL}/order-service/site/orders/${encodeURIComponent(nexposOrderId)}/opt`, {
     method: "POST",
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
       "Cookie": cookie
     },
-    body: JSON.stringify({
-      pickup_time: "",
-      use_shipment: false,
-      mark_ready: true
-    })
+    body: JSON.stringify({ opt_in_sec: prepMinutes * 60 })
   });
 }
 
@@ -117,7 +117,9 @@ Deno.serve(async (request) => {
 
   const supabaseUrl = toText(Deno.env.get("SUPABASE_URL"));
   const serviceRoleKey = toText(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-  if (!supabaseUrl || !serviceRoleKey) return response({ ok: false, message: "Thiếu cấu hình máy chủ Supabase." }, 500);
+  if (!supabaseUrl || !serviceRoleKey) {
+    return response({ ok: false, message: "Thiếu cấu hình máy chủ Supabase." }, 500);
+  }
 
   const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false }
@@ -127,11 +129,15 @@ Deno.serve(async (request) => {
 
   const body = getObject(await request.json().catch(() => ({})));
   const partnerOrderId = toText(body.partner_order_id || body.partnerOrderId);
+  const prepMinutes = Number(body.prep_minutes ?? body.prepMinutes);
   if (!partnerOrderId) return response({ ok: false, message: "Thiếu mã đơn đối tác." }, 400);
+  if (!Number.isInteger(prepMinutes) || prepMinutes < 0 || prepMinutes > 30) {
+    return response({ ok: false, message: "Thời gian làm đơn phải từ 0 đến 30 phút." }, 400);
+  }
 
   const { data: order, error: orderError } = await serviceClient
     .from("partner_orders")
-    .select("id,partner_source,nexpos_order_id,nexpos_status,branch_uuid,kitchen_work_status,nexpos_ready_sync_status,nexpos_ready_sync_attempts")
+    .select("id,partner_source,nexpos_order_id,branch_uuid")
     .eq("id", partnerOrderId)
     .maybeSingle();
   if (orderError || !order) return response({ ok: false, message: "Không tìm thấy đơn đối tác." }, 404);
@@ -141,100 +147,39 @@ Deno.serve(async (request) => {
     return response({ ok: false, message: "Đơn không thuộc chi nhánh của tài khoản Kitchen." }, 403);
   }
 
-  const nexposOrderId = toText(order.nexpos_order_id);
-  if (!nexposOrderId) return response({ ok: false, message: "Đơn chưa có mã nội bộ NexPOS." }, 422);
-
   const partnerSource = toText(order.partner_source).toLowerCase();
   if (!["grab", "grabfood"].includes(partnerSource)) {
-    const completedAt = new Date().toISOString();
-    const { error: localDoneError } = await serviceClient.from("partner_orders").update({
-      kitchen_work_status: "done",
-      kitchen_done_at: completedAt,
-      updated_at: completedAt
-    }).eq("id", partnerOrderId);
-
-    if (localDoneError) return response({ ok: false, message: "Không cập nhật được trạng thái Kitchen." }, 500);
-    return response({ ok: true, synced: false, message: "Kitchen đã ghi nhận xong đơn đối tác." });
+    return response({ ok: false, message: "Chỉ điều chỉnh thời gian cho đơn GrabFood." }, 422);
   }
 
-  if (toText(order.nexpos_ready_sync_status) === "success") {
-    return response({ ok: true, already_synced: true, message: "Đơn đã được báo sẵn sàng sang NexPOS trước đó." });
-  }
-
-  const now = new Date().toISOString();
-  const { error: pendingError } = await serviceClient.from("partner_orders").update({
-    kitchen_work_status: "done",
-    kitchen_done_at: now,
-    nexpos_ready_sync_status: "pending",
-    nexpos_ready_sync_error: null,
-    nexpos_ready_sync_attempts: Number(getObject(order).nexpos_ready_sync_attempts || 0) + 1,
-    updated_at: now
-  }).eq("id", partnerOrderId);
-  if (pendingError) return response({ ok: false, message: "Không cập nhật được trạng thái Kitchen." }, 500);
+  const nexposOrderId = toText(order.nexpos_order_id);
+  if (!nexposOrderId) return response({ ok: false, message: "Đơn chưa có mã nội bộ NexPOS." }, 422);
 
   try {
     let cookie = await readCachedCookie(serviceClient);
     if (!cookie) cookie = await loginNexpos(serviceClient);
-    let nexposResponse = await confirmReady(nexposOrderId, cookie);
+    let nexposResponse = await adjustPrepTime(nexposOrderId, prepMinutes, cookie);
 
     if (nexposResponse.status === 401) {
       cookie = await loginNexpos(serviceClient);
-      nexposResponse = await confirmReady(nexposOrderId, cookie);
+      nexposResponse = await adjustPrepTime(nexposOrderId, prepMinutes, cookie);
     }
 
     if (!nexposResponse.ok) {
       const responseText = sanitizeError(await nexposResponse.text().catch(() => ""));
-      const currentNexposStatus = toText(order.nexpos_status).toUpperCase();
-      const isAlreadyReady = nexposResponse.status === 400 && (
-        currentNexposStatus === "FINISH"
-        || (currentNexposStatus === "PICK" && responseText.includes("order_not_confirmable"))
-      );
-
-      if (isAlreadyReady) {
-        const syncedAt = new Date().toISOString();
-        await serviceClient.from("partner_orders").update({
-          kitchen_work_status: "done",
-          kitchen_done_at: syncedAt,
-          nexpos_ready_sync_status: "success",
-          nexpos_ready_synced_at: syncedAt,
-          nexpos_ready_sync_error: null,
-          updated_at: syncedAt
-        }).eq("id", partnerOrderId);
-
-        return response({
-          ok: true,
-          already_synced: true,
-          message: "Đơn đã ở trạng thái sẵn sàng trên NexPOS/Grab."
-        });
-      }
-
       throw new Error(`NexPOS trả về ${nexposResponse.status}: ${responseText}`);
     }
 
-    const syncedAt = new Date().toISOString();
-    await serviceClient.from("partner_orders").update({
-      kitchen_work_status: "done",
-      kitchen_done_at: syncedAt,
-      nexpos_ready_sync_status: "success",
-      nexpos_ready_synced_at: syncedAt,
-      nexpos_ready_sync_error: null,
-      updated_at: syncedAt
-    }).eq("id", partnerOrderId);
-
-    return response({ ok: true, synced: true, message: "Đã báo đơn sẵn sàng sang NexPOS/Grab." });
-  } catch (error) {
-    const message = sanitizeError(error instanceof Error ? error.message : error);
-    await serviceClient.from("partner_orders").update({
-      nexpos_ready_sync_status: "failed",
-      nexpos_ready_sync_error: message,
-      updated_at: new Date().toISOString()
-    }).eq("id", partnerOrderId);
-
     return response({
       ok: true,
-      synced: false,
-      warning: `Kitchen đã ghi nhận xong đơn nhưng chưa báo được món sẵn sàng sang NexPOS: ${message}`,
-      message: "Kitchen đã ghi nhận xong đơn."
+      prep_minutes: prepMinutes,
+      opt_in_sec: prepMinutes * 60,
+      message: `Đã cập nhật thời gian làm đơn thành ${prepMinutes} phút trên NexPOS/Grab.`
     });
+  } catch (error) {
+    return response({
+      ok: false,
+      message: sanitizeError(error instanceof Error ? error.message : error)
+    }, 502);
   }
 });

@@ -15,6 +15,7 @@ import {
 } from "./kitchenOrderGrouping.js";
 import { getNextKitchenOrderAction } from "../../services/kitchenOrderService.js";
 import { getKitchenOrderTheme, getKitchenPlatformTone } from "./kitchenPlatformTheme.js";
+import KitchenPrepTimeControl from "./KitchenPrepTimeControl.jsx";
 import {
   formatPickupCountdown,
   getScheduledPickupTone,
@@ -711,6 +712,7 @@ export default function KitchenOrderCard({
   onSelectOrder,
   order,
   onMarkDone,
+  onAdjustPrepTime,
   onPrintBill,
   onToggleItemDone,
   updating = false,
@@ -1187,9 +1189,14 @@ export default function KitchenOrderCard({
         </div>
 
         <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: tabletCompact ? 4 : 6, justifyItems: compact ? "start" : "end", minWidth: 0 }}>
-          <strong style={{ color: "#334155", fontSize: isNarrowLayout ? 18 : 21, fontWeight: 780 }}>
-            {isCancelled ? "Đã hủy" : `${doneItems}/${totalItems}`}
-          </strong>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap" }}>
+            {!isCancelled && !isPreorder && !isKitchenOrderDone(order) ? (
+              <KitchenPrepTimeControl order={order} onAdjust={onAdjustPrepTime} />
+            ) : null}
+            <strong style={{ color: "#334155", fontSize: isNarrowLayout ? 18 : 21, fontWeight: 780 }}>
+              {isCancelled ? "Đã hủy" : `${doneItems}/${totalItems}`}
+            </strong>
+          </div>
           {isCancelled ? null : <ProgressBoxes doneItems={doneItems} totalItems={totalItems} accent={theme.border} />}
           {!isCancelled && totalToppings ? (
             <>
