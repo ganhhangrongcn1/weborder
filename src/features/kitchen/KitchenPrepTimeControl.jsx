@@ -55,7 +55,7 @@ function isPrepTimeEditable(metadata = {}) {
   return true;
 }
 
-export default function KitchenPrepTimeControl({ order, onAdjust }) {
+export default function KitchenPrepTimeControl({ compact = false, order, onAdjust }) {
   const metadata = useMemo(() => getPrepMetadata(order), [order]);
   const baseMinutes = getBaseMinutes(metadata);
   const [selectedMinutes, setSelectedMinutes] = useState(baseMinutes ?? 0);
@@ -104,10 +104,12 @@ export default function KitchenPrepTimeControl({ order, onAdjust }) {
         alignItems: "center",
         justifyContent: "flex-end",
         minHeight: 28,
-        gap: 4
+        gap: compact ? 2 : 4,
+        maxWidth: "100%",
+        boxSizing: "border-box"
       }}
     >
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: compact ? 2 : 4, minWidth: 0 }}>
           <button
             type="button"
             aria-label="Giảm một phút"
@@ -118,8 +120,8 @@ export default function KitchenPrepTimeControl({ order, onAdjust }) {
               background: "#ffffff",
               color: "#9a3412",
               borderRadius: 6,
-              width: 28,
-              height: 28,
+              width: compact ? 24 : 28,
+              height: compact ? 24 : 28,
               padding: 0,
               fontSize: 16,
               lineHeight: 1,
@@ -132,15 +134,15 @@ export default function KitchenPrepTimeControl({ order, onAdjust }) {
           <strong
             style={{
               color: "#c2410c",
-              minWidth: 52,
+              minWidth: compact ? 32 : 52,
               textAlign: "center",
-              fontSize: 13,
+              fontSize: compact ? 11 : 13,
               fontWeight: 950,
               fontVariantNumeric: "tabular-nums",
               whiteSpace: "nowrap"
             }}
           >
-            {selectedMinutes} phút
+            {compact ? `${selectedMinutes}p` : `${selectedMinutes} phút`}
           </strong>
           <button
             type="button"
@@ -152,8 +154,8 @@ export default function KitchenPrepTimeControl({ order, onAdjust }) {
               background: "#ffffff",
               color: "#9a3412",
               borderRadius: 6,
-              width: 28,
-              height: 28,
+              width: compact ? 24 : 28,
+              height: compact ? 24 : 28,
               padding: 0,
               fontSize: 16,
               lineHeight: 1,
@@ -165,6 +167,8 @@ export default function KitchenPrepTimeControl({ order, onAdjust }) {
           </button>
           <button
             type="button"
+            aria-label="Xác nhận thời gian làm đơn"
+            title={compact ? "Xác nhận thời gian" : undefined}
             disabled={!editable || !changed || submitting}
             onClick={handleSubmit}
             style={{
@@ -172,15 +176,16 @@ export default function KitchenPrepTimeControl({ order, onAdjust }) {
               background: changed ? "#ea580c" : "#ffedd5",
               color: changed ? "#ffffff" : "#9a3412",
               borderRadius: 6,
-              minHeight: 28,
-              padding: "4px 9px",
-              fontSize: 10,
+              width: compact ? 24 : "auto",
+              minHeight: compact ? 24 : 28,
+              padding: compact ? 0 : "4px 9px",
+              fontSize: compact ? 13 : 10,
               fontWeight: 900,
               whiteSpace: "nowrap",
               cursor: !editable || !changed || submitting ? "not-allowed" : "pointer"
             }}
           >
-            {submitting ? "Đang gửi..." : "Xác nhận"}
+            {submitting ? "…" : compact ? "✓" : "Xác nhận"}
           </button>
       </div>
     </section>

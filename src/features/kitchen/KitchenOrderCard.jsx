@@ -1189,11 +1189,11 @@ export default function KitchenOrderCard({
         </div>
 
         <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: tabletCompact ? 4 : 6, justifyItems: compact ? "start" : "end", minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: isNarrowLayout ? 4 : 7, maxWidth: "100%" }}>
             {!isCancelled && !isPreorder && !isKitchenOrderDone(order) ? (
-              <KitchenPrepTimeControl order={order} onAdjust={onAdjustPrepTime} />
+              <KitchenPrepTimeControl compact={isNarrowLayout} order={order} onAdjust={onAdjustPrepTime} />
             ) : null}
-            <strong style={{ color: "#334155", fontSize: isNarrowLayout ? 18 : 21, fontWeight: 780 }}>
+            <strong style={{ color: "#334155", fontSize: isNarrowLayout ? 16 : 21, fontWeight: 780, flex: "0 0 auto" }}>
               {isCancelled ? "Đã hủy" : `${doneItems}/${totalItems}`}
             </strong>
           </div>
