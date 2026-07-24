@@ -457,6 +457,15 @@ export default function Checkout({
     if (isPlacingOrder) return;
     setCheckoutFieldErrors({});
 
+    if (typeof window !== "undefined" && window.isSecureContext === false) {
+      setCheckoutNotice({
+        icon: "warning",
+        title: "Kết nối chưa an toàn",
+        message: "Vui lòng mở đúng địa chỉ https://ganhhangrong.vn rồi đặt món lại để hệ thống có thể xác nhận đơn."
+      });
+      return;
+    }
+
     if (fulfillmentType === "delivery" && !deliveryAvailable) {
       setCheckoutNotice({
         icon: "warning",

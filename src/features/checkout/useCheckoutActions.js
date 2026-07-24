@@ -136,10 +136,17 @@ export default function useCheckoutActions({
         }
         return;
       }
+      const isOrderTimeout = [
+        "CHECKOUT_ORDER_TIMEOUT",
+        "ORDER_REMOTE_WRITE_TIMEOUT",
+        "ORDER_REMOTE_VERIFY_TIMEOUT"
+      ].includes(String(error?.code || ""));
       if (typeof onNotice === "function") {
         onNotice({
-          title: "Không thể tạo đơn hàng",
-          message: "Không thể ghi đơn lên hệ thống. Vui lòng thử lại sau.",
+          title: isOrderTimeout ? "Kết nối chưa ổn định" : "Không thể tạo đơn hàng",
+          message: isOrderTimeout
+            ? "Hệ thống chưa xác nhận được đơn. Vui lòng kiểm tra mạng và bấm đặt món lại; đơn sẽ dùng lại cùng mã để không bị trùng."
+            : "Không thể ghi đơn lên hệ thống. Vui lòng thử lại sau.",
           icon: "warning"
         });
       } else {

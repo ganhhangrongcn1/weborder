@@ -11,12 +11,39 @@ const repository = createRuntimeAppConfigRepository();
 const REMOTE_CACHE_TTL_MS = 8000;
 const CUSTOMER_REALTIME_SYNC_DELAY_MS = 900;
 const DEFAULT_CUSTOMER_ORDER_SYNC_LIMIT = 6;
+const CUSTOMER_ORDER_REMOTE_WRITE_TIMEOUT_MS = 15000;
+const CUSTOMER_ORDER_REMOTE_VERIFY_TIMEOUT_MS = 7000;
 const ORDER_SYNC_STATUS = {
   pending: "pending_sync",
   synced: "synced"
 };
 let ordersRemoteCache = { value: null, cachedAt: 0 };
 let ordersReadInFlight = null;
+
+function createOrderRemoteTimeoutError(code = "ORDER_REMOTE_WRITE_TIMEOUT") {
+  const error = new Error("order_remote_timeout");
+  error.code = code;
+  return error;
+}
+
+function runOrderTaskWithTimeout(task, timeoutMs, timeoutCode) {
+  const controller = typeof globalThis.AbortController === "function"
+    ? new globalThis.AbortController()
+    : null;
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller?.abort();
+      reject(createOrderRemoteTimeoutError(timeoutCode));
+    }, timeoutMs);
+  });
+  return Promise.race([
+    Promise.resolve().then(() => task(controller?.signal || null)),
+    timeoutPromise
+  ]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
 
 function isLegacySeededDemoCart(cart = []) {
   if (!Array.isArray(cart) || !cart.length) return false;
@@ -268,9 +295,13 @@ async function verifyOrderWasPersistedAfterError(order = {}) {
   const phone = getCustomerKey(order.phone || order.customerPhone);
   if (!phone) return false;
   try {
-    const remoteOrders = await coreSupabaseRepository.readOrdersForPhoneFromTable(
-      phone,
-      { limit: 20, includeItems: true }
+    const remoteOrders = await runOrderTaskWithTimeout(
+      (signal) => coreSupabaseRepository.readOrdersForPhoneFromTable(
+        phone,
+        { limit: 20, includeItems: true, signal }
+      ),
+      CUSTOMER_ORDER_REMOTE_VERIFY_TIMEOUT_MS,
+      "ORDER_REMOTE_VERIFY_TIMEOUT"
     );
     return hasCompleteRemoteOrder(remoteOrders, order);
   } catch (verificationError) {
@@ -552,9 +583,18 @@ export const orderRepository = {
     nextOrder.customerPhoneKey = key;
     nextOrder.rawCustomerPhone = nextOrder.rawCustomerPhone || nextOrder.customerPhone || nextOrder.phone;
     const localPendingOrder = withOrderSyncStatus(nextOrder, ORDER_SYNC_STATUS.pending);
-    await persistOrderLocalAsync(localPendingOrder, key);
     const runtime = getRuntimeStrategy();
     const shouldWriteOrders = canWriteOrdersToSupabase();
+    const shouldWaitForLocalBeforeRemote = !shouldWriteOrders || isCashPaidPosOrder(nextOrder);
+    if (shouldWaitForLocalBeforeRemote) {
+      await persistOrderLocalAsync(localPendingOrder, key);
+    } else {
+      // Một số trình duyệt nhúng trên iPhone có thể treo IndexedDB. Không để
+      // bộ nhớ cục bộ chặn việc ghi đơn lên Supabase.
+      persistOrderLocalAsync(localPendingOrder, key).catch((localSyncError) => {
+        console.warn("[orderRepository] pending order local sync failed", localSyncError);
+      });
+    }
     console.info("[order-debug] upsertOrderAsync:runtime", {
       source: runtime?.source,
       effectiveSource: runtime?.effectiveSource,
@@ -571,7 +611,11 @@ export const orderRepository = {
           orderId: nextOrder.id,
           orderCode: nextOrder.orderCode
         });
-        await coreSupabaseRepository.upsertOrderToTable(nextOrder);
+        await runOrderTaskWithTimeout(
+          (signal) => coreSupabaseRepository.upsertOrderToTable(nextOrder, { signal }),
+          CUSTOMER_ORDER_REMOTE_WRITE_TIMEOUT_MS,
+          "ORDER_REMOTE_WRITE_TIMEOUT"
+        );
         remoteWriteConfirmed = true;
         console.info("[order-debug] upsertOrderAsync:remote-write:ok", {
           orderId: nextOrder.id

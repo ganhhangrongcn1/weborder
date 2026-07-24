@@ -1156,6 +1156,9 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
   if (Number.isFinite(limit) && limit > 0) {
     ordersQuery = ordersQuery.limit(Math.floor(limit));
   }
+  if (options?.signal) {
+    ordersQuery = ordersQuery.abortSignal(options.signal);
+  }
 
   const { data: orders, error: orderError } = await ordersQuery;
   if (orderError) throw orderError;
@@ -1164,10 +1167,14 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
   const orderIds = orders.map((order) => order?.id).filter(Boolean);
   let items = [];
   if (includeItems && orderIds.length) {
-    const { data: itemRows, error: itemError } = await client
+    let itemsQuery = client
       .from("order_items")
       .select(CUSTOMER_ORDER_ITEM_COLUMNS)
       .in("order_id", orderIds);
+    if (options?.signal) {
+      itemsQuery = itemsQuery.abortSignal(options.signal);
+    }
+    const { data: itemRows, error: itemError } = await itemsQuery;
     if (itemError) throw itemError;
     items = Array.isArray(itemRows) ? itemRows : [];
   }
@@ -1302,7 +1309,7 @@ function extractMissingColumnName(error) {
   return pgrstMatch?.[1] || "";
 }
 
-async function upsertOrderRowWithSchemaFallback(client, orderRow) {
+async function upsertOrderRowWithSchemaFallback(client, orderRow, signal = null) {
   const mutableRow = { ...(orderRow || {}) };
   unsupportedOrderColumns.forEach((column) => {
     if (column in mutableRow) delete mutableRow[column];
@@ -1312,7 +1319,9 @@ async function upsertOrderRowWithSchemaFallback(client, orderRow) {
 
   while (attempts < 4) {
     attempts += 1;
-    const { error } = await client.from("orders").upsert(mutableRow, { onConflict: "id" });
+    let query = client.from("orders").upsert(mutableRow, { onConflict: "id" });
+    if (signal) query = query.abortSignal(signal);
+    const { error } = await query;
     if (!error) return;
     if (!shouldRetryWithTrimmedColumns(error)) throw error;
     const missingColumn = extractMissingColumnName(error);
@@ -1325,7 +1334,7 @@ async function upsertOrderRowWithSchemaFallback(client, orderRow) {
   throw new Error("orders_upsert_failed_after_schema_fallback");
 }
 
-async function insertOrderItemRowsWithSchemaFallback(client, itemRows = []) {
+async function insertOrderItemRowsWithSchemaFallback(client, itemRows = [], signal = null) {
   if (!itemRows.length) return;
   const removedColumns = new Set();
   let attempts = 0;
@@ -1339,7 +1348,9 @@ async function insertOrderItemRowsWithSchemaFallback(client, itemRows = []) {
       });
       return nextRow;
     });
-    const { error } = await client.from("order_items").insert(payload);
+    let query = client.from("order_items").insert(payload);
+    if (signal) query = query.abortSignal(signal);
+    const { error } = await query;
     if (!error) return;
     if (!shouldRetryWithTrimmedColumns(error)) throw error;
     const missingColumn = extractMissingColumnName(error);
@@ -1357,15 +1368,17 @@ function getOrderItemRowIndex(row = {}) {
   return Number.isInteger(value) && value >= 0 ? value : null;
 }
 
-async function ensureOrderItemRows(client, mappedOrders = []) {
+async function ensureOrderItemRows(client, mappedOrders = [], signal = null) {
   const candidates = mappedOrders.filter((item) => item?.orderRow?.id && item?.itemRows?.length);
   if (!candidates.length) return;
 
   const orderIds = candidates.map((item) => item.orderRow.id);
-  const { data: existingRows, error } = await client
+  let existingItemsQuery = client
     .from("order_items")
     .select("order_id,metadata")
     .in("order_id", orderIds);
+  if (signal) existingItemsQuery = existingItemsQuery.abortSignal(signal);
+  const { data: existingRows, error } = await existingItemsQuery;
   if (error) throw error;
 
   const existingByOrderId = (existingRows || []).reduce((map, row) => {
@@ -1387,7 +1400,7 @@ async function ensureOrderItemRows(client, mappedOrders = []) {
   });
 
   if (missingRows.length) {
-    await insertOrderItemRowsWithSchemaFallback(client, missingRows);
+    await insertOrderItemRowsWithSchemaFallback(client, missingRows, signal);
   }
 }
 
@@ -1413,7 +1426,7 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
   return ordersWriteQueue;
 }
 
-async function upsertOrderToTable(order = {}) {
+async function upsertOrderToTable(order = {}, options = {}) {
   if (!isSupabaseReady()) return order;
   const client = await getSupabaseClientAsync();
   if (!client) return order;
@@ -1422,9 +1435,9 @@ async function upsertOrderToTable(order = {}) {
   if (!mapped) return order;
   const { orderRow } = mapped;
 
-  await upsertOrderRowWithSchemaFallback(client, orderRow);
+  await upsertOrderRowWithSchemaFallback(client, orderRow, options?.signal || null);
 
-  await ensureOrderItemRows(client, [mapped]);
+  await ensureOrderItemRows(client, [mapped], options?.signal || null);
   return order;
 }
 

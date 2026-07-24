@@ -324,6 +324,112 @@ function createCustomerOrderIdentity(now = new Date()) {
   };
 }
 
+const CHECKOUT_ORDER_ATTEMPT_KEY = "ghr_checkout_order_attempt_v1";
+const CHECKOUT_ORDER_ATTEMPT_TTL_MS = 20 * 60 * 1000;
+const CHECKOUT_PRECHECK_TIMEOUT_MS = 8000;
+const CHECKOUT_PROOF_TIMEOUT_MS = 5000;
+let checkoutOrderAttemptMemory = null;
+
+function createCheckoutOrderTimeoutError(stage = "unknown") {
+  const error = new Error("checkout_order_timeout");
+  error.code = "CHECKOUT_ORDER_TIMEOUT";
+  error.stage = stage;
+  return error;
+}
+
+function withCheckoutStepTimeout(task, stage, timeoutMs) {
+  let timeoutId = null;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(createCheckoutOrderTimeoutError(stage)), timeoutMs);
+  });
+  return Promise.race([Promise.resolve().then(task), timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
+
+function buildCheckoutAttemptFingerprint({
+  cart = [],
+  totalAmount = 0,
+  deliveryInfo = {},
+  fulfillmentType = "",
+  branchInfo = null,
+  pickupTimeText = "",
+  paymentMethod = ""
+}) {
+  const items = (Array.isArray(cart) ? cart : []).map((item) => ({
+    id: String(item?.id || item?.productId || item?.product_id || ""),
+    cartId: String(item?.cartId || ""),
+    quantity: Number(item?.quantity || 0),
+    lineTotal: Number(item?.lineTotal || 0),
+    note: String(item?.note || ""),
+    options: Array.isArray(item?.options) ? item.options : [],
+    toppings: Array.isArray(item?.toppings) ? item.toppings : []
+  }));
+  return JSON.stringify({
+    items,
+    totalAmount: Number(totalAmount || 0),
+    phone: getCustomerKey(deliveryInfo?.phone || ""),
+    fulfillmentType: String(fulfillmentType || ""),
+    branchId: String(branchInfo?.branchUuid || branchInfo?.id || branchInfo?.branchId || ""),
+    pickupTimeText: String(pickupTimeText || ""),
+    paymentMethod: String(paymentMethod || "").toLowerCase()
+  });
+}
+
+function readCheckoutOrderAttempt() {
+  if (typeof window === "undefined") return checkoutOrderAttemptMemory;
+  try {
+    const raw = window.sessionStorage.getItem(CHECKOUT_ORDER_ATTEMPT_KEY);
+    return raw ? JSON.parse(raw) : checkoutOrderAttemptMemory;
+  } catch {
+    return checkoutOrderAttemptMemory;
+  }
+}
+
+function saveCheckoutOrderAttempt(attempt) {
+  checkoutOrderAttemptMemory = attempt;
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(CHECKOUT_ORDER_ATTEMPT_KEY, JSON.stringify(attempt));
+  } catch {
+    // Giữ bản trong bộ nhớ khi trình duyệt nhúng chặn sessionStorage.
+  }
+}
+
+function getOrCreateCheckoutOrderAttempt(params) {
+  const fingerprint = buildCheckoutAttemptFingerprint(params);
+  const existing = readCheckoutOrderAttempt();
+  const createdAtMs = Date.parse(existing?.createdAt || "");
+  const isReusable =
+    existing?.fingerprint === fingerprint &&
+    existing?.orderCode &&
+    Number.isFinite(createdAtMs) &&
+    Date.now() - createdAtMs < CHECKOUT_ORDER_ATTEMPT_TTL_MS;
+  if (isReusable) return existing;
+
+  const createdAtDate = new Date();
+  const identity = createCustomerOrderIdentity(createdAtDate);
+  const attempt = {
+    ...identity,
+    createdAt: createdAtDate.toISOString(),
+    fingerprint
+  };
+  saveCheckoutOrderAttempt(attempt);
+  return attempt;
+}
+
+function clearCheckoutOrderAttempt(orderCode = "") {
+  const existing = readCheckoutOrderAttempt();
+  if (orderCode && existing?.orderCode && String(existing.orderCode) !== String(orderCode)) return;
+  checkoutOrderAttemptMemory = null;
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(CHECKOUT_ORDER_ATTEMPT_KEY);
+  } catch {
+    // noop
+  }
+}
+
 function isDuplicateOrderIdentityError(error) {
   if (String(error?.code || "") !== "23505") return false;
   const detail = [
@@ -378,24 +484,40 @@ export async function createOrderAsync(params) {
   } = params;
 
   if (!Array.isArray(cart) || !cart.length) return null;
-  const createdAtDate = new Date();
-  const createdAt = createdAtDate.toISOString();
-  const { orderCode, displayOrderCode } = createCustomerOrderIdentity(createdAtDate);
+  const checkoutAttempt = getOrCreateCheckoutOrderAttempt({
+    cart,
+    totalAmount,
+    deliveryInfo,
+    fulfillmentType,
+    branchInfo,
+    pickupTimeText,
+    paymentMethod
+  });
+  const createdAt = checkoutAttempt.createdAt;
+  const { orderCode, displayOrderCode } = checkoutAttempt;
   const subtotalAmount = Number(
     subtotal ?? cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
   );
   const [validatedVoucher, loyaltyRule] = await Promise.all([
-    validateCheckoutVoucherBeforeOrder({
-      orderId: orderCode,
-      customerPhone: deliveryInfo?.phone || userProfile.phone,
-      subtotal: subtotalAmount,
-      promoDiscount,
-      promoCode,
-      promoSource,
-      promoVoucherId,
-      at: createdAt
-    }),
-    getLoyaltyRuleConfigAsync()
+    withCheckoutStepTimeout(
+      () => validateCheckoutVoucherBeforeOrder({
+        orderId: orderCode,
+        customerPhone: deliveryInfo?.phone || userProfile.phone,
+        subtotal: subtotalAmount,
+        promoDiscount,
+        promoCode,
+        promoSource,
+        promoVoucherId,
+        at: createdAt
+      }),
+      "voucher",
+      CHECKOUT_PRECHECK_TIMEOUT_MS
+    ),
+    withCheckoutStepTimeout(
+      () => getLoyaltyRuleConfigAsync(),
+      "loyalty_config",
+      CHECKOUT_PRECHECK_TIMEOUT_MS
+    )
   ]);
   const appliedPromoDiscount = validatedVoucher.promoDiscount;
   const appliedPromoCode = validatedVoucher.promoCode;
@@ -409,7 +531,11 @@ export async function createOrderAsync(params) {
   const normalizedPaymentMethod = String(paymentMethod || "").trim().toLowerCase();
   const isPrepaidPayment = ["bank_qr", "momo"].includes(normalizedPaymentMethod);
   const customerActionProof = isPrepaidPayment
-    ? await createCustomerOrderActionProof()
+    ? await withCheckoutStepTimeout(
+        () => createCustomerOrderActionProof(),
+        "customer_action_proof",
+        CHECKOUT_PROOF_TIMEOUT_MS
+      )
     : null;
   const initialOrderStatus = isPrepaidPayment ? "pending_payment" : "preparing";
   const initialKitchenStatus = isPrepaidPayment ? "waiting_payment" : "pending";
@@ -490,6 +616,7 @@ export async function createOrderAsync(params) {
   if (customerActionProof?.token) {
     saveCustomerOrderActionToken(savedOrder?.id || savedOrder?.orderCode || order.orderCode, customerActionProof.token);
   }
+  clearCheckoutOrderAttempt(checkoutAttempt.orderCode);
   notifyWebOrderWebhook({ order: savedOrder }).catch((error) => {
     console.warn("[order] web order webhook failed", error);
   });

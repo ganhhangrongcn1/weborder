@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /checkout
+Disallow: /success
+Disallow: /profile
+Disallow: /kitchen
+Disallow: /qrcode
+
+Sitemap: https://ganhhangrong.vn/sitemap.xml
