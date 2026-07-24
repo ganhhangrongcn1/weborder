@@ -7,7 +7,9 @@ const CONTROL_KEY = "nexpos_partner_orders";
 const SESSION_KEY = "nexpos_master_account";
 const PAGE_SIZE = 20;
 const MAX_PAGES_PER_HUB = 5;
-const LOCK_SECONDS = 25;
+const LOCK_SECONDS = 55;
+const FAST_POLL_STATUSES = ["PRE_ORDER", "DOING", "CANCEL"];
+const FULL_POLL_STATUSES = ["PRE_ORDER", "DOING", "PICK", "FINISH", "CANCEL"];
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8" };
 
 function toText(value: unknown = "") { return String(value ?? "").trim(); }
@@ -207,20 +209,24 @@ Deno.serve(async (request) => {
     const hubIds = Array.from(new Set((hubRows || []).map((row) => toText(row.nexpos_hub_id)).filter(Boolean)));
     const cookieRef = { value: "" };
     const observed: JsonRecord[] = [];
-    const from = new Date(Date.now() - 24 * 3600000).toISOString();
+    const isFullStatusSweep = new Date().getUTCMinutes() % 5 === 0;
+    const pollStatuses = isFullStatusSweep ? FULL_POLL_STATUSES : FAST_POLL_STATUSES;
+    const from = new Date(Date.now() - 6 * 3600000).toISOString();
     const to = new Date(Date.now() + 3600000).toISOString();
 
     for (const hubId of hubIds) {
-      for (let page = 1; page <= MAX_PAGES_PER_HUB; page += 1) {
-        const params = new URLSearchParams({
-          status: "DOING", from, to, filter_type: "hub", hub_ids: hubId,
-          "table[page]": String(page), "table[items_per_page]": String(PAGE_SIZE)
-        });
-        const payload = await nexposFetch(client, `${BASE_URL}/order-service/site/orders?${params}`, cookieRef);
-        requestCount += 1;
-        const rows = extractRows(payload).map(getObject).filter((row) => orderIdentity(row));
-        observed.push(...rows);
-        if (rows.length < PAGE_SIZE) break;
+      for (const status of pollStatuses) {
+        for (let page = 1; page <= MAX_PAGES_PER_HUB; page += 1) {
+          const params = new URLSearchParams({
+            status, from, to, filter_type: "hub", hub_ids: hubId,
+            "table[page]": String(page), "table[items_per_page]": String(PAGE_SIZE)
+          });
+          const payload = await nexposFetch(client, `${BASE_URL}/order-service/site/orders?${params}`, cookieRef);
+          requestCount += 1;
+          const rows = extractRows(payload).map(getObject).filter((row) => orderIdentity(row));
+          observed.push(...rows);
+          if (rows.length < PAGE_SIZE) break;
+        }
       }
     }
 
