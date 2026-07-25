@@ -4,7 +4,16 @@ import { formatMoney } from "../../utils/format.js";
 import Icon from "../Icon.jsx";
 import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
 
-export default function OptionModal({ product, selectedSpice, setSelectedSpice, selectedToppings, setSelectedToppings, note, setNote, quantity, setQuantity, onClose, onAdd, submitLabel, toppings = toppingSeed, optionModalText, spiceLevels, normalizeOrderOption, closeOnlyOnBackdrop, OptionGroup }) {
+function getOptionGroupTitle(groupName) {
+  const normalizedName = String(groupName || "").trim();
+  const lowercaseName = normalizedName.toLocaleLowerCase("vi");
+
+  if (lowercaseName.includes("độ cay") || lowercaseName.includes("chọn vị")) return "Chọn độ cay";
+  if (lowercaseName.includes("ngon hơn khi ăn cùng")) return "Ăn kèm cho ngon";
+  return normalizedName;
+}
+
+export default function OptionModal({ product, selectedSpice, setSelectedSpice, selectedToppings, setSelectedToppings, note, setNote, quantity, setQuantity, onClose, onAdd, submitLabel, toppings = toppingSeed, optionModalText, spiceLevels, normalizeOrderOption, OptionGroup }) {
   const finalSubmitLabel = submitLabel || optionModalText.addToCart;
   const customOptionGroups = product.optionGroups?.length ? product.optionGroups : [];
   const usesCustomOptions = customOptionGroups.length > 0;
@@ -101,33 +110,34 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
     <CustomerBottomSheet
       ariaLabel={optionModalText.aria}
       onClose={onClose}
-      closeOnBackdrop={true}
+      closeOnBackdrop={false}
       className="option-sheet customer-option-sheet"
       contentClassName="customer-option-sheet-scroll"
       footer={(
         <div className="option-modal-footer">
-          <div className="flex items-center justify-between rounded-[22px] bg-orange-50 px-4 py-3">
-            <span className="text-sm font-black uppercase text-brown/70">{optionModalText.subtotal}</span>
-            <div className="text-right">
+          <button type="button" onClick={handleAddToCart} className="cta option-modal-submit">
+            <span>{finalSubmitLabel}</span>
+            <span className="option-modal-submit__summary">
               {hasStrikePrice && (
-                <span className="block text-xs font-bold text-brown/35 line-through">
+                <del>
                   {formatMoney(originalTotal)}
-                </span>
+                </del>
               )}
-              <strong className="text-xl font-black text-orange-600">{formatMoney(total)}</strong>
-            </div>
-          </div>
-          <button onClick={handleAddToCart} className="cta w-full">{finalSubmitLabel}</button>
+              <strong>{quantity} món · {formatMoney(total)}</strong>
+            </span>
+          </button>
         </div>
       )}
       showHeader={false}
     >
         <div className="option-modal-sticky-header flex items-start gap-3">
-          <img src={product.image} alt={product.name} className="h-24 w-24 rounded-[22px] object-cover shadow-soft" />
+          <img src={product.image} alt={product.name} width="96" height="96" className="h-24 w-24 rounded-[22px] object-cover shadow-soft" />
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <h2 className="customer-modal-title line-clamp-2 text-brown">{product.name}</h2>
-              <button onClick={onClose} aria-label={optionModalText.close} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-orange-50 text-sm font-black text-orange-600">X</button>
+              <button type="button" onClick={onClose} aria-label={optionModalText.close} className="option-modal-close">
+                <Icon name="close" size={18} />
+              </button>
             </div>
             <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-brown/55">{product.short}</p>
             <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -146,18 +156,28 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
             customOptionGroups.map((group) => (
               (() => {
                 const isSpiceLikeGroup = (group.required || group.type === "single") && (group.options || []).every((option) => Number(option.price || 0) === 0);
+                const groupTitle = getOptionGroupTitle(group.name);
                 return (
-                  <OptionGroup key={group.id} title={group.name + (group.required ? " *" : "")}>
-                    <p className={`option-hint ${group.required ? "option-hint-required" : "option-hint-optional"}`}>
-                      {group.required ? optionModalText.requiredOne : optionModalText.optionalMany}
-                    </p>
+                  <OptionGroup
+                    key={group.id}
+                    title={groupTitle}
+                    badge={group.required ? optionModalText.requiredOne : optionModalText.optionalMany}
+                  >
                     {isSpiceLikeGroup ? (
-                      <div className="option-spice-grid">
+                      <div className="option-spice-grid" role="radiogroup" aria-label={groupTitle}>
                         {group.options.map((option) => {
                           const active = isCustomOptionActive(group, option);
                           return (
-                            <button key={option.id} onClick={() => toggleCustomOption(group, option)} className={"option " + (active ? "option-active" : "")}>
-                              {option.name}
+                            <button
+                              type="button"
+                              key={option.id}
+                              role="radio"
+                              aria-checked={active}
+                              onClick={() => toggleCustomOption(group, option)}
+                              className={"option " + (active ? "option-active" : "")}
+                            >
+                              <span>{option.name}</span>
+                              {active ? <Icon name="check" size={14} /> : null}
                             </button>
                           );
                         })}
@@ -168,17 +188,34 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
                           const active = isCustomOptionActive(group, option);
                           const qty = getToppingQuantity(option.id, group.id);
                           return (
-                            <button key={option.id} onClick={() => toggleCustomOption(group, option)} className={"modal-topping " + (active ? "modal-topping-active" : "")}>
-                              <span>{option.name}</span>
-                              <strong>{Number(option.price) > 0 ? "+" + formatMoney(Number(option.price)) : optionModalText.zeroDong}</strong>
+                            <div key={option.id} className={"modal-topping " + (active ? "modal-topping-active is-active" : "")}>
+                              <button
+                                type="button"
+                                onClick={() => toggleCustomOption(group, option)}
+                                className="modal-topping__select"
+                                aria-pressed={active}
+                                aria-label={`${active ? "Bỏ chọn" : "Chọn"} ${option.name}`}
+                              >
+                                <span className="modal-topping__copy">
+                                  <span>{option.name}</span>
+                                  <strong>{Number(option.price) > 0 ? "+" + formatMoney(Number(option.price)) : optionModalText.zeroDong}</strong>
+                                </span>
+                                <span className="modal-topping__indicator">
+                                  <Icon name={active ? "check" : "plus"} size={15} />
+                                </span>
+                              </button>
                               {group.type !== "single" && !group.required && qty > 0 && (
-                                <em className="modal-topping-count" onClick={(event) => event.stopPropagation()}>
-                                  <b onClick={() => changeCustomOptionQuantity(group, option, -1)}>-</b>
-                                  <i>{qty}</i>
-                                  <b onClick={() => changeCustomOptionQuantity(group, option, 1)}>+</b>
-                                </em>
+                                <div className="modal-topping-count" aria-label={`Số lượng ${option.name}: ${qty}`}>
+                                  <button type="button" onClick={() => changeCustomOptionQuantity(group, option, -1)} aria-label={`Giảm ${option.name}`}>
+                                    <Icon name="minus" size={13} />
+                                  </button>
+                                  <output aria-live="polite">{qty}</output>
+                                  <button type="button" onClick={() => changeCustomOptionQuantity(group, option, 1)} aria-label={`Tăng ${option.name}`}>
+                                    <Icon name="plus" size={13} />
+                                  </button>
+                                </div>
                               )}
-                            </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -191,15 +228,19 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
 
           <label className="block">
             <span className="label">{optionModalText.note}</span>
-            <textarea value={note} onChange={(event) => setNote(event.target.value)} className="note-input mt-3" rows="2" placeholder={optionModalText.notePlaceholder} />
+            <textarea name="item-note" autoComplete="off" value={note} onChange={(event) => setNote(event.target.value)} className="note-input mt-3" rows="2" placeholder={optionModalText.notePlaceholder} />
           </label>
 
           <div className="flex items-center justify-between">
             <span className="label">{optionModalText.quantity}</span>
             <div className="flex items-center gap-3">
-              <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="qty-btn">-</button>
-              <span className="w-8 text-center font-black">{quantity}</span>
-              <button onClick={() => setQuantity(quantity + 1)} className="qty-btn text-orange-600">+</button>
+              <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="qty-btn" aria-label="Giảm số lượng" disabled={quantity <= 1}>
+                <Icon name="minus" size={15} />
+              </button>
+              <output className="w-8 text-center font-black" aria-live="polite" aria-label={`Số lượng ${quantity}`}>{quantity}</output>
+              <button type="button" onClick={() => setQuantity(quantity + 1)} className="qty-btn text-orange-600" aria-label="Tăng số lượng">
+                <Icon name="plus" size={15} />
+              </button>
             </div>
           </div>
 

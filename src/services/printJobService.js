@@ -26,6 +26,9 @@ const POS_PAYMENT_QR_SOURCE_TYPE = "pos_payment_qr";
 const AUTO_PRINT_WINDOW_MINUTES = 5;
 const RECENT_PRINT_JOBS_CACHE_TTL_MS = 15 * 1000;
 const recentPrintJobsCache = new Map();
+const sharedPrintJobRealtimeListeners = new Set();
+let sharedPrintJobRealtimeClient = null;
+let sharedPrintJobRealtimeChannel = null;
 const AUTO_PRINT_EXPIRED_MESSAGE = "Lệnh in quá 5 phút. Bấm In lại nếu cần.";
 const PRINT_JOB_STATUS_COLUMNS = [
   "id",
@@ -854,65 +857,87 @@ export async function markExpiredPendingPrintJobs(options = {}) {
   else invalidateRecentPrintJobsCache(options);
 }
 
-export async function subscribePrintJobs(options = {}) {
+async function subscribeSharedPrintJobRealtime(onPayload) {
   const client = await getClient();
-  if (!client || typeof options.onPendingJob !== "function") return () => {};
+  if (!client || typeof onPayload !== "function") return () => {};
   if (!(await ensureSupabaseRealtimeReady(client))) return () => {};
 
-  const channel = client
-    .channel(`print-jobs-${toText(options.deviceId || getPrintDeviceId())}-${Date.now()}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "print_jobs" },
-      (payload) => {
-        const job = payload?.new || {};
-        const branchUuid = toText(options.branchUuid);
-        const printerKey = toText(options.printerKey || DEFAULT_PRINTER_KEY);
-        const jobType = toText(options.jobType || CUSTOMER_BILL_JOB_TYPE);
-        if (toText(job.status) !== PRINT_JOB_STATUS.pending) return;
-        if (toText(job.job_type || CUSTOMER_BILL_JOB_TYPE) !== jobType) return;
-        if (printerKey && toText(job.printer_key || DEFAULT_PRINTER_KEY) !== printerKey) return;
-        if (branchUuid && toText(job.branch_uuid) !== branchUuid) return;
-        if (!isPrintJobFresh(job)) {
-          markPrintJobAutoExpired(job);
-          return;
-        }
-        options.onPendingJob(job);
-      }
-    )
-    .subscribe();
+  sharedPrintJobRealtimeListeners.add(onPayload);
 
+  if (!sharedPrintJobRealtimeChannel || sharedPrintJobRealtimeClient !== client) {
+    if (sharedPrintJobRealtimeChannel && sharedPrintJobRealtimeClient) {
+      Promise.resolve(
+        sharedPrintJobRealtimeClient.removeChannel(sharedPrintJobRealtimeChannel)
+      ).catch(() => {});
+    }
+
+    sharedPrintJobRealtimeClient = client;
+    sharedPrintJobRealtimeChannel = client
+      .channel(`print-jobs-shared-${Date.now()}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "print_jobs" },
+        (payload) => {
+          [...sharedPrintJobRealtimeListeners].forEach((listener) => {
+            try {
+              listener(payload);
+            } catch (error) {
+              console.warn("[printJobService] realtime listener failed", error);
+            }
+          });
+        }
+      )
+      .subscribe();
+  }
+
+  let active = true;
   return () => {
-    client.removeChannel(channel);
+    if (!active) return;
+    active = false;
+    sharedPrintJobRealtimeListeners.delete(onPayload);
+    if (sharedPrintJobRealtimeListeners.size || !sharedPrintJobRealtimeChannel) return;
+
+    const channel = sharedPrintJobRealtimeChannel;
+    const channelClient = sharedPrintJobRealtimeClient;
+    sharedPrintJobRealtimeChannel = null;
+    sharedPrintJobRealtimeClient = null;
+    Promise.resolve(channelClient?.removeChannel(channel)).catch(() => {});
   };
 }
 
+export async function subscribePrintJobs(options = {}) {
+  if (typeof options.onPendingJob !== "function") return () => {};
+
+  return subscribeSharedPrintJobRealtime((payload) => {
+    const job = payload?.new || {};
+    const branchUuid = toText(options.branchUuid);
+    const printerKey = toText(options.printerKey || DEFAULT_PRINTER_KEY);
+    const jobType = toText(options.jobType || CUSTOMER_BILL_JOB_TYPE);
+    if (toText(job.status) !== PRINT_JOB_STATUS.pending) return;
+    if (toText(job.job_type || CUSTOMER_BILL_JOB_TYPE) !== jobType) return;
+    if (printerKey && toText(job.printer_key || DEFAULT_PRINTER_KEY) !== printerKey) return;
+    if (branchUuid && toText(job.branch_uuid) !== branchUuid) return;
+    if (!isPrintJobFresh(job)) {
+      markPrintJobAutoExpired(job);
+      return;
+    }
+    options.onPendingJob(job);
+  });
+}
+
 export async function subscribePrintJobChanges(options = {}) {
-  const client = await getClient();
-  if (!client || typeof options.onJobChange !== "function") return () => {};
-  if (!(await ensureSupabaseRealtimeReady(client))) return () => {};
+  if (typeof options.onJobChange !== "function") return () => {};
 
-  const channel = client
-    .channel(`print-job-status-${toText(options.deviceId || getPrintDeviceId())}-${Date.now()}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "print_jobs" },
-      (payload) => {
-        const job = payload?.new || {};
-        const branchUuid = toText(options.branchUuid);
-        const printerKey = toText(options.printerKey || DEFAULT_PRINTER_KEY);
-        const jobType = toText(options.jobType || CUSTOMER_BILL_JOB_TYPE);
-        if (toText(job.job_type || CUSTOMER_BILL_JOB_TYPE) !== jobType) return;
-        if (printerKey && toText(job.printer_key || DEFAULT_PRINTER_KEY) !== printerKey) return;
-        if (branchUuid && toText(job.branch_uuid) !== branchUuid) return;
-        options.onJobChange(job, payload);
-      }
-    )
-    .subscribe();
-
-  return () => {
-    client.removeChannel(channel);
-  };
+  return subscribeSharedPrintJobRealtime((payload) => {
+    const job = payload?.new || {};
+    const branchUuid = toText(options.branchUuid);
+    const printerKey = toText(options.printerKey || DEFAULT_PRINTER_KEY);
+    const jobType = toText(options.jobType || CUSTOMER_BILL_JOB_TYPE);
+    if (toText(job.job_type || CUSTOMER_BILL_JOB_TYPE) !== jobType) return;
+    if (printerKey && toText(job.printer_key || DEFAULT_PRINTER_KEY) !== printerKey) return;
+    if (branchUuid && toText(job.branch_uuid) !== branchUuid) return;
+    options.onJobChange(job, payload);
+  });
 }
 
 export {

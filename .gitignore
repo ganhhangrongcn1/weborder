@@ -146,3 +146,10 @@ vite.config.ts.timestamp-*
 .local-downloads/
 .local-temp/
 .local-backups/
+
+# Local development artifacts and manual rollback files
+RKStorage.db
+ghr-pos-mobile-native/emulator-current.png
+tmp_*.html
+rollback-backups/
+backup-before-*.patch

@@ -20,6 +20,7 @@ import {
 const REALTIME_RELOAD_DELAY_MS = 2000;
 const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
 const KITCHEN_BACKGROUND_REFRESH_MS = 15000;
+const KITCHEN_RECENT_FULL_REFRESH_DEDUP_MS = 5000;
 const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
 const DONE_ORDER_PAGE_SIZE = 20;
@@ -623,6 +624,7 @@ export default function useKitchenOrders(options = null) {
   const [updatingItemKey, setUpdatingItemKey] = useState("");
   const loadingOrdersRef = useRef(false);
   const realtimeReloadTimerRef = useRef(null);
+  const lastFullLoadCompletedAtRef = useRef(0);
   const recentlyClosedOrderKeysRef = useRef(new Map());
   const currentOrdersRef = useRef([]);
 
@@ -713,6 +715,9 @@ export default function useKitchenOrders(options = null) {
           : ""
       );
       setLastUpdatedAt(new Date().toISOString());
+      if (!partialSourceType) {
+        lastFullLoadCompletedAtRef.current = Date.now();
+      }
       setRequestAudit(getKitchenRequestAuditSnapshot());
     } catch (err) {
       setError(err?.message || "Khong tai duoc danh sach don bep.");
@@ -754,6 +759,10 @@ export default function useKitchenOrders(options = null) {
     if (!enabled || typeof window === "undefined") return undefined;
     const timer = window.setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      const recentlyLoadedAllSources = (
+        Date.now() - lastFullLoadCompletedAtRef.current < KITCHEN_RECENT_FULL_REFRESH_DEDUP_MS
+      );
+      if (recentlyLoadedAllSources) return;
       loadOrders({ silent: true });
     }, KITCHEN_BACKGROUND_REFRESH_MS);
 
@@ -803,6 +812,7 @@ export default function useKitchenOrders(options = null) {
     async function startRealtime() {
       const nextUnsubscribe = await subscribeKitchenOrderChanges((change) => {
         if (!alive) return;
+        const realtimeEventReceivedAt = Date.now();
         const dateRange = getDateRange(dateFilter);
         if (!realtimeEventMatchesBranch(change, options, currentOrdersRef.current)) return;
         if (!realtimeEventMatchesDate(change, dateRange, currentOrdersRef.current)) return;
@@ -814,6 +824,7 @@ export default function useKitchenOrders(options = null) {
         }
         realtimeReloadTimerRef.current = window.setTimeout(() => {
           realtimeReloadTimerRef.current = null;
+          if (lastFullLoadCompletedAtRef.current >= realtimeEventReceivedAt) return;
           loadOrders({ silent: true, sourceType });
         }, isRealtimeItemTable(change.table) ? ITEM_REALTIME_RELOAD_DELAY_MS : REALTIME_RELOAD_DELAY_MS);
       }, {

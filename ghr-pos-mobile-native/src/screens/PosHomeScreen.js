@@ -659,6 +659,7 @@ export default function PosHomeScreen() {
             totals={totals}
             paymentConfirmed={paymentConfirmed}
             disabled={busy}
+            qrLoading={qrLoading}
             hasBenefitSignal={hasBenefitSignal}
             onOpenBenefit={() => setBenefitModalOpen(true)}
             onConfirmCash={handleOpenCashModal}

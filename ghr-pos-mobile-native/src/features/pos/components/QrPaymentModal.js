@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 
 import { buildPosPaymentReference, buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/pos/posPaymentService";
@@ -50,7 +50,7 @@ export default function QrPaymentModal({
 
   const content = (
     <View style={styles.layer}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={styles.backdrop} onPress={onClose} disabled={loading} />
       <View style={[styles.sheet, { width: dialogWidth }]}>
         <View style={styles.header}>
           <View style={styles.flexOne}>
@@ -59,13 +59,13 @@ export default function QrPaymentModal({
             <Text style={styles.title}>{isMomo ? "Quét mã thanh toán MoMo" : "Quét mã thanh toán"}</Text>
           </View>
           <View style={styles.headerActions}>
-            {config.ready ? (
+            {config.ready && draftSession && !loading ? (
               <Pressable style={styles.ghostButton} onPress={onPrint} disabled={printBusy}>
                 <Text style={styles.ghostText}>{printBusy ? "Đang in..." : "In QR"}</Text>
               </Pressable>
             ) : null}
-            <Pressable style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeText}>Đóng</Text>
+            <Pressable style={[styles.closeButton, loading && styles.disabledButton]} onPress={onClose} disabled={loading}>
+              <Text style={styles.closeText}>{loading ? "Đang tạo..." : "Đóng"}</Text>
             </Pressable>
           </View>
         </View>
@@ -73,7 +73,13 @@ export default function QrPaymentModal({
         {config.ready ? (
           <View style={styles.body}>
             <View style={styles.qrBox}>
-              {isMomo && momoQrValue ? (
+              {loading && !draftSession ? (
+                <View style={[styles.qrLoadingBox, { width: qrSize, height: qrSize }]}>
+                  <ActivityIndicator size="large" color={POS_COLORS.primaryDark} />
+                  <Text style={styles.qrLoadingTitle}>Đang tạo mã QR</Text>
+                  <Text style={styles.qrLoadingText}>Vui lòng chờ trong giây lát...</Text>
+                </View>
+              ) : isMomo && momoQrValue ? (
                 <QRCode value={momoQrValue} size={qrSize} backgroundColor="#ffffff" color="#111827" />
               ) : qrUrl ? (
                 <Image source={{ uri: qrUrl }} style={{ width: qrSize, height: qrSize }} resizeMode="contain" />
@@ -256,6 +262,21 @@ const styles = StyleSheet.create({
   qrFallback: {
     color: POS_COLORS.muted,
     fontWeight: "900"
+  },
+  qrLoadingBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 9
+  },
+  qrLoadingTitle: {
+    color: POS_COLORS.heading,
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  qrLoadingText: {
+    color: POS_COLORS.muted,
+    fontSize: 12,
+    fontWeight: "700"
   },
   validityNote: {
     color: POS_COLORS.muted,

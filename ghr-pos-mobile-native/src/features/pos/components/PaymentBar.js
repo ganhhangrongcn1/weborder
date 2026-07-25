@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
@@ -17,6 +17,7 @@ export default function PaymentBar({
   totals = {},
   paymentConfirmed,
   disabled = false,
+  qrLoading = false,
   hasBenefitSignal = false,
   onOpenBenefit,
   onConfirmCash,
@@ -79,13 +80,19 @@ export default function PaymentBar({
           </View>
         </Pressable>
         <Pressable
-          style={[styles.secondary, disabled && styles.disabledButton]}
+          style={[styles.secondary, qrLoading && styles.qrLoadingButton, disabled && styles.disabledButton]}
           onPress={onOpenQrPayment}
-          disabled={disabled}
+          disabled={disabled || qrLoading}
         >
           <View style={styles.buttonRow}>
-            <PosIcon name="qr" size={16} color={disabled ? POS_COLORS.muted : POS_COLORS.slate} />
-            <Text style={[styles.secondaryText, disabled && styles.disabledText]}>QR</Text>
+            {qrLoading ? (
+              <ActivityIndicator size="small" color={POS_COLORS.primaryDark} />
+            ) : (
+              <PosIcon name="qr" size={16} color={disabled ? POS_COLORS.muted : POS_COLORS.slate} />
+            )}
+            <Text style={[styles.secondaryText, disabled && styles.disabledText]}>
+              {qrLoading ? "Đang tạo QR..." : "QR"}
+            </Text>
           </View>
         </Pressable>
         <Pressable
@@ -246,6 +253,10 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.55
+  },
+  qrLoadingButton: {
+    borderColor: POS_COLORS.primary,
+    backgroundColor: POS_COLORS.primarySoft
   },
   secondaryText: {
     color: POS_COLORS.slate,

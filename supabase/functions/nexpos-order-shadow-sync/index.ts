@@ -7,8 +7,10 @@ const CONTROL_KEY = "nexpos_partner_orders";
 const SESSION_KEY = "nexpos_master_account";
 const PAGE_SIZE = 20;
 const MAX_PAGES_PER_HUB = 5;
-const FAST_POLL_STATUSES = ["PRE_ORDER", "DOING", "CANCEL"];
+const FAST_POLL_STATUSES = ["DOING"];
+const RARE_POLL_STATUSES = ["PRE_ORDER", "DOING", "CANCEL"];
 const FULL_POLL_STATUSES = ["PRE_ORDER", "DOING", "PICK", "FINISH", "CANCEL"];
+const LATE_RECONCILIATION_STATUSES = ["PICK", "FINISH", "CANCEL"];
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8" };
 
 function toText(value: unknown = "") { return String(value ?? "").trim(); }
@@ -29,6 +31,10 @@ function bangkokMinuteOfDay(date = new Date()) {
 function isActiveTradingWindow(date = new Date()) {
   const minute = bangkokMinuteOfDay(date);
   return minute >= 10 * 60 && minute < 22 * 60 + 30;
+}
+function isLateReconciliationWindow(date = new Date()) {
+  const minute = bangkokMinuteOfDay(date);
+  return minute >= 22 * 60 + 30 && minute < 23 * 60 + 30;
 }
 function normalizeSource(value: unknown) {
   const key = toText(value).toLowerCase().replace(/[\s-]+/g, "_");
@@ -195,13 +201,25 @@ Deno.serve(async (request) => {
   const { data: control } = await client.from("nexpos_shadow_sync_control").select("*").eq("control_key", CONTROL_KEY).maybeSingle();
   if (!control || toText(control.mode) !== "compare_only") return response({ ok: true, skipped: true, reason: "disabled" });
   if (toText(request.headers.get("x-cron-secret")) !== toText(control.cron_secret)) return response({ ok: false }, 401);
-  if (!isActiveTradingWindow()) return response({ ok: true, skipped: true, reason: "outside_trading_hours" });
+  const tradingWindow = isActiveTradingWindow();
+  const lateReconciliationWindow = isLateReconciliationWindow();
+  if (!tradingWindow && !lateReconciliationWindow) {
+    return response({ ok: true, skipped: true, reason: "outside_polling_hours" });
+  }
   if (control.locked_until && new Date(control.locked_until).getTime() > Date.now()) return response({ ok: true, skipped: true, reason: "locked" });
 
   const startedAt = new Date().toISOString();
   const lastFullSweepAt = new Date(toText(control.last_full_sweep_at)).getTime();
-  const isFullStatusSweep = !Number.isFinite(lastFullSweepAt) || Date.now() - lastFullSweepAt >= 5 * 60 * 1000;
-  const lockSeconds = isFullStatusSweep ? 50 : 12;
+  const lastRareSweepAt = new Date(toText(control.last_rare_sweep_at)).getTime();
+  const fullSweepDue = !Number.isFinite(lastFullSweepAt) || Date.now() - lastFullSweepAt >= 5 * 60 * 1000;
+  if (lateReconciliationWindow && !fullSweepDue) {
+    return response({ ok: true, skipped: true, reason: "late_reconciliation_not_due" });
+  }
+  const isFullStatusSweep = tradingWindow && fullSweepDue;
+  const isRareStatusSweep = isFullStatusSweep
+    || !Number.isFinite(lastRareSweepAt)
+    || Date.now() - lastRareSweepAt >= 60 * 1000;
+  const lockSeconds = isFullStatusSweep || lateReconciliationWindow ? 50 : 12;
   const { data: locked } = await client.from("nexpos_shadow_sync_control").update({
     locked_until: new Date(Date.now() + lockSeconds * 1000).toISOString(),
     last_started_at: startedAt,
@@ -219,7 +237,13 @@ Deno.serve(async (request) => {
     const hubIds = Array.from(new Set((hubRows || []).map((row) => toText(row.nexpos_hub_id)).filter(Boolean)));
     const cookieRef = { value: "" };
     const observed: JsonRecord[] = [];
-    const pollStatuses = isFullStatusSweep ? FULL_POLL_STATUSES : FAST_POLL_STATUSES;
+    const pollStatuses = lateReconciliationWindow
+      ? LATE_RECONCILIATION_STATUSES
+      : isFullStatusSweep
+        ? FULL_POLL_STATUSES
+        : isRareStatusSweep
+          ? RARE_POLL_STATUSES
+          : FAST_POLL_STATUSES;
     const from = new Date(Date.now() - 6 * 3600000).toISOString();
     const to = new Date(Date.now() + 3600000).toISOString();
 
@@ -369,13 +393,23 @@ Deno.serve(async (request) => {
       finished_at: finishedAt, status: "success", hub_count: hubIds.length,
       request_count: requestCount, observed_count: observed.length,
       matched_count: matchedCount, mismatch_count: mismatchCount, missing_count: missingCount,
-      metadata: { poll_type: isFullStatusSweep ? "full" : "fast", statuses: pollStatuses }
+      metadata: {
+        poll_type: lateReconciliationWindow
+          ? "late_reconciliation"
+          : isFullStatusSweep
+            ? "full"
+            : isRareStatusSweep
+              ? "rare"
+              : "fast",
+        statuses: pollStatuses
+      }
     }).eq("id", runId);
     const controlUpdate: JsonRecord = {
       locked_until: null, last_finished_at: finishedAt, last_success_at: finishedAt,
       consecutive_failures: 0, last_error: null, updated_at: finishedAt
     };
-    if (isFullStatusSweep) controlUpdate.last_full_sweep_at = finishedAt;
+    if (isFullStatusSweep || lateReconciliationWindow) controlUpdate.last_full_sweep_at = finishedAt;
+    if (isRareStatusSweep) controlUpdate.last_rare_sweep_at = finishedAt;
     await client.from("nexpos_shadow_sync_control").update(controlUpdate).eq("control_key", CONTROL_KEY);
     return response({ ok: true, observed: observed.length, matched: matchedCount, mismatch: mismatchCount, missing: missingCount });
   } catch (error) {

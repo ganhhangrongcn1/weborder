@@ -2035,6 +2035,38 @@ function subscribeOrdersRealtime(onChange) {
   });
 }
 
+function subscribeCustomerOrdersRealtime(phone, onChange) {
+  const client = getRuntimeSupabaseClient();
+  const customerPhone = normalizePhone(phone);
+  if (!client || !customerPhone || typeof onChange !== "function") return () => {};
+  if (!isSupabaseRealtimeReady(client)) return () => {};
+
+  const channelName = `ghr-customer-orders-${customerPhone}-${Date.now()}`;
+  const filter = `customer_phone=eq.${customerPhone}`;
+  const notifyChange = (payload) => onChange({ table: "orders", payload });
+  const channel = client
+    .channel(channelName)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "orders", filter },
+      notifyChange
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "orders", filter },
+      notifyChange
+    )
+    .subscribe();
+
+  return () => {
+    try {
+      client.removeChannel(channel);
+    } catch {
+      // noop
+    }
+  };
+}
+
 function subscribeLoyaltyRealtime(onChange) {
   return subscribeCoreDomainRealtime({
     tables: ["loyalty_accounts", "loyalty_ledger"],
@@ -2105,6 +2137,7 @@ export const coreSupabaseRepository = {
   subscribeCustomersRealtime,
   subscribeCustomerAddressesRealtime,
   subscribeOrdersRealtime,
+  subscribeCustomerOrdersRealtime,
   subscribeLoyaltyRealtime
 };
 

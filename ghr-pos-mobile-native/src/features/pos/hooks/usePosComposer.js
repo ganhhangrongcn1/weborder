@@ -1549,19 +1549,27 @@ export default function usePosComposer() {
       setQrModalOpen(true);
       return;
     }
+    if (qrLoading) {
+      setQrModalOpen(true);
+      return;
+    }
+
+    setQrModalOpen(true);
+    setQrLoading(true);
+    setQrError("");
+    setShiftMessage("Đang tạo mã QR thanh toán...");
 
     const loyaltyValidation = await validateLiveLoyaltySelection();
     if (!loyaltyValidation.ok) {
-      setShiftMessage(loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại.");
+      const validationMessage = loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại.";
+      setQrLoading(false);
+      setQrError(validationMessage);
+      setShiftMessage(validationMessage);
       return;
     }
 
     const orderIdentity = createPosOrderIdentity(new Date());
     setQrPreviewIdentity(orderIdentity);
-    setQrLoading(true);
-    setQrError("");
-    setShiftMessage("");
-
     const paymentReference = buildPosPaymentReference(orderIdentity, branch);
     const result = await createPosPaymentSession({
       requestKey: `pos:${paymentProvider}:${profile.branchUuid}:${orderIdentity.orderCode}`,
@@ -1594,7 +1602,10 @@ export default function usePosComposer() {
         customerName: customerName || customerLookup.result?.customerName || "",
         customerPhone: normalizeCustomerPhone(customerPhone)
       }
-    });
+    }).catch((error) => ({
+      ok: false,
+      message: error?.message || "Không kết nối được máy chủ để tạo QR. Vui lòng thử lại."
+    }));
 
     setQrLoading(false);
     if (!result.ok) {
