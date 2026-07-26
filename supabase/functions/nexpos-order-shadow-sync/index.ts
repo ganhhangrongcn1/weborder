@@ -90,10 +90,44 @@ function orderCode(order: JsonRecord) {
 }
 function normalizedDisplayCode(source: string, rawCode: string) {
   const digits = rawCode.replace(/\D/g, "");
-  if (source === "grabfood") return `GF-${digits.slice(-3).padStart(3, "0")}`;
+  if (source === "grabfood") {
+    const preorderSuffix = /F$/i.test(rawCode) ? "F" : "";
+    return `GF-${digits.slice(-3).padStart(3, "0")}${preorderSuffix}`;
+  }
   if (source === "shopeefood") return `SF-${digits.slice(-4).padStart(4, "0")}`;
   if (source === "xanhngon") return `XN-${digits.slice(-4).padStart(4, "0")}`;
   return rawCode;
+}
+function canonicalOrderCode(source: string, rawCode: string, displayCode: string) {
+  return source === "grabfood" ? displayCode : rawCode || displayCode;
+}
+function normalizePhone(value: unknown) {
+  const digits = toText(value).replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("84")) return `0${digits.slice(2)}`;
+  if (digits.length === 9) return `0${digits}`;
+  return digits;
+}
+function nonnegative(value: unknown) {
+  return Math.max(0, toNumber(value, 0));
+}
+function statusSnapshot(value: unknown) {
+  const status = toText(value).toUpperCase();
+  if (["PICK", "READY", "READY_TO_PICKUP", "READY_TO_SHIP"].includes(status)) {
+    return { order_status: "ready", kitchen_status: "pending" };
+  }
+  if (["FINISH", "FINISHED", "COMPLETED", "DONE", "SERVED"].includes(status)) {
+    return { order_status: "completed", kitchen_status: "served" };
+  }
+  if (["CANCEL", "CANCELLED", "CANCELED"].includes(status)) {
+    return { order_status: "cancelled", kitchen_status: "cancelled" };
+  }
+  if (["REFUND", "REFUNDED"].includes(status)) {
+    return { order_status: "refunded", kitchen_status: "cancelled" };
+  }
+  if (["PRE_ORDER", "PREORDER", "SCHEDULED"].includes(status)) {
+    return { order_status: "new", kitchen_status: "pending" };
+  }
+  return { order_status: "preparing", kitchen_status: "pending" };
 }
 function orderStatus(order: JsonRecord) {
   return toText(order.status || order.order_status || order.state);
@@ -269,6 +303,164 @@ async function autoAdjustGrabPrepTime(
     error: `auto_grab_prep_${result.status}:${detail || "unknown"}`
   };
 }
+async function createMissingPartnerOrder(
+  client: ReturnType<typeof createClient>,
+  order: JsonRecord,
+  source: string,
+  identity: string,
+  displayCode: string,
+  items: JsonRecord[],
+  finance: ReturnType<typeof financeSnapshot>,
+  promotions: JsonRecord[],
+  payloadHash: string,
+  now: string
+) {
+  if (items.length === 0) throw new Error(`dual_write_missing_items:${source}:${identity}`);
+  const rawCode = orderCode(order);
+  const canonicalCode = canonicalOrderCode(source, rawCode, displayCode);
+  const financeRaw = getObject(order.finance_data || order.financeData);
+  const rawNetReceived = financeRaw.real_received ?? financeRaw.net_received ?? order.total_for_biz;
+  const hasNetReceived = rawNetReceived !== undefined && rawNetReceived !== null && toText(rawNetReceived) !== "";
+  const netReceived = hasNetReceived ? nonnegative(rawNetReceived) : null;
+  const rawGrossReceived = financeRaw.gross_received;
+  const totalAmount = rawGrossReceived !== undefined && rawGrossReceived !== null
+    ? nonnegative(rawGrossReceived)
+    : nonnegative(order.total);
+  const totalPromotion = nonnegative(financeRaw.total_promotion_price);
+  const discountAmount = totalPromotion > 0
+    ? totalPromotion
+    : nonnegative(order.total_discount);
+  const customerPhone = normalizePhone(order.customer_phone);
+  const sourceStatus = orderStatus(order);
+  const statuses = statusSnapshot(sourceStatus);
+  const orderRow: JsonRecord = {
+    order_code: canonicalCode,
+    display_order_code: displayCode,
+    partner_source: source,
+    branch_id: toText(order.site_id || order.nexpos_site_id),
+    branch_name: toText(order.site_name || order.nexpos_site_name),
+    customer_name: toText(order.customer_name),
+    customer_phone: customerPhone,
+    customer_phone_key: customerPhone,
+    subtotal: nonnegative(financeRaw.original_price ?? order.total),
+    discount_amount: discountAmount,
+    shipping_fee: nonnegative(financeRaw.shipping_fee ?? order.shipment_fee),
+    total_amount: totalAmount,
+    points_base_amount: netReceived === null ? 0 : Math.round(netReceived),
+    net_received_amount: netReceived,
+    loyalty_hold_reason: netReceived === null ? "missing_partner_net_received" : null,
+    order_status: statuses.order_status,
+    kitchen_status: statuses.kitchen_status,
+    kitchen_work_status: "pending",
+    point_status: "pending",
+    order_time: orderTime(order),
+    synced_at: now,
+    raw_data: order,
+    nexpos_order_id: identity,
+    nexpos_hub_id: toText(order.hub_id || order.nexpos_hub_id),
+    nexpos_hub_name: toText(order.hub_name || order.nexpos_hub_name),
+    nexpos_site_id: toText(order.site_id || order.nexpos_site_id),
+    nexpos_site_name: toText(order.site_name || order.nexpos_site_name),
+    nexpos_status: sourceStatus,
+    ingested_by: "supabase",
+    first_ingested_at: now,
+    last_nexpos_observed_at: now,
+    payload_version: "nexpos-supabase-v1",
+    sync_conflict: false,
+    nexpos_original_price: finance.original_price,
+    nexpos_sell_price: finance.sell_price,
+    nexpos_gross_received: finance.gross_received,
+    nexpos_net_received: finance.net_received,
+    nexpos_total_promotion: finance.total_promotion_price,
+    nexpos_cofund_promotion: finance.co_fund_promotion_price,
+    nexpos_other_promotion: finance.other_promotion_price,
+    nexpos_commission: finance.commission,
+    nexpos_commission_tax: finance.commission_tax,
+    nexpos_transaction_fee: finance.transaction_fee,
+    nexpos_tax: finance.tax,
+    nexpos_other_fee: finance.other_fee,
+    nexpos_adjustment_fee: finance.adjustment_fee,
+    nexpos_additional_income: finance.additional_income,
+    nexpos_shipping_discount: finance.shipping_discount,
+    nexpos_finance_data: finance,
+    nexpos_promotion_data: promotions,
+    nexpos_enrichment_hash: payloadHash
+  };
+  const { data: inserted, error: insertError } = await client.from("partner_orders")
+    .insert(orderRow).select("id,partner_source,nexpos_order_id,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,ingested_by,payload_version,nexpos_enrichment_hash").single();
+  if (insertError) {
+    if (toText(insertError.code) !== "23505") throw new Error(`dual_write_order_insert:${insertError.message}`);
+    const { data: raced, error: raceError } = await client.from("partner_orders")
+      .select("id,partner_source,nexpos_order_id,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,ingested_by,payload_version,nexpos_enrichment_hash")
+      .eq("partner_source", source).eq("nexpos_order_id", identity).maybeSingle();
+    if (raceError || !raced?.id) throw new Error(`dual_write_order_race:${raceError?.message || "missing"}`);
+    return { row: raced as JsonRecord, created: false };
+  }
+
+  const itemRows = items.map((item, index) => {
+    const quantity = Math.max(1, toNumber(item.quantity, 1));
+    const rawLineTotal = item.discount_price ?? item.price;
+    return {
+      partner_order_id: inserted.id,
+      order_code: canonicalCode,
+      display_order_code: displayCode,
+      partner_source: source,
+      branch_id: toText(order.site_id || order.nexpos_site_id),
+      partner_item_id: toText(item.item_id || item.model_id),
+      partner_item_sku: toText(item.code),
+      partner_item_name: toText(item.name) || `Món ${index + 1}`,
+      web_product_name: "",
+      quantity,
+      unit_price: nonnegative(item.price),
+      line_total: nonnegative(rawLineTotal),
+      options: getArray(item.options),
+      note: toText(item.note),
+      item_status: "pending",
+      kitchen_item_status: "pending",
+      nexpos_hub_id: toText(order.hub_id || order.nexpos_hub_id),
+      nexpos_site_id: toText(order.site_id || order.nexpos_site_id),
+      item_key: `${canonicalCode}-${index}`,
+      line_index: index,
+      original_unit_price: nonnegative(item.price),
+      discounted_unit_price: nonnegative(item.discount_price),
+      item_discount_amount: nonnegative(item.discount),
+      platform_discount_amount: nonnegative(item.platform_discount),
+      seller_discount_amount: nonnegative(item.seller_discount),
+      promotion_data: {
+        discount: nonnegative(item.discount),
+        discount_price: nonnegative(item.discount_price),
+        platform_discount: nonnegative(item.platform_discount),
+        seller_discount: nonnegative(item.seller_discount),
+        is_gift: Boolean(item.is_gift)
+      }
+    };
+  });
+  const { error: itemsError } = await client.from("partner_order_items").insert(itemRows);
+  if (itemsError) {
+    await client.from("partner_orders").delete().eq("id", inserted.id);
+    throw new Error(`dual_write_item_insert:${itemsError.message}`);
+  }
+  for (const promotion of promotions) {
+    const { error: promotionError } = await client.from("partner_order_promotions").upsert({
+      partner_order_id: inserted.id,
+      ...promotion,
+      updated_at: now
+    }, { onConflict: "partner_order_id,promotion_key" });
+    if (promotionError) {
+      await client.from("partner_orders").delete().eq("id", inserted.id);
+      throw new Error(`dual_write_promotion:${promotionError.message}`);
+    }
+  }
+  if (customerPhone) {
+    await client.rpc("upsert_customer_stub_profile", {
+      p_phone: customerPhone,
+      p_name: toText(order.customer_name),
+      p_source: source,
+      p_source_ref: toText(inserted.id)
+    });
+  }
+  return { row: inserted as JsonRecord, created: true };
+}
 function buildDifferences(shadow: JsonRecord, existing: JsonRecord | undefined) {
   if (!existing) return ["missing_in_n8n"];
   const differences: string[] = [];
@@ -294,7 +486,10 @@ Deno.serve(async (request) => {
   if (!supabaseUrl || !serviceRoleKey) return response({ ok: false, error: "missing_supabase_env" }, 500);
   const client = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: control } = await client.from("nexpos_shadow_sync_control").select("*").eq("control_key", CONTROL_KEY).maybeSingle();
-  if (!control || toText(control.mode) !== "compare_only") return response({ ok: true, skipped: true, reason: "disabled" });
+  const syncMode = toText(control?.mode);
+  if (!control || !["compare_only", "dual_write"].includes(syncMode)) {
+    return response({ ok: true, skipped: true, reason: "disabled" });
+  }
   if (toText(request.headers.get("x-cron-secret")) !== toText(control.cron_secret)) return response({ ok: false }, 401);
   const tradingWindow = isActiveTradingWindow();
   const lateReconciliationWindow = isLateReconciliationWindow();
@@ -361,13 +556,14 @@ Deno.serve(async (request) => {
 
     const identities = observed.map(orderIdentity);
     const { data: existingRows } = identities.length ? await client.from("partner_orders")
-      .select("id,partner_source,nexpos_order_id,order_code,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,payload_version,nexpos_enrichment_hash")
+      .select("id,partner_source,nexpos_order_id,order_code,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,ingested_by,payload_version,nexpos_enrichment_hash")
       .in("nexpos_order_id", identities) : { data: [] };
     const existingMap = new Map((existingRows || []).map((row) => [`${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`, row]));
 
     let matchedCount = 0;
     let mismatchCount = 0;
     let missingCount = 0;
+    let createdCount = 0;
     let autoPrepAttemptCount = 0;
     let autoPrepAdjustedCount = 0;
     const autoPrepErrors: string[] = [];
@@ -430,15 +626,28 @@ Deno.serve(async (request) => {
         matched_partner_order_id: existing?.id || null,
         last_compared_at: now
       });
+      let effectiveExisting = existing;
+      if (!existing && syncMode === "dual_write") {
+        const ingestResult = await createMissingPartnerOrder(
+          client, order, source, identity, normalizedCode, items.map(getObject),
+          finance, promotions, payloadHash, now
+        );
+        effectiveExisting = ingestResult.row;
+        existingMap.set(`${source}:${identity}`, ingestResult.row);
+        shadow.matched_partner_order_id = ingestResult.row.id;
+        if (ingestResult.created) createdCount += 1;
+      }
       const { error } = await client.from("nexpos_shadow_orders").upsert(shadow, {
         onConflict: "partner_source,nexpos_order_id"
       });
       if (error) throw error;
 
-      if (existing?.id && toText(existing.nexpos_enrichment_hash) !== payloadHash) {
-        const { error: enrichmentError } = await client.from("partner_orders").update({
+      if (effectiveExisting?.id && toText(effectiveExisting.nexpos_enrichment_hash) !== payloadHash) {
+        const enrichmentUpdate: JsonRecord = {
           last_nexpos_observed_at: now,
-          payload_version: "n8n-v1+nexpos-shadow-v2",
+          payload_version: toText(effectiveExisting.ingested_by) === "supabase"
+            ? "nexpos-supabase-v1"
+            : "n8n-v1+nexpos-shadow-v2",
           sync_conflict: businessComparisonStatus === "mismatch",
           nexpos_original_price: finance.original_price,
           nexpos_sell_price: finance.sell_price,
@@ -457,12 +666,24 @@ Deno.serve(async (request) => {
           nexpos_shipping_discount: finance.shipping_discount,
           nexpos_finance_data: finance,
           nexpos_promotion_data: promotions
-        }).eq("id", existing.id);
+        };
+        if (syncMode === "dual_write") {
+          const statuses = statusSnapshot(orderStatus(order));
+          Object.assign(enrichmentUpdate, {
+            nexpos_status: orderStatus(order),
+            order_status: statuses.order_status,
+            kitchen_status: statuses.kitchen_status,
+            raw_data: order,
+            synced_at: now
+          });
+        }
+        const { error: enrichmentError } = await client.from("partner_orders")
+          .update(enrichmentUpdate).eq("id", effectiveExisting.id);
         if (enrichmentError) throw enrichmentError;
 
         for (const promotion of promotions) {
           const { error: promotionError } = await client.from("partner_order_promotions").upsert({
-            partner_order_id: existing.id,
+            partner_order_id: effectiveExisting.id,
             ...promotion,
             updated_at: now
           }, { onConflict: "partner_order_id,promotion_key" });
@@ -470,7 +691,7 @@ Deno.serve(async (request) => {
         }
 
         const { data: partnerItems, error: partnerItemsError } = await client.from("partner_order_items")
-          .select("id,line_index").eq("partner_order_id", existing.id);
+          .select("id,line_index").eq("partner_order_id", effectiveExisting.id);
         if (partnerItemsError) throw partnerItemsError;
         if (items.length > 0 && (partnerItems || []).length < items.length) continue;
 
@@ -499,7 +720,7 @@ Deno.serve(async (request) => {
 
         const { error: hashError } = await client.from("partner_orders").update({
           nexpos_enrichment_hash: payloadHash
-        }).eq("id", existing.id);
+        }).eq("id", effectiveExisting.id);
         if (hashError) throw hashError;
       }
     }
@@ -517,7 +738,14 @@ Deno.serve(async (request) => {
             : isRareStatusSweep
               ? "rare"
               : "fast",
-        statuses: pollStatuses
+        statuses: pollStatuses,
+        sync_mode: syncMode,
+        created_count: createdCount,
+        auto_grab_prep_enabled: grabAutomationConfig.enabled,
+        auto_grab_prep_minutes: grabAutomationConfig.prepMinutes,
+        auto_prep_attempt_count: autoPrepAttemptCount,
+        auto_prep_adjusted_count: autoPrepAdjustedCount,
+        auto_prep_errors: autoPrepErrors.slice(0, 20)
       }
     }).eq("id", runId);
     const controlUpdate: JsonRecord = {
@@ -527,7 +755,12 @@ Deno.serve(async (request) => {
     if (isFullStatusSweep || lateReconciliationWindow) controlUpdate.last_full_sweep_at = finishedAt;
     if (isRareStatusSweep) controlUpdate.last_rare_sweep_at = finishedAt;
     await client.from("nexpos_shadow_sync_control").update(controlUpdate).eq("control_key", CONTROL_KEY);
-    return response({ ok: true, observed: observed.length, matched: matchedCount, mismatch: mismatchCount, missing: missingCount });
+    return response({
+      ok: true, observed: observed.length, matched: matchedCount,
+      mismatch: mismatchCount, missing: missingCount, created: createdCount,
+      auto_prep_attempted: autoPrepAttemptCount,
+      auto_prep_adjusted: autoPrepAdjustedCount
+    });
   } catch (error) {
     const message = toText(error instanceof Error ? error.message : error).slice(0, 500);
     const finishedAt = new Date().toISOString();
