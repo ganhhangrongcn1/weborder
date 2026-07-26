@@ -25,7 +25,8 @@ export const CONFIG_KEY_TTL_MS = {
   ghr_loyalty: 5 * MINUTE,
   ghr_zalo_config: 5 * MINUTE,
   ghr_crm_campaign_presets: 2 * MINUTE,
-  ghr_crm_bulk_gift_history: 2 * MINUTE
+  ghr_crm_bulk_gift_history: 2 * MINUTE,
+  ghr_partner_order_automation: 30 * 1000
 };
 
 export const HYBRID_CACHE_KEYS = new Set(Object.keys(CONFIG_KEY_TTL_MS));

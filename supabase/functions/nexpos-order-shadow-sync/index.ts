@@ -5,7 +5,8 @@ type JsonRecord = Record<string, unknown>;
 const BASE_URL = "https://saas-api.nexpos.io/v1";
 const CONTROL_KEY = "nexpos_partner_orders";
 const SESSION_KEY = "nexpos_master_account";
-const AUTO_GRAB_PREP_MINUTES = 20;
+const PARTNER_AUTOMATION_CONFIG_KEY = "ghr_partner_order_automation";
+const DEFAULT_GRAB_PREP_MINUTES = 20;
 const PAGE_SIZE = 20;
 const MAX_PAGES_PER_HUB = 5;
 const FAST_POLL_STATUSES = ["DOING"];
@@ -25,6 +26,25 @@ function getObject(value: unknown): JsonRecord {
 function getArray(value: unknown) { return Array.isArray(value) ? value : []; }
 function response(body: JsonRecord, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+}
+function normalizeGrabAutomationConfig(value: unknown) {
+  const config = getObject(value);
+  const minutes = Math.min(30, Math.max(1, Math.round(toNumber(
+    config.grabPrepMinutes,
+    DEFAULT_GRAB_PREP_MINUTES
+  ))));
+  return {
+    enabled: config.grabAutoPrepEnabled !== false,
+    prepMinutes: minutes
+  };
+}
+async function readGrabAutomationConfig(client: ReturnType<typeof createClient>) {
+  const { data, error } = await client.from("app_configs")
+    .select("value")
+    .eq("id", PARTNER_AUTOMATION_CONFIG_KEY)
+    .maybeSingle();
+  if (error) throw new Error(`grab_automation_config:${error.message}`);
+  return normalizeGrabAutomationConfig(data?.value);
 }
 function bangkokMinuteOfDay(date = new Date()) {
   return (date.getUTCHours() * 60 + date.getUTCMinutes() + 7 * 60) % (24 * 60);
@@ -206,14 +226,14 @@ function getGrabPrepMetadata(order: JsonRecord) {
   ];
   return candidates.find((candidate) => Object.keys(candidate).length > 0) || {};
 }
-function shouldAutoAdjustGrabPrep(order: JsonRecord, source: string) {
+function shouldAutoAdjustGrabPrep(order: JsonRecord, source: string, prepMinutes: number) {
   if (source !== "grabfood") return false;
   if (!["PENDING", "WAITING_CONFIRM", "DOING"].includes(orderStatus(order).toUpperCase())) return false;
 
   const metadata = getGrabPrepMetadata(order);
   const submittedSeconds = Number(metadata.submitted_opt_in_sec);
   if (!Number.isFinite(submittedSeconds) || submittedSeconds < 0) return false;
-  if (submittedSeconds >= AUTO_GRAB_PREP_MINUTES * 60) return false;
+  if (submittedSeconds >= prepMinutes * 60) return false;
   if (Number(metadata.source_opt) !== 0 || metadata.is_editable === false) return false;
 
   const editableUntil = new Date(toText(metadata.editable_until)).getTime();
@@ -227,14 +247,17 @@ async function autoAdjustGrabPrepTime(
   order: JsonRecord,
   source: string,
   identity: string,
-  cookieRef: { value: string }
+  cookieRef: { value: string },
+  prepMinutes: number
 ) {
-  if (!shouldAutoAdjustGrabPrep(order, source)) return { attempted: false, adjusted: false, error: "" };
+  if (!shouldAutoAdjustGrabPrep(order, source, prepMinutes)) {
+    return { attempted: false, adjusted: false, error: "" };
+  }
 
   const result = await nexposPost(
     client,
     `${BASE_URL}/order-service/site/orders/${encodeURIComponent(identity)}/opt`,
-    { opt_in_sec: AUTO_GRAB_PREP_MINUTES * 60 },
+    { opt_in_sec: prepMinutes * 60 },
     cookieRef
   );
   if (result.ok) return { attempted: true, adjusted: true, error: "" };
@@ -308,6 +331,7 @@ Deno.serve(async (request) => {
     if (hubError) throw hubError;
     const hubIds = Array.from(new Set((hubRows || []).map((row) => toText(row.nexpos_hub_id)).filter(Boolean)));
     const cookieRef = { value: "" };
+    const grabAutomationConfig = await readGrabAutomationConfig(client);
     const observed: JsonRecord[] = [];
     const pollStatuses = lateReconciliationWindow
       ? LATE_RECONCILIATION_STATUSES
@@ -354,7 +378,16 @@ Deno.serve(async (request) => {
       const identity = orderIdentity(order);
       if (!autoPrepAttemptedOrderIds.has(identity)) {
         autoPrepAttemptedOrderIds.add(identity);
-        const autoPrepResult = await autoAdjustGrabPrepTime(client, order, source, identity, cookieRef);
+        const autoPrepResult = grabAutomationConfig.enabled
+          ? await autoAdjustGrabPrepTime(
+              client,
+              order,
+              source,
+              identity,
+              cookieRef,
+              grabAutomationConfig.prepMinutes
+            )
+          : { attempted: false, adjusted: false, error: "" };
         if (autoPrepResult.attempted) autoPrepAttemptCount += 1;
         if (autoPrepResult.adjusted) autoPrepAdjustedCount += 1;
         if (autoPrepResult.error) autoPrepErrors.push(`${identity}:${autoPrepResult.error}`);
