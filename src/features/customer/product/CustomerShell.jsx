@@ -410,6 +410,7 @@ export default function CustomerShell({
             {isJourneyOpen && journeyOrder && !serviceNotice ? (
               <ActiveOrderJourneySheet
                 order={journeyOrder}
+                branches={pageProps.branches}
                 onClose={closeOrderJourney}
                 onOpenOrders={openOrdersFromJourney}
               />

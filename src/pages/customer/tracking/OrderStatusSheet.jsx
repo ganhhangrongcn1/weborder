@@ -11,6 +11,7 @@ import { getCanonicalOrderBranchName, getOrderSourceBadge } from "../../../servi
 import { getCustomerOrderJourney } from "../../../services/customerOrderStatusService.js";
 import { isPrepaidPickupOrder, isQrOrderPaid } from "../../../services/qrPaymentService.js";
 import CustomerOrderActionPanel from "../../../components/customer/CustomerOrderActionPanel.jsx";
+import OrderBranchLocationCard from "../../../components/customer/OrderBranchLocationCard.jsx";
 
 const DISTANCE_FORMATTER = new Intl.NumberFormat("vi-VN", {
   minimumFractionDigits: 0,
@@ -106,6 +107,8 @@ export default function OrderStatusSheet({
           <OrderJourneyTimeline order={order} compact />
         </div>
       ) : null}
+
+      <OrderBranchLocationCard order={order} branches={branches} />
 
       {!showDetails ? (
         <button type="button" className="order-journey-detail-trigger" onClick={() => setShowDetails(true)}>
