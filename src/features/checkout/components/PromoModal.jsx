@@ -37,7 +37,7 @@ export default function PromoModal({
                 { icon: "tag", text: promo.condition }
               ]}
               codeLabel={`Mã: ${promo.code}`}
-              actionLabel={active ? "Bỏ chọn" : "Áp dụng"}
+              actionLabel={active ? "Đang áp dụng" : "Áp dụng"}
               actionIcon="check"
               selected={active}
               inactive={disabled}

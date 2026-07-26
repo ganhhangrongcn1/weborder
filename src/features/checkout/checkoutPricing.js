@@ -161,6 +161,21 @@ export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, form
   ]));
 }
 
+export function findLowestValueEligibleCheckoutPromo(promos = []) {
+  return [...promos]
+    .filter((promo) => Number(promo?.discount || 0) > 0 || promo?.freeShip === true)
+    .sort((a, b) => {
+      const discountGap = Number(a?.discount || 0) - Number(b?.discount || 0);
+      if (discountGap !== 0) return discountGap;
+
+      const aMinOrder = Number(a?.minOrder || 0);
+      const bMinOrder = Number(b?.minOrder || 0);
+      if (aMinOrder !== bMinOrder) return aMinOrder - bMinOrder;
+
+      return String(a?.title || "").localeCompare(String(b?.title || ""), "vi");
+    })[0] || null;
+}
+
 function getActiveFreeShipPromo(smartPromotions = []) {
   return getActivePromotions(smartPromotions, "checkout").find(
     (promotion) => promotion.type === "free_shipping" || promotion.reward?.type === "shipping_discount"

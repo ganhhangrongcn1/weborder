@@ -56,16 +56,28 @@
 }
 
 .home-popup-image-wrap {
+  display: block;
   width: 100%;
   max-height: inherit;
+  min-height: 0 !important;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  border-radius: 22px;
   overflow: visible;
   background: transparent;
+  padding: 0;
+  font: inherit;
+  line-height: 0;
+  box-shadow: none;
+  cursor: pointer;
 }
 
 .home-popup-image {
   display: block;
   width: 100%;
   max-height: inherit;
+  border-radius: inherit;
   aspect-ratio: 3 / 4;
   object-fit: contain;
 }

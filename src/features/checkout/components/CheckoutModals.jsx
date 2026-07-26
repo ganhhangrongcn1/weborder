@@ -41,7 +41,7 @@ export default function CheckoutModals({
           promos={promoCodes}
           selectedPromo={selectedPromo}
           onSelect={(promo) => {
-            setSelectedPromo(selectedPromo?.id === promo.id ? null : promo);
+            setSelectedPromo(promo);
             setIsPromoModalOpen(false);
           }}
           onClose={() => setIsPromoModalOpen(false)}
