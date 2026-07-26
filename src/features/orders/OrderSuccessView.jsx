@@ -25,6 +25,8 @@ import {
   readQrOrderPaymentSession
 } from "../../services/qrPaymentService.js";
 import { getCustomerOrderJourney } from "../../services/customerOrderStatusService.js";
+import { resolveOrderBranch } from "../../services/branchIdentityService.js";
+import { buildGoogleMapsDirectionsUrl } from "../../services/branchNavigationService.js";
 
 function buildOrderTrackingPath(orderCode = "") {
   const code = String(orderCode || "").trim();
@@ -115,6 +117,14 @@ export default function OrderSuccess({
   const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid && !qrPaymentExpired;
   const isMomoAppHandoff = isQrPaymentWaiting && isMomoPayment && !qrPaymentImageUrl;
   const isPickup = String(order?.fulfillmentType || "").toLowerCase() === "pickup";
+  const pickupBranch = useMemo(
+    () => (isPickup ? resolveOrderBranch(order || {}, branches) : null),
+    [branches, isPickup, order]
+  );
+  const pickupDirectionsUrl = useMemo(
+    () => buildGoogleMapsDirectionsUrl(pickupBranch),
+    [pickupBranch]
+  );
   const customerJourney = getCustomerOrderJourney(order || {});
   const paymentText = isQrPaymentOrder
     ? qrPaymentPaid
@@ -418,6 +428,21 @@ export default function OrderSuccess({
               </div>
             </div>
           </div>
+
+          {isPickup && pickupDirectionsUrl ? (
+            <CustomerButton
+              as="a"
+              full
+              variant="secondary"
+              className="mt-4"
+              icon="store"
+              href={pickupDirectionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Định vị quán
+            </CustomerButton>
+          ) : null}
 
           {!qrPaymentExpired && !isMomoAppHandoff ? (
             <div className={`order-success-next-step mt-4 text-left${isQrPaymentWaiting ? " is-waiting" : ""}`}>
