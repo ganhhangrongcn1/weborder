@@ -33,7 +33,13 @@
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+  outline: none !important;
   overflow: visible !important;
+}
+
+.customer-bottom-sheet.home-popup-sheet:focus,
+.customer-bottom-sheet.home-popup-sheet:focus-visible {
+  outline: none !important;
 }
 
 .customer-bottom-sheet.home-popup-sheet .customer-sheet-scroll {
