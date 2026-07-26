@@ -1,6 +1,7 @@
 ﻿import { buildCreateOrderPayload, validateCheckoutContact } from "../../services/checkoutOrderService.js";
 
 import { getCheckoutVoucherErrorMessage } from "../../services/checkoutOrderService.js";
+import { prewarmQrOrderPaymentSession } from "../../services/qrPaymentService.js";
 
 export default function useCheckoutActions({
   setCart,
@@ -167,6 +168,7 @@ export default function useCheckoutActions({
       return;
     }
 
+    prewarmQrOrderPaymentSession({ order });
     navigate("success", "orders");
   };
 

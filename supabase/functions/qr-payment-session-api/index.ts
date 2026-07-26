@@ -867,7 +867,10 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
   const requestKey = buildQrOrderRequestKey(order.id, provider);
   const branchUuid = toText(order.pickup_branch_uuid || order.branch_uuid) || null;
   const branchName = toText(order.pickup_branch_name || order.branch_name);
-  const activeShift = await findActivePosShift(serviceClient, branchUuid || "");
+  const orderSource = toText(metadata.orderSource || metadata.source || metadata.channel).toLowerCase();
+  const activeShift = orderSource === "qr_counter"
+    ? await findActivePosShift(serviceClient, branchUuid || "")
+    : null;
   const posShiftId = toText(order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id || activeShift?.id);
 
   const existing = await findSession(serviceClient, {
@@ -1025,14 +1028,17 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
   };
   if (posShiftId) orderPatch.pos_shift_id = posShiftId;
 
-  await serviceClient
+  const orderUpdateTask = serviceClient
     .from("orders")
     .update(orderPatch)
     .eq("id", toText(order.id));
 
   if (provider === "momo") {
     try {
-      const momoSession = await createMomoPayment(serviceClient, data, order, toText(Deno.env.get("SUPABASE_URL")));
+      const [momoSession] = await Promise.all([
+        createMomoPayment(serviceClient, data, order, toText(Deno.env.get("SUPABASE_URL"))),
+        orderUpdateTask
+      ]);
       return response({ ok: true, session: momoSession, reused: false });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không tạo được giao dịch MoMo.";
@@ -1052,6 +1058,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     }
   }
 
+  await orderUpdateTask;
   return response({ ok: true, session: data, reused: false });
 }
 

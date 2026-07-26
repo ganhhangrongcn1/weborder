@@ -2,6 +2,7 @@ import { initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
 import { buildPosQrImageUrl, getPosQrPaymentConfig } from "./posPaymentService.js";
 
 export const QR_ORDER_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
+const paymentSessionCreateTasks = new Map();
 
 function toText(value = "") {
   return String(value || "").trim();
@@ -347,11 +348,28 @@ export async function createQrOrderPaymentSession({ order = {} } = {}) {
     return { ok: false, message: "Thiếu mã đơn để tạo QR thanh toán." };
   }
 
-  return invokeQrPaymentFunction({
+  const existingTask = paymentSessionCreateTasks.get(orderId);
+  if (existingTask) return existingTask;
+
+  const createTask = invokeQrPaymentFunction({
     action: "create",
     order_id: orderId,
     payment_reference: getQrOrderPaymentReference(safeOrder),
     provider: isMomoPaymentOrder(safeOrder) ? "momo" : "sepay"
+  });
+  paymentSessionCreateTasks.set(orderId, createTask);
+
+  try {
+    return await createTask;
+  } finally {
+    paymentSessionCreateTasks.delete(orderId);
+  }
+}
+
+export function prewarmQrOrderPaymentSession({ order = {} } = {}) {
+  if (!isPrepaidPickupOrder(order)) return;
+  createQrOrderPaymentSession({ order }).catch(() => {
+    // Trang thành công sẽ thử đọc/tạo lại phiên bằng cùng request key.
   });
 }
 
