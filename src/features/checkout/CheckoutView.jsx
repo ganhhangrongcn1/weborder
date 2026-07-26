@@ -204,7 +204,11 @@ export default function Checkout({
   useEffect(() => {
     if (!voucherIntent || !promoCodes.length) return;
     const intendedPromo = findCheckoutPromoByIntent(promoCodes, voucherIntent);
-    if (!intendedPromo) return;
+    if (!intendedPromo) {
+      clearCheckoutVoucherIntent();
+      setVoucherIntent(null);
+      return;
+    }
 
     if (Number(intendedPromo.discount || 0) > 0 || intendedPromo.freeShip) {
       setSelectedPromo(intendedPromo);
