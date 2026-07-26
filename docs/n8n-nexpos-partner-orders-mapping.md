@@ -6,10 +6,15 @@
 
 During the transition, n8n remains the owner of existing order, status, settlement, and loyalty fields. The Supabase polling function may only enrich additive `nexpos_*` fields and promotion snapshots. It must not overwrite `total_amount`, `net_received_amount`, `points_base_amount`, `order_status`, `kitchen_status`, or `kitchen_work_status`.
 
+In `dual_write` mode, Supabase may create an order that does not yet exist by
+`partner_source + nexpos_order_id`, insert its dish rows, and update NexPOS-owned
+business status fields. It must preserve `kitchen_work_status`, claimed loyalty
+fields, and existing settlement values on rows already created by n8n.
+
 Display codes remain compatible with the current Kitchen contract:
 
 ```txt
-grabfood   -> GF- + last 3 digits
+grabfood   -> GF- + last 3 digits; preserve trailing F for pre-orders
 shopeefood -> SF- + last 4 digits
 xanhngon   -> XN- + last 4 digits
 ```

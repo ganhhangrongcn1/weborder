@@ -6,6 +6,7 @@ import { syncBranchesToSupabase } from "../../../services/repositories/catalogCo
 import { createStableBranchUuid } from "../../../services/branchIdentityService.js";
 import { createQrPngDataUrl, createQrSvg } from "../../../services/qrCodeService.js";
 import { AdminButton, AdminCard, AdminInput } from "../ui/index.js";
+import GrabAutomationSettings from "./GrabAutomationSettings.jsx";
 
 const BANK_OPTIONS = [
   { bin: "970422", name: "MB Bank" },
@@ -911,6 +912,8 @@ export default function BranchSettings({
           })}
         </div>
       </AdminCard>
+
+      <GrabAutomationSettings />
 
       <AdminCard className="admin-panel admin-store-panel">
         <div className="admin-panel-head">

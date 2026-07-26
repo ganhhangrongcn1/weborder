@@ -15,7 +15,6 @@ import {
 } from "./kitchenOrderGrouping.js";
 import { getNextKitchenOrderAction } from "../../services/kitchenOrderService.js";
 import { getKitchenOrderTheme, getKitchenPlatformTone } from "./kitchenPlatformTheme.js";
-import KitchenPrepTimeControl from "./KitchenPrepTimeControl.jsx";
 import {
   formatPickupCountdown,
   getScheduledPickupTone,
@@ -712,7 +711,6 @@ export default function KitchenOrderCard({
   onSelectOrder,
   order,
   onMarkDone,
-  onAdjustPrepTime,
   onPrintBill,
   onToggleItemDone,
   updating = false,
@@ -1190,9 +1188,6 @@ export default function KitchenOrderCard({
 
         <div style={{ textAlign: compact ? "left" : "right", display: "grid", gap: tabletCompact ? 4 : 6, justifyItems: compact ? "start" : "end", minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: isNarrowLayout ? 4 : 7, maxWidth: "100%" }}>
-            {!isCancelled && !isPreorder && !isKitchenOrderDone(order) ? (
-              <KitchenPrepTimeControl compact={isNarrowLayout} order={order} onAdjust={onAdjustPrepTime} />
-            ) : null}
             <strong style={{ color: "#334155", fontSize: isNarrowLayout ? 16 : 21, fontWeight: 780, flex: "0 0 auto" }}>
               {isCancelled ? "Đã hủy" : `${doneItems}/${totalItems}`}
             </strong>

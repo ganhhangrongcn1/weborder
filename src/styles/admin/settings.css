@@ -37,6 +37,68 @@
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
+.admin-grab-automation__controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(240px, 0.7fr);
+  gap: 12px;
+}
+
+.admin-grab-automation__toggle,
+.admin-grab-automation__minutes {
+  box-sizing: border-box;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 13px;
+}
+
+.admin-grab-automation__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.admin-grab-automation__toggle > span,
+.admin-grab-automation__minutes {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-grab-automation__toggle strong,
+.admin-grab-automation__minutes > span {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.admin-grab-automation__toggle small,
+.admin-grab-automation__minutes small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.admin-grab-automation__minutes > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.admin-grab-automation__minutes .admin-input {
+  width: 110px;
+  min-height: 40px;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-grab-automation__minutes > div strong {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .admin-branch-card.is-expanded {
   border-color: #fdba74;
   box-shadow: 0 14px 34px rgba(124, 45, 18, 0.08);
@@ -821,6 +883,10 @@
 }
 
 @media (max-width: 760px) {
+  .admin-grab-automation__controls {
+    grid-template-columns: 1fr;
+  }
+
   .admin-branch-card {
     padding: 0;
   }

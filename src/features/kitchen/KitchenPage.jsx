@@ -619,7 +619,6 @@ export default function KitchenPage() {
     resetRequestAudit,
     loadMoreDoneOrders,
     markDone,
-    adjustPartnerPrepTime,
     toggleItemDone,
     reload
   } = useKitchenOrders(kitchenOrderOptions);
@@ -1439,7 +1438,6 @@ export default function KitchenPage() {
                   printingBill={printingOrderKey === orderKey}
                   printBillState={printBillState}
                   onMarkDone={handleMarkOrderDone}
-                  onAdjustPrepTime={adjustPartnerPrepTime}
                   onPrintBill={handlePrintBill}
                   onToggleItemDone={toggleItemDone}
                 />
