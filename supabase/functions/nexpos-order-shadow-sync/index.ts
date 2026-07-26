@@ -266,9 +266,9 @@ function shouldAutoAdjustGrabPrep(order: JsonRecord, source: string, prepMinutes
 
   const metadata = getGrabPrepMetadata(order);
   const submittedSeconds = Number(metadata.submitted_opt_in_sec);
-  if (!Number.isFinite(submittedSeconds) || submittedSeconds < 0) return false;
-  if (submittedSeconds >= prepMinutes * 60) return false;
-  if (Number(metadata.source_opt) !== 0 || metadata.is_editable === false) return false;
+  if (Number.isFinite(submittedSeconds) && submittedSeconds >= prepMinutes * 60) return false;
+  if (metadata.source_opt !== undefined && Number(metadata.source_opt) !== 0) return false;
+  if (metadata.is_editable === false) return false;
 
   const editableUntil = new Date(toText(metadata.editable_until)).getTime();
   if (Number.isFinite(editableUntil) && editableUntil <= Date.now()) return false;
@@ -559,6 +559,13 @@ Deno.serve(async (request) => {
       .select("id,partner_source,nexpos_order_id,order_code,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,ingested_by,payload_version,nexpos_enrichment_hash")
       .in("nexpos_order_id", identities) : { data: [] };
     const existingMap = new Map((existingRows || []).map((row) => [`${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`, row]));
+    const { data: shadowRows } = identities.length ? await client.from("nexpos_shadow_orders")
+      .select("partner_source,nexpos_order_id,raw_data")
+      .in("nexpos_order_id", identities) : { data: [] };
+    const shadowMap = new Map((shadowRows || []).map((row) => [
+      `${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`,
+      getObject(row.raw_data)
+    ]));
 
     let matchedCount = 0;
     let mismatchCount = 0;
@@ -572,7 +579,13 @@ Deno.serve(async (request) => {
     for (const order of observed) {
       const source = normalizeSource(order.source || order.partner_source || order.platform);
       const identity = orderIdentity(order);
-      if (!autoPrepAttemptedOrderIds.has(identity)) {
+      const previousShadow = shadowMap.get(`${source}:${identity}`);
+      const previouslyAppliedMinutes = toNumber(previousShadow?.__ghr_auto_prep_minutes, 0);
+      if (previouslyAppliedMinutes > 0) {
+        order.__ghr_auto_prep_minutes = previouslyAppliedMinutes;
+        order.__ghr_auto_prep_applied_at = previousShadow?.__ghr_auto_prep_applied_at || "";
+      }
+      if (!autoPrepAttemptedOrderIds.has(identity) && previouslyAppliedMinutes !== grabAutomationConfig.prepMinutes) {
         autoPrepAttemptedOrderIds.add(identity);
         const autoPrepResult = grabAutomationConfig.enabled
           ? await autoAdjustGrabPrepTime(
@@ -585,7 +598,11 @@ Deno.serve(async (request) => {
             )
           : { attempted: false, adjusted: false, error: "" };
         if (autoPrepResult.attempted) autoPrepAttemptCount += 1;
-        if (autoPrepResult.adjusted) autoPrepAdjustedCount += 1;
+        if (autoPrepResult.adjusted) {
+          autoPrepAdjustedCount += 1;
+          order.__ghr_auto_prep_minutes = grabAutomationConfig.prepMinutes;
+          order.__ghr_auto_prep_applied_at = now;
+        }
         if (autoPrepResult.error) autoPrepErrors.push(`${identity}:${autoPrepResult.error}`);
       }
       const items = extractItems(order);
