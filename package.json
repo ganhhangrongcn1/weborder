@@ -18,7 +18,9 @@
         "smoke:supabase-catalog": "node scripts/smoke-supabase-catalog.mjs",
         "smoke:supabase-health": "node scripts/smoke-supabase-health.mjs",
         "smoke:customer-profile": "node scripts/smoke-customer-profile-access.mjs",
-        "smoke:kitchen": "node scripts/smoke-kitchen-order-items.mjs"
+        "smoke:kitchen": "node scripts/smoke-kitchen-order-items.mjs",
+        "supabase": "supabase",
+        "supabase:login": "supabase login"
     },
     "dependencies": {
         "@phosphor-icons/react": "^2.1.10",
@@ -36,6 +38,7 @@
         "vite": "5.4.19"
     },
     "devDependencies": {
-        "eslint": "^9.0.0"
+        "eslint": "^9.0.0",
+        "supabase": "2.109.1"
     }
 }
