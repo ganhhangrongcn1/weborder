@@ -1,6 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  adjustKitchenPartnerPrepTime,
   getKitchenOrders,
   getNextKitchenOrderAction,
   markKitchenOrderDone,
@@ -978,26 +977,6 @@ export default function useKitchenOrders(options = null) {
     }
   }, [orders, updatingItemKey]);
 
-  const adjustPartnerPrepTime = useCallback(async (order, prepMinutes) => {
-    setError("");
-
-    try {
-      const result = await adjustKitchenPartnerPrepTime(order, prepMinutes);
-      if (!result.ok) {
-        setError(result.message || "Không điều chỉnh được thời gian làm đơn Grab.");
-      }
-      setRequestAudit(getKitchenRequestAuditSnapshot());
-      return result;
-    } catch (err) {
-      const result = {
-        ok: false,
-        message: err?.message || "Không điều chỉnh được thời gian làm đơn Grab."
-      };
-      setError(result.message);
-      return result;
-    }
-  }, []);
-
   const reload = useCallback(async () => {
     reconnectRealtime();
     await loadOrders({ silent: true, force: true });
@@ -1027,7 +1006,6 @@ export default function useKitchenOrders(options = null) {
     updatingItemKey,
     loadMoreDoneOrders,
     markDone,
-    adjustPartnerPrepTime,
     toggleItemDone,
     reload
   };

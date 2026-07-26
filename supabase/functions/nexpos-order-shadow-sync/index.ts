@@ -5,6 +5,7 @@ type JsonRecord = Record<string, unknown>;
 const BASE_URL = "https://saas-api.nexpos.io/v1";
 const CONTROL_KEY = "nexpos_partner_orders";
 const SESSION_KEY = "nexpos_master_account";
+const AUTO_GRAB_PREP_MINUTES = 20;
 const PAGE_SIZE = 20;
 const MAX_PAGES_PER_HUB = 5;
 const FAST_POLL_STATUSES = ["DOING"];
@@ -174,6 +175,77 @@ async function nexposFetch(client: ReturnType<typeof createClient>, url: string,
   if (!result.ok) throw new Error(`nexpos_list_${result.status}`);
   return result.json();
 }
+async function nexposPost(
+  client: ReturnType<typeof createClient>,
+  url: string,
+  body: JsonRecord,
+  cookieRef: { value: string }
+) {
+  if (!cookieRef.value) cookieRef.value = await readCookie(client) || await login(client);
+  const send = () => fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Cookie: cookieRef.value
+    },
+    body: JSON.stringify(body)
+  });
+  let result = await send();
+  if (result.status === 401) {
+    cookieRef.value = await login(client);
+    result = await send();
+  }
+  return result;
+}
+function getGrabPrepMetadata(order: JsonRecord) {
+  const detail = getObject(order.detail || order.order_detail || order.data);
+  const candidates = [
+    getObject(order.mex_opt || order.mexOpt),
+    getObject(detail.mex_opt || detail.mexOpt)
+  ];
+  return candidates.find((candidate) => Object.keys(candidate).length > 0) || {};
+}
+function shouldAutoAdjustGrabPrep(order: JsonRecord, source: string) {
+  if (source !== "grabfood") return false;
+  if (!["PENDING", "WAITING_CONFIRM", "DOING"].includes(orderStatus(order).toUpperCase())) return false;
+
+  const metadata = getGrabPrepMetadata(order);
+  const submittedSeconds = Number(metadata.submitted_opt_in_sec);
+  if (!Number.isFinite(submittedSeconds) || submittedSeconds < 0) return false;
+  if (submittedSeconds >= AUTO_GRAB_PREP_MINUTES * 60) return false;
+  if (Number(metadata.source_opt) !== 0 || metadata.is_editable === false) return false;
+
+  const editableUntil = new Date(toText(metadata.editable_until)).getTime();
+  if (Number.isFinite(editableUntil) && editableUntil <= Date.now()) return false;
+  const estimatedDoneAt = new Date(toText(metadata.estimated_done_at)).getTime();
+  if (Number.isFinite(estimatedDoneAt) && estimatedDoneAt <= Date.now()) return false;
+  return true;
+}
+async function autoAdjustGrabPrepTime(
+  client: ReturnType<typeof createClient>,
+  order: JsonRecord,
+  source: string,
+  identity: string,
+  cookieRef: { value: string }
+) {
+  if (!shouldAutoAdjustGrabPrep(order, source)) return { attempted: false, adjusted: false, error: "" };
+
+  const result = await nexposPost(
+    client,
+    `${BASE_URL}/order-service/site/orders/${encodeURIComponent(identity)}/opt`,
+    { opt_in_sec: AUTO_GRAB_PREP_MINUTES * 60 },
+    cookieRef
+  );
+  if (result.ok) return { attempted: true, adjusted: true, error: "" };
+
+  const detail = toText(await result.text().catch(() => "")).slice(0, 300);
+  return {
+    attempted: true,
+    adjusted: false,
+    error: `auto_grab_prep_${result.status}:${detail || "unknown"}`
+  };
+}
 function buildDifferences(shadow: JsonRecord, existing: JsonRecord | undefined) {
   if (!existing) return ["missing_in_n8n"];
   const differences: string[] = [];
@@ -272,10 +344,21 @@ Deno.serve(async (request) => {
     let matchedCount = 0;
     let mismatchCount = 0;
     let missingCount = 0;
+    let autoPrepAttemptCount = 0;
+    let autoPrepAdjustedCount = 0;
+    const autoPrepErrors: string[] = [];
+    const autoPrepAttemptedOrderIds = new Set<string>();
     const now = new Date().toISOString();
     for (const order of observed) {
       const source = normalizeSource(order.source || order.partner_source || order.platform);
       const identity = orderIdentity(order);
+      if (!autoPrepAttemptedOrderIds.has(identity)) {
+        autoPrepAttemptedOrderIds.add(identity);
+        const autoPrepResult = await autoAdjustGrabPrepTime(client, order, source, identity, cookieRef);
+        if (autoPrepResult.attempted) autoPrepAttemptCount += 1;
+        if (autoPrepResult.adjusted) autoPrepAdjustedCount += 1;
+        if (autoPrepResult.error) autoPrepErrors.push(`${identity}:${autoPrepResult.error}`);
+      }
       const items = extractItems(order);
       const finance = financeSnapshot(order);
       const promotions = promotionSnapshot(order, items.map(getObject), finance);
