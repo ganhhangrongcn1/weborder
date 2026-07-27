@@ -2,8 +2,9 @@ import Icon from "../Icon.jsx";
 import { getCustomerOrderJourney } from "../../services/customerOrderStatusService.js";
 import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
 import OrderJourneyTimeline from "./OrderJourneyTimeline.jsx";
+import OrderBranchLocationCard from "./OrderBranchLocationCard.jsx";
 
-export default function ActiveOrderJourneySheet({ order, onClose, onOpenOrders }) {
+export default function ActiveOrderJourneySheet({ order, branches = [], onClose, onOpenOrders }) {
   if (!order) return null;
 
   const journey = getCustomerOrderJourney(order);
@@ -54,6 +55,7 @@ export default function ActiveOrderJourneySheet({ order, onClose, onOpenOrders }
       </div>
 
       <OrderJourneyTimeline order={order} />
+      <OrderBranchLocationCard order={order} branches={branches} />
     </CustomerBottomSheet>
   );
 }

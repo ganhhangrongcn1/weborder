@@ -26,7 +26,12 @@ import {
   normalizePickupClock,
   normalizePickupDate
 } from "../../utils/dateTimeDefaults.js";
-import { buildCheckoutPromoCodes, buildShippingZonesFromConfig, calculateCheckoutPricing } from "./checkoutPricing.js";
+import {
+  buildCheckoutPromoCodes,
+  buildShippingZonesFromConfig,
+  calculateCheckoutPricing,
+  findLowestValueEligibleCheckoutPromo
+} from "./checkoutPricing.js";
 import { resolvePickupBranches } from "./checkoutDomain.js";
 import useCheckoutActions from "./useCheckoutActions.js";
 import useCheckoutDeliveryState from "./hooks/useCheckoutDeliveryState.js";
@@ -199,7 +204,11 @@ export default function Checkout({
   useEffect(() => {
     if (!voucherIntent || !promoCodes.length) return;
     const intendedPromo = findCheckoutPromoByIntent(promoCodes, voucherIntent);
-    if (!intendedPromo) return;
+    if (!intendedPromo) {
+      clearCheckoutVoucherIntent();
+      setVoucherIntent(null);
+      return;
+    }
 
     if (Number(intendedPromo.discount || 0) > 0 || intendedPromo.freeShip) {
       setSelectedPromo(intendedPromo);
@@ -230,6 +239,12 @@ export default function Checkout({
       setSelectedPromo(refreshedPromo);
     }
   }, [promoCodes, selectedPromo]);
+
+  useEffect(() => {
+    if (voucherIntent || selectedPromo) return;
+    const automaticPromo = findLowestValueEligibleCheckoutPromo(promoCodes);
+    if (automaticPromo) setSelectedPromo(automaticPromo);
+  }, [promoCodes, selectedPromo, voucherIntent]);
 
   const availablePoints = Math.max(
     0,

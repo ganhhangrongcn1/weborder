@@ -3,7 +3,7 @@ import { recoverMomoReturnOrder } from "../services/qrPaymentService.js";
 import { orderRepository } from "../services/repositories/orderRepository.js";
 
 const MOMO_RETURN_TOKEN_PARAM = "momoReturnToken";
-const MOMO_RETURN_POLL_DELAY_MS = 2500;
+const MOMO_RETURN_POLL_DELAY_MS = 1500;
 const MOMO_RETURN_MAX_POLL_ATTEMPTS = 24;
 const MOMO_RETURN_INITIAL_RETRY_ATTEMPTS = 4;
 const MOMO_RETURN_REQUEST_TIMEOUT_MS = 7000;

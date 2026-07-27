@@ -60,6 +60,16 @@ function buildMapLink(order = {}) {
   return "";
 }
 
+function formatPaymentMethod(value) {
+  const method = String(value || "").trim().toLowerCase();
+  if (method === "momo") return "MoMo";
+  if (method === "bank_qr") return "Chuy\u1EC3n kho\u1EA3n QR";
+  if (method === "counter") return "Thanh to\u00E1n t\u1EA1i qu\u1EA7y";
+  if (method === "foodapp") return "Thanh to\u00E1n qua \u1EE9ng d\u1EE5ng";
+  if (["cod", "cash"].includes(method)) return "Ti\u1EC1n m\u1EB7t khi nh\u1EADn m\u00F3n";
+  return value || "Ti\u1EC1n m\u1EB7t khi nh\u1EADn m\u00F3n";
+}
+
 export async function buildWebOrderZaloMessage(order = {}) {
   const orderCode = String(order.orderCode || order.id || "").trim();
   const isPickup = String(order.fulfillmentType || "").toLowerCase() === "pickup";
@@ -86,7 +96,7 @@ export async function buildWebOrderZaloMessage(order = {}) {
     fulfillment_type: isPickup ? "\u0110\u1ebfn l\u1ea5y" : "Giao t\u1eadn n\u01a1i",
     pickup_branch: [order.pickupBranchName || order.branchName || "", order.pickupBranchAddress || order.branchAddress || ""].filter(Boolean).join(" - "),
     delivery_branch: [order.deliveryBranchName || "", order.deliveryBranchAddress || ""].filter(Boolean).join(" - "),
-    payment_method: order.paymentMethod || "COD",
+    payment_method: formatPaymentMethod(order.paymentMethod),
     map_link: isPickup ? "" : buildMapLink(order),
     distance_km: !isPickup && order.distanceKm ? `${Number(order.distanceKm).toFixed(1)}km` : "",
     address: isPickup ? order.branchAddress || order.branchName || "" : order.deliveryAddress || "",

@@ -498,7 +498,9 @@ export async function createOrderAsync(params) {
   const subtotalAmount = Number(
     subtotal ?? cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
   );
-  const [validatedVoucher, loyaltyRule] = await Promise.all([
+  const normalizedPaymentMethod = String(paymentMethod || "").trim().toLowerCase();
+  const isPrepaidPayment = ["bank_qr", "momo"].includes(normalizedPaymentMethod);
+  const [validatedVoucher, loyaltyRule, customerActionProof] = await Promise.all([
     withCheckoutStepTimeout(
       () => validateCheckoutVoucherBeforeOrder({
         orderId: orderCode,
@@ -517,7 +519,14 @@ export async function createOrderAsync(params) {
       () => getLoyaltyRuleConfigAsync(),
       "loyalty_config",
       CHECKOUT_PRECHECK_TIMEOUT_MS
-    )
+    ),
+    isPrepaidPayment
+      ? withCheckoutStepTimeout(
+          () => createCustomerOrderActionProof(),
+          "customer_action_proof",
+          CHECKOUT_PROOF_TIMEOUT_MS
+        )
+      : Promise.resolve(null)
   ]);
   const appliedPromoDiscount = validatedVoucher.promoDiscount;
   const appliedPromoCode = validatedVoucher.promoCode;
@@ -528,15 +537,6 @@ export async function createOrderAsync(params) {
   );
   const pointsEarned = calculateOrderPoints(pointsAmount, loyaltyRule);
   const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
-  const normalizedPaymentMethod = String(paymentMethod || "").trim().toLowerCase();
-  const isPrepaidPayment = ["bank_qr", "momo"].includes(normalizedPaymentMethod);
-  const customerActionProof = isPrepaidPayment
-    ? await withCheckoutStepTimeout(
-        () => createCustomerOrderActionProof(),
-        "customer_action_proof",
-        CHECKOUT_PROOF_TIMEOUT_MS
-      )
-    : null;
   const initialOrderStatus = isPrepaidPayment ? "pending_payment" : "preparing";
   const initialKitchenStatus = isPrepaidPayment ? "waiting_payment" : "pending";
   let order = {

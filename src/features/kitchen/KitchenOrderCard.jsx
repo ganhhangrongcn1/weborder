@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getKitchenRecipeOptions,
   isKitchenPaidToppingGroup,
-  isKitchenPaidToppingOption,
   isKitchenRecipeOnlyGroup,
   isKitchenRecipeOnlyOption,
   normalizeKitchenOptionText,
@@ -45,14 +44,6 @@ function getItemQuantity(item = {}) {
   return Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1;
 }
 
-function isRecipeOnlyKitchenOption(option = {}) {
-  return (
-    isKitchenRecipeOnlyOption(option.group) ||
-    isKitchenRecipeOnlyOption(option.value) ||
-    isKitchenRecipeOnlyOption(option.label)
-  );
-}
-
 function getRecipeOnlyDisplayLabel(option = {}) {
   const value = String(option.value || "").trim();
   const label = String(option.label || "").trim();
@@ -85,31 +76,35 @@ function compactKitchenDisplayOptions(options = []) {
 }
 
 function getPaidToppings(item = {}) {
-  const fromOptions = getKitchenRecipeOptions(item.options)
-    .filter(isKitchenPaidToppingOption);
-
-  const fromToppings = (Array.isArray(item.toppings) ? item.toppings : [])
-    .map((topping) => {
-      const group = String(topping?.groupName || topping?.group || topping?.group_name || "").trim();
-      const value = String(topping?.name || topping?.label || topping?.value || "").trim();
-      const label = group ? `${group}: ${value}` : value;
-      if (!isKitchenPaidToppingGroup(group) || !value || isRecipeOnlyKitchenOption({ group, value, label })) return null;
-
-      return {
-        group: group || "Ngon Hơn Khi Ăn Cùng",
-        value,
-        label
-      };
-    })
-    .filter(Boolean);
+  const fromKitchenSettings = Array.isArray(item.kitchenChecklistOptions)
+    ? item.kitchenChecklistOptions
+    : [];
 
   const seen = new Set();
-  return [...fromOptions, ...fromToppings].filter((option) => {
+  return fromKitchenSettings.filter((option) => {
     const key = normalizeKitchenOptionText(`${option.group}:${option.value}`);
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+function groupKitchenChecklistOptions(options = []) {
+  const groups = [];
+  const byLabel = new Map();
+
+  (Array.isArray(options) ? options : []).forEach((option) => {
+    const label = String(option?.group || "Topping").trim() || "Topping";
+    let group = byLabel.get(label);
+    if (!group) {
+      group = { label, options: [] };
+      byLabel.set(label, group);
+      groups.push(group);
+    }
+    group.options.push(option);
+  });
+
+  return groups;
 }
 
 function buildPaidToppingOptionKeys(paidToppings = []) {
@@ -657,31 +652,28 @@ function ProgressBoxes({ doneItems, totalItems, accent }) {
 
 function ToppingCheck({ checked, label, onClick }) {
   return (
-    <span
+    <button
+      type="button"
       role="checkbox"
       aria-checked={checked}
-      tabIndex={0}
       onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onClick(event);
-        }
-      }}
       style={{
+        width: "100%",
+        minHeight: 40,
         border: checked ? "1px solid #f59e0b" : "1px solid #fcd34d",
         background: checked ? "#f59e0b" : "#fffbeb",
         color: checked ? "#ffffff" : "#92400e",
         borderRadius: 8,
-        padding: "6px 8px",
+        padding: "8px 10px",
         display: "grid",
-        gridTemplateColumns: "15px minmax(0, 1fr)",
-        gap: 6,
+        gridTemplateColumns: "16px minmax(0, 1fr)",
+        gap: 8,
         alignItems: "center",
         cursor: "pointer",
         fontSize: 12,
         fontWeight: 900,
-        lineHeight: 1.15
+        lineHeight: 1.2,
+        textAlign: "left"
       }}
     >
       <span
@@ -696,7 +688,7 @@ function ToppingCheck({ checked, label, onClick }) {
         }}
       />
       <strong style={{ display: "block", minWidth: 0, overflowWrap: "anywhere" }}>{label}</strong>
-    </span>
+    </button>
   );
 }
 
@@ -1237,8 +1229,8 @@ export default function KitchenOrderCard({
         style={{
           display: "grid",
           gridTemplateColumns: itemGridColumns,
-          gridAutoRows: "auto",
-          alignItems: "start",
+          gridAutoRows: "max-content",
+          alignItems: "stretch",
           gap: tabletCompact ? 7 : 10,
           maxHeight: compact ? "none" : 420,
           overflowY: compact ? "visible" : "auto",
@@ -1253,6 +1245,7 @@ export default function KitchenOrderCard({
             const sourceDone = item.status === "done";
             const unitChecked = getUnitProgressState(unitProgress, itemKey, unitIndex, sourceDone);
             const paidToppings = getPaidToppings(item);
+            const checklistGroups = groupKitchenChecklistOptions(paidToppings);
             const unitToppingsDone = areUnitToppingsDone(toppingProgress, itemKey, unitIndex, paidToppings);
             const itemDone = sourceDone || (unitChecked && unitToppingsDone);
             const itemUpdating = updatingItemKey === itemRequestKey;
@@ -1264,31 +1257,22 @@ export default function KitchenOrderCard({
                 if (recipeOnlyLabel) return [recipeOnlyLabel];
                 return isPaidToppingDisplayOption(option.label, paidToppingKeys) ? [] : [option.label];
               }));
-            const itemMinHeight = tabletCompact
-              ? item.note && paidToppings.length
-                ? 132
-                : item.note
-                  ? 112
-                  : paidToppings.length
-                    ? 104
-                    : 72
-              : item.note && paidToppings.length
-                ? 178
-                : item.note
-                  ? 158
-                  : paidToppings.length
-                    ? 130
-                    : 112;
-
             return (
-              <button
+              <div
                 key={`${item.id || itemKey}-unit-${unitIndex}`}
-                type="button"
-                disabled={!canToggleItems || itemUpdating}
+                role="button"
+                tabIndex={canToggleItems && !itemUpdating ? 0 : -1}
+                aria-disabled={!canToggleItems || itemUpdating}
                 onClick={(event) => handleToggleUnit(event, item, unitIndex)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  handleToggleUnit(event, item, unitIndex);
+                }}
                 style={{
-                  minHeight: itemMinHeight,
-                  height: "auto",
+                  minHeight: tabletCompact ? 72 : 112,
+                  height: "max-content",
+                  alignSelf: "stretch",
                   textAlign: "left",
                   border: itemHighlighted ? "2px solid #8b5cf6" : "1px solid #dbe3ef",
                   background: itemHighlighted ? "#faf5ff" : itemDone ? "#f0fdf4" : unitChecked ? "#fffbeb" : "rgba(255,255,255,0.88)",
@@ -1355,23 +1339,37 @@ export default function KitchenOrderCard({
                       <span>{item.note}</span>
                     </span>
                   ) : null}
-                  {paidToppings.length ? (
+                  {checklistGroups.length ? (
                     <span style={{ display: "grid", gap: 6 }}>
-                      {paidToppings.map((option) => {
-                        const toppingKey = `${itemKey}-${unitIndex}-${option.label}`;
-                        return (
-                          <ToppingCheck
-                            key={toppingKey}
-                            checked={Boolean(toppingProgress[toppingKey])}
-                            label={option.value}
-                            onClick={(event) => handleToggleTopping(event, item, unitIndex, option)}
-                          />
-                        );
-                      })}
+                      {checklistGroups.map((group) => (
+                        <span key={`${itemKey}-${group.label}`} style={{ display: "grid", gap: 6 }}>
+                          <strong
+                            style={{
+                              color: "#92400e",
+                              fontSize: 11,
+                              fontWeight: 950,
+                              textTransform: "uppercase"
+                            }}
+                          >
+                            {group.label}
+                          </strong>
+                          {group.options.map((option) => {
+                            const toppingKey = `${itemKey}-${unitIndex}-${option.label}`;
+                            return (
+                              <ToppingCheck
+                                key={toppingKey}
+                                checked={Boolean(toppingProgress[toppingKey])}
+                                label={option.value}
+                                onClick={(event) => handleToggleTopping(event, item, unitIndex, option)}
+                              />
+                            );
+                          })}
+                        </span>
+                      ))}
                     </span>
                   ) : null}
                 </span>
-              </button>
+              </div>
             );
           })
         ) : (

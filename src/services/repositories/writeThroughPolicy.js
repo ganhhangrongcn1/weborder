@@ -120,7 +120,8 @@ export const CONFIG_KEY_DOMAIN_MAP = {
   ghr_cake_settings: "appConfigs",
   ghr_crm_campaign_presets: "appConfigs",
   ghr_crm_bulk_gift_history: "appConfigs",
-  ghr_partner_order_automation: "appConfigs"
+  ghr_partner_order_automation: "appConfigs",
+  ghr_kitchen_option_group_settings: "appConfigs"
 };
 
 export function resolveDomainForConfigKey(key) {

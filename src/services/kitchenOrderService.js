@@ -11,6 +11,10 @@ import { completeWebsiteOrderWithLoyaltyAsync } from "./loyaltyService.js";
 import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
 import { buildOrderItemStableId } from "./orderItemIdentityService.js";
+import {
+  buildKitchenChecklistOptions,
+  loadKitchenOptionGroupSettings
+} from "./kitchenOptionGroupSettingsService.js";
 
 const KITCHEN_SOURCE = {
   website: "website",
@@ -1583,7 +1587,12 @@ export async function getKitchenOrders(options = {}) {
     tasks.push(getPartnerKitchenOrders(options));
   }
 
+  const kitchenSettingsPromise = loadKitchenOptionGroupSettings().catch((error) => {
+    console.warn("[kitchenOrderService] Cannot load Kitchen option group settings.", error);
+    return { version: 2, groups: [] };
+  });
   const settled = await Promise.allSettled(tasks);
+  const kitchenSettings = await kitchenSettingsPromise;
   const errors = settled
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason);
@@ -1591,6 +1600,26 @@ export async function getKitchenOrders(options = {}) {
   const orders = settled
     .filter((result) => result.status === "fulfilled")
     .flatMap((result) => result.value)
+    .map((order) => {
+      const settingsSource = order.sourceType === KITCHEN_SOURCE.partner
+        ? order.partnerSource || order.source
+        : order.sourceType === KITCHEN_SOURCE.pos
+          ? "pos"
+          : "website";
+      return {
+        ...order,
+        items: getArray(order.items).map((item) => ({
+          ...item,
+          kitchenChecklistOptions: buildKitchenChecklistOptions(
+            order.sourceType === KITCHEN_SOURCE.partner
+              ? [item.raw?.options, item.options]
+              : [item.raw?.option_groups, item.raw?.toppings, item.options],
+            settingsSource,
+            kitchenSettings
+          )
+        }))
+      };
+    })
     .sort((first, second) => getOrderTimeValue(second) - getOrderTimeValue(first));
 
   return {

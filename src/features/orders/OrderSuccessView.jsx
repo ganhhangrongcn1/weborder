@@ -25,6 +25,12 @@ import {
   readQrOrderPaymentSession
 } from "../../services/qrPaymentService.js";
 import { getCustomerOrderJourney } from "../../services/customerOrderStatusService.js";
+import { resolveOrderBranch } from "../../services/branchIdentityService.js";
+import { buildGoogleMapsDirectionsUrl } from "../../services/branchNavigationService.js";
+import { orderStorage } from "../../services/orderService.js";
+
+const PAYMENT_POLL_ACTIVE_MS = 2000;
+const PAYMENT_POLL_BACKGROUND_MS = 5000;
 
 function buildOrderTrackingPath(orderCode = "") {
   const code = String(orderCode || "").trim();
@@ -115,6 +121,14 @@ export default function OrderSuccess({
   const isQrPaymentWaiting = isQrPaymentOrder && !qrPaymentPaid && !qrPaymentExpired;
   const isMomoAppHandoff = isQrPaymentWaiting && isMomoPayment && !qrPaymentImageUrl;
   const isPickup = String(order?.fulfillmentType || "").toLowerCase() === "pickup";
+  const pickupBranch = useMemo(
+    () => (isPickup ? resolveOrderBranch(order || {}, branches) : null),
+    [branches, isPickup, order]
+  );
+  const pickupDirectionsUrl = useMemo(
+    () => buildGoogleMapsDirectionsUrl(pickupBranch),
+    [pickupBranch]
+  );
   const customerJourney = getCustomerOrderJourney(order || {});
   const paymentText = isQrPaymentOrder
     ? qrPaymentPaid
@@ -182,45 +196,73 @@ export default function OrderSuccess({
 
     let isActive = true;
     let timerId = null;
+    let isSyncing = false;
 
     async function syncPaymentSession({ create = false } = {}) {
-      if (!isActive) return;
-      const result = create
-        ? await createQrOrderPaymentSession({ order })
-        : await readQrOrderPaymentSession({ order });
-      if (!isActive) return;
-      const returnedSessionStatus = String(result.session?.status || "").toLowerCase();
-      const returnedOrderStatus = String(result.order?.status || result.order?.orderStatus || "").toLowerCase();
-      const currentOrderStatus = String(order?.status || order?.orderStatus || "").toLowerCase();
-      if (
-        result.order &&
-        ["expired", "cancelled", "canceled", "failed"].includes(returnedSessionStatus) &&
-        returnedOrderStatus !== currentOrderStatus
-      ) {
-        setOrderOverride(result.order);
-        setCurrentOrder?.(result.order);
-      }
-      if (result.ok && result.session) {
-        setPaymentSession(result.session);
-        setPaymentMessage("");
-      } else {
-        if (result.session) setPaymentSession(result.session);
-        if (result.message) setPaymentMessage(result.message);
+      if (!isActive || isSyncing) return;
+      isSyncing = true;
+      try {
+        const result = create
+          ? await createQrOrderPaymentSession({ order })
+          : await readQrOrderPaymentSession({ order });
+        if (!isActive) return;
+        const returnedSessionStatus = String(result.session?.status || "").toLowerCase();
+        const returnedOrderStatus = String(result.order?.status || result.order?.orderStatus || "").toLowerCase();
+        const currentOrderStatus = String(order?.status || order?.orderStatus || "").toLowerCase();
+        if (
+          result.order &&
+          ["expired", "cancelled", "canceled", "failed"].includes(returnedSessionStatus) &&
+          returnedOrderStatus !== currentOrderStatus
+        ) {
+          setOrderOverride(result.order);
+          setCurrentOrder?.(result.order);
+        }
+        if (result.ok && result.session) {
+          setPaymentSession(result.session);
+          setPaymentMessage("");
+        } else {
+          if (result.session) setPaymentSession(result.session);
+          if (result.message) setPaymentMessage(result.message);
+        }
+      } finally {
+        isSyncing = false;
       }
     }
 
+    const scheduleNextSync = () => {
+      if (!isActive || qrPaymentExpired) return;
+      const delay = typeof document !== "undefined" && document.visibilityState === "hidden"
+        ? PAYMENT_POLL_BACKGROUND_MS
+        : PAYMENT_POLL_ACTIVE_MS;
+      timerId = window.setTimeout(async () => {
+        await syncPaymentSession({ create: false });
+        scheduleNextSync();
+      }, delay);
+    };
+
     syncPaymentSession({ create: !qrPaymentExpired });
-    if (!qrPaymentExpired) {
-      timerId = window.setInterval(() => {
-        syncPaymentSession({ create: false });
-      }, 3500);
-    }
+    scheduleNextSync();
 
     return () => {
       isActive = false;
-      if (timerId) window.clearInterval(timerId);
+      if (timerId) window.clearTimeout(timerId);
     };
   }, [isQrPaymentOrder, order, orderId, qrPaymentExpired, qrPaymentPaid]);
+
+  useEffect(() => {
+    if (!isQrPaymentOrder || !orderId || qrPaymentPaid) return undefined;
+    const customerPhone = order?.customerPhone || order?.phone || "";
+    if (!customerPhone) return undefined;
+
+    return orderStorage.subscribeRealtimeByPhone(customerPhone, (orders = []) => {
+      const updatedOrder = orders.find((item) =>
+        String(item?.id || item?.orderCode || "") === String(orderId)
+      );
+      if (!updatedOrder) return;
+      setOrderOverride(updatedOrder);
+      setCurrentOrder?.(updatedOrder);
+    });
+  }, [isQrPaymentOrder, orderId, order?.customerPhone, order?.phone, qrPaymentPaid, setCurrentOrder]);
 
   useEffect(() => {
     if (!isMomoPayment || !momoQrPayload) {
@@ -418,6 +460,21 @@ export default function OrderSuccess({
               </div>
             </div>
           </div>
+
+          {isPickup && pickupDirectionsUrl ? (
+            <CustomerButton
+              as="a"
+              full
+              variant="secondary"
+              className="mt-4"
+              icon="store"
+              href={pickupDirectionsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Định vị quán
+            </CustomerButton>
+          ) : null}
 
           {!qrPaymentExpired && !isMomoAppHandoff ? (
             <div className={`order-success-next-step mt-4 text-left${isQrPaymentWaiting ? " is-waiting" : ""}`}>

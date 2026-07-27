@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
   shippingConfig: "ghr_shipping_config",
   zaloConfig: "ghr_zalo_config",
   optionGroupPresets: "ghr_option_group_presets",
+  kitchenOptionGroupSettings: "ghr_kitchen_option_group_settings",
   legacyOrderStatus: "ghr_order_status",
   legacyUserProfile: "ghr_user_profile"
 };
@@ -51,7 +52,8 @@ export const ADMIN_CONFIG_STORAGE_KEYS = [
   STORAGE_KEYS.crmLoyalty,
   STORAGE_KEYS.shippingConfig,
   STORAGE_KEYS.zaloConfig,
-  STORAGE_KEYS.optionGroupPresets
+  STORAGE_KEYS.optionGroupPresets,
+  STORAGE_KEYS.kitchenOptionGroupSettings
 ];
 
 export function isCustomerDataStorageKey(key) {

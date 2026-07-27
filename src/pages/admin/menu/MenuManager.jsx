@@ -3,6 +3,7 @@ import MenuGroupEditorModal from "./MenuGroupEditorModal.jsx";
 import MenuCategoryEditorModal from "./MenuCategoryEditorModal.jsx";
 import MenuOverviewPanel from "./components/MenuOverviewPanel.jsx";
 import MenuGroupsPanel from "./components/MenuGroupsPanel.jsx";
+import KitchenOptionSettingsPanel from "./components/KitchenOptionSettingsPanel.jsx";
 import useMenuManagerState from "./hooks/useMenuManagerState.js";
 import useMenuManagerActions from "./hooks/useMenuManagerActions.js";
 import { syncMenuCatalogToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
@@ -117,6 +118,7 @@ export default function MenuManager({
         tabs={[
           { value: "overview", label: "Tổng quan menu" },
           { value: "groups", label: "Tùy chọn nhóm" },
+          { value: "kitchen", label: "Thiết lập Kitchen" },
           { value: "bulk", label: "Thêm Cho Đủ Vị (Topping rời)" }
         ]}
       />
@@ -160,6 +162,10 @@ export default function MenuManager({
           removePresetOption={actions.removePresetOption}
           addPresetOption={actions.addPresetOption}
         />
+      )}
+
+      {state.menuTab === "kitchen" && (
+        <KitchenOptionSettingsPanel optionGroupPresets={optionGroupPresets} />
       )}
 
       {state.menuTab === "bulk" && (
