@@ -81,6 +81,30 @@ export async function getSupabaseCustomerSessionSnapshot() {
   }
 }
 
+export async function subscribeCustomerAuthSession(callback) {
+  const client = await getClientReady();
+  if (!client?.auth?.onAuthStateChange || typeof callback !== "function") {
+    return () => {};
+  }
+
+  const { data } = client.auth.onAuthStateChange((event, session) => {
+    const authUser = session?.user || null;
+    const meta = authUser?.user_metadata || {};
+    callback({
+      event,
+      hasSession: Boolean(authUser),
+      phone: getCustomerKey(meta.phone || ""),
+      authUserId: String(authUser?.id || "")
+    });
+
+    syncScopedSessionToRuntime("customer", session || null).catch(() => {});
+  });
+
+  return () => {
+    data?.subscription?.unsubscribe?.();
+  };
+}
+
 function normalizeAuthError(error, fallback = "Không thể thực hiện xác thực. Vui lòng thử lại.") {
   const message = String(error?.message || "").trim();
   if (!message) return fallback;
@@ -274,7 +298,7 @@ export async function logoutCustomerAuthSession() {
   const client = await getClientReady();
   if (!client) return { ok: false, message: "Supabase auth chưa sẵn sàng." };
   try {
-    const { error } = await client.auth.signOut();
+    const { error } = await client.auth.signOut({ scope: "local" });
     if (error) return { ok: false, message: normalizeAuthError(error, "Đăng xuất thất bại.") };
     await syncScopedSessionToRuntime("customer", null).catch(() => {});
     return { ok: true };

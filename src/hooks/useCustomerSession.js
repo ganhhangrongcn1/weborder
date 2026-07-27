@@ -4,7 +4,12 @@ import {
   getStoredMemberLoyaltySnapshot
 } from "../services/memberLoyaltySnapshotService.js";
 import { getDataSource } from "../services/repositories/dataSource.js";
-import { getSupabaseCustomerSessionSnapshot, logoutCustomerAuthSession, syncAuthProfileToCustomerRow } from "../services/supabaseAuthService.js";
+import {
+  getSupabaseCustomerSessionSnapshot,
+  logoutCustomerAuthSession,
+  subscribeCustomerAuthSession,
+  syncAuthProfileToCustomerRow
+} from "../services/supabaseAuthService.js";
 import { customerRepository } from "../services/repositories/customerRepository.js";
 
 const CUSTOMER_TRACKING_INITIAL_LIMIT = 5;
@@ -133,7 +138,7 @@ export default function useCustomerSession({
       }
 
       const pointer = customerRepository.getSessionPointer?.() || {};
-      if (pointer?.phone) {
+      if (!isSupabaseSource && pointer?.phone) {
         const restoredUser = await customerRepository.getUserByPhoneAsync(pointer.phone);
         const hydratedUser = restoredUser || (isSupabaseSource ? buildRestoredSessionUser(defaultUserDemo, pointer.phone) : null);
         if (!disposed && hydratedUser) {
@@ -175,6 +180,39 @@ export default function useCustomerSession({
       disposed = true;
     };
   }, [defaultUserDemo, enabled, isSupabaseSource, userStorage]);
+
+  useEffect(() => {
+    if (!enabled || !isSupabaseSource) return undefined;
+    let disposed = false;
+    let unsubscribe = () => {};
+
+    subscribeCustomerAuthSession(({ event, hasSession }) => {
+      if (disposed || event !== "SIGNED_OUT" || hasSession) return;
+      userStorage.clearCurrentPhone?.();
+      customerRepository.clearSessionPointer?.();
+      setHasCustomerAuthSession(false);
+      setCurrentPhoneState("");
+      setRestoreTargetPhone("");
+      setIsSessionRestoring(false);
+      setIsSessionBootstrapping(false);
+      setDemoUserState(defaultUserDemo);
+      setDemoLoyaltyState(defaultLoyaltyData);
+      setDemoOrdersState([]);
+      setDemoAddressesState([]);
+      setCurrentOrder(null);
+    }).then((cleanup) => {
+      if (disposed) {
+        cleanup();
+        return;
+      }
+      unsubscribe = cleanup;
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [defaultLoyaltyData, defaultUserDemo, enabled, isSupabaseSource, setCurrentOrder, userStorage]);
 
   useEffect(() => {
     if (!enabled) return;
