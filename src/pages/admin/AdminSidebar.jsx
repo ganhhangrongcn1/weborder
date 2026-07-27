@@ -7,7 +7,7 @@ export default function AdminSidebar({ navGroups, navIconMap, activeAdminNav, on
         <span>GHR</span>
         <div>
           <strong>Gánh Hàng Rong</strong>
-          <small>Admin Console</small>
+          <small>Quản trị cửa hàng</small>
         </div>
       </div>
 

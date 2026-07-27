@@ -1,39 +1,14 @@
 ﻿import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.jsx";
-import { resolveSalesChannelKey } from "../../../services/partnerOrderService.js";
-import {
-  branchOptionMatchesOrder,
-  buildBranchFilterOptions
-} from "../../../services/branchIdentityService.js";
-import { getSettlement } from "../orders/orderManager.utils.js";
+import { buildBranchFilterOptions } from "../../../services/branchIdentityService.js";
 import { addDaysToVietnamDateInput, toVietnamDateInputValue } from "../../../utils/adminDateRange.js";
-import AdminBusinessAnalyticsSection from "./AdminBusinessAnalyticsSection.jsx";
+import AdminBusinessAnalyticsSection, { AdminSettlementSummary } from "./AdminBusinessAnalyticsSection.jsx";
 import {
-  AdminBadge,
   AdminInput,
   AdminPanel,
   AdminSelect,
-  AdminStatCard,
-  AdminTable,
-  AdminTableBody,
-  AdminTableHead,
-  AdminTableRow
+  AdminStatCard
 } from "../ui/index.js";
-
-function getOrderStatusMeta(status) {
-  const normalized = String(status || "").toLowerCase();
-  if (normalized === "pending_zalo" || normalized === "new") return { label: "Đơn mới", tone: "warning" };
-  if (normalized === "confirmed") return { label: "Đang làm", tone: "info" };
-  if (normalized === "delivering") return { label: "Đang giao", tone: "info" };
-  if (normalized === "done" || normalized === "completed") return { label: "Hoàn tất", tone: "success" };
-  return { label: status || "Đang xử lý", tone: "neutral" };
-}
-
-function formatOrderTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--";
-  return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-}
 
 function formatNumber(value) {
   const numeric = Number(value);
@@ -41,41 +16,10 @@ function formatNumber(value) {
   return new Intl.NumberFormat("vi-VN").format(numeric);
 }
 
-function getOrderBranch(order) {
-  return [order.deliveryBranchName, order.pickupBranchName, order.branchName, order.branch_name, order.nexposSiteName, order.nexposHubName]
-    .map((value) => String(value || "").trim())
-    .find(Boolean) || "--";
+function formatDashboardMoney(value) {
+  return formatMoney(Math.round(Number(value || 0)));
 }
 
-function getOrderChannel(order) {
-  return resolveSalesChannelKey(order);
-}
-
-function getOrderSourceMeta(order) {
-  const rawSource = getOrderChannel(order);
-  const normalized = rawSource.toLowerCase();
-
-  if (normalized.includes("grab")) return { label: "Grab", tone: "success", className: "is-grab" };
-  if (normalized.includes("shopee")) return { label: "Shopee", tone: "warning", className: "is-shopee" };
-  if (normalized.includes("xanh")) return { label: "Xanh Ngon", tone: "info", className: "is-xanh-ngon" };
-  if (normalized === "pos" || normalized.includes("pos")) return { label: "POS", tone: "neutral", className: "is-pos" };
-  if (normalized.includes("website")) return { label: "Website", tone: "brand", className: "is-website" };
-  if (normalized.includes("pickup") || normalized.includes("đến lấy") || normalized.includes("den lay")) {
-    return { label: "Đến lấy", tone: "brand", className: "is-pickup" };
-  }
-  if (normalized.includes("ship") || normalized.includes("delivery") || normalized.includes("giao")) {
-    return { label: "Ship", tone: "info", className: "is-ship" };
-  }
-  if (normalized === "unknown") return { label: "Chưa xác định", tone: "warning", className: "is-unknown" };
-  if (normalized === "other") return { label: "Khác", tone: "neutral", className: "is-other" };
-  if (rawSource) return { label: rawSource, tone: "neutral", className: "is-other" };
-
-  const fulfillmentType = String(order.fulfillmentType || "").toLowerCase();
-  if (fulfillmentType === "pickup") return { label: "Đến lấy", tone: "brand", className: "is-pickup" };
-  if (fulfillmentType === "delivery") return { label: "Ship", tone: "info", className: "is-ship" };
-
-  return { label: "Chưa rõ", tone: "neutral", className: "is-unknown" };
-}
 
 function getChannelLabel(channel = "") {
   const normalized = String(channel || "").toLowerCase();
@@ -107,28 +51,11 @@ function formatComparison(currentValue = 0, previousValue = 0) {
   return `${percent > 0 ? "+" : ""}${percent}%`;
 }
 
-function getDashboardPresetLabel(preset = "today") {
-  if (preset === "yesterday") return "Hôm qua";
-  if (preset === "week") return "Tuần này";
-  if (preset === "month") return "Tháng này";
-  if (preset === "custom") return "Tùy chỉnh";
-  return "Hôm nay";
-}
-
 function formatDateLabel(value = "") {
   if (!value) return "";
   const date = new Date(`${value}T12:00:00+07:00`);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-}
-
-function buildDashboardPeriodLabel(preset = "today", dateFrom = "", dateTo = "") {
-  const presetLabel = getDashboardPresetLabel(preset);
-  const fromLabel = formatDateLabel(dateFrom);
-  const toLabel = formatDateLabel(dateTo);
-  if (!fromLabel && !toLabel) return presetLabel;
-  if (fromLabel && toLabel && fromLabel !== toLabel) return `${presetLabel}: ${fromLabel} - ${toLabel}`;
-  return `${presetLabel}: ${fromLabel || toLabel}`;
 }
 
 function buildTrafficDailyBars(daily = []) {
@@ -168,16 +95,6 @@ function buildDonutSegments(channels = [], total = 0) {
     offset += value;
     return segment;
   });
-}
-
-function getDashboardOrderRevenue(order = {}) {
-  const partnerRevenue = Number(order.realReceived || order.netReceived || order.grossReceived || 0);
-  if (String(order.sourceType || "").toLowerCase() === "partner" && partnerRevenue > 0) {
-    return partnerRevenue;
-  }
-  const totalAmount = Number(order.totalAmount || order.total || 0);
-  const shippingFee = Number(order.shippingFee ?? order.deliveryFee ?? 0);
-  return Math.max(totalAmount - shippingFee, 0);
 }
 
 function buildSmoothRevenuePath(points = []) {
@@ -274,8 +191,6 @@ function getDashboardTrustMeta(statusMap = {}) {
 }
 
 export default function AdminDashboardSection({
-  dashboardSearch,
-  setDashboardSearch,
   dashboardDateFrom,
   setDashboardDateFrom,
   dashboardDateTo,
@@ -287,10 +202,8 @@ export default function AdminDashboardSection({
   ordersTotal,
   ordersNew,
   ordersDoing,
-  todayRevenue,
   totalCustomers,
   periodCustomers,
-  filteredRecentOrders,
   dashboardChartPreset,
   setDashboardChartPreset,
   dashboardSummary,
@@ -303,26 +216,9 @@ export default function AdminDashboardSection({
   branches = []
 }) {
   const branchOptions = buildBranchFilterOptions(branches);
-  const selectedBranchOption = branchOptions.find((branch) => {
-    if (branch.value === selectedBranchFilter) return true;
-    const rawBranch = (branches || []).find((item) => String(
-      item?.branch_uuid ||
-      item?.branchUuid ||
-      item?.uuid ||
-      item?.id ||
-      ""
-    ) === String(selectedBranchFilter));
-    return rawBranch ? branch.label === rawBranch.name : false;
-  }) || null;
-  const branchScopedRecentOrders = selectedBranchOption
-    ? filteredRecentOrders.filter((order) => branchOptionMatchesOrder(order, selectedBranchOption))
-    : filteredRecentOrders;
   const rpcMetrics = dashboardSummary?.source === "rpc" ? dashboardSummary.current : null;
   const displayedOrdersTotal = rpcMetrics ? ordersTotal : null;
   const displayedOrdersNew = rpcMetrics ? ordersNew : null;
-  const displayedRevenue = rpcMetrics ? todayRevenue : null;
-  const displayedCustomers = rpcMetrics ? totalCustomers : null;
-  const displayedPeriodCustomers = rpcMetrics ? periodCustomers : null;
   const topProducts = businessAnalytics?.source === "rpc"
     ? businessAnalytics.topByQuantity.slice(0, 5).map((item, index) => ({
         id: `${item.name}-${index}`,
@@ -335,23 +231,7 @@ export default function AdminDashboardSection({
     ? buildRpcChannels(dashboardSummary.channels)
     : [];
   const channelTotal = channels.reduce((sum, channel) => sum + channel.count, 0);
-  const channelRevenueTotal = channels.reduce((sum, channel) => sum + channel.revenue, 0);
   const channelSegments = buildDonutSegments(channels, channelTotal);
-  const posChannel = channels.find((channel) => channel.name === "POS") || {
-    count: 0,
-    revenueOrderCount: 0,
-    revenue: 0
-  };
-  const unknownChannel = channels.find((channel) => channel.name === "Chưa xác định") || {
-    count: 0,
-    revenue: 0
-  };
-  const posAverageOrder = posChannel.revenueOrderCount
-    ? Math.round(posChannel.revenue / posChannel.revenueOrderCount)
-    : 0;
-  const posRevenueShare = channelRevenueTotal
-    ? Math.round((posChannel.revenue / channelRevenueTotal) * 1000) / 10
-    : 0;
   const averageOrder = rpcMetrics?.averageOrderValue ?? null;
   const completionCount = rpcMetrics?.completedOrders ?? null;
   const completionRate = rpcMetrics && displayedOrdersTotal
@@ -364,7 +244,6 @@ export default function AdminDashboardSection({
   const deliveringOrders = rpcMetrics?.deliveringOrders ?? null;
   const cancelledOrders = rpcMetrics?.cancelledOrders ?? null;
   const cancelRate = rpcMetrics ? Math.round(Number(rpcMetrics.cancelRate || 0) * 100) : null;
-  const reportPeriodLabel = buildDashboardPeriodLabel(dashboardDatePreset || "today", dashboardDateFrom, dashboardDateTo);
   const displayedSitePageViews = siteTrafficSummary ? formatNumber(siteTrafficSummary.pageViews || 0) : "--";
   const displayedSiteVisitors = siteTrafficSummary ? formatNumber(siteTrafficSummary.uniqueVisitors || 0) : "--";
   const trafficDailyBars = buildTrafficDailyBars(siteTrafficSummary?.daily || []);
@@ -388,11 +267,6 @@ export default function AdminDashboardSection({
   const chartOrdersTotal = chartMetrics?.totalOrders ?? null;
   const chartRevenueTotal = chartMetrics?.netRevenue ?? null;
   const chartAverageOrder = chartMetrics?.averageOrderValue ?? null;
-  const chartCompletionCount = chartMetrics?.completedOrders ?? null;
-  const chartOrdersNew = chartMetrics?.pendingOrders ?? null;
-  const chartOrdersDoing = chartMetrics
-    ? chartMetrics.preparingOrders + chartMetrics.deliveringOrders
-    : null;
   const revenueSeries = dashboardRevenueSeries?.source === "rpc"
     ? dashboardRevenueSeries.dailyRevenue.map((item) => ({
         key: item.date,
@@ -401,6 +275,12 @@ export default function AdminDashboardSection({
       }))
     : [];
   const revenueChart = buildRevenueChart(revenueSeries);
+  const chartDailyAverage = revenueSeries.length
+    ? Math.round(Number(chartRevenueTotal || 0) / revenueSeries.length)
+    : 0;
+  const chartPeakDay = revenueSeries.length
+    ? revenueSeries.reduce((best, item) => (item.value > best.value ? item : best), revenueSeries[0])
+    : null;
   const trustMeta = getDashboardTrustMeta(dashboardDataStatus);
   const trustUpdatedLabel = formatUpdatedTime(trustMeta.updatedAt);
   const dashboardErrors = Object.values(dashboardDataStatus)
@@ -433,29 +313,21 @@ export default function AdminDashboardSection({
 
   return (
     <div className="admin-dashboard-page">
-      <header className="admin-dashboard-compact-head">
-        <div className="admin-dashboard-compact-title">
+      <header className="admin-dashboard-command-bar">
+        <div className="admin-dashboard-command-title">
           <div>
-            <span>Dashboard</span>
             <h1>Tổng quan vận hành</h1>
-          </div>
-          <div className="admin-dashboard-compact-badges">
-            <AdminBadge tone={trustMeta.tone}>{trustMeta.label}</AdminBadge>
-            <AdminBadge tone={openBranches === totalBranches ? "success" : "warning"}>
-              {openBranches}/{totalBranches} chi nhánh mở
-            </AdminBadge>
+            <small>
+              <i className={openBranches === totalBranches ? "is-open" : "is-partial"} />
+              {openBranches}/{totalBranches} chi nhánh đang mở
+              <b>·</b>
+              {trustUpdatedLabel ? `Cập nhật ${trustUpdatedLabel}` : "Đang cập nhật"}
+            </small>
           </div>
         </div>
-        <div className="admin-dashboard-compact-meta">
-          <strong>{reportPeriodLabel}</strong>
-          <span>{selectedBranchOption ? selectedBranchOption.label : "Tất cả chi nhánh"}</span>
-          <small>{trustUpdatedLabel ? `Cập nhật ${trustUpdatedLabel}` : "Đang đồng bộ dữ liệu"}</small>
-        </div>
-      </header>
 
-      <section className="admin-dashboard-scope-bar" aria-label="Phạm vi dashboard">
         <div className="admin-dashboard-branch-switcher">
-          <span>Chi nhánh</span>
+          <span>Xem theo chi nhánh</span>
           <div role="group" aria-label="Chọn chi nhánh">
             <button
               type="button"
@@ -515,22 +387,26 @@ export default function AdminDashboardSection({
             </>
           ) : null}
         </div>
-      </section>
+      </header>
 
       {dashboardErrors.length ? (
-        <div className="admin-dashboard-data-alert" role="alert">
+        <div className="admin-dashboard-data-alert is-soft" role="status">
           <Icon name="warning" size={17} />
-          <span>{dashboardErrors.join(" ")}</span>
+          <span>Một số báo cáo chi tiết đang tạm gián đoạn. Các chỉ số vận hành vẫn được cập nhật.</span>
         </div>
       ) : null}
 
-      <div className="admin-dashboard-stat-grid">
-        <AdminStatCard title="Doanh thu thực nhận" value={displayedRevenue === null ? "--" : formatMoney(displayedRevenue)} subtitle="Không tính đơn hủy/đặt trước · Web trừ phí ship" icon={<Icon name="tag" size={22} />} tone="green" />
-        <AdminStatCard title="Tổng đơn" value={displayedOrdersTotal ?? "--"} subtitle={displayedOrdersNew === null ? "Chưa có dữ liệu Supabase" : `${displayedOrdersNew} đơn mới`} icon={<Icon name="bag" size={22} />} tone="brand" />
-        <AdminStatCard title="Khách mua trong kỳ" value={displayedPeriodCustomers ?? "--"} subtitle="Số điện thoại duy nhất có đơn trong kỳ" icon={<Icon name="user" size={22} />} tone="blue" />
-        <AdminStatCard title="Tổng hồ sơ khách" value={displayedCustomers ?? "--"} subtitle="Toàn bộ hồ sơ khách hàng trên Supabase" icon={<Icon name="user" size={22} />} tone="slate" />
-        <AdminStatCard title="Đơn trung bình" value={averageOrder === null ? "--" : formatMoney(averageOrder)} subtitle={completionRate === null ? "Chưa có dữ liệu Supabase" : `${completionRate}% hoàn tất`} icon={<Icon name="star" size={22} />} tone="amber" />
-      </div>
+      <AdminSettlementSummary
+        analytics={businessAnalytics}
+        status={dashboardDataStatus?.analytics?.status}
+        fallbackNetRevenue={rpcMetrics?.netRevenue}
+      >
+        <div className="admin-dashboard-stat-grid">
+          <AdminStatCard title="Tổng đơn" value={displayedOrdersTotal ?? "--"} subtitle={displayedOrdersNew === null ? "Đang cập nhật" : `${displayedOrdersNew} đơn mới`} icon={<Icon name="bag" size={22} />} tone="brand" />
+          <AdminStatCard title="Đơn trung bình" value={averageOrder === null ? "--" : formatDashboardMoney(averageOrder)} subtitle="Doanh thu thực nhận trung bình mỗi đơn" icon={<Icon name="star" size={22} />} tone="amber" />
+          <AdminStatCard title="Tỷ lệ hoàn tất" value={completionRate === null ? "--" : `${completionRate}%`} subtitle={completionCount === null ? "Đang cập nhật" : `${completionCount} đơn hoàn tất`} icon={<Icon name="check" size={22} />} tone="blue" />
+        </div>
+      </AdminSettlementSummary>
 
       <section className="admin-dashboard-traffic-strip" aria-label="Khách truy cập website">
         <div className="admin-dashboard-traffic-heading">
@@ -565,7 +441,7 @@ export default function AdminDashboardSection({
         ) : (
           <div className="admin-dashboard-traffic-empty">
             {dashboardDataStatus?.traffic?.status === "error"
-              ? "Không thể tải dữ liệu truy cập từ Supabase."
+              ? "Dữ liệu truy cập đang tạm gián đoạn."
               : "Chưa có khách truy cập trong kỳ này."}
           </div>
         )}
@@ -589,42 +465,10 @@ export default function AdminDashboardSection({
         </div>
       </section>
 
-      <section className="admin-dashboard-pos-strip" aria-label="Hiệu quả bán tại quầy POS">
-        <div className="admin-dashboard-pos-heading">
-          <div>
-            <span>Bán trực tiếp</span>
-            <strong>POS tại quầy</strong>
-          </div>
-          {unknownChannel.count ? (
-            <AdminBadge tone="warning">{unknownChannel.count} đơn chưa xác định nguồn</AdminBadge>
-          ) : (
-            <AdminBadge tone="success">Nguồn đơn đã phân loại đầy đủ</AdminBadge>
-          )}
-        </div>
-        <div className="admin-dashboard-pos-metrics">
-          <article>
-            <span>Doanh thu POS</span>
-            <strong>{formatMoney(posChannel.revenue)}</strong>
-          </article>
-          <article>
-            <span>Số đơn POS</span>
-            <strong>{formatNumber(posChannel.count)}</strong>
-          </article>
-          <article>
-            <span>Đơn trung bình POS</span>
-            <strong>{formatMoney(posAverageOrder)}</strong>
-          </article>
-          <article>
-            <span>Tỷ trọng doanh thu</span>
-            <strong>{posRevenueShare}%</strong>
-          </article>
-        </div>
-      </section>
-
       <div className="admin-dashboard-main-grid">
         <AdminPanel
-          title="Doanh thu thực nhận"
-          description="Web: tổng thanh toán trừ phí ship. FoodApp: ưu tiên số thực nhận từ dữ liệu đối soát. Không tính đơn hủy và đơn đặt trước."
+          title="Xu hướng doanh thu"
+          description="Diễn biến doanh thu thực nhận trong khoảng thời gian đã chọn."
           className="admin-dashboard-revenue-card"
           action={
             <AdminSelect
@@ -641,8 +485,8 @@ export default function AdminDashboardSection({
           {chartMetrics ? (
             <>
               <div className="admin-dashboard-revenue-visual">
-                <strong>{formatMoney(chartRevenueTotal)}</strong>
-                <span>{chartOrdersTotal} đơn · {formatMoney(chartAverageOrder)} / đơn</span>
+                <strong>{formatDashboardMoney(chartRevenueTotal)}</strong>
+                <span>{chartOrdersTotal} đơn · {formatDashboardMoney(chartAverageOrder)} / đơn</span>
                 <div className="admin-dashboard-revenue-chart">
                   <svg viewBox={`0 0 ${revenueChart.width} ${revenueChart.height}`} role="img" aria-label="Biểu đồ doanh thu thực nhận">
                     <defs>
@@ -654,7 +498,7 @@ export default function AdminDashboardSection({
                     {revenueChart.gridLines.map((line) => (
                       <g key={line.y}>
                         <line x1={revenueChart.padding.left} x2={revenueChart.width - revenueChart.padding.right} y1={line.y} y2={line.y} />
-                        <text x="10" y={line.y + 4}>{formatMoney(line.value)}</text>
+                        <text x="10" y={line.y + 4}>{formatDashboardMoney(line.value)}</text>
                       </g>
                     ))}
                     <path className="admin-dashboard-revenue-area" d={revenueChart.areaPath} />
@@ -667,29 +511,22 @@ export default function AdminDashboardSection({
                 </div>
               </div>
               <div className="admin-dashboard-mini-metrics">
-                <span><b>{chartOrdersNew}</b> đơn mới</span>
-                <span><b>{chartOrdersDoing}</b> đang xử lý</span>
-                <span><b>{chartCompletionCount}</b> hoàn tất</span>
-                {dashboardSummary?.source === "rpc" ? (
-                  <>
-                    <span><b>{formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.previous.netRevenue)}</b> so với kỳ trước</span>
-                    <span><b>{formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.week.netRevenue)}</b> so với cùng kỳ tuần trước</span>
-                    <span><b>{formatComparison(dashboardSummary.current.totalOrders, dashboardSummary.previous.totalOrders)}</b> số đơn so với kỳ trước</span>
-                    <span><b>{formatComparison(dashboardSummary.current.totalOrders, dashboardSummary.week.totalOrders)}</b> số đơn so với cùng kỳ tuần trước</span>
-                  </>
-                ) : null}
+                <span><b>{formatDashboardMoney(chartDailyAverage)}</b> trung bình / ngày</span>
+                <span><b>{chartOrdersTotal}</b> đơn trong kỳ</span>
+                <span><b>{dashboardSummary?.source === "rpc" ? formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.previous.netRevenue) : "--"}</b> so với kỳ trước</span>
+                <span><b>{chartPeakDay ? formatDashboardMoney(chartPeakDay.value) : "--"}</b> cao nhất{chartPeakDay ? ` · ${chartPeakDay.label}` : ""}</span>
               </div>
             </>
           ) : (
             <div className="admin-dashboard-empty-note">
               {dashboardDataStatus?.revenue?.status === "error"
-                ? "Không thể tải biểu đồ doanh thu từ Supabase."
+                ? "Biểu đồ doanh thu đang tạm gián đoạn."
                 : "Đang tải biểu đồ doanh thu..."}
             </div>
           )}
         </AdminPanel>
 
-        <AdminPanel title="Đơn hàng theo kênh" description="Đơn thiếu source được giữ riêng ở Chưa xác định, không tự gộp vào Web." className="admin-dashboard-channel-card">
+        <AdminPanel title="Cơ cấu kênh bán" description="Tỷ trọng số đơn và doanh thu của từng kênh bán." className="admin-dashboard-channel-card">
           {channels.length ? (
             <div className="admin-dashboard-channel-donut-wrap">
               <div className="admin-dashboard-channel-donut">
@@ -721,7 +558,7 @@ export default function AdminDashboardSection({
                   <div key={channel.name} className="admin-dashboard-channel-legend-row">
                     <i style={{ backgroundColor: channel.color }} />
                     <strong>{channel.name}</strong>
-                    <span>{channel.count} đơn · {percent}%{channel.revenue !== undefined ? ` · ${formatMoney(channel.revenue)}` : ""}</span>
+                    <span>{channel.count} đơn · {percent}%{channel.revenue !== undefined ? ` · ${formatDashboardMoney(channel.revenue)}` : ""}</span>
                   </div>
                 );
               })}
@@ -730,13 +567,13 @@ export default function AdminDashboardSection({
           ) : (
             <div className="admin-dashboard-empty-note">
               {dashboardDataStatus?.summary?.status === "error"
-                ? "Không thể tải dữ liệu kênh bán từ Supabase."
+                ? "Cơ cấu kênh bán đang tạm gián đoạn."
                 : "Chưa có đơn theo kênh trong kỳ đã chọn."}
             </div>
           )}
         </AdminPanel>
 
-        <AdminPanel title="Top món bán chạy" description="Tổng hợp trực tiếp từ món trong đơn Supabase của kỳ đã chọn." className="admin-dashboard-top-products">
+        <AdminPanel title="Món bán chạy" description="Những món được gọi nhiều nhất trong kỳ đã chọn." className="admin-dashboard-top-products">
           {topProducts.length ? (
             <div className="admin-dashboard-product-list">
               {topProducts.map((item, index) => (
@@ -753,65 +590,8 @@ export default function AdminDashboardSection({
           ) : (
             <div className="admin-dashboard-empty-note">
               {dashboardDataStatus?.analytics?.status === "error"
-                ? "Không thể tải dữ liệu món bán từ Supabase."
+                ? "Chưa có dữ liệu món bán trong kỳ này."
                 : "Chưa có món bán trong kỳ đã chọn."}
-            </div>
-          )}
-        </AdminPanel>
-      </div>
-
-      <div className="admin-dashboard-bottom-grid">
-        <AdminPanel
-          title="Đơn hàng gần đây"
-          description="Đọc trực tiếp từ bảng đơn hàng Supabase theo bộ lọc hiện tại."
-          action={(
-            <div className="admin-dashboard-recent-actions">
-              <label className="admin-dashboard-recent-search">
-                <Icon name="search" size={15} />
-                <AdminInput
-                  value={dashboardSearch}
-                  onChange={(event) => setDashboardSearch(event.target.value)}
-                  placeholder="Tìm mã đơn, tên khách, số điện thoại..."
-                />
-              </label>
-              <AdminBadge tone="neutral">{branchScopedRecentOrders.length} đơn</AdminBadge>
-            </div>
-          )}
-          className="admin-dashboard-recent-card"
-        >
-          {branchScopedRecentOrders.length ? (
-            <AdminTable className="admin-dashboard-table">
-              <AdminTableHead>
-                <span>Mã đơn</span><span>Nguồn</span><span>Khách</span><span>Giờ</span><span>Chi nhánh</span><span>Doanh thu thực nhận</span><span>Trạng thái</span>
-              </AdminTableHead>
-              <AdminTableBody>
-                {branchScopedRecentOrders.map((order) => {
-                  const status = getOrderStatusMeta(order.status);
-                  const source = getOrderSourceMeta(order);
-                  const netRevenue = getDashboardOrderRevenue(order) || Number(getSettlement(order)?.netRevenue || 0);
-                  return (
-                    <AdminTableRow key={order.id || order.orderCode}>
-                      <span className="admin-dashboard-order-code"><strong>{order.displayOrderCode || order.orderCode || order.id}</strong></span>
-                      <AdminBadge tone={source.tone} className={`admin-dashboard-source-badge ${source.className}`}>{source.label}</AdminBadge>
-                      <span>{order.orderCustomerName || order.customerName || order.phone || "Khách lẻ"}</span>
-                      <span>{formatOrderTime(order.createdAt)}</span>
-                      <span>{getOrderBranch(order)}</span>
-                      <strong>{formatMoney(netRevenue)}</strong>
-                      <AdminBadge tone={status.tone}>{status.label}</AdminBadge>
-                    </AdminTableRow>
-                  );
-                })}
-              </AdminTableBody>
-            </AdminTable>
-          ) : (
-            <div className="admin-order-empty">
-              <strong>
-                {dashboardDataStatus?.orders?.status === "error"
-                  ? "Không thể tải danh sách đơn từ Supabase."
-                  : dashboardDataStatus?.orders?.status === "loading"
-                    ? "Đang tải danh sách đơn..."
-                    : "Không tìm thấy đơn phù hợp."}
-              </strong>
             </div>
           )}
         </AdminPanel>

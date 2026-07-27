@@ -63,8 +63,23 @@ function buildChartRangeFromPreset(preset = "7d") {
   return buildVietnamDateRange(addDaysToVietnamDateInput(end, -(days - 1)), end);
 }
 
-async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartnerOrders = false, requireRemote = false, includeOrderItems = true } = {}) {
-  const cacheKey = buildOrdersSnapshotCacheKey(dateRange, includePartnerOrders, requireRemote, includeOrderItems);
+async function loadOrdersSnapshot(
+  orderStorage,
+  dateRange = {},
+  {
+    includePartnerOrders = false,
+    requireRemote = false,
+    includeOrderItems = true,
+    limit = 0
+  } = {}
+) {
+  const cacheKey = buildOrdersSnapshotCacheKey(
+    dateRange,
+    includePartnerOrders,
+    requireRemote,
+    includeOrderItems,
+    limit
+  );
   const cached = ordersSnapshotCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < SNAPSHOT_CACHE_TTL_MS) {
     return cached.value;
@@ -73,14 +88,25 @@ async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartner
     return ordersSnapshotInFlight.get(cacheKey);
   }
 
-  const request = loadOrdersSnapshotUncached(orderStorage, dateRange, { includePartnerOrders, requireRemote, includeOrderItems })
+  const request = loadOrdersSnapshotUncached(orderStorage, dateRange, {
+    includePartnerOrders,
+    requireRemote,
+    includeOrderItems,
+    limit
+  })
     .then((value) => {
       ordersSnapshotCache.set(cacheKey, {
         cachedAt: Date.now(),
         value
       });
       if (includePartnerOrders) {
-        ordersSnapshotCache.set(buildOrdersSnapshotCacheKey(dateRange, false, requireRemote, includeOrderItems), {
+        ordersSnapshotCache.set(buildOrdersSnapshotCacheKey(
+          dateRange,
+          false,
+          requireRemote,
+          includeOrderItems,
+          limit
+        ), {
           cachedAt: Date.now(),
           value: getWebOrdersOnly(value)
         });
@@ -95,14 +121,31 @@ async function loadOrdersSnapshot(orderStorage, dateRange = {}, { includePartner
   return request;
 }
 
-async function loadOrdersSnapshotUncached(orderStorage, dateRange = {}, { includePartnerOrders = false, requireRemote = false, includeOrderItems = true } = {}) {
+async function loadOrdersSnapshotUncached(
+  orderStorage,
+  dateRange = {},
+  {
+    includePartnerOrders = false,
+    requireRemote = false,
+    includeOrderItems = true,
+    limit = 0
+  } = {}
+) {
+  const safeLimit = Number.isFinite(Number(limit)) && Number(limit) > 0
+    ? Math.floor(Number(limit))
+    : 0;
   const webOrdersPromise = orderStorage?.getAllAsync?.({
     ...dateRange,
     requireRemote,
-    includeItems: includeOrderItems
+    includeItems: includeOrderItems,
+    ...(safeLimit ? { limit: safeLimit } : {})
   });
   const partnerOrdersPromise = includePartnerOrders
-    ? readPartnerOrdersForAdmin({ ...dateRange, includeItems: includeOrderItems })
+    ? readPartnerOrdersForAdmin({
+        ...dateRange,
+        includeItems: includeOrderItems,
+        ...(safeLimit ? { limit: safeLimit } : {})
+      })
     : Promise.resolve([]);
   const [webOrders, partnerOrders] = await Promise.all([webOrdersPromise, partnerOrdersPromise]);
   recordAdminRequest("read web orders snapshot", "orders");
@@ -111,11 +154,18 @@ async function loadOrdersSnapshotUncached(orderStorage, dateRange = {}, { includ
   return buildAdminOrderFeed(safeWebOrders, partnerOrders);
 }
 
-function buildOrdersSnapshotCacheKey(dateRange = {}, includePartnerOrders = false, requireRemote = false, includeOrderItems = true) {
+function buildOrdersSnapshotCacheKey(
+  dateRange = {},
+  includePartnerOrders = false,
+  requireRemote = false,
+  includeOrderItems = true,
+  limit = 0
+) {
   return [
     includePartnerOrders ? "with-partner" : "web-only",
     requireRemote ? "remote-only" : "fallback-allowed",
     includeOrderItems ? "with-items" : "summary-only",
+    Number(limit || 0) > 0 ? `limit-${Math.floor(Number(limit))}` : "unlimited",
     String(dateRange?.dateFrom || ""),
     String(dateRange?.dateTo || "")
   ].join("|");
@@ -219,7 +269,6 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
     const refreshDashboardSummary = async () => {
       if (section !== "dashboard") return;
-      setDashboardSummary(null);
       updateDashboardDataStatus(setDashboardDataStatus, "summary", "loading");
       try {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
@@ -261,7 +310,6 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
     const refreshSiteTrafficSummary = async () => {
       if (section !== "dashboard") return;
-      setSiteTrafficSummary(null);
       updateDashboardDataStatus(setDashboardDataStatus, "traffic", "loading");
       try {
         const nextTraffic = await getSiteVisitDailyStats({
@@ -300,7 +348,6 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
     const refreshBusinessAnalytics = async () => {
       if (section !== "dashboard") return;
-      setBusinessAnalytics(null);
       updateDashboardDataStatus(setDashboardDataStatus, "analytics", "loading");
       try {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
@@ -347,7 +394,6 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
 
       const dateRange = buildVietnamDateRange(activeDateFrom, activeDateTo);
       if (section === "dashboard") {
-        setOrdersSnapshot([]);
         updateDashboardDataStatus(setDashboardDataStatus, "orders", "loading");
       }
       try {
@@ -356,7 +402,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         }
         const nextOrders = await loadOrdersSnapshot(orderStorage, dateRange, {
           includePartnerOrders: section === "dashboard" || section === "orders",
-          requireRemote: section === "dashboard" || section === "orders"
+          requireRemote: section === "dashboard" || section === "orders",
+          includeOrderItems: section !== "dashboard",
+          limit: section === "dashboard" ? 50 : 0
         });
         if (disposed) return;
         const safeOrders = Array.isArray(nextOrders) ? nextOrders : [];
@@ -397,7 +445,6 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     const refreshDashboardRevenue = async () => {
       if (section !== "dashboard") return;
       const dateRange = buildChartRangeFromPreset(dashboardChartPreset);
-      setDashboardRevenueSeries(null);
       updateDashboardDataStatus(setDashboardDataStatus, "revenue", "loading");
       try {
         const nextRevenueSeries = await getAdminDashboardRevenueSeriesRpc({

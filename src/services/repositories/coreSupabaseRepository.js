@@ -1044,6 +1044,7 @@ async function readOrdersByPhoneFromTable(options = {}) {
   const dateFrom = String(options?.dateFrom || "").trim();
   const dateTo = String(options?.dateTo || "").trim();
   const includeItems = options?.includeItems !== false;
+  const limit = Number(options?.limit || 0);
   let ordersQuery = client.from("orders").select(CUSTOMER_ORDER_COLUMNS);
   if (dateFrom) {
     ordersQuery = ordersQuery.gte("created_at", dateFrom);
@@ -1051,7 +1052,11 @@ async function readOrdersByPhoneFromTable(options = {}) {
   if (dateTo) {
     ordersQuery = ordersQuery.lt("created_at", dateTo);
   }
-  const { data: orders, error: orderError } = await ordersQuery.order("created_at", { ascending: false });
+  ordersQuery = ordersQuery.order("created_at", { ascending: false });
+  if (Number.isFinite(limit) && limit > 0) {
+    ordersQuery = ordersQuery.limit(Math.floor(limit));
+  }
+  const { data: orders, error: orderError } = await ordersQuery;
   if (orderError) throw orderError;
 
   const orderIds = Array.isArray(orders) ? orders.map((order) => order?.id).filter(Boolean) : [];

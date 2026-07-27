@@ -475,6 +475,7 @@ export const orderRepository = {
     const dateTo = String(options?.dateTo || "").trim();
     const requireRemote = options?.requireRemote === true;
     const includeItems = options?.includeItems !== false;
+    const limit = Number(options?.limit || 0);
     const hasDateFilter = Boolean(dateFrom || dateTo);
     const now = Date.now();
     if (!requireRemote && includeItems && !hasDateFilter && ordersRemoteCache.value && now - ordersRemoteCache.cachedAt < REMOTE_CACHE_TTL_MS) {
@@ -490,7 +491,8 @@ export const orderRepository = {
       const remote = await coreSupabaseRepository.readOrdersByPhoneFromTable(
         {
           ...(hasDateFilter ? { dateFrom, dateTo } : {}),
-          includeItems
+          includeItems,
+          ...(Number.isFinite(limit) && limit > 0 ? { limit: Math.floor(limit) } : {})
         }
       );
       if (remote && typeof remote === "object") {
@@ -571,7 +573,11 @@ export const orderRepository = {
   },
   async getAllAsync(options = {}) {
     const all = await this.getAllByPhoneAsync(options);
-    return sortByCreatedAtDesc(Object.values(all).flat());
+    const sorted = sortByCreatedAtDesc(Object.values(all).flat());
+    const limit = Number(options?.limit || 0);
+    return Number.isFinite(limit) && limit > 0
+      ? sorted.slice(0, Math.floor(limit))
+      : sorted;
   },
   async upsertOrderAsync(order) {
     const nextOrder = { id: order.id || order.orderCode || `order_${Date.now()}`, ...order };

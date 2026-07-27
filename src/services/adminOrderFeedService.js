@@ -279,7 +279,12 @@ export function buildAdminOrderFeed(webOrders = [], partnerOrders = []) {
   });
 }
 
-export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "", includeItems = true } = {}) {
+export async function readPartnerOrdersForAdmin({
+  dateFrom = "",
+  dateTo = "",
+  includeItems = true,
+  limit = 0
+} = {}) {
   const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
   if (!client) return [];
 
@@ -290,6 +295,10 @@ export async function readPartnerOrdersForAdmin({ dateFrom = "", dateTo = "", in
 
   if (dateFrom) query = query.gte("order_time", dateFrom);
   if (dateTo) query = query.lt("order_time", dateTo);
+  const safeLimit = Number(limit);
+  if (Number.isFinite(safeLimit) && safeLimit > 0) {
+    query = query.limit(Math.floor(safeLimit));
+  }
 
   const { data: orderRows, error: orderError } = await query;
   recordAdminRequest("read partner orders", "partner_orders");

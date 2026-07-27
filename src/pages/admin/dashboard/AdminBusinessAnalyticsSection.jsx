@@ -1,5 +1,5 @@
 import { formatMoney } from "../../../utils/format.js";
-import { AdminBadge, AdminPanel, AdminStatCard } from "../ui/index.js";
+import { AdminPanel } from "../ui/index.js";
 
 function ProductList({ rows = [], valueKey = "quantity", emptyText }) {
   const maxValue = Math.max(...rows.map((item) => Number(item[valueKey] || 0)), 1);
@@ -52,58 +52,144 @@ function BranchList({ rows = [] }) {
     return <div className="admin-dashboard-empty-note">Chưa có dữ liệu hiệu suất chi nhánh trong kỳ đã chọn.</div>;
   }
 
+  const averageRevenue = rows.reduce((sum, item) => sum + Number(item.netRevenue || 0), 0) / rows.length;
+
   return (
     <div className="admin-business-branches">
-      {rows.map((item) => (
+      {rows.map((item, index) => {
+        const difference = averageRevenue
+          ? Math.round(((Number(item.netRevenue || 0) - averageRevenue) / averageRevenue) * 100)
+          : 0;
+        return (
         <article key={item.branchName}>
+          <span className={`admin-business-branch-rank is-rank-${index + 1}`}>#{index + 1}</span>
           <div>
             <strong>{item.branchName}</strong>
-            <small>{item.totalOrders} đơn · Trung bình {formatMoney(item.averageOrderValue)}</small>
+            <small>
+              {item.totalOrders} đơn · Đơn TB {formatMoney(item.averageOrderValue)} ·
+              <b className={difference >= 0 ? "is-positive" : "is-negative"}>
+                {difference > 0 ? " +" : " "}{difference}% so với TB
+              </b>
+            </small>
           </div>
           <b>{formatMoney(item.netRevenue)}</b>
         </article>
-      ))}
+        );
+      })}
+    </div>
+  );
+}
+
+export function AdminSettlementSummary({
+  analytics,
+  status = "idle",
+  fallbackNetRevenue = null,
+  children = null
+}) {
+  if (!analytics) {
+    const hasFallbackRevenue = Number.isFinite(Number(fallbackNetRevenue));
+    return (
+      <div className="admin-settlement-summary is-loading">
+        <div className="admin-settlement-overview">
+          <header>
+            <span>Thực thu cuối ngày</span>
+            <strong>{hasFallbackRevenue ? formatMoney(Math.round(Number(fallbackNetRevenue))) : "--"}</strong>
+            <small>
+              {hasFallbackRevenue
+                ? "Tổng thực thu trong kỳ đã chọn"
+                : status === "error"
+                  ? "Dữ liệu thực thu đang tạm gián đoạn"
+                  : "Đang tổng hợp từ các kênh bán..."}
+            </small>
+          </header>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  const finance = analytics.finance || {};
+  const partner = analytics.channels?.find((item) => item.group === "partner") || {};
+  const owned = analytics.channels?.find((item) => item.group === "owned") || {};
+  const totalNetRevenue = Number(finance.netRevenue || 0);
+  const partnerShare = totalNetRevenue
+    ? Math.round((Number(partner.netRevenue || 0) / totalNetRevenue) * 100)
+    : 0;
+  const ownedShare = Math.max(0, 100 - partnerShare);
+
+  return (
+    <div className="admin-settlement-summary">
+      <div className="admin-settlement-overview">
+        <header>
+          <span>Thực thu cuối ngày</span>
+          <strong>{formatMoney(finance.netRevenue)}</strong>
+          <small>Tiền thực nhận sau khuyến mãi và phí app</small>
+        </header>
+        {children}
+      </div>
+      <div className="admin-settlement-sources">
+        <article className="is-partner">
+          <span>App đối tác</span>
+          <strong>{formatMoney(partner.netRevenue)}</strong>
+          <small>{partnerShare}% tổng thực thu</small>
+        </article>
+        <article className="is-owned">
+          <span>Kênh của quán · POS + Website + QR</span>
+          <strong>{formatMoney(owned.netRevenue)}</strong>
+          <small>{ownedShare}% tổng thực thu</small>
+        </article>
+      </div>
+      <div className="admin-settlement-share" aria-label={`App đối tác ${partnerShare}%, kênh quán ${ownedShare}%`}>
+        <i style={{ width: `${partnerShare}%` }} />
+      </div>
+      <div className="admin-settlement-share-labels">
+        <span>App đối tác {partnerShare}%</span>
+        <span>{ownedShare}% Kênh quán</span>
+      </div>
+      <details className="admin-settlement-details">
+        <summary>Xem chi tiết khấu trừ</summary>
+        <div>
+          <article>
+            <h3>App đối tác</h3>
+            <p><span>Doanh số</span><b>{formatMoney(partner.grossRevenue)}</b></p>
+            <p><span>− Khuyến mãi</span><b>{formatMoney(partner.promotionAmount)}</b></p>
+            <p><span>− Phí và chiết khấu app</span><b>{formatMoney(partner.platformFee)}</b></p>
+            <footer><span>= Thực nhận</span><strong>{formatMoney(partner.netRevenue)}</strong></footer>
+          </article>
+          <article>
+            <h3>Kênh của quán</h3>
+            <p><span>Doanh số</span><b>{formatMoney(owned.grossRevenue)}</b></p>
+            <p><span>− Khuyến mãi</span><b>{formatMoney(owned.promotionAmount)}</b></p>
+            <p><span>− Phí nền tảng</span><b>0đ</b></p>
+            <footer><span>= Thực thu</span><strong>{formatMoney(owned.netRevenue)}</strong></footer>
+          </article>
+        </div>
+      </details>
     </div>
   );
 }
 
 export default function AdminBusinessAnalyticsSection({ analytics, status = "idle" }) {
   if (!analytics) {
+    if (status === "error") return null;
     const isError = status === "error";
     return (
       <AdminPanel
         title="Hiệu quả kinh doanh"
-        description="Báo cáo món bán, khung giờ và chi nhánh lấy trực tiếp từ Supabase."
+        description="Phân tích món bán, khung giờ và hiệu quả từng chi nhánh."
         className="admin-business-deploy-note"
       >
         <div className="admin-dashboard-empty-note">
           {isError
-            ? "Không thể tải báo cáo hiệu quả kinh doanh từ Supabase."
+            ? "Báo cáo chi tiết đang tạm gián đoạn."
             : "Đang tải báo cáo hiệu quả kinh doanh..."}
         </div>
       </AdminPanel>
     );
   }
 
-  const finance = analytics.finance || {};
-
   return (
     <section className="admin-business-section">
-      <div className="admin-business-heading">
-        <div>
-          <AdminBadge tone="success">Nguồn phân tích: Supabase RPC</AdminBadge>
-          <h2>Hiệu quả kinh doanh</h2>
-          <p>Nhìn nhanh món bán, khung giờ, chi nhánh và phần chênh lệch doanh thu trong kỳ đã chọn.</p>
-        </div>
-      </div>
-
-      <div className="admin-dashboard-stat-grid">
-        <AdminStatCard title="Doanh thu gộp" value={formatMoney(finance.grossRevenue)} subtitle="Tổng trước phần chênh lệch thực nhận" tone="brand" />
-        <AdminStatCard title="Doanh thu thực nhận" value={formatMoney(finance.netRevenue)} subtitle="Ưu tiên số đối soát FoodApp" tone="green" />
-        <AdminStatCard title="Chiết khấu & voucher" value={formatMoney(finance.discountAmount)} subtitle={`Voucher ghi nhận: ${formatMoney(finance.voucherAmount)}`} tone="amber" />
-        <AdminStatCard title="Phí nền tảng" value={formatMoney(finance.platformFee)} subtitle={`Chênh lệch gộp / thực nhận: ${formatMoney(finance.revenueGap)}`} tone="blue" />
-      </div>
-
       <div className="admin-business-grid">
         <AdminPanel title="Top món bán chạy" description="Xếp theo số lượng món trong kỳ đã chọn.">
           <ProductList rows={analytics.topByQuantity} emptyText="Chưa có dữ liệu món bán trong kỳ đã chọn." />

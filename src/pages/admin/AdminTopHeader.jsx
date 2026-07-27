@@ -30,7 +30,7 @@ export default function AdminTopHeader({
       ) : null}
 
       <div className="admin-top-header-right">
-        <span className="admin-top-sync-badge">{syncStatusLabel}</span>
+        {!compact ? <span className="admin-top-sync-badge">{syncStatusLabel}</span> : null}
         {!compact ? (
           <select
             className="admin-top-branch"
