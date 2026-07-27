@@ -9,6 +9,7 @@ const PARTNER_AUTOMATION_CONFIG_KEY = "ghr_partner_order_automation";
 const DEFAULT_GRAB_PREP_MINUTES = 20;
 const PAGE_SIZE = 20;
 const MAX_PAGES_PER_HUB = 5;
+const SHADOW_HEARTBEAT_MS = 15 * 60 * 1000;
 const FAST_POLL_STATUSES = ["DOING"];
 const RARE_POLL_STATUSES = ["PRE_ORDER", "DOING", "CANCEL"];
 const FULL_POLL_STATUSES = ["PRE_ORDER", "DOING", "PICK", "FINISH", "CANCEL"];
@@ -24,6 +25,22 @@ function getObject(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
 }
 function getArray(value: unknown) { return Array.isArray(value) ? value : []; }
+function sameJson(first: unknown, second: unknown) {
+  return JSON.stringify(first ?? null) === JSON.stringify(second ?? null);
+}
+function normalizeOptions(value: unknown): JsonRecord[] {
+  const normalized: JsonRecord[] = [];
+  const visit = (entry: unknown) => {
+    if (Array.isArray(entry)) {
+      entry.forEach(visit);
+      return;
+    }
+    const option = getObject(entry);
+    if (Object.keys(option).length > 0) normalized.push(option);
+  };
+  visit(value);
+  return normalized;
+}
 function response(body: JsonRecord, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 }
@@ -413,7 +430,7 @@ async function createMissingPartnerOrder(
       quantity,
       unit_price: nonnegative(item.price),
       line_total: nonnegative(rawLineTotal),
-      options: getArray(item.options),
+      options: normalizeOptions(item.options),
       note: toText(item.note),
       item_status: "pending",
       kitchen_item_status: "pending",
@@ -560,17 +577,18 @@ Deno.serve(async (request) => {
       .in("nexpos_order_id", identities) : { data: [] };
     const existingMap = new Map((existingRows || []).map((row) => [`${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`, row]));
     const { data: shadowRows } = identities.length ? await client.from("nexpos_shadow_orders")
-      .select("partner_source,nexpos_order_id,raw_data")
+      .select("partner_source,nexpos_order_id,payload_hash,comparison_status,comparison_differences,business_comparison_status,business_comparison_differences,matched_partner_order_id,last_seen_at,raw_data")
       .in("nexpos_order_id", identities) : { data: [] };
     const shadowMap = new Map((shadowRows || []).map((row) => [
       `${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`,
-      getObject(row.raw_data)
+      row
     ]));
 
     let matchedCount = 0;
     let mismatchCount = 0;
     let missingCount = 0;
     let createdCount = 0;
+    let shadowWriteSkippedCount = 0;
     let autoPrepAttemptCount = 0;
     let autoPrepAdjustedCount = 0;
     const autoPrepErrors: string[] = [];
@@ -579,11 +597,12 @@ Deno.serve(async (request) => {
     for (const order of observed) {
       const source = normalizeSource(order.source || order.partner_source || order.platform);
       const identity = orderIdentity(order);
-      const previousShadow = shadowMap.get(`${source}:${identity}`);
-      const previouslyAppliedMinutes = toNumber(previousShadow?.__ghr_auto_prep_minutes, 0);
+      const previousShadowRow = shadowMap.get(`${source}:${identity}`);
+      const previousShadow = getObject(previousShadowRow?.raw_data);
+      const previouslyAppliedMinutes = toNumber(previousShadow.__ghr_auto_prep_minutes, 0);
       if (previouslyAppliedMinutes > 0) {
         order.__ghr_auto_prep_minutes = previouslyAppliedMinutes;
-        order.__ghr_auto_prep_applied_at = previousShadow?.__ghr_auto_prep_applied_at || "";
+        order.__ghr_auto_prep_applied_at = previousShadow.__ghr_auto_prep_applied_at || "";
       }
       if (!autoPrepAttemptedOrderIds.has(identity) && previouslyAppliedMinutes !== grabAutomationConfig.prepMinutes) {
         autoPrepAttemptedOrderIds.add(identity);
@@ -654,10 +673,32 @@ Deno.serve(async (request) => {
         shadow.matched_partner_order_id = ingestResult.row.id;
         if (ingestResult.created) createdCount += 1;
       }
-      const { error } = await client.from("nexpos_shadow_orders").upsert(shadow, {
-        onConflict: "partner_source,nexpos_order_id"
-      });
-      if (error) throw error;
+      const previousSeenAt = new Date(toText(previousShadowRow?.last_seen_at)).getTime();
+      const shadowContentUnchanged = Boolean(previousShadowRow)
+        && toText(previousShadowRow.payload_hash) === payloadHash
+        && toText(previousShadowRow.comparison_status) === comparisonStatus
+        && toText(previousShadowRow.business_comparison_status) === businessComparisonStatus
+        && toText(previousShadowRow.matched_partner_order_id) === toText(shadow.matched_partner_order_id)
+        && sameJson(previousShadowRow.comparison_differences, differences)
+        && sameJson(previousShadowRow.business_comparison_differences, businessDifferences);
+      const shadowHeartbeatDue = !Number.isFinite(previousSeenAt)
+        || Date.now() - previousSeenAt >= SHADOW_HEARTBEAT_MS;
+
+      if (!shadowContentUnchanged) {
+        const { error } = await client.from("nexpos_shadow_orders").upsert(shadow, {
+          onConflict: "partner_source,nexpos_order_id"
+        });
+        if (error) throw error;
+      } else if (shadowHeartbeatDue) {
+        const { error } = await client.from("nexpos_shadow_orders").update({
+          last_seen_at: now,
+          last_compared_at: now,
+          updated_at: now
+        }).eq("partner_source", source).eq("nexpos_order_id", identity);
+        if (error) throw error;
+      } else {
+        shadowWriteSkippedCount += 1;
+      }
 
       if (effectiveExisting?.id && toText(effectiveExisting.nexpos_enrichment_hash) !== payloadHash) {
         const enrichmentUpdate: JsonRecord = {
@@ -758,6 +799,7 @@ Deno.serve(async (request) => {
         statuses: pollStatuses,
         sync_mode: syncMode,
         created_count: createdCount,
+        shadow_write_skipped_count: shadowWriteSkippedCount,
         auto_grab_prep_enabled: grabAutomationConfig.enabled,
         auto_grab_prep_minutes: grabAutomationConfig.prepMinutes,
         auto_prep_attempt_count: autoPrepAttemptCount,
@@ -775,6 +817,7 @@ Deno.serve(async (request) => {
     return response({
       ok: true, observed: observed.length, matched: matchedCount,
       mismatch: mismatchCount, missing: missingCount, created: createdCount,
+      shadow_write_skipped: shadowWriteSkippedCount,
       auto_prep_attempted: autoPrepAttemptCount,
       auto_prep_adjusted: autoPrepAdjustedCount
     });

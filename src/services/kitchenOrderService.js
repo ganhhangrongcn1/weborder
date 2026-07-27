@@ -1879,6 +1879,7 @@ function notifyKitchenRealtimeStatus(onStatus, status = "", error = null) {
 
 export async function subscribeKitchenOrderChanges(onChange, options = {}) {
   const onStatus = typeof options?.onStatus === "function" ? options.onStatus : null;
+  const branchUuid = toText(options?.branchUuid);
   const client = await getClient();
   if (!client || typeof onChange !== "function") {
     notifyKitchenRealtimeStatus(onStatus, "unavailable");
@@ -1891,6 +1892,13 @@ export async function subscribeKitchenOrderChanges(onChange, options = {}) {
     return () => {};
   }
 
+  const partnerOrderFilter = branchUuid
+    ? { event: "*", schema: "public", table: "partner_orders", filter: `branch_uuid=eq.${branchUuid}` }
+    : { event: "*", schema: "public", table: "partner_orders" };
+  const partnerItemFilter = branchUuid
+    ? { event: "*", schema: "public", table: "partner_order_items", filter: `branch_uuid=eq.${branchUuid}` }
+    : { event: "*", schema: "public", table: "partner_order_items" };
+
   const channel = client
     .channel(`kitchen-order-feed-${Date.now()}`)
     .on(
@@ -1900,7 +1908,7 @@ export async function subscribeKitchenOrderChanges(onChange, options = {}) {
     )
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "partner_orders" },
+      partnerOrderFilter,
       (payload) => onChange({ table: "partner_orders", payload })
     )
     .on(
@@ -1910,7 +1918,7 @@ export async function subscribeKitchenOrderChanges(onChange, options = {}) {
     )
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "partner_order_items" },
+      partnerItemFilter,
       (payload) => onChange({ table: "partner_order_items", payload })
     )
     .subscribe((status, error) => {

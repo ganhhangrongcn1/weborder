@@ -18,7 +18,7 @@ import {
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
 const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
-const KITCHEN_BACKGROUND_REFRESH_MS = 15000;
+const KITCHEN_BACKGROUND_REFRESH_MS = 60000;
 const KITCHEN_RECENT_FULL_REFRESH_DEDUP_MS = 5000;
 const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
 const RECENTLY_CLOSED_SUPPRESS_MS = 30000;
@@ -827,6 +827,7 @@ export default function useKitchenOrders(options = null) {
           loadOrders({ silent: true, sourceType });
         }, isRealtimeItemTable(change.table) ? ITEM_REALTIME_RELOAD_DELAY_MS : REALTIME_RELOAD_DELAY_MS);
       }, {
+        branchUuid: options.branchUuid,
         onStatus: (nextStatus) => {
           if (!alive) return;
           setRealtimeStatus(buildKitchenRealtimeStatus(nextStatus?.status, nextStatus?.error));

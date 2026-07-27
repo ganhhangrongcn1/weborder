@@ -2,7 +2,7 @@ import { getAdminSupabaseClient } from "./supabase/adminSupabaseClient.js";
 
 const BUSINESS_ANALYTICS_RPC = "get_admin_business_analytics";
 const MISSING_RPC_CODES = new Set(["42883", "PGRST202"]);
-const BUSINESS_ANALYTICS_CACHE_TTL_MS = 60000;
+const BUSINESS_ANALYTICS_CACHE_TTL_MS = 5 * 60 * 1000;
 const businessAnalyticsCache = new Map();
 const businessAnalyticsInFlight = new Map();
 

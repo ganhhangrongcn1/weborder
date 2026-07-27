@@ -4,7 +4,10 @@ import { getSupabaseRuntimeClient, initSupabaseRuntimeClient } from "./supabase/
 const RPC_MISSING_CODES = new Set(["42883", "PGRST202"]);
 const RPC_UNAVAILABLE_TTL_MS = 5 * 60 * 1000;
 const MONTHLY_GIFT_STATS_BATCH_SIZE = 200;
+const CUSTOMER_ORDER_SUMMARY_CACHE_TTL_MS = 60000;
 const unavailableRpcCache = new Map();
+const customerOrderSummaryCache = new Map();
+const customerOrderSummaryInFlight = new Map();
 
 function toText(value = "") {
   return String(value || "").trim();
@@ -102,24 +105,44 @@ export async function getCustomerOrderCountSummaryRpc(phone = "") {
   const client = await getClientReady();
   if (!client) return null;
 
-  try {
-    const { data, error } = await client.rpc(rpcName, {
-      p_phone: phoneKey
-    });
+  const cached = customerOrderSummaryCache.get(phoneKey);
+  if (cached && Date.now() - cached.cachedAt < CUSTOMER_ORDER_SUMMARY_CACHE_TTL_MS) {
+    return cached.value;
+  }
+  if (customerOrderSummaryInFlight.has(phoneKey)) {
+    return customerOrderSummaryInFlight.get(phoneKey);
+  }
 
-    if (error) {
+  const request = (async () => {
+    try {
+      const { data, error } = await client.rpc(rpcName, {
+        p_phone: phoneKey
+      });
+
+      if (error) {
+        markRpcTemporarilyUnavailable(rpcName, error);
+        return null;
+      }
+
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return null;
+
+      const value = mapOrderSummaryRow(row);
+      customerOrderSummaryCache.set(phoneKey, {
+        cachedAt: Date.now(),
+        value
+      });
+      return value;
+    } catch (error) {
       markRpcTemporarilyUnavailable(rpcName, error);
       return null;
     }
+  })().finally(() => {
+    customerOrderSummaryInFlight.delete(phoneKey);
+  });
 
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return null;
-
-    return mapOrderSummaryRow(row);
-  } catch (error) {
-    markRpcTemporarilyUnavailable(rpcName, error);
-    return null;
-  }
+  customerOrderSummaryInFlight.set(phoneKey, request);
+  return request;
 }
 
 export async function getMonthlyCustomerGiftStatsByPhonesRpc({

@@ -2,6 +2,9 @@ import { getAdminSupabaseClient } from "./supabase/adminSupabaseClient.js";
 
 const DASHBOARD_SUMMARY_RPC = "get_admin_dashboard_summary";
 const MISSING_RPC_CODES = new Set(["42883", "PGRST202"]);
+const DASHBOARD_SUMMARY_CACHE_TTL_MS = 60000;
+const dashboardSummaryCache = new Map();
+const dashboardSummaryInFlight = new Map();
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -55,21 +58,53 @@ async function callDashboardSummaryRpc(client, dateRange = {}, { includeBranchUu
   return client.rpc(DASHBOARD_SUMMARY_RPC, params);
 }
 
+function buildDashboardSummaryCacheKey(dateRange = {}) {
+  return [
+    String(dateRange.dateFrom || ""),
+    String(dateRange.dateTo || ""),
+    String(dateRange.branchUuid || ""),
+    String(dateRange.branchName || dateRange.branchFilter || "")
+  ].join("|");
+}
+
 export async function getAdminDashboardSummaryRpc(dateRange = {}) {
   const client = await getAdminSupabaseClient();
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
 
-  const { data, error } = await callDashboardSummaryRpc(client, dateRange, {
-    includeBranchUuid: true,
-  });
-
-  if (error) {
-    if (MISSING_RPC_CODES.has(String(error.code || ""))) return null;
-    throw error;
+  const cacheKey = buildDashboardSummaryCacheKey(dateRange);
+  const cached = dashboardSummaryCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < DASHBOARD_SUMMARY_CACHE_TTL_MS) {
+    return cached.value;
+  }
+  if (dashboardSummaryInFlight.has(cacheKey)) {
+    return dashboardSummaryInFlight.get(cacheKey);
   }
 
-  const row = Array.isArray(data) ? data[0] : data;
-  return row ? mapSummary(row) : null;
+  const request = (async () => {
+    const { data, error } = await callDashboardSummaryRpc(client, dateRange, {
+      includeBranchUuid: true,
+    });
+
+    if (error) {
+      if (MISSING_RPC_CODES.has(String(error.code || ""))) return null;
+      throw error;
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    const value = row ? mapSummary(row) : null;
+    if (value) {
+      dashboardSummaryCache.set(cacheKey, {
+        cachedAt: Date.now(),
+        value
+      });
+    }
+    return value;
+  })().finally(() => {
+    dashboardSummaryInFlight.delete(cacheKey);
+  });
+
+  dashboardSummaryInFlight.set(cacheKey, request);
+  return request;
 }
 
 export default {
