@@ -7,6 +7,7 @@ export const KITCHEN_OPTION_GROUP_SETTINGS_KEY = "ghr_kitchen_option_group_setti
 const DEFAULT_SETTINGS = {
   version: 3,
   partnerDefaultsApplied: false,
+  groupDefaultsApplied: false,
   groups: []
 };
 
@@ -97,6 +98,7 @@ function normalizeSettingGroup(group = {}, index = 0) {
     groupName,
     optionName,
     matchMode: optionName ? "option" : groupId ? "id" : "name",
+    groupEnabled: Boolean(group.groupEnabled),
     enabled: group.enabled === undefined
       ? isLegacyKitchenChecklistGroupName(groupName)
       : Boolean(group.enabled),
@@ -177,6 +179,7 @@ export function mergeKitchenOptionGroupSettings(settingsValue, observedGroups = 
         group
       ])
   );
+  const savedGroupRules = migratedSettings.filter((group) => group.groupEnabled);
   const observedIdentities = new Set();
   const matchedSavedIds = new Set();
   const mergedObserved = (Array.isArray(observedGroups) ? observedGroups : []).map((group, index) => {
@@ -185,11 +188,29 @@ export function mergeKitchenOptionGroupSettings(settingsValue, observedGroups = 
     const saved = savedByIdentity.get(identity) || savedBySourceOption.get(
       `${normalizeSource(normalized.source)}::${normalizeKey(normalized.optionName)}`
     );
+    const groupRule = savedGroupRules.find((candidate) => (
+      normalizeSource(candidate.source) === normalizeSource(normalized.source) &&
+      (
+        (
+          toText(candidate.groupId) &&
+          toText(normalized.groupId) &&
+          toText(candidate.groupId) === toText(normalized.groupId)
+        ) ||
+        (
+          normalizeKey(candidate.groupName) &&
+          normalizeKey(candidate.groupName) === normalizeKey(normalized.groupName)
+        )
+      )
+    ));
     if (saved?.id) matchedSavedIds.add(saved.id);
     observedIdentities.add(identity);
     return {
       ...normalized,
       ...(saved || {}),
+      enabled: saved ? saved.enabled : groupRule ? true : normalized.enabled,
+      groupEnabled: saved ? saved.groupEnabled : Boolean(groupRule),
+      kitchenType: saved?.kitchenType || groupRule?.kitchenType || normalized.kitchenType,
+      kitchenLabel: saved?.kitchenLabel || groupRule?.kitchenLabel || normalized.kitchenLabel,
       groupId: normalized.groupId || saved?.groupId || "",
       groupName: normalized.groupName || saved?.groupName || "",
       sampleOptions: normalized.sampleOptions.length
@@ -201,6 +222,7 @@ export function mergeKitchenOptionGroupSettings(settingsValue, observedGroups = 
   return normalizeKitchenOptionGroupSettings({
     version: 3,
     partnerDefaultsApplied: settings.partnerDefaultsApplied,
+    groupDefaultsApplied: settings.groupDefaultsApplied,
     groups: [
       ...mergedObserved,
       ...migratedSettings.filter((group) => (
@@ -219,6 +241,7 @@ export function normalizeKitchenOptionGroupSettings(value = DEFAULT_SETTINGS) {
   return {
     version: 3,
     partnerDefaultsApplied: Boolean(value?.partnerDefaultsApplied),
+    groupDefaultsApplied: Boolean(value?.groupDefaultsApplied),
     groups: groups
       .map((group, index) => normalizeSettingGroup({
         ...group,
@@ -557,6 +580,20 @@ function settingMatchesOption(setting = {}, observed = {}) {
   return !settingGroupName || !observedGroupName || settingGroupName === observedGroupName;
 }
 
+function settingMatchesGroupRule(setting = {}, observed = {}) {
+  if (!setting.groupEnabled) return false;
+  if (normalizeSource(setting.source) !== normalizeSource(observed.source)) return false;
+
+  const settingGroupId = toText(setting.groupId);
+  const observedGroupId = toText(observed.groupId);
+  if (settingGroupId && observedGroupId) return settingGroupId === observedGroupId;
+
+  return Boolean(
+    normalizeKey(setting.groupName) &&
+    normalizeKey(setting.groupName) === normalizeKey(observed.groupName)
+  );
+}
+
 function collectSelectedGroups(value, source, result, inheritedGroup = null) {
   if (!value) return;
   if (Array.isArray(value)) {
@@ -626,7 +663,8 @@ export function buildKitchenChecklistOptions(options, source, settingsValue) {
     const seen = new Set();
     return extractObservedKitchenOptions(options, source)
       .flatMap((observed, index) => {
-        const setting = optionSettings.find((candidate) => settingMatchesOption(candidate, observed));
+        const setting = optionSettings.find((candidate) => settingMatchesOption(candidate, observed))
+          || optionSettings.find((candidate) => settingMatchesGroupRule(candidate, observed));
         if (!setting) return [];
         const group = setting.kitchenLabel || observed.groupName || "Lựa chọn combo";
         const label = `${group}: ${observed.optionName}`;

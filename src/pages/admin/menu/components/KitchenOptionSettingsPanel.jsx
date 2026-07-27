@@ -45,17 +45,46 @@ function getIdentity(group = {}) {
   return `${group.source || "other"}::${group.groupId ? `id:${group.groupId}` : `name:${fallbackName}`}`;
 }
 
+function getOptionGroupIdentity(group = {}) {
+  const source = group.source || "other";
+  const groupId = String(group.groupId || "").trim();
+  const groupName = String(group.groupName || "").trim().toLowerCase();
+  if (!groupId && !groupName) return "";
+  return `${source}::${groupId ? `id:${groupId}` : `name:${groupName}`}`;
+}
+
 function mergeGroups(savedGroups = [], observedGroups = []) {
   const savedByIdentity = new Map(savedGroups.map((group) => [getIdentity(group), group]));
   const observedIdentities = new Set(observedGroups.map(getIdentity));
-  const mergedObserved = observedGroups.map((group, index) => ({
-    ...group,
-    ...(savedByIdentity.get(getIdentity(group)) || {}),
-    sampleOptions: group.sampleOptions?.length
-      ? group.sampleOptions
-      : savedByIdentity.get(getIdentity(group))?.sampleOptions || [],
-    sortOrder: savedByIdentity.get(getIdentity(group))?.sortOrder ?? index
-  }));
+  const mergedObserved = observedGroups.map((group, index) => {
+    const saved = savedByIdentity.get(getIdentity(group));
+    const groupRule = savedGroups.find((candidate) => (
+      candidate.groupEnabled &&
+      candidate.source === group.source &&
+      (
+        (candidate.groupId && group.groupId && candidate.groupId === group.groupId) ||
+        (
+          String(candidate.groupName || "").toLowerCase() &&
+          String(candidate.groupName || "").toLowerCase() === String(group.groupName || "").toLowerCase()
+        )
+      )
+    ));
+    return {
+      ...group,
+      ...(saved || {}),
+      enabled: saved ? saved.enabled : groupRule ? true : group.enabled,
+      groupEnabled: saved ? saved.groupEnabled : Boolean(groupRule),
+      kitchenType: saved?.kitchenType || groupRule?.kitchenType || group.kitchenType,
+      kitchenLabel: saved?.kitchenLabel || groupRule?.kitchenLabel || group.kitchenLabel,
+      sampleOptions: group.sampleOptions?.length
+        ? group.sampleOptions
+        : saved?.sampleOptions || [],
+      sortOrder: saved?.sortOrder ?? groupRule?.sortOrder ?? index,
+      groupId: group.groupId || saved?.groupId || groupRule?.groupId || "",
+      groupName: group.groupName || saved?.groupName || groupRule?.groupName || "",
+      optionName: group.optionName || saved?.optionName || ""
+    };
+  });
   const savedOnly = savedGroups.filter((group) => !observedIdentities.has(getIdentity(group)));
   return [...mergedObserved, ...savedOnly];
 }
@@ -68,6 +97,7 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [scanAudit, setScanAudit] = useState(null);
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
 
   function formatScanDate(value = "") {
     if (!value) return "";
@@ -97,7 +127,7 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
           ))
           .map(getIdentity)
       );
-      const shouldSaveDefaults = (
+      const shouldSavePartnerDefaults = (
         !settings.partnerDefaultsApplied ||
         newPartnerDefaultIdentities.size > 0
       );
@@ -112,6 +142,7 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
             ? {
                 ...group,
                 enabled: true,
+                groupEnabled: true,
                 kitchenType: String(group.groupName || "").toLowerCase().includes("mua kèm")
                   ? "addon"
                   : "topping",
@@ -119,12 +150,27 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
               }
             : group
       ));
-      setGroups(preparedGroups);
+      const enabledOptionGroupIdentities = new Set(
+        preparedGroups
+          .filter((group) => group.enabled)
+          .map(getOptionGroupIdentity)
+          .filter(Boolean)
+      );
+      const finalGroups = settings.groupDefaultsApplied
+        ? preparedGroups
+        : preparedGroups.map((group) => (
+          enabledOptionGroupIdentities.has(getOptionGroupIdentity(group))
+            ? { ...group, enabled: true, groupEnabled: true }
+            : group
+        ));
+      const shouldSaveDefaults = shouldSavePartnerDefaults || !settings.groupDefaultsApplied;
+      setGroups(finalGroups);
       if (shouldSaveDefaults) {
         await saveKitchenOptionGroupSettings({
           version: 3,
           partnerDefaultsApplied: true,
-          groups: preparedGroups
+          groupDefaultsApplied: true,
+          groups: finalGroups
         });
       }
       if (announce) {
@@ -186,6 +232,41 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
     )));
   }
 
+  function isSameOptionGroup(first = {}, second = {}) {
+    if (first.source !== second.source) return false;
+    if (first.groupId && second.groupId) return first.groupId === second.groupId;
+    return String(first.groupName || "").toLowerCase() === String(second.groupName || "").toLowerCase();
+  }
+
+  function toggleOptionGroup(optionGroup, checked) {
+    const sample = optionGroup.options[0] || {};
+    setGroups((current) => current.map((group) => (
+      isSameOptionGroup(group, sample)
+        ? { ...group, enabled: checked, groupEnabled: checked }
+        : group
+    )));
+  }
+
+  function toggleSingleOption(target, checked) {
+    const identity = getIdentity(target);
+    setGroups((current) => current.map((group) => {
+      if (!isSameOptionGroup(group, target)) return group;
+      if (getIdentity(group) === identity) {
+        return { ...group, enabled: checked, groupEnabled: false };
+      }
+      return group.groupEnabled ? { ...group, groupEnabled: false } : group;
+    }));
+  }
+
+  function toggleExpandedGroup(key) {
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   async function handleSave() {
     if (saving) return;
     setSaving(true);
@@ -194,6 +275,7 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
       const saved = await saveKitchenOptionGroupSettings({
         version: 3,
         partnerDefaultsApplied: true,
+        groupDefaultsApplied: true,
         groups
       });
       setGroups((current) => mergeGroups(saved.groups, current));
@@ -265,10 +347,31 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
           {groupedFilteredGroups.map((optionGroup) => (
             <section key={optionGroup.key} className="admin-kitchen-option-group">
               <div className="admin-kitchen-option-group__head">
-                <strong>{optionGroup.label}</strong>
-                <span>{SOURCE_LABELS[optionGroup.source] || optionGroup.source} · {optionGroup.options.length} tùy chọn</span>
+                <label className="admin-kitchen-option-group__toggle">
+                  <input
+                    type="checkbox"
+                    checked={optionGroup.options.some((option) => option.groupEnabled)}
+                    onChange={(event) => toggleOptionGroup(optionGroup, event.target.checked)}
+                  />
+                  <span>
+                    <strong>{optionGroup.label}</strong>
+                    <small>
+                      {SOURCE_LABELS[optionGroup.source] || optionGroup.source}
+                      {" · "}{optionGroup.options.length} tùy chọn
+                    </small>
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  className="admin-kitchen-option-group__expand"
+                  aria-expanded={expandedGroups.has(optionGroup.key)}
+                  onClick={() => toggleExpandedGroup(optionGroup.key)}
+                >
+                  {expandedGroups.has(optionGroup.key) ? "Thu gọn ▲" : "Xem món ▼"}
+                </button>
               </div>
-              <div className="admin-kitchen-option-group__options">
+              {expandedGroups.has(optionGroup.key) ? (
+                <div className="admin-kitchen-option-group__options">
                 {optionGroup.options.map((group) => (
                   <article key={getIdentity(group)} className={`admin-kitchen-setting-card ${group.enabled ? "is-enabled" : ""}`}>
               <div className="admin-kitchen-setting-card__identity">
@@ -276,7 +379,7 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
                   <input
                     type="checkbox"
                     checked={Boolean(group.enabled)}
-                    onChange={(event) => patchGroup(group, { enabled: event.target.checked })}
+                    onChange={(event) => toggleSingleOption(group, event.target.checked)}
                   />
                   <span />
                 </label>
@@ -330,7 +433,8 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
               </div>
                   </article>
                 ))}
-              </div>
+                </div>
+              ) : null}
             </section>
           ))}
         </div>

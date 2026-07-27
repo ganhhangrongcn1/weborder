@@ -207,16 +207,54 @@
   background: #eef2ff;
 }
 
-.admin-kitchen-option-group__head strong {
+.admin-kitchen-option-group__toggle {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.admin-kitchen-option-group__toggle input {
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  accent-color: #f97316;
+  cursor: pointer;
+}
+
+.admin-kitchen-option-group__toggle > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-kitchen-option-group__toggle strong {
   color: #1e3a8a;
   font-size: 15px;
   font-weight: 900;
 }
 
-.admin-kitchen-option-group__head span {
+.admin-kitchen-option-group__toggle small {
   color: #64748b;
   font-size: 12px;
   font-weight: 750;
+}
+
+.admin-kitchen-option-group__expand {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid #c7d2fe;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-kitchen-option-group__expand:hover {
+  background: #eef2ff;
 }
 
 .admin-kitchen-option-group__options {
