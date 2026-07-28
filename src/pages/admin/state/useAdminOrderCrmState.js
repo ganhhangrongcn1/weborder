@@ -236,6 +236,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const [siteTrafficSummary, setSiteTrafficSummary] = useState(null);
   const [dashboardDataStatus, setDashboardDataStatus] = useState(createDashboardDataStatus);
   const [crmSnapshot, setCrmSnapshot] = useState({ customers: [], loyaltyConfig: {} });
+  const [crmLoadState, setCrmLoadState] = useState({ status: "idle", error: "" });
   const [adminRequestAudit, setAdminRequestAudit] = useState(() => getAdminRequestAuditSnapshot());
   const [adminOrdersLoadError, setAdminOrdersLoadError] = useState("");
   const [customerAdminTab, setCustomerAdminTab] = useState("crm");
@@ -487,15 +488,24 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     let disposed = false;
 
     const refreshCrmSnapshot = async () => {
+      setCrmLoadState((current) => ({
+        status: current.status === "ready" ? "refreshing" : "loading",
+        error: ""
+      }));
       try {
         const dateRange = buildVietnamDateRange(customersDateFrom, customersDateTo);
         const nextCrm = await loadCrmSnapshotFastFirst(orderStorage, dateRange, selectedBranchOption);
         if (disposed) return;
         setCrmSnapshot(nextCrm);
+        setCrmLoadState({ status: "ready", error: "" });
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
         console.error("[admin][crm] failed to load snapshot", error);
+        setCrmLoadState({
+          status: "error",
+          error: "Không thể tải dữ liệu khách hàng từ Supabase."
+        });
       }
     };
 
@@ -536,6 +546,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     dashboardDataStatus,
     crmSnapshot,
     setCrmSnapshot,
+    crmLoadState,
     adminRequestAudit,
     resetAdminRequestAudit: resetAdminAudit,
     adminOrdersRealtimePending: false,

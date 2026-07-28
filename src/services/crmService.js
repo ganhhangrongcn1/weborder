@@ -528,7 +528,9 @@ export async function buildCustomersFromOrderListAsync(orders = [], orderStorage
 }
 
 export async function buildCustomersFromCrmAnalyticsAsync(options = {}) {
-  const crmAnalytics = await getAdminCrmAnalyticsRpc();
+  const crmAnalytics = await getAdminCrmAnalyticsRpc({
+    force: options?.forceSupportRefresh === true
+  });
   if (!crmAnalytics?.source || !Array.isArray(crmAnalytics.customers)) return null;
 
   const {

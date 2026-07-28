@@ -665,6 +665,7 @@ function CustomerIdentity({ customer, compact = false, insight = "" }) {
 
 export default function CustomerCRM({
   crmSnapshot,
+  crmLoadState,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
   refreshCrm,
@@ -695,6 +696,7 @@ export default function CustomerCRM({
   const [campaignPreviewKeyword, setCampaignPreviewKeyword] = useState("");
   const [campaignPresets, setCampaignPresets] = useState([]);
   const [bulkGiftHistory, setBulkGiftHistory] = useState([]);
+  const [campaignSupportLoaded, setCampaignSupportLoaded] = useState(false);
   const [activeBulkCampaign, setActiveBulkCampaign] = useState(null);
   const [loyaltyDetailByPhone, setLoyaltyDetailByPhone] = useState({});
   const [orderPointStatusRowsByPhone, setOrderPointStatusRowsByPhone] = useState({});
@@ -704,6 +706,7 @@ export default function CustomerCRM({
   const [isBulkGifting, setIsBulkGifting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [topCustomerMode, setTopCustomerMode] = useState("spent");
+  const isInitialLoading = crmLoadState?.status === "loading" && !(crmSnapshot.customers || []).length;
   const crmAnalytics = crmSnapshot.crmAnalytics?.source === "rpc" ? crmSnapshot.crmAnalytics : null;
   const activeDateScope = getDateScopeLabel(customersDatePreset, customersDateFrom, customersDateTo);
   const loyaltyConfig = crmSnapshot.loyaltyConfig || {};
@@ -789,6 +792,8 @@ export default function CustomerCRM({
   }, [crmSnapshot.customers, registeredCustomerPhoneSet]);
 
   useEffect(() => {
+    if (activeViewTab === "customers" || campaignSupportLoaded) return undefined;
+
     let disposed = false;
     (async () => {
       const [presets, history] = await Promise.all([
@@ -798,13 +803,14 @@ export default function CustomerCRM({
       if (disposed) return;
       setCampaignPresets(Array.isArray(presets) ? presets : []);
       setBulkGiftHistory(Array.isArray(history) ? history : []);
+      setCampaignSupportLoaded(true);
     })().catch((error) => {
       console.error("[crm] load campaign presets/history failed", error);
     });
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [activeViewTab, campaignSupportLoaded]);
 
   const summary = useMemo(() => {
     const customers = crmSnapshot.customers || [];
@@ -1329,10 +1335,36 @@ export default function CustomerCRM({
         <CrmStatCard icon="user" tone="orange" scope="Lifetime" title="Tổng khách hàng" value={summary.totalCustomers === null ? "--" : summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Đếm hồ sơ customer từ profiles" />
         <CrmStatCard icon="heart" tone="blue" scope="30 ngày" title="Cần chăm sóc" value={summary.careCount.toLocaleString("vi-VN")} subtitle="Có đơn nhưng chưa quay lại" />
         <CrmStatCard icon="cart" tone="green" scope="30 ngày" title="Khách quay lại" value={summary.repeatCustomers30.toLocaleString("vi-VN")} subtitle="Khách có từ 2 đơn trở lên" />
-        <CrmStatCard icon="user" tone="green" scope="7 / 30 ngày" title="Khách mới" value={`${summary.newCustomers7} / ${summary.newCustomers30}`} subtitle="Theo đơn mua đầu tiên" />
       </div>
 
-      <div className="crm-ops-grid">
+      {isInitialLoading ? (
+        <div className="crm-loading-state" role="status" aria-live="polite">
+          <span className="crm-loading-state__spinner" aria-hidden="true" />
+          <div>
+            <strong>Đang tải hồ sơ khách hàng</strong>
+            <small>Đang đồng bộ dữ liệu khách hàng và tích điểm từ Supabase…</small>
+          </div>
+        </div>
+      ) : null}
+      {crmLoadState?.status === "error" ? (
+        <div className="crm-loading-state crm-loading-state--error" role="alert">
+          <div>
+            <strong>Chưa tải được dữ liệu khách hàng</strong>
+            <small>{crmLoadState.error}</small>
+          </div>
+          <button type="button" onClick={handleRefreshCrm}>Thử lại</button>
+        </div>
+      ) : null}
+
+      <details className="crm-insights-disclosure">
+        <summary>
+          <span>
+            <strong>Phân tích khách hàng</strong>
+            <small>Ưu tiên chăm sóc, đăng ký thành viên và top khách</small>
+          </span>
+          <b>Khách mới 7 ngày: {summary.newCustomers7.toLocaleString("vi-VN")}</b>
+        </summary>
+        <div className="crm-ops-grid">
         <section className="crm-ops-card crm-ops-card--priority">
           <div className="crm-ops-head">
             <div>
@@ -1389,7 +1421,8 @@ export default function CustomerCRM({
           </div>
         </section>
 
-      </div>
+        </div>
+      </details>
 
       <div className="crm-view-tabs" role="tablist" aria-label="Điều hướng CRM">
         {crmViewTabs.map((tab) => (

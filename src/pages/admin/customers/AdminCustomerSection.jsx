@@ -6,6 +6,7 @@ export default function AdminCustomerSection({
   customerAdminTab,
   setCustomerAdminTab,
   crmSnapshot,
+  crmLoadState,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
   refreshCrm,
@@ -38,6 +39,7 @@ export default function AdminCustomerSection({
       {customerAdminTab === "crm" ? (
         <CustomerCRM
           crmSnapshot={crmSnapshot}
+          crmLoadState={crmLoadState}
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           refreshCrm={refreshCrm}
