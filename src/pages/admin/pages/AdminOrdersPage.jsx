@@ -77,18 +77,6 @@ export default function AdminOrdersPage({
 
   return (
     <div className="admin-orders-page">
-      <header className="admin-orders-compact-head">
-        <div className="admin-orders-compact-title">
-          <span>Vận hành đơn hàng</span>
-          <h1>Quản lý đơn hàng</h1>
-          <p>Danh sách đọc trực tiếp từ Supabase, tách rõ Website, POS và FoodApp.</p>
-        </div>
-        <div className="admin-orders-compact-meta">
-          <strong>{ordersSnapshot?.length || 0}</strong>
-          <span>đơn trong kỳ</span>
-        </div>
-      </header>
-
       <section className="admin-orders-scope-bar" aria-label="Phạm vi đơn hàng">
         <div className="admin-orders-branch-switcher">
           <span>Chi nhánh</span>
@@ -169,7 +157,7 @@ export default function AdminOrdersPage({
       </section>
 
       <details className="admin-orders-audit-details">
-        <summary>Kiểm tra request</summary>
+        <summary>Dữ liệu & đồng bộ</summary>
         <AdminRequestAuditBadge audit={adminRequestAudit} onReset={resetAdminRequestAudit} />
       </details>
 

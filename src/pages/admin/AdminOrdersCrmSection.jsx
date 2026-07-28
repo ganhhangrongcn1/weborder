@@ -97,6 +97,16 @@ export default function AdminOrdersCrmSection({
     recordAdminRequest("manual refresh web orders", "orders");
     const partnerOrders = partnerOrdersResult.status === "fulfilled" ? partnerOrdersResult.value : [];
     const combinedOrders = buildAdminOrderFeed(nextOrders, partnerOrders);
+    if (section === "orders") {
+      if (ordersResult.status === "rejected") {
+        console.error("[admin][orders] failed to refresh", ordersResult.reason);
+      }
+      if (partnerOrdersResult.status === "rejected") {
+        console.error("[admin][partner-orders] failed to refresh", partnerOrdersResult.reason);
+      }
+      setOrdersSnapshot(combinedOrders);
+      return combinedOrders;
+    }
     const scopedCrmOrders = section === "customers"
       ? filterOrdersByBranch(combinedOrders, selectedBranchOption)
       : combinedOrders;
@@ -141,7 +151,14 @@ export default function AdminOrdersCrmSection({
       } else {
         orderStorage?.updateOrder?.(orderId, { status: normalized });
       }
-      await refreshCrm();
+      setOrdersSnapshot((current) => (
+        (Array.isArray(current) ? current : []).map((order) => {
+          const currentId = String(order?.id || order?.orderCode || "");
+          return currentId === String(orderId)
+            ? { ...order, status: normalized, updatedAt: new Date().toISOString() }
+            : order;
+        })
+      ));
     } catch (error) {
       console.error("[admin][orders] update status failed", error);
       window.alert("Cập nhật trạng thái thất bại. Khả năng do RLS/permission của bảng orders.");
