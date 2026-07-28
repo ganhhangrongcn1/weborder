@@ -631,8 +631,6 @@ function buildItemLabelText(order = {}, item = {}, label = {}, options = {}) {
   const config = getPrinterConfig(options);
   const width = config.receiptWidthMm === 58 ? 32 : 48;
   const orderCode = toText(order.displayOrderCode || order.orderCode || order.order_code || order.id);
-  const branchName = toText(order.branchName || order.branch_name || label.branchName);
-  const source = toText(order.platform || order.partnerSource || order.sourceType || order.source || "Kitchen");
   const itemName = toText(item.name || item.productName || item.product_name || "Món");
   const note = toText(item.note);
   const orderNote = toText(order.note || order.metadata?.note || order.raw?.metadata?.note);
@@ -642,30 +640,20 @@ function buildItemLabelText(order = {}, item = {}, label = {}, options = {}) {
   const itemNumber = Math.max(1, Math.floor(toNumber(label.itemNumber, 1)));
   const totalItems = Math.max(itemNumber, Math.floor(toNumber(label.totalItems, 1)));
   const lines = [
-    "@@BOLDCENTER:TEM MÓN",
-    `@@BIG:${orderCode || "CHƯA CÓ MÃ"}`,
-    `@@CENTER:MÓN ${itemNumber}/${totalItems}`,
-    "@@RULE",
+    `@@BOLDCENTER:${orderCode || "CHƯA CÓ MÃ"} · ${itemNumber}/${totalItems}`,
     `@@BOLDCENTER:${itemName}`
   ];
 
-  if (totalUnits > 1) lines.push(`@@BOLDCENTER:PHẦN ${unitNumber}/${totalUnits}`);
+  if (totalUnits > 1) lines.push(`@@CENTER:Phần ${unitNumber}/${totalUnits}`);
   optionsText.forEach((value) => {
     splitText(`+ ${value}`, width).forEach((line) => lines.push(line));
   });
   if (note) {
-    lines.push("@@RULE");
-    lines.push("@@BOLDCENTER:GHI CHÚ MÓN");
-    splitText(note, width).forEach((line) => lines.push(`@@BOLDCENTER:${line}`));
+    splitText(`Ghi chú: ${note}`, width).forEach((line) => lines.push(`@@BOLDCENTER:${line}`));
   }
   if (orderNote && orderNote !== note) {
-    lines.push("@@RULE");
-    splitText(`Ghi chú đơn: ${orderNote}`, width).forEach((line) => lines.push(line));
+    splitText(`Đơn: ${orderNote}`, width).forEach((line) => lines.push(`@@BOLDCENTER:${line}`));
   }
-  lines.push("@@RULE");
-  if (branchName) splitText(`Chi nhánh: ${branchName}`, width).forEach((line) => lines.push(line));
-  lines.push(`Nguồn: ${source}`);
-  lines.push(`Giờ: ${formatDateTime(order.createdAt || order.created_at || order.orderTime || order.order_time)}`);
   return lines.join("\n");
 }
 
