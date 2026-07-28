@@ -17,6 +17,43 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizePartnerPromotions(value, rawData = {}) {
+  const candidates = [
+    ...(Array.isArray(value) ? value : []),
+    ...(Array.isArray(rawData.promotions) ? rawData.promotions : []),
+    ...(Array.isArray(rawData.promotion_data) ? rawData.promotion_data : []),
+    ...(Array.isArray(rawData.vouchers) ? rawData.vouchers : [])
+  ];
+  const seen = new Set();
+
+  return candidates.map((promotion, index) => {
+    const item = promotion && typeof promotion === "object" ? promotion : {};
+    const raw = item.raw_data && typeof item.raw_data === "object" ? item.raw_data : {};
+    const key = String(item.promotion_key || item.campaign_id || `promotion-${index}`);
+    const code = String(item.promotion_code || item.code || item.voucher_code || raw.promotion_code || raw.code || raw.voucher_code || "").trim();
+    const explicitName = String(item.promotion_name || item.name || item.campaign_name || raw.promotion_name || raw.campaign_name || "").trim();
+    const itemName = String(raw.name || "").trim();
+    const fallbackName = key === "finance:cofund"
+      ? "Đối tác đồng tài trợ"
+      : key === "finance:other_promotion"
+        ? "Ưu đãi khác từ đối tác"
+        : key.startsWith("item:") && itemName
+          ? `Giảm trên món: ${itemName}`
+          : "";
+    const name = explicitName || fallbackName;
+    const amount = Math.abs(toNumber(item.discount_amount ?? item.amount ?? item.discount ?? raw.discount_amount ?? raw.amount, 0));
+    const fundingSource = String(item.funding_source || raw.funding_source || "").trim();
+    return { key, code, name, amount, fundingSource };
+  }).filter((promotion) => {
+    if (promotion.key === "finance:total_promotion" && !promotion.code && !promotion.name) return false;
+    if (!promotion.code && !promotion.name && !promotion.amount) return false;
+    const identity = `${promotion.code}|${promotion.name}|${promotion.amount}|${promotion.fundingSource}`;
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
 function flattenPartnerItemOptions(value) {
   const result = [];
 
@@ -89,6 +126,8 @@ function mapPartnerItemRow(item = {}) {
   const sourceItemId = String(item.id || "");
   const productId = String(item.web_product_id || item.partner_item_id || item.item_key || sourceItemId);
   const kitchenItemStatus = String(item.kitchen_item_status || item.item_status || "pending");
+  const originalUnitPrice = toNumber(item.original_unit_price, unitPrice);
+  const discountedUnitPrice = toNumber(item.discounted_unit_price, unitPrice);
   return {
     id: productId || sourceItemId,
     sourceItemId,
@@ -100,6 +139,12 @@ function mapPartnerItemRow(item = {}) {
     price: unitPrice,
     unitTotal: unitPrice,
     lineTotal,
+    originalUnitPrice,
+    discountedUnitPrice,
+    itemDiscountAmount: Math.abs(toNumber(item.item_discount_amount, 0)),
+    platformDiscountAmount: Math.abs(toNumber(item.platform_discount_amount, 0)),
+    sellerDiscountAmount: Math.abs(toNumber(item.seller_discount_amount, 0)),
+    promotionData: item.promotion_data && typeof item.promotion_data === "object" ? item.promotion_data : {},
     toppings: options.map((name) => ({ name, price: 0, quantity: 1 })),
     optionGroups: [],
     options,
@@ -115,13 +160,16 @@ function mapPartnerOrderRow(order = {}, itemsByOrderId = new Map()) {
   const orderCode = String(order.order_code || "").trim();
   const displayOrderCode = String(order.display_order_code || orderCode).trim() || orderCode;
   const rawData = order.raw_data && typeof order.raw_data === "object" ? order.raw_data : {};
-  const financeData = rawData.finance_data && typeof rawData.finance_data === "object" ? rawData.finance_data : {};
-  const subtotal = toNumber(order.subtotal, toNumber(financeData.original_price, toNumber(order.total_amount, 0)));
+  const rawFinanceData = rawData.finance_data && typeof rawData.finance_data === "object" ? rawData.finance_data : {};
+  const nexposFinanceData = order.nexpos_finance_data && typeof order.nexpos_finance_data === "object" ? order.nexpos_finance_data : {};
+  const financeData = { ...rawFinanceData, ...nexposFinanceData };
+  const subtotal = toNumber(order.nexpos_original_price, toNumber(order.subtotal, toNumber(financeData.original_price, toNumber(order.total_amount, 0))));
   const shippingFee = toNumber(order.shipping_fee, toNumber(financeData.shipping_fee, toNumber(rawData.shipment_fee, 0)));
-  const totalPromotion = toNumber(order.discount_amount, toNumber(financeData.total_promotion_price, 0));
-  const coFundPromotion = toNumber(financeData.co_fund_promotion_price, 0);
-  const otherPromotion = toNumber(financeData.other_promotion_price, 0);
+  const totalPromotion = Math.abs(toNumber(order.nexpos_total_promotion, toNumber(order.discount_amount, toNumber(financeData.total_promotion_price, 0))));
+  const coFundPromotion = Math.abs(toNumber(order.nexpos_cofund_promotion, toNumber(financeData.co_fund_promotion_price, 0)));
+  const otherPromotion = Math.abs(toNumber(order.nexpos_other_promotion, toNumber(financeData.other_promotion_price, 0)));
   const totalAmount = toNumber(order.total_amount, toNumber(rawData.total, 0));
+  const promotions = normalizePartnerPromotions(order.nexpos_promotion_data, rawData);
   const loyaltyAmount = buildPartnerLoyaltyAmountSnapshot(order);
   return {
     id: order.id || orderCode,
@@ -151,6 +199,7 @@ function mapPartnerOrderRow(order = {}, itemsByOrderId = new Map()) {
     coFundPromotion,
     otherPromotion,
     totalPromotion,
+    promotions,
     totalAmount,
     total: totalAmount,
     pointsBaseAmount: loyaltyAmount.pointsBaseAmount,
@@ -188,7 +237,7 @@ async function readPartnerOrderItemsByOrderIds(client, orderIds = []) {
 
   const { data: itemRows, error: itemError } = await client
     .from("partner_order_items")
-    .select("id,item_key,partner_order_id,partner_item_id,web_product_id,partner_item_name,web_product_name,quantity,unit_price,line_total,options,note,item_status,kitchen_item_status")
+    .select("id,item_key,partner_order_id,partner_item_id,web_product_id,partner_item_name,web_product_name,quantity,unit_price,line_total,original_unit_price,discounted_unit_price,item_discount_amount,platform_discount_amount,seller_discount_amount,promotion_data,options,note,item_status,kitchen_item_status")
     .in("partner_order_id", safeOrderIds);
   recordAdminRequest("read partner order items", "partner_order_items");
 
@@ -290,7 +339,7 @@ export async function readPartnerOrdersForAdmin({
 
   let query = client
     .from("partner_orders")
-    .select("id,order_code,display_order_code,partner_source,nexpos_order_id,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,raw_data,order_time,created_at,updated_at")
+    .select("id,order_code,display_order_code,partner_source,nexpos_order_id,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,nexpos_original_price,nexpos_sell_price,nexpos_total_promotion,nexpos_cofund_promotion,nexpos_other_promotion,nexpos_finance_data,nexpos_promotion_data,raw_data,order_time,created_at,updated_at")
     .order("order_time", { ascending: false });
 
   if (dateFrom) query = query.gte("order_time", dateFrom);
@@ -321,7 +370,7 @@ export async function readCustomerPartnerOrdersForAdmin(phone = "", { limit = 10
   if (!phoneVariants.length) return [];
 
   const safeLimit = Math.max(3, Math.min(100, Number(limit || 100)));
-  const columns = "id,order_code,display_order_code,partner_source,nexpos_order_id,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,raw_data,order_time,created_at,updated_at";
+  const columns = "id,order_code,display_order_code,partner_source,nexpos_order_id,customer_name,customer_phone,customer_phone_key,order_status,nexpos_status,kitchen_status,kitchen_work_status,kitchen_done_at,point_status,subtotal,discount_amount,shipping_fee,total_amount,points_base_amount,branch_id,branch_uuid,branch_name,nexpos_site_name,nexpos_hub_name,nexpos_original_price,nexpos_sell_price,nexpos_total_promotion,nexpos_cofund_promotion,nexpos_other_promotion,nexpos_finance_data,nexpos_promotion_data,raw_data,order_time,created_at,updated_at";
   const rows = [];
 
   for (const column of ["customer_phone_key", "customer_phone"]) {

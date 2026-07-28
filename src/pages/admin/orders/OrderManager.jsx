@@ -27,7 +27,7 @@ const STATUS_META = {
   done: { label: "Hoàn thành", className: "admin-order-status-done" }
 };
 STATUS_META.cancelled = { label: "Đã hủy", className: "admin-order-status-cancelled" };
-const ORDER_PAGE_SIZE = 25;
+const ORDER_PAGE_SIZE = 8;
 
 function getOrderId(order) {
   return order.id || order.orderCode;
@@ -228,7 +228,7 @@ function getUnifiedPointStatusText(order = {}, estimatedPoints = 0) {
   return estimatedPoints > 0 ? `Dự kiến +${estimatedPoints.toLocaleString("vi-VN")} điểm` : "Không có điểm";
 }
 
-function OrderStatsCards({ stats }) {
+function OrderStatsCards({ stats, activeFilter, onSelect }) {
   const cards = [
     { key: "total", label: "Tổng đơn", value: stats.total, hint: "Theo bộ lọc hiện tại", tone: "orange", icon: "🧾" },
     { key: "new", label: "Đơn mới", value: stats.new, hint: "Chờ xử lý", tone: "amber", icon: "⏱" },
@@ -240,14 +240,20 @@ function OrderStatsCards({ stats }) {
   return (
     <div className="admin-order-stats-grid">
       {cards.map((card) => (
-        <article key={card.key} className={`admin-order-stat-card tone-${card.tone}`}>
-          <span className="admin-order-stat-icon">{card.icon}</span>
+        <button
+          type="button"
+          key={card.key}
+          className={`admin-order-stat-card tone-${card.tone}${activeFilter === card.key ? " is-active" : ""}`}
+          aria-pressed={activeFilter === card.key}
+          onClick={() => onSelect(card.key)}
+        >
+          <span className="admin-order-stat-icon" aria-hidden="true">{card.icon}</span>
           <div>
             <p>{card.label}</p>
             <strong>{card.value}</strong>
             <small>{card.hint}</small>
           </div>
-        </article>
+        </button>
       ))}
     </div>
   );
@@ -292,66 +298,60 @@ function OrderFilterBar({
   setFulfillmentFilter,
   paymentFilter,
   setPaymentFilter,
-  onApplyQuickFilter,
-  onReset,
-  statusFilter
+  onReset
 }) {
-  const isQuickActive = (preset) => {
-    if (preset === "all") {
-      return !keyword && statusFilter === "all" && sourceFilter === "all" && fulfillmentFilter === "all" && paymentFilter === "all";
-    }
-    if (preset === "new") return statusFilter === "new";
-    if (preset === "doing") return statusFilter === "doing";
-    if (preset === "grab") return sourceFilter === "grabfood";
-    if (preset === "shopee") return sourceFilter === "shopeefood";
-    if (preset === "pos") return sourceFilter === "pos";
-    if (preset === "website") return sourceFilter === "website";
-    return false;
-  };
   return (
-    <>
-      <div className="admin-order-filter-bar">
+    <div className="admin-order-filter-bar">
         <label className="admin-order-search">
-          <span>🔎</span>
+          <span className="admin-order-filter-label">Tìm đơn</span>
+          <span className="admin-order-search-icon" aria-hidden="true">⌕</span>
           <input
+            type="search"
+            name="order-search"
+            aria-label="Tìm theo mã đơn, tên khách hoặc số điện thoại"
+            autoComplete="off"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
-            placeholder="Tìm mã đơn, tên khách, số điện thoại..."
+            placeholder="Mã đơn, tên khách, số điện thoại…"
           />
         </label>
-        <select value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)}>
-          <option value="all">Tất cả hình thức</option>
-          <option value="delivery">Giao hàng</option>
-          <option value="pickup">Tự đến lấy</option>
-        </select>
-        <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
-          <option value="all">Tất cả nguồn</option>
-          <option value="website">Website</option>
-          <option value="pos">POS / Mua tại quầy</option>
-          <option value="qr_counter">QR tại quầy</option>
-          <option value="grabfood">Grab</option>
-          <option value="shopeefood">Shopee</option>
-          <option value="xanhngon">Xanh Ngon</option>
-          <option value="unknown">Chưa xác định</option>
-          <option value="other">Khác</option>
-        </select>
-        <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}>
-          <option value="all">Tất cả thanh toán</option>
-          <option value="cod">COD</option>
-          <option value="paid">Đã trả trước</option>
-        </select>
+        <label className="admin-order-filter-field">
+          <span className="admin-order-filter-label">Nguồn đơn</span>
+          <select aria-label="Lọc theo nguồn đơn" value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+            <option value="all">Tất cả</option>
+            <option value="website">Website</option>
+            <option value="pos">POS / Mua tại quầy</option>
+            <option value="qr_counter">QR tại quầy</option>
+            <option value="grabfood">Grab</option>
+            <option value="shopeefood">Shopee</option>
+            <option value="xanhngon">Xanh Ngon</option>
+            <option value="unknown">Chưa xác định</option>
+            <option value="other">Khác</option>
+          </select>
+        </label>
         <button type="button" className="admin-order-filter-reset" onClick={onReset}>Xóa lọc</button>
-      </div>
-      <div className="admin-order-quick-filters">
-        <button type="button" className={isQuickActive("all") ? "is-active" : ""} onClick={() => onApplyQuickFilter("all")}>Tất cả</button>
-        <button type="button" className={isQuickActive("new") ? "is-active" : ""} onClick={() => onApplyQuickFilter("new")}>Đơn mới</button>
-        <button type="button" className={isQuickActive("doing") ? "is-active" : ""} onClick={() => onApplyQuickFilter("doing")}>Đang làm</button>
-        <button type="button" className={isQuickActive("grab") ? "is-active" : ""} onClick={() => onApplyQuickFilter("grab")}>Grab</button>
-        <button type="button" className={isQuickActive("shopee") ? "is-active" : ""} onClick={() => onApplyQuickFilter("shopee")}>Shopee</button>
-        <button type="button" className={isQuickActive("pos") ? "is-active" : ""} onClick={() => onApplyQuickFilter("pos")}>POS</button>
-        <button type="button" className={isQuickActive("website") ? "is-active" : ""} onClick={() => onApplyQuickFilter("website")}>Website</button>
-      </div>
-    </>
+        <details className="admin-order-more-filters">
+          <summary>Bộ lọc thêm</summary>
+          <div>
+            <label className="admin-order-filter-field">
+              <span className="admin-order-filter-label">Hình thức</span>
+              <select aria-label="Lọc theo hình thức nhận hàng" value={fulfillmentFilter} onChange={(event) => setFulfillmentFilter(event.target.value)}>
+                <option value="all">Tất cả</option>
+                <option value="delivery">Giao hàng</option>
+                <option value="pickup">Tự đến lấy</option>
+              </select>
+            </label>
+            <label className="admin-order-filter-field">
+              <span className="admin-order-filter-label">Thanh toán</span>
+              <select aria-label="Lọc theo thanh toán" value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}>
+                <option value="all">Tất cả</option>
+                <option value="cod">COD</option>
+                <option value="paid">Đã trả trước</option>
+              </select>
+            </label>
+          </div>
+        </details>
+    </div>
   );
 }
 
@@ -454,7 +454,7 @@ function OrderList({
         <span>Nguồn / Hình thức / CN</span>
         <span>Thời gian</span>
         <span>Trạng thái</span>
-        <span>Thực nhận</span>
+        <span>Thanh toán</span>
         <span>Cập nhật</span>
       </div>
       <div className="admin-order-table-body">
@@ -463,11 +463,19 @@ function OrderList({
           const status = getDisplayStatus(order);
           const fulfillmentType = getFulfillmentType(order);
           const waitingMinutes = getWaitingMinutes(order.createdAt);
+          const isActiveOrder = isActiveOperationalStatus(status);
+          const isOverdue = isActiveOrder && waitingMinutes > 15;
           const isActive = String(activeOrderId) === String(orderId);
           const settlement = getSettlement(order);
           const sourceMeta = getOrderSourceMeta(order);
-          const partnerNetRevenue = Number(order.realReceived || order.netReceived || order.grossReceived || 0);
-          const netRevenue = partnerNetRevenue > 0 ? partnerNetRevenue : Number(settlement?.netRevenue || 0);
+          const totalPayment = Number(order.totalAmount || order.total || settlement?.customerTotal || 0);
+          const paymentMethod = String(order.paymentMethod || "COD").toUpperCase();
+          const isPaid = Boolean(
+            order.paidAt ||
+            order.paymentStatus === "paid" ||
+            order.isPaid === true ||
+            (!paymentMethod.includes("COD") && paymentMethod !== "CASH")
+          );
           const branchName = getOrderBranchName(order);
           const shortBranchName = getShortBranchName(branchName);
           const fulfillmentMeta = getFulfillmentMeta(order);
@@ -476,12 +484,25 @@ function OrderList({
           return (
             <article
               key={orderId}
-              className={`admin-order-row ${isActive ? "is-selected" : ""}`}
+              className={`admin-order-row${isActive ? " is-selected" : ""}${isOverdue ? " is-overdue" : ""}`}
+              role="button"
+              tabIndex={0}
+              aria-label={`Mở chi tiết đơn ${getDisplayOrderCode(order)}`}
+              aria-pressed={isActive}
               onClick={() => onSelectOrder(order)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectOrder(order);
+                }
+              }}
             >
               <div className="admin-order-cell admin-order-code-cell">
                 <strong>{getDisplayOrderCode(order)}</strong>
-                <small>{waitingMinutes} phút</small>
+                <small className={isOverdue ? "is-overdue" : ""}>
+                  {isActiveOrder ? `${isOverdue ? "Trễ" : "Chờ"} ${waitingMinutes} phút` : status === "done" ? "Đã hoàn tất" : "Đã hủy"}
+                </small>
                 {latePaymentReview ? <small className="font-black text-red-600">Tiền đến sau khi hủy</small> : null}
               </div>
               <div className="admin-order-cell">
@@ -500,8 +521,8 @@ function OrderList({
                 <OrderStatusBadge status={status} />
               </div>
               <div className="admin-order-cell admin-order-money">
-                <strong>{formatMoney(netRevenue)}</strong>
-                <small>Tổng thu khách: {formatMoney(Number(order.totalAmount || order.total || 0))}</small>
+                <strong>{formatMoney(totalPayment)}</strong>
+                <small>{paymentMethod} · {isPaid ? "Đã thanh toán" : "Thu khi nhận"}</small>
               </div>
               <div className="admin-order-cell admin-order-row-actions">
                 <OrderStatusSelect order={order} status={status} updateOrderStatus={updateOrderStatus} />
@@ -726,6 +747,13 @@ function OrderDetailPanelV2({
   isOpen,
   registeredCustomersByPhone
 }) {
+  const [isPartnerPromotionOpen, setIsPartnerPromotionOpen] = useState(false);
+  const selectedOrderKey = order ? getOrderId(order) : "";
+
+  useEffect(() => {
+    setIsPartnerPromotionOpen(false);
+  }, [selectedOrderKey]);
+
   if (!order) {
     return (
       <aside className="admin-order-detail-panel is-empty">
@@ -760,9 +788,15 @@ function OrderDetailPanelV2({
   const totalPromotion = Number(order.totalPromotion || order.discountAmount || promoDiscount || 0);
   const coFundPromotion = Number(order.coFundPromotion || 0);
   const appPromotion = Math.max(totalPromotion - coFundPromotion, 0);
-  const partnerGrossReceived = Number(order.grossReceived || 0);
+  const partnerPromotions = Array.isArray(order.promotions) ? order.promotions : [];
+  const partnerPromotionCodes = [...new Set(
+    partnerPromotions.map((promotion) => String(promotion.code || "").trim()).filter(Boolean)
+  )];
+  const otherPartnerPromotion = Math.max(totalPromotion - coFundPromotion, 0);
   const partnerNetReceived = Number(order.netReceivedAmount || order.realReceived || order.netReceived || 0);
-  const partnerFeeDeduction = Math.max(0, partnerGrossReceived - partnerNetReceived);
+  const partnerPlatformDeduction = partnerNetReceived > 0
+    ? Math.max(totalValue - partnerNetReceived, 0)
+    : 0;
   const pointsBaseAmount = Number(
     isPartnerOrder
       ? order.loyaltyEligibleAmount || order.netReceivedAmount || 0
@@ -773,11 +807,9 @@ function OrderDetailPanelV2({
   const pointStatusText = getUnifiedPointStatusText(order, estimatedPoints);
   const shouldShowShipperSection = fulfillmentType === "delivery" && !isPartnerOrder && sourceKey === "website";
   const totalItemQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
-  const netReceived = isPartnerOrder
-    ? Number(partnerNetReceived || order.realReceived || order.netReceived || 0)
-    : Number(settlement.netRevenue || 0);
-  const highlightedReceived = netReceived > 0 ? netReceived : Math.max(totalValue - shippingFee, 0);
   const latePaymentReview = getLatePaymentReview(order);
+  const waitingMinutes = getWaitingMinutes(order.createdAt);
+  const isActiveOrder = isActiveOperationalStatus(status);
 
   return (
     <aside className={`admin-order-detail-panel ${isOpen ? "is-open" : ""}`}>
@@ -804,6 +836,11 @@ function OrderDetailPanelV2({
             <OrderStatusBadge status={status} />
             <span className={`admin-order-type-badge ${sourceMeta.className}`}>{sourceMeta.label}</span>
             <span className={`admin-order-type-badge ${fulfillmentMeta.className}`}>{fulfillmentMeta.label}</span>
+            {isActiveOrder ? (
+              <span className={`admin-order-waiting-badge${waitingMinutes > 15 ? " is-late" : ""}`}>
+                Chờ {waitingMinutes} phút
+              </span>
+            ) : null}
           </div>
 
           {branchName ? (
@@ -854,38 +891,132 @@ function OrderDetailPanelV2({
           <div className="admin-order-item-list">
             {items.map((item, index) => {
               const lineTotal = Number(item.lineTotal || (item.unitTotal || item.price || 0) * (item.quantity || 1));
+              const originalLineTotal = Number(item.originalUnitPrice || item.price || 0) * Number(item.quantity || 1);
+              const itemDiscount = Math.max(
+                Number(item.itemDiscountAmount || 0),
+                originalLineTotal > lineTotal ? originalLineTotal - lineTotal : 0
+              );
               const options = getOrderItemOptionLabels(item, { includeQuantity: true });
               return (
                 <div key={`${item.id || item.name}-${index}`} className="admin-order-detail-item">
                   <div>
                     <strong>{item.name}</strong>
                     {options.length ? <small>{options.join(" • ")}</small> : null}
+                    {isPartnerOrder && itemDiscount > 0 ? (
+                      <small className="admin-order-item-discount">Giảm {formatMoney(itemDiscount)}</small>
+                    ) : null}
                   </div>
                   <span>x{item.quantity || 1}</span>
-                  <em>{formatMoney(lineTotal)}</em>
+                  <div className="admin-order-item-price">
+                    {isPartnerOrder && originalLineTotal > lineTotal ? <del>{formatMoney(originalLineTotal)}</del> : null}
+                    <em>{formatMoney(lineTotal)}</em>
+                  </div>
                 </div>
               );
             })}
           </div>
         </section>
 
+        {isPartnerOrder && (totalPromotion > 0 || partnerPromotions.length > 0) ? (
+          <section className={`admin-order-detail-card admin-order-partner-promotion-card ${isPartnerPromotionOpen ? "is-open" : ""}`}>
+            <button
+              type="button"
+              className="admin-order-partner-promotion-toggle"
+              aria-expanded={isPartnerPromotionOpen}
+              onClick={() => setIsPartnerPromotionOpen((current) => !current)}
+            >
+              <span>
+                <b>Chi tiết ưu đãi</b>
+                <small>{isPartnerPromotionOpen ? "Thu gọn" : "Xem cách tính"}</small>
+              </span>
+              <strong>Tổng ưu đãi -{formatMoney(totalPromotion)}</strong>
+            </button>
+            {isPartnerPromotionOpen ? <div className="admin-order-promotion-content">
+              <div className="admin-order-promotion-equation">
+                {coFundPromotion > 0 ? (
+                  <div>
+                    <span>Nền tảng tài trợ</span>
+                    <strong>-{formatMoney(coFundPromotion)}</strong>
+                  </div>
+                ) : null}
+                {otherPartnerPromotion > 0 ? (
+                  <div>
+                    <span>Ưu đãi khác</span>
+                    <strong>-{formatMoney(otherPartnerPromotion)}</strong>
+                  </div>
+                ) : null}
+                <div className="is-total">
+                  <span>Tổng ưu đãi</span>
+                  <strong>-{formatMoney(totalPromotion)}</strong>
+                </div>
+              </div>
+              {partnerPromotionCodes.length > 0 ? (
+                <div className="admin-order-promotion-codes">
+                  <span>Mã áp dụng</span>
+                  <div>{partnerPromotionCodes.map((code) => <b key={code}>{code}</b>)}</div>
+                </div>
+              ) : (
+                <p className="admin-order-promotion-note">
+                  Đơn này không có mã khuyến mãi được đối tác gửi về.
+                </p>
+              )}
+            </div> : null}
+          </section>
+        ) : null}
+
         <section className="admin-order-detail-card admin-order-payment-card">
           <div className="admin-order-payment-highlight">
-            <span>{isPartnerOrder ? "Quán thực nhận" : "Doanh thu thực nhận"}</span>
-            <strong>{formatMoney(highlightedReceived)}</strong>
+            <span>{isPartnerOrder && partnerNetReceived > 0 ? "Thực tế quán thu về" : "Khách thanh toán"}</span>
+            <strong>{formatMoney(isPartnerOrder && partnerNetReceived > 0 ? partnerNetReceived : totalValue)}</strong>
           </div>
           <div className="admin-order-detail-section-head">
-            <h4>Thanh toán</h4>
+            <h4>{isPartnerOrder ? "Dòng tiền đơn hàng" : "Thanh toán"}</h4>
           </div>
-          <div className="admin-order-total-lines">
+          {isPartnerOrder ? (
+            <div className="admin-order-financial-flow">
+              <div>
+                <span><i>1</i> Giá trị món ban đầu</span>
+                <strong>{formatMoney(subtotalValue)}</strong>
+              </div>
+              <div className="is-discount">
+                <span><i>2</i> Tổng khuyến mãi</span>
+                <strong>-{formatMoney(totalPromotion)}</strong>
+              </div>
+              <div className="is-customer-total">
+                <span><i>3</i> Khách thanh toán</span>
+                <strong>{formatMoney(totalValue)}</strong>
+              </div>
+              {partnerNetReceived > 0 ? (
+                <>
+                  <div className="is-fee">
+                    <span><i>4</i> Phí và chiết khấu nền tảng</span>
+                    <strong>-{formatMoney(partnerPlatformDeduction)}</strong>
+                  </div>
+                  <div className="is-net">
+                    <span><i>5</i> Quán thực nhận</span>
+                    <strong>{formatMoney(partnerNetReceived)}</strong>
+                  </div>
+                </>
+              ) : (
+                <p className="admin-order-financial-pending">
+                  Chưa có dữ liệu tiền thực nhận từ đối tác.
+                </p>
+              )}
+              <small>
+                Giá gốc − khuyến mãi = khách trả; khách trả − phí/chiết khấu = quán thực nhận.
+              </small>
+            </div>
+          ) : <div className="admin-order-total-lines">
             <div><span>Tạm tính</span><strong>{formatMoney(subtotalValue)}</strong></div>
             <div><span>Phí giao hàng</span><strong>{fulfillmentType === "pickup" ? "0đ (Tự lấy)" : formatMoney(shippingFee)}</strong></div>
-            {coFundPromotion > 0 ? <div className="discount"><span>Đồng tài trợ</span><strong>-{formatMoney(coFundPromotion)}</strong></div> : null}
-            {appPromotion > 0 ? <div className="discount"><span>Khuyến mãi app</span><strong>-{formatMoney(appPromotion)}</strong></div> : null}
+            {!isPartnerOrder && coFundPromotion > 0 ? <div className="discount"><span>Đồng tài trợ</span><strong>-{formatMoney(coFundPromotion)}</strong></div> : null}
+            {!isPartnerOrder && appPromotion > 0 ? <div className="discount"><span>Khuyến mãi app</span><strong>-{formatMoney(appPromotion)}</strong></div> : null}
             {shippingSupport > 0 ? <div className="discount"><span>GHR hỗ trợ ship</span><strong>-{formatMoney(shippingSupport)}</strong></div> : null}
             {promoDiscount > 0 ? <div className="discount"><span>Mã giảm giá {order.promoCode || ""}</span><strong>-{formatMoney(promoDiscount)}</strong></div> : null}
             {pointsDiscount > 0 ? <div className="discount"><span>Dùng điểm thưởng</span><strong>-{formatMoney(pointsDiscount)}</strong></div> : null}
             <div className="grand"><span>Tổng thu khách</span><strong>{formatMoney(totalValue)}</strong></div>
+          </div>}
+          <div className="admin-order-total-lines admin-order-loyalty-lines">
             <div><span>Giá trị tính điểm loyalty</span><strong>{formatMoney(pointsBaseAmount)}</strong></div>
             <div><span>Tích điểm</span><strong>{pointStatusText}</strong></div>
             {isPartnerOrder && order.loyaltyHoldReason ? (
@@ -910,18 +1041,6 @@ function OrderDetailPanelV2({
               <div><span>Khách trả phí ship</span><strong>{formatMoney(settlement.shippingFeeCustomer)}</strong></div>
               <div><span>Quán hỗ trợ ship</span><strong>{formatMoney(settlement.shippingSupport)}</strong></div>
               <div className="grand"><span>Shipper nộp lại quán</span><strong>{formatMoney(settlement.shipperPayBackStore)}</strong></div>
-            </div>
-          </section>
-        ) : null}
-
-        {(partnerGrossReceived > 0 || partnerFeeDeduction > 0) ? (
-          <section className="admin-order-detail-card admin-order-settlement-card">
-            <div className="admin-order-detail-section-head">
-              <h4>Đối soát FoodApp</h4>
-            </div>
-            <div className="admin-order-total-lines">
-              {partnerGrossReceived > 0 ? <div><span>Doanh thu trước phí</span><strong>{formatMoney(partnerGrossReceived)}</strong></div> : null}
-              {partnerFeeDeduction > 0 ? <div className="discount"><span>Khấu trừ FoodApp</span><strong>-{formatMoney(partnerFeeDeduction)}</strong></div> : null}
             </div>
           </section>
         ) : null}
@@ -1049,6 +1168,14 @@ export default function OrderManager({
 
   const visibleOrders = useMemo(() => {
     if (statusFilter === "all") return searchedOrders;
+    if (statusFilter === "overdue") {
+      return searchedOrders.filter((order) => (
+        isActiveOperationalStatus(getDisplayStatus(order)) && getWaitingMinutes(order.createdAt) > 15
+      ));
+    }
+    if (statusFilter === "doing") {
+      return searchedOrders.filter((order) => ["doing", "delivering"].includes(getDisplayStatus(order)));
+    }
     return searchedOrders.filter((order) => getDisplayStatus(order) === statusFilter);
   }, [searchedOrders, statusFilter]);
   const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ORDER_PAGE_SIZE));
@@ -1066,17 +1193,13 @@ export default function OrderManager({
     const overdue = searchedOrders.filter((order) => (
       isActiveOperationalStatus(getDisplayStatus(order)) && getWaitingMinutes(order.createdAt) > 15
     )).length;
-    const deliveryCount = searchedOrders.filter((order) => getFulfillmentType(order) === "delivery").length;
-    const pickupCount = searchedOrders.length - deliveryCount;
     return {
       total: searchedOrders.length,
       new: statusCounts.new,
       doing: statusCounts.doing,
       delivering: statusCounts.delivering,
       done: statusCounts.done,
-      overdue,
-      deliveryCount,
-      pickupCount
+      overdue
     };
   }, [searchedOrders, statusCounts]);
 
@@ -1156,41 +1279,8 @@ export default function OrderManager({
     setPaymentFilter("all");
   };
 
-  const applyQuickFilter = (preset) => {
-    if (preset === "all") {
-      resetFilters();
-      return;
-    }
-    if (preset === "new") {
-      setStatusFilter("new");
-      setSourceFilter("all");
-      return;
-    }
-    if (preset === "doing") {
-      setStatusFilter("doing");
-      setSourceFilter("all");
-      return;
-    }
-    if (preset === "grab") {
-      setSourceFilter("grabfood");
-      setStatusFilter("all");
-      return;
-    }
-    if (preset === "shopee") {
-      setSourceFilter("shopeefood");
-      setStatusFilter("all");
-      return;
-    }
-    if (preset === "pos") {
-      setSourceFilter("pos");
-      setStatusFilter("all");
-      return;
-    }
-    if (preset === "website") {
-      setSourceFilter("website");
-      setStatusFilter("all");
-      return;
-    }
+  const applyStatFilter = (key) => {
+    setStatusFilter(key === "total" ? "all" : key);
   };
 
   return (
@@ -1208,7 +1298,11 @@ export default function OrderManager({
           </div>
         </header>
 
-        <OrderStatsCards stats={orderStats} />
+        <OrderStatsCards
+          stats={orderStats}
+          activeFilter={statusFilter === "all" ? "total" : statusFilter}
+          onSelect={applyStatFilter}
+        />
         <OrderHealthAlerts health={dataHealth} />
         <OrderFilterBar
           keyword={keyword}
@@ -1219,10 +1313,18 @@ export default function OrderManager({
           setFulfillmentFilter={setFulfillmentFilter}
           paymentFilter={paymentFilter}
           setPaymentFilter={setPaymentFilter}
-          onApplyQuickFilter={applyQuickFilter}
           onReset={resetFilters}
-          statusFilter={statusFilter}
         />
+      </section>
+
+      <div className="admin-orders-workspace">
+        <section className="admin-orders-list-column">
+        <div className="admin-order-results-summary" aria-live="polite">
+          <span>
+            <strong>{visibleOrders.length}</strong> đơn phù hợp
+          </span>
+          <span>Chọn một đơn để xem món, thanh toán và cập nhật trạng thái</span>
+        </div>
         <OrderList
           orders={pagedOrders}
           activeOrderId={activeOrder ? getOrderId(activeOrder) : activeOrderId}
@@ -1238,18 +1340,19 @@ export default function OrderManager({
             <AdminPagination page={safeCurrentPage} totalPages={totalPages} onChange={setCurrentPage} />
           </div>
         ) : null}
-      </section>
+        </section>
 
-      <OrderDetailPanelV2
-        order={activeOrder}
-        updateOrderStatus={safeUpdateOrderStatus}
-        shipperText={activeOrder ? shipperInfoByOrderId[getOrderId(activeOrder)] : ""}
-        copied={activeOrder ? copiedOrderId === getOrderId(activeOrder) : false}
-        onCopyShipper={copyShipperInfo}
-        onClose={() => setDetailPanelOpen(false)}
-        isOpen={detailPanelOpen}
-        registeredCustomersByPhone={registeredCustomersByPhone}
-      />
+        <OrderDetailPanelV2
+          order={activeOrder}
+          updateOrderStatus={safeUpdateOrderStatus}
+          shipperText={activeOrder ? shipperInfoByOrderId[getOrderId(activeOrder)] : ""}
+          copied={activeOrder ? copiedOrderId === getOrderId(activeOrder) : false}
+          onCopyShipper={copyShipperInfo}
+          onClose={() => setDetailPanelOpen(false)}
+          isOpen={detailPanelOpen}
+          registeredCustomersByPhone={registeredCustomersByPhone}
+        />
+      </div>
     </div>
   );
 }
