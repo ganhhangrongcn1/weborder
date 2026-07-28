@@ -156,14 +156,6 @@ function isPartnerAppReceipt(receipt = {}) {
   return APP_SOURCE_KEYS.some((key) => sourceText.includes(key));
 }
 
-function centerText(value = "", width = 42) {
-  const text = toText(value);
-  if (text.length >= width) return text.slice(0, width);
-  const left = Math.floor((width - text.length) / 2);
-  const right = Math.max(0, width - text.length - left);
-  return `${" ".repeat(left)}${text}${" ".repeat(right)}`;
-}
-
 function normalizeReceiptItem(item = {}) {
   const options = getArray(item.options || item.toppings || item.optionGroups)
     .map((option) => {
@@ -635,6 +627,100 @@ function buildPrintJobPayload(order = {}, options = {}) {
   };
 }
 
+function buildItemLabelText(order = {}, item = {}, label = {}, options = {}) {
+  const config = getPrinterConfig(options);
+  const width = config.receiptWidthMm === 58 ? 32 : 48;
+  const orderCode = toText(order.displayOrderCode || order.orderCode || order.order_code || order.id);
+  const branchName = toText(order.branchName || order.branch_name || label.branchName);
+  const source = toText(order.platform || order.partnerSource || order.sourceType || order.source || "Kitchen");
+  const itemName = toText(item.name || item.productName || item.product_name || "Món");
+  const note = toText(item.note);
+  const orderNote = toText(order.note || order.metadata?.note || order.raw?.metadata?.note);
+  const optionsText = normalizeReceiptItem(item).options;
+  const unitNumber = Math.max(1, Math.floor(toNumber(label.unitNumber, 1)));
+  const totalUnits = Math.max(unitNumber, Math.floor(toNumber(label.totalUnits, 1)));
+  const itemNumber = Math.max(1, Math.floor(toNumber(label.itemNumber, 1)));
+  const totalItems = Math.max(itemNumber, Math.floor(toNumber(label.totalItems, 1)));
+  const lines = [
+    "@@BOLDCENTER:TEM MÓN",
+    `@@BIG:${orderCode || "CHƯA CÓ MÃ"}`,
+    `@@CENTER:MÓN ${itemNumber}/${totalItems}`,
+    "@@RULE",
+    `@@BOLDCENTER:${itemName}`
+  ];
+
+  if (totalUnits > 1) lines.push(`@@BOLDCENTER:PHẦN ${unitNumber}/${totalUnits}`);
+  optionsText.forEach((value) => {
+    splitText(`+ ${value}`, width).forEach((line) => lines.push(line));
+  });
+  if (note) {
+    lines.push("@@RULE");
+    lines.push("@@BOLDCENTER:GHI CHÚ MÓN");
+    splitText(note, width).forEach((line) => lines.push(`@@BOLDCENTER:${line}`));
+  }
+  if (orderNote && orderNote !== note) {
+    lines.push("@@RULE");
+    splitText(`Ghi chú đơn: ${orderNote}`, width).forEach((line) => lines.push(line));
+  }
+  lines.push("@@RULE");
+  if (branchName) splitText(`Chi nhánh: ${branchName}`, width).forEach((line) => lines.push(line));
+  lines.push(`Nguồn: ${source}`);
+  lines.push(`Giờ: ${formatDateTime(order.createdAt || order.created_at || order.orderTime || order.order_time)}`);
+  return lines.join("\n");
+}
+
+function buildItemLabelHtml(order = {}, item = {}, label = {}, options = {}) {
+  const config = getPrinterConfig(options);
+  const text = buildItemLabelText(order, item, label, options)
+    .replace(/^@@(?:BOLDCENTER|CENTER|BIG):/gm, "")
+    .replace(/^@@RULE$/gm, "--------------------------------")
+    .replace(/^@@SPACE$/gm, "");
+  return `<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tem món ${escapeHtml(order.displayOrderCode || order.orderCode || order.id || "")}</title>
+    <style>
+      @page { size: ${config.receiptWidthMm}mm auto; margin: 0; }
+      body { margin: 0; color: #111; background: #fff; font-family: system-ui, Arial, sans-serif; }
+      pre { width: ${config.receiptWidthMm}mm; margin: 0; padding: 8mm 4mm 10mm; box-sizing: border-box; white-space: pre-wrap; text-align: center; font: 800 15px/1.35 system-ui, Arial, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <pre>${escapeHtml(text)}</pre>
+    <script>window.addEventListener("load", () => { window.focus(); window.print(); });</script>
+  </body>
+</html>`;
+}
+
+function buildItemLabelPrintPayload(order = {}, item = {}, label = {}, options = {}) {
+  const config = getPrinterConfig(options);
+  return {
+    printerName: config.printerName,
+    receiptWidthMm: config.receiptWidthMm,
+    type: "item_label",
+    text: buildItemLabelText(order, item, label, options),
+    html: buildItemLabelHtml(order, item, label, options),
+    label: {
+      batchId: toText(label.batchId),
+      labelKey: toText(label.labelKey),
+      originalOrderId: toText(order.id),
+      orderCode: toText(order.displayOrderCode || order.orderCode || order.order_code || order.id),
+      branchUuid: toText(label.branchUuid),
+      itemIndex: Math.max(0, Math.floor(toNumber(label.itemIndex, 0))),
+      itemNumber: Math.max(1, Math.floor(toNumber(label.itemNumber, 1))),
+      totalItems: Math.max(1, Math.floor(toNumber(label.totalItems, 1))),
+      unitIndex: Math.max(0, Math.floor(toNumber(label.unitIndex, 0))),
+      unitNumber: Math.max(1, Math.floor(toNumber(label.unitNumber, 1))),
+      totalUnits: Math.max(1, Math.floor(toNumber(label.totalUnits, 1)))
+    },
+    order: {
+      ...normalizeReceiptOrder(order, options),
+      items: [{ ...normalizeReceiptItem(item), quantity: 1 }]
+    }
+  };
+}
+
 async function printViaAndroidBridge(order = {}, options = {}) {
   const bridge = getAndroidPrinterBridge();
   if (!bridge) {
@@ -747,7 +833,7 @@ async function testAndroidBridge(options = {}) {
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_BRIDGE_TIMEOUT_MS) {
-  const controller = new AbortController();
+  const controller = new globalThis.AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
@@ -878,6 +964,53 @@ export async function printCustomerBill(order = {}, options = {}) {
   return printViaBrowser(order, options);
 }
 
+export async function printItemLabelPayload(payload = {}, options = {}) {
+  const safePayload = getObject(payload);
+  const androidBridge = getAndroidPrinterBridge();
+  if (androidBridge) {
+    try {
+      return parseBridgeResult(
+        androidBridge.printCustomerBill(JSON.stringify(safePayload)),
+        "Đã gửi tem món tới máy in USB."
+      );
+    } catch (error) {
+      return {
+        ok: false,
+        message: error?.message || "App POS không in được tem món."
+      };
+    }
+  }
+
+  const config = getPrinterConfig(options);
+  if (config.mode === PRINTER_MODE.bridge) {
+    if (!config.bridgeUrl) return { ok: false, message: "Chưa cấu hình trạm in." };
+    try {
+      const response = await fetchWithTimeout(
+        buildBridgeUrl("/print", config.bridgeUrl),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+          body: JSON.stringify(safePayload)
+        },
+        config.timeoutMs
+      );
+      return {
+        ok: response.ok,
+        message: response.ok ? "Đã gửi tem món tới máy in." : `Trạm in trả lỗi ${response.status}.`
+      };
+    } catch {
+      return { ok: false, message: "Không kết nối được trạm in để in tem món." };
+    }
+  }
+
+  const printWindow = window.open("", "_blank", "width=420,height=720");
+  if (!printWindow) return { ok: false, message: "Trình duyệt đang chặn cửa sổ in tem." };
+  printWindow.document.open();
+  printWindow.document.write(toText(safePayload.html));
+  printWindow.document.close();
+  return { ok: true, message: "Đã mở hộp thoại in tem món." };
+}
+
 export async function printXprinterTestBill(options = {}) {
   const testOrder = {
     orderCode: "TEST-XPRINTER",
@@ -899,4 +1032,12 @@ export async function printXprinterTestBill(options = {}) {
   return printCustomerBill(testOrder, options);
 }
 
-export { PRINTER_MODE, buildReceiptHtml, buildReceiptText, buildPrintJobPayload, buildPrintPayload, getPrinterConfig };
+export {
+  PRINTER_MODE,
+  buildItemLabelPrintPayload,
+  buildReceiptHtml,
+  buildReceiptText,
+  buildPrintJobPayload,
+  buildPrintPayload,
+  getPrinterConfig
+};

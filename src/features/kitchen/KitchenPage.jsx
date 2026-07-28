@@ -2,19 +2,23 @@
 import useKitchenAuth from "../../hooks/useKitchenAuth.js";
 import useKitchenOrders, { getTodayDateKey } from "../../hooks/useKitchenOrders.js";
 import KitchenDishSummaryPanel from "./KitchenDishSummaryPanel.jsx";
+import KitchenItemLabelPrintDialog from "./KitchenItemLabelPrintDialog.jsx";
 import KitchenOrderCard from "./KitchenOrderCard.jsx";
 import KitchenOrderStrip from "./KitchenOrderStrip.jsx";
 import {
   getPrinterConfig,
   hasAndroidPrinterBridge,
+  printItemLabelPayload,
   printCustomerBill,
   PRINTER_MODE
 } from "../../services/printerService.js";
 import {
   CUSTOMER_BILL_JOB_TYPE,
   DEFAULT_PRINTER_KEY,
+  ITEM_LABEL_JOB_TYPE,
   claimPrintJob,
   createCustomerBillPrintJob,
+  createItemLabelPrintJobs,
   getPrintDeviceId,
   markPrintJobFailed,
   markPrintJobPrinted,
@@ -567,6 +571,8 @@ export default function KitchenPage() {
   const [printerSettings] = useState(() => readPrinterSettings());
   const [printerNotice, setPrinterNotice] = useState("");
   const [printingOrderKey, setPrintingOrderKey] = useState("");
+  const [itemLabelOrder, setItemLabelOrder] = useState(null);
+  const [printingItemLabels, setPrintingItemLabels] = useState(false);
   const [printJobsByOrderKey, setPrintJobsByOrderKey] = useState({});
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const autoPrintBootstrappedRef = useRef(false);
@@ -574,6 +580,8 @@ export default function KitchenPage() {
   const autoPrintedOrderKeysRef = useRef(new Set());
   const autoPrintingOrderKeysRef = useRef(new Set());
   const processingPrintJobsRef = useRef(new Set());
+  const queuedPrintJobsRef = useRef([]);
+  const printQueueRunningRef = useRef(false);
   const moreMenuRef = useRef(null);
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 1280 : window.innerWidth,
@@ -678,7 +686,8 @@ export default function KitchenPage() {
     if (!session || !profile || (!canAutoPrintWithAndroid && !canAutoPrintWithBridge)) return undefined;
 
     let stopped = false;
-    let unsubscribe = () => {};
+    let unsubscribeCustomerBills = () => {};
+    let unsubscribeItemLabels = () => {};
     const deviceId = getPrintDeviceId();
     const branchUuid = profile?.branchUuid || "";
     const printerKey = DEFAULT_PRINTER_KEY;
@@ -690,56 +699,95 @@ export default function KitchenPage() {
       storeName: String(printerSettings.storeName || "").trim()
     };
 
-    async function processPrintJob(job = {}) {
+    async function runPrintQueue() {
+      if (printQueueRunningRef.current || stopped) return;
+      printQueueRunningRef.current = true;
+
+      while (!stopped && queuedPrintJobsRef.current.length) {
+        queuedPrintJobsRef.current.sort((left, right) => {
+          const leftPriority = left.job_type === CUSTOMER_BILL_JOB_TYPE ? 0 : 1;
+          const rightPriority = right.job_type === CUSTOMER_BILL_JOB_TYPE ? 0 : 1;
+          if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+          return new Date(left.created_at || 0).getTime() - new Date(right.created_at || 0).getTime();
+        });
+        const job = queuedPrintJobsRef.current.shift();
+        if (!job?.id) continue;
+
+        try {
+          const claimedJob = await claimPrintJob(job, { deviceId });
+          if (!claimedJob || stopped) continue;
+
+          const payload = claimedJob.payload || {};
+          const result = claimedJob.job_type === ITEM_LABEL_JOB_TYPE
+            ? await printItemLabelPayload(payload, printerOptions)
+            : await printCustomerBill(payload.order || {}, {
+              ...printerOptions,
+              receiptWidthMm: Number(payload.receiptWidthMm) === 58 ? 58 : printerOptions.receiptWidthMm,
+              printerName: payload.printerName || printerOptions.printerName,
+              storeName: payload.storeName || printerOptions.storeName
+            });
+
+          if (result.ok) {
+            await markPrintJobPrinted(claimedJob);
+            setPrinterNotice(
+              claimedJob.job_type === ITEM_LABEL_JOB_TYPE
+                ? `POS đã in tem ${payload?.label?.itemNumber || ""}/${payload?.label?.totalItems || ""} của đơn ${payload?.label?.orderCode || ""}.`
+                : `POS đã in bill ${claimedJob.order_code || ""}.`.trim()
+            );
+          } else {
+            await markPrintJobFailed(claimedJob, result.message);
+            setPrinterNotice(result.message || "POS in thất bại.");
+          }
+        } catch (error) {
+          await markPrintJobFailed(job, error?.message || "POS in thất bại.");
+          setPrinterNotice(error?.message || "POS in thất bại.");
+        } finally {
+          processingPrintJobsRef.current.delete(job.id);
+        }
+      }
+
+      printQueueRunningRef.current = false;
+    }
+
+    function enqueuePrintJob(job = {}) {
       if (!job?.id || stopped || processingPrintJobsRef.current.has(job.id)) return;
       processingPrintJobsRef.current.add(job.id);
-
-      try {
-        const claimedJob = await claimPrintJob(job, { deviceId });
-        if (!claimedJob || stopped) return;
-
-        const payload = claimedJob.payload || {};
-        const order = payload.order || {};
-        const result = await printCustomerBill(order, {
-          ...printerOptions,
-          receiptWidthMm: Number(payload.receiptWidthMm) === 58 ? 58 : printerOptions.receiptWidthMm,
-          printerName: payload.printerName || printerOptions.printerName,
-          storeName: payload.storeName || printerOptions.storeName
-        });
-
-        if (result.ok) {
-          await markPrintJobPrinted(claimedJob);
-          setPrinterNotice(`POS đã in bill ${claimedJob.order_code || ""}.`.trim());
-        } else {
-          await markPrintJobFailed(claimedJob, result.message);
-          setPrinterNotice(result.message || "POS in bill thất bại.");
-        }
-      } catch (error) {
-        await markPrintJobFailed(job, error?.message || "POS in bill thất bại.");
-        setPrinterNotice(error?.message || "POS in bill thất bại.");
-      } finally {
-        processingPrintJobsRef.current.delete(job.id);
-      }
+      queuedPrintJobsRef.current.push(job);
+      runPrintQueue();
     }
 
     async function startPrintStation() {
       setPrinterNotice("Máy in đang chờ lệnh in.");
 
-      unsubscribe = await subscribePrintJobs({
+      unsubscribeCustomerBills = await subscribePrintJobs({
         branchUuid,
         printerKey,
         jobType: CUSTOMER_BILL_JOB_TYPE,
         deviceId,
-        onPendingJob: processPrintJob
+        onPendingJob: enqueuePrintJob
       });
-
-      const pendingJobs = await readPendingPrintJobs({
+      unsubscribeItemLabels = await subscribePrintJobs({
         branchUuid,
         printerKey,
-        jobType: CUSTOMER_BILL_JOB_TYPE
+        jobType: ITEM_LABEL_JOB_TYPE,
+        deviceId,
+        onPendingJob: enqueuePrintJob
       });
+
+      const [pendingCustomerBills, pendingItemLabels] = await Promise.all([
+        readPendingPrintJobs({
+          branchUuid,
+          printerKey,
+          jobType: CUSTOMER_BILL_JOB_TYPE
+        }),
+        readPendingPrintJobs({
+          branchUuid,
+          printerKey,
+          jobType: ITEM_LABEL_JOB_TYPE
+        })
+      ]);
       if (!stopped) {
-        pendingJobs.forEach((job) => processPrintJob(job));
+        [...pendingCustomerBills, ...pendingItemLabels].forEach(enqueuePrintJob);
       }
     }
 
@@ -747,7 +795,11 @@ export default function KitchenPage() {
 
     return () => {
       stopped = true;
-      unsubscribe();
+      unsubscribeCustomerBills();
+      unsubscribeItemLabels();
+      queuedPrintJobsRef.current = [];
+      processingPrintJobsRef.current.clear();
+      printQueueRunningRef.current = false;
     };
   }, [profile, printerSettings, session]);
 
@@ -977,6 +1029,29 @@ export default function KitchenPage() {
 
   async function handlePrintBill(order) {
     await submitPrintJob(order);
+  }
+
+  function handleOpenItemLabelPrint(order) {
+    setItemLabelOrder(order);
+  }
+
+  async function handleSubmitItemLabels(order, selectedUnits) {
+    if (printingItemLabels) return;
+    setPrintingItemLabels(true);
+    try {
+      const result = await createItemLabelPrintJobs(order, selectedUnits, {
+        branchUuid: profile?.branchUuid || "",
+        printerKey: DEFAULT_PRINTER_KEY,
+        requestedBy: profile?.email || profile?.name || "",
+        printerOptions: getPrinterRuntimeOptions()
+      });
+      setPrinterNotice(result.message || (result.ok ? "Đã gửi lệnh in tem món." : "Gửi lệnh in tem thất bại."));
+      if (result.ok) setItemLabelOrder(null);
+    } catch (error) {
+      setPrinterNotice(error?.message || "Gửi lệnh in tem món thất bại.");
+    } finally {
+      setPrintingItemLabels(false);
+    }
   }
 
   const isMobile = viewport.width <= 900;
@@ -1439,6 +1514,7 @@ export default function KitchenPage() {
                   printBillState={printBillState}
                   onMarkDone={handleMarkOrderDone}
                   onPrintBill={handlePrintBill}
+                  onPrintItemLabels={handleOpenItemLabelPrint}
                   onToggleItemDone={toggleItemDone}
                 />
                 </div>
@@ -1481,6 +1557,13 @@ export default function KitchenPage() {
           />
         </section>
       </section>
+      <KitchenItemLabelPrintDialog
+        open={Boolean(itemLabelOrder)}
+        order={itemLabelOrder}
+        printing={printingItemLabels}
+        onClose={() => setItemLabelOrder(null)}
+        onSubmit={handleSubmitItemLabels}
+      />
     </main>
   );
 }

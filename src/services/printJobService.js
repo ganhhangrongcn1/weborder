@@ -1,4 +1,4 @@
-import { buildPrintJobPayload } from "./printerService.js";
+import { buildItemLabelPrintPayload, buildPrintJobPayload } from "./printerService.js";
 import {
   ensureSupabaseRealtimeReady,
   getSupabaseAdminAuthClient,
@@ -18,6 +18,7 @@ const PRINT_JOB_STATUS = {
 };
 
 const CUSTOMER_BILL_JOB_TYPE = "customer_bill";
+const ITEM_LABEL_JOB_TYPE = "item_label";
 const KITCHEN_TICKET_JOB_TYPE = "kitchen_ticket";
 const DEFAULT_PRINTER_KEY = "cashier-80mm";
 const DEFAULT_KITCHEN_PRINTER_KEY = "kitchen-80mm";
@@ -413,6 +414,121 @@ export async function createCustomerBillPrintJob(order = {}, options = {}) {
     ok: true,
     job: data || null,
     message: "Đã gửi lệnh; đang chờ máy POS xác nhận in."
+  };
+}
+
+export async function createItemLabelPrintJobs(order = {}, selectedUnits = [], options = {}) {
+  const client = await getClient();
+  if (!client) {
+    return { ok: false, message: "Chưa kết nối được Supabase để gửi lệnh in tem." };
+  }
+
+  const branchUuid = getOrderBranchUuid(order, options.branchUuid);
+  const expectedBranchUuid = toText(options.branchUuid);
+  if (!branchUuid) {
+    return { ok: false, message: "Đơn chưa có chi nhánh nên chưa thể in tem an toàn." };
+  }
+  if (expectedBranchUuid && branchUuid !== expectedBranchUuid) {
+    return { ok: false, message: "Đơn không thuộc chi nhánh đang đăng nhập. Đã chặn lệnh in tem." };
+  }
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  const normalizedUnits = (Array.isArray(selectedUnits) ? selectedUnits : [])
+    .map((selection) => ({
+      itemIndex: Math.max(0, Math.floor(Number(selection?.itemIndex))),
+      unitIndex: Math.max(0, Math.floor(Number(selection?.unitIndex)))
+    }))
+    .filter((selection, index, list) => (
+      Number.isFinite(selection.itemIndex) &&
+      Number.isFinite(selection.unitIndex) &&
+      list.findIndex((candidate) => (
+        candidate.itemIndex === selection.itemIndex && candidate.unitIndex === selection.unitIndex
+      )) === index
+    ))
+    .sort((left, right) => left.itemIndex - right.itemIndex || left.unitIndex - right.unitIndex);
+
+  if (!normalizedUnits.length) {
+    return { ok: false, message: "Vui lòng chọn ít nhất một món cần in tem." };
+  }
+
+  const invalidSelection = normalizedUnits.find(({ itemIndex, unitIndex }) => {
+    const item = items[itemIndex];
+    const quantity = Math.max(1, Math.floor(Number(item?.quantity) || 1));
+    return !item || unitIndex >= quantity;
+  });
+  if (invalidSelection) {
+    return { ok: false, message: "Danh sách món đã thay đổi. Vui lòng mở lại và chọn món cần in." };
+  }
+
+  const now = new Date().toISOString();
+  const batchId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const shortBatchId = batchId.replace(/[^a-zA-Z0-9]/g, "").slice(-10);
+  const orderCode = getOrderCode(order);
+  const totalItems = items.reduce(
+    (total, item) => total + Math.max(1, Math.floor(Number(item?.quantity) || 1)),
+    0
+  );
+  let runningItemNumber = 0;
+  const itemStartNumbers = items.map((item) => {
+    const start = runningItemNumber + 1;
+    runningItemNumber += Math.max(1, Math.floor(Number(item?.quantity) || 1));
+    return start;
+  });
+
+  const rows = normalizedUnits.map(({ itemIndex, unitIndex }, sequenceIndex) => {
+    const item = items[itemIndex];
+    const totalUnits = Math.max(1, Math.floor(Number(item.quantity) || 1));
+    const itemNumber = itemStartNumbers[itemIndex] + unitIndex;
+    const labelKey = `${batchId}:${itemIndex}:${unitIndex}`;
+    return {
+      branch_uuid: branchUuid,
+      printer_key: toText(options.printerKey || DEFAULT_PRINTER_KEY),
+      job_type: ITEM_LABEL_JOB_TYPE,
+      status: PRINT_JOB_STATUS.pending,
+      order_id: null,
+      order_code: `${orderCode || "ORDER"}-TEM-${shortBatchId}-${sequenceIndex + 1}`,
+      source_type: ITEM_LABEL_JOB_TYPE,
+      payload: buildItemLabelPrintPayload(order, item, {
+        batchId,
+        labelKey,
+        branchUuid,
+        itemIndex,
+        itemNumber,
+        totalItems,
+        unitIndex,
+        unitNumber: unitIndex + 1,
+        totalUnits
+      }, options.printerOptions || {}),
+      requested_by: toText(options.requestedBy),
+      requested_at: now,
+      created_at: now,
+      updated_at: now
+    };
+  });
+
+  const { data, error } = await client
+    .from("print_jobs")
+    .insert(rows)
+    .select(PRINT_JOB_STATUS_COLUMNS);
+  if (error) {
+    return {
+      ok: false,
+      message: error.message || "Không tạo được lệnh in tem món."
+    };
+  }
+
+  invalidateRecentPrintJobsCache({
+    branchUuid,
+    printerKey: options.printerKey || DEFAULT_PRINTER_KEY,
+    jobType: ITEM_LABEL_JOB_TYPE
+  });
+
+  return {
+    ok: true,
+    batchId,
+    jobs: Array.isArray(data) ? data : [],
+    count: rows.length,
+    message: `Đã gửi ${rows.length} tem món tới trạm in POS.`
   };
 }
 
@@ -944,6 +1060,7 @@ export {
   CUSTOMER_BILL_JOB_TYPE,
   DEFAULT_KITCHEN_PRINTER_KEY,
   DEFAULT_PRINTER_KEY,
+  ITEM_LABEL_JOB_TYPE,
   KITCHEN_TICKET_JOB_TYPE,
   PRINT_JOB_STATUS
 };
