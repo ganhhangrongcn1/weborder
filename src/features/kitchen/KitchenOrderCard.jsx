@@ -704,6 +704,7 @@ export default function KitchenOrderCard({
   order,
   onMarkDone,
   onPrintBill,
+  onPrintItemLabels,
   onToggleItemDone,
   updating = false,
   printingBill = false,
@@ -1390,7 +1391,7 @@ export default function KitchenOrderCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: compact ? "1fr" : "minmax(0, 1fr) auto auto",
+          gridTemplateColumns: compact ? "1fr" : "minmax(0, 1fr) auto auto auto",
           gap: tabletCompact ? 7 : 10,
           alignItems: "center"
         }}
@@ -1444,6 +1445,26 @@ export default function KitchenOrderCard({
           }}
         >
           {printButtonConfig.label}
+        </button>
+        <button
+          type="button"
+          disabled={isCancelled || isPreorder || items.length === 0}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPrintItemLabels?.(order);
+          }}
+          style={{
+            border: "1px solid #7c3aed",
+            background: isCancelled || isPreorder || items.length === 0 ? "#ede9fe" : "#8b5cf6",
+            color: isCancelled || isPreorder || items.length === 0 ? "#8b5cf6" : "#ffffff",
+            borderRadius: 10,
+            padding: tabletCompact ? "9px 11px" : "12px 14px",
+            fontSize: 13,
+            fontWeight: 900,
+            cursor: isCancelled || isPreorder || items.length === 0 ? "not-allowed" : "pointer"
+          }}
+        >
+          In tem món
         </button>
         <button
           type="button"
