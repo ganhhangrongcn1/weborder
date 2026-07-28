@@ -1056,6 +1056,12 @@ export default function KitchenPage() {
 
   const isMobile = viewport.width <= 900;
   const isTabletBoard = viewport.width > 900 && viewport.width < 1100;
+  const prefersTouchScrolling = !isMobile
+    && typeof window !== "undefined"
+    && (
+      window.matchMedia?.("(pointer: coarse)")?.matches
+      || Number(window.navigator?.maxTouchPoints || 0) > 0
+    );
   const boardColumns = isMobile
     ? "1fr"
     : isTabletBoard
@@ -1451,6 +1457,9 @@ export default function KitchenPage() {
                 gap: 10,
                 alignContent: "start",
                 overflowY: isMobile ? "visible" : "auto",
+                touchAction: isMobile ? "auto" : "pan-y",
+                WebkitOverflowScrolling: "touch",
+                overscrollBehaviorY: "contain",
                 minHeight: 0,
                 paddingRight: 4,
                 paddingBottom: 12
@@ -1501,6 +1510,7 @@ export default function KitchenPage() {
                 <KitchenOrderCard
                   compact={isMobile}
                   tabletCompact={isTabletBoard}
+                  singleScroll={prefersTouchScrolling}
                   active={activeOrderKey === orderKey}
                   dimmed={Boolean(activeOrderKey && activeOrderKey !== orderKey)}
                   highlightedDishKey={highlightedByDish ? activeDishKey : ""}

@@ -695,6 +695,7 @@ function ToppingCheck({ checked, label, onClick }) {
 export default function KitchenOrderCard({
   compact = false,
   tabletCompact = false,
+  singleScroll = false,
   active = false,
   dimmed = false,
   highlightedDishKey = "",
@@ -1233,8 +1234,9 @@ export default function KitchenOrderCard({
           gridAutoRows: "max-content",
           alignItems: "stretch",
           gap: tabletCompact ? 7 : 10,
-          maxHeight: compact ? "none" : 420,
-          overflowY: compact ? "visible" : "auto",
+          maxHeight: compact || singleScroll ? "none" : 420,
+          overflowY: compact || singleScroll ? "visible" : "auto",
+          touchAction: singleScroll ? "pan-y" : "auto",
           paddingRight: tabletCompact ? 2 : 4
         }}
       >
