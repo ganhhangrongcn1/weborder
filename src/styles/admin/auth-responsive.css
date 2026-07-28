@@ -1,0 +1,85 @@
+@media (max-width: 960px) {
+  .admin-auth-shell .admin-auth-layout {
+    grid-template-columns: minmax(280px, 0.72fr) minmax(430px, 1.28fr);
+  }
+
+  .admin-auth-brand {
+    padding: 32px;
+  }
+
+  .admin-auth-brand-copy h2 {
+    font-size: 42px;
+  }
+
+  .admin-auth-access-list {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-shell.admin-auth-shell {
+    overflow-y: auto;
+  }
+
+  .admin-auth-shell .admin-auth-layout {
+    display: block;
+    min-height: 100dvh;
+  }
+
+  .admin-auth-brand {
+    min-height: auto;
+    padding: 22px 20px 26px;
+  }
+
+  .admin-auth-brand-copy {
+    margin: 28px 0 0;
+    padding: 0;
+  }
+
+  .admin-auth-brand-copy h2 {
+    max-width: 18ch;
+    font-size: 29px;
+    line-height: 1.05;
+  }
+
+  .admin-auth-brand-copy > p:last-child,
+  .admin-auth-brand-footnote {
+    display: none;
+  }
+
+  .admin-auth-logo-frame {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+  }
+
+  .admin-auth-panel-wrap {
+    min-height: auto;
+    padding: 20px 16px 36px;
+    place-items: start center;
+  }
+
+  .admin-auth-panel {
+    margin-top: -1px;
+    padding: 26px 22px 28px;
+    border-radius: 22px;
+  }
+
+  .admin-auth-panel h1 {
+    font-size: 30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-auth-state-icon--loading svg,
+  .admin-auth-button-spinner,
+  .admin-auth-progress span {
+    animation-duration: 2.8s;
+  }
+
+  .admin-auth-panel .admin-auth-submit,
+  .admin-auth-password-toggle,
+  .admin-auth-control {
+    transition-duration: 0.01ms;
+  }
+}

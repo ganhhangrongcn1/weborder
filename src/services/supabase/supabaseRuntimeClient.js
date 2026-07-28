@@ -162,14 +162,26 @@ export function getSupabaseKitchenAuthClient() {
   return getScopedExistingClient("kitchen");
 }
 
-export async function syncScopedSessionToRuntime(scope = "runtime", session = null) {
+export async function syncScopedSessionToRuntime(scope = "runtime", session = undefined) {
   const runtimeClient = getSupabaseRuntimeClient() || await initSupabaseRuntimeClient();
   if (!runtimeClient) return null;
 
-  const scopedClient = getScopedExistingClient(scope) || await createSupabaseClientForScope(scope);
-  const nextSession = session || (scopedClient ? (await scopedClient.auth.getSession()).data?.session || null : null);
+  const shouldReadScopedSession = session === undefined;
+  const scopedClient = shouldReadScopedSession
+    ? getScopedExistingClient(scope) || await createSupabaseClientForScope(scope)
+    : null;
+  const nextSession = shouldReadScopedSession
+    ? scopedClient
+      ? (await scopedClient.auth.getSession()).data?.session || null
+      : null
+    : session;
 
   if (nextSession?.access_token && nextSession?.refresh_token) {
+    const { data: currentRuntimeData } = await runtimeClient.auth.getSession().catch(() => ({ data: null }));
+    if (currentRuntimeData?.session?.access_token === nextSession.access_token) {
+      return runtimeClient;
+    }
+
     await runtimeClient.auth.setSession({
       access_token: nextSession.access_token,
       refresh_token: nextSession.refresh_token
