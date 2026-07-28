@@ -10,6 +10,7 @@ export default function AdminCustomersPage({
   onOrderUpdated,
   crmSnapshot,
   setCrmSnapshot,
+  crmLoadState,
   adminRequestAudit,
   resetAdminRequestAudit,
   selectedCustomerPhone,
@@ -144,6 +145,7 @@ export default function AdminCustomersPage({
         onOrderUpdated={onOrderUpdated}
         crmSnapshot={crmSnapshot}
         setCrmSnapshot={setCrmSnapshot}
+        crmLoadState={crmLoadState}
         selectedCustomerPhone={selectedCustomerPhone}
         setSelectedCustomerPhone={setSelectedCustomerPhone}
         onGiftVoucher={onGiftVoucher}

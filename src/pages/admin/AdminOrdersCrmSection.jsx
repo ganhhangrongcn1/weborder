@@ -43,6 +43,7 @@ export default function AdminOrdersCrmSection({
   onOrderUpdated,
   crmSnapshot,
   setCrmSnapshot,
+  crmLoadState,
   selectedCustomerPhone,
   setSelectedCustomerPhone,
   onGiftVoucher,
@@ -190,6 +191,7 @@ export default function AdminOrdersCrmSection({
           customerAdminTab={customerAdminTab}
           setCustomerAdminTab={setCustomerAdminTab}
           crmSnapshot={crmSnapshot}
+          crmLoadState={crmLoadState}
           selectedCustomerPhone={selectedCustomerPhone}
           setSelectedCustomerPhone={setSelectedCustomerPhone}
           refreshCrm={refreshCrm}

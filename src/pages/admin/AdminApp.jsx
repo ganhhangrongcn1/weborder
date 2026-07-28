@@ -69,6 +69,7 @@ export default function AdminApp({
     setShippingConfig,
     crmSnapshot,
     setCrmSnapshot,
+    crmLoadState,
     adminRequestAudit,
     resetAdminRequestAudit,
     adminOrdersRealtimePending,
@@ -264,6 +265,7 @@ export default function AdminApp({
           onOrderUpdated={handleOrderUpdated}
           crmSnapshot={crmSnapshot}
           setCrmSnapshot={setCrmSnapshot}
+          crmLoadState={crmLoadState}
           adminRequestAudit={adminRequestAudit}
           resetAdminRequestAudit={resetAdminRequestAudit}
           adminOrdersRealtimePending={adminOrdersRealtimePending}

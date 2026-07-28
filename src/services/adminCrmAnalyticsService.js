@@ -4,7 +4,11 @@ import {
 } from "./supabase/supabaseRuntimeClient.js";
 
 const CRM_ANALYTICS_RPC = "get_admin_crm_analytics";
+const CRM_ANALYTICS_CACHED_RPC = "get_admin_crm_analytics_cached";
 const MISSING_RPC_CODES = new Set(["42883", "PGRST202"]);
+const CRM_ANALYTICS_CACHE_TTL_MS = 60000;
+let crmAnalyticsCache = { value: null, cachedAt: 0 };
+let crmAnalyticsInFlight = null;
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -78,12 +82,21 @@ function mapSummary(row = {}) {
   };
 }
 
-export async function getAdminCrmAnalyticsRpc() {
+async function loadAdminCrmAnalyticsRpc({ force = false } = {}) {
   const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
   if (!client) return null;
 
   try {
-    const { data, error } = await client.rpc(CRM_ANALYTICS_RPC);
+    let { data, error } = await client.rpc(CRM_ANALYTICS_CACHED_RPC, {
+      p_force_refresh: force
+    });
+    if (error && (
+      MISSING_RPC_CODES.has(String(error.code || "")) ||
+      String(error.message || "").toLowerCase().includes("could not find the function") ||
+      String(error.message || "").toLowerCase().includes("does not exist")
+    )) {
+      ({ data, error } = await client.rpc(CRM_ANALYTICS_RPC));
+    }
     if (error) {
       const message = String(error.message || "").toLowerCase();
       if (
@@ -103,6 +116,24 @@ export async function getAdminCrmAnalyticsRpc() {
     console.warn("[adminCrmAnalyticsService] crm analytics rpc failed", error);
     return null;
   }
+}
+
+export async function getAdminCrmAnalyticsRpc({ force = false } = {}) {
+  if (!force && crmAnalyticsCache.cachedAt && Date.now() - crmAnalyticsCache.cachedAt < CRM_ANALYTICS_CACHE_TTL_MS) {
+    return crmAnalyticsCache.value;
+  }
+  if (!force && crmAnalyticsInFlight) return crmAnalyticsInFlight;
+
+  crmAnalyticsInFlight = loadAdminCrmAnalyticsRpc({ force })
+    .then((value) => {
+      crmAnalyticsCache = { value, cachedAt: Date.now() };
+      return value;
+    })
+    .finally(() => {
+      crmAnalyticsInFlight = null;
+    });
+
+  return crmAnalyticsInFlight;
 }
 
 export default {
