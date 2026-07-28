@@ -1080,7 +1080,7 @@
   line-height: 1.35;
 }
 
-.admin-order-items-card .admin-order-detail-item span {
+.admin-order-items-card .admin-order-detail-item > span {
   display: grid;
   min-width: 28px;
   min-height: 28px;
@@ -2757,4 +2757,69 @@
     position: fixed;
     min-height: 0;
   }
+}
+.admin-order-item-breakdown {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0;
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.admin-order-item-breakdown span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 0;
+  padding: 3px 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.admin-order-item-breakdown b {
+  min-width: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: 650;
+}
+
+.admin-order-item-breakdown em {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-order-item-breakdown i {
+  color: #f97316;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.admin-order-item-breakdown .is-total {
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+.admin-order-item-breakdown .is-total b,
+.admin-order-item-breakdown .is-total em {
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.admin-order-items-card .admin-order-detail-item.has-price-breakdown {
+  grid-template-columns: minmax(0, 1fr) 34px;
+}
+
+.admin-order-detail-item.has-price-breakdown > .admin-order-item-price {
+  display: none;
 }

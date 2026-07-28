@@ -54,14 +54,14 @@ function normalizePartnerPromotions(value, rawData = {}) {
   });
 }
 
-function flattenPartnerItemOptions(value) {
+function normalizePartnerItemOptions(value) {
   const result = [];
 
   function walk(item) {
     if (!item) return;
     if (typeof item === "string") {
       const label = item.trim();
-      if (label) result.push(label);
+      if (label) result.push({ name: label, price: 0, quantity: 1 });
       return;
     }
     if (Array.isArray(item)) {
@@ -78,13 +78,26 @@ function flattenPartnerItemOptions(value) {
           item.title ||
           ""
       ).trim();
-      if (label) result.push(label);
+      if (label) {
+        result.push({
+          name: label,
+          price: Math.max(toNumber(item.price ?? item.cost, 0), 0),
+          quantity: Math.max(toNumber(item.quantity, 1), 1)
+        });
+        return;
+      }
       [item.items, item.options, item.toppings, item.selectedOptions, item.values].forEach(walk);
     }
   }
 
   walk(value);
-  return Array.from(new Set(result));
+  const seen = new Set();
+  return result.filter((option) => {
+    const key = `${option.name}|${option.price}|${option.quantity}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function toStatusToken(value = "") {
@@ -120,14 +133,25 @@ function normalizeStatusFromPartner(order = {}) {
 
 function mapPartnerItemRow(item = {}) {
   const quantity = toNumber(item.quantity, 1);
-  const unitPrice = toNumber(item.unit_price, 0);
-  const lineTotal = toNumber(item.line_total, unitPrice * quantity);
-  const options = flattenPartnerItemOptions(item.options);
+  const storedUnitPrice = toNumber(item.unit_price, 0);
+  const lineTotal = toNumber(item.line_total, storedUnitPrice * quantity);
+  const optionDetails = normalizePartnerItemOptions(item.options);
+  const options = optionDetails.map((option) => option.name);
   const sourceItemId = String(item.id || "");
   const productId = String(item.web_product_id || item.partner_item_id || item.item_key || sourceItemId);
   const kitchenItemStatus = String(item.kitchen_item_status || item.item_status || "pending");
-  const originalUnitPrice = toNumber(item.original_unit_price, unitPrice);
-  const discountedUnitPrice = toNumber(item.discounted_unit_price, unitPrice);
+  const storedOriginalPrice = toNumber(item.original_unit_price, storedUnitPrice);
+  const storedDiscountedPrice = toNumber(item.discounted_unit_price, lineTotal);
+  const storedItemDiscount = Math.abs(toNumber(item.item_discount_amount, 0));
+  const partnerPricesAreLineTotals = quantity > 1 && (
+    Math.abs(storedDiscountedPrice - lineTotal) < 0.01 ||
+    Math.abs(storedOriginalPrice - lineTotal - storedItemDiscount) < 0.01 ||
+    Math.abs(storedUnitPrice - lineTotal) < 0.01
+  );
+  const originalLineTotal = partnerPricesAreLineTotals ? storedOriginalPrice : storedOriginalPrice * quantity;
+  const originalUnitPrice = quantity > 0 ? originalLineTotal / quantity : originalLineTotal;
+  const discountedUnitPrice = quantity > 0 ? lineTotal / quantity : lineTotal;
+  const unitPrice = partnerPricesAreLineTotals && quantity > 0 ? storedUnitPrice / quantity : storedUnitPrice;
   return {
     id: productId || sourceItemId,
     sourceItemId,
@@ -139,13 +163,14 @@ function mapPartnerItemRow(item = {}) {
     price: unitPrice,
     unitTotal: unitPrice,
     lineTotal,
+    originalLineTotal,
     originalUnitPrice,
     discountedUnitPrice,
-    itemDiscountAmount: Math.abs(toNumber(item.item_discount_amount, 0)),
+    itemDiscountAmount: storedItemDiscount,
     platformDiscountAmount: Math.abs(toNumber(item.platform_discount_amount, 0)),
     sellerDiscountAmount: Math.abs(toNumber(item.seller_discount_amount, 0)),
     promotionData: item.promotion_data && typeof item.promotion_data === "object" ? item.promotion_data : {},
-    toppings: options.map((name) => ({ name, price: 0, quantity: 1 })),
+    toppings: optionDetails,
     optionGroups: [],
     options,
     note: item.note || "",

@@ -891,15 +891,30 @@ function OrderDetailPanelV2({
           <div className="admin-order-item-list">
             {items.map((item, index) => {
               const lineTotal = Number(item.lineTotal || (item.unitTotal || item.price || 0) * (item.quantity || 1));
-              const originalLineTotal = Number(item.originalUnitPrice || item.price || 0) * Number(item.quantity || 1);
+              const originalLineTotal = Number(
+                item.originalLineTotal ??
+                (Number(item.originalUnitPrice || item.price || 0) * Number(item.quantity || 1))
+              );
               const itemDiscount = Math.max(
                 Number(item.itemDiscountAmount || 0),
                 originalLineTotal > lineTotal ? originalLineTotal - lineTotal : 0
               );
-              const options = getOrderItemOptionLabels(item, { includeQuantity: true });
+              const paidToppings = (Array.isArray(item.toppings) ? item.toppings : [])
+                .filter((topping) => Number(topping?.price || 0) > 0);
+              const paidToppingNames = new Set(paidToppings.map((topping) => String(topping?.name || "").trim()));
+              const options = getOrderItemOptionLabels(item, { includeQuantity: true })
+                .filter((label) => !paidToppingNames.has(String(label || "").replace(/\s+x\d+$/i, "").trim()));
+              const paidToppingsTotal = paidToppings.reduce(
+                (sum, topping) => sum + Number(topping.price || 0) * Number(topping.quantity || 1) * Number(item.quantity || 1),
+                0
+              );
+              const baseItemTotal = Math.max(lineTotal - paidToppingsTotal, 0);
               return (
-                <div key={`${item.id || item.name}-${index}`} className="admin-order-detail-item">
-                  <div>
+                <div
+                  key={`${item.id || item.name}-${index}`}
+                  className={`admin-order-detail-item ${paidToppings.length ? "has-price-breakdown" : ""}`}
+                >
+                  <div className="admin-order-item-main">
                     <strong>{item.name}</strong>
                     {options.length ? <small>{options.join(" • ")}</small> : null}
                     {isPartnerOrder && itemDiscount > 0 ? (
@@ -911,6 +926,18 @@ function OrderDetailPanelV2({
                     {isPartnerOrder && originalLineTotal > lineTotal ? <del>{formatMoney(originalLineTotal)}</del> : null}
                     <em>{formatMoney(lineTotal)}</em>
                   </div>
+                  {paidToppings.length ? (
+                    <div className="admin-order-item-breakdown">
+                      <span><b>Giá món</b><em>{formatMoney(baseItemTotal)}</em></span>
+                      {paidToppings.map((topping, toppingIndex) => (
+                        <span key={`${topping.name}-${toppingIndex}`}>
+                          <b><i>+</i> {String(topping.name || "").replace(/^Ưu Đãi Khi Mua Kèm:\s*/i, "")}</b>
+                          <em>{formatMoney(Number(topping.price || 0) * Number(topping.quantity || 1) * Number(item.quantity || 1))}</em>
+                        </span>
+                      ))}
+                      <span className="is-total"><b>Tổng món</b><em>{formatMoney(lineTotal)}</em></span>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
