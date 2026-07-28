@@ -8,7 +8,8 @@ import {
   EyeSlash,
   LockKey,
   ShieldCheck,
-  SignOut
+  SignOut,
+  WarningCircle
 } from "@phosphor-icons/react";
 import { AdminButton } from "../ui/AdminCommon.jsx";
 import { AdminInput } from "../ui/index.js";
@@ -115,6 +116,29 @@ function AdminAuthBlockedPanel({ blockedEmail, message, onLogout }) {
       >
         <SignOut size={19} weight="bold" aria-hidden="true" />
         Đăng xuất và dùng tài khoản khác
+      </AdminButton>
+    </section>
+  );
+}
+
+function AdminAuthErrorPanel({ onRetry }) {
+  return (
+    <section className="admin-auth-panel" aria-labelledby="admin-auth-error-title">
+      <div className="admin-auth-state-icon admin-auth-state-icon--blocked" aria-hidden="true">
+        <WarningCircle size={34} weight="duotone" />
+      </div>
+      <p className="admin-auth-panel-kicker">Giao diện cần tải lại</p>
+      <h1 id="admin-auth-error-title">Admin vừa gặp một sự cố hiển thị</h1>
+      <p className="admin-auth-panel-description">
+        Phiên đăng nhập của bạn vẫn được giữ an toàn. Hãy tải lại để khôi phục khu vực quản trị.
+      </p>
+
+      <AdminButton
+        className="admin-auth-submit"
+        onClick={onRetry}
+      >
+        Tải lại trang Admin
+        <ArrowRight size={19} weight="bold" aria-hidden="true" />
       </AdminButton>
     </section>
   );
@@ -237,7 +261,8 @@ export default function AdminAuthGate({
   onEmailChange,
   onPasswordChange,
   onSubmit,
-  onLogout
+  onLogout,
+  onRetry
 }) {
   return (
     <div className="admin-app admin-shell admin-shell--auth admin-auth-shell">
@@ -252,6 +277,7 @@ export default function AdminAuthGate({
               onLogout={onLogout}
             />
           ) : null}
+          {mode === "error" ? <AdminAuthErrorPanel onRetry={onRetry} /> : null}
           {mode === "login" ? (
             <AdminAuthLoginPanel
               email={email}

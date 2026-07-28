@@ -1,6 +1,22 @@
 import { formatMoney } from "../../../utils/format.js";
 import { AdminPanel } from "../ui/index.js";
 
+const EMPTY_CHANNEL_FINANCE = Object.freeze({
+  totalOrders: 0,
+  grossRevenue: 0,
+  promotionAmount: 0,
+  platformFee: 0,
+  netRevenue: 0
+});
+
+function getChannelFinance(channels = [], group = "") {
+  const rows = Array.isArray(channels) ? channels : [];
+  return {
+    ...EMPTY_CHANNEL_FINANCE,
+    ...(rows.find((item) => item?.group === group) || {})
+  };
+}
+
 function ProductList({ rows = [], valueKey = "quantity", emptyText }) {
   const maxValue = Math.max(...rows.map((item) => Number(item[valueKey] || 0)), 1);
 
@@ -108,9 +124,12 @@ export function AdminSettlementSummary({
     );
   }
 
-  const finance = analytics.finance || {};
-  const partner = analytics.channels?.find((item) => item.group === "partner") || {};
-  const owned = analytics.channels?.find((item) => item.group === "owned") || {};
+  const finance = {
+    ...EMPTY_CHANNEL_FINANCE,
+    ...(analytics.finance || {})
+  };
+  const partner = getChannelFinance(analytics.channels, "partner");
+  const owned = getChannelFinance(analytics.channels, "owned");
   const totalNetRevenue = Number(finance.netRevenue || 0);
   const partnerShare = totalNetRevenue
     ? Math.round((Number(partner.netRevenue || 0) / totalNetRevenue) * 100)

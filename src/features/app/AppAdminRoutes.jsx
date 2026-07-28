@@ -2,6 +2,7 @@ import { useLocation } from "react-router-dom";
 import { adminPathToState } from "../../app/routeState.js";
 import AdminApp from "../../pages/admin/AdminApp.jsx";
 import AdminAuthBoundary from "../../pages/admin/auth/AdminAuthBoundary.jsx";
+import AdminAppErrorBoundary from "../../pages/admin/auth/AdminAppErrorBoundary.jsx";
 
 export default function AppAdminRoutes({ adminAppProps }) {
   const location = useLocation();
@@ -10,11 +11,13 @@ export default function AppAdminRoutes({ adminAppProps }) {
   return (
     <AdminAuthBoundary>
       {(adminAuth) => (
-        <AdminApp
-          {...adminAppProps}
-          routeState={routeState}
-          adminAuth={adminAuth}
-        />
+        <AdminAppErrorBoundary>
+          <AdminApp
+            {...adminAppProps}
+            routeState={routeState}
+            adminAuth={adminAuth}
+          />
+        </AdminAppErrorBoundary>
       )}
     </AdminAuthBoundary>
   );
