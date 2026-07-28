@@ -8,7 +8,9 @@ import {
   printLocalReceipt
 } from "./posPrinterService";
 
-const JOB_TYPE = "customer_bill";
+const CUSTOMER_BILL_JOB_TYPE = "customer_bill";
+const ITEM_LABEL_JOB_TYPE = "item_label";
+const JOB_TYPES = [CUSTOMER_BILL_JOB_TYPE, ITEM_LABEL_JOB_TYPE];
 const PRINTER_KEY = "cashier-80mm";
 const POLL_INTERVAL_MS = 30000;
 const EXPIRED_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
@@ -25,7 +27,8 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
   "delivery_order_payment_qr",
   "qr_order_preparation",
   "qr_order_bundle",
-  "pos_shift_close"
+  "pos_shift_close",
+  ITEM_LABEL_JOB_TYPE
 ]);
 const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "counter", "tai_quay"]);
 const REMOTE_ORDER_SOURCE_TYPES = new Set(["web", "website", "qr_order", "customer_qr", "qr_tai_quay"]);
@@ -146,6 +149,14 @@ function isFreshJob(job = {}) {
   return Number.isFinite(timestamp) && timestamp >= Date.now() - AUTO_PRINT_WINDOW_MS;
 }
 
+function isSupportedPrintJob(job = {}) {
+  return JOB_TYPES.includes(toText(job.job_type));
+}
+
+function getPrintJobPriority(job = {}) {
+  return toText(job.job_type) === CUSTOMER_BILL_JOB_TYPE ? 0 : 1;
+}
+
 async function expireOldPendingJobs(branchUuid) {
   const now = new Date().toISOString();
   const { error } = await supabase
@@ -157,7 +168,7 @@ async function expireOldPendingJobs(branchUuid) {
       updated_at: now
     })
     .eq("branch_uuid", branchUuid)
-    .eq("job_type", JOB_TYPE)
+    .in("job_type", JOB_TYPES)
     .eq("printer_key", PRINTER_KEY)
     .eq("status", "pending")
     .lt("created_at", getCutoffIso());
@@ -206,10 +217,11 @@ async function readPendingJobs(branchUuid) {
     .from("print_jobs")
     .select("id,branch_uuid,printer_key,job_type,status,order_code,source_type,payload,retry_count,created_at,requested_at")
     .eq("branch_uuid", branchUuid)
-    .eq("job_type", JOB_TYPE)
+    .in("job_type", JOB_TYPES)
     .eq("printer_key", PRINTER_KEY)
     .eq("status", "pending")
     .gte("created_at", getCutoffIso())
+    .order("job_type", { ascending: true })
     .order("created_at", { ascending: true })
     .limit(MAX_JOBS_PER_POLL);
 
@@ -230,11 +242,11 @@ async function claimJob(job, branchUuid, deviceId) {
     })
     .eq("id", job.id)
     .eq("branch_uuid", branchUuid)
-    .eq("job_type", JOB_TYPE)
+    .eq("job_type", toText(job.job_type))
     .eq("printer_key", PRINTER_KEY)
     .eq("status", "pending")
     .gte("created_at", getCutoffIso())
-    .select("id,order_code,source_type,payload,retry_count")
+    .select("id,job_type,order_code,source_type,payload,retry_count")
     .maybeSingle();
 
   if (error) throw error;
@@ -276,6 +288,7 @@ async function markFailed(job, message) {
 function buildPrintPayload(job = {}) {
   const payload = getObject(job.payload);
   const sourceType = normalizeSourceToken(job.source_type || payload.type || payload.sourceType);
+  const isItemLabel = toText(job.job_type) === ITEM_LABEL_JOB_TYPE || sourceType === ITEM_LABEL_JOB_TYPE;
   const order = getObject(payload.order);
   const payloadText = toText(payload.text);
   const secondaryText = toText(payload.secondaryText);
@@ -285,6 +298,7 @@ function buildPrintPayload(job = {}) {
     REMOTE_ORDER_SOURCE_TYPES.has(sourceType) &&
     (payloadText.includes("TỔNG CẦN THU") || payloadText.includes("CHƯA THANH TOÁN"));
   const shouldBuildPreparationTicket =
+    !isItemLabel &&
     !paidAt &&
     (["unpaid", "pending", "pendingpayment"].includes(paymentStatus) || legacyUnpaidReceipt);
   const generatedText = shouldBuildPreparationTicket
@@ -292,7 +306,7 @@ function buildPrintPayload(job = {}) {
     : "";
   const text = generatedText || payloadText || buildReceiptTextFromOrder(order, sourceType);
   const isPreparationTicket = text.includes("@@CENTER:PHIẾU LÀM MÓN");
-  const skipFooter = NO_FOOTER_SOURCE_TYPES.has(sourceType) || isPreparationTicket;
+  const skipFooter = isItemLabel || NO_FOOTER_SOURCE_TYPES.has(sourceType) || isPreparationTicket;
 
   return {
     text,
@@ -300,6 +314,7 @@ function buildPrintPayload(job = {}) {
     sourceType,
     alertKey: buildAlertKey(job, payload),
     isQrPayment: isQrPaymentPrintPayload(payload, sourceType),
+    shouldPlayAlert: !isItemLabel,
     shouldDelayPrint: sourceType === "qr_order",
     footerText: skipFooter ? "" : toText(payload.footerText || DEFAULT_FOOTER_TEXT),
     footerQrUrl: skipFooter ? "" : toText(payload.footerQrUrl || DEFAULT_FOOTER_QR_URL),
@@ -420,7 +435,9 @@ async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
     if (typeof onStatus === "function") {
       onStatus({ running: true, tone: "printing", message: `Đang in ${claimed.order_code || "bill"}...` });
     }
-    const alertTask = playPrintJobAlert(printPayload).catch(() => {});
+    const alertTask = printPayload.shouldPlayAlert
+      ? playPrintJobAlert(printPayload).catch(() => {})
+      : Promise.resolve(false);
     if (printPayload.shouldDelayPrint) {
       await wait(QR_CUSTOMER_BILL_PRINT_DELAY_MS);
     }
@@ -492,29 +509,43 @@ export async function startPosPrintStation({
   let polling = false;
   let pollTimer = null;
   let appStateSubscription = null;
-  let printQueue = Promise.resolve();
+  const queuedJobs = [];
+  let queueRunning = false;
   const processingIds = new Set();
 
   const notify = (status) => {
     if (active && typeof onStatus === "function") onStatus(status);
   };
 
+  const drainPrintQueue = async () => {
+    if (queueRunning || !active) return;
+    queueRunning = true;
+    while (active && queuedJobs.length) {
+      queuedJobs.sort((left, right) => {
+        const priorityDifference = getPrintJobPriority(left.job) - getPrintJobPriority(right.job);
+        if (priorityDifference !== 0) return priorityDifference;
+        return new Date(left.job.created_at || 0).getTime() - new Date(right.job.created_at || 0).getTime();
+      });
+      const entry = queuedJobs.shift();
+      try {
+        entry.resolve(await processPrintJobOnce(entry.job, safeBranchUuid, safeDeviceId, notify));
+      } catch (error) {
+        notify({ running: true, tone: "error", message: error?.message || "Không in được lệnh tự động." });
+        entry.resolve(false);
+      } finally {
+        processingIds.delete(entry.job.id);
+      }
+    }
+    queueRunning = false;
+  };
+
   const processJob = (job) => {
     if (!active || !job?.id || processingIds.has(job.id)) return Promise.resolve(false);
     processingIds.add(job.id);
-    const queuedJob = printQueue.then(async () => {
-      if (!active) return false;
-      try {
-        return await processPrintJobOnce(job, safeBranchUuid, safeDeviceId, notify);
-      } catch (error) {
-        notify({ running: true, tone: "error", message: error?.message || "Không in được bill tự động." });
-        return false;
-      } finally {
-        processingIds.delete(job.id);
-      }
+    return new Promise((resolve) => {
+      queuedJobs.push({ job, resolve });
+      drainPrintQueue();
     });
-    printQueue = queuedJob.catch(() => false);
-    return queuedJob;
   };
 
   const poll = async () => {
@@ -555,7 +586,7 @@ export async function startPosPrintStation({
       ({ new: job }) => {
         if (
           toText(job?.status) === "pending" &&
-          toText(job?.job_type) === JOB_TYPE &&
+          isSupportedPrintJob(job) &&
           toText(job?.printer_key) === PRINTER_KEY &&
           isFreshJob(job)
         ) {
@@ -573,6 +604,10 @@ export async function startPosPrintStation({
 
   return () => {
     active = false;
+    queuedJobs.splice(0).forEach((entry) => {
+      processingIds.delete(entry.job?.id);
+      entry.resolve(false);
+    });
     if (pollTimer) globalThis.clearInterval(pollTimer);
     appStateSubscription?.remove();
     supabase.removeChannel(channel);
