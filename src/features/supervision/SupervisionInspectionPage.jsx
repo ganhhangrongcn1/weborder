@@ -152,7 +152,8 @@ export default function SupervisionInspectionPage({ adminAuth }) {
       document.querySelector(".inspection-closing")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    await flow.finish(inspectionNotes);
+    const result = await flow.finish(inspectionNotes);
+    if (result) setShowReport(true);
   }
 
   function renderConfirmationSection() {
