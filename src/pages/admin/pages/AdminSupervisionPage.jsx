@@ -12,7 +12,6 @@ import { AdminBadge, AdminButton, AdminCard, AdminInput, AdminSelect } from "../
 import { AdminEmptyState } from "../ui/AdminCommon.jsx";
 import AdminSupervisionReports from "../checklist/AdminSupervisionReports.jsx";
 import AdminSupervisorAccounts from "../checklist/AdminSupervisorAccounts.jsx";
-import CorrectiveActionsPanel from "../../../features/supervision/CorrectiveActionsPanel.jsx";
 
 const EVIDENCE_LABELS = {
   never: "Không bắt buộc",
@@ -116,7 +115,6 @@ export default function AdminSupervisionPage({ branches = [] }) {
   const tabs = [
     { id: "overview", label: "Tổng quan" },
     { id: "history", label: "Lịch sử kiểm tra" },
-    { id: "corrective", label: "Theo dõi khắc phục" },
     { id: "schedule", label: "Lịch kiểm tra" },
     { id: "accounts", label: "Tài khoản giám sát" },
     { id: "config", label: "Cấu hình checklist" }
@@ -187,7 +185,7 @@ export default function AdminSupervisionPage({ branches = [] }) {
       <nav className="checklist-admin-tabs">
         {tabs.map((tab) => <button type="button" key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
       </nav>
-      {activeTab === "accounts" ? <AdminSupervisorAccounts branches={branches} /> : activeTab === "corrective" ? <CorrectiveActionsPanel adminMode /> : <AdminSupervisionReports branches={branches} view={activeTab} />}
+      {activeTab === "accounts" ? <AdminSupervisorAccounts branches={branches} /> : <AdminSupervisionReports branches={branches} view={activeTab} />}
     </div>;
   }
 

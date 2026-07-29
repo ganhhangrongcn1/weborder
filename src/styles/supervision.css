@@ -72,7 +72,7 @@
 .workspace-account dt { color: var(--sv-muted); font-size: 11px; }
 .workspace-account dd { margin: 0; font-size: 12px; font-weight: 700; }
 .workspace-account > button { display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 15px; border: 1px solid #e1bdb8; border-radius: 9px; background: white; color: #943e35; font: inherit; font-weight: 800; }
-.workspace-bottom-nav { position: fixed; z-index: 30; left: 50%; bottom: 12px; width: min(calc(100% - 24px), 480px); min-height: 62px; display: grid; grid-template-columns: repeat(4, 1fr); padding: 5px; border: 1px solid rgba(217, 208, 198, .9); border-radius: 16px; background: rgba(255, 255, 255, .96); box-shadow: 0 12px 34px rgba(60, 43, 31, .16); backdrop-filter: blur(14px); transform: translateX(-50%); }
+.workspace-bottom-nav { position: fixed; z-index: 30; left: 50%; bottom: 12px; width: min(calc(100% - 24px), 480px); min-height: 62px; display: grid; grid-template-columns: repeat(3, 1fr); padding: 5px; border: 1px solid rgba(217, 208, 198, .9); border-radius: 16px; background: rgba(255, 255, 255, .96); box-shadow: 0 12px 34px rgba(60, 43, 31, .16); backdrop-filter: blur(14px); transform: translateX(-50%); }
 .workspace-bottom-nav button { display: grid; place-items: center; align-content: center; gap: 3px; border: 0; border-radius: 11px; background: transparent; color: var(--sv-muted); font: inherit; }
 .workspace-bottom-nav button.active { background: #292621; color: white; }
 .workspace-bottom-nav span { font-size: 10px; font-weight: 750; }
