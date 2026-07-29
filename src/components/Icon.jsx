@@ -23,6 +23,7 @@ import {
   QrCode,
   SealPercent,
   ShareNetwork,
+  SignOut,
   ShoppingCartSimple,
   Sparkle,
   Star,
@@ -64,6 +65,7 @@ const iconComponents = {
   qr: QrCode,
   download: DownloadSimple,
   warning: WarningCircle,
+  logout: SignOut,
   minus: Minus,
   plus: Plus,
   close: X

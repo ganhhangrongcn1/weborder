@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import useSupervisionInspection from "../../hooks/useSupervisionInspection.js";
 import { processUploadImage } from "../../utils/imageUpload.js";
+import InspectionSummary from "./InspectionSummary.jsx";
 import SignaturePad from "./SignaturePad.jsx";
+import SupervisionWorkspace from "./SupervisionWorkspace.jsx";
 import "../../styles/supervision.css";
 
 const RESULT_OPTIONS = [
@@ -11,28 +13,6 @@ const RESULT_OPTIONS = [
   { value: "fail", label: "Không đạt", short: "×" },
   { value: "not_applicable", label: "Không áp dụng", short: "—" }
 ];
-
-const RESULT_LABELS = { improve: "Cần cải thiện", fail: "Không đạt" };
-const RESPONSIBILITY_LABELS = { store: "Lỗi chung cửa hàng", shift: "Lỗi chung trong ca", employees: "Nhân viên cụ thể" };
-
-function formatInspectionDate(value) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-}
-
-function InspectionSummary({ inspection, items, supervisorName = inspection?.supervisorName, showConfirmationIntro = true }) {
-  const issues = inspection.answers.filter((answer) => ["improve", "fail"].includes(answer.result)).map((answer) => {
-    const linkedParticipantIds = new Set(inspection.answerEmployees.filter((link) => link.answer_id === answer.id).map((link) => link.participant_id));
-    return {
-      ...answer,
-      item: items.find((item) => item.id === answer.item_id),
-      responsibleNames: inspection.participants.filter((participant) => linkedParticipantIds.has(participant.id)).map((participant) => participant.employee_name_snapshot),
-      evidence: inspection.evidence.filter((evidence) => evidence.answer_id === answer.id)
-    };
-  });
-
-  return <div className="inspection-summary"><div><h2>Tổng hợp biên bản</h2><p>Có thể mở lại bất kỳ lúc nào để rà soát lỗi và ảnh bằng chứng.</p></div><dl className="inspection-summary-meta"><div><dt>Người giám sát</dt><dd>{supervisorName || "Chưa xác định"}</dd></div><div><dt>Ngày kiểm tra</dt><dd>{formatInspectionDate(inspection.inspection.started_at)}</dd></div><div><dt>Chi nhánh</dt><dd>{inspection.inspection.branch_name_snapshot}</dd></div><div><dt>Mã biên bản</dt><dd>{inspection.inspection.inspection_code}</dd></div></dl><div className="inspection-summary-stats"><span><strong>{inspection.answers.length}/{items.length}</strong><small>Tiêu chí đã kiểm tra</small></span><span><strong>{issues.length}</strong><small>Nội dung cần lưu ý</small></span></div>{issues.length ? <div className="inspection-issue-summary">{issues.map((issue, index) => <article key={issue.id}><header><span>{index + 1}</span><div><small>{issue.item?.item_code || "Tiêu chí"}</small><strong>{issue.item?.content || "Nội dung kiểm tra"}</strong></div><b className={issue.result}>{RESULT_LABELS[issue.result]}</b></header><dl><div><dt>Phạm vi</dt><dd>{RESPONSIBILITY_LABELS[issue.responsibility_scope] || RESPONSIBILITY_LABELS.store}</dd></div>{issue.responsibility_scope === "employees" ? <div><dt>Nhân viên liên quan</dt><dd>{issue.responsibleNames.join(", ") || "Chưa chọn nhân viên"}</dd></div> : null}{issue.note ? <div><dt>Ghi chú giám sát</dt><dd>{issue.note}</dd></div> : null}</dl>{issue.evidence.length ? <div className="summary-evidence">{issue.evidence.map((evidence, evidenceIndex) => evidence.signed_url ? <a key={evidence.id} href={evidence.signed_url} target="_blank" rel="noreferrer"><img src={evidence.signed_url} alt={`Ảnh lỗi ${index + 1}.${evidenceIndex + 1}`} /></a> : null)}</div> : <small className="summary-no-evidence">Không có ảnh bằng chứng</small>}</article>)}</div> : <p className="inspection-no-issues">✓ Chưa có nội dung cần cải thiện hoặc không đạt.</p>}{showConfirmationIntro ? <div className="confirmation-heading"><h2>Xác nhận cuối biên bản</h2><p>Sau khi đã đọc bảng tổng hợp, từng nhân viên có thể ghi ý kiến và xác nhận trực tiếp trên điện thoại.</p></div> : null}</div>;
-}
 
 function evidenceRequired(item, result) {
   return item.evidence_rule === "always" || (item.evidence_rule === "fail" && result === "fail") || (item.evidence_rule === "improve_or_fail" && ["improve", "fail"].includes(result));
@@ -193,18 +173,9 @@ export default function SupervisionInspectionPage({ adminAuth }) {
 
   if (flow.loading) return <main className="supervision-state"><div className="supervision-spinner" /><h1>Đang chuẩn bị checklist</h1></main>;
 
-  if (flow.result) return <main className="supervision-result"><div className="result-mark">✓</div><p>Đã hoàn tất kiểm tra</p><h1>{flow.result.score} điểm</h1><strong>{flow.result.rating}</strong><span>Lần kiểm tra tiếp theo đã được hẹn sau {setup?.template?.inspection_interval_days || 2} ngày.</span><div><button type="button" className="secondary" onClick={() => setShowReport(true)}>Xem lại biên bản</button><button type="button" onClick={() => window.location.reload()}>Tạo kiểm tra mới</button></div>{showReport ? <div className="inspection-report-backdrop" onMouseDown={() => setShowReport(false)}><aside className="inspection-report-sheet" onMouseDown={(event) => event.stopPropagation()}><header><div><strong>Biên bản {flow.inspection.inspection.inspection_code}</strong><small>{flow.inspection.inspection.branch_name_snapshot}</small></div><button type="button" onClick={() => setShowReport(false)}>×</button></header><div><InspectionSummary inspection={flow.inspection} items={items} showConfirmationIntro={false} /></div></aside></div> : null}</main>;
+  if (flow.result) return <main className="supervision-result"><div className="result-mark">✓</div><p>Đã hoàn tất kiểm tra</p><h1>{flow.result.score} điểm</h1><strong>{flow.result.rating}</strong><span>Biên bản đã được lưu vào lịch sử và có thể mở lại bất kỳ lúc nào.</span><div><button type="button" className="secondary" onClick={() => setShowReport(true)}>Xem lại biên bản</button><button type="button" onClick={() => window.location.reload()}>Về tổng quan</button></div>{showReport ? <div className="inspection-report-backdrop" onMouseDown={() => setShowReport(false)}><aside className="inspection-report-sheet" onMouseDown={(event) => event.stopPropagation()}><header><div><strong>Biên bản {flow.inspection.inspection.inspection_code}</strong><small>{flow.inspection.inspection.branch_name_snapshot}</small></div><button type="button" onClick={() => setShowReport(false)}>×</button></header><div><InspectionSummary inspection={flow.inspection} items={items} showConfirmationIntro={false} /></div></aside></div> : null}</main>;
 
-  if (!flow.inspection) return <main className="supervision-setup">
-    <header><div className="supervision-brand"><span><img src="/pwa-icon-192.png" alt="Logo Gánh Hàng Rong" /></span><div><strong>Kiểm tra cửa hàng</strong><small>{adminAuth?.adminProfile?.name || adminAuth?.adminProfile?.email || "Giám sát"}</small></div></div><button type="button" onClick={adminAuth?.onAdminLogout}><Icon name="logout" size={18} /></button></header>
-    <section className="setup-content"><p className="supervision-kicker">Bắt đầu biên bản</p><h1>Hôm nay kiểm tra cửa hàng nào?</h1><p>Chọn chi nhánh và những nhân viên đang có mặt tại thời điểm kiểm tra.</p>
-      <label className="supervision-field"><span>Chi nhánh *</span><select value={branchUuid} onChange={(event) => { setBranchUuid(event.target.value); setEmployeeIds([]); }}><option value="">Chọn chi nhánh</option>{setup?.branches.map((branch) => <option key={branch.branch_uuid} value={branch.branch_uuid}>{branch.name}</option>)}</select></label>
-      {setup?.drafts?.length ? <section className="draft-inspections"><strong>Biên bản đang làm dở</strong>{setup.drafts.map((item) => <button type="button" key={item.id} disabled={flow.working} onClick={() => flow.resume(item.id)}><span>{item.branch_name_snapshot}<small>{item.inspection_code}</small></span><b>Tiếp tục →</b></button>)}</section> : null}
-      {branchUuid ? <fieldset className="supervision-employees"><legend>Nhân viên có mặt</legend>{branchEmployees.length ? branchEmployees.map((employee) => <label key={employee.id}><input type="checkbox" checked={employeeIds.includes(employee.id)} onChange={() => toggleEmployee(employee.id)} /><span><strong>{employee.full_name}</strong><small>{employee.employee_code} · {employee.position_name}</small></span></label>) : <p>Chi nhánh này chưa có nhân viên đang hoạt động.</p>}</fieldset> : null}
-      {flow.error ? <p className="supervision-error">{flow.error}</p> : null}
-      <button className="supervision-primary" type="button" disabled={!branchUuid || flow.working} onClick={() => flow.begin(branchUuid, employeeIds)}>{flow.working ? "Đang tạo biên bản…" : `Bắt đầu kiểm tra · ${items.length} tiêu chí`}</button>
-    </section>
-  </main>;
+  if (!flow.inspection) return <><SupervisionWorkspace adminAuth={adminAuth} setup={setup} working={flow.working} error={flow.error} branchUuid={branchUuid} employeeIds={employeeIds} branchEmployees={branchEmployees} onBranchChange={(value) => { setBranchUuid(value); setEmployeeIds([]); }} onToggleEmployee={toggleEmployee} onBegin={() => flow.begin(branchUuid, employeeIds)} onResume={flow.resume} onViewReport={flow.viewHistory} />{flow.historyInspection ? <div className="inspection-report-backdrop" onMouseDown={flow.closeHistory}><aside className="inspection-report-sheet" onMouseDown={(event) => event.stopPropagation()}><header><div><strong>Biên bản {flow.historyInspection.inspection.inspection_code}</strong><small>{flow.historyInspection.inspection.branch_name_snapshot}</small></div><button type="button" onClick={flow.closeHistory}>×</button></header><div><InspectionSummary inspection={flow.historyInspection} items={flow.historyInspection.items} showConfirmationIntro={false} /></div></aside></div> : null}</>;
 
   return <main className="supervision-check">
     <header className="check-header"><button type="button" onClick={() => window.location.reload()}><Icon name="arrow-left" size={18} /></button><div><strong>{flow.inspection.inspection.branch_name_snapshot}</strong><small>Đã lưu {completedCount}/{items.length} tiêu chí</small></div><button type="button" className="check-report-trigger" onClick={() => setShowReport(true)}><span>Biên bản</span><b>{flow.inspection.answers.filter((answer) => ["improve", "fail"].includes(answer.result)).length} lỗi</b></button><button type="button" className="check-navigator-trigger" onClick={() => setShowNavigator(true)}><span>Danh mục</span><b>{itemIndex + 1}/{items.length}</b></button></header>

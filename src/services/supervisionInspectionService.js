@@ -23,10 +23,12 @@ export async function loadInspectionSetup() {
   if (failed) throw failed.error;
   const { data: sessionData } = await client.auth.getSession();
   const authUserId = sessionData?.session?.user?.id;
-  const draftResult = authUserId
-    ? await client.from("checklist_inspections").select("id, inspection_code, branch_uuid, branch_name_snapshot, started_at").eq("status", "draft").eq("created_by", authUserId).order("started_at", { ascending: false }).limit(5)
-    : { data: [], error: null };
+  const [draftResult, historyResult] = authUserId ? await Promise.all([
+    client.from("checklist_inspections").select("id, inspection_code, branch_uuid, branch_name_snapshot, started_at").eq("status", "draft").eq("created_by", authUserId).order("started_at", { ascending: false }).limit(5),
+    client.from("checklist_inspections").select("id, inspection_code, branch_uuid, branch_name_snapshot, submitted_at, score, rating, has_critical_failure").eq("status", "submitted").eq("created_by", authUserId).order("submitted_at", { ascending: false }).limit(40)
+  ]) : [{ data: [], error: null }, { data: [], error: null }];
   if (draftResult.error) throw draftResult.error;
+  if (historyResult.error) throw historyResult.error;
   const template = templates.data?.[0] || null;
   const version = (versions.data || []).find((item) => item.template_id === template?.id) || null;
   return {
@@ -37,7 +39,8 @@ export async function loadInspectionSetup() {
     version,
     sections: (sections.data || []).filter((section) => section.version_id === version?.id),
     items: (items.data || []).filter((item) => item.version_id === version?.id),
-    drafts: draftResult.data || []
+    drafts: draftResult.data || [],
+    history: historyResult.data || []
   };
 }
 

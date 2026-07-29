@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { deleteInspectionEvidence, loadInspection, loadInspectionSetup, saveInspectionAnswer, saveInspectionConfirmation, startInspection, submitInspection, uploadInspectionEvidence, uploadInspectionSignature } from "../services/supervisionInspectionService.js";
 
 export default function useSupervisionInspection() {
-  const [state, setState] = useState({ setup: null, inspection: null, loading: true, working: false, error: "", result: null });
+  const [state, setState] = useState({ setup: null, inspection: null, historyInspection: null, loading: true, working: false, error: "", result: null });
 
   useEffect(() => {
     let active = true;
@@ -31,6 +31,17 @@ export default function useSupervisionInspection() {
     setState((current) => ({ ...current, inspection, setup: { ...current.setup, sections: inspection.sections, items: inspection.items } }));
     return true;
   }, [run]);
+
+  const viewHistory = useCallback(async (inspectionId) => {
+    const inspection = await run(() => loadInspection(inspectionId));
+    if (!inspection) return false;
+    setState((current) => ({ ...current, historyInspection: inspection }));
+    return true;
+  }, [run]);
+
+  const closeHistory = useCallback(() => {
+    setState((current) => ({ ...current, historyInspection: null }));
+  }, []);
 
   const saveAnswer = useCallback(async (payload) => {
     const answerId = await run(() => saveInspectionAnswer(payload));
@@ -88,5 +99,5 @@ export default function useSupervisionInspection() {
     return result;
   }, [run, state.inspection]);
 
-  return { ...state, begin, resume, saveAnswer, uploadEvidence, deleteEvidence, confirmParticipant, signParticipant, finish };
+  return { ...state, begin, resume, viewHistory, closeHistory, saveAnswer, uploadEvidence, deleteEvidence, confirmParticipant, signParticipant, finish };
 }
