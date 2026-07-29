@@ -65,7 +65,8 @@ export default function useSupervisionInspection() {
   const confirmParticipant = useCallback(async (payload) => {
     const confirmation = await run(() => saveInspectionConfirmation(payload));
     if (payload.confirmed && confirmation) {
-      setState((current) => ({ ...current, inspection: { ...current.inspection, confirmations: [...current.inspection.confirmations.filter((item) => item.participant_id !== payload.participantId), confirmation] } }));
+      const nextConfirmation = { ...confirmation, signature_signed_url: payload.signatureSignedUrl || confirmation.signature_signed_url || "" };
+      setState((current) => ({ ...current, inspection: { ...current.inspection, confirmations: [...current.inspection.confirmations.filter((item) => item.participant_id !== payload.participantId), nextConfirmation] } }));
       return true;
     }
     if (!payload.confirmed) {
@@ -76,9 +77,9 @@ export default function useSupervisionInspection() {
   }, [run]);
 
   const signParticipant = useCallback(async ({ inspectionId, participantId, file, employeeComment = "" }) => {
-    const signatureObjectPath = await run(() => uploadInspectionSignature({ inspectionId, participantId, file }));
-    if (!signatureObjectPath) return false;
-    return confirmParticipant({ inspectionId, participantId, confirmed: true, method: "signature", signatureObjectPath, employeeComment });
+    const uploadedSignature = await run(() => uploadInspectionSignature({ inspectionId, participantId, file }));
+    if (!uploadedSignature?.objectPath) return false;
+    return confirmParticipant({ inspectionId, participantId, confirmed: true, method: "signature", signatureObjectPath: uploadedSignature.objectPath, signatureSignedUrl: uploadedSignature.signedUrl, employeeComment });
   }, [confirmParticipant, run]);
 
   const finish = useCallback(async (notes) => {

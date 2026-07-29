@@ -71,11 +71,13 @@ export async function loadInspection(inspectionId) {
   if (sections.error) throw sections.error;
   if (items.error) throw items.error;
   const evidenceRows = evidence.data || [];
-  const signedResult = evidenceRows.length
-    ? await client.storage.from(EVIDENCE_BUCKET).createSignedUrls(evidenceRows.map((item) => item.object_path), 3600)
+  const confirmationRows = confirmations.data || [];
+  const signedPaths = [...evidenceRows.map((item) => item.object_path), ...confirmationRows.map((item) => item.signature_object_path).filter(Boolean)];
+  const signedResult = signedPaths.length
+    ? await client.storage.from(EVIDENCE_BUCKET).createSignedUrls(signedPaths, 3600)
     : { data: [], error: null };
   const signedByPath = new Map((signedResult.data || []).map((item) => [item.path, item.signedUrl]));
-  return { inspection: inspection.data, participants: participants.data || [], answers: answers.data || [], evidence: evidenceRows.map((item) => ({ ...item, signed_url: signedByPath.get(item.object_path) || "" })), confirmations: confirmations.data || [], answerEmployees: answerEmployees.data || [], sections: sections.data || [], items: items.data || [] };
+  return { inspection: inspection.data, participants: participants.data || [], answers: answers.data || [], evidence: evidenceRows.map((item) => ({ ...item, signed_url: signedByPath.get(item.object_path) || "" })), confirmations: confirmationRows.map((item) => ({ ...item, signature_signed_url: signedByPath.get(item.signature_object_path) || "" })), answerEmployees: answerEmployees.data || [], sections: sections.data || [], items: items.data || [] };
 }
 
 export async function saveInspectionAnswer({ inspectionId, itemId, result, note, responsibilityScope = "store", employeeIds }) {
@@ -152,7 +154,8 @@ export async function uploadInspectionSignature({ inspectionId, participantId, f
   const objectPath = `${userId}/${inspectionId}/signatures/${participantId}-${Date.now()}.webp`;
   const { error } = await client.storage.from(EVIDENCE_BUCKET).upload(objectPath, file, { contentType: "image/webp", upsert: false });
   if (error) throw error;
-  return objectPath;
+  const { data: signedData } = await client.storage.from(EVIDENCE_BUCKET).createSignedUrl(objectPath, 3600);
+  return { objectPath, signedUrl: signedData?.signedUrl || "" };
 }
 
 export async function submitInspection(inspectionId, notes) {
