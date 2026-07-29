@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
+import CorrectiveActionsPanel from "./CorrectiveActionsPanel.jsx";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -28,6 +29,7 @@ export default function SupervisionWorkspace({ adminAuth, setup, working, error,
     <header className="workspace-header"><div className="supervision-brand"><span><img src="/pwa-icon-192.png" alt="Logo Gánh Hàng Rong" /></span><div><strong>Không gian giám sát</strong><small>{profileName}</small></div></div><button type="button" aria-label="Đăng xuất" onClick={adminAuth?.onAdminLogout}><Icon name="logout" size={18} /></button></header>
 
     <div className="workspace-content">
+      {activeTab === "corrective" ? <CorrectiveActionsPanel adminMode={isAdmin} /> : null}
       {activeTab === "home" ? <>
         <section className="workspace-welcome"><p>Hoạt động hôm nay</p><h1>Chào {profileName.split(" ").slice(-2).join(" ")}</h1><span>Bắt đầu kiểm tra hoặc tiếp tục biên bản đang làm dở.</span></section>
         <section className="workspace-kpis" aria-label="Tổng quan tháng này"><article><span>Tháng này</span><strong>{monthHistory.length}</strong><small>Biên bản hoàn tất</small></article><article><span>Điểm trung bình</span><strong>{averageScore.toFixed(1)}</strong><small>Trên thang điểm 100</small></article><article className={attentionCount ? "attention" : ""}><span>Cần lưu ý</span><strong>{attentionCount}</strong><small>Biên bản dưới 75 hoặc lỗi nặng</small></article></section>
@@ -41,7 +43,7 @@ export default function SupervisionWorkspace({ adminAuth, setup, working, error,
       {activeTab === "account" ? <section className="workspace-account"><div className="account-avatar">{profileName.slice(0, 1).toUpperCase()}</div><p>Tài khoản giám sát</p><h1>{profileName}</h1><dl><div><dt>Vai trò</dt><dd>{isAdmin ? "Quản trị viên" : "Giám sát"}</dd></div><div><dt>Chi nhánh</dt><dd>{isAdmin ? "Toàn hệ thống" : `${(adminAuth?.checklistAccess || []).filter((item) => item.role === "supervisor" && item.branch_uuid).length} chi nhánh được phân công`}</dd></div><div><dt>Quyền thao tác</dt><dd>Tạo và xem biên bản kiểm tra</dd></div><div><dt>Cấu hình checklist</dt><dd>Chỉ quản trị viên chỉnh sửa trong Admin</dd></div></dl><button type="button" onClick={adminAuth?.onAdminLogout}><Icon name="logout" size={18} /> Đăng xuất</button></section> : null}
     </div>
 
-    <nav className="workspace-bottom-nav" aria-label="Điều hướng giám sát"><button type="button" className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><Icon name="home" size={21} /><span>Tổng quan</span></button><button type="button" className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}><Icon name="list" size={21} /><span>Biên bản</span></button><button type="button" className={activeTab === "account" ? "active" : ""} onClick={() => setActiveTab("account")}><Icon name="user" size={21} /><span>Tài khoản</span></button></nav>
+    <nav className="workspace-bottom-nav" aria-label="Điều hướng giám sát"><button type="button" className={activeTab === "home" ? "active" : ""} onClick={() => setActiveTab("home")}><Icon name="home" size={21} /><span>Tổng quan</span></button><button type="button" className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}><Icon name="list" size={21} /><span>Biên bản</span></button><button type="button" className={activeTab === "corrective" ? "active" : ""} onClick={() => setActiveTab("corrective")}><Icon name="check" size={21} /><span>Khắc phục</span></button><button type="button" className={activeTab === "account" ? "active" : ""} onClick={() => setActiveTab("account")}><Icon name="user" size={21} /><span>Tài khoản</span></button></nav>
   </main>;
 }
 
