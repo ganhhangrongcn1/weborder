@@ -25,7 +25,10 @@ async function requireAdmin(request: Request, client: ReturnType<typeof createCl
 
 async function listAccounts(client: ReturnType<typeof createClient>) {
   const { data: accessRows, error } = await client.from("checklist_user_access").select("auth_user_id,branch_uuid,is_active,created_at").eq("role", "supervisor").order("created_at", { ascending: false });
-  if (error) return json({ ok: false, message: "Không tải được danh sách tài khoản giám sát." }, 500);
+  if (error) {
+    console.error("[checklist-supervisor-account-api] list access failed", error);
+    return json({ ok: false, message: "Không tải được danh sách tài khoản giám sát." }, 500);
+  }
   const userIds = Array.from(new Set((accessRows || []).map((row: JsonRecord) => text(row.auth_user_id)).filter(Boolean)));
   if (!userIds.length) return json({ ok: true, accounts: [] });
   const [{ data: profiles }, { data: branchRows }] = await Promise.all([
