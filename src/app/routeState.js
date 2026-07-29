@@ -104,6 +104,12 @@ export function adminPathToState(pathname = "/admin") {
       customerAdminTab: "crm"
     };
   }
+  if (path === "/admin/employees") {
+    return { section: "employees", activeAdminNav: "employees-main" };
+  }
+  if (path === "/admin/supervision") {
+    return { section: "supervision", activeAdminNav: "supervision-main" };
+  }
   if (path === "/admin/loyalty") {
     return {
       section: "customers",
@@ -180,6 +186,8 @@ export function adminNavToPath(item) {
   if (item.id === "orders-main") return "/admin/orders";
   if (item.id === "shifts-main") return "/admin/shifts";
   if (item.id === "customer-main") return "/admin/customers";
+  if (item.id === "employees-main") return "/admin/employees";
+  if (item.id === "supervision-main") return "/admin/supervision";
   if (item.id === "menu-main") return "/admin/menu";
   if (item.id === "store-branches") return "/admin/settings";
   if (item.id === "store-accounts") return "/admin/settings/accounts";

@@ -23,6 +23,13 @@ export const navGroups = [
     ]
   },
   {
+    title: "Nhân sự & giám sát",
+    items: [
+      { id: "employees-main", label: "Quản lý nhân sự", section: "employees" },
+      { id: "supervision-main", label: "Quản lý giám sát", section: "supervision" }
+    ]
+  },
+  {
     title: "Giao diện & KM",
     items: [
       { id: "store-ui", label: "Quản lý giao diện", section: "promo", sub: "ui" },
@@ -43,7 +50,9 @@ export const navIconMap = {
   "store-zalo": "phone",
   "store-downloads": "download",
   "store-ui": "star",
-  "promo-campaign": "gift"
+  "promo-campaign": "gift",
+  "employees-main": "user",
+  "supervision-main": "star"
 };
 
 export const dashboardQuickActions = [
@@ -65,6 +74,8 @@ export function getAdminPageTitle(section) {
   if (section === "customers") return "Khách hàng / CRM";
   if (section === "cakes") return "Bánh sinh nhật bánh tráng";
   if (section === "menu") return "Quản lý menu";
+  if (section === "employees") return "Quản lý nhân sự";
+  if (section === "supervision") return "Quản lý giám sát";
   if (section === "promo") return "Quản lý giao diện / khuyến mãi";
   return "Cài đặt cửa hàng";
 }

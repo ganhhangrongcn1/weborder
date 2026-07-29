@@ -7,6 +7,7 @@ const KitchenPage = lazy(() => import("../features/kitchen/KitchenPage.jsx"));
 const DownloadPage = lazy(() => import("../pages/DownloadPage.jsx"));
 const BanhKemBanhTrangPage = lazy(() => import("../pages/BanhKemBanhTrangPage.jsx"));
 const QrCodeToolPage = lazy(() => import("../pages/QrCodeToolPage.jsx"));
+const SupervisionRoute = lazy(() => import("../features/supervision/SupervisionRoute.jsx"));
 
 function RouteLoadingFallback() {
   return (
@@ -56,11 +57,17 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/pos" element={<Navigate to="/download" replace />} />
       <Route path="/qrcode" element={<QrCodeToolPage />} />
       <Route path="/banhkembanhtrang" element={<BanhKemBanhTrangPage branches={adminAppProps?.branches || []} />} />
+      <Route path="/giamsat" element={<SupervisionRoute />} />
+      <Route path="/checklist" element={<Navigate to="/giamsat" replace />} />
+      <Route path="/chesklist" element={<Navigate to="/giamsat" replace />} />
+      <Route path="/supervision" element={<Navigate to="/giamsat" replace />} />
 
       <Route path="/admin" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/menu" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/orders" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/shifts" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/employees" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/supervision" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/customers" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/loyalty" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/settings" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
