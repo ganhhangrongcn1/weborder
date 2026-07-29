@@ -185,6 +185,34 @@ export async function loadChecklistSupervisionReport({ dateFrom, dateTo, branchU
   return data;
 }
 
+export async function loadChecklistBranchTrendReport({ dateFrom, dateTo, branchUuid = null }) {
+  const client = requireAdminClient();
+  const { data, error } = await client.rpc("get_checklist_branch_trend_report", {
+    p_date_from: dateFrom,
+    p_date_to: dateTo,
+    p_branch_uuid: branchUuid || null
+  });
+  if (error) throw error;
+  const paths = (data?.repeated_issues || []).flatMap((issue) =>
+    (issue.occurrences || []).flatMap((occurrence) => occurrence.evidence_paths || [])
+  );
+  const signedResult = paths.length
+    ? await client.storage.from("checklist-evidence").createSignedUrls([...new Set(paths)], 3600)
+    : { data: [], error: null };
+  if (signedResult.error) throw signedResult.error;
+  const signedByPath = new Map((signedResult.data || []).map((item) => [item.path, item.signedUrl]));
+  return {
+    ...data,
+    repeated_issues: (data?.repeated_issues || []).map((issue) => ({
+      ...issue,
+      occurrences: (issue.occurrences || []).map((occurrence) => ({
+        ...occurrence,
+        evidence_urls: (occurrence.evidence_paths || []).map((path) => signedByPath.get(path)).filter(Boolean)
+      }))
+    }))
+  };
+}
+
 export async function loadChecklistEmployeeMonthlyReport({ month, branchUuid = null }) {
   const client = requireAdminClient();
   const { data, error } = await client.rpc("get_checklist_employee_monthly_report", {
