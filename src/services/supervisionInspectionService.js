@@ -23,6 +23,14 @@ export async function loadInspectionSetup() {
   if (failed) throw failed.error;
   const { data: sessionData } = await client.auth.getSession();
   const authUserId = sessionData?.session?.user?.id;
+  const [profileResult, accessResult] = authUserId ? await Promise.all([
+    client.from("profiles").select("role,status").eq("auth_user_id", authUserId).maybeSingle(),
+    client.from("checklist_user_access").select("branch_uuid,role,is_active").eq("auth_user_id", authUserId).eq("is_active", true)
+  ]) : [{ data: null, error: null }, { data: [], error: null }];
+  if (profileResult.error) throw profileResult.error;
+  if (accessResult.error) throw accessResult.error;
+  const isAdmin = String(profileResult.data?.role || "").toLowerCase() === "admin" && String(profileResult.data?.status || "").toLowerCase() === "active";
+  const allowedBranchUuids = new Set((accessResult.data || []).map((item) => item.branch_uuid).filter(Boolean));
   const [draftResult, historyResult] = authUserId ? await Promise.all([
     client.from("checklist_inspections").select("id, inspection_code, branch_uuid, branch_name_snapshot, started_at").eq("status", "draft").eq("created_by", authUserId).order("started_at", { ascending: false }).limit(5),
     client.from("checklist_inspections").select("id, inspection_code, branch_uuid, branch_name_snapshot, submitted_at, score, rating, has_critical_failure").eq("status", "submitted").eq("created_by", authUserId).order("submitted_at", { ascending: false }).limit(40)
@@ -32,7 +40,7 @@ export async function loadInspectionSetup() {
   const template = templates.data?.[0] || null;
   const version = (versions.data || []).find((item) => item.template_id === template?.id) || null;
   return {
-    branches: (branches.data || []).filter((branch) => branch.branch_uuid),
+    branches: (branches.data || []).filter((branch) => branch.branch_uuid && (isAdmin || allowedBranchUuids.has(branch.branch_uuid))),
     employees: employees.data || [],
     assignments: assignments.data || [],
     template,

@@ -11,6 +11,7 @@ import {
 import { AdminBadge, AdminButton, AdminCard, AdminInput, AdminSelect } from "../ui/index.js";
 import { AdminEmptyState } from "../ui/AdminCommon.jsx";
 import AdminSupervisionReports from "../checklist/AdminSupervisionReports.jsx";
+import AdminSupervisorAccounts from "../checklist/AdminSupervisorAccounts.jsx";
 
 const EVIDENCE_LABELS = {
   never: "Không bắt buộc",
@@ -115,6 +116,7 @@ export default function AdminSupervisionPage({ branches = [] }) {
     { id: "overview", label: "Tổng quan" },
     { id: "history", label: "Lịch sử kiểm tra" },
     { id: "schedule", label: "Lịch kiểm tra" },
+    { id: "accounts", label: "Tài khoản giám sát" },
     { id: "config", label: "Cấu hình checklist" }
   ];
 
@@ -183,7 +185,7 @@ export default function AdminSupervisionPage({ branches = [] }) {
       <nav className="checklist-admin-tabs">
         {tabs.map((tab) => <button type="button" key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
       </nav>
-      <AdminSupervisionReports branches={branches} view={activeTab} />
+      {activeTab === "accounts" ? <AdminSupervisorAccounts branches={branches} /> : <AdminSupervisionReports branches={branches} view={activeTab} />}
     </div>;
   }
 

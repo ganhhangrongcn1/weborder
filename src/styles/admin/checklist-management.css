@@ -144,6 +144,29 @@
 .checklist-config-heading h1 { margin: 0; color: #30251f; font-size: clamp(28px, 3vw, 38px); letter-spacing: -.045em; }
 .checklist-config-heading h1 + span { display: block; margin-top: 7px; color: #81776e; font-size: 13px; }
 .checklist-config-heading > div:last-child { display: flex; gap: 8px; }
+.supervisor-account-admin { display: grid; gap: 14px; }
+.supervisor-account-create > header h3, .supervisor-account-list > header h3 { margin: 0; color: #30251f; }
+.supervisor-account-create > header p { margin: 6px 0 18px; color: #81776e; font-size: 12px; }
+.supervisor-account-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.supervisor-account-fields label { display: grid; gap: 7px; color: #554b44; font-size: 12px; font-weight: 750; }
+.supervisor-account-fields label b, .supervisor-branch-picker legend b { color: #c43126; }
+.supervisor-branch-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 18px 0 0; padding: 13px; border: 1px solid #e4dcd4; border-radius: 10px; }
+.supervisor-branch-picker legend { padding: 0 6px; color: #554b44; font-size: 12px; font-weight: 800; }
+.supervisor-branch-picker label { min-height: 42px; display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; background: #f7f4f0; color: #433932; font-size: 12px; font-weight: 700; }
+.supervisor-branch-picker input { width: 17px; height: 17px; accent-color: #76442d; }
+.supervisor-account-create footer { display: flex; justify-content: flex-end; margin-top: 16px; }
+.supervisor-account-list { display: grid; gap: 10px; }
+.supervisor-account-list > header { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; }
+.supervisor-account-list > header span { color: #81776e; font-size: 12px; }
+.supervisor-account-row { display: grid; gap: 14px; }
+.supervisor-account-identity { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 11px; }
+.supervisor-account-identity > div { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 11px; background: #f4d267; color: #3b2d24; font-size: 17px; font-weight: 850; }
+.supervisor-account-identity strong, .supervisor-account-identity small { display: block; }
+.supervisor-account-identity small { margin-top: 4px; color: #81776e; font-size: 11px; }
+.supervisor-branch-picker.compact { margin: 0; }
+.supervisor-account-row > footer { display: flex; justify-content: flex-end; gap: 8px; }
+.supervisor-account-row > footer > button { min-height: 40px; padding: 0 13px; border: 1px solid #ddd3ca; border-radius: 8px; background: white; color: #554b44; font: inherit; font-size: 12px; font-weight: 800; }
+.supervisor-account-row > footer > button.danger { border-color: #e2bbb5; color: #9b3e34; }
 .checklist-version-bar { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(280px, 420px); align-items: center; gap: 24px; padding: 16px 18px; border: 1px solid #dfd5ca; border-radius: 12px; background: #fff; }
 .checklist-version-bar > div:first-child { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 3px 10px; }
 .checklist-version-bar > div:first-child > strong { font-size: 17px; }
@@ -235,6 +258,11 @@
   .checklist-item-editor { grid-column: 1 / -1; border-top: 1px solid #e7dfd7; }
 }
 @media (max-width: 600px) {
+  .supervisor-account-fields, .supervisor-branch-picker { grid-template-columns: 1fr; }
+  .supervisor-account-identity { grid-template-columns: 44px minmax(0, 1fr); }
+  .supervisor-account-identity > .admin-badge { grid-column: 2; justify-self: start; }
+  .supervisor-account-row > footer { align-items: stretch; flex-direction: column-reverse; }
+  .supervisor-account-row > footer button { width: 100%; }
   .position-catalog-heading { align-items: stretch; flex-direction: column; }
   .report-scope-banner { align-items: flex-start; flex-direction: column; }
   .employee-form-wide { grid-column: auto; }

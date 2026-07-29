@@ -4,7 +4,7 @@ import SupervisionInspectionPage from "./SupervisionInspectionPage.jsx";
 export default function SupervisionRoute() {
   return (
     <ChecklistAuthBoundary>
-      {(checklistAuth) => <SupervisionInspectionPage adminAuth={{ adminProfile: checklistAuth.profile, onAdminLogout: checklistAuth.onLogout }} />}
+      {(checklistAuth) => <SupervisionInspectionPage adminAuth={{ adminProfile: checklistAuth.profile, checklistAccess: checklistAuth.access, onAdminLogout: checklistAuth.onLogout }} />}
     </ChecklistAuthBoundary>
   );
 }
