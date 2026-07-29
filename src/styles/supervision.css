@@ -120,6 +120,10 @@
 .finish-guidance { width: min(100% - 28px, 760px); margin: 0 auto 12px; padding: 12px 14px; border: 1px solid #e0aa67; border-radius: 9px; background: #fff7e8; color: #77551f; font-size: 13px; font-weight: 750; }
 .inspection-summary h2, .confirmation-heading h2 { margin: 0; font-size: 22px; }
 .inspection-summary > div:first-child p, .confirmation-heading p { margin: 6px 0 0; color: var(--sv-muted); font-size: 13px; }
+.inspection-summary-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; overflow: hidden; margin: 0; border: 1px solid var(--sv-line); border-radius: 9px; background: var(--sv-line); }
+.inspection-summary-meta > div { min-width: 0; padding: 10px 11px; background: #faf8f5; }
+.inspection-summary-meta dt { color: var(--sv-muted); font-size: 10px; }
+.inspection-summary-meta dd { overflow: hidden; margin: 3px 0 0; font-size: 12px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 .inspection-summary-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .inspection-summary-stats span { padding: 12px; border: 1px solid var(--sv-line); border-radius: 9px; background: #faf8f5; }
 .inspection-summary-stats strong, .inspection-summary-stats small { display: block; }
@@ -219,6 +223,9 @@
   .evidence-preview-list img, .evidence-preview-list article > span { width: 56px; height: 48px; }
   .evidence-preview-list button { grid-column: 2; justify-self: start; }
   .inspection-summary { width: calc(100% - 20px); }
+  .inspection-report-sheet { width: 100vw; max-width: none; box-shadow: none; }
+  .inspection-report-sheet .inspection-summary { width: calc(100% - 16px); }
+  .inspection-summary-meta { grid-template-columns: 1fr; }
   .inspection-issue-summary header { grid-template-columns: 30px minmax(0, 1fr); }
   .inspection-issue-summary header > b { grid-column: 2; width: fit-content; }
   .inspection-issue-summary dl { margin-left: 0; }

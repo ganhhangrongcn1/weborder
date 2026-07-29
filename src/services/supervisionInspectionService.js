@@ -59,6 +59,11 @@ export async function loadInspection(inspectionId) {
   ]);
   const failed = [inspection, participants, answers, evidence, confirmations].find((result) => result.error);
   if (failed) throw failed.error;
+  const [creatorProfile, sessionResult] = await Promise.all([
+    client.from("profiles").select("name, email").eq("auth_user_id", inspection.data.created_by).maybeSingle(),
+    client.auth.getSession()
+  ]);
+  const supervisorName = creatorProfile.data?.name || creatorProfile.data?.email || (sessionResult.data?.session?.user?.id === inspection.data.created_by ? sessionResult.data.session.user.email : "") || "Giám sát";
   const answerIds = (answers.data || []).map((answer) => answer.id);
   const answerEmployees = answerIds.length
     ? await client.from("checklist_answer_employees").select("answer_id, participant_id, penalty_level, final_penalty").in("answer_id", answerIds)
@@ -77,7 +82,7 @@ export async function loadInspection(inspectionId) {
     ? await client.storage.from(EVIDENCE_BUCKET).createSignedUrls(signedPaths, 3600)
     : { data: [], error: null };
   const signedByPath = new Map((signedResult.data || []).map((item) => [item.path, item.signedUrl]));
-  return { inspection: inspection.data, participants: participants.data || [], answers: answers.data || [], evidence: evidenceRows.map((item) => ({ ...item, signed_url: signedByPath.get(item.object_path) || "" })), confirmations: confirmationRows.map((item) => ({ ...item, signature_signed_url: signedByPath.get(item.signature_object_path) || "" })), answerEmployees: answerEmployees.data || [], sections: sections.data || [], items: items.data || [] };
+  return { inspection: inspection.data, supervisorName, participants: participants.data || [], answers: answers.data || [], evidence: evidenceRows.map((item) => ({ ...item, signed_url: signedByPath.get(item.object_path) || "" })), confirmations: confirmationRows.map((item) => ({ ...item, signature_signed_url: signedByPath.get(item.signature_object_path) || "" })), answerEmployees: answerEmployees.data || [], sections: sections.data || [], items: items.data || [] };
 }
 
 export async function saveInspectionAnswer({ inspectionId, itemId, result, note, responsibilityScope = "store", employeeIds }) {
