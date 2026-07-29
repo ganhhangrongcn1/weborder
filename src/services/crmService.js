@@ -584,6 +584,9 @@ export async function getCustomerLoyaltyDetailAsync(phone, { limit = 50, offset 
       accountVouchers: Array.isArray(account?.voucherHistory)
         ? account.voucherHistory.map(normalizeCrmVoucher)
         : [],
+      accountCheckinStreak: Number(account?.checkinStreak || 0),
+      accountLastCheckinDate: account?.lastCheckinDate || "",
+      accountLastMissedStreak: Number(account?.lastMissedStreak || 0),
       accountUpdatedAt: account?.updatedAt || "",
       ledgerLoadFailed,
       accountLoadFailed

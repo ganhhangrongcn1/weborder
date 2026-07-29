@@ -3649,3 +3649,242 @@
     flex-direction: column;
   }
 }
+
+/* CRM 2026: ưu tiên thao tác danh sách - chi tiết trong một màn hình. */
+@media (min-width: 1181px) {
+  .crm-page {
+    gap: 8px;
+  }
+
+  .crm-page-hero {
+    min-height: 46px;
+    padding: 8px 12px;
+    border-color: #e2e8f0;
+    background: #ffffff;
+  }
+
+  .crm-page-hero h2 {
+    font-size: 17px;
+    letter-spacing: -0.015em;
+  }
+
+  .crm-refresh-btn {
+    min-height: 32px;
+    padding: 0 11px;
+  }
+
+  .crm-stat-grid {
+    display: none;
+  }
+
+  .crm-stat-card {
+    min-height: 60px;
+    padding: 9px 12px;
+    border-color: #e2e8f0;
+  }
+
+  .crm-stat-card strong {
+    font-size: 18px;
+  }
+
+  .crm-stat-card em {
+    display: none;
+  }
+
+  .crm-insights-disclosure > summary {
+    min-height: 40px;
+    padding: 6px 11px;
+  }
+
+  .crm-insights-disclosure > summary > b {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #334155;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .crm-insights-disclosure > summary > b i {
+    color: #cbd5e1;
+    font-style: normal;
+  }
+
+  .crm-insights-disclosure > summary small {
+    display: none;
+  }
+
+  .crm-view-tabs {
+    min-height: 38px;
+    padding: 3px;
+  }
+
+  .crm-view-tab {
+    min-height: 30px;
+    padding: 4px 12px;
+  }
+
+  .crm-workspace {
+    grid-template-columns: minmax(0, 1fr) 376px;
+    height: clamp(560px, calc(100dvh - 264px), 820px);
+    gap: 10px;
+  }
+
+  .crm-list-panel--customers .crm-tab-shell {
+    display: none;
+  }
+
+  .crm-list-panel--customers .crm-filter-bar {
+    grid-template-columns: minmax(300px, 1fr) 160px 160px 180px auto;
+    gap: 6px;
+    padding: 10px 12px 8px;
+    border-bottom: 0;
+  }
+
+  .crm-list-panel--customers .crm-filter-bar .crm-search,
+  .crm-list-panel--customers .crm-filter-bar select,
+  .crm-list-panel--customers .crm-filter-bar button {
+    min-height: 36px;
+  }
+
+  .crm-list-panel--customers .crm-segment-strip {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 0 12px 8px;
+    scrollbar-width: thin;
+  }
+
+  .crm-list-panel--customers .crm-segment-chip {
+    min-height: 30px;
+    flex: 0 0 auto;
+    padding: 4px 9px;
+    border-radius: 999px;
+  }
+
+  .crm-list-panel--customers .crm-result-summary {
+    padding: 7px 12px;
+  }
+
+  .crm-result-row > .crm-pagination-row {
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    gap: 10px;
+    padding: 0;
+    border-top: 0;
+  }
+
+  .crm-result-row .crm-pagination-summary {
+    min-width: 140px;
+  }
+
+  .crm-result-row .crm-page-btn {
+    height: 32px;
+    min-width: 32px;
+    padding: 0 8px;
+    border-radius: 8px;
+  }
+
+  .crm-result-row .crm-pagination-jump {
+    margin-left: auto;
+  }
+
+  .crm-detail-panel {
+    border-color: #dbe3ec;
+    background: #f8fafc;
+  }
+
+  .crm-list-panel--customers {
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .crm-list-panel--customers .crm-table-body {
+    padding-bottom: 22px;
+    scroll-padding-bottom: 22px;
+  }
+}
+
+.crm-checkin-overview {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #94a3b8;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.crm-checkin-overview--good,
+.crm-checkin-overview--steady {
+  border-left-color: #16a34a;
+  background: #f6fdf8;
+}
+
+.crm-checkin-overview--new {
+  border-left-color: #f59e0b;
+  background: #fffaf0;
+}
+
+.crm-checkin-overview--warning {
+  border-left-color: #ea580c;
+  background: #fff7ed;
+}
+
+.crm-checkin-overview__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.crm-checkin-overview__head span {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.crm-checkin-overview__head strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.crm-checkin-overview p {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.crm-checkin-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.crm-checkin-metrics > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 7px;
+}
+
+.crm-checkin-metrics small {
+  color: #64748b;
+  font-size: 9px;
+}
+
+.crm-checkin-metrics b {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

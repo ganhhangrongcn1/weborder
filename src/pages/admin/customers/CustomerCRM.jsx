@@ -154,6 +154,42 @@ function formatListDateTime(value) {
   });
 }
 
+function formatCheckinDate(value) {
+  const dateKey = String(value || "").slice(0, 10);
+  if (!dateKey) return "Chưa điểm danh";
+  const date = new Date(`${dateKey}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? "Chưa điểm danh" : date.toLocaleDateString("vi-VN");
+}
+
+function getCheckinConsistency({ streak = 0, lastCheckinDate = "", lastMissedStreak = 0 } = {}) {
+  const safeStreak = Math.max(0, Number(streak || 0));
+  const safePreviousStreak = Math.max(0, Number(lastMissedStreak || 0));
+  const dateKey = String(lastCheckinDate || "").slice(0, 10);
+  const lastDate = dateKey ? new Date(`${dateKey}T00:00:00`) : null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysSinceCheckin = lastDate && !Number.isNaN(lastDate.getTime())
+    ? Math.max(0, Math.round((today.getTime() - lastDate.getTime()) / 86400000))
+    : null;
+
+  if (daysSinceCheckin === null) {
+    return { tone: "muted", label: "Chưa có dữ liệu", description: "Khách chưa phát sinh lượt điểm danh." };
+  }
+  if (daysSinceCheckin > 1) {
+    return { tone: "warning", label: "Đã gián đoạn", description: `Lần gần nhất cách đây ${daysSinceCheckin} ngày.` };
+  }
+  if (safeStreak >= 7) {
+    return { tone: "good", label: "Duy trì tốt", description: `Khách đang giữ chuỗi ${safeStreak} ngày liên tiếp.` };
+  }
+  if (safeStreak >= 3) {
+    return { tone: "steady", label: "Khá đều", description: `Khách đã điểm danh liên tiếp ${safeStreak} ngày.` };
+  }
+  if (safeStreak > 0 || safePreviousStreak > 0) {
+    return { tone: "new", label: "Đang tạo thói quen", description: "Chuỗi hiện tại còn ngắn, nên tiếp tục theo dõi." };
+  }
+  return { tone: "muted", label: "Chưa đều", description: "Chưa ghi nhận chuỗi điểm danh liên tiếp." };
+}
+
 function getCustomerInsight(customer = {}) {
   const days = Number(customer.daysSinceLastOrder);
   const totalOrders = Number(customer.totalOrders || 0);
@@ -841,10 +877,10 @@ export default function CustomerCRM({
     return [
       { value: "all", label: "Tất cả", count: customers.length },
       { value: "new_member", label: "Mới đăng ký", count: customers.filter(isNewMemberCustomer).length },
-      { value: "tier_member", label: "Khách có hạng", count: customers.filter(hasTierMember).length },
-      { value: "inactive7", label: "7+ ngày chưa quay lại", count: customers.filter((customer) => isWinbackCustomer(customer, 7)).length },
-      { value: "inactive15", label: "15+ ngày chưa quay lại", count: customers.filter((customer) => isWinbackCustomer(customer, 15)).length },
-      { value: "inactive30", label: "30+ ngày cần chăm sóc", count: customers.filter((customer) => isWinbackCustomer(customer, 30)).length }
+      { value: "tier_member", label: "Có hạng thành viên", count: customers.filter(hasTierMember).length },
+      { value: "inactive7", label: "Vắng 7 ngày", count: customers.filter((customer) => isWinbackCustomer(customer, 7)).length },
+      { value: "inactive15", label: "Vắng 15 ngày", count: customers.filter((customer) => isWinbackCustomer(customer, 15)).length },
+      { value: "inactive30", label: "Cần chăm sóc", count: customers.filter((customer) => isWinbackCustomer(customer, 30)).length }
     ];
   }, [crmSnapshot.customers]);
 
@@ -1164,6 +1200,9 @@ export default function CustomerCRM({
               ? null
               : Math.max(0, Number(result.accountTotalPoints || 0)),
             accountVouchers: Array.isArray(result?.accountVouchers) ? result.accountVouchers : [],
+            checkinStreak: Number(result?.accountCheckinStreak || 0),
+            lastCheckinDate: result?.accountLastCheckinDate || "",
+            lastMissedStreak: Number(result?.accountLastMissedStreak || 0),
             accountUpdatedAt: result?.accountUpdatedAt || "",
             ledgerLoadFailed: result?.ledgerLoadFailed === true,
             accountLoadFailed: result?.accountLoadFailed === true,
@@ -1193,6 +1232,11 @@ export default function CustomerCRM({
   const selectedCurrentPoints = Number(
     (selectedLoyaltyDetail?.accountTotalPoints ?? selectedCustomer?.currentPoints) || 0
   );
+  const selectedCheckinInsight = getCheckinConsistency({
+    streak: selectedLoyaltyDetail?.checkinStreak ?? selectedCustomer?.checkinStreak,
+    lastCheckinDate: selectedLoyaltyDetail?.lastCheckinDate ?? selectedCustomer?.lastCheckinDate,
+    lastMissedStreak: selectedLoyaltyDetail?.lastMissedStreak ?? selectedCustomer?.lastMissedStreak
+  });
   const selectedPointRows = selectedLoyaltyDetail?.rows || selectedCustomer?.pointsHistory || [];
   const selectedPointLookup = useMemo(
     () => buildLoyaltyOrderPointLookup(selectedPointRows),
@@ -1314,23 +1358,6 @@ export default function CustomerCRM({
 
   return (
     <section className="crm-page">
-      <div className="crm-page-hero">
-        <div>
-          <p>CRM vận hành</p>
-          <h2>Chăm sóc khách hàng</h2>
-          <span>Tập trung vào nhóm cần gọi lại, khách quay lại và lịch sử mua gần nhất.</span>
-        </div>
-        <button
-          type="button"
-          className={`crm-refresh-btn ${isRefreshing ? "is-loading" : ""}`}
-          onClick={handleRefreshCrm}
-          disabled={isRefreshing}
-        >
-          <Icon name="back" size={16} />
-          {isRefreshing ? "Đang tải..." : "Tải lại dữ liệu"}
-        </button>
-      </div>
-
       <div className="crm-stat-grid">
         <CrmStatCard icon="user" tone="orange" scope="Lifetime" title="Tổng khách hàng" value={summary.totalCustomers === null ? "--" : summary.totalCustomers.toLocaleString("vi-VN")} subtitle="Đếm hồ sơ customer từ profiles" />
         <CrmStatCard icon="heart" tone="blue" scope="30 ngày" title="Cần chăm sóc" value={summary.careCount.toLocaleString("vi-VN")} subtitle="Có đơn nhưng chưa quay lại" />
@@ -1359,10 +1386,16 @@ export default function CustomerCRM({
       <details className="crm-insights-disclosure">
         <summary>
           <span>
-            <strong>Phân tích khách hàng</strong>
-            <small>Ưu tiên chăm sóc, đăng ký thành viên và top khách</small>
+            <strong>Tổng quan CRM</strong>
+            <small>Mở để xem nhóm cần chăm sóc và top khách</small>
           </span>
-          <b>Khách mới 7 ngày: {summary.newCustomers7.toLocaleString("vi-VN")}</b>
+          <b>
+            {summary.totalCustomers === null ? "--" : summary.totalCustomers.toLocaleString("vi-VN")} khách
+            <i aria-hidden="true">·</i>
+            {summary.careCount.toLocaleString("vi-VN")} cần chăm sóc
+            <i aria-hidden="true">·</i>
+            {summary.repeatCustomers30.toLocaleString("vi-VN")} quay lại
+          </b>
         </summary>
         <div className="crm-ops-grid">
         <section className="crm-ops-card crm-ops-card--priority">
@@ -1476,19 +1509,19 @@ export default function CustomerCRM({
           <div className="crm-filter-bar">
             <label className="crm-search">
               <Icon name="search" size={17} />
-              <input placeholder="Tìm theo tên hoặc số điện thoại..." value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+              <input placeholder="Tìm tên hoặc số điện thoại" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
             </label>
             <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-              <option value="latest">Mua gần nhất</option>
-              <option value="spent">Chi tiêu cao nhất</option>
-              <option value="orders">Nhiều đơn nhất</option>
+              <option value="latest">Mới mua gần đây</option>
+              <option value="spent">Giá trị cao nhất</option>
+              <option value="orders">Số đơn nhiều nhất</option>
             </select>
             <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)}>
-              <option value="all">Tất cả kênh mua</option>
+              <option value="all">Tất cả nguồn đơn</option>
               {(crmAnalytics?.filterOptions.channels || []).map((channel) => <option key={channel} value={channel}>{getChannelLabel(channel)}</option>)}
             </select>
             <select className="crm-segment-select" value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
-              <option value="all">Tất cả nhóm khách</option>
+              <option value="all">Tất cả phân khúc</option>
               <option value="new_member">Mới đăng ký chưa có đơn</option>
               <option value="registered">Khách đã đăng ký</option>
               <option value="tier_member">Khách có hạng thành viên</option>
@@ -1500,7 +1533,7 @@ export default function CustomerCRM({
               <option value="inactive15">Chưa quay lại 15+ ngày</option>
               <option value="inactive30">Chưa quay lại 30+ ngày</option>
             </select>
-            <button type="button" className="crm-reset-btn" onClick={resetFilters}>Xóa lọc</button>
+            <button type="button" className="crm-reset-btn" onClick={resetFilters}>Đặt lại</button>
           </div>
           ) : null}
 
@@ -1669,9 +1702,19 @@ export default function CustomerCRM({
 
           {activeViewTab === "customers" ? (
           <div className="crm-result-row">
-            <p className="crm-result-summary">
-              Hiển thị {visibleCustomers.length} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
-            </p>
+            {filteredCustomers.length > CUSTOMER_PAGE_SIZE ? (
+              <CrmCompactPagination
+                page={safeCurrentPage}
+                totalPages={totalPages}
+                totalItems={filteredCustomers.length}
+                pageSize={CUSTOMER_PAGE_SIZE}
+                onChange={setCurrentPage}
+              />
+            ) : (
+              <p className="crm-result-summary">
+                Hiển thị {visibleCustomers.length} / {filteredCustomers.length} khách theo bộ lọc hiện tại.
+              </p>
+            )}
             {!isManualSelectionMode ? (
               <button
                 type="button"
@@ -1868,15 +1911,6 @@ export default function CustomerCRM({
             </div>
           ) : null}
 
-          {activeViewTab === "customers" && filteredCustomers.length > CUSTOMER_PAGE_SIZE ? (
-            <CrmCompactPagination
-              page={safeCurrentPage}
-              totalPages={totalPages}
-              totalItems={filteredCustomers.length}
-              pageSize={CUSTOMER_PAGE_SIZE}
-              onChange={setCurrentPage}
-            />
-          ) : null}
         </div>
 
         {activeViewTab === "customers" ? (
@@ -1932,6 +1966,18 @@ export default function CustomerCRM({
                   <div className="crm-points-line">
                     <span>Điểm hiện tại</span>
                     <strong>{selectedCurrentPoints.toLocaleString("vi-VN")}</strong>
+                  </div>
+                  <div className={`crm-checkin-overview crm-checkin-overview--${selectedCheckinInsight.tone}`}>
+                    <div className="crm-checkin-overview__head">
+                      <span>Thói quen điểm danh</span>
+                      <strong>{isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang tải..." : selectedCheckinInsight.label}</strong>
+                    </div>
+                    <p>{isLoyaltyDetailLoading && !selectedLoyaltyDetail ? "Đang đọc dữ liệu điểm danh gần nhất." : selectedCheckinInsight.description}</p>
+                    <div className="crm-checkin-metrics">
+                      <span><small>Chuỗi hiện tại</small><b>{Number(selectedLoyaltyDetail?.checkinStreak ?? selectedCustomer?.checkinStreak ?? 0)} ngày</b></span>
+                      <span><small>Lần gần nhất</small><b>{formatCheckinDate(selectedLoyaltyDetail?.lastCheckinDate ?? selectedCustomer?.lastCheckinDate)}</b></span>
+                      <span><small>Chuỗi trước</small><b>{Number(selectedLoyaltyDetail?.lastMissedStreak ?? selectedCustomer?.lastMissedStreak ?? 0)} ngày</b></span>
+                    </div>
                   </div>
                   <div className="crm-point-status-grid">
                     <span className="crm-point-status crm-point-status--claimed">Đã tích điểm: {selectedPointSummary.claimed.toLocaleString("vi-VN")} đơn</span>
