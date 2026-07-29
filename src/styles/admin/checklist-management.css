@@ -145,6 +145,7 @@
 .checklist-config-heading h1 + span { display: block; margin-top: 7px; color: #81776e; font-size: 13px; }
 .checklist-config-heading > div:last-child { display: flex; gap: 8px; }
 .supervisor-account-admin { display: grid; gap: 14px; }
+.supervisor-account-create, .supervisor-account-row, .supervisor-account-list > .admin-ui-card { padding: clamp(16px, 2vw, 22px); }
 .supervisor-account-create > header h3, .supervisor-account-list > header h3 { margin: 0; color: #30251f; }
 .supervisor-account-create > header p { margin: 6px 0 18px; color: #81776e; font-size: 12px; }
 .supervisor-account-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
