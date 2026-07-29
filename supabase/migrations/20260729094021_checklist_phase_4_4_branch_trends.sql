@@ -83,8 +83,8 @@ begin
   branch_rows as (
     select inspection.branch_uuid,
       max(inspection.branch_name_snapshot) as branch_name,
-      count(*)::integer as inspection_count,
-      round(avg(inspection.score), 2) as average_score,
+      count(distinct inspection.id)::integer as inspection_count,
+      round((select avg(scoped.score) from current_inspections scoped where scoped.branch_uuid = inspection.branch_uuid), 2) as average_score,
       round(
         avg(inspection.score) - coalesce((
           select avg(previous.score)
