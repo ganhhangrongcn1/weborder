@@ -116,6 +116,13 @@
 .inspection-closing { width: min(100% - 28px, 760px); display: grid; gap: 16px; margin: 0 auto 28px; padding: clamp(18px, 4vw, 28px); border: 1px solid var(--sv-line); border-radius: 15px; background: white; }
 .inspection-closing h2 { margin: 0; font-size: 22px; }
 .inspection-closing > div:first-child p { margin: 6px 0 0; color: var(--sv-muted); font-size: 13px; }
+.inspection-closing--report { width: calc(100% - 24px); margin: 0 auto 20px; }
+.report-confirmation-locked { width: calc(100% - 24px); display: grid; gap: 8px; margin: 0 auto 20px; padding: 16px; border: 1px solid #e0c99f; border-radius: 12px; background: #fff9ed; }
+.report-confirmation-locked strong, .report-confirmation-locked span { display: block; }
+.report-confirmation-locked span { color: var(--sv-muted); font-size: 12px; line-height: 1.5; }
+.report-confirmation-locked button { justify-self: start; min-height: 38px; padding: 0 12px; border: 1px solid var(--sv-line); border-radius: 8px; background: white; color: var(--sv-ink); font: inherit; font-size: 12px; font-weight: 800; }
+.finish-guidance--report { width: 100%; margin: 0; }
+.report-finish-button { width: 100%; }
 .inspection-summary { width: min(100% - 28px, 760px); display: grid; gap: 14px; margin: 0 auto 16px; padding: clamp(18px, 4vw, 28px); border: 1px solid var(--sv-line); border-radius: 15px; background: white; }
 .finish-guidance { width: min(100% - 28px, 760px); margin: 0 auto 12px; padding: 12px 14px; border: 1px solid #e0aa67; border-radius: 9px; background: #fff7e8; color: #77551f; font-size: 13px; font-weight: 750; }
 .inspection-summary h2, .confirmation-heading h2 { margin: 0; font-size: 22px; }
