@@ -134,7 +134,9 @@ export default function SupervisionInspectionPage({ adminAuth }) {
   async function saveSignature(file) {
     if (!selectedSignatureParticipant) return;
     const current = confirmations.find((item) => item.participant_id === selectedSignatureParticipant.id);
-    await flow.signParticipant({ inspectionId: flow.inspection.inspection.id, participantId: selectedSignatureParticipant.id, file, employeeComment: confirmationComments[selectedSignatureParticipant.id] ?? current?.employee_comment ?? "" });
+    const saved = await flow.signParticipant({ inspectionId: flow.inspection.inspection.id, participantId: selectedSignatureParticipant.id, file, employeeComment: confirmationComments[selectedSignatureParticipant.id] ?? current?.employee_comment ?? "" });
+    if (saved) setFinishMessage(`${selectedSignatureParticipant.employee_name_snapshot} đã ký tên và được tự động xác nhận.`);
+    return saved;
   }
 
   async function handleFinish() {

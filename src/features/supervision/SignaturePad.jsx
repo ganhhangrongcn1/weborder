@@ -59,7 +59,8 @@ export default function SignaturePad({ signerName, disabled = false, onSave }) {
     if (!hasInk || disabled) return;
     setSaving(true);
     const blob = await new Promise((resolve) => canvasRef.current.toBlob(resolve, "image/webp", 0.8));
-    if (blob) await onSave(new File([blob], `signature-${Date.now()}.webp`, { type: "image/webp" }));
+    const saved = blob ? await onSave(new File([blob], `signature-${Date.now()}.webp`, { type: "image/webp" })) : false;
+    if (saved) clear();
     setSaving(false);
   }
 
