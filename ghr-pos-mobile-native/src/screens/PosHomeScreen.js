@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import CashPaymentModal from "../features/pos/components/CashPaymentModal";
 import PosBenefitCard from "../features/pos/components/PosBenefitCard";
@@ -10,6 +10,7 @@ import PosCartPanel from "../features/pos/components/PosCartPanel";
 import PosCustomerModal from "../features/pos/components/PosCustomerModal";
 import PosCustomerSummaryCard from "../features/pos/components/PosCustomerSummaryCard";
 import PosHistoryPanel from "../features/pos/components/PosHistoryPanel";
+import PrinterDisconnectedModal from "../features/pos/components/PrinterDisconnectedModal";
 import PosIcon from "../features/pos/components/PosIcon";
 import PosMenuPanel from "../features/pos/components/PosMenuPanel";
 import PosPagerModal from "../features/pos/components/PosPagerModal";
@@ -21,6 +22,7 @@ import usePosComposer from "../features/pos/hooks/usePosComposer";
 import usePosAppUpdate from "../hooks/usePosAppUpdate";
 import {
   getLocalPrinterConfig,
+  checkLocalPrinterConnection,
   listLocalUsbPrinters,
   openLocalCashDrawer,
   printLocalTestBill,
@@ -59,6 +61,7 @@ export default function PosHomeScreen() {
   const [pagerPickerOpen, setPagerPickerOpen] = useState(false);
   const [benefitModalOpen, setBenefitModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("sale");
+  const websiteAlertPulse = React.useRef(new Animated.Value(0)).current;
   const [cashPaymentOpen, setCashPaymentOpen] = useState(false);
   const [pickupCashPaymentOpen, setPickupCashPaymentOpen] = useState(false);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -75,6 +78,9 @@ export default function PosHomeScreen() {
   const [printerBusy, setPrinterBusy] = useState(false);
   const [printerMessage, setPrinterMessage] = useState("");
   const [printerAdvancedOpen, setPrinterAdvancedOpen] = useState(false);
+  const [printerDisconnectedOpen, setPrinterDisconnectedOpen] = useState(false);
+  const [printerConnectionOnline, setPrinterConnectionOnline] = useState(null);
+  const printerAlertDismissedRef = React.useRef(false);
   const appUpdate = usePosAppUpdate();
   const { width } = useWindowDimensions();
   const isWide = width >= 820;
@@ -293,6 +299,21 @@ export default function PosHomeScreen() {
 
   const openingCashAmount = Number(openingCash || 0);
   const websiteAttentionCount = pickupOrders.length + deliveryOrders.length;
+  useEffect(() => {
+    if (!websiteAttentionCount || activeTab === "pickup") {
+      websiteAlertPulse.stopAnimation();
+      websiteAlertPulse.setValue(0);
+      return undefined;
+    }
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(websiteAlertPulse, { toValue: 1, duration: 220, useNativeDriver: true }),
+      Animated.timing(websiteAlertPulse, { toValue: -1, duration: 220, useNativeDriver: true }),
+      Animated.timing(websiteAlertPulse, { toValue: 0, duration: 220, useNativeDriver: true }),
+      Animated.delay(850)
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [activeTab, websiteAlertPulse, websiteAttentionCount]);
   const historyPaymentBadgeCount = useMemo(
     () => (Array.isArray(pendingPaymentSessions) ? pendingPaymentSessions : []).filter(shouldCountHistoryPaymentSession).length,
     [pendingPaymentSessions]
@@ -316,15 +337,17 @@ export default function PosHomeScreen() {
 
     const loadPrinterState = async () => {
       try {
-        const [config, devices] = await Promise.all([
+        const [config, devices, connected] = await Promise.all([
           getLocalPrinterConfig(),
-          listLocalUsbPrinters()
+          listLocalUsbPrinters(),
+          checkLocalPrinterConnection()
         ]);
         if (!active) return;
         setPrinterConfig(config);
         setLanHost(config?.lanHost || "");
         setLanPort(String(config?.lanPort || 9100));
         setUsbDevices(Array.isArray(devices) ? devices : []);
+        setPrinterConnectionOnline(Boolean(connected));
       } catch (error) {
         if (!active) return;
         setPrinterMessage(error?.message || "Không tải được cấu hình máy in.");
@@ -337,6 +360,33 @@ export default function PosHomeScreen() {
     };
   }, []);
 
+  const printerConnected = printerConnectionOnline === null
+    ? (printerConfig?.mode === "lan"
+      ? Boolean(printerConfig?.lanHost)
+      : Boolean(printerConfig?.usbConnected && printerConfig?.usbPermission))
+    : printerConnectionOnline;
+
+  useEffect(() => {
+    if (!isSignedIn || !hasOpenShift || !printerConfig) return undefined;
+    if (printerConnected) {
+      printerAlertDismissedRef.current = false;
+      setPrinterDisconnectedOpen(false);
+      return undefined;
+    }
+    if (!printerAlertDismissedRef.current) setPrinterDisconnectedOpen(true);
+    return undefined;
+  }, [hasOpenShift, isSignedIn, printerConfig, printerConnected]);
+
+  useEffect(() => {
+    if (!isSignedIn || !hasOpenShift) return undefined;
+    const timer = globalThis.setInterval(() => {
+      Promise.all([refreshPrinterState(), checkLocalPrinterConnection()])
+        .then(([, connected]) => setPrinterConnectionOnline(Boolean(connected)))
+        .catch(() => setPrinterConnectionOnline(false));
+    }, 15000);
+    return () => globalThis.clearInterval(timer);
+  }, [hasOpenShift, isSignedIn]);
+
   useEffect(() => {
     if (hasOpenShift) {
       setOpeningCashCounterOpen(false);
@@ -345,14 +395,16 @@ export default function PosHomeScreen() {
   }, [hasOpenShift]);
 
   const refreshPrinterState = async () => {
-    const [config, devices] = await Promise.all([
+    const [config, devices, connected] = await Promise.all([
       getLocalPrinterConfig(),
-      listLocalUsbPrinters()
+      listLocalUsbPrinters(),
+      checkLocalPrinterConnection()
     ]);
     setPrinterConfig(config);
     setLanHost(config?.lanHost || "");
     setLanPort(String(config?.lanPort || 9100));
     setUsbDevices(Array.isArray(devices) ? devices : []);
+    setPrinterConnectionOnline(Boolean(connected));
     return config;
   };
 
@@ -1113,6 +1165,28 @@ export default function PosHomeScreen() {
             <Text style={styles.updateBannerAction}>Xem</Text>
           </Pressable>
         ) : null}
+        {printerConfig && !printerConnected ? (
+          <View style={styles.printerDisconnectedBanner}>
+            <View style={styles.printerDisconnectedMark}>
+              <Text style={styles.printerDisconnectedMarkText}>!</Text>
+            </View>
+            <View style={styles.flexOne}>
+              <Text style={styles.printerDisconnectedTitle}>Máy in đang mất kết nối</Text>
+              <Text style={styles.printerDisconnectedText}>Đơn vẫn được lưu bình thường. Kết nối lại để tiếp tục in bill.</Text>
+            </View>
+            <Pressable
+              style={styles.printerReconnectButton}
+              onPress={() => {
+                printerAlertDismissedRef.current = false;
+                setPrinterDisconnectedOpen(true);
+                handleRefreshPrinterState();
+              }}
+              disabled={printerBusy}
+            >
+              <Text style={styles.printerReconnectText}>{printerBusy ? "Đang quét" : "Kết nối lại"}</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <View style={styles.workspaceFrame}>
           {activeTab === "sale" && renderSaleWorkspace()}
           {activeTab === "pickup" && (
@@ -1156,9 +1230,16 @@ export default function PosHomeScreen() {
             const showHistoryBadge = tab.key === "history" && historyAttentionCount > 0;
             const showPickupBadge = tab.key === "pickup" && websiteAttentionCount > 0;
             return (
-              <Pressable
+              <Animated.View
                 key={tab.key}
-                style={[styles.navButton, active && styles.navButtonActive]}
+                style={showPickupBadge && !active ? {
+                  flex: 1,
+                  opacity: websiteAlertPulse.interpolate({ inputRange: [-1, 0, 1], outputRange: [0.7, 1, 0.7] }),
+                  transform: [{ translateX: websiteAlertPulse.interpolate({ inputRange: [-1, 0, 1], outputRange: [-4, 0, 4] }) }]
+                } : styles.navAnimatedItem}
+              >
+              <Pressable
+                style={[styles.navButton, showPickupBadge && styles.navButtonAttention, active && styles.navButtonActive]}
                 onPress={() => setActiveTab(tab.key)}
               >
                 <View style={[styles.navIcon, active && styles.navIconActive]}>
@@ -1179,6 +1260,7 @@ export default function PosHomeScreen() {
                   </View>
                 )}
               </Pressable>
+              </Animated.View>
             );
           })}
           <Pressable style={styles.changeShiftButton} onPress={signOut}>
@@ -1300,6 +1382,18 @@ export default function PosHomeScreen() {
         onConfirmPaid={confirmQrPaidManually}
         onPrint={printQrReceiptNow}
       />
+      <PrinterDisconnectedModal
+        visible={printerDisconnectedOpen}
+        devices={usbDevices}
+        busy={printerBusy}
+        message={printerMessage}
+        onClose={() => {
+          printerAlertDismissedRef.current = true;
+          setPrinterDisconnectedOpen(false);
+        }}
+        onRefresh={handleRefreshPrinterState}
+        onSelect={handleSelectUsbPrinter}
+      />
       <QrPaymentModal
         visible={pickupQrModalOpen}
         branch={branch}
@@ -1368,6 +1462,55 @@ const styles = StyleSheet.create({
   },
   updateBannerAction: {
     color: POS_COLORS.primaryDark,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  printerDisconnectedBanner: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#ef4444",
+    backgroundColor: "#fef2f2",
+    borderRadius: POS_RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  printerDisconnectedMark: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#dc2626"
+  },
+  printerDisconnectedMarkText: {
+    color: "#ffffff",
+    fontSize: 21,
+    fontWeight: "900"
+  },
+  printerDisconnectedTitle: {
+    color: "#991b1b",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  printerDisconnectedText: {
+    marginTop: 2,
+    color: "#7f1d1d",
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  printerReconnectButton: {
+    minHeight: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: POS_RADIUS.md,
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 14
+  },
+  printerReconnectText: {
+    color: "#ffffff",
     fontSize: 12,
     fontWeight: "900"
   },
@@ -1947,6 +2090,13 @@ const styles = StyleSheet.create({
     color: POS_COLORS.text,
     fontSize: 14,
     fontWeight: "900"
+  },
+  navAnimatedItem: {
+    flex: 1
+  },
+  navButtonAttention: {
+    borderColor: "#f97316",
+    backgroundColor: "#fff7ed"
   },
   summaryHint: {
     color: POS_COLORS.muted,

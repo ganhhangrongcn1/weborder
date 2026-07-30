@@ -148,6 +148,7 @@ function orderMatchesStatus(order = {}, statusFilter = "active", now = Date.now(
 
   if (statusFilter === "all") return true;
   if (statusFilter === "done") return ["done", "completed"].includes(orderStatus) || isLegacyWebsiteDone || (order.sourceType === "partner" && ["done", "completed"].includes(status));
+  if (statusFilter === "handoff") return isWebsite && isWebsiteHandoff;
   if (statusFilter === "cancelled") return isAcknowledgedCancelled;
   if (statusFilter === "scheduled") {
     if (isLegacyWebsiteDone || isAcknowledgedCancelled) return false;
@@ -156,6 +157,7 @@ function orderMatchesStatus(order = {}, statusFilter = "active", now = Date.now(
     return isScheduledForLater;
   }
   if (isLegacyWebsiteDone) return false;
+  if (isWebsiteHandoff) return false;
   if (isAcknowledgedCancelled) return false;
   const closedOrderStatuses = order.sourceType === "partner"
     ? ["done", "completed", "preorder"]
@@ -892,6 +894,7 @@ export default function useKitchenOrders(options = null) {
   const stats = useMemo(() => {
     const activeOrders = orders.filter((order) => orderMatchesStatus(order, "active", scheduleStatusTick));
     const scheduledOrders = orders.filter((order) => orderMatchesStatus(order, "scheduled", scheduleStatusTick));
+    const handoffOrders = orders.filter((order) => orderMatchesStatus(order, "handoff", scheduleStatusTick));
     const doneOrders = orders.filter((order) => orderMatchesStatus(order, "done", scheduleStatusTick));
     const cancelledOrders = orders.filter((order) => orderMatchesStatus(order, "cancelled", scheduleStatusTick));
     const partnerOrders = orders.filter((order) => order.sourceType === "partner");
@@ -901,6 +904,7 @@ export default function useKitchenOrders(options = null) {
       total: orders.length,
       active: activeOrders.length,
       scheduled: scheduledOrders.length,
+      handoff: handoffOrders.length,
       done: doneOrders.length,
       cancelled: cancelledOrders.length,
       partner: partnerOrders.length,

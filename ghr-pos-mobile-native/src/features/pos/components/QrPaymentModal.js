@@ -73,7 +73,7 @@ export default function QrPaymentModal({
         {config.ready ? (
           <View style={styles.body}>
             <View style={styles.qrBox}>
-              {loading && !draftSession ? (
+              {loading && !draftSession && isMomo ? (
                 <View style={[styles.qrLoadingBox, { width: qrSize, height: qrSize }]}>
                   <ActivityIndicator size="large" color={POS_COLORS.primaryDark} />
                   <Text style={styles.qrLoadingTitle}>Đang tạo mã QR</Text>

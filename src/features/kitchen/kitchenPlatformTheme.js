@@ -21,11 +21,11 @@ const ADMIN_ORDER_SOURCE_TONES = {
     strong: "#1e3a8a"
   },
   counter: {
-    background: "#fff7ed",
-    soft: "#fffbeb",
-    border: "#fed7aa",
-    color: "#c2410c",
-    strong: "#7c2d12"
+    background: "#f7e7df",
+    soft: "#fcf3ee",
+    border: "#8b5a43",
+    color: "#6b3a29",
+    strong: "#3f2118"
   },
   delivery: {
     background: "#dcfce7",
@@ -100,6 +100,7 @@ export function getKitchenPlatformTone(platform = "") {
 
 export function getKitchenOrderTheme(order = {}) {
   const status = String(order.kitchenStatus || "").toLowerCase();
+  const orderStatus = String(order.status || "").toLowerCase();
   const nexposStatus = String(order.nexposState || order.nexposStatus || order.raw?.nexpos_status || order.raw?.status || "")
     .trim()
     .toLowerCase();
@@ -112,6 +113,16 @@ export function getKitchenOrderTheme(order = {}) {
       button: "#ef4444",
       code: "#991b1b",
       text: "#7f1d1d"
+    };
+  }
+
+  if (order.sourceType === "website" && ["ready_for_pickup", "ready_for_delivery"].includes(orderStatus)) {
+    return {
+      background: "linear-gradient(135deg, #fef3c7 0%, #fff7ed 100%)",
+      border: "#f97316",
+      button: "#ea580c",
+      code: "#9a3412",
+      text: "#7c2d12"
     };
   }
 

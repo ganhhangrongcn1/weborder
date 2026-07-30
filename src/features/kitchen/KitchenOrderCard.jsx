@@ -19,9 +19,11 @@ import {
   getScheduledPickupTone,
   parsePickupTimeText
 } from "../../utils/dateTimeDefaults.js";
+import { isKitchenUnitDone } from "./kitchenProgressState.js";
 
 const UNIT_PROGRESS_STORAGE_KEY = "ghr:kitchen-unit-progress:v1";
 const TOPPING_PROGRESS_STORAGE_KEY = "ghr:kitchen-topping-progress:v1";
+const PROGRESS_EVENT = "ghr:kitchen-progress-change";
 
 function readProgress(storageKey) {
   try {
@@ -34,6 +36,7 @@ function readProgress(storageKey) {
 function saveProgress(storageKey, progress = {}) {
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(progress));
+    window.dispatchEvent(new CustomEvent(PROGRESS_EVENT, { detail: { storageKey } }));
   } catch {
     // Local progress is a convenience only for this kitchen screen.
   }
@@ -589,8 +592,10 @@ function getKitchenShortOrderCode(order = {}) {
   return fullCode || "----";
 }
 
-function OptionChip({ children, optionLabel = "" }) {
+function OptionChip({ children, optionLabel = "", variant = "default" }) {
   const parsedOption = optionLabel ? parseKitchenOptionLabel(optionLabel) : null;
+  const isItemNumber = variant === "item-number";
+  const isOptionBadge = Boolean(parsedOption);
 
   return (
     <span
@@ -599,22 +604,22 @@ function OptionChip({ children, optionLabel = "" }) {
         alignItems: parsedOption?.group ? "flex-start" : "center",
         flexDirection: parsedOption?.group ? "column" : "row",
         gap: parsedOption?.group ? 2 : 0,
-        border: "1px solid #cbd5e1",
-        background: "#f8fafc",
-        color: "#475569",
+        border: isOptionBadge ? "1px solid #a5b4fc" : "1px solid #cbd5e1",
+        background: isOptionBadge ? "#eef2ff" : "#f8fafc",
+        color: isOptionBadge ? "#4338ca" : "#64748b",
         borderRadius: 999,
-        padding: parsedOption?.group ? "5px 9px 6px" : "5px 8px",
+        padding: parsedOption?.group ? "6px 10px 7px" : "5px 8px",
         fontSize: 11,
-        fontWeight: 700,
+        fontWeight: isItemNumber ? 650 : 750,
         lineHeight: 1.15
       }}
     >
       {parsedOption?.group ? (
         <>
-          <span style={{ color: "#64748b", fontSize: 10, fontWeight: 650 }}>
+          <span style={{ color: "#6366f1", fontSize: 10, fontWeight: 750 }}>
             {parsedOption.group}
           </span>
-          <strong style={{ color: "#111827", fontSize: 12, fontWeight: 780 }}>
+          <strong style={{ color: "#1e1b4b", fontSize: 12, fontWeight: 820 }}>
             {parsedOption.value || children}
           </strong>
         </>
@@ -742,11 +747,13 @@ export default function KitchenOrderCard({
   }, [items]);
   const totalItems = displayItems.length;
   const doneItems = displayItems.filter(({ item, unitIndex }) => {
-    const itemKey = getKitchenItemProgressKey(order, item);
-    const sourceDone = item.status === "done";
-    const paidToppings = getPaidToppings(item);
-    const unitChecked = getUnitProgressState(unitProgress, itemKey, unitIndex, sourceDone);
-    return sourceDone || (unitChecked && areUnitToppingsDone(toppingProgress, itemKey, unitIndex, paidToppings));
+    return isKitchenUnitDone({
+      unitProgress,
+      toppingProgress,
+      order,
+      item,
+      unitIndex
+    });
   }).length;
   const totalToppings = displayItems.reduce((total, { item }) => total + getPaidToppings(item).length, 0);
   const doneToppings = displayItems.reduce((total, { item, unitIndex }) => {
@@ -1250,7 +1257,13 @@ export default function KitchenOrderCard({
             const paidToppings = getPaidToppings(item);
             const checklistGroups = groupKitchenChecklistOptions(paidToppings);
             const unitToppingsDone = areUnitToppingsDone(toppingProgress, itemKey, unitIndex, paidToppings);
-            const itemDone = sourceDone || (unitChecked && unitToppingsDone);
+            const itemDone = isKitchenUnitDone({
+              unitProgress,
+              toppingProgress,
+              order,
+              item,
+              unitIndex
+            });
             const itemUpdating = updatingItemKey === itemRequestKey;
             const normalizedRecipeOptions = getKitchenRecipeOptions(item.options);
             const paidToppingKeys = buildPaidToppingOptionKeys(paidToppings);
@@ -1317,7 +1330,7 @@ export default function KitchenOrderCard({
                     {item.name || "Không tên món"}
                   </strong>
                   <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <OptionChip>Món #{itemNumber}</OptionChip>
+                    <OptionChip variant="item-number">Món {itemNumber}</OptionChip>
                     {displayOptions.map((option) => (
                       <OptionChip key={`${itemKey}-${option}`} optionLabel={option}>
                         {option}

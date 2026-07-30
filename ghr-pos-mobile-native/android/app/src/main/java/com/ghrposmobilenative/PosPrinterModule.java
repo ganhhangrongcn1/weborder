@@ -66,9 +66,11 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private Promise pendingUsbPromise;
     private MediaPlayer alertPlayer;
+    private MediaPlayer websiteOrderPlayer;
     private MediaPlayer qrPaymentPlayer;
     private boolean alertSoundPlaying = false;
     private int alertSoundCount = 0;
+    private int websiteOrderSoundCount = 0;
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
@@ -120,6 +122,31 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void getPrinterConfig(Promise promise) {
         promise.resolve(buildPrinterConfig());
+    }
+
+    @ReactMethod
+    public void checkPrinterConnection(Promise promise) {
+        if (!PRINTER_MODE_LAN.equals(getPrinterMode())) {
+            UsbDevice selected = getSelectedDevice();
+            promise.resolve(selected != null && usbManager != null && usbManager.hasPermission(selected));
+            return;
+        }
+
+        String host = safeText(prefs.getString(KEY_LAN_HOST, ""));
+        int port = getLanPort();
+        if (host.isEmpty()) {
+            promise.resolve(false);
+            return;
+        }
+
+        new Thread(() -> {
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 1200);
+                promise.resolve(true);
+            } catch (Exception ignored) {
+                promise.resolve(false);
+            }
+        }).start();
     }
 
     @ReactMethod
@@ -250,6 +277,19 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
+    public void playWebsiteOrderAlert(Promise promise) {
+        mainHandler.post(() -> {
+            if (websiteOrderPlayer != null) {
+                promise.resolve(false);
+                return;
+            }
+            websiteOrderSoundCount = 0;
+            playNextWebsiteOrderSound();
+            promise.resolve(true);
+        });
+    }
+
+    @ReactMethod
     public void playQrPaymentAlert(Promise promise) {
         mainHandler.post(() -> {
             stopNewOrderAlert();
@@ -359,6 +399,47 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
             alertPlayer.start();
         } catch (Exception ignored) {
             stopNewOrderAlert();
+        }
+    }
+
+    private void playNextWebsiteOrderSound() {
+        if (websiteOrderSoundCount >= 3) {
+            releaseWebsiteOrderPlayer();
+            websiteOrderSoundCount = 0;
+            return;
+        }
+        try {
+            releaseWebsiteOrderPlayer();
+            websiteOrderPlayer = MediaPlayer.create(reactContext, R.raw.website_preorder);
+            if (websiteOrderPlayer == null) return;
+            websiteOrderSoundCount += 1;
+            websiteOrderPlayer.setOnCompletionListener(player -> {
+                releaseWebsiteOrderPlayer();
+                mainHandler.postDelayed(this::playNextWebsiteOrderSound, 250);
+            });
+            websiteOrderPlayer.setOnErrorListener((player, what, extra) -> {
+                releaseWebsiteOrderPlayer();
+                websiteOrderSoundCount = 0;
+                return true;
+            });
+            websiteOrderPlayer.start();
+        } catch (Exception ignored) {
+            releaseWebsiteOrderPlayer();
+            websiteOrderSoundCount = 0;
+        }
+    }
+
+    private void releaseWebsiteOrderPlayer() {
+        try {
+            if (websiteOrderPlayer != null) {
+                websiteOrderPlayer.setOnCompletionListener(null);
+                websiteOrderPlayer.setOnErrorListener(null);
+                if (websiteOrderPlayer.isPlaying()) websiteOrderPlayer.stop();
+                websiteOrderPlayer.release();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            websiteOrderPlayer = null;
         }
     }
 

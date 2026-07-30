@@ -4,6 +4,7 @@ import useKitchenOrders, { getTodayDateKey } from "../../hooks/useKitchenOrders.
 import KitchenDishSummaryPanel from "./KitchenDishSummaryPanel.jsx";
 import KitchenItemLabelPrintDialog from "./KitchenItemLabelPrintDialog.jsx";
 import KitchenOrderCard from "./KitchenOrderCard.jsx";
+import KitchenOrderSummaryPanel from "./KitchenOrderSummaryPanel.jsx";
 import KitchenOrderStrip from "./KitchenOrderStrip.jsx";
 import {
   getPrinterConfig,
@@ -54,6 +55,7 @@ const SOURCE_FILTER_OPTIONS = [
 ];
 
 const PRINTER_SETTINGS_STORAGE_KEY = "ghr:kitchen-printer-settings:v1";
+const RIGHT_PANEL_MODE_STORAGE_KEY = "ghr:kitchen-right-panel-mode:v1";
 const AUTO_PRINT_REQUESTED_BY = "auto-kitchen";
 const AUTO_PRINT_RECENT_GRACE_MS = 2 * 60 * 1000;
 
@@ -575,6 +577,14 @@ export default function KitchenPage() {
   const [printingItemLabels, setPrintingItemLabels] = useState(false);
   const [printJobsByOrderKey, setPrintJobsByOrderKey] = useState({});
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [rightPanelMode, setRightPanelMode] = useState(() => {
+    try {
+      const savedMode = window.localStorage.getItem(RIGHT_PANEL_MODE_STORAGE_KEY);
+      return ["dish", "order", "none"].includes(savedMode) ? savedMode : "dish";
+    } catch {
+      return "dish";
+    }
+  });
   const autoPrintBootstrappedRef = useRef(false);
   const autoPrintStartedAtRef = useRef(0);
   const autoPrintedOrderKeysRef = useRef(new Set());
@@ -630,6 +640,21 @@ export default function KitchenPage() {
     toggleItemDone,
     reload
   } = useKitchenOrders(kitchenOrderOptions);
+  const activeOrder = useMemo(
+    () => filteredOrders.find((order) => getKitchenOrderKey(order) === activeOrderKey) || null,
+    [activeOrderKey, filteredOrders]
+  );
+
+  function handleRightPanelModeChange(mode = "none") {
+    const nextMode = ["dish", "order", "none"].includes(mode) ? mode : "none";
+    setRightPanelMode(nextMode);
+    setActiveDishKey("");
+    try {
+      window.localStorage.setItem(RIGHT_PANEL_MODE_STORAGE_KEY, nextMode);
+    } catch {
+      // Display preference remains active for the current session.
+    }
+  }
 
   useEffect(() => {
     if (!session || !profile) return undefined;
@@ -1062,7 +1087,9 @@ export default function KitchenPage() {
       window.matchMedia?.("(pointer: coarse)")?.matches
       || Number(window.navigator?.maxTouchPoints || 0) > 0
     );
-  const boardColumns = isMobile
+  const boardColumns = rightPanelMode === "none"
+    ? "minmax(0, 1fr)"
+    : isMobile
     ? "1fr"
     : isTabletBoard
       ? "minmax(0, 1fr) minmax(320px, 0.38fr)"
@@ -1299,6 +1326,68 @@ export default function KitchenPage() {
                     </span>
                   </div>
 
+                  <div style={{ display: "grid", gap: 7 }}>
+                    <strong style={{ color: "#334155", fontSize: 12 }}>Cột thông tin bên phải</strong>
+                    <div style={{ display: "grid", gap: 7 }}>
+                      {[
+                        { value: "dish", label: "Tổng hợp món", description: "Gộp món đang chờ từ tất cả đơn" },
+                        { value: "order", label: "Tóm tắt đơn", description: "Chỉ xem món của đơn đang chọn" }
+                      ].map((option) => {
+                        const active = rightPanelMode === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            role="checkbox"
+                            aria-checked={active}
+                            onClick={() => handleRightPanelModeChange(active ? "none" : option.value)}
+                            style={{
+                              minHeight: 54,
+                              display: "grid",
+                              gridTemplateColumns: "24px minmax(0, 1fr)",
+                              alignItems: "center",
+                              gap: 10,
+                              textAlign: "left",
+                              border: active ? "1px solid #16a34a" : "1px solid #cbd5e1",
+                              background: active ? "#f0fdf4" : "#ffffff",
+                              color: "#334155",
+                              borderRadius: 8,
+                              padding: "8px 10px",
+                              cursor: "pointer"
+                            }}
+                          >
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                width: 22,
+                                height: 22,
+                                display: "grid",
+                                placeItems: "center",
+                                border: active ? "2px solid #16a34a" : "2px solid #94a3b8",
+                                background: active ? "#16a34a" : "#ffffff",
+                                color: "#ffffff",
+                                borderRadius: 5,
+                                fontSize: 15,
+                                fontWeight: 950,
+                                lineHeight: 1,
+                                boxSizing: "border-box"
+                              }}
+                            >
+                              {active ? "✓" : ""}
+                            </span>
+                            <span style={{ display: "grid", gap: 2 }}>
+                              <strong style={{ color: active ? "#166534" : "#334155", fontSize: 12 }}>{option.label}</strong>
+                              <small style={{ color: "#64748b", fontSize: 10, lineHeight: 1.3 }}>{option.description}</small>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span style={{ color: "#64748b", fontSize: 11, lineHeight: 1.35 }}>
+                      Chỉ tick được một mục. Bấm lại mục đang tick để tắt cột phải và mở rộng danh sách đơn.
+                    </span>
+                  </div>
+
                   {printerNotice ? (
                     <span style={{ color: "#334155", fontSize: 12, fontWeight: 750, lineHeight: 1.35 }}>
                       {printerNotice}
@@ -1347,15 +1436,22 @@ export default function KitchenPage() {
             }}
           >
             <SourceFilterSelect value={sourceFilter} onChange={handleSourceFilterChange} />
-            <FilterButton active={statusFilter === "active"} onClick={() => handleStatusFilterChange("active")}>
-              Đang xử lý
-            </FilterButton>
             <FilterButton
               active={statusFilter === "scheduled"}
               badgeCount={stats.scheduled || 0}
               onClick={() => handleStatusFilterChange("scheduled")}
             >
               Đơn đặt trước
+            </FilterButton>
+            <FilterButton active={statusFilter === "active"} onClick={() => handleStatusFilterChange("active")}>
+              Đang xử lý
+            </FilterButton>
+            <FilterButton
+              active={statusFilter === "handoff"}
+              badgeCount={stats.handoff || 0}
+              onClick={() => handleStatusFilterChange("handoff")}
+            >
+              Đơn Chờ Giao
             </FilterButton>
             <FilterButton active={statusFilter === "done"} onClick={() => handleStatusFilterChange("done")}>
               Hoàn thành
@@ -1559,12 +1655,15 @@ export default function KitchenPage() {
             />
           </div>
 
-          <KitchenDishSummaryPanel
-            activeDishKey={activeDishKey}
-            activeOrderKey={activeOrderKey}
-            orders={filteredOrders}
-            onSelectDish={handleSelectDish}
-          />
+          {rightPanelMode === "dish" ? (
+            <KitchenDishSummaryPanel
+              activeDishKey={activeDishKey}
+              activeOrderKey={activeOrderKey}
+              orders={filteredOrders}
+              onSelectDish={handleSelectDish}
+            />
+          ) : null}
+          {rightPanelMode === "order" ? <KitchenOrderSummaryPanel order={activeOrder} /> : null}
         </section>
       </section>
       <KitchenItemLabelPrintDialog

@@ -20,6 +20,7 @@ import {
   buildPosShiftCloseReceiptText,
   openLocalCashDrawer,
   playLocalQrPaymentAlert,
+  playLocalWebsiteOrderAlert,
   printLocalReceipt,
   startLocalPrintStationService,
   stopLocalPrintStationService
@@ -100,6 +101,7 @@ export default function usePosComposer() {
   const announcedQrPaymentIdsRef = useRef(new Set());
   const runtimeRefreshInFlightRef = useRef(false);
   const createCashOrderInFlightRef = useRef(false);
+  const knownWebsiteOrderIdsRef = useRef(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState(null);
@@ -222,6 +224,20 @@ export default function usePosComposer() {
     }),
     [baseTotals.subtotal, pricedProducts, rawSmartPromotions]
   );
+
+  useEffect(() => {
+    const websiteOrders = [...pickupOrders, ...deliveryOrders];
+    const nextIds = new Set(websiteOrders.map((order) => String(order?.id || "").trim()).filter(Boolean));
+    const knownIds = knownWebsiteOrderIdsRef.current;
+    knownWebsiteOrderIdsRef.current = nextIds;
+    if (knownIds === null) return;
+    if (websiteOrders.some((order) => {
+      const id = String(order?.id || "").trim();
+      return id && !knownIds.has(id);
+    })) {
+      playLocalWebsiteOrderAlert().catch(() => {});
+    }
+  }, [deliveryOrders, pickupOrders]);
 
   useEffect(() => {
     const timer = globalThis.setInterval(() => setPromotionNowTick(Date.now()), 60000);

@@ -138,6 +138,23 @@ export async function playLocalNewOrderAlert() {
   return printerModule.playNewOrderAlert();
 }
 
+export async function checkLocalPrinterConnection() {
+  if (!isLocalPrinterAvailable()) return false;
+  if (typeof printerModule.checkPrinterConnection !== "function") {
+    const config = await getLocalPrinterConfig();
+    return config?.mode === "lan"
+      ? Boolean(config?.lanHost)
+      : Boolean(config?.usbConnected && config?.usbPermission);
+  }
+  return Boolean(await printerModule.checkPrinterConnection());
+}
+
+export async function playLocalWebsiteOrderAlert() {
+  if (!isLocalPrinterAvailable()) return false;
+  if (typeof printerModule.playWebsiteOrderAlert !== "function") return false;
+  return printerModule.playWebsiteOrderAlert();
+}
+
 export async function playLocalQrPaymentAlert() {
   if (!isLocalPrinterAvailable()) return false;
   if (typeof printerModule.playQrPaymentAlert !== "function") return false;
