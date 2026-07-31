@@ -268,7 +268,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   useEffect(() => {
     let disposed = false;
 
-    const refreshDashboardSummary = async () => {
+    const refreshDashboardSummary = async ({ force = false } = {}) => {
       if (section !== "dashboard") return;
       updateDashboardDataStatus(setDashboardDataStatus, "summary", "loading");
       try {
@@ -278,6 +278,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
           branchFilter: selectedBranchName,
           branchUuid: selectedBranchUuid,
           branchName: selectedBranchName
+        }, {
+          force
         });
         if (disposed) return;
         if (!nextSummary) {
@@ -301,8 +303,17 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     };
 
     refreshDashboardSummary();
+
+    const refreshCurrentDashboard = () => {
+      refreshDashboardSummary({ force: true });
+    };
+    const timer = window.setInterval(refreshCurrentDashboard, 60000);
+    window.addEventListener("focus", refreshCurrentDashboard);
+
     return () => {
       disposed = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshCurrentDashboard);
     };
   }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid]);
 

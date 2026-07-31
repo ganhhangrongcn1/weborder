@@ -67,13 +67,13 @@ function buildDashboardSummaryCacheKey(dateRange = {}) {
   ].join("|");
 }
 
-export async function getAdminDashboardSummaryRpc(dateRange = {}) {
+export async function getAdminDashboardSummaryRpc(dateRange = {}, { force = false } = {}) {
   const client = await getAdminSupabaseClient();
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
 
   const cacheKey = buildDashboardSummaryCacheKey(dateRange);
   const cached = dashboardSummaryCache.get(cacheKey);
-  if (cached && Date.now() - cached.cachedAt < DASHBOARD_SUMMARY_CACHE_TTL_MS) {
+  if (!force && cached && Date.now() - cached.cachedAt < DASHBOARD_SUMMARY_CACHE_TTL_MS) {
     return cached.value;
   }
   if (dashboardSummaryInFlight.has(cacheKey)) {

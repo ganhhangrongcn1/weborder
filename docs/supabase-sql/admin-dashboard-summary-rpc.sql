@@ -13,6 +13,7 @@ create or replace function public.dashboard_to_numeric(p_value text)
 returns numeric
 language sql
 immutable
+set search_path = ''
 as $$
   select case
     when trim(coalesce(p_value, '')) ~ '^-?[0-9]+([.][0-9]+)?$'
@@ -28,6 +29,7 @@ create or replace function public.normalize_dashboard_channel(
 returns text
 language sql
 stable
+set search_path = ''
 as $$
   select case
     when public.normalize_order_counting_status(p_source) in ('grab', 'grabfood')
@@ -75,6 +77,7 @@ returns table(
 language sql
 stable
 security invoker
+set search_path = ''
 as $$
 with bounds as (
   select
@@ -128,7 +131,11 @@ web_orders as (
         then 'delivering'
       when public.normalize_order_counting_status(o.status) in ('done', 'completed', 'complete', 'finish', 'finished', 'served', 'hoantat')
         then 'done'
-      else 'preparing'
+      when public.normalize_order_counting_status(o.status) in (
+        'preparing', 'cooking', 'doing', 'pick', 'picking', 'inprogress',
+        'confirmed', 'accepted', 'processing', 'ready', 'readytopickup', 'readytoship'
+      ) then 'preparing'
+      else 'unknown'
     end as status_group,
     greatest(coalesce(o.total_amount, 0)::numeric - coalesce(o.shipping_fee, 0)::numeric, 0) as net_revenue
   from public.orders o
@@ -183,7 +190,19 @@ partner_orders as (
       when public.normalize_order_counting_status(po.order_status) in ('', 'pending', 'pendingzalo', 'new')
         and public.normalize_order_counting_status(po.nexpos_status) in ('', 'pending', 'pendingzalo', 'new')
         then 'pending'
-      else 'preparing'
+      when public.normalize_order_counting_status(po.order_status) in (
+        'preparing', 'cooking', 'doing', 'pick', 'picking', 'inprogress',
+        'confirmed', 'accepted', 'processing', 'ready', 'readytopickup', 'readytoship'
+      )
+        or public.normalize_order_counting_status(po.nexpos_status) in (
+          'preparing', 'cooking', 'doing', 'pick', 'picking', 'inprogress',
+          'confirmed', 'accepted', 'processing', 'ready', 'readytopickup', 'readytoship'
+        )
+        or public.normalize_order_counting_status(coalesce(po.raw_data ->> 'status', '')) in (
+          'preparing', 'cooking', 'doing', 'pick', 'picking', 'inprogress',
+          'confirmed', 'accepted', 'processing', 'ready', 'readytopickup', 'readytoship'
+        ) then 'preparing'
+      else 'unknown'
     end as status_group,
     greatest(
       coalesce(
