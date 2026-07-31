@@ -19,6 +19,8 @@ import HomePromoPopup from "./components/HomePromoPopup.jsx";
 import HomeFulfillmentCard from "./components/HomeFulfillmentCard.jsx";
 import HomeInfoCards from "./components/HomeInfoCards.jsx";
 import useHomeComputed from "./useHomeComputed.js";
+import HomeReviewRewardBanner from "./components/HomeReviewRewardBanner.jsx";
+import HomeReviewRewardPopup from "./components/HomeReviewRewardPopup.jsx";
 import { createHomeActionHandlers } from "./homeActions.js";
 import { createHomeFulfillmentActions } from "./homeFulfillmentActions.js";
 import useHomeEffects from "./useHomeEffects.js";
@@ -28,6 +30,7 @@ const FALLBACK_HOME_BLOCK_ORDER = [
   "hero",
   "fulfillment",
   "promoVouchers",
+  "reviewRewards",
   "flashSale",
   "featuredProducts",
   "deliveryApps"
@@ -36,6 +39,7 @@ const FALLBACK_HOME_BLOCK_ORDER = [
 const HOME_ORDERING_BLOCKS = [
   "fulfillment",
   "promoVouchers",
+  "reviewRewards",
   "flashSale",
   "featuredProducts"
 ];
@@ -134,6 +138,7 @@ export default function Home({
   const [pickupDate, setPickupDate] = useState(() => normalizePickupDate(checkoutPreset?.pickupDate));
   const [pickupClock, setPickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
   const [homePopupOpen, setHomePopupOpen] = useState(false);
+  const [reviewRewardPopupOpen, setReviewRewardPopupOpen] = useState(false);
   const [homeClockTick, setHomeClockTick] = useState(() => Date.now());
   const popularProductIds = useHomePopularProducts({
     enabled: products.length > 0,
@@ -158,10 +163,12 @@ export default function Home({
     banners,
     cashbackBlock,
     siteBrandBlock,
+    reviewRewardsBlock,
     deliveryAppsBlock,
     popupCampaignBlock,
     voucherCards,
     showCashback,
+    showReviewRewards,
     showPromoVouchers,
     showDeliveryApps,
     showFulfillment,
@@ -302,6 +309,13 @@ export default function Home({
         <HomeVoucherCarousel vouchers={voucherCards} />
       </section>
     ) : null,
+    reviewRewards: () => showReviewRewards ? (
+      <HomeReviewRewardBanner
+        block={reviewRewardsBlock}
+        image={siteBrandBlock?.logo || products.find((product) => product?.image)?.image || ""}
+        onOpen={() => setReviewRewardPopupOpen(true)}
+      />
+    ) : null,
     fulfillment: () => showFulfillment ? (
       <section ref={fulfillmentRef} className="home2026-section">
         <HomeFulfillmentCard
@@ -357,6 +371,16 @@ export default function Home({
         onClickPopup={() => {
           setHomePopupOpen(false);
           handleAction(popupCampaignBlock);
+        }}
+      />
+
+      <HomeReviewRewardPopup
+        open={reviewRewardPopupOpen}
+        block={reviewRewardsBlock}
+        onClose={() => setReviewRewardPopupOpen(false)}
+        onContinue={() => {
+          setReviewRewardPopupOpen(false);
+          navigate("reviewRewards", "account");
         }}
       />
 

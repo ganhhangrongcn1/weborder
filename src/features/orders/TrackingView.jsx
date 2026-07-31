@@ -24,6 +24,7 @@ import {
   resolveCustomerOrderPointStatus
 } from "../../services/customerOrderPointStatusService.js";
 import { getCustomerOrderSummary } from "../../services/orderSummaryService.js";
+import { getCustomerReviewRewards } from "../../services/reviewRewardService.js";
 import {
   buildLoyaltyOrderPointLookup,
   resolveOrderPointStatus
@@ -39,6 +40,7 @@ import {
 const ORDER_HISTORY_PAGE_SIZE = 4;
 const POST_LOGIN_REDIRECT_KEY = "ghr_post_login_redirect";
 const ORDER_DETAIL_INTENT_KEY = "ghr_open_order_detail_intent";
+const REVIEW_REWARD_VIEW_KEY = "ghr_review_reward_view";
 const ORDER_FILTERS = [
   { key: "all", label: "Tất cả" },
   { key: "active", label: "Đang xử lý" },
@@ -152,6 +154,7 @@ export default function Tracking({
     pendingPoints: 0
   });
   const [currentOrderPointStatusMap, setCurrentOrderPointStatusMap] = useState(() => new Map());
+  const [reviewRewardDashboard, setReviewRewardDashboard] = useState(null);
   const guestLookup = useGuestOrderLookup();
   const checkinPromo = useCheckinPromoConfig();
   const canAccessFullOrderHistory = Boolean(
@@ -192,6 +195,7 @@ export default function Tracking({
     setVisibleOrderCount(ORDER_HISTORY_PAGE_SIZE);
     setLoadedHistoryOrders([]);
     setPartnerOrders([]);
+    setReviewRewardDashboard(null);
     setCurrentOrderPointStatusMap(new Map());
     setOrderSearch("");
     setOrderFilter("all");
@@ -224,6 +228,31 @@ export default function Tracking({
       disposed = true;
     };
   }, [canAccessFullOrderHistory, currentPhone, orderQueryLimit]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function loadReviewRewardDashboard() {
+      if (!canAccessFullOrderHistory) {
+        setReviewRewardDashboard(null);
+        return;
+      }
+      try {
+        const nextDashboard = await getCustomerReviewRewards();
+        if (!disposed) setReviewRewardDashboard(nextDashboard);
+      } catch (error) {
+        if (import.meta?.env?.DEV) {
+          console.warn("[orders] load review reward status failed", error);
+        }
+        if (!disposed) setReviewRewardDashboard(null);
+      }
+    }
+
+    loadReviewRewardDashboard();
+    return () => {
+      disposed = true;
+    };
+  }, [canAccessFullOrderHistory, currentPhone]);
 
   useEffect(() => {
     let disposed = false;
@@ -312,6 +341,10 @@ export default function Tracking({
       (a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0)
     ),
     [canAccessFullOrderHistory, guestOrders, resolvedCurrentOrders]
+  );
+  const reviewRewardOrderMap = useMemo(
+    () => new Map((reviewRewardDashboard?.orders || []).map((order) => [String(order.id), order])),
+    [reviewRewardDashboard]
   );
   const searchedOrders = useMemo(() => {
     if (!canAccessFullOrderHistory || !deferredOrderSearch) return orders;
@@ -443,6 +476,13 @@ export default function Tracking({
   };
   const getOrderBranchName = (order) => {
     return getCanonicalOrderBranchName(order, branches);
+  };
+  const openReviewRewards = (view = "submit") => {
+    try {
+      window.sessionStorage.setItem(REVIEW_REWARD_VIEW_KEY, view);
+    } catch {
+    }
+    navigate("reviewRewards", "account");
   };
   const getPointLabel = (order) => {
     const pointStatus = String(order.pointStatus || "").toLowerCase();
@@ -890,6 +930,10 @@ export default function Tracking({
             const statusMeta = getCustomerOrderDisplayStatus(order);
             const status = statusMeta.label;
             const isPartnerOrder = order?.sourceType === "partner";
+            const reviewRewardOrder = isPartnerOrder
+              ? reviewRewardOrderMap.get(String(order.id)) || null
+              : null;
+            const reviewRewardPoints = Number(reviewRewardDashboard?.settings?.reward_points || 5000);
             const sourceBadge = getOrderSourceBadge(order);
             const pointBadge = getPointLabel(order);
             const canClaimPoints = canAccessFullOrderHistory && isPartnerOrder && String(order.pointStatus || "").toLowerCase() === "pending";
@@ -1025,6 +1069,44 @@ export default function Tracking({
                       </strong>
                     ) : null}
                   </div>
+
+                  {reviewRewardOrder ? (
+                    reviewRewardOrder.reward_status === "eligible" ? (
+                      <button
+                        type="button"
+                        className="orders-card__review-reward"
+                        onClick={() => openReviewRewards("submit")}
+                      >
+                        <Icon name="star" size={18} />
+                        <span>
+                          <small>Thưởng đánh giá</small>
+                          <strong>Gửi ảnh 5 sao, nhận {reviewRewardPoints.toLocaleString("vi-VN")}đ</strong>
+                        </span>
+                        <em>Tham gia</em>
+                      </button>
+                    ) : reviewRewardOrder.reward_status === "submitted" ? (
+                      <button
+                        type="button"
+                        className="orders-card__review-reward is-submitted"
+                        onClick={() => openReviewRewards("history")}
+                      >
+                        <Icon name="check" size={18} />
+                        <span>
+                          <small>Thưởng đánh giá</small>
+                          <strong>Đã gửi ảnh đánh giá</strong>
+                        </span>
+                        <em>Xem kết quả</em>
+                      </button>
+                    ) : (
+                      <div className="orders-card__review-reward is-expired">
+                        <Icon name="clock" size={18} />
+                        <span>
+                          <small>Thưởng đánh giá</small>
+                          <strong>Đã hết thời hạn gửi ảnh</strong>
+                        </span>
+                      </div>
+                    )
+                  ) : null}
 
                   <div className="orders-card__footer">
                     <div className="orders-card__amount">

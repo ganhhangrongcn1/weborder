@@ -208,6 +208,7 @@ export default function useHomeComputed({
 
   const cashbackBlock = safeHomeContent.find((block) => block?.id === "cashback");
   const siteBrandBlock = safeHomeContent.find((block) => block?.id === "siteBrand");
+  const reviewRewardsBlock = safeHomeContent.find((block) => block?.id === "reviewRewards");
   const deliveryAppsBlock = safeHomeContent.find((block) => block?.id === "deliveryApps");
   const popupCampaignBlock = safeHomeContent.find((block) => block?.id === "popupCampaign");
   const promoVouchersBlock = safeHomeContent.find((block) => block?.id === "promoVouchers" || block?.id === "promo_vouchers");
@@ -216,6 +217,7 @@ export default function useHomeComputed({
   const categoryBlock = safeHomeContent.find((block) => block?.id === "categorySection");
   const featuredBlock = safeHomeContent.find((block) => block?.id === "featuredProducts");
   const showCashback = cashbackBlock?.active !== false;
+  const showReviewRewards = reviewRewardsBlock?.active !== false;
   const showDeliveryApps = deliveryAppsBlock?.active !== false;
   const voucherCards = buildHomeVoucherCards({
     coupons,
@@ -282,11 +284,13 @@ export default function useHomeComputed({
     heroBlockEnabled,
     cashbackBlock,
     siteBrandBlock,
+    reviewRewardsBlock,
     deliveryAppsBlock,
     popupCampaignBlock,
     promoVouchersBlock,
     voucherCards,
     showCashback,
+    showReviewRewards,
     showPromoVouchers,
     showDeliveryApps,
     showFulfillment,

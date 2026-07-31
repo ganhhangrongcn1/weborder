@@ -18,6 +18,7 @@ import SuccessPage from "./SuccessPage.jsx";
 import TrackingPage from "../tracking/TrackingPage.jsx";
 import LoyaltyPage from "../loyalty/LoyaltyPage.jsx";
 import AccountPage from "../account/AccountPage.jsx";
+import ReviewRewardsPage from "../account/ReviewRewardsPage.jsx";
 import QrOrderEntryPage from "../../../pages/customer/qr/QrOrderEntryPage.jsx";
 import QrMiniHomePage from "../../../pages/customer/qr/QrMiniHomePage.jsx";
 import useActiveOrderFloatboard from "../../../hooks/useActiveOrderFloatboard.js";
@@ -158,7 +159,7 @@ export default function CustomerShell({
   } = useActiveOrderFloatboard(activeCustomerOrder, activeOrderJourneySignature);
   const isChoosingProduct = isOptionModalOpen || page === "detail";
   const shouldHideBottomNav = isChoosingProduct || ["success", "qr-entry"].includes(page);
-  const shouldBlockSessionPage = isSessionBootstrapping && ["tracking", "loyalty", "account"].includes(page);
+  const shouldBlockSessionPage = isSessionBootstrapping && ["tracking", "loyalty", "account", "reviewRewards"].includes(page);
 
   const trackingOrderHistory = forcedLatestOrder
     ? [forcedLatestOrder, ...(Array.isArray(composedUserProfile?.orderHistory) ? composedUserProfile.orderHistory : []).filter((order) => {
@@ -333,6 +334,7 @@ export default function CustomerShell({
               {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} setCurrentOrder={setCurrentOrder} onReorder={reorderOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} isOrderRestoring={isSessionRestoring || isSessionBootstrapping || isMomoReturnRecovering} />}
               {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} setCurrentOrder={setCurrentOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} onOrderSheetVisibilityChange={setIsTrackingOrderSheetOpen} />}
               {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
+              {page === "reviewRewards" && <ReviewRewardsPage navigate={pageProps.navigate} />}
               {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}
             </div>
 

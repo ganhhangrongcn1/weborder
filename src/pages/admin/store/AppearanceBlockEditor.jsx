@@ -203,7 +203,12 @@ export default function AppearanceBlockEditor({
 
         <div className="admin-appearance-group">
           <h4>Thông tin block</h4>
-          {selectedBlockId === "cashback" ? (
+          {selectedBlockId === "reviewRewards" ? (
+            <ReviewRewardsBannerEditor
+              selectedNonHeroBlock={selectedNonHeroBlock}
+              updateHomeContent={updateHomeContent}
+            />
+          ) : selectedBlockId === "cashback" ? (
             <div className="admin-appearance-fields">
               <label className="wide">
                 Tiêu đề
@@ -279,6 +284,36 @@ function SiteBrandEditor({
         </div>
         <p className="admin-help-text">Gợi ý dùng ảnh vuông, nền trong suốt hoặc nền sáng.</p>
       </div>
+    </div>
+  );
+}
+
+function ReviewRewardsBannerEditor({
+  selectedNonHeroBlock,
+  updateHomeContent
+}) {
+  return (
+    <div className="admin-appearance-fields">
+      <label className="wide">
+        Tiêu đề banner
+        <AdminInput
+          value={selectedNonHeroBlock?.title || ""}
+          onChange={(event) => updateHomeContent("reviewRewards", { title: event.target.value })}
+          placeholder="Nhận 5.000đ từ đơn 5 sao"
+        />
+      </label>
+      <label className="wide">
+        Nội dung giới thiệu
+        <AdminInput
+          value={selectedNonHeroBlock?.subtitle || ""}
+          onChange={(event) => updateHomeContent("reviewRewards", { subtitle: event.target.value })}
+          placeholder="Gửi ảnh đánh giá để quán kiểm tra và tặng điểm."
+        />
+      </label>
+      <p className="wide admin-help-text">
+        Nút trên banner sẽ mở trang chương trình và lịch sử kết quả của khách.
+        Mức điểm, thời hạn đơn và nền tảng được quản lý tại mục Thưởng điểm đánh giá.
+      </p>
     </div>
   );
 }

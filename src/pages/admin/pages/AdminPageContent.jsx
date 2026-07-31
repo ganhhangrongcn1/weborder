@@ -8,6 +8,8 @@ import AdminCakesPage from "./AdminCakesPage.jsx";
 import AdminShiftOverviewPage from "./AdminShiftOverviewPage.jsx";
 import AdminEmployeesPage from "./AdminEmployeesPage.jsx";
 import AdminSupervisionPage from "./AdminSupervisionPage.jsx";
+import AdminPartnerReviewsPage from "./AdminPartnerReviewsPage.jsx";
+import AdminReviewRewardsPage from "./AdminReviewRewardsPage.jsx";
 
 export default function AdminPageContent({ section, ...props }) {
   if (section === "dashboard") {
@@ -28,6 +30,14 @@ export default function AdminPageContent({ section, ...props }) {
 
   if (section === "supervision") {
     return <AdminSupervisionPage {...props} />;
+  }
+
+  if (section === "partner-reviews") {
+    return <AdminPartnerReviewsPage {...props} />;
+  }
+
+  if (section === "review-rewards") {
+    return <AdminReviewRewardsPage {...props} />;
   }
 
   if (section === "customers") {

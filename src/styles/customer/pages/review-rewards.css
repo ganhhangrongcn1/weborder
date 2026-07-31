@@ -1,0 +1,1161 @@
+.review-reward-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #efd8c2;
+  border-radius: 8px;
+  background: #fff;
+  color: #30251f;
+}
+
+.account-review-reward-card {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 42px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 14px;
+  border: 1px solid #f1d6bd;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 92% 0%, rgb(255 214 142 / 42%) 0, transparent 34%),
+    #fffdf9;
+  color: #34251e;
+  text-align: left;
+  box-shadow: 0 4px 14px rgb(82 50 26 / 6%);
+}
+
+.account-review-reward-card__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff1cc;
+  color: #d98800;
+}
+
+.account-review-reward-card__content {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.account-review-reward-card__content strong {
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.account-review-reward-card__content small {
+  color: #78675c;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.account-review-reward-card__arrow {
+  justify-self: end;
+  transform: rotate(180deg);
+  color: #d86612;
+}
+
+.customer-sheet-backdrop.account-review-reward-sheet-backdrop {
+  z-index: 190;
+}
+
+.customer-bottom-sheet.account-review-reward-sheet {
+  max-height: min(88dvh, 760px);
+  border-radius: 18px;
+  background: #fff8ef;
+}
+
+.account-review-reward-sheet .customer-sheet-handle {
+  background: #dfcabb;
+}
+
+.account-review-reward-sheet__content {
+  padding: 0 14px 18px;
+}
+
+.account-review-reward-sheet__topbar {
+  display: flex;
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 -14px 12px;
+  padding: 8px 14px 12px;
+  background: #fff8ef;
+}
+
+.account-review-reward-sheet__topbar > div {
+  display: grid;
+  gap: 2px;
+}
+
+.account-review-reward-sheet__topbar span {
+  color: #a45a27;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.account-review-reward-sheet__topbar strong {
+  font-size: 17px;
+}
+
+.account-review-reward-sheet__topbar > button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f4e9de;
+  color: #6c5b50;
+}
+
+.account-review-reward-sheet .review-reward-panel--embedded {
+  border: 0;
+  box-shadow: 0 5px 18px rgb(82 50 26 / 7%);
+}
+
+.review-reward-loading {
+  overflow: hidden;
+}
+
+.review-reward-loading__header {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+}
+
+.review-reward-panel--page .review-reward-loading__header {
+  padding: 16px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.review-reward-loading__header > div {
+  display: grid;
+  gap: 8px;
+}
+
+.review-reward-loading__pagebar > div {
+  display: grid;
+  flex: 1;
+  gap: 7px;
+}
+
+.review-reward-loading__body {
+  display: grid;
+  min-height: 132px;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 22px 16px;
+  border: 1px solid #e7e9ec;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.review-reward-skeleton {
+  display: block;
+  max-width: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #eceff2 25%, #f8f9fa 50%, #eceff2 75%);
+  background-size: 200% 100%;
+  animation: review-reward-skeleton 1.15s ease-in-out infinite;
+}
+
+.review-reward-loading__pagebar .review-reward-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 20%) 25%,
+    rgb(255 255 255 / 42%) 50%,
+    rgb(255 255 255 / 20%) 75%
+  );
+  background-size: 200% 100%;
+}
+
+.review-reward-skeleton--circle,
+.review-reward-skeleton--icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.review-reward-skeleton--eyebrow {
+  width: 82px;
+  height: 8px;
+}
+
+.review-reward-skeleton--title {
+  width: 180px;
+  height: 20px;
+}
+
+.review-reward-skeleton--heading {
+  width: min(210px, 68vw);
+  height: 14px;
+}
+
+.review-reward-skeleton--line {
+  width: min(270px, 74vw);
+  height: 9px;
+}
+
+.review-reward-skeleton--short-line {
+  width: min(230px, 64vw);
+  height: 9px;
+}
+
+.review-reward-skeleton--body-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+
+@keyframes review-reward-skeleton {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-reward-skeleton {
+    animation: none;
+  }
+}
+
+.home-review-reward {
+  padding: 0 16px;
+}
+
+.home-review-reward__banner {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 102px;
+  padding: 13px 14px;
+  border: 1px solid #f0c89e;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 8% 0%, rgb(255 196 92 / 34%) 0, transparent 33%),
+    radial-gradient(circle at 95% 105%, rgb(244 111 22 / 16%) 0, transparent 40%),
+    #fff8ee;
+  box-shadow: 0 9px 22px rgb(155 88 32 / 11%);
+  color: #38261b;
+  text-align: left;
+}
+
+.home-review-reward__content {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.home-review-reward__eyebrow {
+  color: #bd5b17;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.home-review-reward__content > strong {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.home-review-reward__subtitle {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #806455;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.home-review-reward__cta {
+  display: inline-flex;
+  min-width: 102px;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #ef7214;
+  box-shadow: 0 5px 14px rgb(209 91 10 / 18%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.home-review-reward__cta .icon-ux {
+  transform: rotate(180deg);
+}
+
+.home-review-reward__visual {
+  position: relative;
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 8px;
+  background: #fff;
+  color: #e46a13;
+}
+
+.home-review-reward__visual img {
+  width: 42px;
+  height: 42px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: cover;
+}
+
+.home-review-reward__visual > span {
+  position: absolute;
+  right: -4px;
+  bottom: -5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 27px;
+  height: 20px;
+  justify-content: center;
+  border: 2px solid #fff;
+  border-radius: 10px;
+  background: #f7b500;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.customer-sheet-backdrop.review-reward-popup-backdrop {
+  z-index: 1600;
+  padding: 16px;
+  background: rgb(33 25 20 / 62%);
+}
+
+.customer-bottom-sheet.review-reward-popup-sheet {
+  width: min(392px, 100%);
+  max-height: min(760px, calc(100dvh - 32px));
+  border-radius: 8px;
+  background: #fff;
+}
+
+.customer-bottom-sheet.review-reward-popup-sheet .customer-sheet-scroll {
+  padding: 0;
+}
+
+.review-reward-popup {
+  display: grid;
+  background:
+    radial-gradient(circle at 50% 24%, rgb(255 195 92 / 15%) 0, transparent 38%),
+    #fffdf9;
+}
+
+.review-reward-popup__topbar {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-bottom: 1px solid #f0ece8;
+  background: radial-gradient(circle at 8% 0%, #fff4e5 0, #fff 48%);
+}
+
+.review-reward-popup__topbar > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 8px;
+  background: radial-gradient(circle at 28% 18%, #ff9d45 0, #ed6e12 76%);
+  color: #fff;
+}
+
+.review-reward-popup__topbar > strong {
+  font-size: 17px;
+}
+
+.review-reward-popup__topbar > button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f6f7f8;
+  color: #8a817b;
+}
+
+.review-reward-popup__topbar > .review-reward-popup__back {
+  background: #fff1e5;
+  color: #d8600e;
+}
+
+.review-reward-popup__hero {
+  position: relative;
+  display: grid;
+  padding: 26px 16px 16px;
+  place-items: center;
+}
+
+.review-reward-popup__hero > span {
+  display: grid;
+  width: 104px;
+  height: 104px;
+  place-items: center;
+  border: 1px solid #f0e8e1;
+  border-radius: 50%;
+  background: #fff8f2;
+  color: #f37315;
+}
+
+.review-reward-popup__hero > strong {
+  position: absolute;
+  bottom: 8px;
+  padding: 5px 10px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #f6b900;
+  box-shadow: 0 5px 12px rgb(128 76 0 / 14%);
+  color: #372600;
+  font-size: 13px;
+}
+
+.review-reward-popup__copy {
+  padding: 0 24px;
+  text-align: center;
+}
+
+.review-reward-popup__copy h2 {
+  margin: 0;
+  font-size: 23px;
+  line-height: 1.25;
+}
+
+.review-reward-popup__copy p {
+  margin: 10px 0 0;
+  color: #625750;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.review-reward-popup__copy p strong {
+  color: #2d241f;
+  font-weight: 850;
+}
+
+.review-reward-popup__copy--guide {
+  padding-top: 22px;
+}
+
+.review-reward-popup__copy--guide h2 {
+  white-space: nowrap;
+  font-size: 21px;
+}
+
+.review-reward-popup__step-count {
+  display: inline-block;
+  margin-bottom: 7px;
+  color: #dd6411;
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.review-reward-popup__steps {
+  display: grid;
+  gap: 0;
+  margin: 18px 20px 0;
+  border-top: 1px solid #eee9e5;
+  border-bottom: 1px solid #eee9e5;
+}
+
+.review-reward-popup__steps > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px;
+}
+
+.review-reward-popup__steps > div + div {
+  border-top: 1px solid #f2efec;
+}
+
+.review-reward-popup__steps > div > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff0e3;
+  color: #dc6211;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.review-reward-popup__steps p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.review-reward-popup__steps strong {
+  font-size: 12px;
+}
+
+.review-reward-popup__steps small {
+  color: #81766f;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.review-reward-popup__note {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 24px 0;
+  padding: 12px 13px;
+  border: 1px solid #f0d6bb;
+  border-radius: 8px;
+  background: #fff8ef;
+  color: #765d4f;
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.review-reward-popup__note > span {
+  display: grid;
+  gap: 2px;
+}
+
+.review-reward-popup__note strong {
+  color: #4a3327;
+}
+
+.review-reward-popup__note a {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 13px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgb(153 77 24 / 10%);
+  color: #ce5d0d;
+  font-size: 11px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.review-reward-popup__footer-note {
+  margin: -10px 28px 18px;
+  color: #9a928c;
+  font-size: 9px;
+  font-style: italic;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.review-reward-popup__example {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  margin: 14px 20px 0;
+  padding: 11px 12px;
+  border: 1px solid #efd5b9;
+  border-radius: 8px;
+  background: #fff8ef;
+  color: #db6815;
+}
+
+.review-reward-popup__example > .icon-ux {
+  justify-self: center;
+}
+
+.review-reward-popup__example p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.review-reward-popup__example strong {
+  color: #51382a;
+  font-size: 11px;
+}
+
+.review-reward-popup__example span {
+  color: #7d685b;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.review-reward-popup__continue {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 16px 20px 20px;
+  border: 0;
+  border-radius: 8px;
+  background: radial-gradient(circle at 20% 0%, #ff9e42 0, #ed6c11 74%);
+  box-shadow: 0 8px 18px rgb(201 83 7 / 20%);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.review-reward-popup__continue .icon-ux {
+  transform: rotate(180deg);
+}
+
+.review-reward-panel > header {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.review-reward-panel h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.review-reward-panel header p,
+.review-reward-empty,
+.review-reward-message {
+  margin: 3px 0 0;
+  color: #74645a;
+  font-size: 12px;
+}
+
+.review-reward-panel header > strong {
+  color: #c65312;
+  font-size: 13px;
+}
+
+.review-reward-panel--page {
+  min-height: calc(100dvh - 72px);
+  align-content: start;
+  padding: 0 14px 28px;
+  border: 0;
+  border-radius: 0;
+  background: #fff7ec;
+}
+
+.review-reward-panel--page > header {
+  padding: 16px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgb(67 45 28 / 7%);
+}
+
+.review-reward-pagebar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0 -14px;
+  padding: 16px 16px 15px;
+  background:
+    radial-gradient(circle at 86% -20%, rgb(255 193 79 / 70%) 0, transparent 40%),
+    #ed6d11;
+  color: #fff;
+}
+
+.review-reward-pagebar > button {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 38%);
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+}
+
+.review-reward-pagebar span {
+  display: block;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.review-reward-pagebar h1 {
+  margin: 2px 0 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.review-reward-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff4d8;
+  color: #d88900;
+}
+
+.review-reward-orders {
+  display: grid;
+  gap: 8px;
+}
+
+.review-reward-order-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.review-reward-order-picker__trigger {
+  display: grid;
+  width: 100%;
+  min-height: 54px;
+  grid-template-columns: minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid #efcda9;
+  border-radius: 8px;
+  background: #fff;
+  color: #4e4038;
+  text-align: left;
+  box-shadow: 0 3px 12px rgb(77 48 28 / 5%);
+}
+
+.review-reward-order-picker__trigger > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.review-reward-order-picker__trigger strong {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-reward-order-picker__trigger small {
+  overflow: hidden;
+  color: #88776d;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-reward-order-picker__trigger > .icon-ux {
+  justify-self: end;
+  transform: rotate(-90deg);
+  color: #9b887c;
+  transition: transform 160ms ease;
+}
+
+.review-reward-order-picker.is-open .review-reward-order-picker__trigger > .icon-ux {
+  transform: rotate(90deg);
+}
+
+.review-reward-order-picker > .review-reward-orders {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.review-reward-section-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.review-reward-section-title h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.review-reward-section-title p {
+  margin: 3px 0 0;
+  color: #776a62;
+  font-size: 11px;
+}
+
+.review-reward-section-title > span {
+  color: #d65f0e;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.review-reward-view-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #efd9c4;
+  border-radius: 8px;
+  background: #fff3e7;
+}
+
+.review-reward-view-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #80685a;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.review-reward-view-tabs button.is-active {
+  background: #fff;
+  box-shadow: 0 3px 10px rgb(116 64 26 / 9%);
+  color: #d25e0d;
+}
+
+.review-reward-orders button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #e6ddd7;
+  border-radius: 7px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+}
+
+.review-reward-orders button.is-selected {
+  border-color: #e76916;
+  box-shadow: 0 0 0 2px rgb(231 105 22 / 12%);
+}
+
+.review-reward-orders button:disabled {
+  cursor: default;
+}
+
+.review-reward-orders button.is-expired {
+  border-color: #e5dfda;
+  background: #f5f3f1;
+  color: #897d76;
+  opacity: .62;
+}
+
+.review-reward-orders button.is-submitted {
+  border-color: #e3d8cf;
+  background: #faf7f4;
+  color: #6e625b;
+  opacity: .78;
+}
+
+.review-reward-order__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.review-reward-order__topline em {
+  color: #766960;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.review-reward-orders button.is-eligible .review-reward-order__topline em {
+  color: #c85a0d;
+}
+
+.review-reward-orders span {
+  color: #c75c12;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.review-reward-orders small {
+  color: #77675d;
+}
+
+.review-reward-upload {
+  display: grid;
+  min-height: 112px;
+  place-items: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px dashed #d6b99f;
+  border-radius: 7px;
+  background: #fffaf5;
+  color: #8b4b22;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.review-reward-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.review-reward-upload img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+}
+
+.review-reward-submit {
+  min-height: 44px;
+  border: 0;
+  border-radius: 7px;
+  background: #ed6d11;
+  color: #fff;
+  font-weight: 800;
+}
+
+.review-reward-submit:disabled {
+  opacity: .6;
+}
+
+.review-reward-empty-state,
+.review-reward-history-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 132px;
+  padding: 22px 16px;
+  border: 1px dashed #dfe3e8;
+  border-radius: 8px;
+  background: #fff;
+  color: #da6717;
+  text-align: center;
+}
+
+.review-reward-empty-state strong,
+.review-reward-history-empty strong {
+  color: #342923;
+  font-size: 14px;
+}
+
+.review-reward-empty-state p,
+.review-reward-history-empty p {
+  max-width: 300px;
+  margin: 0;
+  color: #776b64;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.review-reward-empty-state--compact {
+  min-height: 108px;
+  padding: 16px;
+}
+
+.review-reward-login {
+  min-height: 42px;
+  margin-top: 6px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 7px;
+  background: #ed6d11;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.review-reward-entry {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  padding: 16px;
+  border: 1px solid #efd4b7;
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 100% 0%, rgb(255 192 77 / 17%) 0, transparent 38%),
+    #fff;
+  box-shadow: 0 5px 16px rgb(123 72 32 / 7%);
+}
+
+.review-reward-entry__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 8px;
+  background: #fff1e3;
+  color: #dd6511;
+}
+
+.review-reward-entry > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.review-reward-entry__eyebrow {
+  color: #ca5e11;
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.review-reward-entry strong {
+  color: #382920;
+  font-size: 14px;
+}
+
+.review-reward-entry p {
+  margin: 0;
+  color: #78675d;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.review-reward-entry .review-reward-login {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.review-reward-history {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid #e5e1dd;
+}
+
+.review-reward-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(max-content, 1fr));
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.review-reward-filters button {
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid #dfe3e8;
+  border-radius: 999px;
+  background: #fff;
+  color: #655950;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.review-reward-filters button.is-active {
+  border-color: #ef6d15;
+  background: #ef6d15;
+  color: #fff;
+}
+
+.review-reward-claim-list {
+  display: grid;
+  gap: 8px;
+}
+
+.review-reward-claim {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #e1e5e9;
+  border-left: 3px solid #e0a238;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.review-reward-claim.is-approved {
+  border-left-color: #2b9a67;
+}
+
+.review-reward-claim.is-rejected {
+  border-left-color: #cf5a4d;
+}
+
+.review-reward-claim > div {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.review-reward-claim span {
+  color: #c75c12;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.review-reward-claim strong {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.review-reward-claim small {
+  color: #7a6e66;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.review-reward-claim__result {
+  padding-left: 10px;
+  border-left: 1px solid #edf0f2;
+}
+
+.review-reward-claim.is-approved .review-reward-claim__result span {
+  color: #26865d;
+}
+
+.review-reward-claim.is-rejected .review-reward-claim__result span {
+  color: #bc4c42;
+}
+
+@media (max-width: 420px) {
+  .review-reward-panel > header {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .review-reward-panel header > strong {
+    grid-column: 2;
+  }
+
+  .home-review-reward__banner {
+    grid-template-columns: 50px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .review-reward-panel--page > header {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+  }
+
+  .review-reward-panel--page > header > strong {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 360px) {
+  .home-review-reward__cta {
+    min-width: 38px;
+    padding: 0;
+  }
+
+  .home-review-reward__cta > span {
+    display: none;
+  }
+}

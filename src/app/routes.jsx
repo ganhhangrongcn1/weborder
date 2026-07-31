@@ -45,6 +45,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/profile" element={<AppCustomerRoutes {...customerRouteProps} />} />
       <Route path="/orders" element={<AppCustomerRoutes {...customerRouteProps} />} />
       <Route path="/loyalty" element={<AppCustomerRoutes {...customerRouteProps} />} />
+      <Route path="/review-rewards" element={<AppCustomerRoutes {...customerRouteProps} />} />
       <Route path="/qr/:branchId" element={<AppCustomerRoutes {...customerRouteProps} />} />
       <Route path="/qr/:branchId/menu" element={<AppCustomerRoutes {...customerRouteProps} />} />
       <Route path="/qr/:branchId/checkout" element={<AppCustomerRoutes {...customerRouteProps} />} />
@@ -65,6 +66,8 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/admin" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/menu" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/orders" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/partner-reviews" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/review-rewards" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/shifts" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/employees" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/supervision" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />

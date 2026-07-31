@@ -1,7 +1,10 @@
+import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
+import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import AccountPanel from "../../../pages/customer/account/AccountPanel.jsx";
 import AddressCard from "../../../pages/customer/account/AddressCard.jsx";
+import ReviewRewardPanel from "./ReviewRewardPanel.jsx";
 
 function OverviewSkeleton() {
   return (
@@ -59,6 +62,7 @@ export default function AccountDashboard({
   vm,
   logoutDemoUser
 }) {
+  const [reviewRewardOpen, setReviewRewardOpen] = useState(false);
   const points = Number(vm.accountOverview.loyalty?.totalPoints || 0);
   const showOverviewSkeleton = vm.accountOverview.isLoading && !vm.accountOverview.hasSummary;
   const tierProgressMetric = getTierProgressMetric(vm.tierJourney);
@@ -145,6 +149,48 @@ export default function AccountDashboard({
           </div>
         )}
       </section>
+
+      <button
+        type="button"
+        className="account-review-reward-card"
+        onClick={() => setReviewRewardOpen(true)}
+        aria-haspopup="dialog"
+      >
+        <span className="account-review-reward-card__icon">
+          <Icon name="star" size={21} />
+        </span>
+        <span className="account-review-reward-card__content">
+          <strong>Đánh giá 5 sao, nhận 5.000đ</strong>
+          <small>Xem đơn đủ điều kiện và kết quả đã gửi</small>
+        </span>
+        <Icon name="back" size={18} className="account-review-reward-card__arrow" />
+      </button>
+
+      {reviewRewardOpen ? (
+        <CustomerBottomSheet
+          onClose={() => setReviewRewardOpen(false)}
+          ariaLabel="Thưởng điểm đánh giá"
+          backdropClassName="account-review-reward-sheet-backdrop"
+          className="account-review-reward-sheet"
+          contentClassName="account-review-reward-sheet__content"
+          showHeader={false}
+        >
+          <div className="account-review-reward-sheet__topbar">
+            <div>
+              <span>Gánh Hàng Rong</span>
+              <strong>Thưởng điểm đánh giá</strong>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReviewRewardOpen(false)}
+              aria-label="Đóng"
+            >
+              <Icon name="close" size={20} />
+            </button>
+          </div>
+          <ReviewRewardPanel showHistory />
+        </CustomerBottomSheet>
+      ) : null}
 
       <AccountPanel
         title="Địa chỉ giao hàng"

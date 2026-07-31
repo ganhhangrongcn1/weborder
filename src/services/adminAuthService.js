@@ -225,7 +225,31 @@ export async function getAdminSession() {
         error
       };
     }
-    const access = await resolveAdminAccessFromSession(client, data?.session || null);
+    let session = data?.session || null;
+    if (session?.access_token) {
+      let validation = await withTimeout(() => client.auth.getUser(session.access_token));
+      if (validation?.error || !validation?.data?.user) {
+        const refreshed = await withTimeout(() => client.auth.refreshSession()).catch(() => null);
+        session = refreshed?.data?.session || null;
+        validation = session?.access_token
+          ? await withTimeout(() => client.auth.getUser(session.access_token)).catch(() => null)
+          : null;
+        if (!validation?.data?.user || validation?.error) {
+          await client.auth.signOut({ scope: "local" }).catch(() => {});
+          clearAdminAccessCache();
+          await syncScopedSessionToRuntime("admin", null).catch(() => {});
+          return {
+            session: null,
+            rawSession: null,
+            profile: null,
+            unauthorized: false,
+            message: "Phiên admin đã hết hạn. Vui lòng đăng nhập lại.",
+            error: validation?.error || refreshed?.error || null
+          };
+        }
+      }
+    }
+    const access = await resolveAdminAccessFromSession(client, session);
     await syncScopedSessionToRuntime("admin", access.session).catch(() => {});
     return access;
   } catch (error) {

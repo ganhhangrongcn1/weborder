@@ -7,6 +7,8 @@ export const navGroups = [
     title: "Vận hành",
     items: [
       { id: "orders-main", label: "Đơn hàng", section: "orders" },
+      { id: "partner-reviews-main", label: "Đánh giá đối tác", section: "partner-reviews" },
+      { id: "review-rewards-main", label: "Thưởng điểm đánh giá", section: "review-rewards" },
       { id: "shifts-main", label: "Tổng quan ca", section: "shifts" },
       { id: "customer-main", label: "Khách hàng / CRM", section: "customers" },
       { id: "cakes-main", label: "Bánh sinh nhật", section: "cakes" }
@@ -41,6 +43,8 @@ export const navGroups = [
 export const navIconMap = {
   "dashboard-main": "home",
   "orders-main": "bag",
+  "partner-reviews-main": "star",
+  "review-rewards-main": "gift",
   "shifts-main": "clock",
   "customer-main": "user",
   "cakes-main": "gift",
@@ -57,6 +61,8 @@ export const navIconMap = {
 
 export const dashboardQuickActions = [
   { id: "orders-main", label: "Đơn hàng" },
+  { id: "partner-reviews-main", label: "Đánh giá đối tác" },
+  { id: "review-rewards-main", label: "Thưởng điểm đánh giá" },
   { id: "shifts-main", label: "Tổng quan ca" },
   { id: "cakes-main", label: "Bánh sinh nhật" },
   { id: "menu-main", label: "Menu" },
@@ -70,6 +76,8 @@ export const dashboardQuickActions = [
 export function getAdminPageTitle(section) {
   if (section === "dashboard") return "Dashboard";
   if (section === "orders") return "Quản lý đơn hàng";
+  if (section === "partner-reviews") return "Quản lý đánh giá đối tác";
+  if (section === "review-rewards") return "Thưởng điểm đánh giá";
   if (section === "shifts") return "Tổng quan ca";
   if (section === "customers") return "Khách hàng / CRM";
   if (section === "cakes") return "Bánh sinh nhật bánh tráng";

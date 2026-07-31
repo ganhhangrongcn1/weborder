@@ -12,6 +12,7 @@ export const HOME_BLOCKS = [
   { id: "siteBrand", title: "Thương hiệu / Logo", placement: "Trang chủ / Logo và lời chào" },
   { id: "hero", title: "Banner đầu trang", placement: "Trang chủ / Banner lớn đầu trang" },
   { id: "promoVouchers", title: "Khuyến mãi cho bạn", placement: "Trang chủ / Mã giảm giá và freeship" },
+  { id: "reviewRewards", title: "Banner thưởng đánh giá", placement: "Trang chủ / Chương trình đánh giá 5 sao" },
   { id: "deliveryApps", title: "Banner mua trên app", placement: "Trang chủ / Đặt qua ứng dụng giao hàng" },
   { id: "popupCampaign", title: "Popup trang chủ", placement: "Trang chủ / Popup sau khi tải trang" },
   { id: "fulfillment", title: "Khối giao hàng / tự đến lấy", placement: "Trang chủ / Chọn hình thức nhận hàng" },
@@ -23,6 +24,13 @@ export const HOME_BLOCKS = [
 export const HOME_BLOCK_DEFAULTS = [
   { id: "siteBrand", placement: "Trang chủ / Logo và lời chào", title: "Gánh Hàng Rong", logo: "", active: true },
   { id: "promoVouchers", placement: "Trang chủ / Mã giảm giá và freeship", title: "Khuyến mãi cho bạn", active: true },
+  {
+    id: "reviewRewards",
+    placement: "Trang chủ / Chương trình đánh giá 5 sao",
+    title: "Nhận 5.000đ từ đơn 5 sao",
+    subtitle: "GrabFood · ShopeeFood · Xanh Ngon",
+    active: true
+  },
   { id: "deliveryApps", placement: "Trang chủ / Đặt qua ứng dụng giao hàng", title: "Đặt qua ứng dụng giao hàng", subtitle: "", active: true, branchApps: [] },
   {
     id: "popupCampaign",
@@ -48,6 +56,7 @@ export const APP_SECTIONS = [
   { value: "menu", label: "Menu" },
   { value: "checkout", label: "Thanh toán" },
   { value: "loyalty", label: "Ưu đãi / Loyalty" },
+  { value: "reviewRewards", label: "Thưởng điểm đánh giá" },
   { value: "account", label: "Tài khoản" },
   { value: "tracking", label: "Theo dõi đơn" }
 ];

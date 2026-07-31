@@ -25,8 +25,8 @@ export function createHomeActionHandlers({
       navigate("menu", "menu");
       return;
     }
-    if (["menu", "checkout", "loyalty", "account", "tracking"].includes(target)) {
-      navigate(target, target);
+    if (["menu", "checkout", "loyalty", "account", "tracking", "reviewRewards"].includes(target)) {
+      navigate(target, target === "reviewRewards" ? "account" : target);
       return;
     }
     if (target === "home") {

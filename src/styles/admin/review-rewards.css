@@ -1,0 +1,173 @@
+.admin-review-rewards {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-review-reward-settings,
+.admin-review-reward-list {
+  padding: 18px;
+  border: 1px solid var(--admin-border, #dfe4ea);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-review-reward-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-review-reward-heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.admin-review-reward-heading p {
+  margin: 4px 0 0;
+  color: #687386;
+  font-size: 13px;
+}
+
+.admin-review-reward-check,
+.admin-review-reward-platforms label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-review-reward-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(130px, 1fr)) minmax(240px, 1.5fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.admin-review-reward-form > label {
+  display: grid;
+  gap: 6px;
+  color: #485366;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-review-reward-form input[type="number"],
+.admin-review-reward-form select,
+.admin-review-reward-heading select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.admin-review-reward-platforms {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 14px;
+}
+
+.admin-review-reward-form > button,
+.admin-review-reward-card-body button {
+  min-height: 40px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 6px;
+  background: #ed6b13;
+  color: #fff;
+  font-weight: 800;
+}
+
+.admin-review-reward-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.admin-review-reward-grid article {
+  overflow: hidden;
+  border: 1px solid #dfe4ea;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.admin-review-reward-grid img,
+.admin-review-reward-deleted {
+  display: grid;
+  width: 100%;
+  height: 190px;
+  place-items: center;
+  object-fit: cover;
+  background: #f4f6f8;
+  color: #7b8492;
+}
+
+.admin-review-reward-card-body {
+  display: grid;
+  gap: 6px;
+  padding: 13px;
+}
+
+.admin-review-reward-card-body > span {
+  color: #278163;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-review-reward-card-body h3,
+.admin-review-reward-card-body p {
+  margin: 0;
+}
+
+.admin-review-reward-card-body p,
+.admin-review-reward-card-body small {
+  color: #6c7583;
+  font-size: 12px;
+}
+
+.admin-review-reward-card-body > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.admin-review-reward-card-body button.is-reject {
+  border: 1px solid #d8dee6;
+  background: #fff;
+  color: #4f5968;
+}
+
+.admin-review-reward-notice {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #fff4e9;
+  color: #8e4818;
+}
+
+.admin-review-reward-empty {
+  padding: 28px;
+  color: #6c7583;
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .admin-review-reward-form {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-review-reward-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-review-reward-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

@@ -33,6 +33,7 @@ export function customerPathToState(pathname = "/") {
   if (path === "/profile") return { page: "account", activeTab: "account" };
   if (path === "/orders") return { page: "tracking", activeTab: "orders" };
   if (path === "/loyalty") return { page: "loyalty", activeTab: "rewards" };
+  if (path === "/review-rewards") return { page: "reviewRewards", activeTab: "account" };
   if (path === "/home" || path === "/") return { page: "home", activeTab: "home" };
 
   return { page: "home", activeTab: "home" };
@@ -57,6 +58,7 @@ export function customerPageToPath(nextPage = "home", nextTab = "home") {
   if (nextPage === "success") return "/success";
   if (nextPage === "tracking") return "/orders";
   if (nextPage === "loyalty") return "/loyalty";
+  if (nextPage === "reviewRewards") return "/review-rewards";
   if (nextPage === "account") return "/profile";
 
   if (nextTab === "menu") return "/menu";
@@ -89,6 +91,18 @@ export function adminPathToState(pathname = "/admin") {
     return {
       section: "orders",
       activeAdminNav: "orders-main"
+    };
+  }
+  if (path === "/admin/partner-reviews") {
+    return {
+      section: "partner-reviews",
+      activeAdminNav: "partner-reviews-main"
+    };
+  }
+  if (path === "/admin/review-rewards") {
+    return {
+      section: "review-rewards",
+      activeAdminNav: "review-rewards-main"
     };
   }
   if (path === "/admin/shifts") {
@@ -184,6 +198,8 @@ export function adminNavToPath(item) {
 
   if (item.id === "dashboard-main") return "/admin";
   if (item.id === "orders-main") return "/admin/orders";
+  if (item.id === "partner-reviews-main") return "/admin/partner-reviews";
+  if (item.id === "review-rewards-main") return "/admin/review-rewards";
   if (item.id === "shifts-main") return "/admin/shifts";
   if (item.id === "customer-main") return "/admin/customers";
   if (item.id === "employees-main") return "/admin/employees";

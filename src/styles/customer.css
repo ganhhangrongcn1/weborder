@@ -16,6 +16,7 @@
 @import "./customer-checkout.css";
 @import "./customer/components/modal.css";
 @import "./customer/pages/account.css";
+@import "./customer/pages/review-rewards.css";
 @import "./customer/utilities/colors.css";
 @import "./customer/utilities/spacing.css";
 @import "./customer/utilities/typography.css";
