@@ -60,6 +60,7 @@
 .admin-sidebar button,
 .admin-view-store {
   display: flex;
+  position: relative;
   width: 100%;
   gap: 10px;
   align-items: center;
@@ -97,6 +98,34 @@
 
 .admin-view-store:hover {
   background: #1e293b;
+}
+
+.admin-sidebar button.has-notification:not(.active) {
+  border: 1px solid #fdba74;
+  background: #fff7ed;
+  color: #b45309;
+  box-shadow: 0 5px 14px rgba(234, 88, 12, 0.1);
+}
+
+.admin-nav-label {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-nav-badge {
+  display: inline-grid;
+  min-width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 11px;
+  background: #ea580c;
+  padding: 0 6px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 3px 8px rgba(194, 65, 12, 0.24);
 }
 
 @media (max-width: 640px) {
@@ -153,5 +182,23 @@
   .admin-sidebar button.active {
     border-left: 1px solid #fed7aa;
     border-color: #fed7aa;
+  }
+
+  .admin-sidebar button.has-notification:not(.active) {
+    border-color: #fdba74;
+  }
+
+  .admin-nav-label {
+    flex: initial;
+  }
+
+  .admin-nav-badge {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    font-size: 9px;
   }
 }

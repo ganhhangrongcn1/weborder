@@ -19,7 +19,7 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-export default function AdminReviewRewardsPage() {
+export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChange }) {
   const [data, setData] = useState({ claims: [], settings: null });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,7 +29,11 @@ export default function AdminReviewRewardsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      setData(await getAdminReviewRewards());
+      const result = await getAdminReviewRewards();
+      setData(result);
+      onReviewRewardPendingCountChange?.(
+        (result?.claims || []).filter((claim) => claim.status === "pending").length
+      );
     } catch (error) {
       setNotice(error.message);
     } finally {

@@ -230,26 +230,35 @@
 }
 
 .home-review-reward {
-  padding: 0 16px;
+  width: 100%;
 }
 
 .home-review-reward__banner {
   display: grid;
+  position: relative;
   grid-template-columns: 54px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: 100%;
   min-height: 102px;
-  padding: 13px 14px;
-  border: 1px solid #f0c89e;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid #f4a11f;
   border-radius: 8px;
   background:
-    radial-gradient(circle at 8% 0%, rgb(255 196 92 / 34%) 0, transparent 33%),
-    radial-gradient(circle at 95% 105%, rgb(244 111 22 / 16%) 0, transparent 40%),
-    #fff8ee;
-  box-shadow: 0 9px 22px rgb(155 88 32 / 11%);
-  color: #38261b;
+    radial-gradient(circle at 5% 0%, rgb(255 255 255 / 18%) 0, transparent 34%),
+    linear-gradient(125deg, #ff8a1c 0%, #ffa916 52%, #ffd338 100%);
+  box-shadow: 0 12px 26px rgb(207 111 13 / 24%);
+  color: #fff;
   text-align: left;
+}
+
+.home-review-reward__banner::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: rgb(255 255 255 / 72%);
+  content: "";
 }
 
 .home-review-reward__content {
@@ -259,13 +268,19 @@
 }
 
 .home-review-reward__eyebrow {
-  color: #bd5b17;
+  width: max-content;
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+  padding: 3px 7px;
+  color: #fff;
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .home-review-reward__content > strong {
+  color: #fff;
   font-size: 18px;
   line-height: 1.2;
 }
@@ -273,7 +288,7 @@
 .home-review-reward__subtitle {
   display: -webkit-box;
   overflow: hidden;
-  color: #806455;
+  color: rgb(255 255 255 / 88%);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.35;
@@ -290,9 +305,9 @@
   gap: 4px;
   padding: 0 10px;
   border-radius: 8px;
-  background: #ef7214;
-  box-shadow: 0 5px 14px rgb(209 91 10 / 18%);
-  color: #fff;
+  background: #fffaf1;
+  box-shadow: 0 6px 16px rgb(163 80 0 / 18%);
+  color: #d85a00;
   font-size: 10px;
   font-weight: 850;
 }
@@ -308,16 +323,17 @@
   height: 54px;
   place-items: center;
   border-radius: 8px;
-  background: #fff;
-  color: #e46a13;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%);
+  color: #e76800;
 }
 
 .home-review-reward__visual img {
   width: 42px;
   height: 42px;
-  border: 2px solid #fff;
+  border: 2px solid #fff8ed;
   border-radius: 50%;
-  background: #fff;
+  background: #fff8ed;
   object-fit: cover;
 }
 
@@ -331,10 +347,10 @@
   min-width: 27px;
   height: 20px;
   justify-content: center;
-  border: 2px solid #fff;
+  border: 2px solid #fff8ed;
   border-radius: 10px;
-  background: #f7b500;
-  color: #fff;
+  background: #ffbd19;
+  color: #4a2a0f;
   font-size: 10px;
   font-weight: 900;
 }

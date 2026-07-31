@@ -1,4 +1,5 @@
 import "../../styles/admin/admin.css";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminSidebar from "./AdminSidebar.jsx";
 import AdminTopHeader from "./AdminTopHeader.jsx";
@@ -11,6 +12,7 @@ import { getRepositoryRuntimeInfo } from "../../services/repositories/repository
 import { adminNavToPath } from "../../app/routeState.js";
 import AdminPageContent from "./pages/AdminPageContent.jsx";
 import { AdminButton, AdminPageHeader } from "./ui/AdminCommon.jsx";
+import { getAdminReviewRewards } from "../../services/reviewRewardService.js";
 
 export default function AdminApp({
   products,
@@ -43,6 +45,7 @@ export default function AdminApp({
   adminAuth
 }) {
   const navigate = useNavigate();
+  const [reviewRewardPendingCount, setReviewRewardPendingCount] = useState(0);
   const {
     adminSession = null,
     adminProfile = null,
@@ -182,6 +185,31 @@ export default function AdminApp({
     setOptionGroupPresetsState
   });
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshPendingCount = async () => {
+      try {
+        const result = await getAdminReviewRewards();
+        if (cancelled) return;
+        const pendingCount = (result?.claims || []).filter((claim) => claim.status === "pending").length;
+        setReviewRewardPendingCount(pendingCount);
+      } catch {
+        // Keep the last known count when the admin session or network is temporarily unavailable.
+      }
+    };
+
+    refreshPendingCount();
+    const intervalId = window.setInterval(refreshPendingCount, 60000);
+    window.addEventListener("focus", refreshPendingCount);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshPendingCount);
+    };
+  }, []);
+
   return (
     <div className="admin-app admin-shell admin-layout">
       <AdminSidebar
@@ -189,6 +217,7 @@ export default function AdminApp({
         navIconMap={navIconMap}
         activeAdminNav={activeAdminNav}
         onActivateNav={activateNav}
+        notificationCounts={{ "review-rewards-main": reviewRewardPendingCount }}
       />
 
       <main className="admin-main admin-content">
@@ -214,6 +243,7 @@ export default function AdminApp({
 
         <AdminPageContent
           section={section}
+          onReviewRewardPendingCountChange={setReviewRewardPendingCount}
           uiDirty={uiDirty}
           dashboardSearch={dashboardSearch}
           setDashboardSearch={setDashboardSearch}
