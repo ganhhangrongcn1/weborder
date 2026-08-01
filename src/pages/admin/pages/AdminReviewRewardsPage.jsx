@@ -11,12 +11,23 @@ const SOURCE_LABELS = {
   xanhngon: "Xanh Ngon"
 };
 
+const STATUS_LABELS = {
+  pending: "Chờ duyệt",
+  processing: "Đang xử lý",
+  approved: "Đã duyệt",
+  rejected: "Đã từ chối"
+};
+
 function formatDate(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("vi-VN", {
     dateStyle: "short",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function formatMoney(value) {
+  return `${Number(value || 0).toLocaleString("vi-VN")}đ`;
 }
 
 export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChange }) {
@@ -189,13 +200,54 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
                 <div className="admin-review-reward-deleted">Ảnh đã tự động xóa</div>
               )}
               <div className="admin-review-reward-card-body">
-                <span>{SOURCE_LABELS[claim.partner_source] || claim.partner_source}</span>
-                <h3>Đơn {claim.order_code}</h3>
-                <p>{claim.customer_phone} · {formatDate(claim.submitted_at)}</p>
-                <strong>+{Number(claim.reward_points).toLocaleString("vi-VN")} điểm</strong>
+                <div className="admin-review-reward-card-topline">
+                  <span>{SOURCE_LABELS[claim.partner_source] || claim.partner_source}</span>
+                  <em className={`is-${claim.status}`}>{STATUS_LABELS[claim.status] || claim.status}</em>
+                </div>
+                <div className="admin-review-reward-customer">
+                  <h3>{claim.order?.customer_name || claim.customer?.name || "Khách chưa có tên"}</h3>
+                  <a href={`tel:${claim.order?.customer_phone || claim.customer_phone}`}>
+                    {claim.order?.customer_phone || claim.customer_phone}
+                  </a>
+                  {claim.customer?.name && claim.customer.name !== claim.order?.customer_name ? (
+                    <small>Tên tài khoản: {claim.customer.name}</small>
+                  ) : null}
+                </div>
+                <dl className="admin-review-reward-details">
+                  <div>
+                    <dt>Đơn đối tác</dt>
+                    <dd>{claim.order?.order_code || claim.order_code}</dd>
+                  </div>
+                  <div>
+                    <dt>Giá trị đơn</dt>
+                    <dd>{formatMoney(claim.order?.total_amount)}</dd>
+                  </div>
+                  <div className="is-wide">
+                    <dt>Chi nhánh</dt>
+                    <dd>{claim.order?.branch_name || "Chưa có thông tin"}</dd>
+                  </div>
+                  <div>
+                    <dt>Thời gian đặt</dt>
+                    <dd>{formatDate(claim.order?.order_time) || "Chưa có"}</dd>
+                  </div>
+                  <div>
+                    <dt>Gửi yêu cầu</dt>
+                    <dd>{formatDate(claim.submitted_at)}</dd>
+                  </div>
+                </dl>
+                <div className="admin-review-reward-points">
+                  <span>
+                    <small>Điểm thưởng</small>
+                    <strong>+{Number(claim.reward_points).toLocaleString("vi-VN")}</strong>
+                  </span>
+                  <span>
+                    <small>Số dư hiện tại</small>
+                    <strong>{Number(claim.current_points || 0).toLocaleString("vi-VN")}</strong>
+                  </span>
+                </div>
                 {claim.rejection_reason ? <small>{claim.rejection_reason}</small> : null}
                 {claim.status === "pending" ? (
-                  <div>
+                  <div className="admin-review-reward-actions">
                     <button type="button" className="is-reject" onClick={() => decide(claim, "reject")}>
                       Từ chối
                     </button>

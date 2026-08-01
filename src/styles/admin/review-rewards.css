@@ -84,7 +84,7 @@
 
 .admin-review-reward-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 12px;
 }
 
@@ -108,32 +108,127 @@
 
 .admin-review-reward-card-body {
   display: grid;
-  gap: 6px;
-  padding: 13px;
+  gap: 12px;
+  padding: 14px;
 }
 
-.admin-review-reward-card-body > span {
+.admin-review-reward-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-review-reward-card-topline > span {
   color: #278163;
   font-size: 11px;
   font-weight: 800;
 }
 
-.admin-review-reward-card-body h3,
-.admin-review-reward-card-body p {
-  margin: 0;
+.admin-review-reward-card-topline em {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff4e9;
+  color: #a94e10;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
 }
 
-.admin-review-reward-card-body p,
-.admin-review-reward-card-body small {
+.admin-review-reward-card-topline em.is-approved {
+  background: #e9f8f1;
+  color: #187757;
+}
+
+.admin-review-reward-card-topline em.is-rejected {
+  background: #f4f5f7;
+  color: #667085;
+}
+
+.admin-review-reward-customer {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-review-reward-customer h3 {
+  margin: 0;
+  color: #182230;
+  font-size: 16px;
+}
+
+.admin-review-reward-customer a {
+  width: max-content;
+  color: #d85b08;
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.admin-review-reward-customer small,
+.admin-review-reward-card-body > small {
   color: #6c7583;
   font-size: 12px;
 }
 
-.admin-review-reward-card-body > div {
+.admin-review-reward-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid #edf0f3;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.admin-review-reward-details > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.admin-review-reward-details > div.is-wide {
+  grid-column: 1 / -1;
+}
+
+.admin-review-reward-details dt,
+.admin-review-reward-points small {
+  color: #7a8492;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.admin-review-reward-details dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: #344054;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-review-reward-points {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-review-reward-points > span {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-review-reward-points > span:last-child {
+  text-align: right;
+}
+
+.admin-review-reward-points strong {
+  color: #d85b08;
+  font-size: 16px;
+}
+
+.admin-review-reward-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 6px;
 }
 
 .admin-review-reward-card-body button.is-reject {
@@ -169,5 +264,9 @@
   .admin-review-reward-heading {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .admin-review-reward-grid {
+    grid-template-columns: 1fr;
   }
 }

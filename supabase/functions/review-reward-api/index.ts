@@ -219,13 +219,62 @@ async function adminDashboard(client: ReturnType<typeof createClient>, admin: Ro
   if (text(admin.branch_uuid)) query = query.eq("branch_uuid", admin.branch_uuid);
   const { data: claims, error } = await query;
   if (error) return reply({ ok: false, message: "Không tải được danh sách chờ duyệt." }, 500);
-  const rows = await Promise.all((claims || []).map(async (claim) => {
+
+  const claimRows = claims || [];
+  const orderIds = [...new Set(claimRows.map((claim) => text(claim.partner_order_id)).filter(Boolean))];
+  const authUserIds = [...new Set(claimRows.map((claim) => text(claim.auth_user_id)).filter(Boolean))];
+  const customerPhones = [...new Set(claimRows.map((claim) => phoneKey(claim.customer_phone)).filter(Boolean))];
+  const [ordersResult, profilesResult, accountsResult] = await Promise.all([
+    orderIds.length
+      ? client.from("partner_orders")
+        .select("id,display_order_code,order_code,partner_source,customer_name,customer_phone,branch_name,nexpos_hub_name,total_amount,order_time,created_at,order_status,nexpos_status")
+        .in("id", orderIds)
+      : Promise.resolve({ data: [], error: null }),
+    authUserIds.length
+      ? client.from("profiles").select("auth_user_id,name,phone").in("auth_user_id", authUserIds)
+      : Promise.resolve({ data: [], error: null }),
+    customerPhones.length
+      ? client.from("loyalty_accounts").select("customer_phone,total_points").in("customer_phone", customerPhones)
+      : Promise.resolve({ data: [], error: null })
+  ]);
+
+  if (ordersResult.error) console.error("[review-reward-api] admin partner orders query", ordersResult.error);
+  if (profilesResult.error) console.error("[review-reward-api] admin profiles query", profilesResult.error);
+  if (accountsResult.error) console.error("[review-reward-api] admin loyalty accounts query", accountsResult.error);
+
+  const orderMap = new Map((ordersResult.data || []).map((order) => [text(order.id), order]));
+  const profileMap = new Map((profilesResult.data || []).map((profile) => [text(profile.auth_user_id), profile]));
+  const accountMap = new Map(
+    (accountsResult.data || []).map((account) => [phoneKey(account.customer_phone), account])
+  );
+  const rows = await Promise.all(claimRows.map(async (claim) => {
     let proof_url = "";
     if (!claim.proof_deleted_at) {
       const { data } = await client.storage.from(BUCKET).createSignedUrl(claim.proof_path, 600);
       proof_url = data?.signedUrl || "";
     }
-    return { ...claim, proof_url };
+    const order = orderMap.get(text(claim.partner_order_id)) || null;
+    const profile = profileMap.get(text(claim.auth_user_id)) || null;
+    const loyaltyAccount = accountMap.get(phoneKey(claim.customer_phone)) || null;
+    return {
+      ...claim,
+      proof_url,
+      customer: profile
+        ? { name: text(profile.name), phone: phoneKey(profile.phone) }
+        : null,
+      order: order
+        ? {
+          customer_name: text(order.customer_name),
+          customer_phone: phoneKey(order.customer_phone),
+          order_code: text(order.display_order_code || order.order_code),
+          branch_name: text(order.branch_name || order.nexpos_hub_name),
+          total_amount: Number(order.total_amount || 0),
+          order_time: order.order_time || order.created_at,
+          order_status: text(order.order_status || order.nexpos_status)
+        }
+        : null,
+      current_points: Number(loyaltyAccount?.total_points || 0)
+    };
   }));
   return reply({ ok: true, settings, claims: rows });
 }
