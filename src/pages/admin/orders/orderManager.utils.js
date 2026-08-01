@@ -1,5 +1,6 @@
 export function toAdminStatus(status) {
   const normalized = String(status || "").toLowerCase();
+  if (["pending_payment", "waiting_payment", "unpaid"].includes(normalized)) return "awaiting_payment";
   if (normalized === "pending_zalo" || normalized === "new") return "new";
   if (["cancelled", "canceled", "cancel", "hủy", "huy", "đã hủy", "da huy"].includes(normalized)) return "cancelled";
   if (normalized === "ready_for_pickup" || normalized === "ready_for_delivery") return "doing";

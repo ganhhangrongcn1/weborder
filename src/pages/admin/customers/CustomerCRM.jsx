@@ -6,6 +6,7 @@ import {
   resolveCustomerOrderPointStatus
 } from "../../../services/customerOrderPointStatusService.js";
 import { getCustomerKey } from "../../../services/storageService.js";
+import { getCustomerOrderDisplayStatus } from "../../../services/customerOrderStatusService.js";
 import { getCustomerLoyaltyDetailAsync, getCustomerRecentOrdersAsync } from "../../../services/crmService.js";
 import { getOrderSourceBadge } from "../../../services/partnerOrderService.js";
 import {
@@ -346,21 +347,29 @@ function matchesCustomerFilterSelection(customer = {}, filter = "all", tierOptio
   );
 }
 
-function getOrderStatusLabel(status) {
-  const normalized = String(status || "").toLowerCase();
-  if (normalized === "done") return "Hoàn tất";
-  if (normalized === "confirmed") return "Đã xác nhận";
-  if (normalized === "delivering") return "Đang giao";
-  return "Chờ xác nhận";
+function getOrderStatusLabel(order = {}) {
+  return getCustomerOrderDisplayStatus(order).label;
 }
 
 function getOrderPointStatus(order = {}, statusMap = new Map(), loyaltyLookup = {}) {
+  const orderStatus = getCustomerOrderDisplayStatus(order);
+  if (orderStatus.key === "awaiting_payment") {
+    return { key: "unknown", label: "Chưa tích điểm" };
+  }
+  if (orderStatus.key === "cancelled") {
+    return { key: "blocked", label: "Không tích điểm" };
+  }
   const rpcStatus = resolveCustomerOrderPointStatus(statusMap, order);
   const status = rpcStatus || resolveOrderPointStatus(order, loyaltyLookup);
   if (status === "claimed") return { key: "claimed", label: "Đã tích điểm" };
   if (status === "expired") return { key: "expired", label: "Đã hết hạn tích điểm" };
   if (status === "blocked") return { key: "blocked", label: "Không tích điểm" };
-  if (status === "pending") return { key: "pending", label: "Chờ tích điểm" };
+  if (status === "pending") {
+    return {
+      key: "pending",
+      label: orderStatus.key === "completed" ? "Đang cập nhật điểm" : "Chờ hoàn tất đơn"
+    };
+  }
   return { key: "unknown", label: "Chưa rõ" };
 }
 
@@ -1985,7 +1994,7 @@ export default function CustomerCRM({
                         </div>
                         <div>
                           <strong>{formatMoney(Number(order.totalAmount || order.total || 0))}</strong>
-                          <em>{getOrderStatusLabel(order.status)}</em>
+                          <em>{getOrderStatusLabel(order)}</em>
                           {(() => {
                             const pointStatus = getOrderPointStatus(order, selectedOrderPointStatusMap, selectedPointLookup);
                             return (

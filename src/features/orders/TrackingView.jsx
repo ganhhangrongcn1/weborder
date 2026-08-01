@@ -485,6 +485,19 @@ export default function Tracking({
     navigate("reviewRewards", "account");
   };
   const getPointLabel = (order) => {
+    const orderStatus = getCustomerOrderDisplayStatus(order);
+    if (order?.sourceType !== "partner" && orderStatus.key === "cancelled") {
+      return {
+        label: "Không tích điểm",
+        className: "bg-red-50 text-red-700"
+      };
+    }
+    if (order?.sourceType !== "partner" && orderStatus.key === "awaiting_payment") {
+      return {
+        label: "Chưa tích điểm",
+        className: "bg-slate-100 text-slate-600"
+      };
+    }
     const pointStatus = String(order.pointStatus || "").toLowerCase();
     if (pointStatus === "claimed") {
       return {

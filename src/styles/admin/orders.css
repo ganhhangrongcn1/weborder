@@ -459,6 +459,11 @@
   color: #ea580c;
 }
 
+.admin-order-status-awaiting-payment {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
 .admin-order-status-doing {
   background: #eff6ff;
   color: #2563eb;
@@ -652,6 +657,12 @@
   border-color: #fecaca;
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.admin-order-status-readonly.is-awaiting-payment {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #c2410c;
 }
 
 .admin-order-row-actions > button {

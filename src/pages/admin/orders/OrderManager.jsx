@@ -21,6 +21,7 @@ import {
 
 const STATUS_META = {
   all: { label: "Tất cả", className: "admin-order-status-all" },
+  awaiting_payment: { label: "Chờ thanh toán", className: "admin-order-status-awaiting-payment" },
   new: { label: "Đơn mới", className: "admin-order-status-new" },
   doing: { label: "Đang làm", className: "admin-order-status-doing" },
   delivering: { label: "Đang giao", className: "admin-order-status-delivering" },
@@ -140,8 +141,45 @@ function matchOrderBranch(order, branchOption) {
 }
 
 function getDisplayStatus(order) {
+  if (isOrderAwaitingPayment(order)) return "awaiting_payment";
   const rawStatus = toAdminStatus(order.status);
   return getFulfillmentType(order) === "pickup" && rawStatus === "delivering" ? "done" : rawStatus;
+}
+
+function getPaymentState(order = {}) {
+  const metadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : {};
+  const method = String(order.paymentMethod || metadata.paymentMethod || "COD").trim().toLowerCase();
+  const paymentStatus = String(
+    order.paymentStatus || metadata.paymentStatus || metadata.payment_status || ""
+  ).trim().toLowerCase();
+  const paidAt = order.paidAt || metadata.paidAt || metadata.paid_at;
+  const isPrepaid = ["momo", "bank_qr"].includes(method);
+  const isExplicitlyUnpaid = [
+    "unpaid", "pending", "pending_payment", "waiting_payment",
+    "failed", "expired", "cancelled", "canceled"
+  ].includes(paymentStatus);
+  const isPaid = !isExplicitlyUnpaid && Boolean(
+    paidAt || paymentStatus === "paid" || paymentStatus === "converted" ||
+    order.isPaid === true || method === "foodapp"
+  );
+
+  return { isPrepaid, isPaid };
+}
+
+function isOrderAwaitingPayment(order = {}) {
+  const status = String(order.status || "").trim().toLowerCase();
+  const kitchenStatus = String(order.kitchenStatus || order.kitchen_status || "").trim().toLowerCase();
+  const payment = getPaymentState(order);
+  return payment.isPrepaid && !payment.isPaid && (
+    status === "pending_payment" || kitchenStatus === "waiting_payment"
+  );
+}
+
+function getPaymentStateLabel(order = {}) {
+  const payment = getPaymentState(order);
+  if (payment.isPaid) return "Đã thanh toán";
+  if (payment.isPrepaid) return "Chưa thanh toán";
+  return "Thu khi nhận";
 }
 
 function isActiveOperationalStatus(status) {
@@ -364,6 +402,10 @@ function OrderStatusSelect({ order, status, updateOrderStatus }) {
     return <span className="admin-order-status-readonly">Đồng bộ NexPOS</span>;
   }
 
+  if (status === "awaiting_payment") {
+    return <span className="admin-order-status-readonly is-awaiting-payment">Chờ thanh toán</span>;
+  }
+
   if (status === "cancelled") {
     return <span className="admin-order-status-readonly is-cancelled">Đã hủy</span>;
   }
@@ -395,7 +437,7 @@ function OrderQuickActions({ order, status, updateOrderStatus }) {
   const orderId = getOrderId(order);
   const fulfillmentType = getFulfillmentType(order);
   const isPartnerOrder = isReadOnlyPartnerOrder(order);
-  if (isPartnerOrder) return null;
+  if (isPartnerOrder || status === "awaiting_payment") return null;
   const quickActions = fulfillmentType === "delivery"
     ? [
         { value: "new", label: "Mới" },
@@ -470,12 +512,7 @@ function OrderList({
           const sourceMeta = getOrderSourceMeta(order);
           const totalPayment = Number(order.totalAmount || order.total || settlement?.customerTotal || 0);
           const paymentMethod = String(order.paymentMethod || "COD").toUpperCase();
-          const isPaid = Boolean(
-            order.paidAt ||
-            order.paymentStatus === "paid" ||
-            order.isPaid === true ||
-            (!paymentMethod.includes("COD") && paymentMethod !== "CASH")
-          );
+          const paymentStateLabel = getPaymentStateLabel(order);
           const branchName = getOrderBranchName(order);
           const shortBranchName = getShortBranchName(branchName);
           const fulfillmentMeta = getFulfillmentMeta(order);
@@ -522,7 +559,7 @@ function OrderList({
               </div>
               <div className="admin-order-cell admin-order-money">
                 <strong>{formatMoney(totalPayment)}</strong>
-                <small>{paymentMethod} · {isPaid ? "Đã thanh toán" : "Thu khi nhận"}</small>
+                <small>{paymentMethod} · {paymentStateLabel}</small>
               </div>
               <div className="admin-order-cell admin-order-row-actions">
                 <OrderStatusSelect order={order} status={status} updateOrderStatus={updateOrderStatus} />
@@ -623,7 +660,7 @@ function OrderDetailPanel({
           ) : null}
           <div className="admin-order-detail-row">
             <span>Thanh toán</span>
-            <strong>{String(order.paymentMethod || "COD").toUpperCase()}</strong>
+            <strong>{String(order.paymentMethod || "COD").toUpperCase()} · {getPaymentStateLabel(order)}</strong>
           </div>
           <div className="admin-order-detail-row">
             <span>Tích điểm</span>
@@ -853,7 +890,7 @@ function OrderDetailPanelV2({
           <div className="admin-order-detail-summary-grid">
             <div>
               <span>Thanh toán</span>
-              <strong>{String(order.paymentMethod || "COD").toUpperCase()}</strong>
+              <strong>{String(order.paymentMethod || "COD").toUpperCase()} · {getPaymentStateLabel(order)}</strong>
             </div>
             <div>
               <span>Món</span>
@@ -1155,7 +1192,11 @@ export default function OrderManager({
     const matchFulfillment = fulfillmentFilter === "all" || fulfillmentFilter === fulfillmentType;
     const matchBranch = branchFilter === "all" || matchOrderBranch(order, selectedBranchOption);
     const matchSource = sourceFilter === "all" || sourceFilter === source;
-    const matchPayment = paymentFilter === "all" || (paymentFilter === "cod" ? paymentMethod.includes("COD") : !paymentMethod.includes("COD"));
+    const matchPayment = paymentFilter === "all" || (
+      paymentFilter === "cod"
+        ? paymentMethod.includes("COD") || paymentMethod === "CASH"
+        : getPaymentState(order).isPaid
+    );
     return matchKeyword && matchFulfillment && matchBranch && matchSource && matchPayment;
   }), [adminOrderFeed, keyword, fulfillmentFilter, branchFilter, selectedBranchOption, sourceFilter, paymentFilter]);
 
@@ -1164,7 +1205,7 @@ export default function OrderManager({
     counts.all += 1;
     counts[status] = (counts[status] || 0) + 1;
     return counts;
-  }, { all: 0, new: 0, doing: 0, delivering: 0, done: 0, cancelled: 0 }), [searchedOrders]);
+  }, { all: 0, awaiting_payment: 0, new: 0, doing: 0, delivering: 0, done: 0, cancelled: 0 }), [searchedOrders]);
 
   const visibleOrders = useMemo(() => {
     if (statusFilter === "all") return searchedOrders;
