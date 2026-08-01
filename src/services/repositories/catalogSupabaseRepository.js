@@ -631,7 +631,7 @@ async function readStructuredBranches(fallback) {
 
   return data.filter((row) => {
     const meta = row?.data && typeof row.data === "object" ? row.data : {};
-    return normalizeBoolean(meta?.open ?? row?.open ?? row?.is_open, true);
+    return normalizeBoolean(row?.is_open ?? row?.open ?? meta?.open, true);
   }).map((row) => {
     const meta = row?.data && typeof row.data === "object" ? row.data : {};
     const rowId = row?.id ?? meta?.id ?? "";
@@ -645,7 +645,7 @@ async function readStructuredBranches(fallback) {
       map: String(meta?.map ?? meta?.map_url ?? row?.map_url ?? ""),
       lat: String(meta?.lat ?? row?.lat ?? ""),
       lng: String(meta?.lng ?? row?.lng ?? ""),
-      open: normalizeBoolean(meta?.open ?? row?.open ?? row?.is_open, true),
+      open: normalizeBoolean(row?.is_open ?? row?.open ?? meta?.open, true),
       time: String(meta?.time ?? [row?.open_time, row?.close_time].filter(Boolean).join(" - ") ?? ""),
       openTime: String(meta?.openTime ?? row?.open_time ?? ""),
       closeTime: String(meta?.closeTime ?? row?.close_time ?? ""),
