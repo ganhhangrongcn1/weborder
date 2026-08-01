@@ -970,7 +970,7 @@ export default function Tracking({
             );
             const isScheduledPickup = statusMeta.key === "scheduled" && !isPartnerOrder;
             const journeyActionLabel = isExpiredPayment
-              ? "Đặt lại đơn"
+              ? canAccessFullOrderHistory ? "Đặt lại đơn" : "Đăng nhập để đặt lại"
               : isAwaitingPayment
                 ? "Thanh toán tiếp"
                 : isReadyForPickup
@@ -985,6 +985,8 @@ export default function Tracking({
                 : isReadyForPickup
                   ? "store"
                   : "clock";
+            const isPointBadgeInformational = ["cancelled", "awaiting_payment"].includes(statusMeta.key) ||
+              ["claimed", "waiting_data", "expired"].includes(String(order.pointStatus || "").toLowerCase());
 
             if (!canAccessFullOrderHistory) {
               return (
@@ -1012,7 +1014,7 @@ export default function Tracking({
                         <p className="text-sm text-brown/60">
                           {getOrderAmountLabel(order)}: <strong className="text-base text-brown">{formatMoney(getOrderDisplayAmount(order))}</strong>
                         </p>
-                        {pointBadge && ["claimed", "waiting_data", "expired"].includes(String(order.pointStatus || "").toLowerCase()) ? (
+                        {pointBadge && isPointBadgeInformational ? (
                           <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${pointBadge.className}`}>
                             {pointBadge.label}
                           </span>
@@ -1031,7 +1033,7 @@ export default function Tracking({
                           type="button"
                           onClick={() => (
                             isExpiredPayment
-                              ? handleReorderOrder(order)
+                              ? handleGuestPointLogin(order)
                               : isAwaitingPayment
                                 ? handleContinuePayment(order)
                                 : openOrderDetails(order)
