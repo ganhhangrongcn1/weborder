@@ -99,6 +99,7 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
   const settings = data.settings || {
     enabled: true,
     reward_points: 5000,
+    google_reward_points: 5000,
     claim_window_hours: 48,
     proof_retention_days: 3,
     platforms: { grabfood: true, shopeefood: true, xanhngon: true, googlemaps: true }
@@ -123,12 +124,21 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
         </div>
         <div className="admin-review-reward-form">
           <label>
-            <span>Điểm thưởng (1 điểm = 1đ)</span>
+            <span>Điểm thưởng đơn đối tác (1 điểm = 1đ)</span>
             <input
               type="number"
               min="1"
               value={settings.reward_points}
               onChange={(event) => updateSetting("reward_points", Number(event.target.value))}
+            />
+          </label>
+          <label>
+            <span>Điểm thưởng Google Maps (1 điểm = 1đ)</span>
+            <input
+              type="number"
+              min="1"
+              value={settings.google_reward_points ?? settings.reward_points}
+              onChange={(event) => updateSetting("google_reward_points", Number(event.target.value))}
             />
           </label>
           <label>

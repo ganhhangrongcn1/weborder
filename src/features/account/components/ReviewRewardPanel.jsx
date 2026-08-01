@@ -188,6 +188,9 @@ export default function ReviewRewardPanel({
     () => (data?.claims || []).filter((claim) => matchesHistoryFilter(claim, historyFilter)),
     [data, historyFilter]
   );
+  const partnerRewardPoints = Number(data?.settings?.reward_points || 5000);
+  const googleRewardPoints = Number(data?.settings?.google_reward_points || partnerRewardPoints);
+  const selectedRewardPoints = selectedSource === "googlemaps" ? googleRewardPoints : partnerRewardPoints;
 
   const handleImage = async (event) => {
     const file = event.target.files?.[0];
@@ -256,11 +259,11 @@ export default function ReviewRewardPanel({
       <header>
         <span className="review-reward-icon"><Icon name="star" size={20} /></span>
         <div>
-          <h2 id="review-reward-title">Gửi ảnh đánh giá, nhận 5.000đ</h2>
+          <h2 id="review-reward-title">Gửi ảnh đánh giá, nhận điểm thưởng</h2>
           <p>Gửi ảnh xong, Gánh sẽ báo kết quả trong 24–48 giờ nhé.</p>
         </div>
         {data?.settings ? (
-          <strong>+{Number(data.settings.reward_points).toLocaleString("vi-VN")} điểm</strong>
+          <strong>+{selectedRewardPoints.toLocaleString("vi-VN")} điểm</strong>
         ) : null}
       </header>
 
@@ -345,6 +348,7 @@ export default function ReviewRewardPanel({
               >
                 <Icon name={source.id === "googlemaps" ? "location" : "store"} size={18} />
                 <span>{source.label}</span>
+                <small>+{Number(source.id === "googlemaps" ? googleRewardPoints : partnerRewardPoints).toLocaleString("vi-VN")}</small>
               </button>
             ))}
           </div>

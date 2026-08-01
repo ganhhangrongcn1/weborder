@@ -764,6 +764,14 @@
   color: #c8560c;
 }
 
+.review-reward-source-picker button small {
+  margin-left: auto;
+  color: #9a6b4f;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .review-reward-selection-step,
 .review-reward-branches {
   display: grid;

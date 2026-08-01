@@ -22,6 +22,12 @@ const platformSettings = (value: unknown): Row =>
   value && typeof value === "object" && !Array.isArray(value)
     ? value as Row
     : { grabfood: true, shopeefood: true, xanhngon: true, googlemaps: true };
+const boundedRewardPoints = (value: unknown, fallback = 5000) =>
+  Math.min(100000, Math.max(1, Number(value) || fallback));
+const rewardPointsForSource = (settings: Row, source: unknown) =>
+  text(source).toLowerCase() === "googlemaps"
+    ? boundedRewardPoints(settings.google_reward_points, boundedRewardPoints(settings.reward_points))
+    : boundedRewardPoints(settings.reward_points);
 
 async function getIdentity(request: Request, client: ReturnType<typeof createClient>) {
   const token = text(request.headers.get("authorization")).replace(/^Bearer\s+/i, "");
@@ -133,7 +139,8 @@ async function customerDashboard(client: ReturnType<typeof createClient>, identi
     ok: true,
     settings: {
       enabled: settings.enabled !== false,
-      reward_points: Number(settings.reward_points || 5000),
+      reward_points: boundedRewardPoints(settings.reward_points),
+      google_reward_points: boundedRewardPoints(settings.google_reward_points, boundedRewardPoints(settings.reward_points)),
       claim_window_hours: Number(settings.claim_window_hours || 48),
       platforms: enabledPlatforms
     },
@@ -261,7 +268,7 @@ async function createClaim(
       auth_user_id: identity.auth_user_id,
       customer_phone: phoneKey(identity.phone),
       ...claimInput,
-      reward_points: Number(settings.reward_points || 5000),
+      reward_points: rewardPointsForSource(settings, claimInput.partner_source),
       proof_path: path,
       proof_size_bytes: bytes.length,
       proof_sha256: digest
@@ -353,7 +360,8 @@ async function adminDashboard(client: ReturnType<typeof createClient>, admin: Ro
 }
 
 async function saveSettings(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
-  const rewardPoints = Math.min(100000, Math.max(1, Number(body.reward_points) || 5000));
+  const rewardPoints = boundedRewardPoints(body.reward_points);
+  const googleRewardPoints = boundedRewardPoints(body.google_reward_points, rewardPoints);
   const windowHours = Math.min(168, Math.max(1, Number(body.claim_window_hours) || 48));
   const retentionDays = Math.min(3, Math.max(2, Number(body.proof_retention_days) || 3));
   const platforms = platformSettings(body.platforms);
@@ -361,6 +369,7 @@ async function saveSettings(client: ReturnType<typeof createClient>, admin: Row,
     id: "default",
     enabled: body.enabled !== false,
     reward_points: rewardPoints,
+    google_reward_points: googleRewardPoints,
     claim_window_hours: windowHours,
     proof_retention_days: retentionDays,
     platforms: {
