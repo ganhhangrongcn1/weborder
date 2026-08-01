@@ -44,6 +44,31 @@ let stopping = false;
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const safeKey = (value) => String(value || "source").replace(/[^a-zA-Z0-9_-]+/g, "_");
 
+function isFeedbackPage(page) {
+  try {
+    return new URL(page.url()).pathname.replace(/\/+$/, "") === "/feedback";
+  } catch {
+    return false;
+  }
+}
+
+async function openFeedbackPage(page, { force = false } = {}) {
+  if (!force && isFeedbackPage(page)) return;
+
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await page.goto(FEEDBACK_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const canRetry = /ERR_ABORTED/i.test(message) && attempt < maxAttempts;
+      if (!canRetry) throw error;
+      await sleep(attempt * 2_000);
+    }
+  }
+}
+
 async function log(message, detail = "") {
   const line = `[${new Date().toISOString()}] ${message}${detail ? ` ${detail}` : ""}`;
   console.log(line);
@@ -166,7 +191,7 @@ async function collectFeedback(page) {
 
   page.on("response", onResponse);
   try {
-    await page.goto(FEEDBACK_URL, { waitUntil: "networkidle2", timeout: 60_000 });
+    await openFeedbackPage(page);
     await sleep(6_000);
     await Promise.allSettled(pending);
     if (!requestTemplate?.body) return { reviews: [], overview, pageCount: 0 };
@@ -257,7 +282,7 @@ async function syncSource(source, chromePath) {
     const pages = await browser.pages();
     const page = pages[0] || await browser.newPage();
     page.setDefaultTimeout(30_000);
-    await page.goto(FEEDBACK_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await openFeedbackPage(page, { force: true });
 
     let loggedInNow = false;
     if (await isLoginRequired(page)) {
