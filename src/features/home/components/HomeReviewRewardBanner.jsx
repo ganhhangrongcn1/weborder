@@ -5,11 +5,17 @@ export default function HomeReviewRewardBanner({
   image,
   onOpen
 }) {
-  const title = String(block?.title || "Nhận 5.000đ từ đơn 5 sao").trim();
+  const configuredTitle = String(block?.title || "").trim();
+  const title = !configuredTitle || configuredTitle === "Nhận 5.000đ từ đơn 5 sao"
+    ? "Đánh giá 5 sao, nhận điểm từ Gánh"
+    : configuredTitle;
   const subtitle = String(
     block?.subtitle ||
-    "GrabFood · ShopeeFood · Xanh Ngon"
+    "GrabFood · ShopeeFood · Xanh Ngon · Google Maps"
   ).trim();
+  const displayedSubtitle = /google\s*maps/i.test(subtitle)
+    ? subtitle
+    : `${subtitle} · Google Maps`;
 
   return (
     <section className="home-review-reward" aria-labelledby="home-review-reward-title">
@@ -22,7 +28,7 @@ export default function HomeReviewRewardBanner({
         <span className="home-review-reward__content">
           <span className="home-review-reward__eyebrow">Quà cảm ơn từ Gánh</span>
           <strong id="home-review-reward-title">{title}</strong>
-          <span className="home-review-reward__subtitle">{subtitle}</span>
+          <span className="home-review-reward__subtitle">{displayedSubtitle}</span>
         </span>
 
         <span className="home-review-reward__cta">

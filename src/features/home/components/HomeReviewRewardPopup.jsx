@@ -53,7 +53,7 @@ export default function HomeReviewRewardPopup({
           <>
             <div className="review-reward-popup__hero" aria-hidden="true">
               <span><Icon name="star" size={52} weight="fill" /></span>
-              <strong>+5.000đ</strong>
+              <strong>2 cách nhận điểm</strong>
             </div>
 
             <div className="review-reward-popup__copy">
@@ -98,22 +98,22 @@ export default function HomeReviewRewardPopup({
               <div>
                 <span>1</span>
                 <p>
-                  <strong>Đánh giá trên nền tảng bạn chọn</strong>
-                  <small>Đánh giá 5 sao trên app đặt món hoặc Google Maps rồi chụp lại màn hình.</small>
+                  <strong>Chọn cách bạn muốn đánh giá</strong>
+                  <small>Chọn một đơn đối tác đã hoàn tất, hoặc chọn Google Maps để mở thẳng nơi đánh giá.</small>
                 </p>
               </div>
               <div>
                 <span>2</span>
                 <p>
-                  <strong>Chọn nguồn, rồi chọn đơn hoặc chi nhánh</strong>
-                  <small>App giao món chọn đúng đơn; Google Maps chọn chi nhánh đã đánh giá.</small>
+                  <strong>Đánh giá đúng đơn hoặc chi nhánh</strong>
+                  <small>Đơn đối tác chọn trong khung danh sách; Google Maps chọn chi nhánh đã ghé.</small>
                 </p>
               </div>
               <div>
                 <span>3</span>
                 <p>
                   <strong>Tải ảnh lên và chờ duyệt</strong>
-                  <small>Gánh kiểm tra ảnh và cộng 5.000 điểm sau khi duyệt.</small>
+                  <small>Gánh kiểm tra ảnh và cộng đúng mức điểm của lựa chọn sau khi duyệt.</small>
                 </p>
               </div>
             </div>
@@ -131,7 +131,7 @@ export default function HomeReviewRewardPopup({
               className="review-reward-popup__continue"
               onClick={handleContinue}
             >
-              Chọn nguồn và tải ảnh
+              Chọn đơn hoặc Google Maps
               <Icon name="back" size={17} />
             </button>
           </>

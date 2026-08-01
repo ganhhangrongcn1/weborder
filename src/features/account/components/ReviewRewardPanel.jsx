@@ -112,6 +112,7 @@ export default function ReviewRewardPanel({
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState(null);
   const [historyFilter, setHistoryFilter] = useState("all");
+  const [ordersOpen, setOrdersOpen] = useState(false);
   const [activeView, setActiveView] = useState(() => {
     try {
       return window.sessionStorage.getItem(REVIEW_REWARD_VIEW_KEY) === "history"
@@ -347,6 +348,7 @@ export default function ReviewRewardPanel({
                 setSelectedSource((current) => current === "googlemaps" ? "" : "googlemaps");
                 setSelectedOrderId("");
                 setSelectedBranchId("");
+                setOrdersOpen(false);
                 setProof(null);
                 setMessage("");
               }}
@@ -404,8 +406,31 @@ export default function ReviewRewardPanel({
               <span>{availableOrders.length ? `${availableOrders.length} đơn còn hạn` : "Chưa có đơn còn hạn"}</span>
             </div>
             {reviewOrders.length ? (
-              <div className="review-reward-orders">
-                {reviewOrders.map((order) => {
+              <div className={`review-reward-order-picker${ordersOpen ? " is-open" : ""}`}>
+                <button
+                  type="button"
+                  className="review-reward-order-picker__trigger"
+                  aria-expanded={ordersOpen}
+                  aria-controls="review-reward-order-options"
+                  onClick={() => setOrdersOpen((current) => !current)}
+                >
+                  <span>
+                    {selectedOrder ? (
+                      <>
+                        <strong>{SOURCE_LABELS[selectedOrder.partner_source] || selectedOrder.partner_source} · Đơn {selectedOrder.order_code}</strong>
+                        <small>{selectedOrder.branch_name} · +{partnerRewardPoints.toLocaleString("vi-VN")} điểm</small>
+                      </>
+                    ) : (
+                      <>
+                        <strong>Chọn đơn hàng đã đánh giá</strong>
+                        <small>GrabFood, ShopeeFood hoặc Xanh Ngon</small>
+                      </>
+                    )}
+                  </span>
+                  <Icon name="back" size={17} />
+                </button>
+                {ordersOpen ? <div className="review-reward-orders" id="review-reward-order-options">
+                  {reviewOrders.map((order) => {
                   const rewardMeta = ORDER_REWARD_META[order.reward_status]
                     || (order.locked ? ORDER_REWARD_META.submitted : ORDER_REWARD_META.eligible);
                   return (
@@ -418,6 +443,7 @@ export default function ReviewRewardPanel({
                         setSelectedSource(order.partner_source);
                         setSelectedOrderId(order.id);
                         setSelectedBranchId("");
+                        setOrdersOpen(false);
                         setProof(null);
                         setMessage("");
                       }}
@@ -432,7 +458,8 @@ export default function ReviewRewardPanel({
                       </span>
                     </button>
                   );
-                })}
+                  })}
+                </div> : null}
               </div>
             ) : <div className="review-reward-empty-state review-reward-empty-state--compact"><Icon name="clock" size={24} /><strong>Chưa có đơn đối tác phù hợp</strong><p>Đơn đã hoàn tất bằng đúng số điện thoại tài khoản sẽ xuất hiện tại đây.</p></div>}
           </div>
