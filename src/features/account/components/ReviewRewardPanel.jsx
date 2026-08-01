@@ -5,12 +5,15 @@ import {
   getCustomerReviewRewards,
   submitReviewReward
 } from "../../../services/reviewRewardService.js";
+import { buildGoogleMapsReviewUrl } from "../../../services/branchNavigationService.js";
 
 const SOURCE_LABELS = {
   grabfood: "GrabFood",
   shopeefood: "ShopeeFood",
-  xanhngon: "Xanh Ngon"
+  xanhngon: "Xanh Ngon",
+  googlemaps: "Google Maps"
 };
+const SOURCE_OPTIONS = Object.entries(SOURCE_LABELS).map(([id, label]) => ({ id, label }));
 
 const HISTORY_FILTERS = [
   { id: "all", label: "Tất cả" },
@@ -98,10 +101,13 @@ export default function ReviewRewardPanel({
   variant = "embedded",
   showHistory = false,
   onBack,
-  onLogin
+  onLogin,
+  branches = []
 }) {
   const [data, setData] = useState(null);
+  const [selectedSource, setSelectedSource] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [selectedBranchId, setSelectedBranchId] = useState("");
   const [proof, setProof] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -147,14 +153,36 @@ export default function ReviewRewardPanel({
     }
   }, []);
 
-  const availableOrders = useMemo(
-    () => (data?.orders || []).filter((order) => !order.locked),
-    [data]
+  const sourceOrders = useMemo(
+    () => (data?.orders || []).filter((order) => order.partner_source === selectedSource),
+    [data, selectedSource]
   );
-  const reviewOrders = data?.orders || [];
+  const availableOrders = useMemo(
+    () => sourceOrders.filter((order) => !order.locked),
+    [sourceOrders]
+  );
+  const reviewOrders = sourceOrders;
   const selectedOrder = useMemo(
     () => reviewOrders.find((order) => order.id === selectedOrderId) || null,
     [reviewOrders, selectedOrderId]
+  );
+  const reviewBranches = useMemo(() => {
+    const apiBranches = Array.isArray(data?.branches) ? data.branches : [];
+    if (apiBranches.length) return apiBranches;
+    return (branches || []).filter((branch) => branch?.open !== false && branch?.is_open !== false).map((branch) => ({
+      id: String(branch?.branch_uuid || branch?.branchUuid || branch?.uuid || branch?.id || ""),
+      name: String(branch?.name || branch?.branch_name || "Chi nhánh").trim(),
+      address: String(branch?.address || branch?.metadata?.address || "").trim(),
+      map: String(branch?.map || branch?.map_url || branch?.metadata?.map || "").trim(),
+      googleReviewUrl: String(branch?.googleReviewUrl || branch?.google_review_url || branch?.metadata?.googleReviewUrl || "").trim(),
+      lat: branch?.lat || branch?.metadata?.lat || "",
+      lng: branch?.lng || branch?.metadata?.lng || "",
+      locked: false
+    })).filter((branch) => branch.id);
+  }, [branches, data]);
+  const selectedBranch = useMemo(
+    () => reviewBranches.find((branch) => branch.id === selectedBranchId) || null,
+    [reviewBranches, selectedBranchId]
   );
   const visibleClaims = useMemo(
     () => (data?.claims || []).filter((claim) => matchesHistoryFilter(claim, historyFilter)),
@@ -177,19 +205,23 @@ export default function ReviewRewardPanel({
   };
 
   const submit = async () => {
-    if (!selectedOrderId || !proof) {
-      setMessage("Vui lòng chọn đơn và tải ảnh chụp đánh giá 5 sao.");
+    const googleMaps = selectedSource === "googlemaps";
+    if (!selectedSource || (!googleMaps && !selectedOrderId) || (googleMaps && !selectedBranchId) || !proof) {
+      setMessage("Vui lòng chọn nguồn, đơn hoặc chi nhánh và tải ảnh chụp đánh giá 5 sao.");
       return;
     }
     setSubmitting(true);
     try {
       const result = await submitReviewReward({
-        partner_order_id: selectedOrderId,
+        partner_source: selectedSource,
+        partner_order_id: googleMaps ? null : selectedOrderId,
+        branch_uuid: googleMaps ? selectedBranchId : null,
         proof_data_url: proof.dataUrl,
         original_name: proof.originalName
       });
       setMessage(result.message);
       setSelectedOrderId("");
+      setSelectedBranchId("");
       setProof(null);
       await load();
     } catch (error) {
@@ -286,46 +318,86 @@ export default function ReviewRewardPanel({
           <strong>Chương trình đang tạm dừng</strong>
           <p>Những yêu cầu đã gửi vẫn được giữ nguyên và có thể xem trong lịch sử bên dưới.</p>
         </div>
-      ) : reviewOrders.length ? (
+      ) : (
         <>
           <div className="review-reward-section-title">
             <div>
-              <h3>Chọn đơn bạn vừa đánh giá</h3>
-              <p>Chọn đơn còn hạn để gửi ảnh nhé.</p>
+              <h3>1. Chọn nơi bạn đã đánh giá</h3>
+              <p>Danh sách đơn sẽ được lọc theo nguồn đã chọn.</p>
             </div>
-            <span>
-              {availableOrders.length
-                ? `${availableOrders.length} đơn còn hạn`
-                : "Chưa có đơn còn hạn"}
-            </span>
           </div>
-          <div className={`review-reward-order-picker${ordersOpen ? " is-open" : ""}`}>
-            <button
-              type="button"
-              className="review-reward-order-picker__trigger"
-              aria-expanded={ordersOpen}
-              aria-controls="review-reward-order-options"
-              onClick={() => setOrdersOpen((current) => !current)}
-            >
-              <span>
-                {selectedOrder ? (
-                  <>
-                    <strong>
-                      {SOURCE_LABELS[selectedOrder.partner_source] || selectedOrder.partner_source}
-                      {" · "}Đơn {selectedOrder.order_code}
-                    </strong>
-                    <small>{selectedOrder.branch_name}</small>
-                  </>
-                ) : (
-                  <strong>Chọn đơn hàng</strong>
-                )}
-              </span>
-              <Icon name="back" size={17} />
-            </button>
+          <div className="review-reward-source-picker" role="radiogroup" aria-label="Nguồn đánh giá">
+            {SOURCE_OPTIONS.filter((source) => data.settings?.platforms?.[source.id] !== false).map((source) => (
+              <button
+                key={source.id}
+                type="button"
+                role="radio"
+                aria-checked={selectedSource === source.id}
+                className={selectedSource === source.id ? "is-selected" : ""}
+                onClick={() => {
+                  setSelectedSource(source.id);
+                  setSelectedOrderId("");
+                  setSelectedBranchId("");
+                  setOrdersOpen(false);
+                  setProof(null);
+                  setMessage("");
+                }}
+              >
+                <Icon name={source.id === "googlemaps" ? "location" : "store"} size={18} />
+                <span>{source.label}</span>
+              </button>
+            ))}
+          </div>
 
-            {ordersOpen ? (
-              <div className="review-reward-orders" id="review-reward-order-options">
-                {reviewOrders.map((order) => {
+          {selectedSource === "googlemaps" ? (
+            <div className="review-reward-selection-step">
+              <div className="review-reward-section-title">
+                <div><h3>2. Chọn chi nhánh đã đánh giá</h3><p>Không cần chọn đơn hàng cho Google Maps.</p></div>
+              </div>
+              <div className="review-reward-branches">
+                {reviewBranches.map((branch) => (
+                  <button
+                    key={branch.id}
+                    type="button"
+                    disabled={branch.locked}
+                    className={selectedBranchId === branch.id ? "is-selected" : ""}
+                    onClick={() => {
+                      setSelectedBranchId(branch.id);
+                      setProof(null);
+                      setMessage("Đã chọn chi nhánh. Sau khi đánh giá, quay lại đây để tải ảnh.");
+                      const mapsUrl = buildGoogleMapsReviewUrl(branch);
+                      if (mapsUrl && typeof window !== "undefined") {
+                        window.open(mapsUrl, "_blank", "noopener,noreferrer");
+                      }
+                    }}
+                  >
+                    <strong>{branch.name}</strong>
+                    <small>{branch.locked ? "Đã gửi yêu cầu" : `${branch.address || "Xem địa điểm"} · Viết đánh giá ngay`}</small>
+                  </button>
+                ))}
+                {!reviewBranches.length ? (
+                  <div className="review-reward-empty-state review-reward-empty-state--compact">
+                    <Icon name="store" size={24} />
+                    <strong>Chưa tải được danh sách chi nhánh</strong>
+                    <p>Vui lòng thử tải lại trang.</p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : selectedSource ? (
+            <div className="review-reward-selection-step">
+              <div className="review-reward-section-title">
+                <div><h3>2. Chọn đơn bạn vừa đánh giá</h3><p>Chỉ hiển thị đơn {SOURCE_LABELS[selectedSource]} của tài khoản này.</p></div>
+                <span>{availableOrders.length ? `${availableOrders.length} đơn còn hạn` : "Chưa có đơn còn hạn"}</span>
+              </div>
+              {reviewOrders.length ? (
+                <div className={`review-reward-order-picker${ordersOpen ? " is-open" : ""}`}>
+                  <button type="button" className="review-reward-order-picker__trigger" aria-expanded={ordersOpen} aria-controls="review-reward-order-options" onClick={() => setOrdersOpen((current) => !current)}>
+                    <span>{selectedOrder ? <><strong>Đơn {selectedOrder.order_code}</strong><small>{selectedOrder.branch_name}</small></> : <strong>Chọn đơn hàng</strong>}</span>
+                    <Icon name="back" size={17} />
+                  </button>
+                  {ordersOpen ? <div className="review-reward-orders" id="review-reward-order-options">
+                    {reviewOrders.map((order) => {
                   const rewardMeta = ORDER_REWARD_META[order.reward_status]
                     || (order.locked ? ORDER_REWARD_META.submitted : ORDER_REWARD_META.eligible);
                   return (
@@ -347,13 +419,16 @@ export default function ReviewRewardPanel({
                       <small>{order.branch_name} · {formatDate(order.order_time)}</small>
                     </button>
                   );
-                })}
-              </div>
-            ) : null}
-          </div>
+                    })}
+                  </div> : null}
+                </div>
+              ) : <div className="review-reward-empty-state review-reward-empty-state--compact"><Icon name="clock" size={24} /><strong>Chưa có đơn {SOURCE_LABELS[selectedSource]} phù hợp</strong><p>Đơn đã hoàn tất bằng đúng số điện thoại tài khoản sẽ xuất hiện tại đây.</p></div>}
+            </div>
+          ) : null}
 
-          {selectedOrder ? (
+          {selectedOrder || selectedBranch ? (
             <>
+              <div className="review-reward-section-title"><div><h3>3. Tải ảnh đánh giá 5 sao</h3><p>Ảnh cần thấy rõ nền tảng và mức 5 sao.</p></div></div>
               <label className="review-reward-upload">
                 <input type="file" accept="image/*" onChange={handleImage} />
                 {proof ? (
@@ -376,12 +451,6 @@ export default function ReviewRewardPanel({
             </>
           ) : null}
         </>
-      ) : (
-        <div className="review-reward-empty-state">
-          <Icon name="clock" size={28} />
-          <strong>Tài khoản chưa có đơn đối tác phù hợp</strong>
-          <p>Đơn GrabFood, ShopeeFood hoặc Xanh Ngon đã hoàn tất sẽ xuất hiện tại đây.</p>
-        </div>
       )) : null}
       {activeView === "submit" && message && data ? <p className="review-reward-message" role="status">{message}</p> : null}
 
@@ -414,7 +483,7 @@ export default function ReviewRewardPanel({
                   <article key={claim.id} className={`review-reward-claim is-${claim.status}`}>
                     <div>
                       <span>{SOURCE_LABELS[claim.partner_source] || "Đơn đối tác"}</span>
-                      <strong>Đơn {claim.order_code || "đã chọn"}</strong>
+                      <strong>{claim.partner_source === "googlemaps" ? claim.metadata?.branch_name || "Chi nhánh đã chọn" : `Đơn ${claim.order_code || "đã chọn"}`}</strong>
                       <small>Gửi lúc {formatDate(claim.submitted_at)}</small>
                     </div>
                     <div className="review-reward-claim__result">

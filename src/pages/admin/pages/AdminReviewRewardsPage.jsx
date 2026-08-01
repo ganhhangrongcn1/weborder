@@ -8,7 +8,8 @@ import {
 const SOURCE_LABELS = {
   grabfood: "GrabFood",
   shopeefood: "ShopeeFood",
-  xanhngon: "Xanh Ngon"
+  xanhngon: "Xanh Ngon",
+  googlemaps: "Google Maps"
 };
 
 const STATUS_LABELS = {
@@ -100,7 +101,7 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
     reward_points: 5000,
     claim_window_hours: 48,
     proof_retention_days: 3,
-    platforms: { grabfood: true, shopeefood: true, xanhngon: true }
+    platforms: { grabfood: true, shopeefood: true, xanhngon: true, googlemaps: true }
   };
 
   return (
@@ -194,7 +195,7 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
             <article key={claim.id}>
               {claim.proof_url ? (
                 <a href={claim.proof_url} target="_blank" rel="noreferrer">
-                  <img src={claim.proof_url} alt={`Ảnh đánh giá đơn ${claim.order_code}`} />
+                  <img src={claim.proof_url} alt={`Ảnh đánh giá ${SOURCE_LABELS[claim.partner_source] || "5 sao"}`} />
                 </a>
               ) : (
                 <div className="admin-review-reward-deleted">Ảnh đã tự động xóa</div>
@@ -214,22 +215,13 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
                   ) : null}
                 </div>
                 <dl className="admin-review-reward-details">
-                  <div>
-                    <dt>Đơn đối tác</dt>
-                    <dd>{claim.order?.order_code || claim.order_code}</dd>
-                  </div>
-                  <div>
-                    <dt>Giá trị đơn</dt>
-                    <dd>{formatMoney(claim.order?.total_amount)}</dd>
-                  </div>
+                  {claim.partner_source === "googlemaps" ? null : <div><dt>Đơn đối tác</dt><dd>{claim.order?.order_code || claim.order_code}</dd></div>}
+                  {claim.partner_source === "googlemaps" ? null : <div><dt>Giá trị đơn</dt><dd>{formatMoney(claim.order?.total_amount)}</dd></div>}
                   <div className="is-wide">
                     <dt>Chi nhánh</dt>
-                    <dd>{claim.order?.branch_name || "Chưa có thông tin"}</dd>
+                    <dd>{claim.order?.branch_name || claim.metadata?.branch_name || "Chưa có thông tin"}</dd>
                   </div>
-                  <div>
-                    <dt>Thời gian đặt</dt>
-                    <dd>{formatDate(claim.order?.order_time) || "Chưa có"}</dd>
-                  </div>
+                  {claim.partner_source === "googlemaps" ? null : <div><dt>Thời gian đặt</dt><dd>{formatDate(claim.order?.order_time) || "Chưa có"}</dd></div>}
                   <div>
                     <dt>Gửi yêu cầu</dt>
                     <dd>{formatDate(claim.submitted_at)}</dd>

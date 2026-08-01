@@ -59,7 +59,7 @@ export default function HomeReviewRewardPopup({
             <div className="review-reward-popup__copy">
               <p>
                 Nếu món ăn hôm nay làm bạn hài lòng, hãy dành một chút thời gian
-                <strong> đánh giá 5 sao cho Gánh trên GrabFood, ShopeeFood hoặc Xanh Ngon</strong> nhé.
+                <strong> đánh giá 5 sao cho Gánh trên GrabFood, ShopeeFood, Xanh Ngon hoặc Google Maps</strong> nhé.
                 Mỗi lời khen của bạn là niềm vui và động lực để Gánh chăm chút món ăn tốt hơn mỗi ngày.
               </p>
             </div>
@@ -98,15 +98,15 @@ export default function HomeReviewRewardPopup({
               <div>
                 <span>1</span>
                 <p>
-                  <strong>Đánh giá trên ứng dụng đối tác</strong>
-                  <small>Mở app đã đặt món, đánh giá 5 sao rồi chụp lại màn hình.</small>
+                  <strong>Đánh giá trên nền tảng bạn chọn</strong>
+                  <small>Đánh giá 5 sao trên app đặt món hoặc Google Maps rồi chụp lại màn hình.</small>
                 </p>
               </div>
               <div>
                 <span>2</span>
                 <p>
-                  <strong>Quay lại web và chọn đúng đơn</strong>
-                  <small>Đăng nhập bằng số điện thoại đặt món, sau đó chọn đơn đã hoàn tất.</small>
+                  <strong>Chọn nguồn, rồi chọn đơn hoặc chi nhánh</strong>
+                  <small>App giao món chọn đúng đơn; Google Maps chọn chi nhánh đã đánh giá.</small>
                 </p>
               </div>
               <div>
@@ -131,7 +131,7 @@ export default function HomeReviewRewardPopup({
               className="review-reward-popup__continue"
               onClick={handleContinue}
             >
-              Chọn đơn và tải ảnh
+              Chọn nguồn và tải ảnh
               <Icon name="back" size={17} />
             </button>
           </>

@@ -735,6 +735,58 @@
   gap: 8px;
 }
 
+.review-reward-source-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.review-reward-source-picker button,
+.review-reward-branches button {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e6d8cb;
+  border-radius: 8px;
+  background: #fff;
+  color: #5b493f;
+  font-weight: 800;
+  text-align: left;
+}
+
+.review-reward-source-picker button.is-selected,
+.review-reward-branches button.is-selected {
+  border-color: #e76916;
+  background: #fff7ef;
+  box-shadow: 0 0 0 2px rgb(231 105 22 / 12%);
+  color: #c8560c;
+}
+
+.review-reward-selection-step,
+.review-reward-branches {
+  display: grid;
+  gap: 8px;
+}
+
+.review-reward-branches button {
+  display: grid;
+  gap: 2px;
+}
+
+.review-reward-branches button small {
+  color: #84736a;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.review-reward-branches button:disabled {
+  background: #f5f3f1;
+  color: #897d76;
+  opacity: .65;
+}
+
 .review-reward-order-picker {
   display: grid;
   gap: 8px;

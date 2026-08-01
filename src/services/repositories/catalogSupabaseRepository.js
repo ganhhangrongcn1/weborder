@@ -629,7 +629,10 @@ async function readStructuredBranches(fallback) {
   if (!Array.isArray(data)) return fallback;
   if (!data.length) return fallback;
 
-  return data.map((row) => {
+  return data.filter((row) => {
+    const meta = row?.data && typeof row.data === "object" ? row.data : {};
+    return normalizeBoolean(meta?.open ?? row?.open ?? row?.is_open, true);
+  }).map((row) => {
     const meta = row?.data && typeof row.data === "object" ? row.data : {};
     const rowId = row?.id ?? meta?.id ?? "";
     return {
@@ -777,6 +780,7 @@ async function writeStructuredBranches(value) {
   const byLegacyId = new Map(existing.map((row) => [String(row?.legacy_id || "").trim().toLowerCase(), row]).filter(([key]) => key));
   const bySlug = new Map(existing.map((row) => [String(row?.slug || "").trim().toLowerCase(), row]).filter(([key]) => key));
   const byName = new Map(existing.map((row) => [normalizeBranchKey(row?.name || ""), row]).filter(([key]) => key));
+  const retainedDbIds = new Set();
 
   for (const item of rows) {
     const source = item && typeof item === "object" ? item : {};
@@ -796,6 +800,7 @@ async function writeStructuredBranches(value) {
       null;
 
     const dbId = matched?.id ?? (rawDbId && /^\d+$/.test(rawDbId) ? Number(rawDbId) : null);
+    if (matched?.id != null) retainedDbIds.add(String(matched.id));
     const rawBranchUuid = source?.branch_uuid || source?.branchUuid;
     const branchUuid = isUuidLike(rawBranchUuid)
       ? String(rawBranchUuid)
@@ -807,6 +812,7 @@ async function writeStructuredBranches(value) {
       branch_code: rawBranchCode || matched?.branch_code || null,
       legacy_id: rawLegacyId || matched?.legacy_id || null,
       branch_uuid: branchUuid,
+      is_open: source?.open !== false && source?.is_open !== false,
       data: {
         ...(matched?.data && typeof matched.data === "object" ? matched.data : {}),
         ...source,
@@ -819,6 +825,17 @@ async function writeStructuredBranches(value) {
     if (dbId != null) payload.id = dbId;
 
     await upsertBranchRowWithSchemaFallback(client, payload);
+  }
+
+  const removedDbIds = existing
+    .map((row) => row?.id)
+    .filter((id) => id != null && !retainedDbIds.has(String(id)));
+  if (removedDbIds.length) {
+    const { error } = await client
+      .from("branches")
+      .update({ is_open: false })
+      .in("id", removedDbIds);
+    if (error) throw error;
   }
 
   return rows;

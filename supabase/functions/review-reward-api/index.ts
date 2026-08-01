@@ -9,7 +9,7 @@ const cors = {
 };
 const jsonHeaders = { ...cors, "Content-Type": "application/json; charset=utf-8" };
 const BUCKET = "review-reward-proofs";
-const SOURCES = new Set(["grabfood", "shopeefood", "xanhngon"]);
+const ORDER_SOURCES = new Set(["grabfood", "shopeefood", "xanhngon"]);
 const text = (value: unknown = "") => String(value ?? "").trim();
 const reply = (body: Row, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
@@ -21,7 +21,7 @@ const phoneKey = (value: unknown) => {
 const platformSettings = (value: unknown): Row =>
   value && typeof value === "object" && !Array.isArray(value)
     ? value as Row
-    : { grabfood: true, shopeefood: true, xanhngon: true };
+    : { grabfood: true, shopeefood: true, xanhngon: true, googlemaps: true };
 
 async function getIdentity(request: Request, client: ReturnType<typeof createClient>) {
   const token = text(request.headers.get("authorization")).replace(/^Bearer\s+/i, "");
@@ -96,12 +96,20 @@ async function customerDashboard(client: ReturnType<typeof createClient>, identi
       message: "Chưa tải được đơn đối tác. Vui lòng thử lại."
     }, 500);
   }
-  const { data: claims, error: claimsError } = await client
-    .from("review_reward_claims")
-    .select("id,partner_order_id,partner_source,order_code,status,reward_points,submitted_at,reviewed_at,rejection_reason")
-    .eq("auth_user_id", identity.auth_user_id)
-    .order("submitted_at", { ascending: false })
-    .limit(50);
+  const [{ data: claims, error: claimsError }, { data: branches, error: branchesError }] = await Promise.all([
+    client
+      .from("review_reward_claims")
+      .select("id,partner_order_id,partner_source,branch_uuid,order_code,status,reward_points,submitted_at,reviewed_at,rejection_reason,metadata")
+      .eq("auth_user_id", identity.auth_user_id)
+      .order("submitted_at", { ascending: false })
+      .limit(50),
+    client
+      .from("branches")
+      .select("branch_uuid,name,address,map_url,lat,lng,is_open,data")
+      .not("branch_uuid", "is", null)
+      .or("is_open.is.null,is_open.eq.true")
+      .order("name", { ascending: true })
+  ]);
   if (claimsError) {
     console.error("[review-reward-api] customer claims query", claimsError);
     return reply({
@@ -110,10 +118,14 @@ async function customerDashboard(client: ReturnType<typeof createClient>, identi
       message: "Chưa tải được lịch sử chương trình. Vui lòng thử lại."
     }, 500);
   }
+  if (branchesError) {
+    console.error("[review-reward-api] branches query", branchesError);
+    return reply({ ok: false, code: "BRANCHES_QUERY_FAILED", message: "Chưa tải được danh sách chi nhánh." }, 500);
+  }
   const claimMap = new Map((claims || []).map((claim) => [claim.partner_order_id, claim]));
   const enabledPlatforms = platformSettings(settings.platforms);
   const eligible = (orders || [])
-    .filter((order) => SOURCES.has(text(order.partner_source)))
+    .filter((order) => ORDER_SOURCES.has(text(order.partner_source)))
     .filter((order) => enabledPlatforms[text(order.partner_source)] !== false)
     .filter(isCompletedOrder)
     .map((order) => publicOrder(order, claimMap.get(order.id) || null, cutoff));
@@ -122,9 +134,22 @@ async function customerDashboard(client: ReturnType<typeof createClient>, identi
     settings: {
       enabled: settings.enabled !== false,
       reward_points: Number(settings.reward_points || 5000),
-      claim_window_hours: Number(settings.claim_window_hours || 48)
+      claim_window_hours: Number(settings.claim_window_hours || 48),
+      platforms: enabledPlatforms
     },
     orders: eligible,
+    branches: (branches || []).map((branch) => ({
+      id: branch.branch_uuid,
+      name: text(branch.name),
+      address: text(branch.address),
+      map: text(branch.map_url),
+      googleReviewUrl: text(branch.data?.googleReviewUrl || branch.data?.google_review_url),
+      lat: branch.lat,
+      lng: branch.lng,
+      locked: (claims || []).some((claim) =>
+        text(claim.partner_source) === "googlemaps" && text(claim.branch_uuid) === text(branch.branch_uuid)
+      )
+    })),
     claims: claims || []
   });
 }
@@ -138,13 +163,49 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
   const settings = await getSettings(client);
   if (settings.enabled === false) return reply({ ok: false, message: "Chương trình hiện đang tạm dừng." }, 400);
   const orderId = text(body.partner_order_id);
+  const requestedSource = text(body.partner_source).toLowerCase();
+  const branchId = text(body.branch_uuid);
   const match = text(body.proof_data_url).match(/^data:image\/webp;base64,(.+)$/);
-  if (!orderId || !match) return reply({ ok: false, message: "Vui lòng chọn đơn và tải ảnh đánh giá." }, 400);
+  const isGoogleMaps = requestedSource === "googlemaps";
+  if ((!isGoogleMaps && !orderId) || (isGoogleMaps && !branchId) || !match) {
+    return reply({ ok: false, message: "Vui lòng chọn nguồn, đơn hoặc chi nhánh và tải ảnh đánh giá." }, 400);
+  }
   const bytes = Uint8Array.from(atob(match[1]), (char) => char.charCodeAt(0));
   if (!bytes.length || bytes.length > 1048576) {
     return reply({ ok: false, message: "Ảnh sau khi nén phải nhỏ hơn 1 MB." }, 400);
   }
   const key = phoneKey(identity.phone);
+  if (isGoogleMaps) {
+    if (platformSettings(settings.platforms).googlemaps === false) {
+      return reply({ ok: false, message: "Google Maps chưa được bật nhận thưởng." }, 400);
+    }
+    const { data: branch } = await client
+      .from("branches")
+      .select("branch_uuid,name,address,map_url,lat,lng,is_open,data")
+      .eq("branch_uuid", branchId)
+      .or("is_open.is.null,is_open.eq.true")
+      .maybeSingle();
+    if (!branch) return reply({ ok: false, message: "Chi nhánh đã chọn không hợp lệ." }, 400);
+    const { data: existing } = await client
+      .from("review_reward_claims")
+      .select("id")
+      .eq("auth_user_id", identity.auth_user_id)
+      .eq("partner_source", "googlemaps")
+      .eq("branch_uuid", branch.branch_uuid)
+      .maybeSingle();
+    if (existing) return reply({ ok: false, message: "Chi nhánh này đã được gửi yêu cầu thưởng Google Maps." }, 409);
+    return createClaim(client, identity, settings, bytes, {
+      partner_order_id: null,
+      partner_source: "googlemaps",
+      branch_uuid: branch.branch_uuid,
+      order_code: null,
+      metadata: {
+        original_name: text(body.original_name).slice(0, 160),
+        branch_name: text(branch.name),
+        branch_address: text(branch.address)
+      }
+    });
+  }
   const { data: order } = await client
     .from("partner_orders")
     .select("*")
@@ -155,7 +216,7 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
     return reply({ ok: false, message: "Đơn không hợp lệ hoặc chưa hoàn tất." }, 400);
   }
   const source = text(order.partner_source);
-  if (!SOURCES.has(source) || platformSettings(settings.platforms)[source] === false) {
+  if (!ORDER_SOURCES.has(source) || platformSettings(settings.platforms)[source] === false) {
     return reply({ ok: false, message: "Nền tảng này chưa được bật nhận thưởng." }, 400);
   }
   const orderTime = Date.parse(order.order_time || order.created_at);
@@ -170,6 +231,22 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
     .maybeSingle();
   if (existing) return reply({ ok: false, message: "Đơn này đã gửi ảnh đánh giá trước đó." }, 409);
 
+  return createClaim(client, identity, settings, bytes, {
+    partner_order_id: order.id,
+    partner_source: source,
+    branch_uuid: order.branch_uuid || null,
+    order_code: text(order.display_order_code || order.order_code),
+    metadata: { original_name: text(body.original_name).slice(0, 160) }
+  });
+}
+
+async function createClaim(
+  client: ReturnType<typeof createClient>,
+  identity: Row,
+  settings: Row,
+  bytes: Uint8Array,
+  claimInput: Row
+) {
   const id = crypto.randomUUID();
   const path = `${identity.auth_user_id}/${id}.webp`;
   const digest = await sha256Hex(bytes);
@@ -182,16 +259,12 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
     .insert({
       id,
       auth_user_id: identity.auth_user_id,
-      customer_phone: key,
-      partner_order_id: order.id,
-      partner_source: source,
-      branch_uuid: order.branch_uuid || null,
-      order_code: text(order.display_order_code || order.order_code),
+      customer_phone: phoneKey(identity.phone),
+      ...claimInput,
       reward_points: Number(settings.reward_points || 5000),
       proof_path: path,
       proof_size_bytes: bytes.length,
-      proof_sha256: digest,
-      metadata: { original_name: text(body.original_name).slice(0, 160) }
+      proof_sha256: digest
     })
     .select("id,status,reward_points,submitted_at")
     .maybeSingle();
@@ -201,7 +274,7 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
     return reply({
       ok: false,
       message: duplicate
-        ? "Đơn hoặc ảnh này đã được dùng để nhận điểm."
+        ? "Đơn, chi nhánh hoặc ảnh này đã được dùng để nhận điểm."
         : "Không tạo được yêu cầu nhận điểm."
     }, duplicate ? 409 : 500);
   }
@@ -293,7 +366,8 @@ async function saveSettings(client: ReturnType<typeof createClient>, admin: Row,
     platforms: {
       grabfood: platforms.grabfood !== false,
       shopeefood: platforms.shopeefood !== false,
-      xanhngon: platforms.xanhngon !== false
+      xanhngon: platforms.xanhngon !== false,
+      googlemaps: platforms.googlemaps !== false
     },
     updated_by: admin.auth_user_id,
     updated_at: new Date().toISOString()

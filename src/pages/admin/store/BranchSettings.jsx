@@ -376,6 +376,7 @@ export default function BranchSettings({
       address: "",
       phone: "",
       map: "",
+      googleReviewUrl: "",
       lat: "",
       lng: "",
       shipEnabled: true,
@@ -572,6 +573,20 @@ export default function BranchSettings({
                           value={branch.phone ?? ""}
                           onChange={(event) => updateBranchField(branch.id, "phone", event.target.value)}
                         />
+                      </label>
+
+                      <label className="admin-branch-field-card admin-branch-select-field">
+                        <span className="text-xs font-semibold text-brown/70">Link đánh giá Google</span>
+                        <AdminInput
+                          className="admin-input"
+                          type="url"
+                          name={`branch-google-review-${branchId}`}
+                          autoComplete="url"
+                          placeholder="https://search.google.com/local/writereview?..."
+                          value={branch.googleReviewUrl ?? branch.google_review_url ?? ""}
+                          onChange={(event) => updateBranchField(branch.id, "googleReviewUrl", event.target.value.trim())}
+                        />
+                        <small className="text-[10px] leading-4 text-brown/55">Dán link “Yêu cầu đánh giá” lấy từ Hồ sơ doanh nghiệp Google.</small>
                       </label>
 
                       <div className="admin-branch-time-grid">
