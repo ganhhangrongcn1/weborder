@@ -13,8 +13,6 @@ const SOURCE_LABELS = {
   xanhngon: "Xanh Ngon",
   googlemaps: "Google Maps"
 };
-const SOURCE_OPTIONS = Object.entries(SOURCE_LABELS).map(([id, label]) => ({ id, label }));
-
 const HISTORY_FILTERS = [
   { id: "all", label: "Tất cả" },
   { id: "pending", label: "Chờ kiểm tra" },
@@ -114,7 +112,6 @@ export default function ReviewRewardPanel({
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState(null);
   const [historyFilter, setHistoryFilter] = useState("all");
-  const [ordersOpen, setOrdersOpen] = useState(false);
   const [activeView, setActiveView] = useState(() => {
     try {
       return window.sessionStorage.getItem(REVIEW_REWARD_VIEW_KEY) === "history"
@@ -153,15 +150,11 @@ export default function ReviewRewardPanel({
     }
   }, []);
 
-  const sourceOrders = useMemo(
-    () => (data?.orders || []).filter((order) => order.partner_source === selectedSource),
-    [data, selectedSource]
-  );
+  const reviewOrders = useMemo(() => data?.orders || [], [data]);
   const availableOrders = useMemo(
-    () => sourceOrders.filter((order) => !order.locked),
-    [sourceOrders]
+    () => reviewOrders.filter((order) => !order.locked),
+    [reviewOrders]
   );
-  const reviewOrders = sourceOrders;
   const selectedOrder = useMemo(
     () => reviewOrders.find((order) => order.id === selectedOrderId) || null,
     [reviewOrders, selectedOrderId]
@@ -190,7 +183,6 @@ export default function ReviewRewardPanel({
   );
   const partnerRewardPoints = Number(data?.settings?.reward_points || 5000);
   const googleRewardPoints = Number(data?.settings?.google_reward_points || partnerRewardPoints);
-  const selectedRewardPoints = selectedSource === "googlemaps" ? googleRewardPoints : partnerRewardPoints;
 
   const handleImage = async (event) => {
     const file = event.target.files?.[0];
@@ -223,6 +215,7 @@ export default function ReviewRewardPanel({
         original_name: proof.originalName
       });
       setMessage(result.message);
+      setSelectedSource("");
       setSelectedOrderId("");
       setSelectedBranchId("");
       setProof(null);
@@ -233,6 +226,31 @@ export default function ReviewRewardPanel({
       setSubmitting(false);
     }
   };
+
+  const renderProofUpload = () => (
+    <div className="review-reward-proof-step">
+      <div className="review-reward-section-title"><div><h3>Tải ảnh đánh giá 5 sao</h3><p>Ảnh cần thấy rõ nền tảng và mức 5 sao.</p></div></div>
+      <label className="review-reward-upload">
+        <input type="file" accept="image/*" onChange={handleImage} />
+        {proof ? (
+          <img src={proof.dataUrl} alt="Ảnh đánh giá đã chọn" />
+        ) : (
+          <>
+            <Icon name="star" size={22} />
+            <span>Chọn ảnh chụp có hiển thị đánh giá 5 sao</span>
+          </>
+        )}
+      </label>
+      <button
+        type="button"
+        className="review-reward-submit"
+        disabled={submitting}
+        onClick={submit}
+      >
+        {submitting ? "Đang gửi..." : "Gửi ảnh để Gánh duyệt"}
+      </button>
+    </div>
+  );
 
   if (loading) {
     return <ReviewRewardLoading variant={variant} />;
@@ -262,9 +280,6 @@ export default function ReviewRewardPanel({
           <h2 id="review-reward-title">Gửi ảnh đánh giá, nhận điểm thưởng</h2>
           <p>Gửi ảnh xong, Gánh sẽ báo kết quả trong 24–48 giờ nhé.</p>
         </div>
-        {data?.settings ? (
-          <strong>+{selectedRewardPoints.toLocaleString("vi-VN")} điểm</strong>
-        ) : null}
       </header>
 
       {showHistory && data ? (
@@ -323,40 +338,32 @@ export default function ReviewRewardPanel({
         </div>
       ) : (
         <>
-          <div className="review-reward-section-title">
-            <div>
-              <h3>1. Chọn nơi bạn đã đánh giá</h3>
-              <p>Danh sách đơn sẽ được lọc theo nguồn đã chọn.</p>
-            </div>
-          </div>
-          <div className="review-reward-source-picker" role="radiogroup" aria-label="Nguồn đánh giá">
-            {SOURCE_OPTIONS.filter((source) => data.settings?.platforms?.[source.id] !== false).map((source) => (
-              <button
-                key={source.id}
-                type="button"
-                role="radio"
-                aria-checked={selectedSource === source.id}
-                className={selectedSource === source.id ? "is-selected" : ""}
-                onClick={() => {
-                  setSelectedSource(source.id);
-                  setSelectedOrderId("");
-                  setSelectedBranchId("");
-                  setOrdersOpen(false);
-                  setProof(null);
-                  setMessage("");
-                }}
-              >
-                <Icon name={source.id === "googlemaps" ? "location" : "store"} size={18} />
-                <span>{source.label}</span>
-                <small>+{Number(source.id === "googlemaps" ? googleRewardPoints : partnerRewardPoints).toLocaleString("vi-VN")}</small>
-              </button>
-            ))}
-          </div>
+          {data.settings?.platforms?.googlemaps !== false ? (
+            <button
+              type="button"
+              className={`review-reward-google-card${selectedSource === "googlemaps" ? " is-selected" : ""}`}
+              aria-expanded={selectedSource === "googlemaps"}
+              onClick={() => {
+                setSelectedSource((current) => current === "googlemaps" ? "" : "googlemaps");
+                setSelectedOrderId("");
+                setSelectedBranchId("");
+                setProof(null);
+                setMessage("");
+              }}
+            >
+              <span className="review-reward-google-card__icon"><Icon name="location" size={22} /></span>
+              <span>
+                <strong>Đánh giá Google Maps</strong>
+                <small>Chọn chi nhánh và mở thẳng nơi viết đánh giá</small>
+              </span>
+              <em>+{googleRewardPoints.toLocaleString("vi-VN")}</em>
+            </button>
+          ) : null}
 
           {selectedSource === "googlemaps" ? (
             <div className="review-reward-selection-step">
               <div className="review-reward-section-title">
-                <div><h3>2. Chọn chi nhánh đã đánh giá</h3><p>Không cần chọn đơn hàng cho Google Maps.</p></div>
+                <div><h3>Chọn chi nhánh</h3><p>Google Maps sẽ mở ngay để bạn viết đánh giá.</p></div>
               </div>
               <div className="review-reward-branches">
                 {reviewBranches.map((branch) => (
@@ -376,7 +383,7 @@ export default function ReviewRewardPanel({
                     }}
                   >
                     <strong>{branch.name}</strong>
-                    <small>{branch.locked ? "Đã gửi yêu cầu" : `${branch.address || "Xem địa điểm"} · Viết đánh giá ngay`}</small>
+                    <small>{branch.locked ? "Đã gửi yêu cầu" : `${branch.address || "Xem địa điểm"} · Đánh giá ngay`}</small>
                   </button>
                 ))}
                 {!reviewBranches.length ? (
@@ -388,20 +395,17 @@ export default function ReviewRewardPanel({
                 ) : null}
               </div>
             </div>
-          ) : selectedSource ? (
-            <div className="review-reward-selection-step">
-              <div className="review-reward-section-title">
-                <div><h3>2. Chọn đơn bạn vừa đánh giá</h3><p>Chỉ hiển thị đơn {SOURCE_LABELS[selectedSource]} của tài khoản này.</p></div>
-                <span>{availableOrders.length ? `${availableOrders.length} đơn còn hạn` : "Chưa có đơn còn hạn"}</span>
-              </div>
-              {reviewOrders.length ? (
-                <div className={`review-reward-order-picker${ordersOpen ? " is-open" : ""}`}>
-                  <button type="button" className="review-reward-order-picker__trigger" aria-expanded={ordersOpen} aria-controls="review-reward-order-options" onClick={() => setOrdersOpen((current) => !current)}>
-                    <span>{selectedOrder ? <><strong>Đơn {selectedOrder.order_code}</strong><small>{selectedOrder.branch_name}</small></> : <strong>Chọn đơn hàng</strong>}</span>
-                    <Icon name="back" size={17} />
-                  </button>
-                  {ordersOpen ? <div className="review-reward-orders" id="review-reward-order-options">
-                    {reviewOrders.map((order) => {
+          ) : null}
+          {selectedSource === "googlemaps" && selectedBranch ? renderProofUpload() : null}
+
+          <div className="review-reward-selection-step review-reward-partner-section">
+            <div className="review-reward-section-title">
+              <div><h3>Đơn hàng có thể đánh giá</h3><p>Chọn trực tiếp một đơn GrabFood, ShopeeFood hoặc Xanh Ngon.</p></div>
+              <span>{availableOrders.length ? `${availableOrders.length} đơn còn hạn` : "Chưa có đơn còn hạn"}</span>
+            </div>
+            {reviewOrders.length ? (
+              <div className="review-reward-orders">
+                {reviewOrders.map((order) => {
                   const rewardMeta = ORDER_REWARD_META[order.reward_status]
                     || (order.locked ? ORDER_REWARD_META.submitted : ORDER_REWARD_META.eligible);
                   return (
@@ -411,49 +415,28 @@ export default function ReviewRewardPanel({
                       disabled={order.locked}
                       className={`${selectedOrderId === order.id ? "is-selected " : ""}${rewardMeta.className}`.trim()}
                       onClick={() => {
+                        setSelectedSource(order.partner_source);
                         setSelectedOrderId(order.id);
-                        setOrdersOpen(false);
+                        setSelectedBranchId("");
+                        setProof(null);
+                        setMessage("");
                       }}
                     >
                       <span className="review-reward-order__topline">
                         <span>{SOURCE_LABELS[order.partner_source] || order.partner_source}</span>
                         <em>{rewardMeta.label}</em>
                       </span>
-                      <strong>Đơn {order.order_code}</strong>
-                      <small>{order.branch_name} · {formatDate(order.order_time)}</small>
+                      <span className="review-reward-order__summary">
+                        <span><strong>Đơn {order.order_code}</strong><small>{order.branch_name} · {formatDate(order.order_time)}</small></span>
+                        <b>+{partnerRewardPoints.toLocaleString("vi-VN")}</b>
+                      </span>
                     </button>
                   );
-                    })}
-                  </div> : null}
-                </div>
-              ) : <div className="review-reward-empty-state review-reward-empty-state--compact"><Icon name="clock" size={24} /><strong>Chưa có đơn {SOURCE_LABELS[selectedSource]} phù hợp</strong><p>Đơn đã hoàn tất bằng đúng số điện thoại tài khoản sẽ xuất hiện tại đây.</p></div>}
-            </div>
-          ) : null}
-
-          {selectedOrder || selectedBranch ? (
-            <>
-              <div className="review-reward-section-title"><div><h3>3. Tải ảnh đánh giá 5 sao</h3><p>Ảnh cần thấy rõ nền tảng và mức 5 sao.</p></div></div>
-              <label className="review-reward-upload">
-                <input type="file" accept="image/*" onChange={handleImage} />
-                {proof ? (
-                  <img src={proof.dataUrl} alt="Ảnh đánh giá đã chọn" />
-                ) : (
-                  <>
-                    <Icon name="star" size={22} />
-                    <span>Chọn ảnh chụp có hiển thị đánh giá 5 sao</span>
-                  </>
-                )}
-              </label>
-              <button
-                type="button"
-                className="review-reward-submit"
-                disabled={submitting}
-                onClick={submit}
-              >
-                {submitting ? "Đang gửi..." : "Gửi ảnh để Gánh duyệt"}
-              </button>
-            </>
-          ) : null}
+                })}
+              </div>
+            ) : <div className="review-reward-empty-state review-reward-empty-state--compact"><Icon name="clock" size={24} /><strong>Chưa có đơn đối tác phù hợp</strong><p>Đơn đã hoàn tất bằng đúng số điện thoại tài khoản sẽ xuất hiện tại đây.</p></div>}
+          </div>
+          {selectedOrder ? renderProofUpload() : null}
         </>
       )) : null}
       {activeView === "submit" && message && data ? <p className="review-reward-message" role="status">{message}</p> : null}

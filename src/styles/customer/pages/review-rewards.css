@@ -730,6 +730,71 @@
   color: #d88900;
 }
 
+.review-reward-google-card {
+  display: grid;
+  width: 100%;
+  min-height: 76px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid #f0c68f;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fff 0%, #fff7e9 100%);
+  box-shadow: 0 5px 16px rgb(116 64 26 / 7%);
+  color: #513d31;
+  text-align: left;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.review-reward-google-card:active {
+  transform: scale(.985);
+}
+
+.review-reward-google-card:focus-visible {
+  outline: 3px solid rgb(231 105 22 / 24%);
+  outline-offset: 2px;
+}
+
+.review-reward-google-card.is-selected {
+  border-color: #e76916;
+  box-shadow: 0 0 0 2px rgb(231 105 22 / 11%), 0 7px 18px rgb(116 64 26 / 9%);
+}
+
+.review-reward-google-card__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 9px;
+  background: #fff0d8;
+  color: #dc650f;
+}
+
+.review-reward-google-card > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+}
+
+.review-reward-google-card strong {
+  font-size: 14px;
+}
+
+.review-reward-google-card small {
+  color: #7c6a5e;
+  font-size: 10px;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.review-reward-google-card em {
+  color: #c9580c;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .review-reward-orders {
   display: grid;
   gap: 8px;
@@ -776,6 +841,14 @@
 .review-reward-branches {
   display: grid;
   gap: 8px;
+}
+
+.review-reward-proof-step {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 9px;
+  background: rgb(255 255 255 / 72%);
 }
 
 .review-reward-branches button {
@@ -965,6 +1038,45 @@
 
 .review-reward-orders small {
   color: #77675d;
+}
+
+.review-reward-order__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.review-reward-order__summary > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  color: inherit;
+}
+
+.review-reward-order__summary strong,
+.review-reward-order__summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-reward-order__summary strong {
+  color: #4f4037;
+  font-size: 13px;
+}
+
+.review-reward-order__summary b {
+  color: #c9580c;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.review-reward-orders button:focus-visible,
+.review-reward-branches button:focus-visible {
+  outline: 3px solid rgb(231 105 22 / 22%);
+  outline-offset: 2px;
 }
 
 .review-reward-upload {
