@@ -520,6 +520,17 @@ export function getNextKitchenOrderAction(order = {}) {
     };
   }
 
+  if (order.sourceType === KITCHEN_SOURCE.pos) {
+    return {
+      type: "pos_completed",
+      label: "Đã đủ món",
+      nextStatus: "done",
+      nextKitchenStatus: "done",
+      requiresReady: true,
+      settleOrder: true
+    };
+  }
+
   if (fulfillmentType === "pickup") {
     if (!isWebsiteOrderReady(order)) {
       return {
