@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "../../../utils/format.js";
 import { getOrderItemOptionLabels } from "../../../utils/orderItemDisplay.js";
 import { getCustomerKey } from "../../../services/storageService.js";
+import { getCustomerOrderDisplayStatus } from "../../../services/customerOrderStatusService.js";
 import { buildAdminOrderFeed, readPartnerOrdersForAdmin } from "../../../services/adminOrderFeedService.js";
 import { resolveSalesChannelKey } from "../../../services/partnerOrderService.js";
 import {
@@ -22,6 +23,7 @@ import {
 const STATUS_META = {
   all: { label: "Tất cả", className: "admin-order-status-all" },
   awaiting_payment: { label: "Chờ thanh toán", className: "admin-order-status-awaiting-payment" },
+  payment_expired: { label: "Đã hết hạn thanh toán", className: "admin-order-status-payment-expired" },
   new: { label: "Đơn mới", className: "admin-order-status-new" },
   doing: { label: "Đang làm", className: "admin-order-status-doing" },
   delivering: { label: "Đang giao", className: "admin-order-status-delivering" },
@@ -141,6 +143,10 @@ function matchOrderBranch(order, branchOption) {
 }
 
 function getDisplayStatus(order) {
+  const customerStatus = getCustomerOrderDisplayStatus(order);
+  if (customerStatus.key === "cancelled") {
+    return customerStatus.paymentExpired ? "payment_expired" : "cancelled";
+  }
   if (isOrderAwaitingPayment(order)) return "awaiting_payment";
   const rawStatus = toAdminStatus(order.status);
   return getFulfillmentType(order) === "pickup" && rawStatus === "delivering" ? "done" : rawStatus;
@@ -184,6 +190,16 @@ function getPaymentStateLabel(order = {}) {
 
 function isActiveOperationalStatus(status) {
   return ["new", "doing", "delivering"].includes(String(status || "").toLowerCase());
+}
+
+function getOrderTimelineText(status, waitingMinutes) {
+  if (status === "payment_expired") return "Hết hạn thanh toán";
+  if (status === "awaiting_payment") return "Chờ thanh toán";
+  if (isActiveOperationalStatus(status)) {
+    return `${waitingMinutes > 15 ? "Trễ" : "Chờ"} ${waitingMinutes} phút`;
+  }
+  if (status === "done") return "Đã hoàn tất";
+  return "Đã hủy";
 }
 
 function getStatusLabel(status) {
@@ -406,6 +422,10 @@ function OrderStatusSelect({ order, status, updateOrderStatus }) {
     return <span className="admin-order-status-readonly is-awaiting-payment">Chờ thanh toán</span>;
   }
 
+  if (status === "payment_expired") {
+    return <span className="admin-order-status-readonly is-payment-expired">Đã hết hạn</span>;
+  }
+
   if (status === "cancelled") {
     return <span className="admin-order-status-readonly is-cancelled">Đã hủy</span>;
   }
@@ -437,7 +457,7 @@ function OrderQuickActions({ order, status, updateOrderStatus }) {
   const orderId = getOrderId(order);
   const fulfillmentType = getFulfillmentType(order);
   const isPartnerOrder = isReadOnlyPartnerOrder(order);
-  if (isPartnerOrder || status === "awaiting_payment") return null;
+  if (isPartnerOrder || ["awaiting_payment", "payment_expired"].includes(status)) return null;
   const quickActions = fulfillmentType === "delivery"
     ? [
         { value: "new", label: "Mới" },
@@ -537,8 +557,8 @@ function OrderList({
             >
               <div className="admin-order-cell admin-order-code-cell">
                 <strong>{getDisplayOrderCode(order)}</strong>
-                <small className={isOverdue ? "is-overdue" : ""}>
-                  {isActiveOrder ? `${isOverdue ? "Trễ" : "Chờ"} ${waitingMinutes} phút` : status === "done" ? "Đã hoàn tất" : "Đã hủy"}
+                <small className={`${isOverdue ? "is-overdue" : ""}${status === "payment_expired" ? " is-payment-expired" : ""}`.trim()}>
+                  {getOrderTimelineText(status, waitingMinutes)}
                 </small>
                 {latePaymentReview ? <small className="font-black text-red-600">Tiền đến sau khi hủy</small> : null}
               </div>
@@ -1138,10 +1158,16 @@ export default function OrderManager({
   const [branchFilter, setBranchFilter] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [statusClock, setStatusClock] = useState(() => Date.now());
   const snapshotHasPartnerOrders = useMemo(
     () => (ordersSnapshot || []).some((order) => order?.sourceType === "partner"),
     [ordersSnapshot]
   );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setStatusClock(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -1205,7 +1231,7 @@ export default function OrderManager({
     counts.all += 1;
     counts[status] = (counts[status] || 0) + 1;
     return counts;
-  }, { all: 0, awaiting_payment: 0, new: 0, doing: 0, delivering: 0, done: 0, cancelled: 0 }), [searchedOrders]);
+  }, { all: 0, awaiting_payment: 0, payment_expired: 0, new: 0, doing: 0, delivering: 0, done: 0, cancelled: 0 }), [searchedOrders, statusClock]);
 
   const visibleOrders = useMemo(() => {
     if (statusFilter === "all") return searchedOrders;
@@ -1218,7 +1244,7 @@ export default function OrderManager({
       return searchedOrders.filter((order) => ["doing", "delivering"].includes(getDisplayStatus(order)));
     }
     return searchedOrders.filter((order) => getDisplayStatus(order) === statusFilter);
-  }, [searchedOrders, statusFilter]);
+  }, [searchedOrders, statusFilter, statusClock]);
   const totalPages = Math.max(1, Math.ceil(visibleOrders.length / ORDER_PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pagedOrders = useMemo(() => {

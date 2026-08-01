@@ -406,6 +406,13 @@
   color: #f97316;
 }
 
+.admin-order-code-cell small.is-payment-expired {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.25;
+}
+
 .admin-order-branch-name {
   max-width: 100%;
   display: inline-flex;
@@ -462,6 +469,11 @@
 .admin-order-status-awaiting-payment {
   background: #fff7ed;
   color: #c2410c;
+}
+
+.admin-order-status-payment-expired {
+  background: #fef2f2;
+  color: #dc2626;
 }
 
 .admin-order-status-doing {
@@ -663,6 +675,12 @@
   border-color: #fed7aa;
   background: #fff7ed;
   color: #c2410c;
+}
+
+.admin-order-status-readonly.is-payment-expired {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .admin-order-row-actions > button {
