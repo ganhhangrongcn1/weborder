@@ -617,9 +617,11 @@ export async function createOrderAsync(params) {
     saveCustomerOrderActionToken(savedOrder?.id || savedOrder?.orderCode || order.orderCode, customerActionProof.token);
   }
   clearCheckoutOrderAttempt(checkoutAttempt.orderCode);
-  notifyWebOrderWebhook({ order: savedOrder }).catch((error) => {
-    console.warn("[order] web order webhook failed", error);
-  });
+  if (!isPrepaidPayment) {
+    notifyWebOrderWebhook({ order: savedOrder }).catch((error) => {
+      console.warn("[order] web order webhook failed", error);
+    });
+  }
   saveCreatedOrderCustomerMarker({ order, currentPhone, saveDemoUser });
   finalizeCreatedOrderUi({ savedOrder, setCurrentOrder, setOrderStatus, setCart });
   saveCreatedOrderAddress({

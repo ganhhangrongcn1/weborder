@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { notifyPaidWebsiteOrder } from "../_shared/webOrderPaidNotification.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -1392,6 +1393,12 @@ Deno.serve(async (request) => {
 
   const printJob = await ensureCustomerBillPrintJob(supabase, matchedOrder);
   console.log("[sepay-pos-webhook] print job result", JSON.stringify(printJob));
+
+  try {
+    await notifyPaidWebsiteOrder(supabase, matchedOrder);
+  } catch (error) {
+    console.error("[sepay-pos-webhook] paid order Zalo notification failed", error);
+  }
 
   await tryInsertWebhookLog(supabase, {
     provider: "sepay",

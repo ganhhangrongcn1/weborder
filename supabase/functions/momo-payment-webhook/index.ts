@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { notifyPaidWebsiteOrder } from "../_shared/webOrderPaidNotification.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -424,6 +425,11 @@ Deno.serve(async (request) => {
   }
 
   await ensurePrintJob(supabase, order);
+  try {
+    await notifyPaidWebsiteOrder(supabase, order);
+  } catch (error) {
+    console.error("[momo-payment-webhook] paid order Zalo notification failed", error);
+  }
   await supabase.from("pos_payment_sessions").update({
     status: "converted",
     converted_at: now,
