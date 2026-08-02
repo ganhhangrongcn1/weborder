@@ -16,8 +16,16 @@ const STATUS_LABELS = {
   pending: "Chờ duyệt",
   processing: "Đang xử lý",
   approved: "Đã duyệt",
-  rejected: "Đã từ chối"
+  rejected: "Chờ khách bổ sung"
 };
+
+const REJECTION_REASONS = [
+  "Ảnh chưa nhìn rõ mức đánh giá 5 sao.",
+  "Ảnh bị mờ hoặc thiếu nội dung.",
+  "Ảnh chưa đúng đơn hàng hoặc chi nhánh.",
+  "Ảnh chưa hiển thị rõ tên nền tảng.",
+  "Ảnh trùng với yêu cầu đã gửi trước đó."
+];
 
 function formatDate(value) {
   if (!value) return "";
@@ -37,6 +45,9 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("pending");
   const [notice, setNotice] = useState("");
+  const [rejectClaim, setRejectClaim] = useState(null);
+  const [rejectReason, setRejectReason] = useState(REJECTION_REASONS[0]);
+  const [deciding, setDeciding] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -83,16 +94,17 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
   };
 
   const decide = async (claim, decision) => {
-    const reason = decision === "reject"
-      ? window.prompt("Lý do từ chối:", "Ảnh chưa thể hiện đánh giá 5 sao hợp lệ.")
-      : "";
-    if (decision === "reject" && reason === null) return;
+    setDeciding(true);
     try {
-      const result = await reviewRewardClaim(claim.id, decision, reason);
+      const result = await reviewRewardClaim(claim.id, decision, decision === "reject" ? rejectReason : "");
       setNotice(result.message);
+      setRejectClaim(null);
+      setRejectReason(REJECTION_REASONS[0]);
       await load();
     } catch (error) {
       setNotice(error.message);
+    } finally {
+      setDeciding(false);
     }
   };
 
@@ -250,10 +262,13 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
                 {claim.rejection_reason ? <small>{claim.rejection_reason}</small> : null}
                 {claim.status === "pending" ? (
                   <div className="admin-review-reward-actions">
-                    <button type="button" className="is-reject" onClick={() => decide(claim, "reject")}>
+                    <button type="button" className="is-reject" onClick={() => {
+                      setRejectClaim(claim);
+                      setRejectReason(REJECTION_REASONS[0]);
+                    }}>
                       Từ chối
                     </button>
-                    <button type="button" onClick={() => decide(claim, "approve")}>
+                    <button type="button" disabled={deciding} onClick={() => decide(claim, "approve")}>
                       Duyệt + cộng điểm
                     </button>
                   </div>
@@ -263,6 +278,54 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
           ))}
         </div>
       </section>
+      {rejectClaim ? (
+        <div className="admin-review-reject-overlay" role="presentation" onMouseDown={() => !deciding && setRejectClaim(null)}>
+          <section
+            className="admin-review-reject-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-review-reject-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <span>Cần khách bổ sung</span>
+                <h2 id="admin-review-reject-title">Chọn lý do ảnh chưa đạt</h2>
+                <p>Khách sẽ thấy nội dung này và có thể gửi lại ảnh trong 24 giờ.</p>
+              </div>
+              <button type="button" aria-label="Đóng" disabled={deciding} onClick={() => setRejectClaim(null)}>×</button>
+            </header>
+            <div className="admin-review-reject-presets">
+              {REJECTION_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  className={rejectReason === reason ? "is-selected" : ""}
+                  onClick={() => setRejectReason(reason)}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+            <label>
+              <span>Ghi chú gửi khách</span>
+              <textarea
+                rows="3"
+                maxLength="500"
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                placeholder="Nhập hướng dẫn ngắn gọn để khách sửa đúng..."
+              />
+            </label>
+            <footer>
+              <button type="button" className="is-cancel" disabled={deciding} onClick={() => setRejectClaim(null)}>Quay lại</button>
+              <button type="button" disabled={deciding || !rejectReason.trim()} onClick={() => decide(rejectClaim, "reject")}>
+                {deciding ? "Đang gửi..." : "Từ chối & cho gửi lại"}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

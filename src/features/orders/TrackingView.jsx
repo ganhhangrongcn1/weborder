@@ -32,6 +32,7 @@ import {
 import useGuestOrderLookup from "./hooks/useGuestOrderLookup.js";
 import useCheckinPromoConfig from "./hooks/useCheckinPromoConfig.js";
 import CheckinPromoCard from "./components/CheckinPromoCard.jsx";
+import ReviewRewardPromoCard from "./components/ReviewRewardPromoCard.jsx";
 import {
   cancelCustomerUnpaidOrder,
   prepareOrderForPaymentResume
@@ -758,13 +759,13 @@ export default function Tracking({
     <section className="orders-page">
       <div className="tracking-page-content space-y-4 px-4 pb-6 pt-4">
         {!canAccessFullOrderHistory ? (
-          <CustomerCard className="space-y-4">
+          <CustomerCard className="space-y-3">
             <div>
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-orange-50 text-orange-600">
-                <Icon name="gift" size={20} />
+              <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-orange-50 text-orange-600">
+                <Icon name="gift" size={18} />
               </div>
-              <h2 className="mt-3 text-center text-lg font-black text-brown">Tra cứu đơn và tích điểm</h2>
-              <p className="mt-2 text-center text-sm leading-6 text-brown/60">
+              <h2 className="mt-2 text-center text-base font-black text-brown">Tra cứu đơn và tích điểm</h2>
+              <p className="mt-1 text-center text-xs leading-5 text-brown/60">
                 {isQrCounterFlow
                   ? "Nhập số điện thoại để xem đơn QR tại quầy và đơn website của bạn."
                   : "Nhập số điện thoại để xem đơn và nhận điểm từ Grab, ShopeeFood, Xanh Ngon."}
@@ -808,15 +809,20 @@ export default function Tracking({
           </CustomerCard>
         ) : null}
 
-        {checkinPromo.enabled ? (
+        {!canAccessFullOrderHistory ? (
+          <ReviewRewardPromoCard onClick={() => openReviewRewards()} />
+        ) : null}
+
+        {!canAccessFullOrderHistory && checkinPromo.enabled ? (
           <CheckinPromoCard
             dailyPoints={checkinPromo.dailyPoints}
             cyclePoints={checkinPromo.cyclePoints}
-            onClick={() => navigate(
-              canAccessFullOrderHistory ? "loyalty" : "account",
-              canAccessFullOrderHistory ? "rewards" : "account"
-            )}
+            onClick={() => navigate("account", "account")}
           />
+        ) : null}
+
+        {canAccessFullOrderHistory ? (
+          <ReviewRewardPromoCard onClick={() => openReviewRewards()} />
         ) : null}
 
         {canAccessFullOrderHistory ? (

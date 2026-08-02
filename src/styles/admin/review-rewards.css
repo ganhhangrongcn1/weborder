@@ -250,6 +250,134 @@
   text-align: center;
 }
 
+.admin-review-reject-overlay {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 52%);
+  backdrop-filter: blur(3px);
+}
+
+.admin-review-reject-dialog {
+  display: grid;
+  width: min(520px, 100%);
+  gap: 18px;
+  padding: 22px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 28%);
+}
+
+.admin-review-reject-dialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-review-reject-dialog header span {
+  color: #d85b08;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.admin-review-reject-dialog h2 {
+  margin: 4px 0 0;
+  color: #182230;
+  font-size: 20px;
+}
+
+.admin-review-reject-dialog p {
+  margin: 5px 0 0;
+  color: #687386;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.admin-review-reject-dialog header > button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e1e6ec;
+  border-radius: 50%;
+  background: #f8fafc;
+  color: #536071;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.admin-review-reject-presets {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-review-reject-presets button {
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid #e0e5eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #344054;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.admin-review-reject-presets button.is-selected {
+  border-color: #ed6b13;
+  background: #fff6ed;
+  color: #b84d08;
+  box-shadow: 0 0 0 2px rgb(237 107 19 / 10%);
+}
+
+.admin-review-reject-dialog > label {
+  display: grid;
+  gap: 7px;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-review-reject-dialog textarea {
+  resize: vertical;
+  padding: 11px 12px;
+  border: 1px solid #d9e0e8;
+  border-radius: 8px;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.admin-review-reject-dialog textarea:focus {
+  border-color: #ed6b13;
+  outline: 3px solid rgb(237 107 19 / 12%);
+}
+
+.admin-review-reject-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.admin-review-reject-dialog footer button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #ed6b13;
+  color: #fff;
+  font-weight: 800;
+}
+
+.admin-review-reject-dialog footer button.is-cancel {
+  border: 1px solid #d9e0e8;
+  background: #fff;
+  color: #475467;
+}
+
 @media (max-width: 1100px) {
   .admin-review-reward-form {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
@@ -268,5 +396,21 @@
 
   .admin-review-reward-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-review-reject-overlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .admin-review-reject-dialog {
+    max-height: 88dvh;
+    overflow-y: auto;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .admin-review-reject-dialog footer {
+    display: grid;
+    grid-template-columns: .8fr 1.2fr;
   }
 }

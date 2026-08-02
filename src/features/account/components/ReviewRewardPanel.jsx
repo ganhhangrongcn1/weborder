@@ -17,7 +17,7 @@ const HISTORY_FILTERS = [
   { id: "all", label: "Tất cả" },
   { id: "pending", label: "Chờ kiểm tra" },
   { id: "approved", label: "Đã nhận điểm" },
-  { id: "rejected", label: "Chưa đạt" }
+  { id: "rejected", label: "Cần bổ sung" }
 ];
 const REVIEW_REWARD_VIEW_KEY = "ghr_review_reward_view";
 const GOOGLE_REVIEW_DRAFT_KEY = "ghr_google_review_draft";
@@ -45,8 +45,8 @@ const STATUS_META = {
     description: "Điểm thưởng đã được cộng vào tài khoản."
   },
   rejected: {
-    label: "Chưa đạt",
-    description: "Ảnh chưa đủ thông tin để xác nhận đánh giá 5 sao."
+    label: "Cần bổ sung",
+    description: "Ảnh cần được gửi lại để Gánh kiểm tra."
   }
 };
 
@@ -125,6 +125,7 @@ export default function ReviewRewardPanel({
   const [loadError, setLoadError] = useState(null);
   const [historyFilter, setHistoryFilter] = useState("all");
   const [ordersOpen, setOrdersOpen] = useState(false);
+  const [resubmittingClaimId, setResubmittingClaimId] = useState("");
   const uploadSectionRef = useRef(null);
   const [activeView, setActiveView] = useState(() => {
     try {
@@ -238,19 +239,30 @@ export default function ReviewRewardPanel({
   const handleImage = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setMessage("Đang nén ảnh...");
+    setMessage("Đang chuẩn bị ảnh...");
     try {
       const previewDataUrl = await readFileAsDataUrl(file);
       setProofPreview(previewDataUrl);
-      const processed = await processUploadImage(file, {
-        maxWidth: 1280,
-        quality: 0.76,
-        outputType: "image/jpeg"
-      });
+      const canKeepOriginal = ["image/jpeg", "image/png", "image/webp"].includes(file.type)
+        && file.size <= 1048576;
+      const processed = canKeepOriginal
+        ? {
+          file,
+          dataUrl: previewDataUrl,
+          contentType: file.type,
+          size: file.size
+        }
+        : await processUploadImage(file, {
+          maxWidth: 1280,
+          quality: 0.76,
+          outputType: "image/jpeg"
+        });
       if (processed.size > 1048576) throw new Error("Ảnh vẫn lớn hơn 1 MB. Vui lòng chọn ảnh khác.");
       setProof({ ...processed, originalName: file.name });
       setReturnedFromMaps(false);
-      setMessage(`Đã nén ảnh còn ${Math.max(1, Math.round(processed.size / 1024))} KB.`);
+      setMessage(canKeepOriginal
+        ? `Đã chọn ảnh (${Math.max(1, Math.round(processed.size / 1024))} KB).`
+        : `Đã nén ảnh còn ${Math.max(1, Math.round(processed.size / 1024))} KB.`);
     } catch (error) {
       setProof(null);
       setProofPreview("");
@@ -278,6 +290,21 @@ export default function ReviewRewardPanel({
     window.open(mapsUrl, "_blank", "noopener,noreferrer");
   };
 
+  const startResubmission = (claim) => {
+    setResubmittingClaimId(claim.id);
+    setSelectedSource(claim.partner_source);
+    setSelectedOrderId(claim.partner_order_id || "");
+    setSelectedBranchId(claim.branch_uuid || "");
+    setProof(null);
+    setProofPreview("");
+    setReturnedFromMaps(false);
+    setMessage("Chọn ảnh mới rõ thông tin và mức đánh giá 5 sao.");
+    setActiveView("submit");
+    window.setTimeout(() => {
+      uploadSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 160);
+  };
+
   const submit = async () => {
     const googleMaps = selectedSource === "googlemaps";
     if (!selectedSource || (!googleMaps && !selectedOrderId) || (googleMaps && !selectedBranchId) || !proof) {
@@ -287,6 +314,7 @@ export default function ReviewRewardPanel({
     setSubmitting(true);
     try {
       const result = await submitReviewReward({
+        claim_id: resubmittingClaimId || null,
         partner_source: selectedSource,
         partner_order_id: googleMaps ? null : selectedOrderId,
         branch_uuid: googleMaps ? selectedBranchId : null,
@@ -297,6 +325,7 @@ export default function ReviewRewardPanel({
       setSelectedSource("");
       setSelectedOrderId("");
       setSelectedBranchId("");
+      setResubmittingClaimId("");
       setProof(null);
       setProofPreview("");
       try {
@@ -316,6 +345,21 @@ export default function ReviewRewardPanel({
       ref={uploadSectionRef}
       className={`review-reward-proof-step${returnedFromMaps ? " is-returned" : ""}`}
     >
+      {resubmittingClaimId ? (
+        <div className="review-reward-resubmit-note">
+          <span><Icon name="refresh" size={18} /></span>
+          <div><strong>Gửi lại ảnh cần bổ sung</strong><small>Đơn hàng hoặc chi nhánh cũ đã được giữ sẵn.</small></div>
+          <button type="button" onClick={() => {
+            setResubmittingClaimId("");
+            setSelectedSource("");
+            setSelectedOrderId("");
+            setSelectedBranchId("");
+            setProof(null);
+            setProofPreview("");
+            setMessage("");
+          }}>Hủy</button>
+        </div>
+      ) : null}
       {selectedSource === "googlemaps" ? (
         <div className="review-reward-maps-flow">
           <span><Icon name={returnedFromMaps ? "check" : "location"} size={19} /></span>
@@ -350,7 +394,7 @@ export default function ReviewRewardPanel({
         disabled={submitting || !proof}
         onClick={submit}
       >
-        {submitting ? "Đang gửi..." : "Gửi ảnh để Gánh duyệt"}
+        {submitting ? "Đang gửi..." : resubmittingClaimId ? "Gửi lại ảnh mới" : "Gửi ảnh để Gánh duyệt"}
       </button>
       {message ? <p className="review-reward-message review-reward-message--inline" role="status">{message}</p> : null}
     </div>
@@ -459,6 +503,8 @@ export default function ReviewRewardPanel({
         </div>
       ) : (
         <>
+          {resubmittingClaimId ? renderProofUpload() : (
+          <>
           {data.settings?.platforms?.googlemaps !== false ? (
             <button
               type="button"
@@ -589,6 +635,8 @@ export default function ReviewRewardPanel({
             ) : <div className="review-reward-empty-state review-reward-empty-state--compact"><Icon name="clock" size={24} /><strong>Chưa có đơn đối tác phù hợp</strong><p>Đơn đã hoàn tất bằng đúng số điện thoại tài khoản sẽ xuất hiện tại đây.</p></div>}
           </div>
           {selectedOrder ? renderProofUpload() : null}
+          </>
+          )}
         </>
       )) : null}
       {activeView === "submit" && message && data && !selectedOrder && !(selectedSource === "googlemaps" && selectedBranch) ? (
@@ -635,7 +683,15 @@ export default function ReviewRewardPanel({
                           : status.description}
                       </strong>
                       {claim.status === "rejected" && claim.rejection_reason ? (
-                        <small>{claim.rejection_reason}</small>
+                        <small className="review-reward-claim__reason">{claim.rejection_reason}</small>
+                      ) : null}
+                      {claim.status === "rejected" && claim.can_resubmit ? (
+                        <button type="button" className="review-reward-claim__retry" onClick={() => startResubmission(claim)}>
+                          <Icon name="image" size={14} /> Gửi lại ảnh
+                        </button>
+                      ) : null}
+                      {claim.status === "rejected" && !claim.can_resubmit ? (
+                        <small>Đã quá thời hạn gửi lại. Vui lòng liên hệ Gánh để được hỗ trợ.</small>
                       ) : null}
                     </div>
                   </article>

@@ -1,3 +1,125 @@
+.orders-review-reward-promo {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 82px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 14px;
+  overflow: hidden;
+  border: 1px solid #f4a11f;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 5% 0%, rgb(255 255 255 / 18%) 0, transparent 34%),
+    linear-gradient(125deg, #ff8a1c 0%, #ffa916 52%, #ffd338 100%);
+  box-shadow: 0 12px 26px rgb(207 111 13 / 24%);
+  color: #fff;
+  text-align: left;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.orders-review-reward-promo::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: rgb(255 255 255 / 72%);
+  content: "";
+}
+
+.orders-review-reward-promo.is-embedded {
+  min-height: 76px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  box-shadow: 0 8px 18px rgb(207 111 13 / 18%);
+}
+
+.orders-review-reward-promo:active {
+  transform: scale(.985);
+}
+
+.orders-review-reward-promo:focus-visible {
+  outline: 3px solid rgb(237 109 17 / 24%);
+  outline-offset: 2px;
+}
+
+.orders-review-reward-promo__icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 70%);
+  color: #e76800;
+}
+
+.orders-review-reward-promo__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.orders-review-reward-promo__copy small {
+  color: rgb(255 255 255 / 88%);
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.orders-review-reward-promo__copy strong {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.28;
+  text-shadow: 0 2px 8px rgb(126 51 0 / 18%);
+  text-wrap: balance;
+}
+
+.orders-review-reward-promo__copy > span {
+  color: rgb(255 255 255 / 88%);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.orders-review-reward-promo__action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 9px;
+  border-radius: 9px;
+  background: #fff;
+  color: #d65f0e;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.orders-review-reward-promo__action .icon-ux {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 390px) {
+  .orders-review-reward-promo {
+    grid-template-columns: 42px minmax(0, 1fr) 32px;
+    gap: 9px;
+    padding-inline: 11px;
+  }
+
+  .orders-review-reward-promo__icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .orders-review-reward-promo__action {
+    min-width: 32px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+}
+
 .orders-toolbar {
   display: grid;
   gap: 12px;

@@ -105,7 +105,7 @@ async function customerDashboard(client: ReturnType<typeof createClient>, identi
   const [{ data: claims, error: claimsError }, { data: branches, error: branchesError }] = await Promise.all([
     client
       .from("review_reward_claims")
-      .select("id,partner_order_id,partner_source,branch_uuid,order_code,status,reward_points,submitted_at,reviewed_at,rejection_reason,metadata")
+      .select("id,partner_order_id,partner_source,branch_uuid,order_code,status,reward_points,submitted_at,reviewed_at,rejection_reason,resubmit_until,resubmission_count,metadata")
       .eq("auth_user_id", identity.auth_user_id)
       .order("submitted_at", { ascending: false })
       .limit(50),
@@ -157,7 +157,12 @@ async function customerDashboard(client: ReturnType<typeof createClient>, identi
         text(claim.partner_source) === "googlemaps" && text(claim.branch_uuid) === text(branch.branch_uuid)
       )
     })),
-    claims: claims || []
+    claims: (claims || []).map((claim) => ({
+      ...claim,
+      can_resubmit: claim.status === "rejected"
+        && Boolean(claim.resubmit_until)
+        && Date.parse(claim.resubmit_until) >= Date.now()
+    }))
   });
 }
 
@@ -172,7 +177,7 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
   const orderId = text(body.partner_order_id);
   const requestedSource = text(body.partner_source).toLowerCase();
   const branchId = text(body.branch_uuid);
-  const match = text(body.proof_data_url).match(/^data:(image\/(?:webp|jpeg));base64,(.+)$/);
+  const match = text(body.proof_data_url).match(/^data:(image\/(?:webp|jpeg|png));base64,(.+)$/);
   const isGoogleMaps = requestedSource === "googlemaps";
   if ((!isGoogleMaps && !orderId) || (isGoogleMaps && !branchId) || !match) {
     return reply({ ok: false, message: "Vui lòng chọn nguồn, đơn hoặc chi nhánh và tải ảnh đánh giá." }, 400);
@@ -181,6 +186,10 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
   const bytes = Uint8Array.from(atob(match[2]), (char) => char.charCodeAt(0));
   if (!bytes.length || bytes.length > 1048576) {
     return reply({ ok: false, message: "Ảnh sau khi nén phải nhỏ hơn 1 MB." }, 400);
+  }
+  const rejectedClaimId = text(body.claim_id);
+  if (rejectedClaimId) {
+    return resubmitRejectedClaim(client, identity, body, rejectedClaimId, bytes, contentType);
   }
   const key = phoneKey(identity.phone);
   if (isGoogleMaps) {
@@ -248,6 +257,87 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
   });
 }
 
+async function resubmitRejectedClaim(
+  client: ReturnType<typeof createClient>,
+  identity: Row,
+  body: Row,
+  claimId: string,
+  bytes: Uint8Array,
+  contentType: string
+) {
+  const { data: claim } = await client
+    .from("review_reward_claims")
+    .select("*")
+    .eq("id", claimId)
+    .eq("auth_user_id", identity.auth_user_id)
+    .eq("status", "rejected")
+    .maybeSingle();
+  if (!claim) return reply({ ok: false, message: "Yêu cầu này không còn ở trạng thái cần bổ sung." }, 409);
+  if (!claim.resubmit_until || Date.parse(claim.resubmit_until) < Date.now()) {
+    return reply({ ok: false, message: "Đã quá 24 giờ để gửi lại ảnh. Vui lòng liên hệ Gánh để được hỗ trợ." }, 409);
+  }
+
+  const extension = contentType === "image/jpeg" ? "jpg" : contentType === "image/png" ? "png" : "webp";
+  const newPath = `${identity.auth_user_id}/${claim.id}-${Date.now()}.${extension}`;
+  const digest = await sha256Hex(bytes);
+  const { error: uploadError } = await client.storage
+    .from(BUCKET)
+    .upload(newPath, bytes, { contentType, upsert: false });
+  if (uploadError) return reply({ ok: false, message: "Không lưu được ảnh đánh giá mới." }, 500);
+
+  const previousHistory = Array.isArray(claim.metadata?.rejection_history)
+    ? claim.metadata.rejection_history
+    : [];
+  const now = new Date().toISOString();
+  const metadata = {
+    ...(claim.metadata || {}),
+    original_name: text(body.original_name).slice(0, 160),
+    rejection_history: [
+      ...previousHistory,
+      {
+        reason: text(claim.rejection_reason),
+        rejected_at: claim.reviewed_at,
+        resubmitted_at: now
+      }
+    ].slice(-10)
+  };
+  const { data: updated, error } = await client
+    .from("review_reward_claims")
+    .update({
+      proof_path: newPath,
+      proof_size_bytes: bytes.length,
+      proof_sha256: digest,
+      status: "pending",
+      rejection_reason: null,
+      reviewed_at: null,
+      reviewed_by: null,
+      proof_delete_after: null,
+      proof_deleted_at: null,
+      resubmit_until: null,
+      resubmission_count: Number(claim.resubmission_count || 0) + 1,
+      submitted_at: now,
+      updated_at: now,
+      metadata
+    })
+    .eq("id", claim.id)
+    .eq("auth_user_id", identity.auth_user_id)
+    .eq("status", "rejected")
+    .select("id,status,reward_points,submitted_at,resubmission_count")
+    .maybeSingle();
+  if (error || !updated) {
+    await client.storage.from(BUCKET).remove([newPath]);
+    const duplicate = text(error?.code) === "23505";
+    return reply({
+      ok: false,
+      message: duplicate ? "Ảnh này đã được dùng trước đó. Vui lòng chọn ảnh khác." : "Chưa gửi lại được ảnh. Vui lòng thử lại."
+    }, duplicate ? 409 : 500);
+  }
+  if (claim.proof_path && claim.proof_path !== newPath) {
+    await client.storage.from(BUCKET).remove([claim.proof_path]);
+  }
+  return reply({ ok: true, message: "Đã gửi lại ảnh. Gánh sẽ kiểm tra sớm cho anh/chị.", claim: updated });
+}
+
 async function createClaim(
   client: ReturnType<typeof createClient>,
   identity: Row,
@@ -257,9 +347,27 @@ async function createClaim(
   claimInput: Row
 ) {
   const id = crypto.randomUUID();
-  const extension = contentType === "image/jpeg" ? "jpg" : "webp";
+  const extension = contentType === "image/jpeg"
+    ? "jpg"
+    : contentType === "image/png"
+      ? "png"
+      : "webp";
   const path = `${identity.auth_user_id}/${id}.${extension}`;
   const digest = await sha256Hex(bytes);
+  const { data: duplicateProof } = await client
+    .from("review_reward_claims")
+    .select("id,auth_user_id,partner_source,branch_uuid,order_code")
+    .eq("proof_sha256", digest)
+    .maybeSingle();
+  if (duplicateProof) {
+    return reply({
+      ok: false,
+      code: "PROOF_ALREADY_USED",
+      message: duplicateProof.auth_user_id === identity.auth_user_id
+        ? "Ảnh này đã được dùng ở một yêu cầu trước. Vui lòng chọn ảnh chụp mới của đúng chi nhánh hoặc đơn hàng."
+        : "Ảnh này đã được dùng để nhận điểm. Vui lòng chọn ảnh khác."
+    }, 409);
+  }
   const { error: uploadError } = await client.storage
     .from(BUCKET)
     .upload(path, bytes, { contentType, upsert: false });
@@ -281,10 +389,16 @@ async function createClaim(
   if (error) {
     await client.storage.from(BUCKET).remove([path]);
     const duplicate = text(error.code) === "23505";
+    const errorText = `${text(error.message)} ${text(error.details)}`.toLowerCase();
+    const duplicateMessage = errorText.includes("proof_sha256")
+      ? "Ảnh này đã được dùng ở một yêu cầu trước. Vui lòng chọn ảnh chụp mới."
+      : claimInput.partner_source === "googlemaps"
+        ? "Chi nhánh này đã có yêu cầu nhận điểm Google Maps."
+        : "Đơn hàng này đã có yêu cầu nhận điểm đánh giá.";
     return reply({
       ok: false,
       message: duplicate
-        ? "Đơn, chi nhánh hoặc ảnh này đã được dùng để nhận điểm."
+        ? duplicateMessage
         : "Không tạo được yêu cầu nhận điểm."
     }, duplicate ? 409 : 500);
   }
@@ -402,6 +516,7 @@ async function reviewClaim(client: ReturnType<typeof createClient>, admin: Row, 
       rejection_reason: text(body.reason).slice(0, 500) || "Ảnh chưa thể hiện đánh giá 5 sao hợp lệ.",
       reviewed_at: now.toISOString(),
       reviewed_by: admin.auth_user_id,
+      resubmit_until: new Date(now.getTime() + 24 * 3600000).toISOString(),
       proof_delete_after: new Date(now.getTime() + Number(settings.proof_retention_days) * 86400000).toISOString(),
       updated_at: now.toISOString()
     }).eq("id", id).eq("status", "pending");

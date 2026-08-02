@@ -9,20 +9,40 @@
 }
 
 .account-review-reward-card {
+  position: relative;
   display: grid;
   width: 100%;
   grid-template-columns: 42px minmax(0, 1fr) 24px;
   align-items: center;
   gap: 11px;
   padding: 13px 14px;
-  border: 1px solid #f1d6bd;
-  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #f4a11f;
+  border-radius: 12px;
   background:
-    radial-gradient(circle at 92% 0%, rgb(255 214 142 / 42%) 0, transparent 34%),
-    #fffdf9;
-  color: #34251e;
+    radial-gradient(circle at 5% 0%, rgb(255 255 255 / 18%) 0, transparent 34%),
+    linear-gradient(125deg, #ff8a1c 0%, #ffa916 52%, #ffd338 100%);
+  color: #fff;
   text-align: left;
-  box-shadow: 0 4px 14px rgb(82 50 26 / 6%);
+  box-shadow: 0 10px 22px rgb(207 111 13 / 22%);
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+
+.account-review-reward-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: rgb(255 255 255 / 72%);
+  content: "";
+}
+
+.account-review-reward-card:active {
+  transform: scale(.985);
+}
+
+.account-review-reward-card:focus-visible {
+  outline: 3px solid rgb(237 109 17 / 25%);
+  outline-offset: 2px;
 }
 
 .account-review-reward-card__icon {
@@ -30,9 +50,10 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  border-radius: 50%;
-  background: #fff1cc;
-  color: #d98800;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 72%);
+  color: #e76800;
 }
 
 .account-review-reward-card__content {
@@ -42,12 +63,15 @@
 }
 
 .account-review-reward-card__content strong {
+  color: #fff;
   font-size: 14px;
+  font-weight: 900;
   line-height: 1.3;
+  text-shadow: 0 2px 8px rgb(126 51 0 / 18%);
 }
 
 .account-review-reward-card__content small {
-  color: #78675c;
+  color: rgb(255 255 255 / 88%);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -55,7 +79,7 @@
 .account-review-reward-card__arrow {
   justify-self: end;
   transform: rotate(180deg);
-  color: #d86612;
+  color: #fff;
 }
 
 .customer-sheet-backdrop.account-review-reward-sheet-backdrop {
@@ -1540,6 +1564,77 @@
 
 .review-reward-claim.is-rejected .review-reward-claim__result span {
   color: #bc4c42;
+}
+
+.review-reward-claim__reason {
+  margin-top: 3px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: #fff3ef;
+  color: #8f3d35 !important;
+}
+
+.review-reward-claim__retry {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 7px;
+  background: #ed6d11;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.review-reward-resubmit-note {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #f0c9a9;
+  border-radius: 9px;
+  background: #fff7ef;
+}
+
+.review-reward-resubmit-note > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 8px;
+  background: #ffead7;
+  color: #db6815;
+}
+
+.review-reward-resubmit-note > div {
+  display: grid;
+  gap: 2px;
+}
+
+.review-reward-resubmit-note strong {
+  color: #49372c;
+  font-size: 11px;
+}
+
+.review-reward-resubmit-note small {
+  color: #78675d;
+  font-size: 9px;
+}
+
+.review-reward-resubmit-note button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #e6c5aa;
+  border-radius: 7px;
+  background: #fff;
+  color: #9b4b16;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 @media (max-width: 420px) {
