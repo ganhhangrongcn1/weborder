@@ -21,6 +21,8 @@ const HISTORY_FILTERS = [
 ];
 const REVIEW_REWARD_VIEW_KEY = "ghr_review_reward_view";
 const GOOGLE_REVIEW_DRAFT_KEY = "ghr_google_review_draft";
+const DEFAULT_PARTNER_REWARD_POINTS = 5000;
+const DEFAULT_GOOGLE_REWARD_POINTS = 10000;
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -118,7 +120,6 @@ export default function ReviewRewardPanel({
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [proof, setProof] = useState(null);
   const [proofPreview, setProofPreview] = useState("");
-  const [proofPreviewReady, setProofPreviewReady] = useState(false);
   const [returnedFromMaps, setReturnedFromMaps] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -158,10 +159,6 @@ export default function ReviewRewardPanel({
   useEffect(() => {
     load();
   }, []);
-
-  useEffect(() => () => {
-    if (proofPreview.startsWith("blob:")) URL.revokeObjectURL(proofPreview);
-  }, [proofPreview]);
 
   useEffect(() => {
     try {
@@ -230,6 +227,12 @@ export default function ReviewRewardPanel({
       locked: false
     })).filter((branch) => branch.id);
   }, [branches, data]);
+  const availableReviewBranches = useMemo(
+    () => reviewBranches.filter((branch) => !branch.locked),
+    [reviewBranches]
+  );
+  const showGoogleReview = data?.settings?.platforms?.googlemaps !== false
+    && availableReviewBranches.length > 0;
   const selectedBranch = useMemo(
     () => reviewBranches.find((branch) => branch.id === selectedBranchId) || null,
     [reviewBranches, selectedBranchId]
@@ -238,17 +241,14 @@ export default function ReviewRewardPanel({
     () => (data?.claims || []).filter((claim) => matchesHistoryFilter(claim, historyFilter)),
     [data, historyFilter]
   );
-  const partnerRewardPoints = Number(data?.settings?.reward_points || 5000);
-  const googleRewardPoints = Number(data?.settings?.google_reward_points || partnerRewardPoints);
+  const partnerRewardPoints = Number(data?.settings?.reward_points || DEFAULT_PARTNER_REWARD_POINTS);
+  const googleRewardPoints = Number(data?.settings?.google_reward_points || DEFAULT_GOOGLE_REWARD_POINTS);
 
   const handleImage = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setMessage("Đang chuẩn bị ảnh...");
     try {
-      const previewUrl = URL.createObjectURL(file);
-      setProofPreviewReady(false);
-      setProofPreview(previewUrl);
       const originalDataUrl = await readFileAsDataUrl(file);
       const canKeepOriginal = ["image/jpeg", "image/png", "image/webp"].includes(file.type)
         && file.size <= 1048576;
@@ -266,6 +266,7 @@ export default function ReviewRewardPanel({
         });
       if (processed.size > 1048576) throw new Error("Ảnh vẫn lớn hơn 1 MB. Vui lòng chọn ảnh khác.");
       setProof({ ...processed, originalName: file.name });
+      setProofPreview(file.name || "Ảnh đánh giá đã chọn");
       setReturnedFromMaps(false);
       setMessage(canKeepOriginal
         ? `Đã chọn ảnh (${Math.max(1, Math.round(processed.size / 1024))} KB).`
@@ -273,7 +274,6 @@ export default function ReviewRewardPanel({
     } catch (error) {
       setProof(null);
       setProofPreview("");
-      setProofPreviewReady(false);
       setMessage(error.message);
     }
   };
@@ -305,7 +305,6 @@ export default function ReviewRewardPanel({
     setSelectedBranchId(claim.branch_uuid || "");
     setProof(null);
     setProofPreview("");
-    setProofPreviewReady(false);
     setReturnedFromMaps(false);
     setMessage("Chọn ảnh mới rõ thông tin và mức đánh giá 5 sao.");
     setActiveView("submit");
@@ -337,7 +336,6 @@ export default function ReviewRewardPanel({
       setResubmittingClaimId("");
       setProof(null);
       setProofPreview("");
-      setProofPreviewReady(false);
       try {
         window.sessionStorage.removeItem(GOOGLE_REVIEW_DRAFT_KEY);
       } catch {
@@ -366,7 +364,6 @@ export default function ReviewRewardPanel({
             setSelectedBranchId("");
             setProof(null);
             setProofPreview("");
-            setProofPreviewReady(false);
             setMessage("");
           }}>Hủy</button>
         </div>
@@ -388,16 +385,11 @@ export default function ReviewRewardPanel({
         <input type="file" accept="image/*" onChange={handleImage} />
         {proofPreview ? (
           <>
-            <img
-              src={proofPreview}
-              alt="Ảnh đánh giá đã chọn"
-              onLoad={() => setProofPreviewReady(true)}
-              onError={() => {
-                setProof(null);
-                setProofPreviewReady(false);
-                setMessage("Điện thoại chưa hiển thị được ảnh này. Vui lòng chọn lại ảnh khác.");
-              }}
-            />
+            <span className="review-reward-upload__selected-icon"><Icon name="check" size={22} /></span>
+            <span className="review-reward-upload__selected-copy">
+              <strong>Đã chọn ảnh</strong>
+              <small>{proofPreview} · {Math.max(1, Math.round(Number(proof?.size || 0) / 1024))} KB</small>
+            </span>
             <span className="review-reward-upload__change"><Icon name="image" size={15} /> Đổi ảnh</span>
           </>
         ) : (
@@ -411,7 +403,7 @@ export default function ReviewRewardPanel({
       <button
         type="button"
         className="review-reward-submit"
-        disabled={submitting || !proof || !proofPreviewReady}
+        disabled={submitting || !proof}
         onClick={submit}
       >
         {submitting ? "Đang gửi..." : resubmittingClaimId ? "Gửi lại ảnh mới" : "Gửi ảnh để Gánh duyệt"}
@@ -451,13 +443,13 @@ export default function ReviewRewardPanel({
       </header>
 
       {data?.settings?.enabled !== false ? (
-        <div className="review-reward-point-showcase" aria-label="Mức điểm thưởng">
+        <div className={`review-reward-point-showcase${showGoogleReview ? "" : " is-single"}`} aria-label="Mức điểm thưởng">
           <div>
             <span>Đơn đối tác</span>
             <strong>+{partnerRewardPoints.toLocaleString("vi-VN")}</strong>
             <small>điểm</small>
           </div>
-          {data.settings?.platforms?.googlemaps !== false ? (
+          {showGoogleReview ? (
             <div>
               <span>Google Maps</span>
               <strong>+{googleRewardPoints.toLocaleString("vi-VN")}</strong>
@@ -525,7 +517,7 @@ export default function ReviewRewardPanel({
         <>
           {resubmittingClaimId ? renderProofUpload() : (
           <>
-          {data.settings?.platforms?.googlemaps !== false ? (
+          {showGoogleReview ? (
             <button
               type="button"
               className={`review-reward-google-card${selectedSource === "googlemaps" ? " is-selected" : ""}`}
@@ -537,7 +529,6 @@ export default function ReviewRewardPanel({
                 setOrdersOpen(false);
                 setProof(null);
                 setProofPreview("");
-                setProofPreviewReady(false);
                 setMessage("");
               }}
             >
@@ -549,23 +540,21 @@ export default function ReviewRewardPanel({
             </button>
           ) : null}
 
-          {selectedSource === "googlemaps" ? (
+          {showGoogleReview && selectedSource === "googlemaps" ? (
             <div className="review-reward-selection-step">
               <div className="review-reward-section-title">
                 <div><h3>Chọn chi nhánh</h3><p>Google Maps sẽ mở ngay để bạn viết đánh giá.</p></div>
               </div>
               <div className="review-reward-branches">
-                {reviewBranches.map((branch) => (
+                {availableReviewBranches.map((branch) => (
                   <button
                     key={branch.id}
                     type="button"
-                    disabled={branch.locked}
                     className={selectedBranchId === branch.id ? "is-selected" : ""}
                     onClick={() => {
                       setSelectedBranchId(branch.id);
                       setProof(null);
                       setProofPreview("");
-                      setProofPreviewReady(false);
                       setReturnedFromMaps(false);
                       setMessage("Đã chọn chi nhánh. Bấm Mở Google Maps để bắt đầu đánh giá.");
                       window.setTimeout(() => {
@@ -577,10 +566,10 @@ export default function ReviewRewardPanel({
                     }}
                   >
                     <strong>{branch.name}</strong>
-                    <small>{branch.locked ? "Đã gửi yêu cầu" : `${branch.address || "Xem địa điểm"} · Đánh giá ngay`}</small>
+                    <small>{branch.address || "Xem địa điểm"} · Đánh giá ngay</small>
                   </button>
                 ))}
-                {!reviewBranches.length ? (
+                {!availableReviewBranches.length ? (
                   <div className="review-reward-empty-state review-reward-empty-state--compact">
                     <Icon name="store" size={24} />
                     <strong>Chưa tải được danh sách chi nhánh</strong>
@@ -590,7 +579,7 @@ export default function ReviewRewardPanel({
               </div>
             </div>
           ) : null}
-          {selectedSource === "googlemaps" && selectedBranch ? renderProofUpload() : null}
+          {showGoogleReview && selectedSource === "googlemaps" && selectedBranch ? renderProofUpload() : null}
 
           <div className="review-reward-selection-step review-reward-partner-section">
             <div className="review-reward-section-title">
@@ -638,7 +627,6 @@ export default function ReviewRewardPanel({
                         setOrdersOpen(false);
                         setProof(null);
                         setProofPreview("");
-                        setProofPreviewReady(false);
                         setMessage("");
                       }}
                     >

@@ -111,7 +111,7 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
   const settings = data.settings || {
     enabled: true,
     reward_points: 5000,
-    google_reward_points: 5000,
+    google_reward_points: 10000,
     claim_window_hours: 48,
     proof_retention_days: 3,
     platforms: { grabfood: true, shopeefood: true, xanhngon: true, googlemaps: true }
