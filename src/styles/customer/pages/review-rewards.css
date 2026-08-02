@@ -1310,9 +1310,13 @@
 }
 
 .review-reward-upload img {
+  display: block;
   width: 100%;
+  height: 220px;
   max-height: 220px;
   object-fit: contain;
+  object-position: center;
+  background: #f7f7f7;
 }
 
 .review-reward-upload > strong {

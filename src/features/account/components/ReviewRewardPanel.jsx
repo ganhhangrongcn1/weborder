@@ -118,6 +118,7 @@ export default function ReviewRewardPanel({
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [proof, setProof] = useState(null);
   const [proofPreview, setProofPreview] = useState("");
+  const [proofPreviewReady, setProofPreviewReady] = useState(false);
   const [returnedFromMaps, setReturnedFromMaps] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -157,6 +158,10 @@ export default function ReviewRewardPanel({
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => () => {
+    if (proofPreview.startsWith("blob:")) URL.revokeObjectURL(proofPreview);
+  }, [proofPreview]);
 
   useEffect(() => {
     try {
@@ -241,14 +246,16 @@ export default function ReviewRewardPanel({
     if (!file) return;
     setMessage("Đang chuẩn bị ảnh...");
     try {
-      const previewDataUrl = await readFileAsDataUrl(file);
-      setProofPreview(previewDataUrl);
+      const previewUrl = URL.createObjectURL(file);
+      setProofPreviewReady(false);
+      setProofPreview(previewUrl);
+      const originalDataUrl = await readFileAsDataUrl(file);
       const canKeepOriginal = ["image/jpeg", "image/png", "image/webp"].includes(file.type)
         && file.size <= 1048576;
       const processed = canKeepOriginal
         ? {
           file,
-          dataUrl: previewDataUrl,
+          dataUrl: originalDataUrl,
           contentType: file.type,
           size: file.size
         }
@@ -266,6 +273,7 @@ export default function ReviewRewardPanel({
     } catch (error) {
       setProof(null);
       setProofPreview("");
+      setProofPreviewReady(false);
       setMessage(error.message);
     }
   };
@@ -297,6 +305,7 @@ export default function ReviewRewardPanel({
     setSelectedBranchId(claim.branch_uuid || "");
     setProof(null);
     setProofPreview("");
+    setProofPreviewReady(false);
     setReturnedFromMaps(false);
     setMessage("Chọn ảnh mới rõ thông tin và mức đánh giá 5 sao.");
     setActiveView("submit");
@@ -328,6 +337,7 @@ export default function ReviewRewardPanel({
       setResubmittingClaimId("");
       setProof(null);
       setProofPreview("");
+      setProofPreviewReady(false);
       try {
         window.sessionStorage.removeItem(GOOGLE_REVIEW_DRAFT_KEY);
       } catch {
@@ -356,6 +366,7 @@ export default function ReviewRewardPanel({
             setSelectedBranchId("");
             setProof(null);
             setProofPreview("");
+            setProofPreviewReady(false);
             setMessage("");
           }}>Hủy</button>
         </div>
@@ -377,7 +388,16 @@ export default function ReviewRewardPanel({
         <input type="file" accept="image/*" onChange={handleImage} />
         {proofPreview ? (
           <>
-            <img src={proofPreview} alt="Ảnh đánh giá đã chọn" />
+            <img
+              src={proofPreview}
+              alt="Ảnh đánh giá đã chọn"
+              onLoad={() => setProofPreviewReady(true)}
+              onError={() => {
+                setProof(null);
+                setProofPreviewReady(false);
+                setMessage("Điện thoại chưa hiển thị được ảnh này. Vui lòng chọn lại ảnh khác.");
+              }}
+            />
             <span className="review-reward-upload__change"><Icon name="image" size={15} /> Đổi ảnh</span>
           </>
         ) : (
@@ -391,7 +411,7 @@ export default function ReviewRewardPanel({
       <button
         type="button"
         className="review-reward-submit"
-        disabled={submitting || !proof}
+        disabled={submitting || !proof || !proofPreviewReady}
         onClick={submit}
       >
         {submitting ? "Đang gửi..." : resubmittingClaimId ? "Gửi lại ảnh mới" : "Gửi ảnh để Gánh duyệt"}
@@ -517,6 +537,7 @@ export default function ReviewRewardPanel({
                 setOrdersOpen(false);
                 setProof(null);
                 setProofPreview("");
+                setProofPreviewReady(false);
                 setMessage("");
               }}
             >
@@ -544,6 +565,7 @@ export default function ReviewRewardPanel({
                       setSelectedBranchId(branch.id);
                       setProof(null);
                       setProofPreview("");
+                      setProofPreviewReady(false);
                       setReturnedFromMaps(false);
                       setMessage("Đã chọn chi nhánh. Bấm Mở Google Maps để bắt đầu đánh giá.");
                       window.setTimeout(() => {
@@ -616,6 +638,7 @@ export default function ReviewRewardPanel({
                         setOrdersOpen(false);
                         setProof(null);
                         setProofPreview("");
+                        setProofPreviewReady(false);
                         setMessage("");
                       }}
                     >
