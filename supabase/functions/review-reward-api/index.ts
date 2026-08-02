@@ -172,12 +172,13 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
   const orderId = text(body.partner_order_id);
   const requestedSource = text(body.partner_source).toLowerCase();
   const branchId = text(body.branch_uuid);
-  const match = text(body.proof_data_url).match(/^data:image\/webp;base64,(.+)$/);
+  const match = text(body.proof_data_url).match(/^data:(image\/(?:webp|jpeg));base64,(.+)$/);
   const isGoogleMaps = requestedSource === "googlemaps";
   if ((!isGoogleMaps && !orderId) || (isGoogleMaps && !branchId) || !match) {
     return reply({ ok: false, message: "Vui lòng chọn nguồn, đơn hoặc chi nhánh và tải ảnh đánh giá." }, 400);
   }
-  const bytes = Uint8Array.from(atob(match[1]), (char) => char.charCodeAt(0));
+  const contentType = match[1];
+  const bytes = Uint8Array.from(atob(match[2]), (char) => char.charCodeAt(0));
   if (!bytes.length || bytes.length > 1048576) {
     return reply({ ok: false, message: "Ảnh sau khi nén phải nhỏ hơn 1 MB." }, 400);
   }
@@ -201,7 +202,7 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
       .eq("branch_uuid", branch.branch_uuid)
       .maybeSingle();
     if (existing) return reply({ ok: false, message: "Chi nhánh này đã được gửi yêu cầu thưởng Google Maps." }, 409);
-    return createClaim(client, identity, settings, bytes, {
+    return createClaim(client, identity, settings, bytes, contentType, {
       partner_order_id: null,
       partner_source: "googlemaps",
       branch_uuid: branch.branch_uuid,
@@ -238,7 +239,7 @@ async function submitClaim(client: ReturnType<typeof createClient>, identity: Ro
     .maybeSingle();
   if (existing) return reply({ ok: false, message: "Đơn này đã gửi ảnh đánh giá trước đó." }, 409);
 
-  return createClaim(client, identity, settings, bytes, {
+  return createClaim(client, identity, settings, bytes, contentType, {
     partner_order_id: order.id,
     partner_source: source,
     branch_uuid: order.branch_uuid || null,
@@ -252,14 +253,16 @@ async function createClaim(
   identity: Row,
   settings: Row,
   bytes: Uint8Array,
+  contentType: string,
   claimInput: Row
 ) {
   const id = crypto.randomUUID();
-  const path = `${identity.auth_user_id}/${id}.webp`;
+  const extension = contentType === "image/jpeg" ? "jpg" : "webp";
+  const path = `${identity.auth_user_id}/${id}.${extension}`;
   const digest = await sha256Hex(bytes);
   const { error: uploadError } = await client.storage
     .from(BUCKET)
-    .upload(path, bytes, { contentType: "image/webp", upsert: false });
+    .upload(path, bytes, { contentType, upsert: false });
   if (uploadError) return reply({ ok: false, message: "Không lưu được ảnh đánh giá." }, 500);
   const { data: claim, error } = await client
     .from("review_reward_claims")

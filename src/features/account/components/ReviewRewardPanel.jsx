@@ -352,6 +352,7 @@ export default function ReviewRewardPanel({
       >
         {submitting ? "Đang gửi..." : "Gửi ảnh để Gánh duyệt"}
       </button>
+      {message ? <p className="review-reward-message review-reward-message--inline" role="status">{message}</p> : null}
     </div>
   );
 
@@ -499,6 +500,12 @@ export default function ReviewRewardPanel({
                       setProofPreview("");
                       setReturnedFromMaps(false);
                       setMessage("Đã chọn chi nhánh. Bấm Mở Google Maps để bắt đầu đánh giá.");
+                      window.setTimeout(() => {
+                        uploadSectionRef.current?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center"
+                        });
+                      }, 120);
                     }}
                   >
                     <strong>{branch.name}</strong>
@@ -584,7 +591,9 @@ export default function ReviewRewardPanel({
           {selectedOrder ? renderProofUpload() : null}
         </>
       )) : null}
-      {activeView === "submit" && message && data ? <p className="review-reward-message" role="status">{message}</p> : null}
+      {activeView === "submit" && message && data && !selectedOrder && !(selectedSource === "googlemaps" && selectedBranch) ? (
+        <p className="review-reward-message" role="status">{message}</p>
+      ) : null}
 
       {showHistory && data && activeView === "history" ? (
         <div className="review-reward-history">
