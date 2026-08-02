@@ -994,6 +994,58 @@
   transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
 
+.review-reward-proof-step.is-returned {
+  box-shadow: 0 0 0 3px rgb(237 109 17 / 14%), 0 8px 22px rgb(111 62 27 / 9%);
+}
+
+.review-reward-maps-flow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid #efcda9;
+  border-radius: 10px;
+  background: #fff8ef;
+}
+
+.review-reward-maps-flow > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 9px;
+  background: #ffead5;
+  color: #d8610e;
+}
+
+.review-reward-maps-flow > div {
+  display: grid;
+  gap: 2px;
+}
+
+.review-reward-maps-flow strong {
+  color: #4d3729;
+  font-size: 12px;
+}
+
+.review-reward-maps-flow small {
+  color: #806d61;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.review-reward-maps-flow button {
+  grid-column: 1 / -1;
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  background: #ed6d11;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 850;
+}
+
 .review-reward-order-picker__trigger:focus-visible,
 .review-reward-order-picker.is-open .review-reward-order-picker__trigger {
   border-color: #ef8a32;
@@ -1223,6 +1275,7 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
+  text-align: center;
 }
 
 .review-reward-upload input {
@@ -1236,6 +1289,39 @@
   width: 100%;
   max-height: 220px;
   object-fit: contain;
+}
+
+.review-reward-upload > strong {
+  color: #6d3d20;
+  font-size: 13px;
+}
+
+.review-reward-upload > span:not(.review-reward-upload__change) {
+  color: #9a7964;
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.review-reward-upload.has-preview {
+  position: relative;
+  padding: 8px;
+  background: #fff;
+}
+
+.review-reward-upload__change {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: rgb(45 35 28 / 82%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .review-reward-submit {

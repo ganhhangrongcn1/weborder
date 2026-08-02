@@ -17,7 +17,11 @@ function loadImageFromObjectUrl(objectUrl) {
 }
 
 export async function processUploadImage(file, options = {}) {
-  const { maxWidth = 1200, quality = 0.75 } = options;
+  const {
+    maxWidth = 1200,
+    quality = 0.75,
+    outputType = "image/webp"
+  } = options;
   if (!file || !String(file.type || "").startsWith("image/")) {
     throw new Error("File tải lên không phải ảnh hợp lệ.");
   }
@@ -39,28 +43,30 @@ export async function processUploadImage(file, options = {}) {
     context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, targetWidth, targetHeight);
 
-    const webpBlob = await new Promise((resolve, reject) => {
+    const outputBlob = await new Promise((resolve, reject) => {
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            reject(new Error("Không thể chuyển ảnh sang WebP."));
+            reject(new Error("Không thể nén ảnh trên thiết bị này."));
             return;
           }
           resolve(blob);
         },
-        "image/webp",
+        outputType,
         quality
       );
     });
 
-    const safeFileName = `image_${Date.now()}.webp`;
-    const outputFile = new File([webpBlob], safeFileName, { type: "image/webp" });
-    const dataUrl = await readBlobAsDataUrl(webpBlob);
+    const finalType = outputBlob.type || outputType;
+    const extension = finalType === "image/jpeg" ? "jpg" : "webp";
+    const safeFileName = `image_${Date.now()}.${extension}`;
+    const outputFile = new File([outputBlob], safeFileName, { type: finalType });
+    const dataUrl = await readBlobAsDataUrl(outputBlob);
 
     return {
       file: outputFile,
       dataUrl,
-      contentType: "image/webp",
+      contentType: finalType,
       width: targetWidth,
       height: targetHeight,
       size: outputFile.size

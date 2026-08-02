@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import { processUploadImage } from "../../../utils/imageUpload.js";
 import {
@@ -20,6 +20,16 @@ const HISTORY_FILTERS = [
   { id: "rejected", label: "Chưa đạt" }
 ];
 const REVIEW_REWARD_VIEW_KEY = "ghr_review_reward_view";
+const GOOGLE_REVIEW_DRAFT_KEY = "ghr_google_review_draft";
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Không thể xem trước ảnh đã chọn."));
+    reader.readAsDataURL(file);
+  });
+}
 
 const STATUS_META = {
   pending: {
@@ -107,12 +117,15 @@ export default function ReviewRewardPanel({
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [selectedBranchId, setSelectedBranchId] = useState("");
   const [proof, setProof] = useState(null);
+  const [proofPreview, setProofPreview] = useState("");
+  const [returnedFromMaps, setReturnedFromMaps] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState(null);
   const [historyFilter, setHistoryFilter] = useState("all");
   const [ordersOpen, setOrdersOpen] = useState(false);
+  const uploadSectionRef = useRef(null);
   const [activeView, setActiveView] = useState(() => {
     try {
       return window.sessionStorage.getItem(REVIEW_REWARD_VIEW_KEY) === "history"
@@ -149,6 +162,43 @@ export default function ReviewRewardPanel({
       window.sessionStorage.removeItem(REVIEW_REWARD_VIEW_KEY);
     } catch {
     }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const draft = JSON.parse(window.sessionStorage.getItem(GOOGLE_REVIEW_DRAFT_KEY) || "null");
+      if (draft?.branchId) {
+        setSelectedSource("googlemaps");
+        setSelectedBranchId(String(draft.branchId));
+      }
+    } catch {
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleReturn = () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const draft = JSON.parse(window.sessionStorage.getItem(GOOGLE_REVIEW_DRAFT_KEY) || "null");
+        if (!draft?.awaitingReturn || Date.now() - Number(draft.openedAt || 0) < 1000) return;
+        window.sessionStorage.setItem(GOOGLE_REVIEW_DRAFT_KEY, JSON.stringify({
+          ...draft,
+          awaitingReturn: false
+        }));
+        setReturnedFromMaps(true);
+        setMessage("Đã quay lại Gánh. Chọn ảnh màn hình bạn vừa chụp nhé.");
+        window.setTimeout(() => {
+          uploadSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 180);
+      } catch {
+      }
+    };
+    window.addEventListener("focus", handleReturn);
+    document.addEventListener("visibilitychange", handleReturn);
+    return () => {
+      window.removeEventListener("focus", handleReturn);
+      document.removeEventListener("visibilitychange", handleReturn);
+    };
   }, []);
 
   const reviewOrders = useMemo(() => data?.orders || [], [data]);
@@ -190,14 +240,42 @@ export default function ReviewRewardPanel({
     if (!file) return;
     setMessage("Đang nén ảnh...");
     try {
-      const processed = await processUploadImage(file, { maxWidth: 1280, quality: 0.68 });
+      const previewDataUrl = await readFileAsDataUrl(file);
+      setProofPreview(previewDataUrl);
+      const processed = await processUploadImage(file, {
+        maxWidth: 1280,
+        quality: 0.76,
+        outputType: "image/jpeg"
+      });
       if (processed.size > 1048576) throw new Error("Ảnh vẫn lớn hơn 1 MB. Vui lòng chọn ảnh khác.");
       setProof({ ...processed, originalName: file.name });
+      setReturnedFromMaps(false);
       setMessage(`Đã nén ảnh còn ${Math.max(1, Math.round(processed.size / 1024))} KB.`);
     } catch (error) {
       setProof(null);
+      setProofPreview("");
       setMessage(error.message);
     }
+  };
+
+  const openGoogleReview = () => {
+    if (!selectedBranch) return;
+    const mapsUrl = buildGoogleMapsReviewUrl(selectedBranch);
+    if (!mapsUrl || typeof window === "undefined") {
+      setMessage("Chi nhánh này chưa có đường dẫn Google Maps.");
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(GOOGLE_REVIEW_DRAFT_KEY, JSON.stringify({
+        branchId: selectedBranch.id,
+        openedAt: Date.now(),
+        awaitingReturn: true
+      }));
+    } catch {
+    }
+    setReturnedFromMaps(false);
+    setMessage("Đánh giá và chụp màn hình, sau đó quay lại trang này.");
+    window.open(mapsUrl, "_blank", "noopener,noreferrer");
   };
 
   const submit = async () => {
@@ -220,6 +298,11 @@ export default function ReviewRewardPanel({
       setSelectedOrderId("");
       setSelectedBranchId("");
       setProof(null);
+      setProofPreview("");
+      try {
+        window.sessionStorage.removeItem(GOOGLE_REVIEW_DRAFT_KEY);
+      } catch {
+      }
       await load();
     } catch (error) {
       setMessage(error.message);
@@ -229,23 +312,42 @@ export default function ReviewRewardPanel({
   };
 
   const renderProofUpload = () => (
-    <div className="review-reward-proof-step">
+    <div
+      ref={uploadSectionRef}
+      className={`review-reward-proof-step${returnedFromMaps ? " is-returned" : ""}`}
+    >
+      {selectedSource === "googlemaps" ? (
+        <div className="review-reward-maps-flow">
+          <span><Icon name={returnedFromMaps ? "check" : "location"} size={19} /></span>
+          <div>
+            <strong>{returnedFromMaps ? "Bạn đã quay lại Gánh" : "Đánh giá xong, nhớ chụp màn hình"}</strong>
+            <small>{returnedFromMaps ? "Bây giờ hãy chọn ảnh bạn vừa chụp." : "Sau đó quay lại trang này để gửi ảnh nhận điểm."}</small>
+          </div>
+          {!returnedFromMaps ? (
+            <button type="button" onClick={openGoogleReview}>Mở Google Maps</button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="review-reward-section-title"><div><h3>Tải ảnh đánh giá 5 sao</h3><p>Ảnh cần thấy rõ nền tảng và mức 5 sao.</p></div></div>
-      <label className="review-reward-upload">
+      <label className={`review-reward-upload${proofPreview ? " has-preview" : ""}`}>
         <input type="file" accept="image/*" onChange={handleImage} />
-        {proof ? (
-          <img src={proof.dataUrl} alt="Ảnh đánh giá đã chọn" />
+        {proofPreview ? (
+          <>
+            <img src={proofPreview} alt="Ảnh đánh giá đã chọn" />
+            <span className="review-reward-upload__change"><Icon name="image" size={15} /> Đổi ảnh</span>
+          </>
         ) : (
           <>
-            <Icon name="star" size={22} />
-            <span>Chọn ảnh chụp có hiển thị đánh giá 5 sao</span>
+            <Icon name="image" size={24} />
+            <strong>{returnedFromMaps ? "Chọn ảnh vừa chụp" : "Chọn ảnh đánh giá 5 sao"}</strong>
+            <span>Chạm để mở thư viện ảnh</span>
           </>
         )}
       </label>
       <button
         type="button"
         className="review-reward-submit"
-        disabled={submitting}
+        disabled={submitting || !proof}
         onClick={submit}
       >
         {submitting ? "Đang gửi..." : "Gửi ảnh để Gánh duyệt"}
@@ -367,6 +469,7 @@ export default function ReviewRewardPanel({
                 setSelectedBranchId("");
                 setOrdersOpen(false);
                 setProof(null);
+                setProofPreview("");
                 setMessage("");
               }}
             >
@@ -393,11 +496,9 @@ export default function ReviewRewardPanel({
                     onClick={() => {
                       setSelectedBranchId(branch.id);
                       setProof(null);
-                      setMessage("Đã chọn chi nhánh. Sau khi đánh giá, quay lại đây để tải ảnh.");
-                      const mapsUrl = buildGoogleMapsReviewUrl(branch);
-                      if (mapsUrl && typeof window !== "undefined") {
-                        window.open(mapsUrl, "_blank", "noopener,noreferrer");
-                      }
+                      setProofPreview("");
+                      setReturnedFromMaps(false);
+                      setMessage("Đã chọn chi nhánh. Bấm Mở Google Maps để bắt đầu đánh giá.");
                     }}
                   >
                     <strong>{branch.name}</strong>
@@ -461,6 +562,7 @@ export default function ReviewRewardPanel({
                         setSelectedBranchId("");
                         setOrdersOpen(false);
                         setProof(null);
+                        setProofPreview("");
                         setMessage("");
                       }}
                     >
