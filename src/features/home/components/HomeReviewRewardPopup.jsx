@@ -53,15 +53,31 @@ export default function HomeReviewRewardPopup({
           <>
             <div className="review-reward-popup__hero" aria-hidden="true">
               <span><Icon name="star" size={52} weight="fill" /></span>
-              <strong>2 cách nhận điểm</strong>
+              <strong>ĐÁNH GIÁ NGAY · ĐIỂM VỀ TAY</strong>
             </div>
 
             <div className="review-reward-popup__copy">
-              <p>
-                Nếu món ăn hôm nay làm bạn hài lòng, hãy dành một chút thời gian
-                <strong> đánh giá 5 sao cho Gánh trên GrabFood, ShopeeFood, Xanh Ngon hoặc Google Maps</strong> nhé.
-                Mỗi lời khen của bạn là niềm vui và động lực để Gánh chăm chút món ăn tốt hơn mỗi ngày.
-              </p>
+              <h2>Chia sẻ cảm nhận,<br />Gánh gửi lời cảm ơn</h2>
+              <p>Đơn đối tác · Google Maps</p>
+            </div>
+
+            <div className="review-reward-popup__ways" aria-label="Hai cách nhận điểm">
+              <article>
+                <span><Icon name="bag" size={22} /></span>
+                <div>
+                  <small>Đơn hàng đã mua</small>
+                  <strong>Đánh giá đơn đối tác</strong>
+                  <p>GrabFood · ShopeeFood · Xanh Ngon</p>
+                </div>
+              </article>
+              <article>
+                <span><Icon name="location" size={22} /></span>
+                <div>
+                  <small>Địa điểm đã ghé</small>
+                  <strong>Đánh giá Google Maps</strong>
+                  <p>Chọn chi nhánh bạn đã trải nghiệm</p>
+                </div>
+              </article>
             </div>
 
             <p className="review-reward-popup__note">
@@ -83,7 +99,7 @@ export default function HomeReviewRewardPopup({
               className="review-reward-popup__continue"
               onClick={() => setStep(2)}
             >
-              Tiếp tục
+              Bắt đầu nhận điểm
               <Icon name="back" size={17} />
             </button>
           </>

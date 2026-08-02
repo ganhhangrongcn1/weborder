@@ -5,10 +5,7 @@ export default function HomeReviewRewardBanner({
   image,
   onOpen
 }) {
-  const configuredTitle = String(block?.title || "").trim();
-  const title = !configuredTitle || configuredTitle === "Nhận 5.000đ từ đơn 5 sao"
-    ? "Đánh giá 5 sao, nhận điểm từ Gánh"
-    : configuredTitle;
+  const title = "Đánh Giá Ngay – Nhận Điểm Liền Tay";
   const subtitle = String(
     block?.subtitle ||
     "GrabFood · ShopeeFood · Xanh Ngon · Google Maps"

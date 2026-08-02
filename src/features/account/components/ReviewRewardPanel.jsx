@@ -278,10 +278,27 @@ export default function ReviewRewardPanel({
       <header>
         <span className="review-reward-icon"><Icon name="star" size={20} /></span>
         <div>
-          <h2 id="review-reward-title">Gửi ảnh đánh giá, nhận điểm thưởng</h2>
-          <p>Gửi ảnh xong, Gánh sẽ báo kết quả trong 24–48 giờ nhé.</p>
+          <h2 id="review-reward-title">Đánh Giá Ngay – Nhận Điểm Liền Tay</h2>
+          <p>Chọn cách đánh giá phù hợp và gửi ảnh để nhận điểm.</p>
         </div>
       </header>
+
+      {data?.settings?.enabled !== false ? (
+        <div className="review-reward-point-showcase" aria-label="Mức điểm thưởng">
+          <div>
+            <span>Đơn đối tác</span>
+            <strong>+{partnerRewardPoints.toLocaleString("vi-VN")}</strong>
+            <small>điểm</small>
+          </div>
+          {data.settings?.platforms?.googlemaps !== false ? (
+            <div>
+              <span>Google Maps</span>
+              <strong>+{googleRewardPoints.toLocaleString("vi-VN")}</strong>
+              <small>điểm</small>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {showHistory && data ? (
         <div className="review-reward-view-tabs" role="tablist" aria-label="Chương trình đánh giá">
@@ -358,7 +375,6 @@ export default function ReviewRewardPanel({
                 <strong>Đánh giá Google Maps</strong>
                 <small>Chọn chi nhánh và mở thẳng nơi viết đánh giá</small>
               </span>
-              <em>+{googleRewardPoints.toLocaleString("vi-VN")}</em>
             </button>
           ) : null}
 
@@ -402,7 +418,7 @@ export default function ReviewRewardPanel({
 
           <div className="review-reward-selection-step review-reward-partner-section">
             <div className="review-reward-section-title">
-              <div><h3>Đơn hàng có thể đánh giá</h3><p>Chọn trực tiếp một đơn GrabFood, ShopeeFood hoặc Xanh Ngon.</p></div>
+              <div><h3>Đơn hàng của bạn</h3><p>Chọn đơn bạn đã đánh giá trên ứng dụng đối tác.</p></div>
               <span>{availableOrders.length ? `${availableOrders.length} đơn còn hạn` : "Chưa có đơn còn hạn"}</span>
             </div>
             {reviewOrders.length ? (
@@ -422,8 +438,8 @@ export default function ReviewRewardPanel({
                       </>
                     ) : (
                       <>
-                        <strong>Chọn đơn hàng đã đánh giá</strong>
-                        <small>GrabFood, ShopeeFood hoặc Xanh Ngon</small>
+                        <strong>Chọn đơn hàng</strong>
+                        <small>GrabFood · ShopeeFood · Xanh Ngon</small>
                       </>
                     )}
                   </span>
