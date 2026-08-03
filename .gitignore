@@ -147,6 +147,7 @@ vite.config.ts.timestamp-*
 .local-downloads/
 .local-temp/
 .local-backups/
+.codegraph-v2/
 
 # Local development artifacts and manual rollback files
 RKStorage.db

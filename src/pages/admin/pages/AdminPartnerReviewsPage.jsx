@@ -29,6 +29,12 @@ const badgeTone = (value) => {
   if (value === "running") return "info";
   return "neutral";
 };
+const syncStatusLabel = (value) => {
+  if (value === "success") return "Lần cuối thành công";
+  if (value === "failed" || value === "error") return "Lần cuối thất bại";
+  if (value === "running") return "Đang đồng bộ";
+  return "Chưa đồng bộ";
+};
 const formatReviewDate = (value) => {
   if (!value) return "Chưa có thời gian";
   return new Intl.DateTimeFormat("vi-VN", {
@@ -195,8 +201,11 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
                   <AdminBadge tone={badgeTone(source.auth_status)}>
                     {source.credentials_configured ? "Đã lưu đăng nhập" : "Thiếu đăng nhập"}
                   </AdminBadge>
-                  <AdminBadge tone={badgeTone(source.sync_status)}>
+                  <AdminBadge tone={source.sync_enabled ? "success" : "neutral"}>
                     {source.sync_enabled ? "Đang bật" : "Đã tắt"}
+                  </AdminBadge>
+                  <AdminBadge tone={badgeTone(source.sync_status)}>
+                    {syncStatusLabel(source.sync_status)}
                   </AdminBadge>
                 </div>
                 <button type="button" className="admin-review-edit" onClick={() => edit(source)}>

@@ -37,6 +37,17 @@ const CONCURRENCY = Math.min(8, Math.max(1, Number(process.env.PARTNER_REVIEW_CO
 const HEADLESS = String(process.env.PARTNER_REVIEW_HEADLESS || "true").toLowerCase() !== "false";
 const RUN_ONCE = process.argv.includes("--once");
 const WORKER_ID = `${hostname()}:${process.pid}`;
+const USERNAME_SELECTOR = [
+  "#Username",
+  "input[name='username']",
+  "input[autocomplete='username']",
+  "input[type='email']"
+].join(", ");
+const PASSWORD_SELECTOR = [
+  "input[type='password']",
+  "input[name='password']",
+  "input[autocomplete='current-password']"
+].join(", ");
 
 let lockHandle = null;
 let stopping = false;
@@ -137,28 +148,59 @@ async function findChrome() {
 async function isLoginRequired(page) {
   const url = page.url().toLowerCase();
   if (url.includes("weblogin.grab.com") || url.includes("/login")) return true;
-  return Boolean(await page.$("#Username, input[type='password']"));
+  return Boolean(await page.$(`${USERNAME_SELECTOR}, ${PASSWORD_SELECTOR}`));
 }
 
-async function login(page, source) {
+async function waitForGrabLogin(page, maxAttempts) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await page.waitForSelector(USERNAME_SELECTOR, {
+        visible: true,
+        timeout: 35_000
+      });
+    } catch (error) {
+      if (attempt >= maxAttempts) {
+        const pageText = await page.evaluate(() => document.body?.innerText || "").catch(() => "");
+        if (/securing browser|secure payment environment/i.test(pageText)) {
+          throw new Error("Grab đang giữ trang ở bước kiểm tra bảo mật trình duyệt.");
+        }
+        throw new Error("Grab không hiển thị ô đăng nhập sau bước kiểm tra bảo mật.");
+      }
+      await sleep(attempt * 2_000);
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 60_000 });
+    }
+  }
+  return null;
+}
+
+async function login(page, source, { visible = false } = {}) {
   const credentials = await api("automation_credentials", { source_id: source.id });
   const username = String(credentials.credentials?.username || "");
   const password = String(credentials.credentials?.password || "");
   if (!username || !password) throw new Error("Thiếu tài khoản hoặc mật khẩu trong Supabase Vault.");
 
   await log("Phiên Grab hết hạn, đang đăng nhập lại:", source.display_name);
-  await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
-  await page.waitForSelector("#Username", { timeout: 30_000 });
-  await page.type("#Username", username, { delay: 20 });
+  if (!await isLoginRequired(page)) {
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  }
+  if (visible) {
+    await log("Đang chờ Grab hoàn tất xác minh trên cửa sổ Chrome:", source.display_name);
+  }
+  const usernameInput = await waitForGrabLogin(page, visible ? 10 : 2);
+  if (!usernameInput) throw new Error("Không tìm thấy ô tài khoản Grab.");
+  await usernameInput.type(username, { delay: 20 });
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => null),
-    page.click("button")
+    usernameInput.press("Enter")
   ]);
-  await page.waitForSelector("input[type='password']", { timeout: 30_000 });
-  await page.type("input[type='password']", password, { delay: 20 });
+  const passwordInput = await page.waitForSelector(PASSWORD_SELECTOR, {
+    visible: true,
+    timeout: 35_000
+  });
+  await passwordInput.type(password, { delay: 20 });
   await Promise.all([
     page.waitForNavigation({ waitUntil: "networkidle2", timeout: 45_000 }).catch(() => null),
-    page.click("button")
+    passwordInput.press("Enter")
   ]);
   if (await isLoginRequired(page)) throw new Error("Grab từ chối đăng nhập hoặc yêu cầu xác minh bổ sung.");
 }
@@ -262,21 +304,24 @@ async function collectFeedback(page) {
   }
 }
 
-async function syncSource(source, chromePath) {
+async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleRetry = true) {
   const startedAt = Date.now();
   const profilePath = path.join(PROFILE_ROOT, safeKey(source.account_key || source.id));
   await mkdir(profilePath, { recursive: true });
   const browser = await puppeteer.launch({
     executablePath: chromePath,
     userDataDir: profilePath,
-    headless: HEADLESS,
+    headless,
+    ignoreDefaultArgs: ["--enable-automation"],
     defaultViewport: { width: 1366, height: 900 },
     args: [
       "--no-first-run",
       "--no-default-browser-check",
+      "--disable-blink-features=AutomationControlled",
       "--disable-features=Translate"
     ]
   });
+  let browserClosed = false;
 
   try {
     const pages = await browser.pages();
@@ -286,7 +331,7 @@ async function syncSource(source, chromePath) {
 
     let loggedInNow = false;
     if (await isLoginRequired(page)) {
-      await login(page, source);
+      await login(page, source, { visible: !headless });
       loggedInNow = true;
     } else {
       await log("Dùng lại phiên Grab còn hiệu lực:", source.display_name);
@@ -295,7 +340,7 @@ async function syncSource(source, chromePath) {
     let { reviews, overview, pageCount } = await collectFeedback(page);
     if (!reviews.length) {
       if (await isLoginRequired(page)) {
-        await login(page, source);
+        await login(page, source, { visible: !headless });
         loggedInNow = true;
         const retried = await collectFeedback(page);
         reviews = retried.reviews;
@@ -322,8 +367,18 @@ async function syncSource(source, chromePath) {
       "Đồng bộ thành công:",
       `${source.display_name} - ${result.upserted_count} đánh giá / ${pageCount} trang / ${Math.round((Date.now() - startedAt) / 1000)} giây`
     );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const needsVisibleLogin = /kiểm tra bảo mật|không hiển thị ô đăng nhập/i.test(message);
+    if (headless && allowVisibleRetry && needsVisibleLogin) {
+      await browser.close();
+      browserClosed = true;
+      await log("Grab chặn đăng nhập ẩn, chuyển sang Chrome hiển thị:", source.display_name);
+      return syncSource(source, chromePath, false, false);
+    }
+    throw error;
   } finally {
-    await browser.close();
+    if (!browserClosed) await browser.close();
   }
 }
 
