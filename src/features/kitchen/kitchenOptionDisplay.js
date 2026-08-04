@@ -28,6 +28,12 @@ export function normalizeKitchenOptionText(value = "") {
     .replace(/\s+/g, " ");
 }
 
+export function normalizeKitchenOptionMatchText(value = "") {
+  return normalizeKitchenOptionText(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function normalizeGroupKey(value = "") {
   return normalizeKitchenOptionText(value).replace(/[^a-z0-9]+/g, " ").trim();
 }
