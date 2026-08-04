@@ -3,11 +3,12 @@ import AppShell from "./components/AppShell.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import {
   CatalogPage,
-  DashboardPage,
   InventoryPage,
   StaffPage,
   WorkflowPage
 } from "./components/InventoryPages.jsx";
+import DashboardPage from "./components/DashboardPage.jsx";
+import AppLoadingState from "./components/AppLoadingState.jsx";
 import { useInventoryApp } from "./hooks/useInventoryApp.js";
 
 export default function App() {
@@ -18,13 +19,13 @@ export default function App() {
     return <LoginPage configured={inventory.configured} onSignIn={inventory.signIn} />;
   }
 
-  let page = <DashboardPage data={inventory.data} />;
+  let page = <DashboardPage data={inventory.data} onNavigate={setActivePage} />;
   if (activePage === "inventory") page = <InventoryPage data={inventory.data} />;
   if (["transfers", "receipts", "counts", "reports"].includes(activePage)) {
-    page = <WorkflowPage page={activePage} data={inventory.data} />;
+    page = <WorkflowPage page={activePage} data={inventory.data} onCreateReceipt={inventory.createReceipt} />;
   }
   if (activePage === "catalog") {
-    page = <CatalogPage data={inventory.data} onCreate={inventory.createCatalogEntry} />;
+    page = <CatalogPage data={inventory.data} onCreate={inventory.createCatalogEntry} onSaveNorm={inventory.updateInventoryNorm} />;
   }
   if (activePage === "staff") page = <StaffPage data={inventory.data} />;
 
@@ -39,13 +40,13 @@ export default function App() {
       onSignOut={inventory.signOut}
     >
       {inventory.error ? (
-        <div className="error-banner">
+        <div className="error-banner" role="alert">
           <strong>Chưa tải được dữ liệu kho.</strong>
           <span>{inventory.error}</span>
           <button onClick={inventory.reload}>Thử lại</button>
         </div>
       ) : null}
-      {inventory.loading ? <div className="loading-line" /> : page}
+      {inventory.loading ? <AppLoadingState /> : page}
     </AppShell>
   );
 }

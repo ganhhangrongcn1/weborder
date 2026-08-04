@@ -43,6 +43,7 @@ create table if not exists public.inventory_units (
   unit_type text not null default 'count'
     check (unit_type in ('count', 'weight', 'volume', 'length', 'other')),
   decimal_places smallint not null default 3 check (decimal_places between 0 and 6),
+  description text,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id),
@@ -53,6 +54,7 @@ create table if not exists public.inventory_item_groups (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   name text not null,
+  description text,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   created_by uuid references auth.users(id),
@@ -64,12 +66,13 @@ create table if not exists public.inventory_items (
   code text not null unique,
   name text not null,
   item_type text not null default 'ingredient'
-    check (item_type in ('ingredient', 'finished_good', 'packaging', 'other')),
+    check (item_type in ('ingredient', 'finished_good', 'semi_finished', 'direct_sale', 'other', 'note')),
   group_id uuid references public.inventory_item_groups(id),
   base_unit_id uuid not null references public.inventory_units(id),
   purchase_unit_id uuid references public.inventory_units(id),
   purchase_to_base_ratio numeric(18,6) not null default 1
     check (purchase_to_base_ratio > 0),
+  tracks_inventory boolean not null default true,
   minimum_stock numeric(18,6) not null default 0 check (minimum_stock >= 0),
   is_active boolean not null default true,
   notes text,
@@ -78,6 +81,15 @@ create table if not exists public.inventory_items (
   created_by uuid references auth.users(id),
   updated_at timestamptz not null default now(),
   updated_by uuid references auth.users(id)
+);
+
+create table if not exists public.inventory_item_warehouses (
+  item_id uuid not null references public.inventory_items(id) on delete cascade,
+  warehouse_id uuid not null references public.inventory_warehouses(id) on delete cascade,
+  minimum_stock numeric(18,6) not null default 0 check (minimum_stock >= 0),
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id),
+  primary key (item_id, warehouse_id)
 );
 
 create table if not exists public.inventory_suppliers (
@@ -190,6 +202,8 @@ create index if not exists inventory_user_access_warehouse_idx
   on public.inventory_user_access (warehouse_id) where is_active;
 create index if not exists inventory_items_group_idx
   on public.inventory_items (group_id) where is_active;
+create index if not exists inventory_item_warehouses_warehouse_idx
+  on public.inventory_item_warehouses (warehouse_id, item_id);
 create index if not exists inventory_documents_source_idx
   on public.inventory_documents (source_warehouse_id, created_at desc);
 create index if not exists inventory_documents_destination_idx
@@ -262,6 +276,7 @@ alter table public.inventory_user_access enable row level security;
 alter table public.inventory_units enable row level security;
 alter table public.inventory_item_groups enable row level security;
 alter table public.inventory_items enable row level security;
+alter table public.inventory_item_warehouses enable row level security;
 alter table public.inventory_suppliers enable row level security;
 alter table public.inventory_supplier_items enable row level security;
 alter table public.inventory_documents enable row level security;
@@ -315,6 +330,16 @@ on public.inventory_items for select to authenticated using (true);
 drop policy if exists inventory_items_admin_write on public.inventory_items;
 create policy inventory_items_admin_write
 on public.inventory_items for all to authenticated
+using ((select private.inventory_is_admin()))
+with check ((select private.inventory_is_admin()));
+
+drop policy if exists inventory_item_warehouses_select on public.inventory_item_warehouses;
+create policy inventory_item_warehouses_select
+on public.inventory_item_warehouses for select to authenticated
+using ((select private.inventory_is_admin()) or (select private.inventory_can_access_warehouse(warehouse_id)));
+drop policy if exists inventory_item_warehouses_admin_write on public.inventory_item_warehouses;
+create policy inventory_item_warehouses_admin_write
+on public.inventory_item_warehouses for all to authenticated
 using ((select private.inventory_is_admin()))
 with check ((select private.inventory_is_admin()));
 
@@ -420,6 +445,7 @@ grant select, insert, update, delete on table
   public.inventory_units,
   public.inventory_item_groups,
   public.inventory_items,
+  public.inventory_item_warehouses,
   public.inventory_suppliers,
   public.inventory_supplier_items,
   public.inventory_documents,
