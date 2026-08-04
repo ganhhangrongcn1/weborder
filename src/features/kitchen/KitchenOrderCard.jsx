@@ -5,6 +5,7 @@ import {
   isKitchenRecipeOnlyGroup,
   isKitchenRecipeOnlyOption,
   normalizeKitchenOptionText,
+  normalizeKitchenOptionMatchText,
   parseKitchenOptionLabel
 } from "./kitchenOptionDisplay.js";
 import {
@@ -118,7 +119,7 @@ function buildPaidToppingOptionKeys(paidToppings = []) {
         option.value,
         option.group && option.value ? `${option.group}: ${option.value}` : ""
       ])
-      .map(normalizeKitchenOptionText)
+      .map(normalizeKitchenOptionMatchText)
       .filter(Boolean)
   );
 }
@@ -156,7 +157,7 @@ function areUnitToppingsDone(progress = {}, itemKey = "", unitIndex = 0, paidTop
 function isPaidToppingDisplayOption(option = "", paidToppingKeys = new Set()) {
   const parsed = parseKitchenOptionLabel(option);
   if (isKitchenPaidToppingGroup(parsed.group)) return true;
-  return paidToppingKeys.has(normalizeKitchenOptionText(option));
+  return paidToppingKeys.has(normalizeKitchenOptionMatchText(option));
 }
 
 function formatTime(value = "") {

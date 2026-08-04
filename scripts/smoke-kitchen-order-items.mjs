@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { buildOrderItemStableId, isOrderItemUuid } from "../src/services/orderItemIdentityService.js";
 import { mapWebsiteKitchenItem, resolveWebsiteKitchenItems } from "../src/services/kitchenOrderService.js";
+import { normalizeKitchenOptionMatchText } from "../src/features/kitchen/kitchenOptionDisplay.js";
+
+assert.equal(
+  normalizeKitchenOptionMatchText("Chọn Món Combo: Bánh Tráng Cuốn Bơ"),
+  normalizeKitchenOptionMatchText("Chọn Món Combo Bánh Tráng Cuốn Bơ"),
+  "Kitchen must match Shopee option labels with checklist labels even when the separator is omitted"
+);
 
 const orderRow = {
   id: "GHR-SMOKE-KITCHEN",
