@@ -8,3 +8,8 @@ if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
 } else {
   Write-Host "Không tìm thấy task: $taskName"
 }
+
+$protocolRoot = "HKCU:\Software\Classes\ghr-review-worker"
+if (Test-Path -LiteralPath $protocolRoot) {
+  Remove-Item -LiteralPath $protocolRoot -Recurse -Force
+}

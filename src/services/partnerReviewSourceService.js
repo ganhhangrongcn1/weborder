@@ -24,7 +24,7 @@ async function invoke(payload) {
   const client = await getAdminClient();
   if (!client?.functions?.invoke) return { ok: false, message: "Supabase Admin chưa sẵn sàng." };
 
-  const controller = new AbortController();
+  const controller = new globalThis.AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     let { data: sessionData } = await client.auth.getSession();
@@ -71,7 +71,26 @@ async function invoke(payload) {
 
 export async function listPartnerReviewSources() {
   const result = await invoke({ action: "list" });
-  return { ...result, sources: Array.isArray(result.sources) ? result.sources : [] };
+  return {
+    ...result,
+    sources: Array.isArray(result.sources) ? result.sources : [],
+    settings: result.settings && typeof result.settings === "object" ? result.settings : null
+  };
+}
+
+export async function savePartnerReviewWorkerSettings(syncIntervalMinutes) {
+  return invoke({
+    action: "save_worker_settings",
+    sync_interval_minutes: Number(syncIntervalMinutes)
+  });
+}
+
+export async function requestPartnerStoreControl(sourceId, action) {
+  return invoke({
+    action: "store_control",
+    source_id: toText(sourceId),
+    store_control_action: action === "normal" ? "normal" : "busy"
+  });
 }
 
 export async function listPartnerReviews(filters = {}) {
@@ -100,8 +119,15 @@ export async function savePartnerReviewSource(source = {}) {
     password: String(source.password || ""),
     browser_profile_name: toText(source.browserProfileName),
     sync_enabled: source.syncEnabled !== false,
+    busy_enabled: source.busyEnabled === true,
     auto_reply_enabled: false
   });
 }
 
-export default { listPartnerReviewSources, listPartnerReviews, savePartnerReviewSource };
+export default {
+  listPartnerReviewSources,
+  listPartnerReviews,
+  savePartnerReviewSource,
+  savePartnerReviewWorkerSettings,
+  requestPartnerStoreControl
+};
