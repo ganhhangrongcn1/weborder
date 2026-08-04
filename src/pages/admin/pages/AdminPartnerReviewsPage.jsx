@@ -3,7 +3,9 @@ import Icon from "../../../components/Icon.jsx";
 import {
   listPartnerReviews,
   listPartnerReviewSources,
-  savePartnerReviewSource
+  requestPartnerStoreControl,
+  savePartnerReviewSource,
+  savePartnerReviewWorkerSettings
 } from "../../../services/partnerReviewSourceService.js";
 import { AdminBadge, AdminButton, AdminCard, AdminSwitch } from "../ui/AdminCommon.jsx";
 
@@ -15,10 +17,11 @@ const PLATFORMS = [
 ];
 const EMPTY = {
   id: "", platform: "grabfood", accountKey: "", displayName: "", merchantId: "",
-  branchUuid: "", branchCode: "", username: "", password: "", syncEnabled: true,
+  branchUuid: "", branchCode: "", username: "", password: "", syncEnabled: true, busyEnabled: false,
   loginIdentifierHint: "", credentialsConfigured: false
 };
 const REVIEWS_PER_PAGE = 8;
+const INTERVAL_OPTIONS = [5, 10, 15, 30, 60, 120, 360, 720, 1440];
 const text = (value = "") => String(value || "").trim();
 const branchUuid = (branch) => text(branch?.branch_uuid || branch?.branchUuid || branch?.uuid);
 const branchCode = (branch) => text(branch?.branch_code || branch?.branchCode);
@@ -42,6 +45,20 @@ const formatReviewDate = (value) => {
     timeStyle: "short"
   }).format(new Date(value));
 };
+const intervalLabel = (minutes) => {
+  const value = Number(minutes) || 60;
+  if (value < 60) return `${value} phút`;
+  if (value % 60 === 0) return `${value / 60} giờ`;
+  return `${value} phút`;
+};
+const isStoreControlSelected = (source, action) => {
+  if (source.store_control_action !== action) return false;
+  if (["pending", "running"].includes(source.store_control_status)) return true;
+  if (source.store_control_status !== "success") return false;
+  if (action === "normal") return true;
+  const finishedAt = Date.parse(source.store_control_finished_at || "");
+  return Number.isFinite(finishedAt) && Date.now() < finishedAt + 15 * 60_000;
+};
 
 export default function AdminPartnerReviewsPage({ branches = [] }) {
   const [sources, setSources] = useState([]);
@@ -53,7 +70,10 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
   const [loading, setLoading] = useState(true);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState({ sync_interval_minutes: 60 });
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [storeControlSaving, setStoreControlSaving] = useState("");
 
   const branchOptions = useMemo(
     () => branches.map((branch) => ({
@@ -73,7 +93,10 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
     setLoading(true);
     try {
       const result = await listPartnerReviewSources();
-      if (result.ok) setSources(result.sources);
+      if (result.ok) {
+        setSources(result.sources);
+        if (result.settings) setSettings(result.settings);
+      }
       else setMessage(result.message);
       return result;
     } finally {
@@ -135,6 +158,7 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
       username: "",
       password: "",
       syncEnabled: source.sync_enabled !== false,
+      busyEnabled: source.busy_enabled === true,
       loginIdentifierHint: source.login_identifier_hint || "",
       credentialsConfigured: source.credentials_configured === true
     });
@@ -160,6 +184,33 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
     setSaving(false);
   };
 
+  const saveSchedule = async () => {
+    setSettingsSaving(true);
+    setMessage("");
+    const result = await savePartnerReviewWorkerSettings(settings.sync_interval_minutes);
+    setMessage(result.message || (result.ok ? "Đã cập nhật thời gian đồng bộ." : "Không lưu được thời gian đồng bộ."));
+    if (result.ok && result.settings) setSettings(result.settings);
+    setSettingsSaving(false);
+  };
+
+  const startLocalWorker = () => {
+    window.location.href = "ghr-review-worker://start";
+    setMessage("Đã gửi yêu cầu bật worker trên máy này. Nếu trình duyệt hỏi, anh chọn Mở GHR Partner Review Worker.");
+  };
+
+  const setStoreControl = async (source, action) => {
+    const requestKey = `${source.id}:${action}`;
+    setStoreControlSaving(requestKey);
+    setMessage("");
+    const result = await requestPartnerStoreControl(source.id, action);
+    setMessage(result.message || (result.ok ? "Đã gửi lệnh tới worker." : "Không gửi được lệnh tới worker."));
+    if (result.ok && result.source) {
+      setSources((current) => current.map((item) => item.id === source.id ? result.source : item));
+      window.setTimeout(() => load(), 12000);
+    }
+    setStoreControlSaving("");
+  };
+
   return (
     <div className="admin-review-page">
       {message ? (
@@ -181,6 +232,41 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
         <div><strong>{loading ? "–" : sources.filter((item) => item.credentials_configured).length}</strong><span>Đã có đăng nhập</span></div>
         <div><strong>{loading ? "–" : sources.filter((item) => item.sync_enabled).length}</strong><span>Đang đồng bộ</span></div>
       </div>
+
+      <AdminCard className="admin-review-schedule-card">
+        <div className="admin-review-schedule-copy">
+          <div className="admin-review-schedule-icon"><Icon name="refresh" size={20} /></div>
+          <div>
+            <h2>Lịch đồng bộ tự động</h2>
+            <p>Worker kiểm tra thay đổi mỗi phút và lấy đánh giá theo chu kỳ đã chọn.</p>
+            <small>
+              Lần chạy gần nhất: {formatReviewDate(settings.last_worker_cycle_at)} · Lần kế tiếp: {formatReviewDate(settings.next_worker_cycle_at)}
+            </small>
+          </div>
+        </div>
+        <div className="admin-review-schedule-control">
+          <label>
+            <span>Đồng bộ lại sau mỗi</span>
+            <select
+              value={settings.sync_interval_minutes || 60}
+              onChange={(event) => setSettings((current) => ({
+                ...current,
+                sync_interval_minutes: Number(event.target.value)
+              }))}
+            >
+              {INTERVAL_OPTIONS.map((minutes) => (
+                <option key={minutes} value={minutes}>{intervalLabel(minutes)}</option>
+              ))}
+            </select>
+          </label>
+          <AdminButton type="button" onClick={saveSchedule} disabled={settingsSaving}>
+            {settingsSaving ? "Đang lưu..." : "Lưu lịch"}
+          </AdminButton>
+          <AdminButton type="button" variant="secondary" onClick={startLocalWorker}>
+            <Icon name="play" size={16} /> Bật worker trên máy này
+          </AdminButton>
+        </div>
+      </AdminCard>
 
       <div className="admin-review-layout">
         <AdminCard>
@@ -204,10 +290,33 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
                   <AdminBadge tone={source.sync_enabled ? "success" : "neutral"}>
                     {source.sync_enabled ? "Đang bật" : "Đã tắt"}
                   </AdminBadge>
+                  <AdminBadge tone={source.busy_enabled ? "info" : "neutral"}>
+                    {source.busy_enabled ? "Busy 15 phút" : "Không chỉnh Busy"}
+                  </AdminBadge>
                   <AdminBadge tone={badgeTone(source.sync_status)}>
                     {syncStatusLabel(source.sync_status)}
                   </AdminBadge>
                 </div>
+                {source.platform === "grabfood" ? (
+                  <div className={`admin-review-store-control is-${source.store_control_status || "idle"}`}>
+                    <button
+                      type="button"
+                      className={`is-busy ${isStoreControlSelected(source, "busy") ? "is-selected" : ""}`}
+                      disabled={Boolean(storeControlSaving) || ["pending", "running"].includes(source.store_control_status)}
+                      onClick={() => setStoreControl(source, "busy")}
+                    >
+                      {storeControlSaving === `${source.id}:busy` ? "Đang gửi..." : "Bận 15 phút"}
+                    </button>
+                    <button
+                      type="button"
+                      className={`is-normal ${isStoreControlSelected(source, "normal") ? "is-selected" : ""}`}
+                      disabled={Boolean(storeControlSaving) || ["pending", "running"].includes(source.store_control_status)}
+                      onClick={() => setStoreControl(source, "normal")}
+                    >
+                      {storeControlSaving === `${source.id}:normal` ? "Đang gửi..." : "Mở bình thường"}
+                    </button>
+                  </div>
+                ) : null}
                 <button type="button" className="admin-review-edit" onClick={() => edit(source)}>
                   <Icon name="edit" size={15} /> Sửa
                 </button>
@@ -362,6 +471,13 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
               <div className="admin-review-switch is-wide">
                 <div><strong>Tự động đồng bộ</strong><small>Cho phép n8n xử lý gian hàng này.</small></div>
                 <AdminSwitch checked={form.syncEnabled} onChange={(checked) => setForm({ ...form, syncEnabled: checked })} />
+              </div>
+              <div className="admin-review-switch is-wide">
+                <div>
+                  <strong>Tự động kéo Bận 15 phút</strong>
+                  <small>Chỉ áp dụng cho gian hàng này khi worker đồng bộ; cửa hàng đang đóng sẽ được giữ nguyên.</small>
+                </div>
+                <AdminSwitch checked={form.busyEnabled} onChange={(checked) => setForm({ ...form, busyEnabled: checked })} />
               </div>
               <div className="admin-review-actions is-wide">
                 <AdminButton type="button" variant="secondary" onClick={() => setFormOpen(false)}>Hủy</AdminButton>

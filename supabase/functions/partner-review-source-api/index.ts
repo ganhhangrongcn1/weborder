@@ -19,6 +19,24 @@ const hasAutomationAccess = (request: Request) => {
   const provided = text(request.headers.get("x-automation-secret"));
   return Boolean(expected && provided && provided === expected);
 };
+const boundedIntervalMinutes = (value: unknown) =>
+  Math.min(1440, Math.max(5, Math.round(Number(value) || 60)));
+
+async function getWorkerSettings(client: ReturnType<typeof createClient>) {
+  const { data, error } = await client
+    .from("partner_review_worker_settings")
+    .select("sync_interval_minutes,last_worker_cycle_at,next_worker_cycle_at,last_worker_id,updated_at")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error) throw error;
+  return {
+    sync_interval_minutes: boundedIntervalMinutes(data?.sync_interval_minutes),
+    last_worker_cycle_at: data?.last_worker_cycle_at || null,
+    next_worker_cycle_at: data?.next_worker_cycle_at || null,
+    last_worker_id: text(data?.last_worker_id),
+    updated_at: data?.updated_at || null
+  };
+}
 
 function publicSource(row: Row) {
   return {
@@ -36,6 +54,12 @@ function publicSource(row: Row) {
     auth_status: text(row.auth_status || "not_configured"),
     sync_status: text(row.sync_status || "idle"),
     sync_enabled: row.sync_enabled !== false,
+    busy_enabled: row.busy_enabled === true,
+    store_control_action: text(row.store_control_action),
+    store_control_status: text(row.store_control_status || "idle"),
+    store_control_requested_at: row.store_control_requested_at || null,
+    store_control_finished_at: row.store_control_finished_at || null,
+    store_control_error: text(row.store_control_error),
     auto_reply_enabled: false,
     last_auth_at: row.last_auth_at || null,
     token_expires_at: row.token_expires_at || null,
@@ -97,7 +121,64 @@ async function listSources(client: ReturnType<typeof createClient>, admin: Row) 
     console.error("[partner-review-source-api] list failed", error);
     return reply({ ok: false, message: "Không tải được danh sách nguồn đánh giá." }, 500);
   }
-  return reply({ ok: true, sources: (data || []).map((row) => publicSource(row as Row)) });
+  try {
+    const settings = await getWorkerSettings(client);
+    return reply({ ok: true, sources: (data || []).map((row) => publicSource(row as Row)), settings });
+  } catch (settingsError) {
+    console.error("[partner-review-source-api] worker settings failed", settingsError);
+    return reply({ ok: false, message: "Không tải được lịch đồng bộ đánh giá." }, 500);
+  }
+}
+
+async function saveWorkerSettings(client: ReturnType<typeof createClient>, body: Row) {
+  const syncIntervalMinutes = Math.round(Number(body.sync_interval_minutes));
+  if (!Number.isInteger(syncIntervalMinutes) || syncIntervalMinutes < 5 || syncIntervalMinutes > 1440) {
+    return reply({ ok: false, message: "Thời gian đồng bộ phải từ 5 phút đến 24 giờ." }, 400);
+  }
+  const updatedAt = new Date().toISOString();
+  const { error } = await client.from("partner_review_worker_settings").upsert({
+    id: "default",
+    sync_interval_minutes: syncIntervalMinutes,
+    updated_at: updatedAt
+  }, { onConflict: "id" });
+  if (error) {
+    console.error("[partner-review-source-api] worker settings save failed", error);
+    return reply({ ok: false, message: "Không lưu được lịch đồng bộ đánh giá." }, 500);
+  }
+  return reply({ ok: true, message: "Đã cập nhật thời gian đồng bộ.", settings: await getWorkerSettings(client) });
+}
+
+async function requestStoreControl(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
+  const sourceId = text(body.source_id);
+  const action = text(body.store_control_action).toLowerCase();
+  if (!sourceId || !["busy", "normal"].includes(action)) {
+    return reply({ ok: false, message: "Lệnh trạng thái cửa hàng không hợp lệ." }, 400);
+  }
+  const now = new Date().toISOString();
+  let query = client
+    .from("partner_review_sources")
+    .update({
+      store_control_action: action,
+      store_control_status: "pending",
+      store_control_requested_at: now,
+      store_control_finished_at: null,
+      store_control_error: null,
+      ...(action === "normal" ? { busy_enabled: false } : {}),
+      updated_at: now
+    })
+    .eq("id", sourceId)
+    .eq("platform", "grabfood");
+  if (text(admin.branch_uuid)) query = query.eq("branch_uuid", text(admin.branch_uuid));
+  const { data, error } = await query.select("*").maybeSingle();
+  if (error || !data) {
+    console.error("[partner-review-source-api] store control request failed", error);
+    return reply({ ok: false, message: "Không gửi được lệnh tới cửa hàng Grab." }, 500);
+  }
+  return reply({
+    ok: true,
+    message: action === "busy" ? "Đã gửi lệnh Bận 15 phút." : "Đã gửi lệnh Mở bình thường.",
+    source: publicSource(data as Row)
+  });
 }
 
 async function listReviews(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
@@ -197,6 +278,7 @@ async function saveSource(client: ReturnType<typeof createClient>, admin: Row, b
         ? text(existing?.auth_status || "ready")
         : "not_configured",
       sync_enabled: body.sync_enabled !== false,
+      busy_enabled: body.busy_enabled === true,
       auto_reply_enabled: false,
       updated_at: new Date().toISOString()
     }, { onConflict: "platform,account_key" })
@@ -324,7 +406,8 @@ async function getAutomationSources(
   const selected = ((data || []) as Row[])
     .sort((left, right) => attemptTime(left) - attemptTime(right))
     .slice(0, limit);
-  if (!selected.length) return reply({ ok: true, sources: [] });
+  const settings = await getWorkerSettings(client);
+  if (!selected.length) return reply({ ok: true, sources: [], settings });
 
   const now = new Date().toISOString();
   const workerId = text(body.worker_id);
@@ -345,7 +428,122 @@ async function getAutomationSources(
     console.error("[partner-review-source-api] source batch claim failed", updateError);
     return reply({ ok: false, message: "Không nhận được nhóm đồng bộ." }, 500);
   }
-  return reply({ ok: true, sources: selected.map(publicSource) });
+  return reply({ ok: true, sources: selected.map(publicSource), settings });
+}
+
+async function getAutomationSettings(request: Request, client: ReturnType<typeof createClient>) {
+  if (!hasAutomationAccess(request)) return reply({ ok: false, message: "Automation secret không hợp lệ." }, 403);
+  return reply({ ok: true, settings: await getWorkerSettings(client) });
+}
+
+async function getAutomationBusyPermission(
+  request: Request,
+  client: ReturnType<typeof createClient>,
+  body: Row
+) {
+  if (!hasAutomationAccess(request)) {
+    return reply({ ok: false, message: "Automation secret không hợp lệ." }, 403);
+  }
+  const sourceId = text(body.source_id);
+  if (!sourceId) return reply({ ok: false, message: "Thiếu nguồn đồng bộ." }, 400);
+  const { data, error } = await client
+    .from("partner_review_sources")
+    .select("id,busy_enabled,sync_enabled")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (error || !data) return reply({ ok: false, message: "Không tìm thấy nguồn đồng bộ." }, 404);
+  return reply({
+    ok: true,
+    source_id: sourceId,
+    busy_enabled: data.sync_enabled === true && data.busy_enabled === true
+  });
+}
+
+async function claimAutomationStoreCommands(
+  request: Request,
+  client: ReturnType<typeof createClient>,
+  body: Row
+) {
+  if (!hasAutomationAccess(request)) {
+    return reply({ ok: false, message: "Automation secret không hợp lệ." }, 403);
+  }
+  const limit = Math.min(5, Math.max(1, Number(body.limit) || 5));
+  const { data, error } = await client
+    .from("partner_review_sources")
+    .select("*")
+    .eq("platform", "grabfood")
+    .eq("store_control_status", "pending")
+    .order("store_control_requested_at", { ascending: true })
+    .limit(limit);
+  if (error) return reply({ ok: false, message: "Không đọc được lệnh trạng thái cửa hàng." }, 500);
+  const claimed: Row[] = [];
+  for (const source of data || []) {
+    const { data: row } = await client
+      .from("partner_review_sources")
+      .update({ store_control_status: "running", store_control_error: null })
+      .eq("id", source.id)
+      .eq("store_control_status", "pending")
+      .select("*")
+      .maybeSingle();
+    if (row) claimed.push(row as Row);
+  }
+  return reply({ ok: true, sources: claimed.map(publicSource) });
+}
+
+async function finishAutomationStoreCommand(
+  request: Request,
+  client: ReturnType<typeof createClient>,
+  body: Row
+) {
+  if (!hasAutomationAccess(request)) {
+    return reply({ ok: false, message: "Automation secret không hợp lệ." }, 403);
+  }
+  const sourceId = text(body.source_id);
+  const requestedAt = text(body.store_control_requested_at);
+  const succeeded = body.succeeded === true;
+  if (!sourceId || !requestedAt) return reply({ ok: false, message: "Thiếu định danh lệnh." }, 400);
+  const result = object(body.result);
+  const errorMessage = text(body.error).slice(0, 500);
+  const { data: source } = await client
+    .from("partner_review_sources")
+    .select("metadata")
+    .eq("id", sourceId)
+    .maybeSingle();
+  const { error } = await client
+    .from("partner_review_sources")
+    .update({
+      store_control_status: succeeded ? "success" : "error",
+      store_control_finished_at: new Date().toISOString(),
+      store_control_error: succeeded ? null : errorMessage || "Grab không nhận lệnh.",
+      metadata: {
+        ...object(source?.metadata),
+        last_store_control_result: result
+      },
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", sourceId)
+    .eq("store_control_requested_at", requestedAt);
+  if (error) return reply({ ok: false, message: "Không ghi được kết quả lệnh cửa hàng." }, 500);
+  return reply({ ok: true });
+}
+
+async function saveAutomationHeartbeat(
+  request: Request,
+  client: ReturnType<typeof createClient>,
+  body: Row
+) {
+  if (!hasAutomationAccess(request)) return reply({ ok: false, message: "Automation secret không hợp lệ." }, 403);
+  const now = new Date().toISOString();
+  const nextRunAt = new Date(text(body.next_run_at));
+  if (!Number.isFinite(nextRunAt.getTime())) return reply({ ok: false, message: "Thời gian chạy kế tiếp không hợp lệ." }, 400);
+  const { error } = await client.from("partner_review_worker_settings").update({
+    last_worker_cycle_at: now,
+    next_worker_cycle_at: nextRunAt.toISOString(),
+    last_worker_id: text(body.worker_id),
+    updated_at: now
+  }).eq("id", "default");
+  if (error) return reply({ ok: false, message: "Không ghi được lịch chạy worker." }, 500);
+  return reply({ ok: true });
 }
 
 async function markAutomationFailure(
@@ -474,6 +672,7 @@ async function saveAutomationReviews(
   const reviews = arrayValue(body.reviews).map((review) => object(review));
   const overview = object(body.overview);
   const session = object(body.session);
+  const busyResult = object(body.busy_result);
   if (!sourceId) return reply({ ok: false, message: "Thieu nguon dong bo." }, 400);
 
   const { data: source } = await client
@@ -559,7 +758,9 @@ async function saveAutomationReviews(
         metadata: {
           ...object(source.metadata),
           feedback_overview: overview,
-          last_fetched_count: reviews.length
+          last_fetched_count: reviews.length,
+          last_busy_result: busyResult,
+          ...(busyResult.applied === true ? { last_busy_at: finishedAt } : {})
         },
         updated_at: finishedAt
       })
@@ -626,6 +827,21 @@ Deno.serve(async (request) => {
   if (action === "automation_sources") {
     return getAutomationSources(request, client, body);
   }
+  if (action === "automation_settings") {
+    return getAutomationSettings(request, client);
+  }
+  if (action === "automation_busy_permission") {
+    return getAutomationBusyPermission(request, client, body);
+  }
+  if (action === "automation_store_commands") {
+    return claimAutomationStoreCommands(request, client, body);
+  }
+  if (action === "automation_store_command_result") {
+    return finishAutomationStoreCommand(request, client, body);
+  }
+  if (action === "automation_heartbeat") {
+    return saveAutomationHeartbeat(request, client, body);
+  }
   if (action === "automation_credentials") {
     return getAutomationCredentials(request, client, body);
   }
@@ -644,5 +860,7 @@ Deno.serve(async (request) => {
   if (action === "list") return listSources(client, admin);
   if (action === "list_reviews") return listReviews(client, admin, body);
   if (action === "save") return saveSource(client, admin, body);
+  if (action === "save_worker_settings") return saveWorkerSettings(client, body);
+  if (action === "store_control") return requestStoreControl(client, admin, body);
   return reply({ ok: false, message: "Action không được hỗ trợ." }, 400);
 });
