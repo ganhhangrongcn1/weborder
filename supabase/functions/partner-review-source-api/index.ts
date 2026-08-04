@@ -148,6 +148,218 @@ async function getAdmin(request: Request, serviceClient: ReturnType<typeof creat
   return profile as Row;
 }
 
+function normalizePhoneKey(value: unknown) {
+  const digits = text(value).replace(/\D/g, "");
+  if (/^84\d{9}$/.test(digits)) return `0${digits.slice(2)}`;
+  return digits;
+}
+
+function phoneCandidates(phoneKeys: string[]) {
+  const values = new Set<string>();
+  phoneKeys.forEach((phoneKey) => {
+    const normalized = normalizePhoneKey(phoneKey);
+    if (!normalized) return;
+    values.add(normalized);
+    if (/^0\d{9}$/.test(normalized)) {
+      values.add(`84${normalized.slice(1)}`);
+      values.add(`+84${normalized.slice(1)}`);
+    }
+  });
+  return [...values];
+}
+
+function maskPhone(value: unknown) {
+  const phone = normalizePhoneKey(value);
+  if (phone.length < 7) return "";
+  return `${phone.slice(0, 3)} *** ${phone.slice(-3)}`;
+}
+
+function reviewOrderKey(platform: unknown, externalOrderId: unknown) {
+  return `${text(platform).toLowerCase()}::${text(externalOrderId)}`;
+}
+
+function partnerOrderPhoneKey(order: Row) {
+  return normalizePhoneKey(
+    order.customer_phone_key || order.customer_phone || order.claimed_customer_phone
+  );
+}
+
+function numeric(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function timestamp(value: unknown) {
+  const parsed = Date.parse(text(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function enrichReviews(
+  client: ReturnType<typeof createClient>,
+  admin: Row,
+  reviewRows: Row[]
+) {
+  const externalOrderIds = [...new Set(
+    reviewRows.map((review) => text(review.external_order_id)).filter(Boolean)
+  )];
+  if (!externalOrderIds.length) return reviewRows;
+
+  let orderQuery = client
+    .from("partner_orders")
+    .select(`
+      id,order_code,display_order_code,nexpos_order_id,partner_source,
+      branch_uuid,branch_code,branch_name,customer_name,customer_phone,
+      customer_phone_key,claimed_customer_phone,total_amount,order_status,
+      kitchen_status,order_time,created_at
+    `)
+    .in("nexpos_order_id", externalOrderIds);
+  if (text(admin.branch_uuid)) orderQuery = orderQuery.eq("branch_uuid", text(admin.branch_uuid));
+  const { data: orderData, error: orderError } = await orderQuery;
+  if (orderError) throw orderError;
+
+  const matchedOrders = (orderData || []) as Row[];
+  const orderByReviewKey = new Map<string, Row>();
+  matchedOrders.forEach((order) => {
+    const key = reviewOrderKey(order.partner_source, order.nexpos_order_id);
+    const current = orderByReviewKey.get(key);
+    if (!current || timestamp(order.order_time || order.created_at) > timestamp(current.order_time || current.created_at)) {
+      orderByReviewKey.set(key, order);
+    }
+  });
+
+  const matchedOrderIds = matchedOrders.map((order) => text(order.id)).filter(Boolean);
+  let itemRows: Row[] = [];
+  if (matchedOrderIds.length) {
+    const { data, error } = await client
+      .from("partner_order_items")
+      .select(`
+        id,partner_order_id,partner_item_name,web_product_name,quantity,
+        unit_price,line_total,options,note,item_status,line_index
+      `)
+      .in("partner_order_id", matchedOrderIds)
+      .order("line_index", { ascending: true });
+    if (error) throw error;
+    itemRows = (data || []) as Row[];
+  }
+  const itemsByOrderId = new Map<string, Row[]>();
+  itemRows.forEach((item) => {
+    const orderId = text(item.partner_order_id);
+    const current = itemsByOrderId.get(orderId) || [];
+    current.push(item);
+    itemsByOrderId.set(orderId, current);
+  });
+
+  const phoneKeys = [...new Set(matchedOrders.map(partnerOrderPhoneKey).filter((phone) => phone.length >= 9))];
+  const candidates = phoneCandidates(phoneKeys);
+  const partnerHistoryById = new Map<string, Row>();
+  let webHistory: Row[] = [];
+  let profiles: Row[] = [];
+  if (candidates.length) {
+    const partnerHistorySelect = "id,customer_phone_key,customer_phone,claimed_customer_phone,total_amount,order_time,created_at";
+    const [byKey, byPhone, byClaimed, webResult, profileResult] = await Promise.all([
+      client.from("partner_orders").select(partnerHistorySelect).in("customer_phone_key", candidates),
+      client.from("partner_orders").select(partnerHistorySelect).in("customer_phone", candidates),
+      client.from("partner_orders").select(partnerHistorySelect).in("claimed_customer_phone", candidates),
+      client.from("orders").select("id,customer_phone,total_amount,created_at").in("customer_phone", candidates),
+      client.from("profiles").select("id,phone,name,total_orders,total_spent,member_rank,status").in("phone", candidates)
+    ]);
+    [byKey, byPhone, byClaimed].forEach((result) => {
+      if (result.error) console.error("[partner-review-source-api] customer partner history failed", result.error);
+      ((result.data || []) as Row[]).forEach((order) => partnerHistoryById.set(text(order.id), order));
+    });
+    if (webResult.error) console.error("[partner-review-source-api] customer web history failed", webResult.error);
+    if (profileResult.error) console.error("[partner-review-source-api] customer profile lookup failed", profileResult.error);
+    webHistory = (webResult.data || []) as Row[];
+    profiles = (profileResult.data || []) as Row[];
+  }
+
+  const ordersByPhone = new Map<string, Row[]>();
+  const addHistory = (order: Row, phoneValue: unknown) => {
+    const phoneKey = normalizePhoneKey(phoneValue);
+    if (phoneKey.length < 9) return;
+    const current = ordersByPhone.get(phoneKey) || [];
+    current.push(order);
+    ordersByPhone.set(phoneKey, current);
+  };
+  [...partnerHistoryById.values()].forEach((order) => addHistory(order, partnerOrderPhoneKey(order)));
+  webHistory.forEach((order) => addHistory(order, order.customer_phone));
+
+  const profilesByPhone = new Map<string, Row>();
+  profiles.forEach((profile) => {
+    const phoneKey = normalizePhoneKey(profile.phone);
+    if (phoneKey) profilesByPhone.set(phoneKey, profile);
+  });
+
+  const reviewsByPhone = new Map<string, Row[]>();
+  reviewRows.forEach((review) => {
+    const order = orderByReviewKey.get(reviewOrderKey(review.platform, review.external_order_id));
+    const phoneKey = order ? partnerOrderPhoneKey(order) : "";
+    if (!phoneKey) return;
+    const current = reviewsByPhone.get(phoneKey) || [];
+    current.push(review);
+    reviewsByPhone.set(phoneKey, current);
+  });
+
+  return reviewRows.map((review) => {
+    const order = orderByReviewKey.get(reviewOrderKey(review.platform, review.external_order_id));
+    if (!order) return review;
+    const phoneKey = partnerOrderPhoneKey(order);
+    const customerOrders = ordersByPhone.get(phoneKey) || [];
+    const customerReviews = reviewsByPhone.get(phoneKey) || [];
+    const profile = profilesByPhone.get(phoneKey);
+    const orderCount = new Set(customerOrders.map((item) => text(item.id))).size;
+    const totalSpent = customerOrders.reduce((sum, item) => sum + numeric(item.total_amount), 0);
+    const reviewCount = customerReviews.length;
+    const averageRating = reviewCount
+      ? customerReviews.reduce((sum, item) => sum + numeric(item.rating), 0) / reviewCount
+      : 0;
+    const lastOrder = [...customerOrders].sort(
+      (left, right) => timestamp(right.order_time || right.created_at) - timestamp(left.order_time || left.created_at)
+    )[0];
+    return {
+      ...review,
+      linked_order: {
+        id: text(order.id),
+        order_code: text(order.display_order_code || order.order_code),
+        nexpos_order_id: text(order.nexpos_order_id),
+        partner_source: text(order.partner_source),
+        branch_code: text(order.branch_code),
+        branch_name: text(order.branch_name),
+        customer_name: text(order.customer_name),
+        customer_phone: phoneKey,
+        customer_phone_masked: maskPhone(phoneKey),
+        total_amount: numeric(order.total_amount),
+        order_status: text(order.order_status),
+        kitchen_status: text(order.kitchen_status),
+        order_time: order.order_time || order.created_at || null,
+        items: (itemsByOrderId.get(text(order.id)) || []).map((item) => ({
+          id: text(item.id),
+          name: text(item.web_product_name || item.partner_item_name) || "Món chưa có tên",
+          quantity: numeric(item.quantity) || 1,
+          unit_price: numeric(item.unit_price),
+          line_total: numeric(item.line_total),
+          options: item.options || [],
+          note: text(item.note),
+          status: text(item.item_status)
+        }))
+      },
+      customer_insights: {
+        profile_id: text(profile?.id),
+        name: text(profile?.name || order.customer_name || review.customer_display_name),
+        phone: phoneKey,
+        phone_masked: maskPhone(phoneKey),
+        member_rank: text(profile?.member_rank),
+        order_count: Math.max(orderCount, numeric(profile?.total_orders)),
+        total_spent: Math.max(totalSpent, numeric(profile?.total_spent)),
+        review_count: reviewCount,
+        average_rating: Math.round(averageRating * 10) / 10,
+        low_rating_count: customerReviews.filter((item) => numeric(item.rating) <= 3).length,
+        last_order_at: lastOrder?.order_time || lastOrder?.created_at || null
+      }
+    };
+  });
+}
+
 async function storeSecret(
   client: ReturnType<typeof createClient>,
   value: string,
@@ -291,7 +503,13 @@ async function listReviews(client: ReturnType<typeof createClient>, admin: Row, 
     console.error("[partner-review-source-api] review list failed", error);
     return reply({ ok: false, message: "Không tải được danh sách đánh giá." }, 500);
   }
-  return reply({ ok: true, reviews: data || [] });
+  try {
+    const reviews = await enrichReviews(client, admin, (data || []) as Row[]);
+    return reply({ ok: true, reviews });
+  } catch (enrichmentError) {
+    console.error("[partner-review-source-api] review enrichment failed", enrichmentError);
+    return reply({ ok: true, reviews: data || [], enrichment_warning: true });
+  }
 }
 
 async function saveSource(client: ReturnType<typeof createClient>, admin: Row, body: Row) {

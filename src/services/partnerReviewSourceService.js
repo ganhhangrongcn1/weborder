@@ -104,7 +104,7 @@ export async function listPartnerReviews(filters = {}) {
     branch_uuid: toText(filters.branchUuid),
     platform: toText(filters.platform),
     rating: Number(filters.rating) || 0,
-    limit: Number(filters.limit) || 100
+    limit: Number(filters.limit) || 200
   });
   return { ...result, reviews: Array.isArray(result.reviews) ? result.reviews : [] };
 }
