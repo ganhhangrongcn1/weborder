@@ -85,6 +85,10 @@ export async function savePartnerReviewWorkerSettings(syncIntervalMinutes) {
   });
 }
 
+export async function requestPartnerReviewWorkerStart() {
+  return invoke({ action: "request_worker_start" });
+}
+
 export async function requestPartnerStoreControl(sourceId, action) {
   return invoke({
     action: "store_control",
@@ -129,5 +133,6 @@ export default {
   listPartnerReviews,
   savePartnerReviewSource,
   savePartnerReviewWorkerSettings,
+  requestPartnerReviewWorkerStart,
   requestPartnerStoreControl
 };

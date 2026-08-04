@@ -148,6 +148,23 @@ async function saveWorkerSettings(client: ReturnType<typeof createClient>, body:
   return reply({ ok: true, message: "Đã cập nhật thời gian đồng bộ.", settings: await getWorkerSettings(client) });
 }
 
+async function requestWorkerStart(client: ReturnType<typeof createClient>) {
+  const now = new Date().toISOString();
+  const { error } = await client
+    .from("partner_review_worker_settings")
+    .update({ next_worker_cycle_at: now, updated_at: now })
+    .eq("id", "default");
+  if (error) {
+    console.error("[partner-review-source-api] worker start request failed", error);
+    return reply({ ok: false, message: "Không gửi được yêu cầu bật worker." }, 500);
+  }
+  return reply({
+    ok: true,
+    message: "Đã gửi yêu cầu. Worker trên máy đồng bộ sẽ tự bật trong tối đa 1 phút.",
+    settings: await getWorkerSettings(client)
+  });
+}
+
 async function requestStoreControl(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
   const sourceId = text(body.source_id);
   const action = text(body.store_control_action).toLowerCase();
@@ -861,6 +878,7 @@ Deno.serve(async (request) => {
   if (action === "list_reviews") return listReviews(client, admin, body);
   if (action === "save") return saveSource(client, admin, body);
   if (action === "save_worker_settings") return saveWorkerSettings(client, body);
+  if (action === "request_worker_start") return requestWorkerStart(client);
   if (action === "store_control") return requestStoreControl(client, admin, body);
   return reply({ ok: false, message: "Action không được hỗ trợ." }, 400);
 });

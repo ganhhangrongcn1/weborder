@@ -5,6 +5,7 @@ import {
   access,
   mkdir,
   open,
+  readFile,
   rm,
   stat,
   writeFile
@@ -715,7 +716,17 @@ async function acquireLock() {
   } catch (error) {
     if (error?.code !== "EEXIST") throw error;
     const lockStat = await stat(LOCK_PATH).catch(() => null);
-    if (!lockStat || Date.now() - lockStat.mtimeMs > 6 * 60 * 60_000) {
+    const lockData = JSON.parse(await readFile(LOCK_PATH, "utf8").catch(() => "{}"));
+    const lockPid = Number(lockData?.pid);
+    let lockProcessAlive = Number.isInteger(lockPid) && lockPid > 0;
+    if (lockProcessAlive) {
+      try {
+        process.kill(lockPid, 0);
+      } catch {
+        lockProcessAlive = false;
+      }
+    }
+    if (!lockProcessAlive || !lockStat || Date.now() - lockStat.mtimeMs > 6 * 60 * 60_000) {
       await rm(LOCK_PATH, { force: true });
       lockHandle = await open(LOCK_PATH, "wx");
     } else {

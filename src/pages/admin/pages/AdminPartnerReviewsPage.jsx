@@ -4,6 +4,7 @@ import {
   listPartnerReviews,
   listPartnerReviewSources,
   requestPartnerStoreControl,
+  requestPartnerReviewWorkerStart,
   savePartnerReviewSource,
   savePartnerReviewWorkerSettings
 } from "../../../services/partnerReviewSourceService.js";
@@ -72,6 +73,7 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({ sync_interval_minutes: 60 });
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [workerStarting, setWorkerStarting] = useState(false);
   const [message, setMessage] = useState("");
   const [storeControlSaving, setStoreControlSaving] = useState("");
 
@@ -193,9 +195,13 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
     setSettingsSaving(false);
   };
 
-  const startLocalWorker = () => {
-    window.location.href = "ghr-review-worker://start";
-    setMessage("Đã gửi yêu cầu bật worker trên máy này. Nếu trình duyệt hỏi, anh chọn Mở GHR Partner Review Worker.");
+  const startLocalWorker = async () => {
+    setWorkerStarting(true);
+    setMessage("");
+    const result = await requestPartnerReviewWorkerStart();
+    setMessage(result.message || (result.ok ? "Đã gửi yêu cầu bật worker." : "Không gửi được yêu cầu bật worker."));
+    if (result.ok && result.settings) setSettings(result.settings);
+    setWorkerStarting(false);
   };
 
   const setStoreControl = async (source, action) => {
@@ -262,8 +268,8 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
           <AdminButton type="button" onClick={saveSchedule} disabled={settingsSaving}>
             {settingsSaving ? "Đang lưu..." : "Lưu lịch"}
           </AdminButton>
-          <AdminButton type="button" variant="secondary" onClick={startLocalWorker}>
-            <Icon name="play" size={16} /> Bật worker trên máy này
+          <AdminButton type="button" variant="secondary" onClick={startLocalWorker} disabled={workerStarting}>
+            <Icon name="play" size={16} /> {workerStarting ? "Đang gửi..." : "Bật worker"}
           </AdminButton>
         </div>
       </AdminCard>
