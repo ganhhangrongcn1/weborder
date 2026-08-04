@@ -21,6 +21,7 @@
         "smoke:kitchen": "node scripts/smoke-kitchen-order-items.mjs",
         "reviews:worker": "node scripts/partner-review-worker.mjs",
         "reviews:worker:once": "node scripts/partner-review-worker.mjs --once",
+        "test:partner-review-worker": "node --test scripts/partner-review-login-policy.test.mjs",
         "reviews:worker:install": "powershell -ExecutionPolicy Bypass -File scripts/install-partner-review-worker-task.ps1",
         "reviews:worker:uninstall": "powershell -ExecutionPolicy Bypass -File scripts/uninstall-partner-review-worker-task.ps1",
         "supabase": "supabase",
@@ -40,6 +41,7 @@
         "react-dom": "18.2.0",
         "react-router-dom": "^6.30.3",
         "tailwindcss": "3.4.17",
+        "tough-cookie": "6.0.0",
         "tus-js-client": "^4.3.1",
         "vite": "5.4.19"
     },

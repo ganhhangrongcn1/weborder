@@ -15,6 +15,14 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
+import { loginGrabDirect } from "./grab-direct-auth.mjs";
+import {
+  LOGIN_RETRY_DELAYS_MS,
+  classifyGrabLoginFailure,
+  isRetryableGrabLoginFailure,
+  isTransientBrowserFailure,
+  loginSpacingMs
+} from "./partner-review-login-policy.mjs";
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 loadEnv({ path: path.join(PROJECT_ROOT, ".env.partner-review-worker"), override: false });
@@ -55,6 +63,9 @@ const PASSWORD_SELECTOR = [
 
 let lockHandle = null;
 let stopping = false;
+let nextLoginAllowedAt = 0;
+let loginQueue = Promise.resolve();
+const accountQueues = new Map();
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const safeKey = (value) => String(value || "source").replace(/[^a-zA-Z0-9_-]+/g, "_");
@@ -65,6 +76,46 @@ const cookieHeader = (cookies) => cookies
   .join("; ");
 const CLOSED_STORE_REASONS = new Set([3, 4, 5, 7, 8]);
 const PAUSED_STORE_REASONS = new Map([[1, "TEMPPAUSED"], [2, "OPSPAUSED"], [6, "OPSPAUSED"]]);
+
+async function withExclusiveLogin(task) {
+  const previousLogin = loginQueue;
+  let releaseLogin;
+  loginQueue = new Promise((resolve) => {
+    releaseLogin = resolve;
+  });
+  await previousLogin;
+  try {
+    return await task();
+  } finally {
+    releaseLogin();
+  }
+}
+
+async function waitForLoginSlot(source) {
+  const waitMs = Math.max(nextLoginAllowedAt - Date.now(), 0);
+  if (waitMs > 0) {
+    await log("Giãn lượt đăng nhập để tránh Grab giới hạn:", `${source.display_name} - ${Math.ceil(waitMs / 1000)} giây`);
+    await sleep(waitMs);
+  }
+  nextLoginAllowedAt = Date.now() + loginSpacingMs();
+}
+
+async function withAccountLock(source, task) {
+  const key = safeKey(source.account_key || source.id);
+  const previous = accountQueues.get(key) || Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => {
+    release = resolve;
+  });
+  accountQueues.set(key, current);
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+    if (accountQueues.get(key) === current) accountQueues.delete(key);
+  }
+}
 
 function isFeedbackPage(page) {
   try {
@@ -192,13 +243,31 @@ async function waitForGrabLogin(page, maxAttempts) {
   return null;
 }
 
-async function login(page, source, { visible = false } = {}) {
-  const credentials = await api("automation_credentials", { source_id: source.id });
-  const username = String(credentials.credentials?.username || "");
-  const password = String(credentials.credentials?.password || "");
-  if (!username || !password) throw new Error("Thiếu tài khoản hoặc mật khẩu trong Supabase Vault.");
+async function restoreStoredSession(page, source) {
+  try {
+    const response = await api("automation_credentials", { source_id: source.id });
+    const rawSession = String(response.credentials?.session || "").trim();
+    if (!rawSession) return response;
+    const session = JSON.parse(rawSession);
+    const cookies = Array.isArray(session?.cookies)
+      ? session.cookies.filter((cookie) => cookie?.name && cookie?.value && (cookie?.domain || cookie?.url))
+      : [];
+    if (cookies.length) {
+      await page.browserContext().setCookie(...cookies);
+      await log("Đã khôi phục phiên Grab mã hóa từ Supabase Vault:", source.display_name);
+    }
+    return response;
+  } catch (error) {
+    await log(
+      "Chưa khôi phục được phiên Grab đã lưu, tiếp tục bằng hồ sơ Chrome:",
+      `${source.display_name} - ${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+}
 
-  await log("Phiên Grab hết hạn, đang đăng nhập lại:", source.display_name);
+async function loginViaBrowser(page, source, credentials, { visible = false } = {}) {
+  const { username, password } = credentials;
   if (!await isLoginRequired(page)) {
     await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
   }
@@ -207,6 +276,8 @@ async function login(page, source, { visible = false } = {}) {
   }
   const usernameInput = await waitForGrabLogin(page, visible ? 10 : 2);
   if (!usernameInput) throw new Error("Không tìm thấy ô tài khoản Grab.");
+  await usernameInput.click({ clickCount: 3 }).catch(() => null);
+  await usernameInput.press("Backspace").catch(() => null);
   await usernameInput.type(username, { delay: 20 });
   await Promise.all([
     page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 30_000 }).catch(() => null),
@@ -216,12 +287,65 @@ async function login(page, source, { visible = false } = {}) {
     visible: true,
     timeout: 35_000
   });
+  await passwordInput.click({ clickCount: 3 }).catch(() => null);
+  await passwordInput.press("Backspace").catch(() => null);
   await passwordInput.type(password, { delay: 20 });
   await Promise.all([
     page.waitForNavigation({ waitUntil: "networkidle2", timeout: 45_000 }).catch(() => null),
     passwordInput.press("Enter")
   ]);
-  if (await isLoginRequired(page)) throw new Error("Grab từ chối đăng nhập hoặc yêu cầu xác minh bổ sung.");
+  if (await isLoginRequired(page)) {
+    const pageText = await page.evaluate(() => document.body?.innerText || "").catch(() => "");
+    if (/captcha|mã xác minh|mã otp|xác thực|verification code|one[- ]time password/i.test(pageText)) {
+      throw new Error("Grab yêu cầu OTP hoặc CAPTCHA; cần xác minh trên cửa sổ Chrome.");
+    }
+    throw new Error("Grab từ chối đăng nhập hoặc yêu cầu xác minh bổ sung.");
+  }
+}
+
+async function login(page, source, { visible = false, authBundle = null } = {}) {
+  const response = authBundle || await api("automation_credentials", { source_id: source.id });
+  const credentials = {
+    username: String(response.credentials?.username || ""),
+    password: String(response.credentials?.password || "")
+  };
+  if (!credentials.username || !credentials.password) {
+    throw new Error("Thiếu tài khoản hoặc mật khẩu trong Supabase Vault.");
+  }
+
+  await log("Phiên Grab hết hạn, đang đăng nhập lại:", source.display_name);
+  return withExclusiveLogin(async () => {
+    for (let attempt = 0; attempt <= LOGIN_RETRY_DELAYS_MS.length; attempt += 1) {
+      await waitForLoginSlot(source);
+      try {
+        const cookies = await loginGrabDirect(page.browser(), credentials);
+        await page.browserContext().setCookie(...cookies);
+        await openFeedbackPage(page, { force: true });
+        if (await isLoginRequired(page)) {
+          throw new Error("Phiên đăng nhập API chưa mở được Grab Portal.");
+        }
+        await log("Đăng nhập Grab trực tiếp thành công:", source.display_name);
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const code = error?.code || classifyGrabLoginFailure(message, error?.status);
+        if (isRetryableGrabLoginFailure(code) && attempt < LOGIN_RETRY_DELAYS_MS.length) {
+          const waitMs = LOGIN_RETRY_DELAYS_MS[attempt];
+          await log(
+            code === "GRAB_RATE_LIMITED" ? "Grab đang giới hạn đăng nhập, sẽ thử lại:" : "Grab tạm lỗi đăng nhập, sẽ thử lại:",
+            `${source.display_name} - ${Math.round(waitMs / 1000)} giây`
+          );
+          await sleep(waitMs);
+          continue;
+        }
+        await log("Đăng nhập API trực tiếp chưa dùng được, chuyển sang Chrome:", `${source.display_name} - ${message}`);
+        break;
+      }
+    }
+
+    await loginViaBrowser(page, source, credentials, { visible });
+    await log("Đăng nhập Grab bằng Chrome thành công:", source.display_name);
+  });
 }
 
 async function collectFeedback(page) {
@@ -360,6 +484,7 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
     const pages = await browser.pages();
     const page = pages[0] || await browser.newPage();
     page.setDefaultTimeout(30_000);
+    const authBundle = await restoreStoredSession(page, source);
     let loggedInNow = false;
     let reviews;
     let overview;
@@ -382,7 +507,7 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
     if (!directApi) {
       await openFeedbackPage(page, { force: true });
       if (await isLoginRequired(page)) {
-        await login(page, source, { visible: !headless });
+        await login(page, source, { visible: !headless, authBundle });
         loggedInNow = true;
       } else {
         await log("Dùng lại phiên Grab còn hiệu lực:", source.display_name);
@@ -393,7 +518,7 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
         const message = error instanceof Error ? error.message : String(error);
         const sessionExpired = /hết hạn|401|403/i.test(message);
         if (sessionExpired || await isLoginRequired(page)) {
-          await login(page, source, { visible: !headless });
+          await login(page, source, { visible: !headless, authBundle });
           loggedInNow = true;
           ({ reviews, overview, pageCount } = await collectFeedback(page));
         } else {
@@ -432,6 +557,8 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
     const merchantId = String(reviews.find((review) => review?.merchantID)?.merchantID || "");
     const result = await api("automation_reviews", {
       source_id: source.id,
+      worker_id: WORKER_ID,
+      lease_token: source.lease_token,
       merchant_id: merchantId,
       overview,
       reviews,
@@ -459,17 +586,29 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
 
 async function runSource(source, chromePath) {
   await log("Bắt đầu đồng bộ:", source.display_name);
-  try {
-    await syncSource(source, chromePath);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await log("Đồng bộ thất bại:", `${source.display_name} - ${message}`);
-    await api("automation_failure", {
-      source_id: source.id,
-      worker_id: WORKER_ID,
-      error_message: message,
-      auth_expired: /đăng nhập|login|401|403|xác minh/i.test(message)
-    }).catch(() => null);
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await syncSource(source, chromePath);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const transientBrowserError = isTransientBrowserFailure(message);
+      if (transientBrowserError && attempt < maxAttempts) {
+        await log("Trình duyệt Grab vừa đổi phiên, đang thử lại:", source.display_name);
+        await sleep(3_000);
+        continue;
+      }
+      await log("Đồng bộ thất bại:", `${source.display_name} - ${message}`);
+      await api("automation_failure", {
+        source_id: source.id,
+        worker_id: WORKER_ID,
+        lease_token: source.lease_token,
+        error_message: message,
+        auth_expired: /đăng nhập|login|401|403|xác minh/i.test(message)
+      }).catch(() => null);
+      return;
+    }
   }
 }
 
@@ -494,7 +633,7 @@ async function runCycle(chromePath) {
     await Promise.all(
       sources
         .slice(index, index + CONCURRENCY)
-        .map((source) => runSource(source, chromePath))
+        .map((source) => withAccountLock(source, () => runSource(source, chromePath)))
     );
     if (CONCURRENCY === 1 && index < sources.length - 1) await sleep(5_000);
   }
@@ -689,23 +828,28 @@ async function pollStoreControls(chromePath) {
   const batch = await api("automation_store_commands", { worker_id: WORKER_ID, limit: CONCURRENCY });
   const sources = Array.isArray(batch.sources) ? batch.sources : [];
   if (!sources.length) return;
-  await Promise.all(sources.map((source) => runStoreControl(source, chromePath)));
+  await Promise.all(sources.map((source) => withAccountLock(source, () => runStoreControl(source, chromePath))));
 }
 
-async function readRemoteInterval(fallbackMs) {
+async function readRemoteSchedule(fallbackMs) {
   try {
     const result = await api("automation_settings");
-    return intervalMs(result.settings?.sync_interval_minutes);
+    const requestedRunAt = Date.parse(String(result.settings?.next_worker_cycle_at || ""));
+    return {
+      intervalMs: intervalMs(result.settings?.sync_interval_minutes),
+      requestedRunAtMs: Number.isFinite(requestedRunAt) ? requestedRunAt : 0
+    };
   } catch (error) {
     await log("Chưa đọc được lịch đồng bộ mới, giữ lịch hiện tại:", error instanceof Error ? error.message : String(error));
-    return fallbackMs;
+    return { intervalMs: fallbackMs, requestedRunAtMs: 0 };
   }
 }
 
-async function saveNextRun(nextRunAt) {
+async function saveNextRun(nextRunAt, { cycleCompleted = true } = {}) {
   await api("automation_heartbeat", {
     worker_id: WORKER_ID,
-    next_run_at: nextRunAt.toISOString()
+    next_run_at: nextRunAt.toISOString(),
+    cycle_completed: cycleCompleted
   }).catch((error) => log("Chưa ghi được lần chạy kế tiếp:", error instanceof Error ? error.message : String(error)));
 }
 
@@ -716,7 +860,13 @@ async function acquireLock() {
   } catch (error) {
     if (error?.code !== "EEXIST") throw error;
     const lockStat = await stat(LOCK_PATH).catch(() => null);
-    const lockData = JSON.parse(await readFile(LOCK_PATH, "utf8").catch(() => "{}"));
+    const lockText = await readFile(LOCK_PATH, "utf8").catch(() => "{}");
+    let lockData = {};
+    try {
+      lockData = JSON.parse(lockText);
+    } catch {
+      await log("File khóa worker bị lỗi, sẽ tạo lại.");
+    }
     const lockPid = Number(lockData?.pid);
     let lockProcessAlive = Number.isInteger(lockPid) && lockPid > 0;
     if (lockProcessAlive) {
@@ -761,16 +911,21 @@ async function main() {
     await pollStoreControls(chromePath).catch((error) =>
       log("Chưa đọc được lệnh công tắc cửa hàng:", error instanceof Error ? error.message : String(error))
     );
+    let runRequestedNow = false;
     if (Date.now() - lastSettingsReadAt >= 60_000) {
       const previousIntervalMs = currentIntervalMs;
-      currentIntervalMs = await readRemoteInterval(currentIntervalMs);
+      const remoteSchedule = await readRemoteSchedule(currentIntervalMs);
+      currentIntervalMs = remoteSchedule.intervalMs;
       lastSettingsReadAt = Date.now();
+      runRequestedNow = remoteSchedule.requestedRunAtMs > lastCycleCompletedAt
+        && remoteSchedule.requestedRunAtMs <= Date.now();
       if (currentIntervalMs !== previousIntervalMs) {
-        await saveNextRun(new Date(lastCycleCompletedAt + currentIntervalMs));
+        await saveNextRun(new Date(lastCycleCompletedAt + currentIntervalMs), { cycleCompleted: false });
         await log("Đã nhận lịch đồng bộ mới:", `${Math.round(currentIntervalMs / 60_000)} phút/lần`);
       }
     }
-    if (Date.now() - lastCycleCompletedAt < currentIntervalMs) continue;
+    if (!runRequestedNow && Date.now() - lastCycleCompletedAt < currentIntervalMs) continue;
+    if (runRequestedNow) await log("Đã nhận yêu cầu đồng bộ ngay từ trang quản trị.");
     currentIntervalMs = await runCycle(chromePath);
     lastCycleCompletedAt = Date.now();
     await saveNextRun(new Date(lastCycleCompletedAt + currentIntervalMs));

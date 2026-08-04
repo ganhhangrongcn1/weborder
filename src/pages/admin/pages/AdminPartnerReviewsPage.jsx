@@ -195,11 +195,11 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
     setSettingsSaving(false);
   };
 
-  const startLocalWorker = async () => {
+  const requestWorkerRunNow = async () => {
     setWorkerStarting(true);
     setMessage("");
     const result = await requestPartnerReviewWorkerStart();
-    setMessage(result.message || (result.ok ? "Đã gửi yêu cầu bật worker." : "Không gửi được yêu cầu bật worker."));
+    setMessage(result.message || (result.ok ? "Đã ghi nhận yêu cầu đồng bộ ngay." : "Không gửi được yêu cầu đồng bộ ngay."));
     if (result.ok && result.settings) setSettings(result.settings);
     setWorkerStarting(false);
   };
@@ -268,8 +268,8 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
           <AdminButton type="button" onClick={saveSchedule} disabled={settingsSaving}>
             {settingsSaving ? "Đang lưu..." : "Lưu lịch"}
           </AdminButton>
-          <AdminButton type="button" variant="secondary" onClick={startLocalWorker} disabled={workerStarting}>
-            <Icon name="play" size={16} /> {workerStarting ? "Đang gửi..." : "Bật worker"}
+          <AdminButton type="button" variant="secondary" onClick={requestWorkerRunNow} disabled={workerStarting}>
+            <Icon name="play" size={16} /> {workerStarting ? "Đang gửi..." : "Chạy đồng bộ ngay"}
           </AdminButton>
         </div>
       </AdminCard>

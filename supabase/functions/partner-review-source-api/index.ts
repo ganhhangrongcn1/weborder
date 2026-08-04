@@ -21,6 +21,65 @@ const hasAutomationAccess = (request: Request) => {
 };
 const boundedIntervalMinutes = (value: unknown) =>
   Math.min(1440, Math.max(5, Math.round(Number(value) || 60)));
+const AUTOMATION_LEASE_MS = 30 * 60 * 1000;
+
+function hasActiveAutomationLease(source: Row, now = Date.now()) {
+  const metadata = object(source.metadata);
+  const expiresAt = Date.parse(text(metadata.local_worker_lease_expires_at));
+  return Boolean(text(metadata.local_worker_lease_token) && Number.isFinite(expiresAt) && expiresAt > now);
+}
+
+function automationSource(row: Row) {
+  const metadata = object(row.metadata);
+  return {
+    ...publicSource(row),
+    lease_token: text(metadata.local_worker_lease_token)
+  };
+}
+
+function releaseAutomationLease(metadataValue: unknown) {
+  const metadata = { ...object(metadataValue) };
+  delete metadata.local_worker_lease_token;
+  delete metadata.local_worker_lease_owner;
+  delete metadata.local_worker_lease_expires_at;
+  return metadata;
+}
+
+function automationLeaseMatches(source: Row, body: Row) {
+  const storedToken = text(object(source.metadata).local_worker_lease_token);
+  const providedToken = text(body.lease_token);
+  return !storedToken || Boolean(providedToken && providedToken === storedToken);
+}
+
+async function tryClaimAutomationSource(
+  client: ReturnType<typeof createClient>,
+  source: Row,
+  workerId: string
+) {
+  const now = new Date();
+  const leaseToken = crypto.randomUUID();
+  const metadata = {
+    ...object(source.metadata),
+    local_worker_last_attempt_at: now.toISOString(),
+    local_worker_id: workerId,
+    local_worker_lease_token: leaseToken,
+    local_worker_lease_owner: workerId,
+    local_worker_lease_expires_at: new Date(now.getTime() + AUTOMATION_LEASE_MS).toISOString()
+  };
+  let query = client
+    .from("partner_review_sources")
+    .update({
+      sync_status: "running",
+      metadata,
+      updated_at: now.toISOString()
+    })
+    .eq("id", source.id);
+  const previousUpdatedAt = text(source.updated_at);
+  query = previousUpdatedAt ? query.eq("updated_at", previousUpdatedAt) : query.is("updated_at", null);
+  const { data, error } = await query.select("*").maybeSingle();
+  if (error) throw error;
+  return data ? automationSource(data as Row) : null;
+}
 
 async function getWorkerSettings(client: ReturnType<typeof createClient>) {
   const { data, error } = await client
@@ -150,17 +209,20 @@ async function saveWorkerSettings(client: ReturnType<typeof createClient>, body:
 
 async function requestWorkerStart(client: ReturnType<typeof createClient>) {
   const now = new Date().toISOString();
-  const { error } = await client
+  const { data, error } = await client
     .from("partner_review_worker_settings")
     .update({ next_worker_cycle_at: now, updated_at: now })
-    .eq("id", "default");
-  if (error) {
+    .eq("id", "default")
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
     console.error("[partner-review-source-api] worker start request failed", error);
-    return reply({ ok: false, message: "Không gửi được yêu cầu bật worker." }, 500);
+    return reply({ ok: false, message: "Không ghi được yêu cầu đồng bộ ngay." }, 500);
   }
   return reply({
     ok: true,
-    message: "Đã gửi yêu cầu. Worker trên máy đồng bộ sẽ tự bật trong tối đa 1 phút.",
+    message: "Đã ghi nhận yêu cầu. Máy đồng bộ đã cài worker sẽ nhận lệnh trong tối đa 1 phút.",
+    request_accepted_at: now,
     settings: await getWorkerSettings(client)
   });
 }
@@ -359,7 +421,7 @@ async function getNextAutomationSource(
     console.error("[partner-review-source-api] next source failed", error);
     return reply({ ok: false, message: "Không chọn được gian hàng cần đồng bộ." }, 500);
   }
-  const sources = (data || []) as Row[];
+  const sources = ((data || []) as Row[]).filter((source) => !hasActiveAutomationLease(source));
   if (!sources.length) return reply({ ok: true, source: null });
 
   const attemptTime = (source: Row) => {
@@ -371,26 +433,16 @@ async function getNextAutomationSource(
     return Number.isFinite(timestamp) ? timestamp : 0;
   };
   sources.sort((left, right) => attemptTime(left) - attemptTime(right));
-  const selected = sources[0];
-  const now = new Date().toISOString();
-  const metadata = {
-    ...object(selected.metadata),
-    local_worker_last_attempt_at: now,
-    local_worker_id: text(body.worker_id)
-  };
-  const { error: updateError } = await client
-    .from("partner_review_sources")
-    .update({
-      sync_status: "running",
-      metadata,
-      updated_at: now
-    })
-    .eq("id", selected.id);
-  if (updateError) {
+  try {
+    for (const source of sources) {
+      const claimed = await tryClaimAutomationSource(client, source, text(body.worker_id));
+      if (claimed) return reply({ ok: true, source: claimed });
+    }
+  } catch (updateError) {
     console.error("[partner-review-source-api] source claim failed", updateError);
     return reply({ ok: false, message: "Không nhận được lượt đồng bộ." }, 500);
   }
-  return reply({ ok: true, source: publicSource(selected) });
+  return reply({ ok: true, source: null });
 }
 
 async function getAutomationSources(
@@ -420,32 +472,26 @@ async function getAutomationSources(
     const timestamp = Date.parse(value);
     return Number.isFinite(timestamp) ? timestamp : 0;
   };
-  const selected = ((data || []) as Row[])
+  const candidates = ((data || []) as Row[])
+    .filter((source) => !hasActiveAutomationLease(source))
     .sort((left, right) => attemptTime(left) - attemptTime(right))
-    .slice(0, limit);
+    .slice(0, Math.max(limit * 2, limit));
   const settings = await getWorkerSettings(client);
-  if (!selected.length) return reply({ ok: true, sources: [], settings });
+  if (!candidates.length) return reply({ ok: true, sources: [], settings });
 
-  const now = new Date().toISOString();
   const workerId = text(body.worker_id);
-  const results = await Promise.all(selected.map((source) => client
-    .from("partner_review_sources")
-    .update({
-      sync_status: "running",
-      metadata: {
-        ...object(source.metadata),
-        local_worker_last_attempt_at: now,
-        local_worker_id: workerId
-      },
-      updated_at: now
-    })
-    .eq("id", source.id)));
-  const updateError = results.find((result) => result.error)?.error;
-  if (updateError) {
+  const claimed: Row[] = [];
+  try {
+    for (const source of candidates) {
+      if (claimed.length >= limit) break;
+      const result = await tryClaimAutomationSource(client, source, workerId);
+      if (result) claimed.push(result);
+    }
+  } catch (updateError) {
     console.error("[partner-review-source-api] source batch claim failed", updateError);
     return reply({ ok: false, message: "Không nhận được nhóm đồng bộ." }, 500);
   }
-  return reply({ ok: true, sources: selected.map(publicSource), settings });
+  return reply({ ok: true, sources: claimed, settings });
 }
 
 async function getAutomationSettings(request: Request, client: ReturnType<typeof createClient>) {
@@ -553,12 +599,13 @@ async function saveAutomationHeartbeat(
   const now = new Date().toISOString();
   const nextRunAt = new Date(text(body.next_run_at));
   if (!Number.isFinite(nextRunAt.getTime())) return reply({ ok: false, message: "Thời gian chạy kế tiếp không hợp lệ." }, 400);
-  const { error } = await client.from("partner_review_worker_settings").update({
-    last_worker_cycle_at: now,
+  const heartbeatUpdate: Row = {
     next_worker_cycle_at: nextRunAt.toISOString(),
     last_worker_id: text(body.worker_id),
     updated_at: now
-  }).eq("id", "default");
+  };
+  if (body.cycle_completed !== false) heartbeatUpdate.last_worker_cycle_at = now;
+  const { error } = await client.from("partner_review_worker_settings").update(heartbeatUpdate).eq("id", "default");
   if (error) return reply({ ok: false, message: "Không ghi được lịch chạy worker." }, 500);
   return reply({ ok: true });
 }
@@ -578,26 +625,35 @@ async function markAutomationFailure(
     .eq("id", sourceId)
     .maybeSingle();
   if (!source) return reply({ ok: false, message: "Không tìm thấy nguồn đồng bộ." }, 404);
+  if (!automationLeaseMatches(source as Row, body)) {
+    return reply({ ok: false, message: "Lượt đồng bộ đã được worker khác tiếp nhận." }, 409);
+  }
 
   const now = new Date().toISOString();
+  const releasedMetadata = releaseAutomationLease(source.metadata);
   const update: Row = {
     sync_status: "failed",
     last_error: text(body.error_message).slice(0, 2000),
     metadata: {
-      ...object(source.metadata),
+      ...releasedMetadata,
       local_worker_last_attempt_at: now,
       local_worker_id: text(body.worker_id)
     },
     updated_at: now
   };
   if (body.auth_expired === true) update.auth_status = "expired";
-  const { error } = await client
+  let updateQuery = client
     .from("partner_review_sources")
     .update(update)
     .eq("id", sourceId);
-  if (error) {
+  const storedLeaseToken = text(object(source.metadata).local_worker_lease_token);
+  if (storedLeaseToken) {
+    updateQuery = updateQuery.contains("metadata", { local_worker_lease_token: storedLeaseToken });
+  }
+  const { data: updatedSource, error } = await updateQuery.select("id").maybeSingle();
+  if (error || !updatedSource) {
     console.error("[partner-review-source-api] failure update failed", error);
-    return reply({ ok: false, message: "Không ghi được trạng thái lỗi." }, 500);
+    return reply({ ok: false, message: "Không ghi được trạng thái lỗi hoặc lượt đồng bộ đã đổi worker." }, 409);
   }
   return reply({ ok: true, source_id: sourceId });
 }
@@ -626,6 +682,9 @@ async function saveAutomationSession(
     .eq("sync_enabled", true)
     .maybeSingle();
   if (!source) return reply({ ok: false, message: "Khong tim thay nguon dong bo." }, 404);
+  if (!automationLeaseMatches(source as Row, body)) {
+    return reply({ ok: false, message: "Luot dong bo da duoc worker khac tiep nhan." }, 409);
+  }
 
   try {
     const sessionSecretId = await storeSecret(
@@ -699,6 +758,9 @@ async function saveAutomationReviews(
     .eq("sync_enabled", true)
     .maybeSingle();
   if (!source) return reply({ ok: false, message: "Khong tim thay nguon dong bo." }, 404);
+  if (!automationLeaseMatches(source as Row, body)) {
+    return reply({ ok: false, message: "Luot dong bo da duoc worker khac tiep nhan." }, 409);
+  }
 
   const startedAt = new Date().toISOString();
   const { data: run } = await client
@@ -762,7 +824,8 @@ async function saveAutomationReviews(
       || text(reviews.find((review) => text(review.merchantID))?.merchantID)
       || text(source.merchant_id);
     const finishedAt = new Date().toISOString();
-    const { error: sourceError } = await client
+    const releasedMetadata = releaseAutomationLease(source.metadata);
+    let sourceUpdateQuery = client
       .from("partner_review_sources")
       .update({
         merchant_id: merchantId || null,
@@ -773,7 +836,7 @@ async function saveAutomationReviews(
         last_sync_at: finishedAt,
         last_error: null,
         metadata: {
-          ...object(source.metadata),
+          ...releasedMetadata,
           feedback_overview: overview,
           last_fetched_count: reviews.length,
           last_busy_result: busyResult,
@@ -782,7 +845,14 @@ async function saveAutomationReviews(
         updated_at: finishedAt
       })
       .eq("id", sourceId);
-    if (sourceError) throw sourceError;
+    const storedLeaseToken = text(object(source.metadata).local_worker_lease_token);
+    if (storedLeaseToken) {
+      sourceUpdateQuery = sourceUpdateQuery.contains("metadata", { local_worker_lease_token: storedLeaseToken });
+    }
+    const { data: updatedSource, error: sourceError } = await sourceUpdateQuery.select("id").maybeSingle();
+    if (sourceError || !updatedSource) {
+      throw sourceError || new Error("Lượt đồng bộ đã được worker khác tiếp nhận.");
+    }
 
     if (run?.id) {
       await client
@@ -804,14 +874,24 @@ async function saveAutomationReviews(
   } catch (error) {
     const detail = error instanceof Error ? error.message : JSON.stringify(error);
     const finishedAt = new Date().toISOString();
-    await client
+    const storedLeaseToken = text(object(source.metadata).local_worker_lease_token);
+    let failureUpdateQuery = client
       .from("partner_review_sources")
       .update({
         sync_status: "failed",
         last_error: detail,
+        metadata: {
+          ...releaseAutomationLease(source.metadata),
+          local_worker_last_attempt_at: finishedAt,
+          local_worker_id: text(body.worker_id)
+        },
         updated_at: finishedAt
       })
       .eq("id", sourceId);
+    if (storedLeaseToken) {
+      failureUpdateQuery = failureUpdateQuery.contains("metadata", { local_worker_lease_token: storedLeaseToken });
+    }
+    await failureUpdateQuery;
     if (run?.id) {
       await client
         .from("partner_review_sync_runs")
