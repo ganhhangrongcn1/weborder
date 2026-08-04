@@ -23,6 +23,11 @@ import {
   isTransientBrowserFailure,
   loginSpacingMs
 } from "./partner-review-login-policy.mjs";
+import {
+  calculateNextWorkerRun,
+  parseWorkerTimestamp,
+  resolveWorkerStartupSchedule
+} from "./partner-review-schedule-policy.mjs";
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 loadEnv({ path: path.join(PROJECT_ROOT, ".env.partner-review-worker"), override: false });
@@ -834,14 +839,14 @@ async function pollStoreControls(chromePath) {
 async function readRemoteSchedule(fallbackMs) {
   try {
     const result = await api("automation_settings");
-    const requestedRunAt = Date.parse(String(result.settings?.next_worker_cycle_at || ""));
     return {
       intervalMs: intervalMs(result.settings?.sync_interval_minutes),
-      requestedRunAtMs: Number.isFinite(requestedRunAt) ? requestedRunAt : 0
+      requestedRunAtMs: parseWorkerTimestamp(result.settings?.next_worker_cycle_at),
+      lastCycleCompletedAtMs: parseWorkerTimestamp(result.settings?.last_worker_cycle_at)
     };
   } catch (error) {
     await log("Chưa đọc được lịch đồng bộ mới, giữ lịch hiện tại:", error instanceof Error ? error.message : String(error));
-    return { intervalMs: fallbackMs, requestedRunAtMs: 0 };
+    return { intervalMs: fallbackMs, requestedRunAtMs: 0, lastCycleCompletedAtMs: 0 };
   }
 }
 
@@ -899,11 +904,32 @@ async function main() {
   const chromePath = await findChrome();
   await log("Worker đánh giá đã khởi động:", `${WORKER_ID} - ${HEADLESS ? "ẩn" : "hiện Chrome"}`);
 
-  let currentIntervalMs = await runCycle(chromePath);
-  let lastCycleCompletedAt = Date.now();
+  const initialSchedule = await readRemoteSchedule(intervalMs(FALLBACK_INTERVAL_MINUTES));
+  let currentIntervalMs = initialSchedule.intervalMs;
+  let lastCycleCompletedAt = initialSchedule.lastCycleCompletedAtMs || Date.now();
+  const startupSchedule = RUN_ONCE
+    ? { shouldRun: true, nextRunAtMs: Date.now(), reason: "run_once" }
+    : resolveWorkerStartupSchedule(initialSchedule.requestedRunAtMs, Date.now());
+  let nextRunAtMs = startupSchedule.nextRunAtMs;
   let lastSettingsReadAt = 0;
-  await saveNextRun(new Date(lastCycleCompletedAt + currentIntervalMs));
-  await log("Lần đồng bộ kế tiếp:", new Date(lastCycleCompletedAt + currentIntervalMs).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }));
+
+  if (startupSchedule.shouldRun) {
+    await log(
+      startupSchedule.reason === "missing_schedule"
+        ? "Chưa có lịch hợp lệ, đồng bộ an toàn một lần."
+        : startupSchedule.reason === "run_once"
+          ? "Đã nhận chế độ chạy một lần."
+        : "Đã đến lịch trong lúc worker tắt, đồng bộ bù một lần."
+    );
+    currentIntervalMs = await runCycle(chromePath);
+    lastCycleCompletedAt = Date.now();
+    nextRunAtMs = calculateNextWorkerRun(lastCycleCompletedAt, currentIntervalMs);
+    await saveNextRun(new Date(nextRunAtMs));
+  } else {
+    await saveNextRun(new Date(nextRunAtMs), { cycleCompleted: false });
+    await log("Worker đã bật lại và tiếp tục chờ đúng lịch, không đồng bộ sớm.");
+  }
+  await log("Lần đồng bộ kế tiếp:", new Date(nextRunAtMs).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }));
 
   while (!RUN_ONCE && !stopping) {
     await sleep(10_000);
@@ -917,19 +943,22 @@ async function main() {
       const remoteSchedule = await readRemoteSchedule(currentIntervalMs);
       currentIntervalMs = remoteSchedule.intervalMs;
       lastSettingsReadAt = Date.now();
-      runRequestedNow = remoteSchedule.requestedRunAtMs > lastCycleCompletedAt
-        && remoteSchedule.requestedRunAtMs <= Date.now();
       if (currentIntervalMs !== previousIntervalMs) {
-        await saveNextRun(new Date(lastCycleCompletedAt + currentIntervalMs), { cycleCompleted: false });
+        nextRunAtMs = calculateNextWorkerRun(lastCycleCompletedAt, currentIntervalMs);
+        await saveNextRun(new Date(nextRunAtMs), { cycleCompleted: false });
         await log("Đã nhận lịch đồng bộ mới:", `${Math.round(currentIntervalMs / 60_000)} phút/lần`);
+      } else if (remoteSchedule.requestedRunAtMs) {
+        nextRunAtMs = remoteSchedule.requestedRunAtMs;
       }
+      runRequestedNow = nextRunAtMs > lastCycleCompletedAt && nextRunAtMs <= Date.now();
     }
-    if (!runRequestedNow && Date.now() - lastCycleCompletedAt < currentIntervalMs) continue;
-    if (runRequestedNow) await log("Đã nhận yêu cầu đồng bộ ngay từ trang quản trị.");
+    if (Date.now() < nextRunAtMs) continue;
+    if (runRequestedNow) await log("Đã đến lịch hoặc nhận yêu cầu đồng bộ ngay từ trang quản trị.");
     currentIntervalMs = await runCycle(chromePath);
     lastCycleCompletedAt = Date.now();
-    await saveNextRun(new Date(lastCycleCompletedAt + currentIntervalMs));
-    await log("Lần đồng bộ kế tiếp:", new Date(lastCycleCompletedAt + currentIntervalMs).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }));
+    nextRunAtMs = calculateNextWorkerRun(lastCycleCompletedAt, currentIntervalMs);
+    await saveNextRun(new Date(nextRunAtMs));
+    await log("Lần đồng bộ kế tiếp:", new Date(nextRunAtMs).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }));
   }
 }
 

@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $workerPath = Join-Path $PSScriptRoot "partner-review-worker.mjs"
+$hiddenRunnerPath = Join-Path $PSScriptRoot "run-partner-review-worker-hidden.ps1"
 $startWorkerPath = Join-Path $PSScriptRoot "start-partner-review-worker-task.ps1"
 $envPath = Join-Path $projectRoot ".env.partner-review-worker"
 $nodePath = (Get-Command node -ErrorAction Stop).Source
@@ -12,17 +13,18 @@ if (-not (Test-Path -LiteralPath $envPath)) {
 }
 
 $action = New-ScheduledTaskAction `
-  -Execute $nodePath `
-  -Argument "`"$workerPath`"" `
+  -Execute "powershell.exe" `
+  -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$hiddenRunnerPath`"" `
   -WorkingDirectory $projectRoot
 $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $recoveryTrigger = New-ScheduledTaskTrigger `
   -Once `
   -At (Get-Date).AddMinutes(1) `
-  -RepetitionInterval (New-TimeSpan -Minutes 1) `
+  -RepetitionInterval (New-TimeSpan -Minutes 5) `
   -RepetitionDuration (New-TimeSpan -Days 3650)
 $triggers = @($logonTrigger, $recoveryTrigger)
 $settings = New-ScheduledTaskSettingsSet `
+  -Hidden `
   -AllowStartIfOnBatteries `
   -DontStopIfGoingOnBatteries `
   -StartWhenAvailable `
