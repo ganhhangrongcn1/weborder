@@ -3,6 +3,7 @@ import { getOrderItemOptionLabels } from "../utils/orderItemDisplay.js";
 import { loadZaloConfigAsync, renderZaloTemplate } from "./zaloService.js";
 
 const WEB_ORDER_WEBHOOK_URL = "https://n8nhosting-13007771.phoai.vn/webhook/ac55da0e-a0d8-47e5-89c7-fcaa07fb736d";
+const PUBLIC_ORDER_ORIGIN = "https://ganhhangrong.vn";
 const VIETNAM_TIMEZONE = "Asia/Ho_Chi_Minh";
 
 function toNumber(value, fallback = 0) {
@@ -49,7 +50,7 @@ function buildOrderItemsText(orderItems = []) {
 function buildOrderLink(orderCode = "") {
   const code = String(orderCode || "").trim();
   if (!code) return "";
-  return `/orders?orderCode=${encodeURIComponent(code)}`;
+  return `${PUBLIC_ORDER_ORIGIN}/orders?orderCode=${encodeURIComponent(code)}`;
 }
 
 function buildMapLink(order = {}) {
@@ -87,19 +88,21 @@ export async function buildWebOrderZaloMessage(order = {}) {
     items: buildOrderItemsText(items),
     total: formatMoney(total),
     subtotal: formatMoney(subtotal),
-    shipping_fee: isPickup ? "Kh\u00f4ng t\u00ednh ph\u00ed giao h\u00e0ng" : formatMoney(shippingFee),
+    shipping_fee: isPickup ? formatMoney(0) : formatMoney(shippingFee),
     promo_discount: promoDiscount > 0 ? formatMoney(promoDiscount) : "",
     points_discount: pointsDiscount > 0 ? formatMoney(pointsDiscount) : "",
     order_code: orderCode,
     order_time: order.createdAt ? new Date(order.createdAt).toLocaleString("vi-VN") : new Date().toLocaleString("vi-VN"),
     pickup_time: isPickup ? order.pickupTimeText || "" : "",
-    fulfillment_type: isPickup ? "\u0110\u1ebfn l\u1ea5y" : "Giao t\u1eadn n\u01a1i",
+    fulfillment_type: isPickup ? "Đến lấy tại quán" : "Giao tận nơi",
     pickup_branch: [order.pickupBranchName || order.branchName || "", order.pickupBranchAddress || order.branchAddress || ""].filter(Boolean).join(" - "),
     delivery_branch: [order.deliveryBranchName || "", order.deliveryBranchAddress || ""].filter(Boolean).join(" - "),
     payment_method: formatPaymentMethod(order.paymentMethod),
     map_link: isPickup ? "" : buildMapLink(order),
     distance_km: !isPickup && order.distanceKm ? `${Number(order.distanceKm).toFixed(1)}km` : "",
-    address: isPickup ? order.branchAddress || order.branchName || "" : order.deliveryAddress || "",
+    address: isPickup
+      ? [order.pickupBranchName || order.branchName || "", order.pickupBranchAddress || order.branchAddress || ""].filter(Boolean).join(" - ")
+      : order.deliveryAddress || "",
     note: order.note || "",
     order_link: buildOrderLink(orderCode)
   });
@@ -144,6 +147,7 @@ export async function notifyWebOrderWebhook({ order } = {}) {
   await fetch(WEB_ORDER_WEBHOOK_URL, {
     method: "POST",
     mode: "no-cors",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body: toFormBody(payload)
   });
 

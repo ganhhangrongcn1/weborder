@@ -1,28 +1,31 @@
 import { zaloConfigRepository } from "./repositories/zaloConfigRepository.js";
 
 export const DEFAULT_ZALO_TEMPLATE = [
-  "\uD83D\uDD14 \u0110\u01A0N H\u00C0NG M\u1EDAI - G\u00C1NH H\u00C0NG RONG",
-  "\uD83D\uDD16 M\u00E3 \u0111\u01A1n: {{order_code}}",
-  "\uD83D\uDD52 Th\u1EDDi gian \u0111\u1EB7t: {{order_time}}",
-  "\u23F0 Gi\u1EDD l\u1EA5y: {{pickup_time}}",
-  "\uD83D\uDCE6 H\u00ECnh th\u1EE9c nh\u1EADn: {{fulfillment_type}}",
-  "\uD83D\uDCB3 Thanh to\u00E1n: {{payment_method}}",
-  "\uD83D\uDD0E Tra c\u1EE9u \u0111\u01A1n: {{order_link}}",
+  "🧡 GÁNH HÀNG RONG ĐÃ NHẬN ĐƠN",
   "",
-  "\uD83D\uDC64 TH\u00D4NG TIN KH\u00C1CH",
-  "\u2022 Kh\u00E1ch: {{customer_name}} - {{phone}}",
-  "\uD83D\uDCCD \u0110\u1ECBa ch\u1EC9: {{address}}",
-  "\uD83D\uDDFA\uFE0F B\u1EA3n \u0111\u1ED3: {{map_link}}",
+  "🔖 Mã đơn: {{order_code}}",
+  "🕒 Thời gian đặt: {{order_time}}",
+  "📦 Hình thức nhận: {{fulfillment_type}}",
+  "⏰ Giờ lấy dự kiến: {{pickup_time}}",
+  "💳 Thanh toán: {{payment_method}}",
   "",
-  "\uD83C\uDF7D\uFE0F CHI TI\u1EBET M\u00D3N",
+  "👤 {{customer_name}} - {{phone}}",
+  "📍 {{address}}",
+  "🗺️ Bản đồ: {{map_link}}",
+  "",
+  "🍽️ MÓN ĐÃ ĐẶT",
   "{{items}}",
   "",
-  "\uD83D\uDCB0 THANH TO\u00C1N",
-  "\uD83D\uDE9A Ph\u00ED giao h\u00E0ng: {{shipping_fee}}",
-  "\uD83C\uDF81 \u01AFu \u0111\u00E3i: -{{promo_discount}}",
-  "\u2B50 D\u00F9ng \u0111i\u1EC3m th\u01B0\u1EDFng: -{{points_discount}}",
-  "\u2705 T\u1ED5ng thanh to\u00E1n: {{total}}",
-  "\uD83D\uDCDD Ghi ch\u00FA: {{note}}"
+  "💰 Tạm tính: {{subtotal}}",
+  "🚚 Phí giao hàng: {{shipping_fee}}",
+  "🎁 Ưu đãi: -{{promo_discount}}",
+  "⭐ Dùng điểm thưởng: -{{points_discount}}",
+  "✅ TỔNG THANH TOÁN: {{total}}",
+  "📝 Ghi chú: {{note}}",
+  "",
+  "🔎 Theo dõi đơn hàng: {{order_link}}",
+  "",
+  "Quán sẽ chuẩn bị món ngay. Cảm ơn bạn đã đặt món tại Gánh Hàng Rong 🧡"
 ].join("\n");
 
 function normalizeZaloConfig(config, fallbackPhone) {
@@ -96,7 +99,7 @@ export function renderZaloTemplate(template, data) {
       return nextLine;
     })
     .join("\n");
-  return output;
+  return output.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export function buildZaloLink(phone, message) {

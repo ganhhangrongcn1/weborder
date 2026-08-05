@@ -1,24 +1,32 @@
 type JsonRecord = Record<string, unknown>;
 
 const DEFAULT_WEB_ORDER_WEBHOOK_URL = "https://n8nhosting-13007771.phoai.vn/webhook/ac55da0e-a0d8-47e5-89c7-fcaa07fb736d";
-const DEFAULT_ZALO_TEMPLATE = `🧡 GÁNH HÀNG RONG - ĐẶT HÀNG THÀNH CÔNG
-🔖 Mã đơn: {{order_code}}
-🕒 Thời gian: {{order_time}}
-📦 Hình thức: {{fulfillment_type}}
+const PUBLIC_ORDER_ORIGIN = "https://ganhhangrong.vn";
+const DEFAULT_ZALO_TEMPLATE = `🧡 GÁNH HÀNG RONG ĐÃ NHẬN ĐƠN
 
-👤 Khách: {{customer_name}} - {{phone}}
-📍 Địa chỉ: {{address}}
+🔖 Mã đơn: {{order_code}}
+🕒 Thời gian đặt: {{order_time}}
+📦 Hình thức nhận: {{fulfillment_type}}
+⏰ Giờ lấy dự kiến: {{pickup_time}}
+💳 Thanh toán: {{payment_method}}
+
+👤 {{customer_name}} - {{phone}}
+📍 {{address}}
 🗺️ Bản đồ: {{map_link}}
 
-🍽️ Món đã đặt
+🍽️ MÓN ĐÃ ĐẶT
 {{items}}
 
-🚚 Phí ship: {{shipping_fee}}
-✅ Tổng thanh toán: {{total}}
+💰 Tạm tính: {{subtotal}}
+🚚 Phí giao hàng: {{shipping_fee}}
+🎁 Ưu đãi: -{{promo_discount}}
+⭐ Dùng điểm thưởng: -{{points_discount}}
+✅ TỔNG THANH TOÁN: {{total}}
 📝 Ghi chú: {{note}}
 
-🔎 Xem lại đơn hàng: {{order_link}}
-Cảm ơn bạn đã đặt món tại Gánh Hàng Rong 🧡`;
+🔎 Theo dõi đơn hàng: {{order_link}}
+
+Quán sẽ chuẩn bị món ngay. Cảm ơn bạn đã đặt món tại Gánh Hàng Rong 🧡`;
 
 function toText(value: unknown = "") {
   return String(value ?? "").trim();
@@ -57,10 +65,19 @@ function formatDateTime(value: unknown) {
 }
 
 function renderTemplate(template: string, data: Record<string, string>) {
-  return Object.entries(data).reduce(
-    (message, [key, value]) => message.replaceAll(`{{${key}}}`, value),
-    template
-  );
+  return template
+    .split("\n")
+    .filter((line) => {
+      const keys = [...line.matchAll(/{{(\w+)}}/g)].map((match) => match[1]);
+      return !keys.length || keys.every((key) => toText(data[key]));
+    })
+    .map((line) => Object.entries(data).reduce(
+      (nextLine, [key, value]) => nextLine.replaceAll(`{{${key}}}`, value),
+      line
+    ))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function buildItemsText(items: JsonRecord[]) {
@@ -103,12 +120,6 @@ export async function notifyPaidWebsiteOrder(supabase: any, inputOrder: JsonReco
     return { ok: true, skipped: true, reason: "already_notified" };
   }
 
-  const { data: configRow } = await supabase
-    .from("app_configs")
-    .select("value")
-    .eq("id", "ghr_zalo_config")
-    .maybeSingle();
-  const config = getObject(configRow?.value);
   const items = getArray(metadata.items);
   const isPickup = toText(order.fulfillment_type || metadata.fulfillmentType).toLowerCase() === "pickup";
   const orderCode = toText(order.order_code || metadata.orderCode || order.id);
@@ -123,28 +134,29 @@ export async function notifyPaidWebsiteOrder(supabase: any, inputOrder: JsonReco
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`
       : "";
   const totalAmount = toNumber(order.total_amount ?? metadata.totalAmount ?? metadata.total);
-  const template = toText(config.template) || DEFAULT_ZALO_TEMPLATE;
-  const zaloMessage = renderTemplate(template, {
+  const zaloMessage = renderTemplate(DEFAULT_ZALO_TEMPLATE, {
     customer_name: toText(order.customer_name || metadata.customerName || metadata.orderCustomerName) || "Khách",
     phone: toText(order.customer_phone || metadata.customerPhone || metadata.phone),
     items: buildItemsText(items),
     total: formatMoney(totalAmount),
     subtotal: formatMoney(order.subtotal ?? metadata.subtotal),
-    shipping_fee: isPickup ? "Không tính phí giao hàng" : formatMoney(order.shipping_fee ?? metadata.shippingFee),
+    shipping_fee: isPickup ? formatMoney(0) : formatMoney(order.shipping_fee ?? metadata.shippingFee),
     promo_discount: toNumber(order.promo_discount ?? metadata.promoDiscount) > 0 ? formatMoney(order.promo_discount ?? metadata.promoDiscount) : "",
     points_discount: toNumber(order.points_discount ?? metadata.pointsDiscount) > 0 ? formatMoney(order.points_discount ?? metadata.pointsDiscount) : "",
     order_code: orderCode,
     order_time: formatDateTime(order.created_at || metadata.createdAt),
     pickup_time: isPickup ? toText(order.pickup_time_text || metadata.pickupTimeText) : "",
-    fulfillment_type: isPickup ? "Đến lấy" : "Giao tận nơi",
+    fulfillment_type: isPickup ? "Đến lấy tại quán" : "Giao tận nơi",
     pickup_branch: isPickup ? [branchName, branchAddress].filter(Boolean).join(" - ") : "",
     delivery_branch: !isPickup ? [branchName, branchAddress].filter(Boolean).join(" - ") : "",
-    payment_method: toText(order.payment_method).toLowerCase() === "momo" ? "MoMo" : "Chuyển khoản QR",
+    payment_method: toText(order.payment_method).toLowerCase() === "momo"
+      ? "MoMo - Đã thanh toán"
+      : "Chuyển khoản QR - Đã thanh toán",
     map_link: mapLink,
     distance_km: !isPickup && toNumber(order.distance_km ?? metadata.distanceKm) > 0 ? `${toNumber(order.distance_km ?? metadata.distanceKm).toFixed(1)}km` : "",
     address: isPickup ? [branchName, branchAddress].filter(Boolean).join(" - ") : deliveryAddress,
     note: toText(metadata.note),
-    order_link: `/orders?orderCode=${encodeURIComponent(orderCode)}`
+    order_link: `${PUBLIC_ORDER_ORIGIN}/orders?orderCode=${encodeURIComponent(orderCode)}`
   });
 
   const payload = {
@@ -185,7 +197,11 @@ export async function notifyPaidWebsiteOrder(supabase: any, inputOrder: JsonReco
   });
 
   const webhookUrl = toText(Deno.env.get("WEB_ORDER_WEBHOOK_URL")) || DEFAULT_WEB_ORDER_WEBHOOK_URL;
-  const response = await fetch(webhookUrl, { method: "POST", body });
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body
+  });
   if (!response.ok) throw new Error(`Webhook Zalo trả về HTTP ${response.status}.`);
 
   const notifiedAt = new Date().toISOString();
