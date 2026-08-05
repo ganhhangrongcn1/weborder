@@ -46,11 +46,13 @@ const REVIEW_REWARD_API_URL = String(
 ).trim();
 const AUTOMATION_SECRET = String(process.env.PARTNER_REVIEW_AUTOMATION_SECRET || "").trim();
 const SUPABASE_ANON_KEY = String(process.env.PARTNER_REVIEW_ANON_KEY || "").trim();
+const cliNumber = (name) => Number(String(process.argv.find((item) => item.startsWith(`--${name}=`)) || "").split("=")[1]);
 const FALLBACK_INTERVAL_MINUTES = Math.max(5, Number(process.env.PARTNER_REVIEW_INTERVAL_MINUTES) || 60);
 const REVIEW_WINDOW_DAYS = Math.max(1, Number(process.env.PARTNER_REVIEW_WINDOW_DAYS) || 2);
-const FINANCE_SNAPSHOT_DAYS = Math.min(31, Math.max(1, Number(process.env.PARTNER_REVIEW_FINANCE_DAYS) || 2));
-const FINANCE_DETAIL_LIMIT = Math.min(300, Math.max(10, Number(process.env.PARTNER_REVIEW_FINANCE_DETAIL_LIMIT) || 120));
-const FINANCE_DETAIL_CONCURRENCY = Math.min(4, Math.max(1, Number(process.env.PARTNER_REVIEW_FINANCE_DETAIL_CONCURRENCY) || 3));
+const FINANCE_SNAPSHOT_DAYS = Math.min(31, Math.max(1, cliNumber("finance-days") || Number(process.env.PARTNER_REVIEW_FINANCE_DAYS) || 2));
+const FINANCE_DETAIL_LIMIT = Math.min(1000, Math.max(10, cliNumber("finance-detail-limit") || Number(process.env.PARTNER_REVIEW_FINANCE_DETAIL_LIMIT) || 300));
+const FINANCE_DETAIL_CONCURRENCY = Math.min(4, Math.max(1, cliNumber("finance-detail-concurrency") || Number(process.env.PARTNER_REVIEW_FINANCE_DETAIL_CONCURRENCY) || 2));
+const FINANCE_DETAIL_DELAY_MS = Math.min(1000, Math.max(0, cliNumber("finance-detail-delay-ms") || Number(process.env.PARTNER_REVIEW_FINANCE_DETAIL_DELAY_MS) || 400));
 const BATCH_SIZE = Math.min(50, Math.max(1, Number(process.env.PARTNER_REVIEW_BATCH_SIZE) || 4));
 const CONCURRENCY = Math.min(8, Math.max(1, Number(process.env.PARTNER_REVIEW_CONCURRENCY) || 1));
 const HEADLESS = String(process.env.PARTNER_REVIEW_HEADLESS || "true").toLowerCase() !== "false";
@@ -232,6 +234,7 @@ async function collectFinanceSnapshots(page, merchantId, sourceId) {
     const storeId = encodeURIComponent(String(stub.store_id || ""));
     const transactionId = encodeURIComponent(String(stub.transaction_id || ""));
     const payload = await fetchGrabFinanceJson(`https://merchant.grab.com/mex/finances/v2/stores/${storeId}/transactions/${transactionId}`, headers);
+    if (FINANCE_DETAIL_DELAY_MS) await sleep(FINANCE_DETAIL_DELAY_MS);
     return normalizeFinanceTransaction(stub, payload?.data || payload?.result || payload || {});
   });
   return { snapshots, transactions, detailStats: { listed: transactionStubs.length, requested: required.length, remaining: Math.max(0, Number(plan.required_count || required.length) - required.length) } };

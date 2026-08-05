@@ -31,8 +31,8 @@ export default function AdminGrabFinancePage({
   setSelectedBranchFilter
 }) {
   const today = toVietnamDateInputValue();
-  const initialRange = buildPresetRange("month", today);
-  const [preset, setPreset] = useState("month");
+  const initialRange = buildPresetRange("today", today);
+  const [preset, setPreset] = useState("today");
   const [fromDate, setFromDate] = useState(initialRange[0]);
   const [toDate, setToDate] = useState(initialRange[1]);
   const [report, setReport] = useState(null);
