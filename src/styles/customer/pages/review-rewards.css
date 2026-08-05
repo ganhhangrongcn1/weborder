@@ -871,17 +871,20 @@
 }
 
 .review-reward-google-card {
+  position: relative;
   display: grid;
   width: 100%;
   min-height: 76px;
   grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 11px;
-  padding: 13px;
-  border: 1px solid #f0c68f;
+  padding: 16px 104px 13px 13px;
+  border: 1px solid #eebd7d;
   border-radius: 10px;
-  background: linear-gradient(135deg, #fff 0%, #fff7e9 100%);
-  box-shadow: 0 5px 16px rgb(116 64 26 / 7%);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(255 211 137 / 32%) 0, transparent 42%),
+    linear-gradient(135deg, #fff 0%, #fff7e9 100%);
+  box-shadow: 0 7px 20px rgb(160 83 27 / 11%);
   color: #513d31;
   text-align: left;
   transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
@@ -925,6 +928,41 @@
   font-size: 10px;
   font-weight: 550;
   line-height: 1.35;
+}
+
+.review-reward-google-card__reward {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  display: inline-flex;
+  min-height: 29px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #e45f08;
+  border-radius: 0 10px 0 11px;
+  background: linear-gradient(135deg, #ef751d 0%, #dc5705 100%);
+  box-shadow: -4px 4px 10px rgb(184 78 11 / 14%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform-origin: 100% 0;
+  animation: review-reward-badge-nudge 4.8s ease-in-out infinite;
+}
+
+@keyframes review-reward-badge-nudge {
+  0%, 82%, 100% { transform: rotate(0deg) scale(1); }
+  85% { transform: rotate(-3deg) scale(1.025); }
+  88% { transform: rotate(3deg) scale(1.025); }
+  91% { transform: rotate(-2deg) scale(1.015); }
+  94% { transform: rotate(0deg) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-reward-google-card__reward {
+    animation: none;
+  }
 }
 
 .review-reward-orders {

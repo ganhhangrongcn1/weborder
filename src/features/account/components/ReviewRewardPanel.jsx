@@ -564,7 +564,10 @@ export default function ReviewRewardPanel({
               <span className="review-reward-google-card__icon"><Icon name="location" size={22} /></span>
               <span>
                 <strong>Đánh giá Google Maps</strong>
-                <small>Chọn chi nhánh và mở thẳng nơi viết đánh giá</small>
+                <small>Chọn chi nhánh Gánh bạn từng mua để chia sẻ cảm nhận</small>
+              </span>
+              <span className="review-reward-google-card__reward" aria-label={`Nhận ${googleRewardPoints.toLocaleString("vi-VN")} điểm`}>
+                +{googleRewardPoints.toLocaleString("vi-VN")} điểm
               </span>
             </button>
           ) : null}
