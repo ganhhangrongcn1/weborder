@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { orderRepository } from "../services/repositories/orderRepository.js";
 import { getActiveFlashSalePromotions } from "../services/flashSaleService.js";
+import { sanitizeOrderSpice } from "../utils/orderSpice.js";
 
 function normalizeLookupText(value = "") {
   return String(value || "")
@@ -185,7 +186,7 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
       ...item,
       ...product,
       cartId: item.cartId,
-      spice: item.spice,
+      spice: sanitizeOrderSpice(product, item.spice),
       toppings: item.toppings || [],
       note: item.note || "",
       quantity: quantityValue,

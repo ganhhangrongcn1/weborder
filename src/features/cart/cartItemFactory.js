@@ -1,3 +1,5 @@
+import { sanitizeOrderSpice } from "../../utils/orderSpice.js";
+
 export function makeCartItem(product, spice, chosenToppings, qty, note = "") {
   const toppingTotal = chosenToppings.reduce((sum, topping) => sum + Number(topping.price || 0) * (topping.quantity || 1), 0);
   const unitPrice = Number(product.price || 0);
@@ -9,7 +11,7 @@ export function makeCartItem(product, spice, chosenToppings, qty, note = "") {
   return {
     ...product,
     cartId: `${product.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    spice,
+    spice: sanitizeOrderSpice(product, spice),
     toppings: chosenToppings,
     note,
     quantity: qty,

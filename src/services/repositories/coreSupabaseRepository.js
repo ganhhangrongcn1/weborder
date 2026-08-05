@@ -12,6 +12,7 @@ import { isSupabaseConfigSyncEnabled } from "../supabase/runtimeFlags.js";
 import { buildBranchLookupMap, normalizeBranchKey } from "../branchIdentityService.js";
 import { isCheckinLikeEntryType } from "../loyaltyLedgerUtils.js";
 import { buildOrderItemStableId } from "../orderItemIdentityService.js";
+import { sanitizeOrderSpice } from "../../utils/orderSpice.js";
 
 let ordersWriteQueue = Promise.resolve();
 let branchLookupCache = { value: null, cachedAt: 0 };
@@ -362,24 +363,28 @@ function buildOrderItemMetadata(item = {}, index = 0) {
 }
 
 function buildOrderItemRow(item = {}, orderId = "", index = 0) {
-  const productId = getOrderItemProductId(item, index);
-  const quantity = Math.max(1, toFiniteNumber(item.quantity, 1));
-  const unitPrice = toFiniteNumber(item.unitTotal ?? item.unitPrice ?? item.price, 0);
-  const lineTotal = toFiniteNumber(item.lineTotal, quantity * unitPrice);
+  const normalizedItem = {
+    ...item,
+    spice: sanitizeOrderSpice(item, item.spice)
+  };
+  const productId = getOrderItemProductId(normalizedItem, index);
+  const quantity = Math.max(1, toFiniteNumber(normalizedItem.quantity, 1));
+  const unitPrice = toFiniteNumber(normalizedItem.unitTotal ?? normalizedItem.unitPrice ?? normalizedItem.price, 0);
+  const lineTotal = toFiniteNumber(normalizedItem.lineTotal, quantity * unitPrice);
   const row = {
-    id: buildOrderItemStableId(orderId, item, index),
+    id: buildOrderItemStableId(orderId, normalizedItem, index),
     order_id: orderId,
     product_id: productId,
-    product_name: String(item.name || item.productName || item.product_name || ""),
+    product_name: String(normalizedItem.name || normalizedItem.productName || normalizedItem.product_name || ""),
     quantity,
     unit_price: unitPrice,
     line_total: lineTotal,
-    spice: String(item.spice || ""),
-    note: String(item.note || ""),
-    toppings: normalizeOrderItemToppings(item),
-    option_groups: getSelectedOptionGroupRows(item),
-    kitchen_item_status: normalizeKitchenItemStatus(item.kitchenItemStatus || item.kitchen_item_status || item.status),
-    metadata: buildOrderItemMetadata(item, index)
+    spice: normalizedItem.spice,
+    note: String(normalizedItem.note || ""),
+    toppings: normalizeOrderItemToppings(normalizedItem),
+    option_groups: getSelectedOptionGroupRows(normalizedItem),
+    kitchen_item_status: normalizeKitchenItemStatus(normalizedItem.kitchenItemStatus || normalizedItem.kitchen_item_status || normalizedItem.status),
+    metadata: buildOrderItemMetadata(normalizedItem, index)
   };
   return row;
 }
