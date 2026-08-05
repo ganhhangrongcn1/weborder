@@ -243,6 +243,20 @@ export default function ReviewRewardPanel({
   );
   const partnerRewardPoints = Number(data?.settings?.reward_points || DEFAULT_PARTNER_REWARD_POINTS);
   const googleRewardPoints = Number(data?.settings?.google_reward_points || DEFAULT_GOOGLE_REWARD_POINTS);
+  const isGoogleMapsReview = selectedSource === "googlemaps";
+  const proofCopy = isGoogleMapsReview
+    ? {
+        title: "Tải ảnh chụp màn hình Google Maps",
+        description: "Ảnh cần thấy rõ tên chi nhánh Gánh Hàng Rong và mức đánh giá 5 sao.",
+        correct: "Ảnh chụp màn hình Google Maps có tên chi nhánh và 5 sao.",
+        choose: "Chọn ảnh chụp màn hình Google Maps"
+      }
+    : {
+        title: "Tải ảnh chụp màn hình đánh giá",
+        description: "Ảnh cần thấy rõ tên ứng dụng đối tác và mức đánh giá 5 sao.",
+        correct: "Ảnh chụp màn hình đánh giá trên ứng dụng đối tác.",
+        choose: "Chọn ảnh chụp màn hình"
+      };
 
   const handleImage = async (event) => {
     const file = event.target.files?.[0];
@@ -380,14 +394,29 @@ export default function ReviewRewardPanel({
           ) : null}
         </div>
       ) : null}
-      <div className="review-reward-section-title"><div><h3>Tải ảnh đánh giá 5 sao</h3><p>Ảnh cần thấy rõ nền tảng và mức 5 sao.</p></div></div>
+      <div className="review-reward-section-title">
+        <div>
+          <h3>{proofCopy.title}</h3>
+          <p>{proofCopy.description}</p>
+        </div>
+      </div>
+      <div className="review-reward-proof-guide" aria-label="Hướng dẫn chọn ảnh">
+        <div className="is-correct">
+          <span><Icon name="check" size={15} /></span>
+          <p><strong>Ảnh đúng</strong><small>{proofCopy.correct}</small></p>
+        </div>
+        <div className="is-wrong">
+          <span><Icon name="close" size={15} /></span>
+          <p><strong>Không dùng</strong><small>Ảnh món ăn, hóa đơn hoặc ảnh giao hàng.</small></p>
+        </div>
+      </div>
       <label className={`review-reward-upload${proofPreview ? " has-preview" : ""}`}>
         <input type="file" accept="image/*" onChange={handleImage} />
         {proofPreview ? (
           <>
-            <span className="review-reward-upload__selected-icon"><Icon name="check" size={22} /></span>
+            <img className="review-reward-upload__preview" src={proof?.dataUrl} alt="Ảnh chụp màn hình đánh giá đã chọn" />
             <span className="review-reward-upload__selected-copy">
-              <strong>Đã chọn ảnh</strong>
+              <strong>Kiểm tra lại ảnh trước khi gửi</strong>
               <small>{proofPreview} · {Math.max(1, Math.round(Number(proof?.size || 0) / 1024))} KB</small>
             </span>
             <span className="review-reward-upload__change"><Icon name="image" size={15} /> Đổi ảnh</span>
@@ -395,8 +424,8 @@ export default function ReviewRewardPanel({
         ) : (
           <>
             <Icon name="image" size={24} />
-            <strong>{returnedFromMaps ? "Chọn ảnh vừa chụp" : "Chọn ảnh đánh giá 5 sao"}</strong>
-            <span>Chạm để mở thư viện ảnh</span>
+            <strong>{returnedFromMaps ? "Chọn ảnh Google Maps vừa chụp" : proofCopy.choose}</strong>
+            <span>Không chọn ảnh món ăn · Chạm để mở thư viện ảnh</span>
           </>
         )}
       </label>

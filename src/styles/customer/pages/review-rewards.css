@@ -1162,6 +1162,64 @@
   font-weight: 800;
 }
 
+.review-reward-proof-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.review-reward-proof-guide > div {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 7px;
+  padding: 9px;
+  border-radius: 8px;
+}
+
+.review-reward-proof-guide > div > span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 7px;
+}
+
+.review-reward-proof-guide p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.review-reward-proof-guide strong {
+  color: #49372c;
+  font-size: 11px;
+}
+
+.review-reward-proof-guide small {
+  color: #75675f;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.review-reward-proof-guide .is-correct {
+  background: #eef8f2;
+}
+
+.review-reward-proof-guide .is-correct > span {
+  background: #d8f0e1;
+  color: #218355;
+}
+
+.review-reward-proof-guide .is-wrong {
+  background: #fff1ed;
+}
+
+.review-reward-proof-guide .is-wrong > span {
+  background: #f9ded5;
+  color: #b74e31;
+}
+
 .review-reward-view-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1337,14 +1395,12 @@
   text-align: left;
 }
 
-.review-reward-upload__selected-icon {
-  display: grid;
+.review-reward-upload__preview {
   width: 44px;
   height: 44px;
-  place-items: center;
   border-radius: 11px;
-  background: #e9f8ef;
-  color: #218355;
+  background: #f0e7df;
+  object-fit: cover;
 }
 
 .review-reward-upload__selected-copy {
