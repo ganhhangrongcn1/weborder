@@ -81,6 +81,10 @@ export function bottomTabToPath(tab) {
 export function adminPathToState(pathname = "/admin") {
   const path = normalizePath(pathname);
 
+  if (path === "/admin/grab-finance") {
+    return { section: "grab-finance", activeAdminNav: "grab-finance-main" };
+  }
+
   if (path === "/admin/menu") {
     return {
       section: "menu",
@@ -197,6 +201,7 @@ export function adminNavToPath(item) {
   if (!item) return "/admin";
 
   if (item.id === "dashboard-main") return "/admin";
+  if (item.id === "grab-finance-main") return "/admin/grab-finance";
   if (item.id === "orders-main") return "/admin/orders";
   if (item.id === "partner-reviews-main") return "/admin/partner-reviews";
   if (item.id === "review-rewards-main") return "/admin/review-rewards";

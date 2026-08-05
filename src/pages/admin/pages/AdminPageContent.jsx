@@ -10,10 +10,15 @@ import AdminEmployeesPage from "./AdminEmployeesPage.jsx";
 import AdminSupervisionPage from "./AdminSupervisionPage.jsx";
 import AdminPartnerReviewsPage from "./AdminPartnerReviewsPage.jsx";
 import AdminReviewRewardsPage from "./AdminReviewRewardsPage.jsx";
+import AdminGrabFinancePage from "./AdminGrabFinancePage.jsx";
 
 export default function AdminPageContent({ section, ...props }) {
   if (section === "dashboard") {
     return <AdminDashboardPage {...props} />;
+  }
+
+  if (section === "grab-finance") {
+    return <AdminGrabFinancePage {...props} />;
   }
 
   if (section === "orders") {

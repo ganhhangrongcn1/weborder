@@ -48,6 +48,9 @@ const AUTOMATION_SECRET = String(process.env.PARTNER_REVIEW_AUTOMATION_SECRET ||
 const SUPABASE_ANON_KEY = String(process.env.PARTNER_REVIEW_ANON_KEY || "").trim();
 const FALLBACK_INTERVAL_MINUTES = Math.max(5, Number(process.env.PARTNER_REVIEW_INTERVAL_MINUTES) || 60);
 const REVIEW_WINDOW_DAYS = Math.max(1, Number(process.env.PARTNER_REVIEW_WINDOW_DAYS) || 2);
+const FINANCE_SNAPSHOT_DAYS = Math.min(31, Math.max(1, Number(process.env.PARTNER_REVIEW_FINANCE_DAYS) || 2));
+const FINANCE_DETAIL_LIMIT = Math.min(300, Math.max(10, Number(process.env.PARTNER_REVIEW_FINANCE_DETAIL_LIMIT) || 120));
+const FINANCE_DETAIL_CONCURRENCY = Math.min(4, Math.max(1, Number(process.env.PARTNER_REVIEW_FINANCE_DETAIL_CONCURRENCY) || 3));
 const BATCH_SIZE = Math.min(50, Math.max(1, Number(process.env.PARTNER_REVIEW_BATCH_SIZE) || 4));
 const CONCURRENCY = Math.min(8, Math.max(1, Number(process.env.PARTNER_REVIEW_CONCURRENCY) || 1));
 const HEADLESS = String(process.env.PARTNER_REVIEW_HEADLESS || "true").toLowerCase() !== "false";
@@ -81,6 +84,158 @@ const cookieHeader = (cookies) => cookies
   .join("; ");
 const CLOSED_STORE_REASONS = new Set([3, 4, 5, 7, 8]);
 const PAUSED_STORE_REASONS = new Map([[1, "TEMPPAUSED"], [2, "OPSPAUSED"], [6, "OPSPAUSED"]]);
+
+function vietnamDateOnly(offsetDays = 0) {
+  const date = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function grabFinanceSummary(payload) {
+  return [payload?.data, payload?.result, payload].find((value) => value && typeof value === "object" && (
+    "net_earning" in value || "netEarning" in value || "net_sales" in value || "netSales" in value
+  )) || null;
+}
+
+function safeMoneyNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = typeof value === "number" ? value : Number(String(value).replace(/[^\d.-]/g, ""));
+  return Number.isFinite(number) ? Math.round(number) : null;
+}
+
+function financeHeaders(cookie, merchantId) {
+  return {
+    accept: "application/json, text/plain, */*",
+    cookie,
+    merchantid: merchantId,
+    origin: "https://merchant.grab.com",
+    referer: "https://merchant.grab.com/",
+    requestsource: "troyPortal"
+  };
+}
+
+async function fetchGrabFinanceJson(url, headers) {
+  const response = await fetch(url, { headers, signal: globalThis.AbortSignal.timeout(30_000) });
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`Phiên Grab hết hạn khi đồng bộ tài chính (HTTP ${response.status}).`);
+  }
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.message || `Grab Finance API trả HTTP ${response.status}.`);
+  return payload;
+}
+
+function feeBreakdownValue(detail, key) {
+  const item = Array.isArray(detail?.fee_breakdown)
+    ? detail.fee_breakdown.find((entry) => String(entry?.key || "").toUpperCase() === key)
+    : null;
+  return safeMoneyNumber(item?.value?.amount ?? item?.value) || 0;
+}
+
+function vietnamDateFromTimestamp(value) {
+  const timestamp = Date.parse(String(value || ""));
+  if (!Number.isFinite(timestamp)) return vietnamDateOnly();
+  const date = new Date(timestamp + 7 * 60 * 60 * 1000);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function normalizeFinanceTransaction(stub, detail) {
+  const category = String(detail?.transaction_category || stub?.transaction_category || "").toLowerCase();
+  const amount = safeMoneyNumber(detail?.amount) || 0;
+  const taxOnAmount = safeMoneyNumber(detail?.tax_on_amount) || 0;
+  return {
+    transaction_id: String(detail?.transaction_id || stub?.transaction_id || ""),
+    store_id: String(detail?.store_id || stub?.store_id || ""),
+    transaction_date: String(stub?.report_date || vietnamDateFromTimestamp(detail?.created_at || stub?.created_at)),
+    transaction_updated_at: detail?.updated_at || stub?.updated_at || null,
+    transaction_category: category,
+    transaction_sub_category: String(detail?.transaction_sub_category || stub?.transaction_sub_category || ""),
+    transaction_status: String(detail?.transaction_status || stub?.transaction_status || ""),
+    currency: String(detail?.currency || "VND"),
+    net_total: safeMoneyNumber(detail?.net_total) || 0,
+    net_sales: safeMoneyNumber(detail?.net_sales) || 0,
+    order_value: safeMoneyNumber(detail?.order_value) || 0,
+    merchant_discount: safeMoneyNumber(detail?.mex_fund_discount) || 0,
+    delivery_discount: safeMoneyNumber(detail?.mex_fund_delivery_campaign) || 0,
+    voucher_amount: safeMoneyNumber(detail?.mex_issued_voucher) || 0,
+    offer_amount: safeMoneyNumber(detail?.offer_amount) || 0,
+    advertising_amount: category === "advertisement" ? (safeMoneyNumber(detail?.net_total) || amount) : 0,
+    advertising_tax: category === "advertisement" ? taxOnAmount : 0,
+    service_fee: safeMoneyNumber(detail?.gf_total_commission ?? detail?.gk_total_commission) || 0,
+    channel_commission: safeMoneyNumber(detail?.channel_commission) || 0,
+    delivery_commission: safeMoneyNumber(detail?.delivery_commission) || 0,
+    commission_tax: safeMoneyNumber(detail?.gf_total_commission_tax ?? detail?.gk_total_commission_tax) || 0,
+    vat_amount: feeBreakdownValue(detail, "VAT_AMOUNT"),
+    withholding_tax: safeMoneyNumber(detail?.withholding_tax) || feeBreakdownValue(detail, "PIT_AMOUNT"),
+    merchant_charges: safeMoneyNumber(detail?.mex_charges) || 0,
+    raw_data: {
+      fee_breakdown: Array.isArray(detail?.fee_breakdown) ? detail.fee_breakdown : [],
+      commissions: Array.isArray(detail?.commissions) ? detail.commissions : [],
+      omni_discount_details: detail?.omniDiscountDetails || null
+    }
+  };
+}
+
+async function mapWithConcurrency(items, concurrency, task) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await task(items[index]);
+    }
+  }));
+  return results;
+}
+
+async function collectFinanceSnapshots(page, merchantId, sourceId) {
+  if (!merchantId) return { snapshots: [], transactions: [], detailStats: { listed: 0, requested: 0 } };
+  const cookies = await page.cookies("https://merchant.grab.com/", "https://api.grab.com/");
+  const cookie = cookieHeader(cookies);
+  if (!cookie) throw new Error("Chưa có cookie Grab để đồng bộ tài chính.");
+  const headers = financeHeaders(cookie, merchantId);
+  const snapshots = [];
+  for (let offset = 0; offset > -FINANCE_SNAPSHOT_DAYS; offset -= 1) {
+    const snapshotDate = vietnamDateOnly(offset);
+    const query = new URLSearchParams({ from: snapshotDate, to: snapshotDate });
+    const payload = await fetchGrabFinanceJson(`https://merchant.grab.com/mex/finances/v1/transactions/summary?${query}`, headers);
+    const summary = grabFinanceSummary(payload);
+    const netIncomeAmount = safeMoneyNumber(summary?.net_earning ?? summary?.netEarning);
+    if (!summary || !Number.isSafeInteger(netIncomeAmount)) throw new Error(`Không đọc được thu nhập ròng Grab ngày ${snapshotDate}.`);
+    snapshots.push({ snapshot_date: snapshotDate, currency: String(summary.currency || "VND"), net_revenue_amount: safeMoneyNumber(summary.net_sales ?? summary.netSales), net_income_amount: netIncomeAmount, raw_data: { source_path: "mex/finances/v1/transactions/summary", summary } });
+  }
+
+  const transactionStubs = [];
+  for (let dayOffset = 0; dayOffset > -FINANCE_SNAPSHOT_DAYS; dayOffset -= 1) {
+    const reportDate = vietnamDateOnly(dayOffset);
+    let offset = 0;
+    while (transactionStubs.length < 1000) {
+      const query = new URLSearchParams({ from: reportDate, to: reportDate, offset: String(offset), limit: "50" });
+      const payload = await fetchGrabFinanceJson(`https://merchant.grab.com/mex/finances/v2/transactions?${query}`, headers);
+      const pageData = payload?.data || payload?.result || payload || {};
+      const results = Array.isArray(pageData.results) ? pageData.results : [];
+      transactionStubs.push(...results.map((item) => ({ ...item, report_date: reportDate })));
+      offset += results.length;
+      if (results.length < 50) break;
+    }
+  }
+
+  const plan = transactionStubs.length
+    ? await api("automation_finance_detail_plan", {
+        source_id: sourceId,
+        transactions: transactionStubs.map((item) => ({ transaction_id: item.transaction_id, updated_at: item.updated_at }))
+      })
+    : { required_transaction_ids: [] };
+  const requiredIds = new Set((plan.required_transaction_ids || []).slice(0, FINANCE_DETAIL_LIMIT).map(String));
+  const required = transactionStubs.filter((item) => requiredIds.has(String(item.transaction_id)));
+  const transactions = await mapWithConcurrency(required, FINANCE_DETAIL_CONCURRENCY, async (stub) => {
+    const storeId = encodeURIComponent(String(stub.store_id || ""));
+    const transactionId = encodeURIComponent(String(stub.transaction_id || ""));
+    const payload = await fetchGrabFinanceJson(`https://merchant.grab.com/mex/finances/v2/stores/${storeId}/transactions/${transactionId}`, headers);
+    return normalizeFinanceTransaction(stub, payload?.data || payload?.result || payload || {});
+  });
+  return { snapshots, transactions, detailStats: { listed: transactionStubs.length, requested: required.length, remaining: Math.max(0, Number(plan.required_count || required.length) - required.length) } };
+}
 
 async function withExclusiveLogin(task) {
   const previousLogin = loginQueue;
@@ -170,7 +325,8 @@ async function api(action, payload = {}) {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || !body.ok) {
-    throw new Error(body.message || `Partner review API returned ${response.status}`);
+    const detail = String(body.detail || "").trim();
+    throw new Error([body.message || `Partner review API returned ${response.status}`, detail].filter(Boolean).join(" - "));
   }
   return body;
 }
@@ -532,6 +688,21 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       }
     }
 
+    const merchantId = String(source.merchant_id || reviews.find((review) => review?.merchantID)?.merchantID || "");
+    let financeSnapshots = [];
+    let financeTransactions = [];
+    let financeDetailStats = { listed: 0, requested: 0, remaining: 0 };
+    let financeError = "";
+    try {
+      const finance = await collectFinanceSnapshots(page, merchantId, source.id);
+      financeSnapshots = finance.snapshots;
+      financeTransactions = finance.transactions;
+      financeDetailStats = finance.detailStats;
+    } catch (error) {
+      financeError = String(error?.message || error).slice(0, 500);
+      await log("Chưa đồng bộ được tài chính Grab, vẫn lưu đánh giá:", `${source.display_name} - ${financeError}`);
+    }
+
     let busyResult = { applied: false, reason: "disabled" };
     if (source.busy_enabled === true) {
       try {
@@ -559,7 +730,6 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
           storage: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)))
         }
       : {};
-    const merchantId = String(reviews.find((review) => review?.merchantID)?.merchantID || "");
     const result = await api("automation_reviews", {
       source_id: source.id,
       worker_id: WORKER_ID,
@@ -567,12 +737,16 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       merchant_id: merchantId,
       overview,
       reviews,
+      finance_snapshots: financeSnapshots,
+      finance_transactions: financeTransactions,
+      finance_detail_stats: financeDetailStats,
+      finance_error: financeError,
       session,
       busy_result: busyResult
     });
     await log(
       "Đồng bộ thành công:",
-      `${source.display_name} - ${result.upserted_count} đánh giá / ${pageCount} trang / ${Math.round((Date.now() - startedAt) / 1000)} giây / ${directApi ? "API trực tiếp" : "trình duyệt"}`
+      `${source.display_name} - ${result.upserted_count} đánh giá / ${result.finance_transaction_count || 0} giao dịch mới / ${pageCount} trang / ${Math.round((Date.now() - startedAt) / 1000)} giây / ${directApi ? "API trực tiếp" : "trình duyệt"}`
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

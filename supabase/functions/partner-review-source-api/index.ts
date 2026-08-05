@@ -951,6 +951,49 @@ function arrayValue(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
+async function planAutomationFinanceDetails(
+  request: Request,
+  client: ReturnType<typeof createClient>,
+  body: Row
+) {
+  const expected = text(Deno.env.get("PARTNER_REVIEW_AUTOMATION_SECRET"));
+  const provided = text(request.headers.get("x-automation-secret"));
+  if (!expected || !provided || provided !== expected) {
+    return reply({ ok: false, message: "Automation secret khong hop le." }, 403);
+  }
+  const sourceId = text(body.source_id);
+  const candidates = arrayValue(body.transactions)
+    .map((item) => object(item))
+    .filter((item) => text(item.transaction_id))
+    .slice(0, 1000);
+  if (!sourceId) return reply({ ok: false, message: "Thieu nguon dong bo." }, 400);
+
+  const existing = new Map<string, string>();
+  const ids = candidates.map((item) => text(item.transaction_id));
+  for (let index = 0; index < ids.length; index += 500) {
+    const { data, error } = await client
+      .from("partner_grab_finance_transactions")
+      .select("transaction_id,transaction_updated_at")
+      .eq("source_id", sourceId)
+      .in("transaction_id", ids.slice(index, index + 500));
+    if (error) throw error;
+    (data || []).forEach((item: Row) => existing.set(text(item.transaction_id), text(item.transaction_updated_at)));
+  }
+  const requiredTransactionIds = candidates
+    .filter((item) => {
+      const stored = existing.get(text(item.transaction_id));
+      if (!stored) return true;
+      const incoming = text(item.updated_at);
+      return incoming && Date.parse(incoming) !== Date.parse(stored);
+    })
+    .map((item) => text(item.transaction_id));
+  return reply({
+    ok: true,
+    required_count: requiredTransactionIds.length,
+    required_transaction_ids: requiredTransactionIds
+  });
+}
+
 async function saveAutomationReviews(
   request: Request,
   client: ReturnType<typeof createClient>,
@@ -967,6 +1010,8 @@ async function saveAutomationReviews(
   const overview = object(body.overview);
   const session = object(body.session);
   const busyResult = object(body.busy_result);
+  const financeSnapshots = arrayValue(body.finance_snapshots).map((snapshot) => object(snapshot));
+  const financeTransactions = arrayValue(body.finance_transactions).map((transaction) => object(transaction));
   if (!sourceId) return reply({ ok: false, message: "Thieu nguon dong bo." }, 400);
 
   const { data: source } = await client
@@ -1028,6 +1073,69 @@ async function saveAutomationReviews(
       if (error) throw error;
     }
 
+    const financeRows = financeSnapshots
+      .filter((snapshot) => /^\d{4}-\d{2}-\d{2}$/.test(text(snapshot.snapshot_date)))
+      .map((snapshot) => ({
+        source_id: sourceId,
+        branch_uuid: source.branch_uuid || null,
+        branch_code: text(source.branch_code) || null,
+        snapshot_date: text(snapshot.snapshot_date),
+        currency: text(snapshot.currency || "VND").toUpperCase().slice(0, 10),
+        net_revenue_amount: Number.isFinite(Number(snapshot.net_revenue_amount)) ? Math.round(Number(snapshot.net_revenue_amount)) : null,
+        net_income_amount: Math.round(Number(snapshot.net_income_amount)),
+        raw_data: object(snapshot.raw_data),
+        last_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }))
+      .filter((snapshot) => Number.isSafeInteger(snapshot.net_income_amount));
+    if (financeRows.length) {
+      const { error: financeError } = await client
+        .from("partner_grab_finance_snapshots")
+        .upsert(financeRows, { onConflict: "source_id,snapshot_date" });
+      if (financeError) throw financeError;
+    }
+
+    const financeTransactionRows = financeTransactions
+      .filter((transaction) => text(transaction.transaction_id) && /^\d{4}-\d{2}-\d{2}$/.test(text(transaction.transaction_date)))
+      .map((transaction) => ({
+        source_id: sourceId,
+        branch_uuid: source.branch_uuid || null,
+        branch_code: text(source.branch_code) || null,
+        transaction_id: text(transaction.transaction_id),
+        store_id: text(transaction.store_id) || null,
+        transaction_date: text(transaction.transaction_date),
+        transaction_updated_at: text(transaction.transaction_updated_at) || null,
+        transaction_category: text(transaction.transaction_category) || null,
+        transaction_sub_category: text(transaction.transaction_sub_category) || null,
+        transaction_status: text(transaction.transaction_status) || null,
+        currency: text(transaction.currency || "VND").toUpperCase().slice(0, 10),
+        net_total: Math.round(Number(transaction.net_total) || 0),
+        net_sales: Math.round(Number(transaction.net_sales) || 0),
+        order_value: Math.round(Number(transaction.order_value) || 0),
+        merchant_discount: Math.round(Number(transaction.merchant_discount) || 0),
+        delivery_discount: Math.round(Number(transaction.delivery_discount) || 0),
+        voucher_amount: Math.round(Number(transaction.voucher_amount) || 0),
+        offer_amount: Math.round(Number(transaction.offer_amount) || 0),
+        advertising_amount: Math.round(Number(transaction.advertising_amount) || 0),
+        advertising_tax: Math.round(Number(transaction.advertising_tax) || 0),
+        service_fee: Math.round(Number(transaction.service_fee) || 0),
+        channel_commission: Math.round(Number(transaction.channel_commission) || 0),
+        delivery_commission: Math.round(Number(transaction.delivery_commission) || 0),
+        commission_tax: Math.round(Number(transaction.commission_tax) || 0),
+        vat_amount: Math.round(Number(transaction.vat_amount) || 0),
+        withholding_tax: Math.round(Number(transaction.withholding_tax) || 0),
+        merchant_charges: Math.round(Number(transaction.merchant_charges) || 0),
+        raw_data: object(transaction.raw_data),
+        last_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+    for (let index = 0; index < financeTransactionRows.length; index += 500) {
+      const { error: financeTransactionError } = await client
+        .from("partner_grab_finance_transactions")
+        .upsert(financeTransactionRows.slice(index, index + 500), { onConflict: "source_id,transaction_id" });
+      if (financeTransactionError) throw financeTransactionError;
+    }
+
     let sessionSecretId = text(source.session_secret_id);
     if (Object.keys(session).length) {
       sessionSecretId = await storeSecret(
@@ -1057,6 +1165,10 @@ async function saveAutomationReviews(
           ...releasedMetadata,
           feedback_overview: overview,
           last_fetched_count: reviews.length,
+          last_finance_snapshot_count: financeRows.length,
+          last_finance_transaction_count: financeTransactionRows.length,
+          last_finance_detail_stats: object(body.finance_detail_stats),
+          last_finance_error: text(body.finance_error) || null,
           last_busy_result: busyResult,
           ...(busyResult.applied === true ? { last_busy_at: finishedAt } : {})
         },
@@ -1087,7 +1199,9 @@ async function saveAutomationReviews(
       source_id: sourceId,
       fetched_count: reviews.length,
       upserted_count: rows.length,
-      merchant_id: merchantId
+      merchant_id: merchantId,
+      finance_snapshot_count: financeRows.length,
+      finance_transaction_count: financeTransactionRows.length
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : JSON.stringify(error);
@@ -1122,6 +1236,168 @@ async function saveAutomationReviews(
     }
     return reply({ ok: false, message: "Khong luu duoc danh gia.", detail }, 500);
   }
+}
+
+async function getFinanceReport(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
+  const fromDate = text(body.from_date || body.fromDate);
+  const toDate = text(body.to_date || body.toDate);
+  const requestedBranchUuid = text(body.branch_uuid || body.branchUuid);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate) || fromDate > toDate) {
+    return reply({ ok: false, message: "Khoảng ngày báo cáo Grab không hợp lệ." }, 400);
+  }
+  const adminBranchUuid = text(admin.branch_uuid);
+  const branchUuid = adminBranchUuid || requestedBranchUuid;
+  if (adminBranchUuid && requestedBranchUuid && adminBranchUuid !== requestedBranchUuid) {
+    return reply({ ok: false, message: "Admin không có quyền xem chi nhánh đã chọn." }, 403);
+  }
+
+  let query = client
+    .from("partner_grab_finance_snapshots")
+    .select("source_id,branch_uuid,branch_code,snapshot_date,currency,net_revenue_amount,net_income_amount,last_synced_at,raw_data")
+    .gte("snapshot_date", fromDate)
+    .lte("snapshot_date", toDate)
+    .order("snapshot_date", { ascending: true });
+  if (branchUuid) query = query.eq("branch_uuid", branchUuid);
+  const { data: snapshots, error } = await query;
+  if (error) throw error;
+
+  let transactionQuery = client
+    .from("partner_grab_finance_transactions")
+    .select("source_id,transaction_date,order_value,merchant_discount,delivery_discount,voucher_amount,offer_amount,advertising_amount,advertising_tax,service_fee,channel_commission,delivery_commission,commission_tax,vat_amount,withholding_tax,merchant_charges,last_synced_at")
+    .gte("transaction_date", fromDate)
+    .lte("transaction_date", toDate);
+  if (branchUuid) transactionQuery = transactionQuery.eq("branch_uuid", branchUuid);
+  const { data: transactions, error: transactionError } = await transactionQuery;
+  if (transactionError) throw transactionError;
+
+  const detailFields = [
+    "orderValueAmount", "merchantDiscountAmount", "deliveryDiscountAmount", "voucherAmount", "offerAmount",
+    "advertisingAmount", "advertisingTaxAmount", "serviceFeeAmount", "channelCommissionAmount",
+    "deliveryCommissionAmount", "commissionTaxAmount", "vatAmount", "withholdingTaxAmount",
+    "merchantChargesAmount", "detailedTransactionCount"
+  ];
+  const emptyDetails = () => Object.fromEntries(detailFields.map((field) => [field, 0]));
+  const addTransactionDetails = (target: Row, transaction: Row) => {
+    target.orderValueAmount = Number(target.orderValueAmount || 0) + Number(transaction.order_value || 0);
+    target.merchantDiscountAmount = Number(target.merchantDiscountAmount || 0) + Number(transaction.merchant_discount || 0);
+    target.deliveryDiscountAmount = Number(target.deliveryDiscountAmount || 0) + Number(transaction.delivery_discount || 0);
+    target.voucherAmount = Number(target.voucherAmount || 0) + Number(transaction.voucher_amount || 0);
+    target.offerAmount = Number(target.offerAmount || 0) + Number(transaction.offer_amount || 0);
+    target.advertisingAmount = Number(target.advertisingAmount || 0) + Number(transaction.advertising_amount || 0);
+    target.advertisingTaxAmount = Number(target.advertisingTaxAmount || 0) + Number(transaction.advertising_tax || 0);
+    target.serviceFeeAmount = Number(target.serviceFeeAmount || 0) + Number(transaction.service_fee || 0);
+    target.channelCommissionAmount = Number(target.channelCommissionAmount || 0) + Number(transaction.channel_commission || 0);
+    target.deliveryCommissionAmount = Number(target.deliveryCommissionAmount || 0) + Number(transaction.delivery_commission || 0);
+    target.commissionTaxAmount = Number(target.commissionTaxAmount || 0) + Number(transaction.commission_tax || 0);
+    target.vatAmount = Number(target.vatAmount || 0) + Number(transaction.vat_amount || 0);
+    target.withholdingTaxAmount = Number(target.withholdingTaxAmount || 0) + Number(transaction.withholding_tax || 0);
+    target.merchantChargesAmount = Number(target.merchantChargesAmount || 0) + Number(transaction.merchant_charges || 0);
+    target.detailedTransactionCount = Number(target.detailedTransactionCount || 0) + 1;
+  };
+
+  const sourceIds = [...new Set((snapshots || []).map((item: Row) => text(item.source_id)).filter(Boolean))];
+  const sourcesResult = sourceIds.length
+    ? await client.from("partner_review_sources").select("id,display_name,branch_uuid,branch_code").in("id", sourceIds)
+    : { data: [] };
+  const sourceById = new Map((sourcesResult.data || []).map((source: Row) => [text(source.id), source]));
+  const accountMap = new Map<string, Row>();
+  (snapshots || []).forEach((snapshot: Row) => {
+    const sourceId = text(snapshot.source_id);
+    const source = sourceById.get(sourceId) || {};
+    const current = accountMap.get(sourceId) || {
+      sourceId,
+      displayName: text(source.display_name),
+      branchUuid: text(snapshot.branch_uuid),
+      branchCode: text(snapshot.branch_code),
+      netRevenueAmount: 0,
+      netIncomeAmount: 0,
+      grossSalesAmount: 0,
+      totalOrders: 0,
+      totalPayments: 0,
+      snapshotCount: 0,
+      ...emptyDetails(),
+      lastSyncedAt: null,
+      dailyTotals: []
+    };
+    const summary = object(object(snapshot.raw_data).summary);
+    const grossSalesAmount = Number(summary.gross_sales ?? summary.grossSales ?? 0);
+    const totalOrders = Number(summary.total_orders ?? summary.totalOrders ?? 0);
+    const totalPayments = Number(summary.total_payments ?? summary.totalPayments ?? 0);
+    current.netRevenueAmount = Number(current.netRevenueAmount || 0) + Number(snapshot.net_revenue_amount || 0);
+    current.netIncomeAmount = Number(current.netIncomeAmount || 0) + Number(snapshot.net_income_amount || 0);
+    current.grossSalesAmount = Number(current.grossSalesAmount || 0) + grossSalesAmount;
+    current.totalOrders = Number(current.totalOrders || 0) + totalOrders;
+    current.totalPayments = Number(current.totalPayments || 0) + totalPayments;
+    current.snapshotCount = Number(current.snapshotCount || 0) + 1;
+    (current.dailyTotals as Row[]).push({
+      date: text(snapshot.snapshot_date),
+      grossSalesAmount,
+      netRevenueAmount: Number(snapshot.net_revenue_amount || 0),
+      netIncomeAmount: Number(snapshot.net_income_amount || 0),
+      totalOrders,
+      totalPayments
+    });
+    if (text(snapshot.last_synced_at) > text(current.lastSyncedAt)) current.lastSyncedAt = snapshot.last_synced_at;
+    accountMap.set(sourceId, current);
+  });
+  (transactions || []).forEach((transaction: Row) => {
+    const account = accountMap.get(text(transaction.source_id));
+    if (!account) return;
+    addTransactionDetails(account, transaction);
+    const day = (account.dailyTotals as Row[]).find((item) => text(item.date) === text(transaction.transaction_date));
+    if (day) addTransactionDetails(day, transaction);
+    if (text(transaction.last_synced_at) > text(account.lastSyncedAt)) account.lastSyncedAt = transaction.last_synced_at;
+  });
+  const accounts = [...accountMap.values()].map((account) => ({
+    ...account,
+    dailyTotals: (account.dailyTotals as Row[]).sort((left, right) => text(right.date).localeCompare(text(left.date)))
+  }));
+  const dailyMap = new Map<string, Row>();
+  (snapshots || []).forEach((snapshot: Row) => {
+    const date = text(snapshot.snapshot_date);
+    const summary = object(object(snapshot.raw_data).summary);
+    const current = dailyMap.get(date) || { date, grossSalesAmount: 0, netIncomeAmount: 0, netRevenueAmount: 0, totalOrders: 0, totalPayments: 0, ...emptyDetails(), sourceIds: new Set<string>() };
+    current.grossSalesAmount = Number(current.grossSalesAmount || 0) + Number(summary.gross_sales ?? summary.grossSales ?? 0);
+    current.netIncomeAmount = Number(current.netIncomeAmount || 0) + Number(snapshot.net_income_amount || 0);
+    current.netRevenueAmount = Number(current.netRevenueAmount || 0) + Number(snapshot.net_revenue_amount || 0);
+    current.totalOrders = Number(current.totalOrders || 0) + Number(summary.total_orders ?? summary.totalOrders ?? 0);
+    current.totalPayments = Number(current.totalPayments || 0) + Number(summary.total_payments ?? summary.totalPayments ?? 0);
+    (current.sourceIds as Set<string>).add(text(snapshot.source_id));
+    dailyMap.set(date, current);
+  });
+  (transactions || []).forEach((transaction: Row) => {
+    const current = dailyMap.get(text(transaction.transaction_date));
+    if (current) addTransactionDetails(current, transaction);
+  });
+  const dailyTotals = [...dailyMap.values()].map((item) => ({
+    date: item.date,
+    grossSalesAmount: item.grossSalesAmount,
+    netIncomeAmount: item.netIncomeAmount,
+    netRevenueAmount: item.netRevenueAmount,
+    totalOrders: item.totalOrders,
+      totalPayments: item.totalPayments,
+      ...Object.fromEntries(detailFields.map((field) => [field, item[field] || 0])),
+      accountCount: (item.sourceIds as Set<string>).size
+  })).sort((left, right) => text(right.date).localeCompare(text(left.date)));
+  return reply({
+    ok: true,
+    data: {
+      fromDate,
+      toDate,
+      currency: "VND",
+      netRevenueAmount: accounts.reduce((sum, account) => sum + Number(account.netRevenueAmount || 0), 0),
+      netIncomeAmount: accounts.reduce((sum, account) => sum + Number(account.netIncomeAmount || 0), 0),
+      grossSalesAmount: accounts.reduce((sum, account) => sum + Number(account.grossSalesAmount || 0), 0),
+      totalOrders: accounts.reduce((sum, account) => sum + Number(account.totalOrders || 0), 0),
+      totalPayments: accounts.reduce((sum, account) => sum + Number(account.totalPayments || 0), 0),
+      ...Object.fromEntries(detailFields.map((field) => [field, accounts.reduce((sum, account) => sum + Number(account[field] || 0), 0)])),
+      accountCount: accounts.length,
+      snapshotCount: (snapshots || []).length,
+      lastSyncedAt: (snapshots || []).reduce((latest: string, item: Row) => text(item.last_synced_at) > latest ? text(item.last_synced_at) : latest, "") || null,
+      dailyTotals,
+      accounts
+    }
+  });
 }
 
 Deno.serve(async (request) => {
@@ -1163,6 +1439,9 @@ Deno.serve(async (request) => {
   if (action === "automation_session") {
     return saveAutomationSession(request, client, body);
   }
+  if (action === "automation_finance_detail_plan") {
+    return planAutomationFinanceDetails(request, client, body);
+  }
   if (action === "automation_reviews") {
     return saveAutomationReviews(request, client, body);
   }
@@ -1173,6 +1452,7 @@ Deno.serve(async (request) => {
   const admin = await getAdmin(request, client);
   if (!admin) return reply({ ok: false, message: "Chỉ admin mới được quản lý nguồn đánh giá." }, 403);
   if (action === "list") return listSources(client, admin);
+  if (action === "finance_report") return getFinanceReport(client, admin, body);
   if (action === "list_reviews") return listReviews(client, admin, body);
   if (action === "save") return saveSource(client, admin, body);
   if (action === "save_worker_settings") return saveWorkerSettings(client, body);

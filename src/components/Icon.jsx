@@ -35,6 +35,7 @@ import {
   Trash,
   UserCircle,
   WarningCircle,
+  Wallet,
   X
 } from "@phosphor-icons/react";
 
@@ -71,6 +72,7 @@ const iconComponents = {
   qr: QrCode,
   download: DownloadSimple,
   warning: WarningCircle,
+  wallet: Wallet,
   logout: SignOut,
   minus: Minus,
   plus: Plus,
