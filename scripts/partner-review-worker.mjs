@@ -116,10 +116,17 @@ function financeHeaders(cookie, merchantId) {
   };
 }
 
-async function fetchGrabFinanceJson(url, headers) {
+async function fetchGrabFinanceJson(url, headers, cookieJar = null) {
   const response = await fetch(url, { headers, signal: globalThis.AbortSignal.timeout(30_000) });
+  if (cookieJar && typeof response.headers.getSetCookie === "function") {
+    for (const value of response.headers.getSetCookie()) {
+      await cookieJar.setCookie(value, url);
+    }
+  }
   if (response.status === 401 || response.status === 403) {
-    throw new Error(`Phiên Grab hết hạn khi đồng bộ tài chính (HTTP ${response.status}).`);
+    const error = new Error(`Phiên Grab hết hạn khi đồng bộ tài chính (HTTP ${response.status}).`);
+    error.code = "GRAB_SESSION_EXPIRED";
+    throw error;
   }
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message || `Grab Finance API trả HTTP ${response.status}.`);
@@ -190,17 +197,21 @@ async function mapWithConcurrency(items, concurrency, task) {
   return results;
 }
 
-async function collectFinanceSnapshots(page, merchantId, sourceId) {
+async function collectFinanceSnapshots(page, merchantId, sourceId, cookieJar = null) {
   if (!merchantId) return { snapshots: [], transactions: [], detailStats: { listed: 0, requested: 0 } };
-  const cookies = await page.cookies("https://merchant.grab.com/", "https://api.grab.com/");
-  const cookie = cookieHeader(cookies);
-  if (!cookie) throw new Error("Chưa có cookie Grab để đồng bộ tài chính.");
-  const headers = financeHeaders(cookie, merchantId);
+  const cookies = cookieJar
+    ? []
+    : await page.cookies("https://merchant.grab.com/", "https://api.grab.com/");
+  if (!cookieJar && !cookieHeader(cookies)) throw new Error("Chưa có cookie Grab để đồng bộ tài chính.");
+  const request = async (url) => {
+    const cookie = cookieJar ? await cookieJar.getCookieString(url) : cookieHeader(cookies);
+    return fetchGrabFinanceJson(url, financeHeaders(cookie, merchantId), cookieJar);
+  };
   const snapshots = [];
   for (let offset = 0; offset > -FINANCE_SNAPSHOT_DAYS; offset -= 1) {
     const snapshotDate = vietnamDateOnly(offset);
     const query = new URLSearchParams({ from: snapshotDate, to: snapshotDate });
-    const payload = await fetchGrabFinanceJson(`https://merchant.grab.com/mex/finances/v1/transactions/summary?${query}`, headers);
+    const payload = await request(`https://merchant.grab.com/mex/finances/v1/transactions/summary?${query}`);
     const summary = grabFinanceSummary(payload);
     const netIncomeAmount = safeMoneyNumber(summary?.net_earning ?? summary?.netEarning);
     if (!summary || !Number.isSafeInteger(netIncomeAmount)) throw new Error(`Không đọc được thu nhập ròng Grab ngày ${snapshotDate}.`);
@@ -213,7 +224,7 @@ async function collectFinanceSnapshots(page, merchantId, sourceId) {
     let offset = 0;
     while (transactionStubs.length < 1000) {
       const query = new URLSearchParams({ from: reportDate, to: reportDate, offset: String(offset), limit: "50" });
-      const payload = await fetchGrabFinanceJson(`https://merchant.grab.com/mex/finances/v2/transactions?${query}`, headers);
+      const payload = await request(`https://merchant.grab.com/mex/finances/v2/transactions?${query}`);
       const pageData = payload?.data || payload?.result || payload || {};
       const results = Array.isArray(pageData.results) ? pageData.results : [];
       transactionStubs.push(...results.map((item) => ({ ...item, report_date: reportDate })));
@@ -233,7 +244,7 @@ async function collectFinanceSnapshots(page, merchantId, sourceId) {
   const transactions = await mapWithConcurrency(required, FINANCE_DETAIL_CONCURRENCY, async (stub) => {
     const storeId = encodeURIComponent(String(stub.store_id || ""));
     const transactionId = encodeURIComponent(String(stub.transaction_id || ""));
-    const payload = await fetchGrabFinanceJson(`https://merchant.grab.com/mex/finances/v2/stores/${storeId}/transactions/${transactionId}`, headers);
+    const payload = await request(`https://merchant.grab.com/mex/finances/v2/stores/${storeId}/transactions/${transactionId}`);
     if (FINANCE_DETAIL_DELAY_MS) await sleep(FINANCE_DETAIL_DELAY_MS);
     return normalizeFinanceTransaction(stub, payload?.data || payload?.result || payload || {});
   });
@@ -430,6 +441,28 @@ async function restoreStoredSession(page, source) {
   }
 }
 
+async function currentBrowserSession(page) {
+  return {
+    cookies: await page.cookies(),
+    storage: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage))).catch(() => ({}))
+  };
+}
+
+async function saveRefreshedSession(page, source) {
+  await api("automation_session", {
+    source_id: source.id,
+    worker_id: WORKER_ID,
+    lease_token: source.lease_token,
+    session: await currentBrowserSession(page)
+  });
+  await log("Đã lưu phiên Grab mới sau khi đăng nhập:", source.display_name);
+}
+
+function isGrabSessionExpired(error) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return error?.code === "GRAB_SESSION_EXPIRED" || /hết hạn|401|403/i.test(message);
+}
+
 async function loginViaBrowser(page, source, credentials, { visible = false } = {}) {
   const { username, password } = credentials;
   if (!await isLoginRequired(page)) {
@@ -482,14 +515,14 @@ async function login(page, source, { visible = false, authBundle = null } = {}) 
     for (let attempt = 0; attempt <= LOGIN_RETRY_DELAYS_MS.length; attempt += 1) {
       await waitForLoginSlot(source);
       try {
-        const cookies = await loginGrabDirect(page.browser(), credentials);
-        await page.browserContext().setCookie(...cookies);
+        const directSession = await loginGrabDirect(page.browser(), credentials);
+        await page.browserContext().setCookie(...directSession.cookies);
         await openFeedbackPage(page, { force: true });
         if (await isLoginRequired(page)) {
           throw new Error("Phiên đăng nhập API chưa mở được Grab Portal.");
         }
         await log("Đăng nhập Grab trực tiếp thành công:", source.display_name);
-        return;
+        return directSession.jar;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const code = error?.code || classifyGrabLoginFailure(message, error?.status);
@@ -509,6 +542,7 @@ async function login(page, source, { visible = false, authBundle = null } = {}) 
 
     await loginViaBrowser(page, source, credentials, { visible });
     await log("Đăng nhập Grab bằng Chrome thành công:", source.display_name);
+    return null;
   });
 }
 
@@ -654,6 +688,7 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
     let overview;
     let pageCount;
     let directApi = false;
+    let directCookieJar = null;
 
     if (source.merchant_id) {
       try {
@@ -661,30 +696,53 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
         directApi = true;
         await log("Dùng cookie gọi trực tiếp Grab API:", source.display_name);
       } catch (error) {
-        await log(
-          "Chuyển sang trình duyệt để làm mới phiên:",
-          `${source.display_name} - ${error instanceof Error ? error.message : String(error)}`
-        );
+        if (isGrabSessionExpired(error)) {
+          await log("Phiên Grab API đã hết hạn, đăng nhập lại và thử API một lần:", source.display_name);
+          directCookieJar = await login(page, source, { visible: !headless, authBundle });
+          loggedInNow = true;
+          await saveRefreshedSession(page, source);
+          try {
+            ({ reviews, overview, pageCount } = await collectFeedbackDirect(page, source, directCookieJar));
+            directApi = true;
+            await log("Gọi lại Grab API trực tiếp thành công:", source.display_name);
+          } catch (retryError) {
+            await log(
+              "API trực tiếp vẫn chưa dùng được, chuyển sang phương án trình duyệt cuối cùng:",
+              `${source.display_name} - ${retryError instanceof Error ? retryError.message : String(retryError)}`
+            );
+          }
+        } else {
+          await log(
+            "API trực tiếp chưa dùng được, chuyển sang phương án trình duyệt cuối cùng:",
+            `${source.display_name} - ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
       }
     }
 
     if (!directApi) {
       await openFeedbackPage(page, { force: true });
       if (await isLoginRequired(page)) {
-        await login(page, source, { visible: !headless, authBundle });
+        directCookieJar = await login(page, source, { visible: !headless, authBundle });
         loggedInNow = true;
+        await saveRefreshedSession(page, source);
       } else {
         await log("Dùng lại phiên Grab còn hiệu lực:", source.display_name);
       }
       try {
         ({ reviews, overview, pageCount } = await collectFeedback(page));
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const sessionExpired = /hết hạn|401|403/i.test(message);
-        if (sessionExpired || await isLoginRequired(page)) {
-          await login(page, source, { visible: !headless, authBundle });
+        if (isGrabSessionExpired(error) || await isLoginRequired(page)) {
+          directCookieJar = await login(page, source, { visible: !headless, authBundle });
           loggedInNow = true;
-          ({ reviews, overview, pageCount } = await collectFeedback(page));
+          await saveRefreshedSession(page, source);
+          if (source.merchant_id) {
+            ({ reviews, overview, pageCount } = await collectFeedbackDirect(page, source, directCookieJar));
+            directApi = true;
+            await log("Gọi lại Grab API trực tiếp thành công:", source.display_name);
+          } else {
+            ({ reviews, overview, pageCount } = await collectFeedback(page));
+          }
         } else {
           throw error;
         }
@@ -697,7 +755,7 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
     let financeDetailStats = { listed: 0, requested: 0, remaining: 0 };
     let financeError = "";
     try {
-      const finance = await collectFinanceSnapshots(page, merchantId, source.id);
+      const finance = await collectFinanceSnapshots(page, merchantId, source.id, directCookieJar);
       financeSnapshots = finance.snapshots;
       financeTransactions = finance.transactions;
       financeDetailStats = finance.detailStats;
@@ -727,12 +785,7 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       }
     }
 
-    const session = loggedInNow
-      ? {
-          cookies: await page.cookies(),
-          storage: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)))
-        }
-      : {};
+    const session = loggedInNow ? await currentBrowserSession(page) : {};
     const result = await api("automation_reviews", {
       source_id: source.id,
       worker_id: WORKER_ID,
@@ -822,17 +875,20 @@ async function runCycle(chromePath) {
   return intervalMs(batch.settings?.sync_interval_minutes);
 }
 
-async function collectFeedbackDirect(page, source) {
+async function collectFeedbackDirect(page, source, cookieJar = null) {
   const merchantId = String(source.merchant_id || "").trim();
   if (!merchantId) throw new Error("Chưa có Merchant ID để gọi trực tiếp Grab API.");
-  const cookies = await page.cookies("https://api.grab.com/", "https://merchant.grab.com/");
-  const cookie = cookieHeader(cookies);
-  if (!cookie) throw new Error("Chưa có cookie Grab API trong Chrome profile.");
+  const cookies = cookieJar
+    ? []
+    : await page.cookies("https://api.grab.com/", "https://merchant.grab.com/");
+  if (!cookieJar && !cookieHeader(cookies)) throw new Error("Chưa có cookie Grab API trong Chrome profile.");
 
   const cutoff = new Date(Date.now() - REVIEW_WINDOW_DAYS * 24 * 60 * 60_000);
   const end = new Date();
   const request = async (path, options = {}) => {
-    const response = await fetch(`${FEEDBACK_API_URL}${path}`, {
+    const url = `${FEEDBACK_API_URL}${path}`;
+    const cookie = cookieJar ? await cookieJar.getCookieString(url) : cookieHeader(cookies);
+    const response = await fetch(url, {
       ...options,
       headers: {
         accept: "application/json, text/plain, */*",
@@ -845,8 +901,15 @@ async function collectFeedbackDirect(page, source) {
       },
       signal: globalThis.AbortSignal.timeout(30_000)
     });
+    if (cookieJar && typeof response.headers.getSetCookie === "function") {
+      for (const value of response.headers.getSetCookie()) {
+        await cookieJar.setCookie(value, url);
+      }
+    }
     if (response.status === 401 || response.status === 403) {
-      throw new Error(`Phiên Grab hết hạn (HTTP ${response.status}).`);
+      const error = new Error(`Phiên Grab hết hạn (HTTP ${response.status}).`);
+      error.code = "GRAB_SESSION_EXPIRED";
+      throw error;
     }
     const body = await response.json().catch(() => null);
     if (!response.ok) throw new Error(body?.message || `Grab feedback API returned ${response.status}`);

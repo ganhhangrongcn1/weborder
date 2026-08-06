@@ -207,5 +207,5 @@ export async function loginGrabDirect(browser, { username, password }) {
   await followRedirects(request, completed.data.redirect);
   const cookies = await cookiesForBrowser(jar);
   if (!cookies.length) throw directAuthError("Grab đăng nhập thành công nhưng không trả cookie API.");
-  return cookies;
+  return { cookies, jar };
 }
