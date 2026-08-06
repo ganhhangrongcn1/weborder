@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import PartnerReviewReplyDialog from "./PartnerReviewReplyDialog.jsx";
 import { formatMoney } from "../../../utils/format.js";
 import { AdminBadge, AdminButton, AdminCard } from "../ui/AdminCommon.jsx";
 import {
@@ -160,12 +161,15 @@ export default function PartnerReviewInbox({
   branchOptions = [],
   filters,
   onFilterChange,
-  onRefresh
+  onRefresh,
+  onReply,
+  replySavingId = ""
 }) {
   const [view, setView] = useState("attention");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selectedReview, setSelectedReview] = useState(null);
+  const [replyingReview, setReplyingReview] = useState(null);
   const [detailTab, setDetailTab] = useState("order");
 
   const metrics = useMemo(() => {
@@ -206,6 +210,11 @@ export default function PartnerReviewInbox({
   const openDetail = (review, tab) => {
     setSelectedReview(review);
     setDetailTab(tab);
+  };
+
+  const submitReply = async (review, replyText) => {
+    const result = await onReply?.(review, replyText);
+    if (result?.ok) setReplyingReview(null);
   };
 
   return (
@@ -260,6 +269,19 @@ export default function PartnerReviewInbox({
             const order = review.linked_order;
             const content = textValue(review.content);
             const tone = ratingTone(review.rating);
+            const replyStatus = textValue(review.reply_command?.status);
+            const hasReply = Array.isArray(review.replies) && review.replies.length > 0;
+            const replyPending = replyStatus === "pending" || replyStatus === "processing";
+            const replyDone = hasReply || replyStatus === "succeeded";
+            const canReply = textValue(review.platform) === "grabfood"
+              && textValue(review.review_status).toUpperCase() !== "REMOVED"
+              && !replyPending
+              && !replyDone;
+            const replyLabel = replyPending
+              ? (replyStatus === "processing" ? "Đang gửi" : "Đang chờ gửi")
+              : replyDone
+                ? "Đã trả lời"
+                : replyStatus === "failed" ? "Thử lại trả lời" : "Trả lời";
             return (
               <article key={review.id} className={`admin-review-inbox-item is-${tone}${content ? "" : " is-compact"}`}>
                 <div className="admin-review-score"><strong>{review.rating || 0}</strong><Icon name="star" size={15} /><span>sao</span></div>
@@ -280,6 +302,9 @@ export default function PartnerReviewInbox({
                       {customer ? <><span><b>{customer.order_count || 0}</b> đơn đã mua</span><span><b>{customer.review_count || 0}</b> lần đánh giá</span><span>TB <b>{customer.average_rating || 0}★</b></span></> : <span>Chưa nhận diện được khách</span>}
                     </div>
                     <div className="admin-review-inbox-actions">
+                      <button type="button" disabled={!canReply} onClick={() => setReplyingReview(review)}>
+                        <Icon name={replyDone ? "check" : "share"} size={15} /> {replyLabel}
+                      </button>
                       <button type="button" disabled={!order} onClick={() => openDetail(review, "order")}><Icon name="eye" size={15} /> Xem đơn</button>
                       <button type="button" disabled={!customer} onClick={() => openDetail(review, "customer")}><Icon name="user" size={15} /> Hồ sơ khách</button>
                     </div>
@@ -299,6 +324,12 @@ export default function PartnerReviewInbox({
       </AdminCard>
 
       <ReviewDetailDrawer review={selectedReview} initialTab={detailTab} onClose={() => setSelectedReview(null)} />
+      <PartnerReviewReplyDialog
+        review={replyingReview}
+        saving={replySavingId === replyingReview?.id}
+        onClose={() => setReplyingReview(null)}
+        onSubmit={submitReply}
+      />
     </>
   );
 }

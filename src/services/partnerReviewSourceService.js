@@ -109,6 +109,14 @@ export async function listPartnerReviews(filters = {}) {
   return { ...result, reviews: Array.isArray(result.reviews) ? result.reviews : [] };
 }
 
+export async function replyToPartnerReview(reviewId, replyText) {
+  return invoke({
+    action: "reply_review",
+    review_id: toText(reviewId),
+    reply_text: toText(replyText)
+  });
+}
+
 export async function savePartnerReviewSource(source = {}) {
   return invoke({
     action: "save",
@@ -131,6 +139,7 @@ export async function savePartnerReviewSource(source = {}) {
 export default {
   listPartnerReviewSources,
   listPartnerReviews,
+  replyToPartnerReview,
   savePartnerReviewSource,
   savePartnerReviewWorkerSettings,
   requestPartnerReviewWorkerStart,

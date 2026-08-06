@@ -472,6 +472,87 @@ async function requestStoreControl(client: ReturnType<typeof createClient>, admi
   });
 }
 
+async function attachLatestReplyCommands(client: ReturnType<typeof createClient>, reviews: Row[]) {
+  const reviewIds = reviews.map((review) => text(review.id)).filter(Boolean);
+  if (!reviewIds.length) return reviews;
+  const { data, error } = await client
+    .from("partner_review_reply_commands")
+    .select("id,review_id,reply_text,status,attempt_count,error_message,created_at,claimed_at,finished_at")
+    .in("review_id", reviewIds)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[partner-review-source-api] reply command list failed", error);
+    return reviews;
+  }
+  const commandByReviewId = new Map<string, Row>();
+  (data || []).forEach((command: Row) => {
+    const reviewId = text(command.review_id);
+    if (reviewId && !commandByReviewId.has(reviewId)) commandByReviewId.set(reviewId, command);
+  });
+  return reviews.map((review) => ({
+    ...review,
+    reply_command: commandByReviewId.get(text(review.id)) || null
+  }));
+}
+
+async function requestReviewReply(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
+  const reviewId = text(body.review_id);
+  const replyText = text(body.reply_text);
+  if (!reviewId || !replyText || replyText.length > 500) {
+    return reply({ ok: false, message: "Nội dung trả lời phải từ 1 đến 500 ký tự." }, 400);
+  }
+  let reviewQuery = client
+    .from("partner_reviews")
+    .select(`
+      id,platform,external_review_id,source_id,branch_uuid,review_status,replies,
+      source:partner_review_sources(id,platform,merchant_id,sync_enabled)
+    `)
+    .eq("id", reviewId);
+  if (text(admin.branch_uuid)) reviewQuery = reviewQuery.eq("branch_uuid", text(admin.branch_uuid));
+  const { data: review, error: reviewError } = await reviewQuery.maybeSingle();
+  if (reviewError || !review) {
+    return reply({ ok: false, message: "Không tìm thấy đánh giá hoặc admin không có quyền với chi nhánh này." }, 404);
+  }
+  const source = object(review.source);
+  if (text(review.platform) !== "grabfood" || text(source.platform) !== "grabfood") {
+    return reply({ ok: false, message: "Hiện chỉ hỗ trợ trả lời đánh giá GrabFood." }, 400);
+  }
+  if (source.sync_enabled !== true || !text(source.merchant_id)) {
+    return reply({ ok: false, message: "Gian hàng Grab chưa sẵn sàng để gửi trả lời." }, 409);
+  }
+  if (text(review.review_status).toUpperCase() === "REMOVED") {
+    return reply({ ok: false, message: "Không thể trả lời đánh giá đã bị gỡ." }, 409);
+  }
+  if (arrayValue(review.replies).length) {
+    return reply({ ok: false, message: "Đánh giá này đã có phản hồi trên Grab." }, 409);
+  }
+  const { data: command, error } = await client
+    .from("partner_review_reply_commands")
+    .insert({
+      review_id: reviewId,
+      source_id: text(review.source_id),
+      external_review_id: text(review.external_review_id),
+      merchant_id: text(source.merchant_id),
+      reply_text: replyText,
+      requested_by: text(admin.id),
+      status: "pending"
+    })
+    .select("id,review_id,reply_text,status,created_at")
+    .single();
+  if (error) {
+    const duplicate = text(error.code) === "23505";
+    return reply({
+      ok: false,
+      message: duplicate ? "Đánh giá này đã có lệnh trả lời đang xử lý." : "Không tạo được lệnh trả lời đánh giá."
+    }, duplicate ? 409 : 500);
+  }
+  return reply({
+    ok: true,
+    message: "Đã xếp hàng gửi phản hồi tới Grab. Worker sẽ xử lý trong tối đa 1 phút.",
+    command
+  });
+}
+
 async function listReviews(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
   const limit = Math.min(Math.max(Number(body.limit) || 100, 1), 200);
   let query = client
@@ -505,10 +586,14 @@ async function listReviews(client: ReturnType<typeof createClient>, admin: Row, 
   }
   try {
     const reviews = await enrichReviews(client, admin, (data || []) as Row[]);
-    return reply({ ok: true, reviews });
+    return reply({ ok: true, reviews: await attachLatestReplyCommands(client, reviews) });
   } catch (enrichmentError) {
     console.error("[partner-review-source-api] review enrichment failed", enrichmentError);
-    return reply({ ok: true, reviews: data || [], enrichment_warning: true });
+    return reply({
+      ok: true,
+      reviews: await attachLatestReplyCommands(client, (data || []) as Row[]),
+      enrichment_warning: true
+    });
   }
 }
 
@@ -808,6 +893,105 @@ async function finishAutomationStoreCommand(
   return reply({ ok: true });
 }
 
+async function claimAutomationReplyCommands(
+  request: Request,
+  client: ReturnType<typeof createClient>,
+  body: Row
+) {
+  if (!hasAutomationAccess(request)) {
+    return reply({ ok: false, message: "Automation secret không hợp lệ." }, 403);
+  }
+  const workerId = text(body.worker_id);
+  const limit = Math.min(5, Math.max(1, Number(body.limit) || 5));
+  if (!workerId) return reply({ ok: false, message: "Thiếu mã worker." }, 400);
+  const { data, error } = await client
+    .from("partner_review_reply_commands")
+    .select("*,source:partner_review_sources(*)")
+    .eq("status", "pending")
+    .lt("attempt_count", 3)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  if (error) return reply({ ok: false, message: "Không đọc được hàng đợi trả lời đánh giá." }, 500);
+  const commands: Row[] = [];
+  for (const candidate of data || []) {
+    const now = new Date().toISOString();
+    const { data: claimed } = await client
+      .from("partner_review_reply_commands")
+      .update({
+        status: "processing",
+        worker_id: workerId,
+        attempt_count: Number(candidate.attempt_count || 0) + 1,
+        claimed_at: now,
+        error_message: null,
+        updated_at: now
+      })
+      .eq("id", candidate.id)
+      .eq("status", "pending")
+      .select("*")
+      .maybeSingle();
+    if (claimed) {
+      commands.push({
+        ...claimed,
+        source: publicSource(object(candidate.source))
+      });
+    }
+  }
+  return reply({ ok: true, commands });
+}
+
+async function finishAutomationReplyCommand(
+  request: Request,
+  client: ReturnType<typeof createClient>,
+  body: Row
+) {
+  if (!hasAutomationAccess(request)) {
+    return reply({ ok: false, message: "Automation secret không hợp lệ." }, 403);
+  }
+  const commandId = text(body.command_id);
+  const workerId = text(body.worker_id);
+  const succeeded = body.succeeded === true;
+  if (!commandId || !workerId) return reply({ ok: false, message: "Thiếu định danh lệnh trả lời." }, 400);
+  const { data: command } = await client
+    .from("partner_review_reply_commands")
+    .select("id,review_id,external_review_id,reply_text,status,worker_id")
+    .eq("id", commandId)
+    .maybeSingle();
+  if (!command || text(command.worker_id) !== workerId || text(command.status) !== "processing") {
+    return reply({ ok: false, message: "Lệnh trả lời không còn thuộc worker này." }, 409);
+  }
+  const now = new Date().toISOString();
+  const responseData = object(body.response_data);
+  const errorMessage = text(body.error_message).slice(0, 1000);
+  const { error } = await client
+    .from("partner_review_reply_commands")
+    .update({
+      status: succeeded ? "succeeded" : "failed",
+      finished_at: now,
+      error_message: succeeded ? null : errorMessage || "Grab không nhận phản hồi.",
+      response_data: responseData,
+      updated_at: now
+    })
+    .eq("id", commandId)
+    .eq("status", "processing")
+    .eq("worker_id", workerId);
+  if (error) return reply({ ok: false, message: "Không ghi được kết quả trả lời đánh giá." }, 500);
+  if (succeeded) {
+    await client
+      .from("partner_reviews")
+      .update({
+        replies: [{
+          reviewID: text(command.external_review_id),
+          description: text(command.reply_text),
+          submittedAt: now,
+          source: "admin-worker"
+        }],
+        updated_at: now
+      })
+      .eq("id", command.review_id);
+  }
+  return reply({ ok: true, command_id: commandId, status: succeeded ? "succeeded" : "failed" });
+}
+
 async function saveAutomationHeartbeat(
   request: Request,
   client: ReturnType<typeof createClient>,
@@ -895,12 +1079,24 @@ async function saveAutomationSession(
 
   const { data: source } = await client
     .from("partner_review_sources")
-    .select("id,platform")
+    .select("id,platform,metadata")
     .eq("id", sourceId)
     .eq("sync_enabled", true)
     .maybeSingle();
   if (!source) return reply({ ok: false, message: "Khong tim thay nguon dong bo." }, 404);
-  if (!automationLeaseMatches(source as Row, body)) {
+  let authorized = automationLeaseMatches(source as Row, body);
+  if (!authorized && text(body.reply_command_id) && text(body.worker_id)) {
+    const { data: replyCommand } = await client
+      .from("partner_review_reply_commands")
+      .select("id")
+      .eq("id", text(body.reply_command_id))
+      .eq("source_id", sourceId)
+      .eq("worker_id", text(body.worker_id))
+      .eq("status", "processing")
+      .maybeSingle();
+    authorized = Boolean(replyCommand);
+  }
+  if (!authorized) {
     return reply({ ok: false, message: "Luot dong bo da duoc worker khac tiep nhan." }, 409);
   }
 
@@ -1430,6 +1626,12 @@ Deno.serve(async (request) => {
   if (action === "automation_store_command_result") {
     return finishAutomationStoreCommand(request, client, body);
   }
+  if (action === "automation_reply_commands") {
+    return claimAutomationReplyCommands(request, client, body);
+  }
+  if (action === "automation_reply_command_result") {
+    return finishAutomationReplyCommand(request, client, body);
+  }
   if (action === "automation_heartbeat") {
     return saveAutomationHeartbeat(request, client, body);
   }
@@ -1454,6 +1656,7 @@ Deno.serve(async (request) => {
   if (action === "list") return listSources(client, admin);
   if (action === "finance_report") return getFinanceReport(client, admin, body);
   if (action === "list_reviews") return listReviews(client, admin, body);
+  if (action === "reply_review") return requestReviewReply(client, admin, body);
   if (action === "save") return saveSource(client, admin, body);
   if (action === "save_worker_settings") return saveWorkerSettings(client, body);
   if (action === "request_worker_start") return requestWorkerStart(client);

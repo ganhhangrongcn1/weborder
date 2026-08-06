@@ -76,7 +76,25 @@
 .admin-review-pagination > span { color: var(--admin-text-muted); font-size: 11px; font-weight: 700; }
 .admin-review-pagination > div { display: flex; gap: 8px; }
 
-.admin-review-detail-overlay, .admin-review-form-overlay { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; background: rgba(20, 28, 42, .42); backdrop-filter: blur(2px); }
+.admin-review-detail-overlay, .admin-review-form-overlay, .admin-review-reply-overlay { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; background: rgba(20, 28, 42, .42); backdrop-filter: blur(2px); }
+
+.admin-review-reply-overlay { align-items: center; justify-content: center; padding: 20px; }
+.admin-review-reply-panel { width: min(520px, 100%); overflow: hidden; border: 1px solid var(--admin-border); border-radius: 14px; background: var(--admin-surface); box-shadow: 0 22px 70px rgba(20, 28, 42, .24); }
+.admin-review-reply-panel > header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--admin-border); padding: 18px 20px; }
+.admin-review-reply-panel > header h2 { margin: 0; color: var(--admin-text); font-size: 17px; }
+.admin-review-reply-panel > header p { margin: 3px 0 0; color: var(--admin-muted); font-size: 12px; }
+.admin-review-reply-panel > header > button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--admin-muted); cursor: pointer; }
+.admin-review-reply-panel > blockquote { margin: 18px 20px 14px; border-left: 3px solid #f1a26e; border-radius: 0 8px 8px 0; background: #fff8f3; padding: 12px 14px; color: var(--admin-text); font-size: 13px; line-height: 1.55; }
+.admin-review-reply-field { display: grid; gap: 7px; margin: 0 20px; }
+.admin-review-reply-field > span { color: var(--admin-text); font-size: 12px; font-weight: 800; }
+.admin-review-reply-field textarea { width: 100%; resize: vertical; border: 1px solid var(--admin-border); border-radius: 9px; background: #fff; padding: 12px; color: var(--admin-text); font: inherit; font-size: 13px; line-height: 1.55; outline: none; }
+.admin-review-reply-field textarea:focus { border-color: #d9783b; box-shadow: 0 0 0 3px rgba(217, 120, 59, .12); }
+.admin-review-reply-field small { justify-self: end; color: var(--admin-muted); font-size: 11px; }
+.admin-review-reply-error, .admin-review-reply-note { display: flex; align-items: flex-start; gap: 8px; margin: 0 20px 14px; border-radius: 8px; padding: 10px 12px; font-size: 11px; line-height: 1.45; }
+.admin-review-reply-error { background: #fff0ef; color: #b42318; }
+.admin-review-reply-note { margin-top: 14px; background: #f5f7fa; color: var(--admin-muted); }
+.admin-review-reply-error svg, .admin-review-reply-note svg { flex: 0 0 auto; margin-top: 1px; }
+.admin-review-reply-panel > footer { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--admin-border); margin-top: 18px; padding: 14px 20px; }
 .admin-review-detail-panel, .admin-review-form-panel { width: min(620px, calc(100vw - 24px)); height: 100%; overflow-y: auto; background: var(--admin-surface); box-shadow: -18px 0 46px rgba(20, 28, 42, .18); padding: 24px; }
 .admin-review-detail-head, .admin-review-form-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--admin-border); }
 .admin-review-detail-head > div { display: flex; align-items: center; gap: 12px; }

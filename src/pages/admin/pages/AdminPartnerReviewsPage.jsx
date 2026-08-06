@@ -3,6 +3,7 @@ import Icon from "../../../components/Icon.jsx";
 import {
   listPartnerReviews,
   listPartnerReviewSources,
+  replyToPartnerReview,
   requestPartnerStoreControl,
   requestPartnerReviewWorkerStart,
   savePartnerReviewSource,
@@ -46,6 +47,7 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
   const [workerStarting, setWorkerStarting] = useState(false);
   const [message, setMessage] = useState("");
   const [storeControlSaving, setStoreControlSaving] = useState("");
+  const [replySavingId, setReplySavingId] = useState("");
 
   const branchOptions = useMemo(
     () => branches.map((branch) => ({
@@ -195,6 +197,22 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
     }
   };
 
+  const submitReviewReply = async (review, replyText) => {
+    setReplySavingId(review.id);
+    setMessage("");
+    try {
+      const result = await replyToPartnerReview(review.id, replyText);
+      setMessage(result.message || (result.ok ? "Đã xếp hàng gửi phản hồi lên Grab." : "Không gửi được phản hồi lên Grab."));
+      if (result.ok) {
+        await loadReviews();
+        window.setTimeout(() => loadReviews(), 15000);
+      }
+      return result;
+    } finally {
+      setReplySavingId("");
+    }
+  };
+
   return (
     <div className="admin-review-page">
       {message ? (
@@ -213,6 +231,8 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
         filters={filters}
         onFilterChange={updateFilter}
         onRefresh={() => loadReviews()}
+        onReply={submitReviewReply}
+        replySavingId={replySavingId}
       />
 
       <PartnerReviewOperations

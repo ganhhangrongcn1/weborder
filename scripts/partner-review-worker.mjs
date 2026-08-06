@@ -448,11 +448,12 @@ async function currentBrowserSession(page) {
   };
 }
 
-async function saveRefreshedSession(page, source) {
+async function saveRefreshedSession(page, source, replyCommandId = "") {
   await api("automation_session", {
     source_id: source.id,
     worker_id: WORKER_ID,
     lease_token: source.lease_token,
+    reply_command_id: replyCommandId,
     session: await currentBrowserSession(page)
   });
   await log("Đã lưu phiên Grab mới sau khi đăng nhập:", source.display_name);
@@ -1076,6 +1077,69 @@ async function pollStoreControls(chromePath) {
   await Promise.all(sources.map((source) => withAccountLock(source, () => runStoreControl(source, chromePath))));
 }
 
+async function runReviewReplyCommand(command, chromePath) {
+  const source = command.source || {};
+  let browser;
+  let succeeded = false;
+  let responseData = {};
+  let errorMessage = "";
+  try {
+    const profilePath = path.join(PROFILE_ROOT, safeKey(source.account_key || source.id));
+    await mkdir(profilePath, { recursive: true });
+    browser = await puppeteer.launch({
+      executablePath: chromePath,
+      userDataDir: profilePath,
+      headless: HEADLESS,
+      ignoreDefaultArgs: ["--enable-automation"],
+      defaultViewport: { width: 1366, height: 900 },
+      args: [
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-features=Translate"
+      ]
+    });
+    const page = (await browser.pages())[0] || await browser.newPage();
+    page.setDefaultTimeout(30_000);
+    const authBundle = await restoreStoredSession(page, source);
+    try {
+      responseData = await sendReviewReplyDirect(page, command);
+    } catch (error) {
+      const needsLogin = isGrabSessionExpired(error) || /chưa có cookie/i.test(String(error?.message || error));
+      if (!needsLogin) throw error;
+      const cookieJar = await login(page, source, { visible: !HEADLESS, authBundle });
+      await saveRefreshedSession(page, source, command.id);
+      responseData = await sendReviewReplyDirect(page, command, cookieJar);
+    }
+    succeeded = true;
+    await log("Đã gửi trả lời đánh giá lên Grab:", `${source.display_name} - ${command.external_review_id}`);
+  } catch (error) {
+    errorMessage = String(error?.message || error).slice(0, 1000);
+    await log("Gửi trả lời đánh giá Grab thất bại:", `${source.display_name || source.id} - ${errorMessage}`);
+  } finally {
+    await browser?.close().catch(() => null);
+    await api("automation_reply_command_result", {
+      command_id: command.id,
+      worker_id: WORKER_ID,
+      succeeded,
+      response_data: responseData,
+      error_message: errorMessage
+    }).catch((error) => log(
+      "Chưa ghi được kết quả trả lời đánh giá:",
+      error instanceof Error ? error.message : String(error)
+    ));
+  }
+}
+
+async function pollReviewReplyCommands(chromePath) {
+  const batch = await api("automation_reply_commands", { worker_id: WORKER_ID, limit: CONCURRENCY });
+  const commands = Array.isArray(batch.commands) ? batch.commands : [];
+  if (!commands.length) return;
+  await Promise.all(commands.map((command) => (
+    withAccountLock(command.source || { id: command.source_id }, () => runReviewReplyCommand(command, chromePath))
+  )));
+}
+
 async function readRemoteSchedule(fallbackMs) {
   try {
     const result = await api("automation_settings");
@@ -1088,6 +1152,46 @@ async function readRemoteSchedule(fallbackMs) {
     await log("Chưa đọc được lịch đồng bộ mới, giữ lịch hiện tại:", error instanceof Error ? error.message : String(error));
     return { intervalMs: fallbackMs, requestedRunAtMs: 0, lastCycleCompletedAtMs: 0 };
   }
+}
+
+async function sendReviewReplyDirect(page, command, cookieJar = null) {
+  const merchantId = String(command.merchant_id || command.source?.merchant_id || "").trim();
+  const reviewId = String(command.external_review_id || "").trim();
+  const description = String(command.reply_text || "").trim();
+  if (!merchantId || !reviewId || !description) throw new Error("Lệnh trả lời đánh giá Grab thiếu dữ liệu.");
+  const url = `${FEEDBACK_API_URL}/review-reply`;
+  const cookies = cookieJar
+    ? []
+    : await page.cookies("https://api.grab.com/", "https://merchant.grab.com/");
+  const cookie = cookieJar ? await cookieJar.getCookieString(url) : cookieHeader(cookies);
+  if (!cookie) throw new Error("Chưa có cookie Grab API để gửi trả lời.");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      accept: "application/json, text/plain, */*",
+      "content-type": "application/json",
+      cookie,
+      merchantid: merchantId,
+      origin: "https://merchant.grab.com",
+      referer: "https://merchant.grab.com/",
+      requestsource: "troyPortal"
+    },
+    body: JSON.stringify({ reviewID: reviewId, description }),
+    signal: globalThis.AbortSignal.timeout(30_000)
+  });
+  if (cookieJar && typeof response.headers.getSetCookie === "function") {
+    for (const value of response.headers.getSetCookie()) await cookieJar.setCookie(value, url);
+  }
+  const body = await response.json().catch(() => ({}));
+  if (response.status === 401 || response.status === 403) {
+    const error = new Error(`Phiên Grab hết hạn khi gửi trả lời (HTTP ${response.status}).`);
+    error.code = "GRAB_SESSION_EXPIRED";
+    throw error;
+  }
+  if (!response.ok || body?.message) {
+    throw new Error(body?.message || `Grab không nhận phản hồi (HTTP ${response.status}).`);
+  }
+  return body;
 }
 
 async function saveNextRun(nextRunAt, { cycleCompleted = true } = {}) {
@@ -1176,6 +1280,9 @@ async function main() {
     if (stopping) break;
     await pollStoreControls(chromePath).catch((error) =>
       log("Chưa đọc được lệnh công tắc cửa hàng:", error instanceof Error ? error.message : String(error))
+    );
+    await pollReviewReplyCommands(chromePath).catch((error) =>
+      log("Chưa đọc được hàng đợi trả lời đánh giá:", error instanceof Error ? error.message : String(error))
     );
     let runRequestedNow = false;
     if (Date.now() - lastSettingsReadAt >= 60_000) {
