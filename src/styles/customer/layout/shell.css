@@ -16,7 +16,7 @@
   --customer-page-x: 16px;
   --customer-shadow-soft: 0 12px 34px rgba(58, 31, 20, 0.08);
   --customer-shadow-orange: 0 12px 24px rgba(255, 90, 31, 0.24);
-  --customer-bottom-safe: env(safe-area-inset-bottom, 0px);
+  --customer-bottom-safe: min(env(safe-area-inset-bottom, 0px), 34px);
   --customer-bottom-nav-height: calc(74px + var(--customer-bottom-safe));
   --customer-motion-fast: 160ms;
   --customer-motion-base: 180ms;

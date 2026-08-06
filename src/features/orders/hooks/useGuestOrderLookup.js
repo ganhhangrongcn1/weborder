@@ -51,7 +51,7 @@ export default function useGuestOrderLookup() {
     const normalizedPhone = getCustomerKey(phone);
     if (!normalizedPhone || normalizedPhone.length < 9) {
       alert("Vui lòng nhập số điện thoại hợp lệ.");
-      return;
+      return false;
     }
 
     setIsLoading(true);
@@ -83,6 +83,7 @@ export default function useGuestOrderLookup() {
           ? `Đã tìm thấy ${nextOrders.length} đơn theo số ${normalizedPhone}.`
           : "Chưa tìm thấy đơn hàng theo số điện thoại này."
       );
+      return true;
     } finally {
       setIsLoading(false);
     }

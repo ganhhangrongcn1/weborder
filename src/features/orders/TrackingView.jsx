@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import AppEmptyState from "../../components/app/EmptyState.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
@@ -138,6 +138,7 @@ export default function Tracking({
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showSelectedOrderDetails, setShowSelectedOrderDetails] = useState(false);
   const [visibleOrderCount, setVisibleOrderCount] = useState(ORDER_HISTORY_PAGE_SIZE);
+  const guestResultsRef = useRef(null);
   const [loadedHistoryOrders, setLoadedHistoryOrders] = useState([]);
   const [isHistoryOrdersLoading, setIsHistoryOrdersLoading] = useState(false);
   const [partnerOrders, setPartnerOrders] = useState([]);
@@ -755,6 +756,22 @@ export default function Tracking({
     navigate("account", "account");
   };
 
+  const handleGuestLookupSubmit = async (event) => {
+    event.preventDefault();
+    const didLookup = await guestLookup.handleLookup();
+    if (!didLookup || typeof window === "undefined") return;
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        guestResultsRef.current?.scrollIntoView({
+          behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+          block: "start"
+        });
+        guestResultsRef.current?.focus({ preventScroll: true });
+      });
+    });
+  };
+
   return (
     <section className="orders-page">
       <div className="tracking-page-content space-y-4 px-4 pb-6 pt-4">
@@ -772,7 +789,7 @@ export default function Tracking({
               </p>
             </div>
 
-            <form onSubmit={guestLookup.handleSubmit} className="flex gap-2">
+            <form onSubmit={handleGuestLookupSubmit} className="flex gap-2">
               <input
                 value={guestLookup.phone}
                 onChange={(event) => guestLookup.setPhone(event.target.value)}
@@ -802,23 +819,25 @@ export default function Tracking({
             </button>
 
             {guestLookup.notice ? (
-              <div className="rounded-2xl bg-cream/70 px-4 py-3 text-sm font-bold text-brown/65">
+              <div className="rounded-2xl bg-cream/70 px-4 py-3 text-sm font-bold text-brown/65" aria-live="polite">
                 {guestLookup.notice}
               </div>
             ) : null}
           </CustomerCard>
         ) : null}
 
-        {!canAccessFullOrderHistory ? (
-          <ReviewRewardPromoCard onClick={() => openReviewRewards()} />
-        ) : null}
-
-        {!canAccessFullOrderHistory && checkinPromo.enabled ? (
-          <CheckinPromoCard
-            dailyPoints={checkinPromo.dailyPoints}
-            cyclePoints={checkinPromo.cyclePoints}
-            onClick={() => navigate("account", "account")}
-          />
+        {!canAccessFullOrderHistory && guestLookup.lookupPhone ? (
+          <div
+            ref={guestResultsRef}
+            tabIndex={-1}
+            className="scroll-mt-4 rounded-2xl bg-white/80 px-4 py-3 outline-none"
+            aria-live="polite"
+          >
+            <strong className="block text-sm font-black text-brown">Kết quả tra cứu</strong>
+            <span className="mt-1 block text-xs font-bold text-brown/60">
+              {orders.length.toLocaleString("vi-VN")} đơn hàng phù hợp
+            </span>
+          </div>
         ) : null}
 
         {canAccessFullOrderHistory ? (
@@ -1184,6 +1203,18 @@ export default function Tracking({
           >
             {isHistoryOrdersLoading || isPartnerOrdersLoading ? "Đang tải thêm..." : "Xem thêm đơn hàng"}
           </CustomerButton>
+        ) : null}
+
+        {!canAccessFullOrderHistory ? (
+          <ReviewRewardPromoCard onClick={() => openReviewRewards()} />
+        ) : null}
+
+        {!canAccessFullOrderHistory && checkinPromo.enabled ? (
+          <CheckinPromoCard
+            dailyPoints={checkinPromo.dailyPoints}
+            cyclePoints={checkinPromo.cyclePoints}
+            onClick={() => navigate("account", "account")}
+          />
         ) : null}
       </div>
 
