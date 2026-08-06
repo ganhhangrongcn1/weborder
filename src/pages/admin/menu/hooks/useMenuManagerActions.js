@@ -107,7 +107,7 @@ export default function useMenuManagerActions({
 
   const createPreset = () => {
     const nextId = `preset-${Date.now()}`;
-    const next = { id: nextId, name: "", required: false, maxSelect: 1, options: [{ id: `opt-${Date.now()}`, name: "", price: 0, active: true }] };
+    const next = { id: nextId, name: "", required: false, selectionMode: "max", maxSelect: 1, options: [{ id: `opt-${Date.now()}`, name: "", price: 0, active: true }] };
     setEditingPresetId(nextId);
     setEditingPresetDraft(next);
     setGroupEditorOpen(true);
@@ -170,6 +170,37 @@ export default function useMenuManagerActions({
       const exists = current.some((item) => item.id === normalized.id);
       return exists ? current.map((item) => (item.id === normalized.id ? normalized : item)) : [normalized, ...current];
     });
+    if (typeof setProducts === "function") {
+      setProducts((current) => (Array.isArray(current) ? current : []).map((product) => {
+        const groups = Array.isArray(product?.optionGroups) ? product.optionGroups : [];
+        let changed = false;
+        const nextGroups = groups.map((group) => {
+          const matchesPreset = group?.sourcePresetId === normalized.id || (
+            !group?.sourcePresetId &&
+            String(group?.name || "").trim().toLowerCase() === normalized.name.toLowerCase()
+          );
+          if (!matchesPreset) return group;
+          changed = true;
+          return {
+            ...group,
+            sourcePresetId: normalized.id,
+            name: normalized.name,
+            type: normalized.maxSelect === 1 ? "single" : "multiple",
+            required: normalized.selectionMode === "exact" || Boolean(normalized.required),
+            selectionMode: normalized.selectionMode,
+            maxSelect: normalized.maxSelect,
+            options: normalized.options
+              .filter((option) => option.active !== false)
+              .map((option) => ({
+                id: `${normalized.id}-${option.id}`,
+                name: option.name,
+                price: Number(option.price || 0)
+              }))
+          };
+        });
+        return changed ? { ...product, optionGroups: nextGroups } : product;
+      }));
+    }
     setSelectedPresetId(normalized.id);
     setGroupEditorOpen(false);
   };

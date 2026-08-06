@@ -20,7 +20,8 @@ function buildOptionGroupsFromPresets(presetIds, presets) {
       sourcePresetId: preset.id,
       name: preset.name,
       type: maxSelect === 1 ? "single" : "multiple",
-      required: Boolean(preset.required),
+      required: preset.selectionMode === "exact" || Boolean(preset.required),
+      selectionMode: preset.selectionMode === "exact" || (!preset.selectionMode && maxSelect === 1) ? "exact" : "max",
       maxSelect,
       options: activeOptions.map((opt) => ({
         id: `${preset.id}-${opt.id}`,
@@ -330,7 +331,9 @@ export default function AdminProductModal({ product, categories, branches = [], 
             <div className="admin-stack">
               {selectedPresetList.map((preset) => {
                 const maxSelect = Math.max(1, Number(preset.maxSelect || 1));
-                const selectText = maxSelect === 1 ? "vui lòng chọn 1" : `chọn tối đa ${maxSelect}${preset.required ? "" : " (không bắt buộc)"}`;
+                const selectText = preset.selectionMode === "exact"
+                  ? `phải chọn đủ ${maxSelect}`
+                  : maxSelect === 1 ? "chọn tối đa 1" : `chọn tối đa ${maxSelect}${preset.required ? "" : " (không bắt buộc)"}`;
                 return (
                   <div
                     key={preset.id}
@@ -387,7 +390,9 @@ export default function AdminProductModal({ product, categories, branches = [], 
                     <div>
                       <strong>{preset.name}</strong>
                       <span>
-                        {(preset.options || []).length} tùy chọn, {maxSelect === 1 ? "vui lòng chọn 1" : `chọn tối đa ${maxSelect}${preset.required ? "" : " (không bắt buộc)"}`}
+                        {(preset.options || []).length} tùy chọn, {preset.selectionMode === "exact"
+                          ? `phải chọn đủ ${maxSelect}`
+                          : maxSelect === 1 ? "chọn tối đa 1" : `chọn tối đa ${maxSelect}${preset.required ? "" : " (không bắt buộc)"}`}
                       </span>
                       <small>{summary}</small>
                     </div>

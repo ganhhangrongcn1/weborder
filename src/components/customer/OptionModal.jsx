@@ -72,7 +72,11 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
       });
       return;
     }
-    changeCustomOptionQuantity(group, option, 1);
+    const isActive = isCustomOptionActive(group, option);
+    const selectedCount = selectedToppings.filter((item) => item.groupId === group.id).length;
+    const maxSelect = Math.min((group.options || []).length, Math.max(1, Number(group.maxSelect || 1)));
+    if (!isActive && selectedCount >= maxSelect) return;
+    changeCustomOptionQuantity(group, option, isActive ? -getToppingQuantity(option.id, group.id) : 1);
   }
 
   function changeCustomOptionQuantity(group, option, delta) {
@@ -96,7 +100,14 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
   function hasMissingRequiredSelection() {
     if (!usesCustomOptions) return false;
     const requiredGroups = customOptionGroups.filter((group) => group.required && (group.options || []).length > 0);
-    return requiredGroups.some((group) => !selectedToppings.some((item) => item.groupId === group.id));
+    return requiredGroups.some((group) => {
+      const selectedCount = selectedToppings.filter((item) => item.groupId === group.id).length;
+      if (group.selectionMode === "exact") {
+        const exactCount = Math.min((group.options || []).length, Math.max(1, Number(group.maxSelect || 1)));
+        return selectedCount !== exactCount;
+      }
+      return selectedCount < 1;
+    });
   }
 
   function handleAddToCart() {
@@ -115,7 +126,7 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
       contentClassName="customer-option-sheet-scroll"
       footer={(
         <div className="option-modal-footer">
-          <button type="button" onClick={handleAddToCart} className="cta option-modal-submit">
+          <button type="button" onClick={handleAddToCart} className="cta option-modal-submit" disabled={hasMissingRequiredSelection()}>
             <span>{finalSubmitLabel}</span>
             <span className="option-modal-submit__summary">
               {hasStrikePrice && (
@@ -161,7 +172,9 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
                   <OptionGroup
                     key={group.id}
                     title={groupTitle}
-                    badge={group.required ? optionModalText.requiredOne : optionModalText.optionalMany}
+                    badge={group.required && group.selectionMode === "exact"
+                      ? `Bắt buộc chọn đủ ${Math.min((group.options || []).length, Math.max(1, Number(group.maxSelect || 1)))}`
+                      : group.required ? optionModalText.requiredOne : optionModalText.optionalMany}
                   >
                     {isSpiceLikeGroup ? (
                       <div className="option-spice-grid" role="radiogroup" aria-label={groupTitle}>

@@ -29,10 +29,12 @@ export function filterPresets(optionGroupPresets, groupSearch) {
 }
 
 export function normalizePresetDraft(editingPresetDraft) {
+  const optionCount = Math.max(1, (editingPresetDraft.options || []).length);
   return {
     ...editingPresetDraft,
     name: String(editingPresetDraft.name || "").trim() || "Nhóm tùy chọn",
-    maxSelect: Math.max(1, Number(editingPresetDraft.maxSelect || 1)),
+    selectionMode: editingPresetDraft.selectionMode === "exact" || (!editingPresetDraft.selectionMode && Number(editingPresetDraft.maxSelect || 1) === 1) ? "exact" : "max",
+    maxSelect: Math.min(optionCount, Math.max(1, Number(editingPresetDraft.maxSelect || 1))),
     options: (editingPresetDraft.options || []).map((opt) => ({
       ...opt,
       name: String(opt.name || "").trim() || "Tùy chọn",

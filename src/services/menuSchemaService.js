@@ -83,6 +83,7 @@ export function normalizeMenuOptionGroup(group, index = 0) {
     id: cleanText(group?.id, `option-group-${slugify(name)}-${index + 1}`),
     name,
     required: Boolean(group?.required),
+    selectionMode: group?.selectionMode === "exact" || (!group?.selectionMode && cleanNumber(group?.maxSelect, 1) === 1) ? "exact" : "max",
     maxSelect: Math.max(1, cleanNumber(group?.maxSelect, 1)),
     active: group?.active !== false,
     sortOrder: cleanNumber(group?.sortOrder ?? group?.sort_order, index),
@@ -123,6 +124,7 @@ function buildProductOptionGroups(products = [], optionGroups = []) {
         optionGroupId,
         sortOrder: index,
         required: group?.required ?? matchedGroup?.required ?? false,
+        selectionMode: group?.selectionMode ?? matchedGroup?.selectionMode ?? "max",
         maxSelect: Math.max(1, cleanNumber(group?.maxSelect ?? matchedGroup?.maxSelect, 1))
       });
     });
@@ -256,6 +258,7 @@ export function legacyOptionGroupPresetsFromMenuSchema(schema) {
       id: group.id,
       name: group.name,
       required: Boolean(group.required),
+      selectionMode: group.selectionMode === "exact" ? "exact" : "max",
       maxSelect: Math.max(1, cleanNumber(group.maxSelect, 1)),
       active: group.active,
       options: [...(itemsByGroup.get(group.id) || [])]
@@ -295,6 +298,7 @@ export function legacyProductsFromMenuSchema(schema) {
             name: preset.name,
             type: Math.max(1, cleanNumber(row.maxSelect ?? preset.maxSelect, 1)) === 1 ? "single" : "multiple",
             required: Boolean(row.required ?? preset.required),
+            selectionMode: row.selectionMode === "exact" || preset.selectionMode === "exact" ? "exact" : "max",
             maxSelect: Math.max(1, cleanNumber(row.maxSelect ?? preset.maxSelect, 1)),
             options: (preset.options || [])
               .filter((option) => option.active !== false)

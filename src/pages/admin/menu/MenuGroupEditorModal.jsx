@@ -21,6 +21,9 @@ export default function MenuGroupEditorModal({
   const isNewPreset =
     editingPresetId.startsWith("preset-") &&
     !optionGroupPresets.some((item) => item.id === editingPresetId);
+  const optionCount = Math.max(1, (editingPresetDraft.options || []).length);
+  const selectionMode = editingPresetDraft.selectionMode || (Number(editingPresetDraft.maxSelect || 1) === 1 ? "exact" : "max");
+  const maxSelect = Math.min(optionCount, Math.max(1, Number(editingPresetDraft.maxSelect || 1)));
 
   return (
     <div className="admin-modal-backdrop admin-side-backdrop" onClick={onClose}>
@@ -122,13 +125,11 @@ export default function MenuGroupEditorModal({
               </label>
               <div className="group-rule-inline">
                 <AdminSelect
-                  value={Number(editingPresetDraft.maxSelect || 1) === 1 ? "exact" : "max"}
+                  value={selectionMode}
                   onChange={(event) =>
                     patchEditingPreset({
-                      maxSelect:
-                        event.target.value === "exact"
-                          ? 1
-                          : Math.max(2, Number(editingPresetDraft.maxSelect || 2))
+                      selectionMode: event.target.value,
+                      ...(event.target.value === "exact" ? { required: true } : {})
                     })
                   }
                 >
@@ -138,10 +139,11 @@ export default function MenuGroupEditorModal({
                 <AdminInput
                   type="number"
                   min="1"
-                  value={Number(editingPresetDraft.maxSelect || 1)}
+                  max={optionCount}
+                  value={maxSelect}
                   onChange={(event) =>
                     patchEditingPreset({
-                      maxSelect: Math.max(1, Number(event.target.value || 1))
+                      maxSelect: Math.min(optionCount, Math.max(1, Number(event.target.value || 1)))
                     })
                   }
                 />
@@ -151,16 +153,14 @@ export default function MenuGroupEditorModal({
                   type="radio"
                   name={`rule-${editingPresetDraft.id}`}
                   checked={!editingPresetDraft.required}
-                  onChange={() => patchEditingPreset({ required: false })}
+                  onChange={() => patchEditingPreset({ required: false, selectionMode: "max" })}
                 />
                 <span>Không bắt buộc khách phải chọn</span>
               </label>
               <p className="group-rule-note">
-                {Number(editingPresetDraft.maxSelect || 1) === 1
-                  ? "Khách chỉ có thể chọn 1 tùy chọn khi đặt món."
-                  : `Khách có thể chọn tối đa ${Number(
-                      editingPresetDraft.maxSelect || 1
-                    )} tùy chọn khi đặt món.`}
+                {selectionMode === "exact"
+                  ? `Khách phải chọn chính xác ${maxSelect} tùy chọn khi đặt món.`
+                  : `Khách có thể chọn tối đa ${maxSelect} tùy chọn khi đặt món.`}
               </p>
             </div>
           </div>

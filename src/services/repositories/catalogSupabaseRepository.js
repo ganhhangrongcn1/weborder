@@ -440,6 +440,7 @@ async function syncProductToppingsFromProducts(products) {
             groupId: group?.id || "",
             groupName: group?.name || "",
             required: Boolean(group?.required),
+            selectionMode: group?.selectionMode === "exact" ? "exact" : "max",
             maxSelect: normalizeNumber(group?.maxSelect, 1)
           }
         });
