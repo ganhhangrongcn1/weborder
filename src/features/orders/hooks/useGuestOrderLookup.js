@@ -31,8 +31,17 @@ function markPointStatusFromRpc(orders = [], statusMap = new Map()) {
   });
 }
 
+function getPrefilledPhoneFromLocation() {
+  if (typeof window === "undefined") return "";
+  const searchPhone = new URLSearchParams(window.location.search || "").get("phone");
+  const hashQuery = String(window.location.hash || "").split("?")[1] || "";
+  const hashPhone = new URLSearchParams(hashQuery).get("phone");
+  const normalized = getCustomerKey(searchPhone || hashPhone || "");
+  return normalized.length >= 9 ? normalized : "";
+}
+
 export default function useGuestOrderLookup() {
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(getPrefilledPhoneFromLocation);
   const [lookupPhone, setLookupPhone] = useState("");
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(false);

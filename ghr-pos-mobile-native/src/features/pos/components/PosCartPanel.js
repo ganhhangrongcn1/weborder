@@ -79,6 +79,13 @@ const PosCartPanel = memo(function PosCartPanel({
                     {optionSummary}
                   </Text>
                 ) : null}
+                {String(item.note || "").trim() ? (
+                  <View style={styles.noteBadge}>
+                    <Text style={styles.noteText} numberOfLines={2}>
+                      Ghi chú: {String(item.note).trim()}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
 
               {autoGift ? (
@@ -200,6 +207,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
     fontWeight: "700"
+  },
+  noteBadge: {
+    alignSelf: "flex-start",
+    marginTop: 3,
+    borderWidth: 1,
+    borderColor: "#fdba74",
+    backgroundColor: "#fff7ed",
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 4
+  },
+  noteText: {
+    color: "#c2410c",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "900"
   },
   controls: {
     flexDirection: "row",

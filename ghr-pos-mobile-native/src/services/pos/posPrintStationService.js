@@ -41,7 +41,6 @@ const DEFAULT_FOOTER_TEXT = [
   "@@CENTER:Hotline: 0933799061",
   "@@CENTER:Cảm ơn quý khách!"
 ].join("\n");
-const DEFAULT_FOOTER_QR_URL = "https://ganhhangrong.vn/orders";
 const recentAlertByOrderKey = new Map();
 const expiredCleanupStateByBranch = new Map();
 
@@ -316,14 +315,16 @@ function buildPrintPayload(job = {}) {
     isQrPayment: isQrPaymentPrintPayload(payload, sourceType),
     shouldPlayAlert: !isItemLabel,
     shouldDelayPrint: sourceType === "qr_order",
+    customerPhone: toText(order.customerPhone || order.customer_phone || payload.customerPhone || payload.customer_phone),
     footerText: skipFooter ? "" : toText(payload.footerText || DEFAULT_FOOTER_TEXT),
-    footerQrUrl: skipFooter ? "" : toText(payload.footerQrUrl || DEFAULT_FOOTER_QR_URL),
+    footerQrUrl: skipFooter ? "" : toText(payload.footerQrUrl),
     secondaryReceipt: secondaryText
       ? {
           text: secondaryText,
           sourceType: "qr_order",
+          customerPhone: toText(order.customerPhone || order.customer_phone || payload.customerPhone || payload.customer_phone),
           footerText: toText(payload.footerText || DEFAULT_FOOTER_TEXT),
-          footerQrUrl: toText(payload.footerQrUrl || DEFAULT_FOOTER_QR_URL)
+          footerQrUrl: toText(payload.footerQrUrl)
         }
       : null
   };

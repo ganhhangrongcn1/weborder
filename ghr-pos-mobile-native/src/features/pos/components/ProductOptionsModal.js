@@ -12,35 +12,17 @@ import {
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
 import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
+import {
+  buildInitialPosOptionSelections,
+  buildSelectedPosOptionList,
+  getPosOptionSelectionLimit,
+  getPosOptionSelectionMode,
+  isPosOptionGroupComplete
+} from "../../../shared/pos/posOptionSelection";
 
 function toNumber(value = 0) {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function buildSelectedList(groups = [], selectedOptions = {}) {
-  return groups
-    .map((group) => {
-      const option = (group.options || []).find((item) => item.id === selectedOptions[group.id]);
-      if (!option) return null;
-      return {
-        ...option,
-        groupId: group.id,
-        groupName: group.name
-      };
-    })
-    .filter(Boolean);
-}
-
-function buildInitialSelectedOptions(groups = [], selectedOptions = []) {
-  return (Array.isArray(selectedOptions) ? selectedOptions : []).reduce((result, option) => {
-    const matchedGroup = (Array.isArray(groups) ? groups : []).find((group) => group.id === option.groupId);
-    if (!matchedGroup) return result;
-    return {
-      ...result,
-      [matchedGroup.id]: option.id
-    };
-  }, {});
 }
 
 export default function ProductOptionsModal({
@@ -60,31 +42,31 @@ export default function ProductOptionsModal({
     const groups = Array.isArray(product?.optionGroups) ? product.optionGroups : [];
     setQuantity(Math.max(1, Number(initialConfig?.quantity || 1)));
     setNote(String(initialConfig?.note || ""));
-    setSelectedOptions(buildInitialSelectedOptions(groups, initialConfig?.selectedOptions));
+    setSelectedOptions(buildInitialPosOptionSelections(groups, initialConfig?.selectedOptions));
     setSubmitError("");
   }, [initialConfig, product?.id]);
 
   const groups = Array.isArray(product?.optionGroups) ? product.optionGroups : [];
   const selectedList = useMemo(
-    () => buildSelectedList(groups, selectedOptions),
+    () => buildSelectedPosOptionList(groups, selectedOptions),
     [groups, selectedOptions]
   );
   const optionTotal = selectedList.reduce((sum, option) => sum + toNumber(option.price, 0), 0);
   const total = (toNumber(product?.price, 0) + optionTotal) * quantity;
-  const missingRequiredGroups = groups.filter((group) => group.required && !selectedOptions[group.id]);
+  const missingRequiredGroups = groups.filter((group) => !isPosOptionGroupComplete(group, selectedOptions[group.id]));
   const canSubmit = Boolean(product) && missingRequiredGroups.length === 0;
   const compactGrid = width >= 760;
   const dialogWidth = getPosDialogWidth(width, width >= 760 ? 700 : 500);
 
   const handleSelectOption = (group, optionId) => {
     setSelectedOptions((current) => {
-      const currentValue = current[group.id];
-      if (!group.required && currentValue === optionId) {
-        const next = { ...current };
-        delete next[group.id];
-        return next;
-      }
-      return { ...current, [group.id]: optionId };
+      const currentValues = Array.isArray(current[group.id]) ? current[group.id] : [];
+      const selected = currentValues.includes(optionId);
+      const limit = getPosOptionSelectionLimit(group);
+      const nextValues = selected
+        ? currentValues.filter((id) => id !== optionId)
+        : currentValues.length < limit ? [...currentValues, optionId] : currentValues;
+      return { ...current, [group.id]: nextValues };
     });
     setSubmitError("");
   };
@@ -129,17 +111,21 @@ export default function ProductOptionsModal({
                   <Text style={styles.groupTitle}>{group.name}</Text>
                   <View style={[styles.groupBadge, group.required ? styles.groupBadgeRequired : styles.groupBadgeOptional]}>
                     <Text style={[styles.groupBadgeText, group.required ? styles.groupBadgeTextRequired : styles.groupBadgeTextOptional]}>
-                      {group.required ? "Bắt buộc" : "Tùy chọn"}
+                      {getPosOptionSelectionMode(group) === "exact"
+                        ? `Chính xác ${getPosOptionSelectionLimit(group)}`
+                        : group.required ? "Bắt buộc" : "Tùy chọn"}
                     </Text>
                   </View>
                 </View>
-                {group.required ? (
-                  <Text style={styles.groupNote}>Chọn 1 mục trước khi lưu món.</Text>
-                ) : null}
+                <Text style={styles.groupNote}>
+                  {getPosOptionSelectionMode(group) === "exact"
+                    ? `Phải chọn đủ ${getPosOptionSelectionLimit(group)} mục trước khi lưu món.`
+                    : `Có thể chọn tối đa ${getPosOptionSelectionLimit(group)} mục.`}
+                </Text>
 
                 <View style={styles.optionGrid}>
                   {(group.options || []).map((option) => {
-                    const active = selectedOptions[group.id] === option.id;
+                    const active = (selectedOptions[group.id] || []).includes(option.id);
                     return (
                       <Pressable
                         key={option.id}

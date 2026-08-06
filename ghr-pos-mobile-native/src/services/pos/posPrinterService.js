@@ -45,6 +45,13 @@ function alignReceiptLine(label = "", value = "", width = 42) {
   return `${left}${" ".repeat(gap)}${right}`;
 }
 
+export function buildReceiptFooterQrUrl(customerPhone = "") {
+  const phone = toText(customerPhone).replace(/\D+/g, "");
+  return phone
+    ? `${DEFAULT_RECEIPT_FOOTER_QR_URL}?phone=${encodeURIComponent(phone)}`
+    : DEFAULT_RECEIPT_FOOTER_QR_URL;
+}
+
 function buildReceiptRow(label = "", value = "", strong = false) {
   return `${strong ? "@@BOLDROW:" : "@@ROW:"}${toText(label)}\t${toText(value)}`;
 }
@@ -175,7 +182,7 @@ export async function stopLocalPrintStationService() {
   return printerModule.stopPrintStationService();
 }
 
-export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = "", footerText = "", footerQrUrl = "" } = {}) {
+export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = "", footerText = "", footerQrUrl = "", customerPhone = "" } = {}) {
   if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
   const safeSourceType = toText(sourceType).toLowerCase();
   const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN");
@@ -185,7 +192,7 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
     qrUrl,
     sourceType: safeSourceType || sourceType,
     footerText: toText(footerText) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_TEXT : ""),
-    footerQrUrl: toText(footerQrUrl) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_QR_URL : "")
+    footerQrUrl: toText(footerQrUrl) || (shouldUseDefaultFooter ? buildReceiptFooterQrUrl(customerPhone) : "")
   });
 }
 

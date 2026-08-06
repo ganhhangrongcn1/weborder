@@ -33,7 +33,7 @@ describe("buildPosCustomerBillText", () => {
 
     expect(receipt).toContain("@@BIG:GHR-1104");
     expect(receipt).toContain("@@RULE");
-    expect(receipt).toContain("@@ROW:1 × Bánh Tráng Cuộn Chấm Sốt Đặc Biệt\t30.000đ");
+    expect(receipt).toContain("@@BOLDROW:1 × Bánh Tráng Cuộn Chấm Sốt Đặc Biệt\t30.000đ");
     expect(receipt).toContain("@@BOLDROW:ĐÃ THANH TOÁN TIỀN MẶT\t30.000đ");
     expect(receipt).toContain("@@BOLDROW:CÒN PHẢI THU\t0đ");
     expect(receipt).toContain("@@CENTER:*** KHÔNG THU THÊM TIỀN ***");

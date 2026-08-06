@@ -26,11 +26,16 @@ function getObject(value) {
 
 function normalizeOptionGroups(groups = []) {
   return (Array.isArray(groups) ? groups : [])
-    .map((group, groupIndex) => ({
+    .map((group, groupIndex) => {
+      const metadata = getObject(group.metadata);
+      const maxSelect = Math.max(1, Math.floor(toNumber(group.maxSelect || group.max_select || 1)));
+      return {
       id: toText(group.id || `group-${groupIndex + 1}`),
       name: toText(group.name || group.title || `Tùy chọn ${groupIndex + 1}`),
       required: Boolean(group.required),
-      maxSelect: Math.max(1, Math.floor(toNumber(group.maxSelect || group.max_select || 1))),
+      selectionMode: group.selectionMode === "exact" || metadata.selectionMode === "exact"
+        || (!group.selectionMode && !metadata.selectionMode && maxSelect === 1) ? "exact" : "max",
+      maxSelect,
       options: (Array.isArray(group.options) ? group.options : [])
         .filter((option) => option?.active !== false)
         .map((option, optionIndex) => ({
@@ -39,7 +44,8 @@ function normalizeOptionGroups(groups = []) {
           price: toNumber(option.price || option.extraPrice || option.extra_price, 0)
         }))
         .filter((option) => option.name)
-    }))
+      };
+    })
     .filter((group) => group.name && group.options.length);
 }
 
@@ -147,11 +153,14 @@ async function readOptionGroups() {
     (groups || []).forEach((group) => {
       if (group?.active === false) return;
       const groupId = toText(group.id);
+      const metadata = getObject(group.metadata);
+      const maxSelect = Math.max(1, Math.floor(toNumber(group.max_select, 1)));
       groupById.set(groupId, {
         id: groupId,
         name: toText(group.name),
         required: Boolean(group.required),
-        maxSelect: Math.max(1, Math.floor(toNumber(group.max_select, 1))),
+        selectionMode: metadata.selectionMode === "exact" || (!metadata.selectionMode && maxSelect === 1) ? "exact" : "max",
+        maxSelect,
         options: optionsByGroup.get(groupId) || []
       });
     });

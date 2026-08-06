@@ -312,7 +312,8 @@ export default function usePosComposer() {
     try {
       await printLocalReceipt({
         text: buildPosCustomerBillText(billData),
-        sourceType: "customer_bill"
+        sourceType: "customer_bill",
+        customerPhone: billData.customerPhone
       });
     } catch (error) {
       failures.push(`bill khách: ${error?.message || "Lỗi máy in."}`);
@@ -353,7 +354,8 @@ export default function usePosComposer() {
     try {
       await printLocalReceipt({
         text: receiptText,
-        sourceType: "customer_bill"
+        sourceType: "customer_bill",
+        customerPhone: printableOrder.customerPhone
       });
       return { ok: true, message: " Đã in bill tại máy POS." };
     } catch (error) {
@@ -2145,7 +2147,8 @@ export default function usePosComposer() {
 
       await printLocalReceipt({
         text: receiptText,
-        sourceType: "customer_bill_reprint"
+        sourceType: "customer_bill_reprint",
+        customerPhone: printableOrder.customerPhone
       });
       setShiftMessage(`Đã in lại bill ${printableOrder.displayOrderCode || order.displayOrderCode || order.id}.`);
     } catch (error) {
