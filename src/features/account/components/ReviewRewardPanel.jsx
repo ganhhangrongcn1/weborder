@@ -129,6 +129,8 @@ export default function ReviewRewardPanel({
   const [ordersOpen, setOrdersOpen] = useState(false);
   const [resubmittingClaimId, setResubmittingClaimId] = useState("");
   const uploadSectionRef = useRef(null);
+  const googleReviewCardRef = useRef(null);
+  const partnerSectionRef = useRef(null);
   const [activeView, setActiveView] = useState(() => {
     try {
       return window.sessionStorage.getItem(REVIEW_REWARD_VIEW_KEY) === "history"
@@ -257,6 +259,39 @@ export default function ReviewRewardPanel({
         correct: "Ảnh chụp màn hình đánh giá trên ứng dụng đối tác.",
         choose: "Chọn ảnh chụp màn hình"
       };
+
+  const scrollToReviewChoice = (targetRef) => {
+    window.setTimeout(() => {
+      targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      targetRef.current?.focus?.({ preventScroll: true });
+    }, 120);
+  };
+
+  const chooseGoogleMapsReview = () => {
+    setActiveView("submit");
+    setSelectedSource("googlemaps");
+    setSelectedOrderId("");
+    setSelectedBranchId("");
+    setOrdersOpen(false);
+    setProof(null);
+    setProofPreview("");
+    setReturnedFromMaps(false);
+    setMessage("");
+    scrollToReviewChoice(googleReviewCardRef);
+  };
+
+  const choosePartnerReview = () => {
+    setActiveView("submit");
+    setSelectedSource("");
+    setSelectedOrderId("");
+    setSelectedBranchId("");
+    setOrdersOpen(true);
+    setProof(null);
+    setProofPreview("");
+    setReturnedFromMaps(false);
+    setMessage("");
+    scrollToReviewChoice(partnerSectionRef);
+  };
 
   const handleImage = async (event) => {
     const file = event.target.files?.[0];
@@ -473,17 +508,17 @@ export default function ReviewRewardPanel({
 
       {data?.settings?.enabled !== false ? (
         <div className={`review-reward-point-showcase${showGoogleReview ? "" : " is-single"}`} aria-label="Mức điểm thưởng">
-          <div>
+          <button type="button" onClick={choosePartnerReview} aria-label={`Chọn đánh giá đơn đối tác để nhận ${partnerRewardPoints.toLocaleString("vi-VN")} điểm`}>
             <span>Đơn đối tác</span>
             <strong>+{partnerRewardPoints.toLocaleString("vi-VN")}</strong>
             <small>điểm</small>
-          </div>
+          </button>
           {showGoogleReview ? (
-            <div>
+            <button type="button" onClick={chooseGoogleMapsReview} aria-label={`Chọn đánh giá Google Maps để nhận ${googleRewardPoints.toLocaleString("vi-VN")} điểm`}>
               <span>Google Maps</span>
               <strong>+{googleRewardPoints.toLocaleString("vi-VN")}</strong>
               <small>điểm</small>
-            </div>
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -548,6 +583,7 @@ export default function ReviewRewardPanel({
           <>
           {showGoogleReview ? (
             <button
+              ref={googleReviewCardRef}
               type="button"
               className={`review-reward-google-card${selectedSource === "googlemaps" ? " is-selected" : ""}`}
               aria-expanded={selectedSource === "googlemaps"}
@@ -613,7 +649,7 @@ export default function ReviewRewardPanel({
           ) : null}
           {showGoogleReview && selectedSource === "googlemaps" && selectedBranch ? renderProofUpload() : null}
 
-          <div className="review-reward-selection-step review-reward-partner-section">
+          <div ref={partnerSectionRef} className="review-reward-selection-step review-reward-partner-section" tabIndex={-1}>
             <div className="review-reward-section-title">
               <div><h3>Đơn hàng của bạn</h3><p>Chọn đơn bạn đã đánh giá trên ứng dụng đối tác.</p></div>
               <span>{availableOrders.length ? `${availableOrders.length} đơn còn hạn` : "Chưa có đơn còn hạn"}</span>

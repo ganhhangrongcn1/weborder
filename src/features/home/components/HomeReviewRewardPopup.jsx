@@ -106,8 +106,7 @@ export default function HomeReviewRewardPopup({
         ) : (
           <>
             <div className="review-reward-popup__copy review-reward-popup__copy--guide">
-              <h2>Gửi ảnh, chờ Gánh duyệt</h2>
-              <p>Gánh sẽ kiểm tra và phản hồi kết quả trong 24–48 giờ.</p>
+              <h2>Gửi Ảnh Đánh Giá 5⭐, Chờ Gánh Duyệt</h2>
             </div>
 
             <div className="review-reward-popup__steps" aria-label="Ba bước nhận thưởng">
@@ -128,8 +127,8 @@ export default function HomeReviewRewardPopup({
               <div>
                 <span>3</span>
                 <p>
-                  <strong>Tải ảnh lên và chờ duyệt</strong>
-                  <small>Gánh kiểm tra ảnh và cộng đúng mức điểm của lựa chọn sau khi duyệt.</small>
+                  <strong>Tải ảnh đánh giá 5⭐ lên</strong>
+                  <small>Sau khi đánh giá 5⭐, hãy tải ảnh chụp màn hình lên. Gánh sẽ kiểm tra và cộng điểm sau khi duyệt.</small>
                 </p>
               </div>
             </div>
