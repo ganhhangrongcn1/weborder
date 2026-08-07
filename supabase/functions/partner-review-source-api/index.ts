@@ -523,7 +523,7 @@ async function requestReviewReply(client: ReturnType<typeof createClient>, admin
   if (text(review.review_status).toUpperCase() === "REMOVED") {
     return reply({ ok: false, message: "Không thể trả lời đánh giá đã bị gỡ." }, 409);
   }
-  if (arrayValue(review.replies).length) {
+  if (reviewReplyValues(review.replies).length) {
     return reply({ ok: false, message: "Đánh giá này đã có phản hồi trên Grab." }, 409);
   }
   const { data: command, error } = await client
@@ -1147,6 +1147,12 @@ function arrayValue(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
 
+function reviewReplyValues(value: unknown) {
+  return arrayValue(value)
+    .map((replyItem) => object(replyItem))
+    .filter((replyItem) => text(replyItem.description));
+}
+
 async function planAutomationFinanceDetails(
   request: Request,
   client: ReturnType<typeof createClient>,
@@ -1252,7 +1258,7 @@ async function saveAutomationReviews(
         is_new: Boolean(review.isNew),
         ordered_items: arrayValue(review.orderedItems),
         aspects: arrayValue(review.reviewAspects),
-        replies: arrayValue(review.reviewReplies),
+        replies: reviewReplyValues(review.reviewReplies),
         image_urls: arrayValue(review.paxReviewImageUrls),
         review_created_at: text(review.createdAt) || null,
         content_modified_at: text(review.contentLastModifiedAt) || null,

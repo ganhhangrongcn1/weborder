@@ -270,7 +270,11 @@ export default function PartnerReviewInbox({
             const content = textValue(review.content);
             const tone = ratingTone(review.rating);
             const replyStatus = textValue(review.reply_command?.status);
-            const hasReply = Array.isArray(review.replies) && review.replies.length > 0;
+            const hasReply = Array.isArray(review.replies) && review.replies.some((replyItem) => (
+              replyItem
+              && typeof replyItem === "object"
+              && textValue(replyItem.description)
+            ));
             const replyPending = replyStatus === "pending" || replyStatus === "processing";
             const replyDone = hasReply || replyStatus === "succeeded";
             const canReply = textValue(review.platform) === "grabfood"
