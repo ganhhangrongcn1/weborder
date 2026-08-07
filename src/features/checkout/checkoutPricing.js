@@ -137,9 +137,9 @@ export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, form
       if (!voucher) return false;
       const voucherId = String(voucher.id || "").trim();
       const voucherCode = String(voucher.code || "").trim().toUpperCase();
-      const usedByOrder =
-        (voucherId && loyaltyUsageLookup.byId.has(voucherId)) ||
-        (voucherCode && loyaltyUsageLookup.byCode.has(voucherCode));
+      const usedByOrder = voucherId
+        ? loyaltyUsageLookup.byId.has(voucherId)
+        : Boolean(voucherCode && loyaltyUsageLookup.byCode.has(voucherCode));
       return !usedByOrder && voucher.used !== true;
     })
     .filter((voucher) => voucher.canceled !== true)

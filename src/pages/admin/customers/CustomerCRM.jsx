@@ -508,15 +508,28 @@ function getVoucherGrantSourceLabel(voucher = {}) {
   return "";
 }
 
+function isVoucherExpired(voucher, now = new Date()) {
+  const expiredAt = String(
+    voucher?.expiredAt || voucher?.endAt || voucher?.expiry || ""
+  ).trim().slice(0, 10);
+  if (!expiredAt) return false;
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return expiredAt < `${year}-${month}-${day}`;
+}
+
 function getVoucherStatus(voucher) {
   if (voucher.canceled) return { label: "Đã hủy", className: "crm-status-canceled" };
   if (voucher.used) return { label: "Đã dùng", className: "crm-status-used" };
+  if (isVoucherExpired(voucher)) return { label: "Hết hạn", className: "crm-status-expired" };
   return { label: "Chưa dùng", className: "crm-status-active" };
 }
 
 function getVoucherSortWeight(voucher) {
-  if (voucher?.canceled) return 2;
-  if (voucher?.used) return 1;
+  if (voucher?.canceled) return 3;
+  if (voucher?.used) return 2;
+  if (isVoucherExpired(voucher)) return 1;
   return 0;
 }
 

@@ -991,6 +991,7 @@
 }
 
 .crm-status-active { background: #dcfce7; color: #16a34a; }
+.crm-status-expired { background: #fff7ed; color: #c2410c; }
 .crm-status-used { background: #f1f5f9; color: #64748b; }
 .crm-status-canceled { background: #fee2e2; color: #dc2626; }
 
