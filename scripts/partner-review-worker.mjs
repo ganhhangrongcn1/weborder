@@ -933,11 +933,14 @@ async function collectFeedbackDirect(page, source, cookieJar = null) {
       method: "POST",
       body: JSON.stringify({ ...baseBody, ...(nextToken ? { nextToken } : {}) })
     });
-    if (!Array.isArray(body?.reviews)) throw new Error("Grab feedback API trả dữ liệu đánh giá không hợp lệ.");
-    reviews.push(...body.reviews);
+    const pageReviews = body?.reviews == null ? [] : body.reviews;
+    if (!Array.isArray(pageReviews)) {
+      throw new Error("Grab feedback API trả dữ liệu đánh giá không hợp lệ.");
+    }
+    reviews.push(...pageReviews);
     nextToken = String(body.nextToken || "");
     pageCount += 1;
-    if (!body.reviews.length || pageCount >= 50) nextToken = "";
+    if (!pageReviews.length || pageCount >= 50) nextToken = "";
   } while (nextToken);
 
   const query = new URLSearchParams({
