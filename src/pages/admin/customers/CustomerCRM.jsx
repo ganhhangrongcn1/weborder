@@ -556,7 +556,7 @@ function mergeVoucherLists(...lists) {
 
 function formatCustomerPoints(customer) {
   const points = Number(customer?.currentPoints || 0);
-  return points > 0 ? points.toLocaleString("vi-VN") : "";
+  return Math.max(0, Number.isFinite(points) ? points : 0).toLocaleString("vi-VN");
 }
 
 function getChannelLabel(channel = "") {
