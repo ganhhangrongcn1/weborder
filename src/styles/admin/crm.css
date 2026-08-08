@@ -3628,6 +3628,7 @@
 }
 
 .crm-list-panel--customers .crm-table-body {
+  align-content: start;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;

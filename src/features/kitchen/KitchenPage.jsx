@@ -7,6 +7,13 @@ import KitchenOrderCard from "./KitchenOrderCard.jsx";
 import KitchenOrderSummaryPanel from "./KitchenOrderSummaryPanel.jsx";
 import KitchenOrderStrip from "./KitchenOrderStrip.jsx";
 import {
+  catalogConfigRepository,
+  CATALOG_CONFIG_KEYS
+} from "../../services/repositories/catalogConfigRepository.js";
+import {
+  buildBranchFilterOptions
+} from "../../services/branchIdentityService.js";
+import {
   getPrinterConfig,
   hasAndroidPrinterBridge,
   printItemLabelPayload,
@@ -212,6 +219,62 @@ function SourceFilterSelect({ value, onChange }) {
           borderLeft: "5px solid transparent",
           borderRight: "5px solid transparent",
           borderTop: "6px solid #475569",
+          pointerEvents: "none"
+        }}
+      />
+    </label>
+  );
+}
+
+function BranchFilterSelect({ options = [], value, onChange }) {
+  return (
+    <label
+      title="Lọc đơn theo chi nhánh"
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        minWidth: 150,
+        height: 34
+      }}
+    >
+      <select
+        aria-label="Lọc đơn theo chi nhánh"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        style={{
+          width: "100%",
+          height: "100%",
+          appearance: "none",
+          border: "1px solid #16a34a",
+          background: "#f0fdf4",
+          color: "#166534",
+          borderRadius: 8,
+          padding: "0 28px 0 9px",
+          fontSize: 12,
+          fontWeight: 850,
+          lineHeight: "34px",
+          cursor: "pointer",
+          outline: "none"
+        }}
+      >
+        <option value="all">Tất cả chi nhánh</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          right: 10,
+          width: 0,
+          height: 0,
+          borderLeft: "5px solid transparent",
+          borderRight: "5px solid transparent",
+          borderTop: "6px solid #166534",
           pointerEvents: "none"
         }}
       />
@@ -577,6 +640,8 @@ export default function KitchenPage() {
   const [printingItemLabels, setPrintingItemLabels] = useState(false);
   const [printJobsByOrderKey, setPrintJobsByOrderKey] = useState({});
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [branches, setBranches] = useState([]);
+  const [branchFilter, setBranchFilter] = useState("all");
   const [rightPanelMode, setRightPanelMode] = useState(() => {
     try {
       const savedMode = window.localStorage.getItem(RIGHT_PANEL_MODE_STORAGE_KEY);
@@ -608,12 +673,49 @@ export default function KitchenPage() {
     logout
   } = useKitchenAuth();
 
+  const isAdmin = profile?.role === "admin";
+  const branchFilterOptions = useMemo(() => buildBranchFilterOptions(branches), [branches]);
+  const selectedBranchOption = useMemo(
+    () => branchFilterOptions.find((option) => option.value === branchFilter) || null,
+    [branchFilter, branchFilterOptions]
+  );
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setBranches([]);
+      setBranchFilter("all");
+      return undefined;
+    }
+
+    let active = true;
+    catalogConfigRepository.getAsync(CATALOG_CONFIG_KEYS.branches, [])
+      .then((items) => {
+        if (!active) return;
+        setBranches(Array.isArray(items) ? items : []);
+      })
+      .catch((error) => {
+        console.warn("[kitchen] Không tải được danh sách chi nhánh", error);
+        if (active) setBranches([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (branchFilter === "all") return;
+    if (!branchFilterOptions.some((option) => option.value === branchFilter)) {
+      setBranchFilter("all");
+    }
+  }, [branchFilter, branchFilterOptions]);
+
   const kitchenOrderOptions = useMemo(() => ({
     enabled: Boolean(session && profile),
-    branchUuid: profile?.branchUuid || "",
-    branchName: profile?.branchName || "",
-    branchAlias: profile?.branchAlias || ""
-  }), [profile, session]);
+    branchUuid: isAdmin ? selectedBranchOption?.value || "" : profile?.branchUuid || "",
+    branchName: isAdmin ? selectedBranchOption?.label || "" : profile?.branchName || "",
+    branchAlias: isAdmin ? selectedBranchOption?.aliases?.join(" ") || "" : profile?.branchAlias || ""
+  }), [isAdmin, profile, selectedBranchOption, session]);
 
   const {
     orders,
@@ -922,7 +1024,9 @@ export default function KitchenPage() {
   }
 
   const displayName = profile.name || profile.email || "Tài khoản bếp";
-  const branchLabel = profile.branchName || profile.branchAlias || "Chưa gán chi nhánh";
+  const branchLabel = isAdmin
+    ? selectedBranchOption?.label || "Tất cả chi nhánh"
+    : profile.branchName || profile.branchAlias || "Chưa gán chi nhánh";
 
   function scrollToOrder(orderKey = "") {
     window.requestAnimationFrame(() => {
@@ -968,6 +1072,11 @@ export default function KitchenPage() {
   function handleSourceFilterChange(value = "all") {
     clearActiveSelection();
     setSourceFilter(value);
+  }
+
+  function handleBranchFilterChange(value = "all") {
+    clearActiveSelection();
+    setBranchFilter(value);
   }
 
   function handleStatusFilterChange(value = "active") {
@@ -1435,6 +1544,13 @@ export default function KitchenPage() {
               scrollbarWidth: "none"
             }}
           >
+            {isAdmin ? (
+              <BranchFilterSelect
+                options={branchFilterOptions}
+                value={branchFilter}
+                onChange={handleBranchFilterChange}
+              />
+            ) : null}
             <SourceFilterSelect value={sourceFilter} onChange={handleSourceFilterChange} />
             <FilterButton
               active={statusFilter === "scheduled"}
