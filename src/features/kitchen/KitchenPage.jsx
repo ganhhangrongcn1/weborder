@@ -714,7 +714,8 @@ export default function KitchenPage() {
     enabled: Boolean(session && profile),
     branchUuid: isAdmin ? selectedBranchOption?.value || "" : profile?.branchUuid || "",
     branchName: isAdmin ? selectedBranchOption?.label || "" : profile?.branchName || "",
-    branchAlias: isAdmin ? selectedBranchOption?.aliases?.join(" ") || "" : profile?.branchAlias || ""
+    branchAlias: isAdmin ? selectedBranchOption?.aliases?.join(" ") || "" : profile?.branchAlias || "",
+    branchOption: isAdmin ? selectedBranchOption : null
   }), [isAdmin, profile, selectedBranchOption, session]);
 
   const {

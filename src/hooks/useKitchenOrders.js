@@ -15,6 +15,7 @@ import {
   getKitchenRequestAuditSnapshot,
   resetKitchenRequestAudit
 } from "../services/kitchenRequestAuditService.js";
+import { branchOptionMatchesOrder } from "../services/branchIdentityService.js";
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
 const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
@@ -856,8 +857,14 @@ export default function useKitchenOrders(options = null) {
     };
   }, [dateFilter, enabled, loadOrders, realtimeReconnectKey]);
 
+  const branchScopedOrders = useMemo(() => {
+    const branchOption = options?.branchOption || null;
+    if (!branchOption) return orders;
+    return orders.filter((order) => branchOptionMatchesOrder(order, branchOption));
+  }, [options?.branchOption, orders]);
+
   const filteredOrders = useMemo(() => {
-    const matchedOrders = orders.filter((order) => {
+    const matchedOrders = branchScopedOrders.filter((order) => {
       if (!orderMatchesSource(order, sourceFilter)) return false;
       if (!orderMatchesStatus(order, statusFilter, scheduleStatusTick)) return false;
       if (!orderMatchesSearch(order, search)) return false;
@@ -869,18 +876,18 @@ export default function useKitchenOrders(options = null) {
     }
 
     return sortKitchenOrdersForBoard(matchedOrders);
-  }, [doneOrderLimit, orders, scheduleStatusTick, search, sourceFilter, statusFilter]);
+  }, [branchScopedOrders, doneOrderLimit, scheduleStatusTick, search, sourceFilter, statusFilter]);
 
   const canLoadMoreDoneOrders = useMemo(() => {
     if (statusFilter !== "done") return false;
-    const doneMatches = orders.filter((order) => {
+    const doneMatches = branchScopedOrders.filter((order) => {
       if (!orderMatchesSource(order, sourceFilter)) return false;
       if (!orderMatchesStatus(order, "done", scheduleStatusTick)) return false;
       if (!orderMatchesSearch(order, search)) return false;
       return true;
     });
     return doneMatches.length > doneOrderLimit;
-  }, [doneOrderLimit, orders, scheduleStatusTick, search, sourceFilter, statusFilter]);
+  }, [branchScopedOrders, doneOrderLimit, scheduleStatusTick, search, sourceFilter, statusFilter]);
 
   const loadMoreDoneOrders = useCallback(() => {
     setDoneOrderLimit((limit) => limit + DONE_ORDER_PAGE_SIZE);
@@ -892,16 +899,16 @@ export default function useKitchenOrders(options = null) {
   }, []);
 
   const stats = useMemo(() => {
-    const activeOrders = orders.filter((order) => orderMatchesStatus(order, "active", scheduleStatusTick));
-    const scheduledOrders = orders.filter((order) => orderMatchesStatus(order, "scheduled", scheduleStatusTick));
-    const handoffOrders = orders.filter((order) => orderMatchesStatus(order, "handoff", scheduleStatusTick));
-    const doneOrders = orders.filter((order) => orderMatchesStatus(order, "done", scheduleStatusTick));
-    const cancelledOrders = orders.filter((order) => orderMatchesStatus(order, "cancelled", scheduleStatusTick));
-    const partnerOrders = orders.filter((order) => order.sourceType === "partner");
-    const websiteOrders = orders.filter((order) => order.sourceType === "website");
+    const activeOrders = branchScopedOrders.filter((order) => orderMatchesStatus(order, "active", scheduleStatusTick));
+    const scheduledOrders = branchScopedOrders.filter((order) => orderMatchesStatus(order, "scheduled", scheduleStatusTick));
+    const handoffOrders = branchScopedOrders.filter((order) => orderMatchesStatus(order, "handoff", scheduleStatusTick));
+    const doneOrders = branchScopedOrders.filter((order) => orderMatchesStatus(order, "done", scheduleStatusTick));
+    const cancelledOrders = branchScopedOrders.filter((order) => orderMatchesStatus(order, "cancelled", scheduleStatusTick));
+    const partnerOrders = branchScopedOrders.filter((order) => order.sourceType === "partner");
+    const websiteOrders = branchScopedOrders.filter((order) => order.sourceType === "website");
 
     return {
-      total: orders.length,
+      total: branchScopedOrders.length,
       active: activeOrders.length,
       scheduled: scheduledOrders.length,
       handoff: handoffOrders.length,
@@ -910,7 +917,7 @@ export default function useKitchenOrders(options = null) {
       partner: partnerOrders.length,
       website: websiteOrders.length
     };
-  }, [orders, scheduleStatusTick]);
+  }, [branchScopedOrders, scheduleStatusTick]);
 
   const markDone = useCallback(async (order) => {
     const orderId = String(order?.id || "").trim();
