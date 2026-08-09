@@ -1044,11 +1044,16 @@ async function runStoreControl(source, chromePath) {
     const pages = await browser.pages();
     const page = pages[0] || await browser.newPage();
     page.setDefaultTimeout(30_000);
+    const authBundle = await restoreStoredSession(page, source);
     try {
       result = await setStoreState(page, source, action);
-    } catch {
-      await openFeedbackPage(page, { force: true });
-      if (await isLoginRequired(page)) await login(page, source, { visible: !HEADLESS });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const sessionMissing = /chưa có cookie grab portal/i.test(message);
+      if (!sessionMissing && !isGrabSessionExpired(error)) throw error;
+      await log("Phiên Grab của công tắc cửa hàng đã hết hạn, đang đăng nhập lại:", source.display_name);
+      await login(page, source, { visible: !HEADLESS, authBundle });
+      await saveRefreshedSession(page, source);
       result = await setStoreState(page, source, action);
     }
     succeeded = result.applied === true || result.reason === "already_normal";
