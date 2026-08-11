@@ -233,7 +233,7 @@ export default function AdminApp({
           compact={section === "dashboard" || section === "orders"}
         />
 
-        {section !== "dashboard" && section !== "grab-finance" && section !== "orders" && section !== "customers" ? (
+        {section !== "dashboard" && section !== "grab-finance" && section !== "grab-marketing" && section !== "orders" && section !== "customers" ? (
           <AdminPageHeader
             title={getAdminPageTitle(section)}
             description="Quản trị vận hành cửa hàng, dữ liệu vận hành lưu trên Supabase."

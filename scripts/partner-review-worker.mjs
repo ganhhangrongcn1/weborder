@@ -47,6 +47,7 @@ const REVIEW_REWARD_API_URL = String(
 const AUTOMATION_SECRET = String(process.env.PARTNER_REVIEW_AUTOMATION_SECRET || "").trim();
 const SUPABASE_ANON_KEY = String(process.env.PARTNER_REVIEW_ANON_KEY || "").trim();
 const cliNumber = (name) => Number(String(process.argv.find((item) => item.startsWith(`--${name}=`)) || "").split("=")[1]);
+const cliText = (name) => String(process.argv.find((item) => item.startsWith(`--${name}=`)) || "").slice(name.length + 3).trim();
 const FALLBACK_INTERVAL_MINUTES = Math.max(5, Number(process.env.PARTNER_REVIEW_INTERVAL_MINUTES) || 60);
 const REVIEW_WINDOW_DAYS = Math.max(1, Number(process.env.PARTNER_REVIEW_WINDOW_DAYS) || 2);
 const FINANCE_SNAPSHOT_DAYS = Math.min(31, Math.max(1, cliNumber("finance-days") || Number(process.env.PARTNER_REVIEW_FINANCE_DAYS) || 2));
@@ -57,6 +58,7 @@ const BATCH_SIZE = Math.min(50, Math.max(1, Number(process.env.PARTNER_REVIEW_BA
 const CONCURRENCY = Math.min(8, Math.max(1, Number(process.env.PARTNER_REVIEW_CONCURRENCY) || 1));
 const HEADLESS = String(process.env.PARTNER_REVIEW_HEADLESS || "true").toLowerCase() !== "false";
 const RUN_ONCE = process.argv.includes("--once");
+const MARKETING_AUTH_ACCOUNT = cliText("marketing-auth-account");
 const WORKER_ID = `${hostname()}:${process.pid}`;
 const USERNAME_SELECTOR = [
   "#Username",
@@ -251,6 +253,273 @@ async function collectFinanceSnapshots(page, merchantId, sourceId, cookieJar = n
   return { snapshots, transactions, detailStats: { listed: transactionStubs.length, requested: required.length, remaining: Math.max(0, Number(plan.required_count || required.length) - required.length) } };
 }
 
+function marketingNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const match = String(value ?? "").replace(/,/g, "").match(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/);
+  return Number(match?.[0]) || 0;
+}
+
+function marketingValue(values, metric, responseKey = "") {
+  if (Array.isArray(values)) {
+    const item = values.find((entry) => String(entry?.Metric ?? entry?.metric) === String(metric));
+    const value = item?.Value ?? item?.value ?? 0;
+    return marketingNumber(value);
+  }
+  if (!values || typeof values !== "object") return 0;
+  const value = values[responseKey] ?? values[metric] ?? values[String(metric)];
+  return marketingNumber(value);
+}
+
+function grabReportItems(payload) {
+  const report = payload?.report
+    || payload?.response?.report
+    || payload?.response?.Report
+    || payload?.data?.report
+    || payload?.data?.response?.report
+    || payload?.data?.response?.Report
+    || payload?.Report
+    || payload?.data?.Report
+    || [];
+  return Array.isArray(report) ? report : [];
+}
+
+function marketingPayloadShape(value, depth = 0) {
+  if (depth >= 5) return Array.isArray(value) ? "array" : typeof value;
+  if (Array.isArray(value)) {
+    return { type: "array", length: value.length, item: value.length ? marketingPayloadShape(value[0], depth + 1) : null };
+  }
+  if (!value || typeof value !== "object") return typeof value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, marketingPayloadShape(item, depth + 1)]));
+}
+
+async function discoverAdvertiserId(page, source) {
+  const saved = String(source?.marketing_advertiser_id || "").trim();
+  if (saved) return saved;
+  await page.goto("https://merchant.grab.com/marketing", { waitUntil: "domcontentloaded", timeout: 60_000 });
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const match = page.url().match(/\/marketing\/advertisers\/(\d+)/i);
+    if (match?.[1]) return match[1];
+    await sleep(500);
+  }
+  throw new Error("Không xác định được mã gian hàng quảng cáo Grab.");
+}
+
+function safeCapturedHeaders(headers = {}) {
+  const blocked = new Set(["accept-encoding", "connection", "content-length", "cookie", "host", "origin", "referer", "user-agent"]);
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => (
+    /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(name)
+    && !blocked.has(name.toLowerCase())
+    && !name.toLowerCase().startsWith("sec-")
+  )));
+}
+
+async function captureMarketingRequest(page, targetUrl, matchesUrl, timeoutMs = 20_000) {
+  let captured = null;
+  const pending = [];
+  const onResponse = (response) => {
+    const request = response.request();
+    if (request.method() !== "POST" || !matchesUrl(response.url(), request)) return;
+    const job = response.json().then((payload) => {
+      captured = {
+        url: response.url(),
+        status: response.status(),
+        headers: safeCapturedHeaders(request.headers()),
+        body: request.postData(),
+        payload
+      };
+    }).catch(() => null);
+    pending.push(job);
+  };
+  page.on("response", onResponse);
+  try {
+    await openMarketingPage(page, targetUrl);
+    const deadline = Date.now() + timeoutMs;
+    while (!captured && Date.now() < deadline) await sleep(500);
+    await Promise.allSettled(pending);
+  } finally {
+    page.off("response", onResponse);
+  }
+  if (!captured) throw new Error("Không bắt được yêu cầu API Marketing từ Grab sau khi mở trang báo cáo.");
+  if (captured.status === 401 || captured.status === 403) {
+    throw Object.assign(new Error("Phiên Grab Marketing đã hết hạn."), { code: "GRAB_SESSION_EXPIRED" });
+  }
+  if (captured.status < 200 || captured.status >= 300) {
+    throw new Error(`Grab Marketing API trả về HTTP ${captured.status}.`);
+  }
+  return captured;
+}
+
+async function replayMarketingRequest(page, template, body) {
+  return page.evaluate(async ({ url, headers, requestBody }) => {
+    const response = await fetch(url, {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: JSON.stringify(requestBody)
+    });
+    const payload = await response.json().catch(() => ({}));
+    return { ok: response.ok, status: response.status, payload };
+  }, { url: template.url, headers: template.headers, requestBody: body });
+}
+
+async function collectMarketingRows(page, source, { interactive = false } = {}) {
+  const advertiserId = await discoverAdvertiserId(page, source);
+  const endDate = vietnamDateOnly(-1);
+  const startDate = `${endDate.slice(0, 8)}01`;
+  const adStartTime = `${startDate}T00:00:00+07:00`;
+  const adEndTime = `${endDate}T23:59:59+07:00`;
+  const promoStartTime = { seconds: Math.floor(new Date(adStartTime).getTime() / 1000), nanos: 0 };
+  const promoEndTime = { seconds: Math.floor(new Date(`${endDate}T23:59:59.999+07:00`).getTime() / 1000), nanos: 0 };
+  const startMs = new Date(adStartTime).getTime();
+  const endMs = new Date(adEndTime).getTime();
+  const rows = [];
+  const adsPageUrl = `https://merchant.grab.com/marketing/advertisers/${encodeURIComponent(advertiserId)}/reports/overview?st=${startMs}&et=${endMs}`;
+  const adTemplate = await captureMarketingRequest(
+    page,
+    adsPageUrl,
+    (url, request) => {
+      if (!url.includes(`/adsapi/v1/advertisers/${advertiserId}/selfserve/report`)) return false;
+      const body = JSON.parse(request.postData() || "{}");
+      const metrics = [...(body.metrics || []), ...(body.summary?.metrics || [])];
+      return metrics.includes("SSR_BILLABLE_LOCAL_AD_SPEND")
+        && metrics.includes("SSR_CONVERSIONS")
+        && metrics.includes("SSR_IMPRESSIONS");
+    },
+    interactive ? 900_000 : 20_000
+  );
+  const adItems = grabReportItems(adTemplate.payload);
+  const responseShapes = { ads: marketingPayloadShape(adTemplate.payload), promos: {} };
+  const adTotals = adItems.reduce((result, item) => {
+    const metrics = item?.metrics || item?.Metrics || {};
+    result.spend += marketingValue(metrics, "SSR_BILLABLE_LOCAL_AD_SPEND", "BillableLocalAdSpend_");
+    result.orders += marketingValue(metrics, "SSR_CONVERSIONS", "Conversions_");
+    const spend = marketingValue(metrics, "SSR_BILLABLE_LOCAL_AD_SPEND", "BillableLocalAdSpend_");
+    const roas = marketingValue(metrics, "SSR_ROAS", "ROAS_");
+    const conversionValue = marketingValue(metrics, "SSR_CONVERSION_VALUE", "ConversionValue_");
+    const attributedSales = marketingValue(metrics, "SSR_CLICK_ATTRIBUTED_SALE", "ClickAttributedSale_")
+      + marketingValue(metrics, "SSR_VIEW_ATTRIBUTED_SALE", "ViewAttributedSale_");
+    result.sales += conversionValue || attributedSales || spend * roas;
+    result.impressions += marketingValue(metrics, "SSR_IMPRESSIONS", "Impressions_");
+    result.clicks += marketingValue(metrics, "SSR_CLICKS", "Clicks_");
+    return result;
+  }, { spend: 0, orders: 0, sales: 0, impressions: 0, clicks: 0 });
+  rows.push({
+    advertiser_id: advertiserId,
+    report_date: endDate,
+    channel: "keyword_ads",
+    campaign_key: "keyword_ads-month-summary",
+    campaign_name: "Quảng cáo từ khóa",
+    campaign_type: "ADS_REPORT",
+    currency: "VND",
+    spend_amount: adTotals.spend,
+    sales_amount: adTotals.sales,
+    orders_count: adTotals.orders,
+    impressions_count: adTotals.impressions,
+    clicks_count: adTotals.clicks,
+    grab_funded_amount: 0,
+    merchant_funded_amount: adTotals.spend,
+    marketing_fee_amount: 0,
+    raw_data: { source_path: "adsapi/v1/selfserve/report", request: JSON.parse(adTemplate.body || "{}"), report: adItems }
+  });
+
+  const promoPageUrl = `https://merchant.grab.com/marketing/advertisers/${encodeURIComponent(advertiserId)}/reports/promo?st=${startMs}&et=${endMs}`;
+  const promoTemplate = await captureMarketingRequest(
+    page,
+    promoPageUrl,
+    (url, request) => {
+      if (!url.includes(`/unifieddemandgen/v1/advertisers/${advertiserId}/self-serve-promo/reporting`)) return false;
+      const body = JSON.parse(request.postData() || "{}");
+      const reportRequest = body.request && typeof body.request === "object" ? body.request : body;
+      const metrics = reportRequest.metrics || [];
+      const dimensions = reportRequest.dimensions || [];
+      return [6, 2, 1, 8, 9].every((metric) => metrics.includes(metric)) && dimensions.length === 0;
+    }
+  );
+  const capturedPromoBody = JSON.parse(promoTemplate.body || "{}");
+  responseShapes.promos.captured = marketingPayloadShape(promoTemplate.payload);
+  const promoGroups = [
+    { channel: "promo", name: "Khuyến mãi tự tạo", types: ["ALA_CARTE_PROMO"] },
+    { channel: "spotlight", name: "Xế tối / Siêu Deal", types: ["GMS_ONE_CLICK", "SPECIAL_CAMPAIGN", "ALICE_CAMPAIGN"] }
+  ];
+  for (const group of promoGroups) {
+    const baseRequest = capturedPromoBody.request && typeof capturedPromoBody.request === "object"
+      ? capturedPromoBody.request
+      : capturedPromoBody;
+    const request = {
+      ...baseRequest,
+      startTime: promoStartTime,
+      endTime: promoEndTime,
+      dimensionFilters: [{ dimension: 3, operator: 0, values: group.types }],
+      metrics: [6, 2, 1, 8, 9],
+      sort: 1,
+      pageSize: 100,
+      pageToken: 0,
+      timeZone: "Asia/Bangkok",
+      locale: "vi-vn"
+    };
+    const replayBody = capturedPromoBody.request && typeof capturedPromoBody.request === "object"
+      ? { ...capturedPromoBody, advertiserID: advertiserId, request }
+      : request;
+    const promoResponse = await replayMarketingRequest(page, promoTemplate, replayBody);
+    if (promoResponse.status === 401 || promoResponse.status === 403) {
+      throw Object.assign(new Error("Phiên Grab marketing đã hết hạn."), { code: "GRAB_SESSION_EXPIRED", advertiserId });
+    }
+    if (!promoResponse.ok) throw new Error(`Grab Marketing API trả về HTTP ${promoResponse.status}.`);
+    responseShapes.promos[group.channel] = marketingPayloadShape(promoResponse.payload);
+    const promoItems = grabReportItems(promoResponse.payload);
+    const totals = promoItems.reduce((result, item) => {
+      const metrics = item?.Metrics || item?.metrics || [];
+      const metricKeys = {
+        1: "SSM_AssistedOrders",
+        2: "SSM_AssistedSales",
+        6: "SSM_PromoSpend",
+        8: "SSM_AverageOrderValue",
+        9: "SSM_ROMS"
+      };
+      for (const [metric, responseKey] of Object.entries(metricKeys)) {
+        result[metric] = (result[metric] || 0) + marketingValue(metrics, metric, responseKey);
+      }
+      return result;
+    }, {});
+    rows.push({
+      advertiser_id: advertiserId,
+      report_date: endDate,
+      channel: group.channel,
+      campaign_key: `${group.channel}-month-summary`,
+      campaign_name: group.name,
+      campaign_type: group.types.join(","),
+      currency: "VND",
+      spend_amount: totals[6] || 0,
+      sales_amount: totals[2] || 0,
+      orders_count: totals[1] || 0,
+      impressions_count: 0,
+      clicks_count: 0,
+      grab_funded_amount: 0,
+      merchant_funded_amount: totals[6] || 0,
+      marketing_fee_amount: 0,
+      raw_data: { source_path: "unifieddemandgen/v1/self-serve-promo/reporting", request, report: promoItems }
+    });
+  }
+  const hasActivity = rows.some((row) => (
+    Number(row.spend_amount) > 0
+    || Number(row.sales_amount) > 0
+    || Number(row.orders_count) > 0
+    || Number(row.impressions_count) > 0
+    || Number(row.clicks_count) > 0
+  ));
+  if (!hasActivity) {
+    await log("Cấu trúc phản hồi Marketing Grab (chỉ tên trường):", JSON.stringify(responseShapes));
+    throw new Error("API Marketing đã phản hồi nhưng bộ đọc chưa nhận diện được cấu trúc số liệu mới.");
+  }
+  const promoHasActivity = rows
+    .filter((row) => row.channel === "promo" || row.channel === "spotlight")
+    .some((row) => Number(row.spend_amount) > 0 || Number(row.sales_amount) > 0 || Number(row.orders_count) > 0);
+  if (!promoHasActivity) {
+    await log("Cấu trúc phản hồi khuyến mãi Grab (chỉ tên trường):", JSON.stringify(responseShapes.promos));
+  }
+  return { advertiserId, rows, responseShapes };
+}
+
 async function withExclusiveLogin(task) {
   const previousLogin = loginQueue;
   let releaseLogin;
@@ -424,6 +693,17 @@ async function restoreStoredSession(page, source) {
     const rawSession = String(response.credentials?.session || "").trim();
     if (!rawSession) return response;
     const session = JSON.parse(rawSession);
+    const storage = session?.storage && typeof session.storage === "object" && !Array.isArray(session.storage)
+      ? session.storage
+      : {};
+    if (Object.keys(storage).length) {
+      await page.evaluateOnNewDocument((values) => {
+        if (window.location.origin !== "https://merchant.grab.com") return;
+        for (const [key, value] of Object.entries(values)) {
+          if (key !== "JWT" && typeof value === "string") window.localStorage.setItem(key, value);
+        }
+      }, storage);
+    }
     const cookies = Array.isArray(session?.cookies)
       ? session.cookies.filter((cookie) => cookie?.name && cookie?.value && (cookie?.domain || cookie?.url))
       : [];
@@ -449,12 +729,13 @@ async function currentBrowserSession(page) {
 }
 
 async function saveRefreshedSession(page, source, replyCommandId = "") {
+  const session = await currentBrowserSession(page);
   await api("automation_session", {
     source_id: source.id,
     worker_id: WORKER_ID,
     lease_token: source.lease_token,
     reply_command_id: replyCommandId,
-    session: await currentBrowserSession(page)
+    session
   });
   await log("Đã lưu phiên Grab mới sau khi đăng nhập:", source.display_name);
 }
@@ -765,6 +1046,19 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       await log("Chưa đồng bộ được tài chính Grab, vẫn lưu đánh giá:", `${source.display_name} - ${financeError}`);
     }
 
+    let marketingRows = [];
+    let marketingAdvertiserId = "";
+    let marketingError = "";
+    try {
+      const marketing = await collectMarketingRows(page, source);
+      marketingRows = marketing.rows;
+      marketingAdvertiserId = marketing.advertiserId;
+    } catch (error) {
+      marketingAdvertiserId = String(error?.advertiserId || "");
+      marketingError = String(error?.message || error).slice(0, 500);
+      await log("Chưa đồng bộ được Marketing Grab, vẫn tiếp tục lưu dữ liệu khác:", `${source.display_name} - ${marketingError}`);
+    }
+
     let busyResult = { applied: false, reason: "disabled" };
     if (source.busy_enabled === true) {
       try {
@@ -798,6 +1092,9 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       finance_transactions: financeTransactions,
       finance_detail_stats: financeDetailStats,
       finance_error: financeError,
+      marketing_rows: marketingRows,
+      marketing_advertiser_id: marketingAdvertiserId,
+      marketing_error: marketingError,
       session,
       busy_result: busyResult
     });
@@ -1248,6 +1545,83 @@ async function releaseLock() {
   await rm(LOCK_PATH, { force: true }).catch(() => null);
 }
 
+async function openMarketingPage(page, targetUrl) {
+  try {
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  } catch (error) {
+    const message = String(error?.message || error);
+    const currentUrl = String(page.url() || "");
+    if (!message.includes("ERR_ABORTED") || !currentUrl.startsWith("https://merchant.grab.com/")) throw error;
+    await sleep(2_000);
+  }
+}
+
+async function runMarketingAuthentication(source, chromePath) {
+  const profilePath = path.join(PROFILE_ROOT, safeKey(source.account_key || source.id));
+  await mkdir(profilePath, { recursive: true });
+  const browser = await puppeteer.launch({
+    executablePath: chromePath,
+    userDataDir: profilePath,
+    headless: false,
+    ignoreDefaultArgs: ["--enable-automation"],
+    defaultViewport: null,
+    args: [
+      "--no-first-run",
+      "--no-default-browser-check",
+      "--start-maximized",
+      "--disable-blink-features=AutomationControlled",
+      "--disable-features=Translate"
+    ]
+  });
+  try {
+    const page = (await browser.pages())[0] || await browser.newPage();
+    page.setDefaultTimeout(30_000);
+    const authBundle = await restoreStoredSession(page, source);
+    const advertiserId = String(source.marketing_advertiser_id || "").trim();
+    if (!advertiserId) throw new Error("Tài khoản chưa có mã gian hàng Marketing Grab.");
+    await openMarketingPage(page, "https://merchant.grab.com/marketing");
+    if (await isLoginRequired(page)) {
+      await login(page, source, { visible: true, authBundle });
+    }
+    await log("Đang chờ trang Báo cáo Marketing trên cửa sổ Chrome riêng:", source.display_name);
+    const marketing = await collectMarketingRows(page, source, { interactive: true });
+    await saveRefreshedSession(page, source);
+    const session = await currentBrowserSession(page);
+    const result = await api("automation_reviews", {
+      source_id: source.id,
+      worker_id: WORKER_ID,
+      lease_token: source.lease_token,
+      merchant_id: source.merchant_id,
+      overview: {},
+      reviews: [],
+      finance_snapshots: [],
+      finance_transactions: [],
+      finance_detail_stats: {},
+      finance_error: "",
+      marketing_rows: marketing.rows,
+      marketing_advertiser_id: marketing.advertiserId,
+      marketing_error: "",
+      session,
+      busy_result: { applied: false, reason: "marketing_api_capture" }
+    });
+    await log(
+      "Đã bắt request và đồng bộ API Marketing Grab thành công:",
+      `${source.display_name} - ${result.marketing_row_count || 0} dòng`
+    );
+  } catch (error) {
+    await api("automation_failure", {
+      source_id: source.id,
+      worker_id: WORKER_ID,
+      lease_token: source.lease_token,
+      error_message: String(error?.message || error).slice(0, 1000),
+      auth_expired: false
+    }).catch(() => null);
+    throw error;
+  } finally {
+    await browser.close().catch(() => null);
+  }
+}
+
 async function main() {
   if (!API_URL || !AUTOMATION_SECRET) {
     throw new Error("Thiếu PARTNER_REVIEW_API_URL hoặc PARTNER_REVIEW_AUTOMATION_SECRET.");
@@ -1255,6 +1629,16 @@ async function main() {
   await acquireLock();
   const chromePath = await findChrome();
   await log("Worker đánh giá đã khởi động:", `${WORKER_ID} - ${HEADLESS ? "ẩn" : "hiện Chrome"}`);
+
+  if (MARKETING_AUTH_ACCOUNT) {
+    const claimed = await api("automation_marketing_source", {
+      worker_id: WORKER_ID,
+      account_key: MARKETING_AUTH_ACCOUNT
+    });
+    if (!claimed.source) throw new Error("Không nhận được tài khoản cần xác thực Marketing.");
+    await runMarketingAuthentication(claimed.source, chromePath);
+    return;
+  }
 
   const initialSchedule = await readRemoteSchedule(intervalMs(FALLBACK_INTERVAL_MINUTES));
   let currentIntervalMs = initialSchedule.intervalMs;

@@ -3,7 +3,8 @@ export const navGroups = [
     title: "Tổng quan",
     items: [
       { id: "dashboard-main", label: "Dashboard", section: "dashboard" },
-      { id: "grab-finance-main", label: "Tài chính Grab", section: "grab-finance" }
+      { id: "grab-finance-main", label: "Tài chính Grab", section: "grab-finance" },
+      { id: "grab-marketing-main", label: "Hiệu quả Marketing Grab", section: "grab-marketing" }
     ]
   },
   {
@@ -46,6 +47,7 @@ export const navGroups = [
 export const navIconMap = {
   "dashboard-main": "home",
   "grab-finance-main": "wallet",
+  "grab-marketing-main": "sale",
   "orders-main": "bag",
   "partner-reviews-main": "star",
   "review-rewards-main": "gift",
@@ -80,6 +82,7 @@ export const dashboardQuickActions = [
 export function getAdminPageTitle(section) {
   if (section === "dashboard") return "Dashboard";
   if (section === "grab-finance") return "Tài chính Grab";
+  if (section === "grab-marketing") return "Hiệu quả Marketing Grab";
   if (section === "orders") return "Quản lý đơn hàng";
   if (section === "partner-reviews") return "Quản lý đánh giá đối tác";
   if (section === "review-rewards") return "Thưởng điểm đánh giá";

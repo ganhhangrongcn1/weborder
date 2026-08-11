@@ -33,6 +33,7 @@ function automationSource(row: Row) {
   const metadata = object(row.metadata);
   return {
     ...publicSource(row),
+    marketing_advertiser_id: text(metadata.marketing_advertiser_id),
     lease_token: text(metadata.local_worker_lease_token)
   };
 }
@@ -748,6 +749,42 @@ async function getNextAutomationSource(
   return reply({ ok: true, source: null });
 }
 
+async function claimAutomationMarketingSource(
+  request: Request,
+  client: ReturnType<typeof createClient>,
+  body: Row
+) {
+  if (!hasAutomationAccess(request)) {
+    return reply({ ok: false, message: "Automation secret không hợp lệ." }, 403);
+  }
+  const accountKey = text(body.account_key);
+  const workerId = text(body.worker_id);
+  if (!accountKey || !workerId) {
+    return reply({ ok: false, message: "Thiếu tài khoản hoặc mã worker Marketing." }, 400);
+  }
+  const { data: source, error } = await client
+    .from("partner_review_sources")
+    .select("*")
+    .eq("platform", "grabfood")
+    .eq("account_key", accountKey)
+    .eq("sync_enabled", true)
+    .maybeSingle();
+  if (error || !source) {
+    return reply({ ok: false, message: "Không tìm thấy tài khoản Grab cần xác thực Marketing." }, 404);
+  }
+  if (hasActiveAutomationLease(source as Row)) {
+    return reply({ ok: false, message: "Tài khoản Grab đang được worker khác sử dụng." }, 409);
+  }
+  try {
+    const claimed = await tryClaimAutomationSource(client, source as Row, workerId);
+    if (!claimed) return reply({ ok: false, message: "Không nhận được lượt xác thực Marketing." }, 409);
+    return reply({ ok: true, source: claimed });
+  } catch (claimError) {
+    console.error("[partner-review-source-api] marketing source claim failed", claimError);
+    return reply({ ok: false, message: "Không nhận được tài khoản xác thực Marketing." }, 500);
+  }
+}
+
 async function getAutomationSources(
   request: Request,
   client: ReturnType<typeof createClient>,
@@ -1214,6 +1251,7 @@ async function saveAutomationReviews(
   const busyResult = object(body.busy_result);
   const financeSnapshots = arrayValue(body.finance_snapshots).map((snapshot) => object(snapshot));
   const financeTransactions = arrayValue(body.finance_transactions).map((transaction) => object(transaction));
+  const marketingRows = arrayValue(body.marketing_rows).map((row) => object(row));
   if (!sourceId) return reply({ ok: false, message: "Thieu nguon dong bo." }, 400);
 
   const { data: source } = await client
@@ -1338,6 +1376,40 @@ async function saveAutomationReviews(
       if (financeTransactionError) throw financeTransactionError;
     }
 
+    const marketingDailyRows = marketingRows
+      .filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(text(row.report_date)) && text(row.campaign_key))
+      .map((row) => ({
+        source_id: sourceId,
+        branch_uuid: source.branch_uuid || null,
+        branch_code: text(source.branch_code) || null,
+        advertiser_id: text(row.advertiser_id || body.marketing_advertiser_id),
+        report_date: text(row.report_date),
+        channel: ["keyword_ads", "promo", "spotlight"].includes(text(row.channel)) ? text(row.channel) : "spotlight",
+        campaign_key: text(row.campaign_key),
+        campaign_id: text(row.campaign_id) || null,
+        campaign_name: text(row.campaign_name) || null,
+        campaign_type: text(row.campaign_type) || null,
+        currency: text(row.currency || "VND").toUpperCase().slice(0, 10),
+        spend_amount: Math.round(Number(row.spend_amount) || 0),
+        sales_amount: Math.round(Number(row.sales_amount) || 0),
+        orders_count: Math.round(Number(row.orders_count) || 0),
+        impressions_count: Math.round(Number(row.impressions_count) || 0),
+        clicks_count: Math.round(Number(row.clicks_count) || 0),
+        grab_funded_amount: Math.round(Number(row.grab_funded_amount) || 0),
+        merchant_funded_amount: Math.round(Number(row.merchant_funded_amount) || 0),
+        marketing_fee_amount: Math.round(Number(row.marketing_fee_amount) || 0),
+        raw_data: object(row.raw_data),
+        last_synced_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }))
+      .filter((row) => row.advertiser_id);
+    for (let index = 0; index < marketingDailyRows.length; index += 500) {
+      const { error: marketingError } = await client
+        .from("partner_grab_marketing_daily")
+        .upsert(marketingDailyRows.slice(index, index + 500), { onConflict: "source_id,report_date,channel,campaign_key" });
+      if (marketingError) throw marketingError;
+    }
+
     let sessionSecretId = text(source.session_secret_id);
     if (Object.keys(session).length) {
       sessionSecretId = await storeSecret(
@@ -1371,6 +1443,9 @@ async function saveAutomationReviews(
           last_finance_transaction_count: financeTransactionRows.length,
           last_finance_detail_stats: object(body.finance_detail_stats),
           last_finance_error: text(body.finance_error) || null,
+          marketing_advertiser_id: text(body.marketing_advertiser_id) || text(object(source.metadata).marketing_advertiser_id) || null,
+          last_marketing_row_count: marketingDailyRows.length,
+          last_marketing_error: text(body.marketing_error) || null,
           last_busy_result: busyResult,
           ...(busyResult.applied === true ? { last_busy_at: finishedAt } : {})
         },
@@ -1403,7 +1478,8 @@ async function saveAutomationReviews(
       upserted_count: rows.length,
       merchant_id: merchantId,
       finance_snapshot_count: financeRows.length,
-      finance_transaction_count: financeTransactionRows.length
+      finance_transaction_count: financeTransactionRows.length,
+      marketing_row_count: marketingDailyRows.length
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : JSON.stringify(error);
@@ -1438,6 +1514,56 @@ async function saveAutomationReviews(
     }
     return reply({ ok: false, message: "Khong luu duoc danh gia.", detail }, 500);
   }
+}
+
+async function getMarketingReport(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
+  const fromDate = text(body.from_date || body.fromDate);
+  const toDate = text(body.to_date || body.toDate);
+  const requestedBranchUuid = text(body.branch_uuid || body.branchUuid);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate) || fromDate > toDate) {
+    return reply({ ok: false, message: "Khoảng ngày báo cáo Marketing Grab không hợp lệ." }, 400);
+  }
+  const adminBranchUuid = text(admin.branch_uuid);
+  const branchUuid = adminBranchUuid || requestedBranchUuid;
+  if (adminBranchUuid && requestedBranchUuid && adminBranchUuid !== requestedBranchUuid) {
+    return reply({ ok: false, message: "Admin không có quyền xem chi nhánh đã chọn." }, 403);
+  }
+  let query = client.from("partner_grab_marketing_daily")
+    .select("source_id,branch_uuid,branch_code,advertiser_id,report_date,channel,campaign_key,campaign_id,campaign_name,campaign_type,currency,spend_amount,sales_amount,orders_count,impressions_count,clicks_count,grab_funded_amount,merchant_funded_amount,marketing_fee_amount,last_synced_at")
+    .gte("report_date", fromDate).lte("report_date", toDate).order("report_date", { ascending: true });
+  if (branchUuid) query = query.eq("branch_uuid", branchUuid);
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data || []) as Row[];
+  const sourceIds = [...new Set(rows.map((row) => text(row.source_id)).filter(Boolean))];
+  const sourceResult = sourceIds.length
+    ? await client.from("partner_review_sources").select("id,display_name,branch_code").in("id", sourceIds)
+    : { data: [] };
+  const sourceNames = new Map((sourceResult.data || []).map((source: Row) => [text(source.id), text(source.display_name || source.branch_code)]));
+  const empty = () => ({ spendAmount: 0, salesAmount: 0, ordersCount: 0, impressionsCount: 0, clicksCount: 0, grabFundedAmount: 0, merchantFundedAmount: 0, marketingFeeAmount: 0 });
+  const add = (target: Row, row: Row) => {
+    target.spendAmount += Number(row.spend_amount || 0); target.salesAmount += Number(row.sales_amount || 0);
+    target.ordersCount += Number(row.orders_count || 0); target.impressionsCount += Number(row.impressions_count || 0);
+    target.clicksCount += Number(row.clicks_count || 0); target.grabFundedAmount += Number(row.grab_funded_amount || 0);
+    target.merchantFundedAmount += Number(row.merchant_funded_amount || 0); target.marketingFeeAmount += Number(row.marketing_fee_amount || 0);
+  };
+  const decorate = (item: Row) => ({ ...item,
+    costPerOrder: item.ordersCount > 0 ? item.spendAmount / item.ordersCount : null,
+    roas: item.spendAmount > 0 ? item.salesAmount / item.spendAmount : null,
+    ctr: item.impressionsCount > 0 ? item.clicksCount * 100 / item.impressionsCount : null
+  });
+  const total: Row = empty();
+  const channels = new Map<string, Row>(); const accounts = new Map<string, Row>(); const campaigns = new Map<string, Row>();
+  rows.forEach((row) => {
+    add(total, row);
+    const channel = text(row.channel); const channelRow = channels.get(channel) || { channel, ...empty() }; add(channelRow, row); channels.set(channel, channelRow);
+    const sourceId = text(row.source_id); const account = accounts.get(sourceId) || { sourceId, displayName: sourceNames.get(sourceId) || text(row.branch_code), branchCode: text(row.branch_code), ...empty() }; add(account, row); accounts.set(sourceId, account);
+    const key = `${sourceId}|${channel}|${text(row.campaign_key)}`; const campaign = campaigns.get(key) || { sourceId, displayName: sourceNames.get(sourceId) || text(row.branch_code), channel, campaignName: text(row.campaign_name) || "Chương trình Grab", campaignType: text(row.campaign_type), ...empty() }; add(campaign, row); campaigns.set(key, campaign);
+  });
+  const lastSyncedAt = rows.map((row) => text(row.last_synced_at)).sort().at(-1) || null;
+  return reply({ ok: true, data: { fromDate, toDate, lastSyncedAt, ...decorate(total),
+    channels: [...channels.values()].map(decorate), accounts: [...accounts.values()].map(decorate),
+    campaigns: [...campaigns.values()].map(decorate).sort((a, b) => Number(b.spendAmount) - Number(a.spendAmount)) } });
 }
 
 async function getFinanceReport(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
@@ -1617,6 +1743,9 @@ Deno.serve(async (request) => {
   if (action === "automation_next_source") {
     return getNextAutomationSource(request, client, body);
   }
+  if (action === "automation_marketing_source") {
+    return claimAutomationMarketingSource(request, client, body);
+  }
   if (action === "automation_sources") {
     return getAutomationSources(request, client, body);
   }
@@ -1661,6 +1790,7 @@ Deno.serve(async (request) => {
   if (!admin) return reply({ ok: false, message: "Chỉ admin mới được quản lý nguồn đánh giá." }, 403);
   if (action === "list") return listSources(client, admin);
   if (action === "finance_report") return getFinanceReport(client, admin, body);
+  if (action === "marketing_report") return getMarketingReport(client, admin, body);
   if (action === "list_reviews") return listReviews(client, admin, body);
   if (action === "reply_review") return requestReviewReply(client, admin, body);
   if (action === "save") return saveSource(client, admin, body);

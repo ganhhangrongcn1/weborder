@@ -84,6 +84,7 @@ export function adminPathToState(pathname = "/admin") {
   if (path === "/admin/grab-finance") {
     return { section: "grab-finance", activeAdminNav: "grab-finance-main" };
   }
+  if (path === "/admin/grab-marketing") return { section: "grab-marketing", activeAdminNav: "grab-marketing-main" };
 
   if (path === "/admin/menu") {
     return {
@@ -202,6 +203,7 @@ export function adminNavToPath(item) {
 
   if (item.id === "dashboard-main") return "/admin";
   if (item.id === "grab-finance-main") return "/admin/grab-finance";
+  if (item.id === "grab-marketing-main") return "/admin/grab-marketing";
   if (item.id === "orders-main") return "/admin/orders";
   if (item.id === "partner-reviews-main") return "/admin/partner-reviews";
   if (item.id === "review-rewards-main") return "/admin/review-rewards";

@@ -11,6 +11,7 @@ import AdminSupervisionPage from "./AdminSupervisionPage.jsx";
 import AdminPartnerReviewsPage from "./AdminPartnerReviewsPage.jsx";
 import AdminReviewRewardsPage from "./AdminReviewRewardsPage.jsx";
 import AdminGrabFinancePage from "./AdminGrabFinancePage.jsx";
+import AdminGrabMarketingPage from "./AdminGrabMarketingPage.jsx";
 
 export default function AdminPageContent({ section, ...props }) {
   if (section === "dashboard") {
@@ -20,6 +21,7 @@ export default function AdminPageContent({ section, ...props }) {
   if (section === "grab-finance") {
     return <AdminGrabFinancePage {...props} />;
   }
+  if (section === "grab-marketing") return <AdminGrabMarketingPage {...props} />;
 
   if (section === "orders") {
     return <AdminOrdersPage {...props} />;
