@@ -224,6 +224,12 @@ function normalizeReceiptOrder(order = {}, config = {}) {
         metadata.discountAmount ??
         metadata.promoDiscount
     ),
+    expectedEarnPoints: Math.max(0, Math.floor(toNumber(
+      order.expectedEarnPoints ??
+        order.expected_earn_points ??
+        metadata.expectedEarnPoints ??
+        metadata.expected_earn_points
+    ))),
     totalAmount: toNumber(order.totalAmount ?? order.total_amount ?? metadata.totalAmount),
     items
   };
@@ -306,6 +312,17 @@ function pushLoyaltyFooter(lines) {
   lines.push("@@CENTER:Cảm ơn quý khách!");
 }
 
+function pushPartnerLoyaltyPrompt(lines, expectedEarnPoints = 0) {
+  const safeExpectedEarnPoints = Math.max(0, Math.floor(toNumber(expectedEarnPoints)));
+  lines.push("@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY");
+  lines.push("@@QR");
+  lines.push(safeExpectedEarnPoints > 0
+    ? `@@BOLDCENTER:Quét để nhận ${safeExpectedEarnPoints.toLocaleString("vi-VN")} của đơn này`
+    : "@@BOLDCENTER:Quét để nhận tích lũy của đơn này");
+  lines.push("@@CENTER:ganhhangrong.vn");
+  lines.push(`@@CENTER:Hotline: ${SUPPORT_HOTLINE}`);
+}
+
 function buildReceiptText(order = {}, options = {}) {
   const config = getPrinterConfig(options);
   const receipt = normalizeReceiptOrder(order, options);
@@ -321,7 +338,12 @@ function buildReceiptText(order = {}, options = {}) {
     "@@RULE"
   ];
 
-  pushOrderMeta(lines, receipt, width);
+  const usePartnerLoyaltyPrompt = options.partnerLoyaltyPrompt === true && isPartnerAppReceipt(receipt);
+  if (usePartnerLoyaltyPrompt) {
+    pushPartnerLoyaltyPrompt(lines, receipt.expectedEarnPoints);
+  } else {
+    pushOrderMeta(lines, receipt, width);
+  }
   if (isPreparationTicket) {
     lines.push("@@CENTER:*** CHƯA THANH TOÁN TẠI QUẦY ***");
   }
@@ -353,6 +375,10 @@ function buildReceiptText(order = {}, options = {}) {
 
   if (!isPartnerAppReceipt(receipt)) pushBranchFooter(lines, receipt, width);
   if (includeLoyaltyFooter && !isPreparationTicket) pushLoyaltyFooter(lines);
+  if (usePartnerLoyaltyPrompt) {
+    lines.push("@@RULE");
+    lines.push("@@CENTER:Cảm ơn quý khách!");
+  }
 
   return lines.join("\n");
 }
@@ -615,15 +641,19 @@ function buildPrintPayload(order = {}, options = {}) {
 
 function buildPrintJobPayload(order = {}, options = {}) {
   const config = getPrinterConfig(options);
+  const receipt = normalizeReceiptOrder(order, options);
+  const partnerReceipt = isPartnerAppReceipt(receipt);
   return {
     printerName: config.printerName,
     receiptWidthMm: config.receiptWidthMm,
     type: "customer_bill",
     text: buildReceiptText(order, {
       ...options,
-      includeLoyaltyFooter: false
+      includeLoyaltyFooter: false,
+      partnerLoyaltyPrompt: partnerReceipt
     }),
-    order: normalizeReceiptOrder(order, options)
+    loyaltyUrl: partnerReceipt ? config.loyaltyUrl : "",
+    order: receipt
   };
 }
 

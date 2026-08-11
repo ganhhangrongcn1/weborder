@@ -12,7 +12,17 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
   "qr_order_preparation",
   "qr_order_bundle",
   "pos_shift_close",
-  "item_label"
+  "item_label",
+  "partner",
+  "partner_order",
+  "foodapp",
+  "food_app",
+  "grab",
+  "grabfood",
+  "shopee",
+  "shopeefood",
+  "xanhngon",
+  "nexpos"
 ]);
 const DEFAULT_RECEIPT_FOOTER_TEXT = [
   "@@RULE",

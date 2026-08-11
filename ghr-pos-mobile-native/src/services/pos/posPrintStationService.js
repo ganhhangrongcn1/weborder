@@ -2,6 +2,7 @@ import { AppState } from "react-native";
 
 import { supabase } from "../supabase/client";
 import {
+  buildReceiptFooterQrUrl,
   buildPosCustomerBillText,
   playLocalNewOrderAlert,
   playLocalQrPaymentAlert,
@@ -32,6 +33,19 @@ const NO_FOOTER_SOURCE_TYPES = new Set([
 ]);
 const POS_ORDER_SOURCE_TYPES = new Set(["pos", "pos_mobile", "posmobile", "counter", "tai_quay"]);
 const REMOTE_ORDER_SOURCE_TYPES = new Set(["web", "website", "qr_order", "customer_qr", "qr_tai_quay"]);
+const PARTNER_ORDER_SOURCE_TYPES = new Set([
+  "partner",
+  "partner_order",
+  "foodapp",
+  "food_app",
+  "grab",
+  "grabfood",
+  "shopee",
+  "shopeefood",
+  "xanh",
+  "xanhngon",
+  "nexpos"
+]);
 const DEFAULT_FOOTER_TEXT = [
   "@@RULE",
   "@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY",
@@ -139,6 +153,143 @@ function isPosOrderPrintJob(job = {}) {
   ));
 }
 
+function isPartnerOrderPrintJob(job = {}) {
+  const payload = getObject(job.payload);
+  const order = getObject(payload.order);
+  const receiptText = normalizeSourceToken(payload.text);
+  const sourceTokens = [
+    job.source_type,
+    payload.sourceType,
+    payload.source,
+    payload.channel,
+    payload.orderSource,
+    payload.platform,
+    order.sourceType,
+    order.source,
+    order.channel,
+    order.orderSource,
+    order.platform,
+    order.partnerSource
+  ].map(normalizeSourceToken).filter(Boolean);
+
+  return sourceTokens.some((token) => (
+    PARTNER_ORDER_SOURCE_TYPES.has(token) ||
+    token.includes("grab") ||
+    token.includes("shopee") ||
+    token.includes("xanhngon") ||
+    token.includes("nexpos") ||
+    token.includes("foodapp") ||
+    token.includes("food_app")
+  )) || ["nguon_grab", "nguon_shopee", "nguon_xanh", "nguon_foodapp", "nguon_doi_tac"]
+    .some((marker) => receiptText.includes(marker));
+}
+
+function buildPartnerReceiptText(receiptText = "", order = {}) {
+  const lines = toText(receiptText).split("\n");
+  const orderCodeIndex = lines.findIndex((line) => line.startsWith("@@BIG:"));
+  const firstItemIndex = lines.findIndex((line) => line.startsWith("@@BOLDROW:"));
+  if (orderCodeIndex < 0) return toText(receiptText);
+
+  const headerLines = lines.slice(0, orderCodeIndex + 1);
+  const itemLines = firstItemIndex >= 0
+    ? lines.slice(firstItemIndex)
+    : lines.slice(orderCodeIndex + 1).filter((line) => (
+        line !== "@@RULE" &&
+        !line.startsWith("Chi nhánh:") &&
+        !line.startsWith("Nguồn:") &&
+        !line.startsWith("Giờ:") &&
+        !line.startsWith("Khách:") &&
+        line !== "@@SPACE"
+      ));
+  const oldPromptIndex = itemLines.findIndex((line) => (
+    line.includes("ĐỪNG BỎ LỠ ĐIỂM") || line.includes("@@QR")
+  ));
+  const cleanItemLines = (oldPromptIndex >= 0 ? itemLines.slice(0, oldPromptIndex) : itemLines)
+    .filter((line, index, list) => !(
+      index === list.length - 1 && line === "@@RULE"
+    ));
+
+  const expectedEarnPoints = Math.max(0, Math.floor(toNumber(
+    order.expectedEarnPoints ?? order.expected_earn_points
+  )));
+  const promptLines = [
+    "@@RULE",
+    "@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY",
+    "@@QR",
+    expectedEarnPoints > 0
+      ? `@@BOLDCENTER:Quét để nhận ${expectedEarnPoints.toLocaleString("vi-VN")} của đơn này`
+      : "@@BOLDCENTER:Quét để nhận tích lũy của đơn này",
+    "@@CENTER:ganhhangrong.vn",
+    "@@CENTER:Hotline: 0933799061",
+    "@@RULE",
+    ...(toText(order.customerName || order.customer_name)
+      ? [`Khách: ${toText(order.customerName || order.customer_name)}`]
+      : []),
+    ...(toText(order.customerPhone || order.customer_phone)
+      ? [`SĐT: ${toText(order.customerPhone || order.customer_phone)}`]
+      : []),
+    ...(toText(order.customerAddress || order.customer_address)
+      ? [`Địa chỉ: ${toText(order.customerAddress || order.customer_address)}`]
+      : [])
+  ];
+
+  return [
+    ...headerLines,
+    ...promptLines,
+    ...cleanItemLines,
+    "@@RULE",
+    "@@CENTER:Cảm ơn quý khách!"
+  ].join("\n");
+}
+
+async function hydratePartnerPrintJob(job = {}) {
+  if (!isPartnerOrderPrintJob(job) || !supabase) return job;
+  const payload = getObject(job.payload);
+  const order = getObject(payload.order);
+  const orderId = toText(job.order_id || order.id);
+  const orderCode = toText(job.order_code || order.displayOrderCode || order.orderCode);
+  const columns = "id,customer_name,customer_phone,expected_earn_points,raw_data";
+  let result = orderId
+    ? await supabase.from("partner_orders").select(columns).eq("id", orderId).maybeSingle()
+    : { data: null, error: null };
+  if (!result.data && orderCode) {
+    result = await supabase
+      .from("partner_orders")
+      .select(columns)
+      .eq("display_order_code", orderCode)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  }
+  if (!result.data && orderCode) {
+    result = await supabase
+      .from("partner_orders")
+      .select(columns)
+      .eq("order_code", orderCode)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+  }
+  const { data, error } = result;
+  if (error || !data) return job;
+
+  const rawData = getObject(data.raw_data);
+  return {
+    ...job,
+    payload: {
+      ...payload,
+      order: {
+        ...order,
+        id: toText(order.id || data.id),
+        customerName: toText(order.customerName || order.customer_name || data.customer_name),
+        customerPhone: toText(order.customerPhone || order.customer_phone || data.customer_phone),
+        customerAddress: toText(order.customerAddress || order.customer_address || rawData.customer_address),
+        expectedEarnPoints: Math.max(0, Math.floor(toNumber(data.expected_earn_points, 0)))
+      }
+    }
+  };
+}
+
 function getCutoffIso() {
   return new Date(Date.now() - AUTO_PRINT_WINDOW_MS).toISOString();
 }
@@ -214,7 +365,7 @@ async function readPendingJobs(branchUuid) {
   await maybeExpireOldPendingJobs(branchUuid);
   const { data, error } = await supabase
     .from("print_jobs")
-    .select("id,branch_uuid,printer_key,job_type,status,order_code,source_type,payload,retry_count,created_at,requested_at")
+    .select("id,branch_uuid,printer_key,job_type,status,order_id,order_code,source_type,payload,retry_count,created_at,requested_at")
     .eq("branch_uuid", branchUuid)
     .in("job_type", JOB_TYPES)
     .eq("printer_key", PRINTER_KEY)
@@ -245,7 +396,7 @@ async function claimJob(job, branchUuid, deviceId) {
     .eq("printer_key", PRINTER_KEY)
     .eq("status", "pending")
     .gte("created_at", getCutoffIso())
-    .select("id,job_type,order_code,source_type,payload,retry_count")
+    .select("id,job_type,order_id,order_code,source_type,payload,retry_count")
     .maybeSingle();
 
   if (error) throw error;
@@ -303,19 +454,22 @@ function buildPrintPayload(job = {}) {
   const generatedText = shouldBuildPreparationTicket
     ? buildReceiptTextFromOrder(order, sourceType)
     : "";
-  const text = generatedText || payloadText || buildReceiptTextFromOrder(order, sourceType);
+  const originalText = generatedText || payloadText || buildReceiptTextFromOrder(order, sourceType);
+  const isPartnerReceipt = isPartnerOrderPrintJob(job);
+  const text = isPartnerReceipt ? buildPartnerReceiptText(originalText, order) : originalText;
   const isPreparationTicket = text.includes("@@CENTER:PHIẾU LÀM MÓN");
-  const skipFooter = isItemLabel || NO_FOOTER_SOURCE_TYPES.has(sourceType) || isPreparationTicket;
+  const skipFooter = isItemLabel || NO_FOOTER_SOURCE_TYPES.has(sourceType) || isPreparationTicket || isPartnerReceipt;
+  const customerPhone = toText(order.customerPhone || order.customer_phone || payload.customerPhone || payload.customer_phone);
 
   return {
     text,
-    qrUrl: toText(payload.qrUrl || payload.loyaltyUrl),
-    sourceType,
+    qrUrl: isPartnerReceipt ? buildReceiptFooterQrUrl(customerPhone) : toText(payload.qrUrl),
+    sourceType: isPartnerReceipt ? "partner" : sourceType,
     alertKey: buildAlertKey(job, payload),
     isQrPayment: isQrPaymentPrintPayload(payload, sourceType),
     shouldPlayAlert: !isItemLabel,
     shouldDelayPrint: sourceType === "qr_order",
-    customerPhone: toText(order.customerPhone || order.customer_phone || payload.customerPhone || payload.customer_phone),
+    customerPhone,
     footerText: skipFooter ? "" : toText(payload.footerText || DEFAULT_FOOTER_TEXT),
     footerQrUrl: skipFooter ? "" : toText(payload.footerQrUrl),
     secondaryReceipt: secondaryText
@@ -431,7 +585,8 @@ async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
   }
 
   try {
-    const printPayload = buildPrintPayload(claimed);
+    const hydratedJob = await hydratePartnerPrintJob(claimed);
+    const printPayload = buildPrintPayload(hydratedJob);
     if (!printPayload.text) throw new Error("Nội dung bill đang trống.");
     if (typeof onStatus === "function") {
       onStatus({ running: true, tone: "printing", message: `Đang in ${claimed.order_code || "bill"}...` });

@@ -66,7 +66,13 @@ import {
   removePosOfflineOrder
 } from "../../../services/pos/posOfflineOrderQueueService";
 import { fetchPosProducts } from "../../../services/pos/posProductService";
-import { closePosShift, fetchActivePosShift, fetchPosShiftSummary, openPosShift } from "../../../services/pos/posShiftService";
+import {
+  closePosShift,
+  fetchActivePosShift,
+  fetchPosShiftSummary,
+  fetchRecentClosedPosShifts,
+  openPosShift
+} from "../../../services/pos/posShiftService";
 import { createPosOrderIdentity } from "../../../shared/pos/posOrderIdentity";
 import { ALL_CATEGORY, buildPosCatalog, filterPosProducts } from "../../../shared/pos/posCatalog";
 import {
@@ -112,6 +118,10 @@ export default function usePosComposer() {
   const [shiftMessage, setShiftMessage] = useState("");
   const [shiftSummary, setShiftSummary] = useState(null);
   const [shiftSummaryError, setShiftSummaryError] = useState("");
+  const [lastClosedShift, setLastClosedShift] = useState(null);
+  const [recentClosedShifts, setRecentClosedShifts] = useState([]);
+  const [closedShiftsLoading, setClosedShiftsLoading] = useState(false);
+  const [closedShiftsError, setClosedShiftsError] = useState("");
   const [closingCash, setClosingCash] = useState("");
   const [closingNote, setClosingNote] = useState("");
   const [menuMessage, setMenuMessage] = useState("");
@@ -759,6 +769,15 @@ export default function usePosComposer() {
       if (active && shiftResult.ok) {
         setShift(shiftResult.shift);
         await refreshShiftSummary(shiftResult.shift);
+      }
+      const closedShiftsResult = await fetchRecentClosedPosShifts({
+        branchUuid: restored.profile.branchUuid,
+        registerKey: "main",
+        days: 7
+      });
+      if (active) {
+        setRecentClosedShifts(closedShiftsResult.shifts || []);
+        setClosedShiftsError(closedShiftsResult.ok ? "" : closedShiftsResult.message);
       }
       await refreshPosRuntime(restored.profile.branchUuid);
       await checkConnectionNow();
@@ -1432,6 +1451,7 @@ export default function usePosComposer() {
     setShift(null);
     setShiftSummary(null);
     setShiftSummaryError("");
+    setLastClosedShift(null);
     setClosingCash("");
     setClosingNote("");
     setOpeningCash("");
@@ -1756,6 +1776,17 @@ export default function usePosComposer() {
     }
     await refreshPosRuntime(profile?.branchUuid);
     await refreshShiftSummary(shift);
+    await refreshRecentClosedShifts();
+  };
+
+  const refreshRecentClosedShifts = async () => {
+    const branchUuid = String(profile?.branchUuid || "").trim();
+    if (!branchUuid) return;
+    setClosedShiftsLoading(true);
+    const result = await fetchRecentClosedPosShifts({ branchUuid, registerKey: "main", days: 7 });
+    setRecentClosedShifts(result.shifts || []);
+    setClosedShiftsError(result.ok ? "" : result.message || "Không tải được lịch sử ca POS.");
+    setClosedShiftsLoading(false);
   };
 
   const printQrReceiptNow = async () => {
@@ -2229,30 +2260,46 @@ export default function usePosComposer() {
     setShiftMessage(result.message || "");
     if (!result.ok) return false;
 
+    const closedShift = result.shift || {
+      ...shift,
+      status: "closed",
+      closedAt: new Date().toISOString(),
+      closingCashCounted,
+      closingCashBreakdown,
+      closingNote: nextClosingNote
+    };
+    const closedSummary = closedShift.closingSummary || latestSummary || shiftSummary || {};
+    const receiptText = buildPosShiftCloseReceiptText({
+      shift: closedShift,
+      summary: closedSummary,
+      closingCashCounted,
+      closingCashBreakdown,
+      closingNote: nextClosingNote
+    });
     let closePrintMessage = "";
+    let printStatus = printReceipt ? "failed" : "skipped";
     if (printReceipt) {
       try {
         setShiftMessage("Đang in phiếu kết ca...");
-        const receiptText = buildPosShiftCloseReceiptText({
-          shift: {
-            ...shift,
-            closedAt: result.shift?.closedAt || new Date().toISOString()
-          },
-          summary: latestSummary || shiftSummary || {},
-          closingCashCounted,
-          closingCashBreakdown,
-          closingNote: nextClosingNote
-        });
         await printLocalReceipt({
           text: receiptText,
           sourceType: "pos_shift_close"
         });
+        printStatus = "printed";
         closePrintMessage = " Đã in phiếu kết ca.";
       } catch (printError) {
         closePrintMessage = ` Đã kết ca nhưng chưa in được phiếu: ${printError?.message || "Lỗi máy in."}`;
       }
     }
 
+    setLastClosedShift({
+      shift: closedShift,
+      summary: closedSummary,
+      receiptText,
+      printStatus,
+      printMessage: closePrintMessage.trim()
+    });
+    setRecentClosedShifts((current) => [closedShift, ...current.filter((item) => item.id !== closedShift.id)]);
     setShift(null);
     setShiftSummary(null);
     setShiftSummaryError("");
@@ -2269,6 +2316,67 @@ export default function usePosComposer() {
     setPickupQrError("");
     setShiftMessage(`${result.message || ""}${closePrintMessage}`.trim());
     return true;
+  };
+
+  const reprintLastClosedShift = async () => {
+    if (!lastClosedShift?.receiptText) {
+      setShiftMessage("Không còn dữ liệu phiếu kết ca để in lại.");
+      return false;
+    }
+
+    setBusy(true);
+    setLastClosedShift((current) => current ? {
+      ...current,
+      printMessage: "Đang gửi lại phiếu đến máy in..."
+    } : current);
+    try {
+      await printLocalReceipt({
+        text: lastClosedShift.receiptText,
+        sourceType: "pos_shift_close"
+      });
+      setLastClosedShift((current) => current ? {
+        ...current,
+        printStatus: "printed",
+        printMessage: "Đã in lại phiếu kết ca."
+      } : current);
+      setBusy(false);
+      return true;
+    } catch (printError) {
+      setLastClosedShift((current) => current ? {
+        ...current,
+        printStatus: "failed",
+        printMessage: printError?.message || "Lỗi máy in."
+      } : current);
+      setBusy(false);
+      return false;
+    }
+  };
+
+  const reprintClosedShift = async (closedShift = null) => {
+    if (!closedShift?.id) {
+      setClosedShiftsError("Không tìm thấy dữ liệu ca cần in lại.");
+      return false;
+    }
+    const summary = closedShift.closingSummary || {};
+    const receiptText = buildPosShiftCloseReceiptText({
+      shift: closedShift,
+      summary,
+      closingCashCounted: closedShift.closingCashCounted,
+      closingCashBreakdown: closedShift.closingCashBreakdown,
+      closingNote: closedShift.closingNote
+    });
+    setBusy(true);
+    setClosedShiftsError("");
+    try {
+      await printLocalReceipt({ text: receiptText, sourceType: "pos_shift_close" });
+      setShiftMessage(`Đã in lại phiếu ca ${String(closedShift.id).slice(0, 8).toUpperCase()}.`);
+      setBusy(false);
+      return true;
+    } catch (printError) {
+      setClosedShiftsError(printError?.message || "Không in lại được phiếu kết ca.");
+      setBusy(false);
+      return false;
+    }
   };
 
   const confirmQrPaidManually = async () => {
@@ -2435,6 +2543,10 @@ export default function usePosComposer() {
     shift,
     shiftSummary,
     shiftSummaryError,
+    lastClosedShift,
+    recentClosedShifts,
+    closedShiftsLoading,
+    closedShiftsError,
     closingCash,
     setClosingCash,
     closingNote,
@@ -2512,6 +2624,7 @@ export default function usePosComposer() {
     reprintRecentOrder,
     openRecentOrderDetail,
     refreshCurrentPosRuntime,
+    refreshRecentClosedShifts,
     checkConnectionNow,
     syncOfflineOrdersNow,
     confirmQrPaidManually,
@@ -2521,6 +2634,9 @@ export default function usePosComposer() {
     signOut,
     openShiftNow,
     closeShiftNow,
+    reprintLastClosedShift,
+    reprintClosedShift,
+    dismissLastClosedShift: () => setLastClosedShift(null),
     hasOpenShift: Boolean(shift?.id)
   };
 }

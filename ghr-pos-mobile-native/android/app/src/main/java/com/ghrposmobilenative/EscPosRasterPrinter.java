@@ -61,7 +61,8 @@ final class EscPosRasterPrinter {
         boolean paymentQrSource = isPaymentQrSource(sourceType);
         boolean remotePaymentQrSource = isRemotePaymentQrSource(sourceType);
         boolean itemLabelSource = isItemLabelSource(sourceType);
-        ReceiptRasterParts parts = paymentQrSource
+        boolean partnerOrderSource = isPartnerOrderSource(sourceType);
+        ReceiptRasterParts parts = paymentQrSource || partnerOrderSource
                 ? new ReceiptRasterParts(cleanText, "")
                 : splitReceiptFooter(cleanText);
         ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -121,6 +122,17 @@ final class EscPosRasterPrinter {
 
     private static boolean isItemLabelSource(String sourceType) {
         return "item_label".equals(normalizeSourceType(sourceType));
+    }
+
+    private static boolean isPartnerOrderSource(String sourceType) {
+        String normalized = normalizeSourceType(sourceType)
+                .replace('-', '_')
+                .replace(' ', '_');
+        return "partner".equals(normalized)
+                || normalized.contains("grab")
+                || normalized.contains("shopee")
+                || normalized.contains("xanhngon")
+                || normalized.contains("nexpos");
     }
 
     static String cleanVietnamese(String value) {
@@ -215,8 +227,10 @@ final class EscPosRasterPrinter {
         for (String line : lines) {
             if ("@@QR".equals(line) && qrBitmap != null) {
                 int left = (width - qrBitmap.getWidth()) / 2;
-                canvas.drawBitmap(qrBitmap, left, y + 6, null);
-                y += qrBitmap.getHeight() + 20;
+                int qrTopSpacing = compact ? 2 : 4;
+                int qrBottomSpacing = compact ? 6 : 10;
+                canvas.drawBitmap(qrBitmap, left, y + qrTopSpacing, null);
+                y += qrBitmap.getHeight() + qrTopSpacing + qrBottomSpacing;
                 continue;
             }
             y = drawReceiptLine(canvas, paint, line, padding, y, width);
@@ -228,7 +242,7 @@ final class EscPosRasterPrinter {
         int height = 0;
         for (String line : lines) {
             if ("@@QR".equals(line) && qrBitmap != null) {
-                height += qrBitmap.getHeight() + 20;
+                height += qrBitmap.getHeight() + 14;
             } else if (line.startsWith("@@BIG:")) {
                 height += BIG_LINE_HEIGHT;
             } else if (line.startsWith(BOLD_ROW_PREFIX) || line.startsWith(BOLD_CENTER_PREFIX)) {

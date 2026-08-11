@@ -3,6 +3,7 @@ import React from "react";
 import {
   BadgeHelp,
   Banknote,
+  CircleCheck,
   Clock3,
   CreditCard,
   Gift,
@@ -36,7 +37,8 @@ const ICONS = {
   pending: Clock3,
   open: PackagePlus,
   loading: LoaderCircle,
-  help: BadgeHelp
+  help: BadgeHelp,
+  check: CircleCheck
 };
 
 export default function PosIcon({ name, size = 18, color = "#334155", strokeWidth = 2 }) {

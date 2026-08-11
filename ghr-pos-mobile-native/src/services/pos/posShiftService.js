@@ -150,6 +150,39 @@ export async function fetchActivePosShift({ branchUuid, registerKey = "main" } =
   };
 }
 
+export async function fetchRecentClosedPosShifts({
+  branchUuid,
+  registerKey = "main",
+  days = 7
+} = {}) {
+  const safeBranchUuid = toText(branchUuid);
+  if (!safeBranchUuid) {
+    return { ok: false, shifts: [], message: "Thiếu chi nhánh." };
+  }
+  if (!supabase) return { ok: true, shifts: [], message: "" };
+
+  const safeDays = Math.min(31, Math.max(1, Math.floor(toNumber(days, 7))));
+  const cutoff = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("pos_shifts")
+    .select(POS_SHIFT_SELECT)
+    .eq("branch_uuid", safeBranchUuid)
+    .eq("register_key", toText(registerKey) || "main")
+    .eq("status", "closed")
+    .gte("closed_at", cutoff)
+    .order("closed_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    return { ok: false, shifts: [], message: error.message || "Không tải được lịch sử ca POS." };
+  }
+  return {
+    ok: true,
+    shifts: (Array.isArray(data) ? data : []).map(normalizeShift).filter(Boolean),
+    message: ""
+  };
+}
+
 export async function openPosShift({
   branchUuid,
   branchName,

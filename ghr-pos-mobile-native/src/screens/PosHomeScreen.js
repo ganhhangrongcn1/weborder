@@ -16,6 +16,8 @@ import PosMenuPanel from "../features/pos/components/PosMenuPanel";
 import PosPagerModal from "../features/pos/components/PosPagerModal";
 import PosPickupOrdersPanel from "../features/pos/components/PosPickupOrdersPanel";
 import PosShiftCloseModal from "../features/pos/components/PosShiftCloseModal";
+import PosShiftClosedCard from "../features/pos/components/PosShiftClosedCard";
+import PosClosedShiftHistory from "../features/pos/components/PosClosedShiftHistory";
 import ProductOptionsModal from "../features/pos/components/ProductOptionsModal";
 import QrPaymentModal from "../features/pos/components/QrPaymentModal";
 import usePosComposer from "../features/pos/hooks/usePosComposer";
@@ -66,6 +68,7 @@ export default function PosHomeScreen() {
   const [pickupCashPaymentOpen, setPickupCashPaymentOpen] = useState(false);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
+  const [closedShiftHistoryOpen, setClosedShiftHistoryOpen] = useState(false);
   const [openingCashCounterOpen, setOpeningCashCounterOpen] = useState(false);
   const [openingCashBreakdown, setOpeningCashBreakdown] = useState(null);
   const [cashReceived, setCashReceived] = useState("");
@@ -103,6 +106,10 @@ export default function PosHomeScreen() {
     shift,
     shiftSummary,
     shiftSummaryError,
+    lastClosedShift,
+    recentClosedShifts,
+    closedShiftsLoading,
+    closedShiftsError,
     openingCash,
     setOpeningCash,
     pagerNumber,
@@ -174,6 +181,7 @@ export default function PosHomeScreen() {
     reprintRecentOrder,
     openRecentOrderDetail,
     refreshCurrentPosRuntime,
+    refreshRecentClosedShifts,
     checkConnectionNow,
     syncOfflineOrdersNow,
     confirmQrPaidManually,
@@ -183,6 +191,9 @@ export default function PosHomeScreen() {
     signOut,
     openShiftNow,
     closeShiftNow,
+    reprintLastClosedShift,
+    reprintClosedShift,
+    dismissLastClosedShift,
     hasOpenShift
   } = usePosComposer();
   const hasBenefitSignal = Boolean(
@@ -550,6 +561,18 @@ export default function PosHomeScreen() {
   }
 
   if (!hasOpenShift) {
+    if (lastClosedShift) {
+      return (
+        <PosShiftClosedCard
+          record={lastClosedShift}
+          busy={busy}
+          onReprint={reprintLastClosedShift}
+          onStartNewShift={dismissLastClosedShift}
+          onSignOut={signOut}
+        />
+      );
+    }
+
     return (
       <>
         <View style={styles.centerPage}>
@@ -750,6 +773,15 @@ export default function PosHomeScreen() {
               <Text style={styles.shiftHeroMeta}>Thu ngân: {cashierName}</Text>
               <Text style={styles.shiftHeroMeta}>Mở lúc {openedAtText} • Mã ca {shiftCode}</Text>
             </View>
+            <Pressable
+              style={styles.closedShiftHistoryButton}
+              onPress={() => {
+                setClosedShiftHistoryOpen(true);
+                refreshRecentClosedShifts();
+              }}
+            >
+              <Text style={styles.closedShiftHistoryButtonText}>Xem ca đã kết</Text>
+            </Pressable>
             <View style={styles.shiftHeroBadge}>
               <Text style={styles.shiftHeroBadgeValue}>{formatMoney(shift?.openingCash || 0)}</Text>
               <Text style={styles.shiftHeroBadgeLabel}>Tiền đầu ca</Text>
@@ -845,6 +877,17 @@ export default function PosHomeScreen() {
             </Pressable>
           </View>
         </View>
+
+        <PosClosedShiftHistory
+          visible={closedShiftHistoryOpen}
+          shifts={recentClosedShifts}
+          loading={closedShiftsLoading}
+          error={closedShiftsError}
+          busy={busy}
+          onClose={() => setClosedShiftHistoryOpen(false)}
+          onRefresh={refreshRecentClosedShifts}
+          onReprint={reprintClosedShift}
+        />
       </View>
     );
   };
@@ -1693,6 +1736,21 @@ const styles = StyleSheet.create({
     backgroundColor: POS_COLORS.surface,
     borderRadius: POS_RADIUS.md,
     padding: 12
+  },
+  closedShiftHistoryButton: {
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: POS_COLORS.primaryDark,
+    borderRadius: POS_RADIUS.md,
+    backgroundColor: POS_COLORS.surface
+  },
+  closedShiftHistoryButtonText: {
+    color: POS_COLORS.primaryDark,
+    fontSize: 12,
+    fontWeight: "900"
   },
   advancedSettingsToggle: {
     minHeight: 58,
