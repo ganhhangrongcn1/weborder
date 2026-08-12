@@ -11,6 +11,8 @@ const SITE_VISIT_DEDUPE_PREFIX = "ghr_site_visit_sent";
 const SITE_VISIT_DEDUPE_MS = 10000;
 const SITE_VISITS_TABLE = "site_visits";
 const SITE_VISIT_DAILY_STATS_RPC = "get_site_visit_daily_stats";
+const SITE_VISIT_TRAFFIC_STATS_RPC = "get_site_visit_traffic_stats";
+const TRAFFIC_PERIODS = new Set(["24h", "7d", "30d"]);
 
 function isBrowserReady() {
   return typeof window !== "undefined" && typeof document !== "undefined";
@@ -232,6 +234,34 @@ function buildComparison(current = {}, previous = {}, previousDateRange = null) 
   };
 }
 
+function normalizeTrafficPeriod(period = "24h") {
+  const normalized = String(period || "24h").toLowerCase();
+  return TRAFFIC_PERIODS.has(normalized) ? normalized : "24h";
+}
+
+function mapTrafficStats(rows = [], period = "24h") {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const firstRow = safeRows[0] || {};
+  const points = safeRows.map((row) => ({
+    bucketStart: String(row.bucket_start || ""),
+    pageViews: toNumber(row.page_views),
+    uniqueVisitors: toNumber(row.unique_visitors)
+  }));
+  const pageViews = toNumber(firstRow.total_page_views);
+  const uniqueVisitors = toNumber(firstRow.total_unique_visitors);
+
+  return {
+    source: "rpc",
+    period,
+    points,
+    pageViews,
+    uniqueVisitors,
+    averagePageViewsPerVisitor: uniqueVisitors
+      ? Math.round((pageViews / uniqueVisitors) * 10) / 10
+      : 0
+  };
+}
+
 export async function recordSiteVisit({ pathname = "", search = "" } = {}) {
   if (!isBrowserReady()) return { ok: false, skipped: true, reason: "not_browser" };
   if (!isSiteVisitTrackingEnabled()) return { ok: false, skipped: true, reason: "disabled" };
@@ -294,7 +324,41 @@ export async function getSiteVisitDailyStats(dateRange = {}) {
   };
 }
 
+export async function getSiteVisitTrafficStats(period = "24h") {
+  const client = await getAdminSupabaseClient();
+  if (!client) return null;
+
+  const normalizedPeriod = normalizeTrafficPeriod(period);
+  const [currentResult, previousResult] = await Promise.all([
+    client.rpc(SITE_VISIT_TRAFFIC_STATS_RPC, {
+      p_period: normalizedPeriod,
+      p_offset: 0
+    }),
+    client.rpc(SITE_VISIT_TRAFFIC_STATS_RPC, {
+      p_period: normalizedPeriod,
+      p_offset: 1
+    })
+  ]);
+  const error = currentResult.error || previousResult.error;
+  if (error) {
+    const code = String(error.code || "");
+    if (code === "42883" || code === "PGRST202") return null;
+    throw error;
+  }
+
+  const current = mapTrafficStats(currentResult.data, normalizedPeriod);
+  const previous = mapTrafficStats(previousResult.data, normalizedPeriod);
+  return {
+    ...current,
+    previous,
+    comparison: buildComparison(current, previous, {
+      dayCount: normalizedPeriod === "24h" ? 1 : Number.parseInt(normalizedPeriod, 10)
+    })
+  };
+}
+
 export default {
   recordSiteVisit,
-  getSiteVisitDailyStats
+  getSiteVisitDailyStats,
+  getSiteVisitTrafficStats
 };

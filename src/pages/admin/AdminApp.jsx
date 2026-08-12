@@ -64,6 +64,8 @@ export default function AdminApp({
     dashboardRevenueSeries,
     businessAnalytics,
     siteTrafficSummary,
+    siteTrafficPreset,
+    setSiteTrafficPreset,
     dashboardDataStatus,
     setOrdersSnapshot,
     zaloConfig,
@@ -288,6 +290,8 @@ export default function AdminApp({
           dashboardRevenueSeries={dashboardRevenueSeries}
           businessAnalytics={businessAnalytics}
           siteTrafficSummary={siteTrafficSummary}
+          siteTrafficPreset={siteTrafficPreset}
+          setSiteTrafficPreset={setSiteTrafficPreset}
           dashboardDataStatus={dashboardDataStatus}
           selectedBranchFilter={selectedBranchFilter}
           setSelectedBranchFilter={setSelectedBranchFilter}

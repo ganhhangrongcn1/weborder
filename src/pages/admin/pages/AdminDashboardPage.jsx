@@ -30,6 +30,8 @@ export default function AdminDashboardPage({
   dashboardRevenueSeries,
   businessAnalytics,
   siteTrafficSummary,
+  siteTrafficPreset,
+  setSiteTrafficPreset,
   dashboardDataStatus,
   selectedBranchFilter,
   setSelectedBranchFilter,
@@ -66,6 +68,8 @@ export default function AdminDashboardPage({
       dashboardRevenueSeries={dashboardRevenueSeries}
       businessAnalytics={businessAnalytics}
       siteTrafficSummary={siteTrafficSummary}
+      siteTrafficPreset={siteTrafficPreset}
+      setSiteTrafficPreset={setSiteTrafficPreset}
       dashboardDataStatus={dashboardDataStatus}
       selectedBranchFilter={selectedBranchFilter}
       setSelectedBranchFilter={setSelectedBranchFilter}

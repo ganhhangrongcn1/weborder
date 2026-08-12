@@ -1,4 +1,5 @@
-﻿import { formatMoney } from "../../../utils/format.js";
+﻿import { useState } from "react";
+import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.jsx";
 import { buildBranchFilterOptions } from "../../../services/branchIdentityService.js";
 import { addDaysToVietnamDateInput, toVietnamDateInputValue } from "../../../utils/adminDateRange.js";
@@ -58,14 +59,54 @@ function formatDateLabel(value = "") {
   return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
 }
 
-function buildTrafficDailyBars(daily = []) {
-  const items = (Array.isArray(daily) ? daily : []).slice(-7);
-  return items.map((item) => ({
-    date: item.date,
-    label: formatDateLabel(item.date),
-    pageViews: Number(item.pageViews || 0),
-    uniqueVisitors: Number(item.uniqueVisitors || 0)
+function formatTrafficPointLabel(value = "", period = "24h", detailed = false) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--";
+  if (period === "24h") {
+    return date.toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      day: detailed ? "2-digit" : undefined,
+      month: detailed ? "2-digit" : undefined,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    });
+  }
+  return date.toLocaleDateString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit"
+  });
+}
+
+function buildTrafficChart(series = [], period = "24h") {
+  const width = 820;
+  const height = 210;
+  const padding = { top: 18, right: 24, bottom: 34, left: 48 };
+  const safeSeries = series.length ? series : [{ bucketStart: "", uniqueVisitors: 0, pageViews: 0 }];
+  const maxValue = Math.max(...safeSeries.map((item) => Number(item.uniqueVisitors || 0)), 1);
+  const roundedMax = Math.max(4, Math.ceil(maxValue / 4) * 4);
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const step = safeSeries.length > 1 ? plotWidth / (safeSeries.length - 1) : plotWidth;
+  const labelStep = period === "30d" ? 5 : period === "24h" ? 4 : 1;
+  const points = safeSeries.map((item, index) => ({
+    ...item,
+    x: padding.left + index * step,
+    y: padding.top + (1 - Number(item.uniqueVisitors || 0) / roundedMax) * plotHeight,
+    label: formatTrafficPointLabel(item.bucketStart, period),
+    detailLabel: formatTrafficPointLabel(item.bucketStart, period, true),
+    showLabel: index % labelStep === 0 || index === safeSeries.length - 1
   }));
+  const linePath = points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ");
+  const areaPath = points.length
+    ? `${linePath} L ${points[points.length - 1].x} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`
+    : "";
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
+    y: padding.top + ratio * plotHeight,
+    value: Math.round(roundedMax * (1 - ratio))
+  }));
+  return { width, height, padding, points, linePath, areaPath, gridLines };
 }
 
 function getChannelColor(name = "") {
@@ -210,11 +251,14 @@ export default function AdminDashboardSection({
   dashboardRevenueSeries,
   businessAnalytics,
   siteTrafficSummary,
+  siteTrafficPreset = "24h",
+  setSiteTrafficPreset,
   dashboardDataStatus = {},
   selectedBranchFilter = "all",
   setSelectedBranchFilter,
   branches = []
 }) {
+  const [activeTrafficPoint, setActiveTrafficPoint] = useState(null);
   const branchOptions = buildBranchFilterOptions(branches);
   const rpcMetrics = dashboardSummary?.source === "rpc" ? dashboardSummary.current : null;
   const displayedOrdersTotal = rpcMetrics ? ordersTotal : null;
@@ -246,16 +290,17 @@ export default function AdminDashboardSection({
   const cancelRate = rpcMetrics ? Math.round(Number(rpcMetrics.cancelRate || 0) * 100) : null;
   const displayedSitePageViews = siteTrafficSummary ? formatNumber(siteTrafficSummary.pageViews || 0) : "--";
   const displayedSiteVisitors = siteTrafficSummary ? formatNumber(siteTrafficSummary.uniqueVisitors || 0) : "--";
-  const trafficDailyBars = buildTrafficDailyBars(siteTrafficSummary?.daily || []);
+  const trafficPoints = Array.isArray(siteTrafficSummary?.points) ? siteTrafficSummary.points : [];
   const trafficComparison = siteTrafficSummary?.comparison || {};
   const trafficDelta = Number(trafficComparison.uniqueVisitorDelta || 0);
-  const trafficPeriodLabel = trafficComparison.dayCount > 1 ? "kỳ trước" : "hôm qua";
+  const trafficPeriodLabel = siteTrafficPreset === "24h" ? "24 giờ trước" : `${siteTrafficPreset.replace("d", " ngày")} trước`;
   const trafficTrendLabel = siteTrafficSummary
     ? trafficDelta
       ? `${trafficDelta > 0 ? "+" : ""}${formatNumber(trafficDelta)} khách so với ${trafficPeriodLabel}`
       : `Không đổi so với ${trafficPeriodLabel}`
     : "Đang tải dữ liệu truy cập";
   const trafficAverageViews = Number(siteTrafficSummary?.averagePageViewsPerVisitor || 0);
+  const trafficChart = buildTrafficChart(trafficPoints, siteTrafficPreset);
   const operationalStats = [
     { label: "Đơn mới", value: pendingOrders ?? "--", detail: "chờ xác nhận", tone: pendingOrders ? "warning" : "success" },
     { label: "Đang làm", value: preparingOrders ?? "--", detail: "bếp xử lý", tone: "brand" },
@@ -408,36 +453,92 @@ export default function AdminDashboardSection({
         </div>
       </AdminSettlementSummary>
 
-      <section className="admin-dashboard-traffic-strip" aria-label="Khách truy cập website">
-        <div className="admin-dashboard-traffic-heading">
-          <span>Website</span>
-          <strong>{displayedSiteVisitors} khách vào trang</strong>
-          <small>{trafficTrendLabel}</small>
+      <section className="admin-dashboard-traffic-card" aria-label="Khách truy cập website">
+        <div className="admin-dashboard-traffic-toolbar">
+          {[{ value: "24h", label: "24 giờ qua" }, { value: "7d", label: "7 ngày qua" }, { value: "30d", label: "30 ngày qua" }].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={siteTrafficPreset === option.value ? "is-active" : ""}
+              onClick={() => setSiteTrafficPreset?.(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
-        {trafficDailyBars.length ? (
-          <div className="admin-dashboard-traffic-inline">
-            <article>
-              <span>Lượt xem trang</span>
-              <strong>{displayedSitePageViews}</strong>
-            </article>
-            <article>
-              <span>Mỗi khách xem</span>
-              <strong>{trafficAverageViews ? `${trafficAverageViews} trang` : "0 trang"}</strong>
-            </article>
-            <article className={trafficDelta > 0 ? "is-up" : trafficDelta < 0 ? "is-down" : ""}>
-              <span>So với {trafficPeriodLabel}</span>
-              <strong>{trafficDelta > 0 ? "+" : ""}{formatNumber(trafficDelta)} khách</strong>
-            </article>
-            <div className="admin-dashboard-traffic-days">
-              {trafficDailyBars.map((item) => (
-                <span key={item.date} title={`${item.label}: ${formatNumber(item.pageViews)} lượt, ${formatNumber(item.uniqueVisitors)} khách`}>
-                  <b>{item.label}</b>
-                  <strong>{formatNumber(item.uniqueVisitors)} khách</strong>
-                  <small>{formatNumber(item.pageViews)} lượt xem</small>
-                </span>
-              ))}
+
+        {trafficPoints.length ? (
+          <>
+            <div className="admin-dashboard-traffic-summary">
+              <div>
+                <span>Khách truy cập</span>
+                <strong>Tổng cộng: {displayedSiteVisitors}</strong>
+              </div>
+              <article>
+                <span>Lượt xem trang</span>
+                <strong>{displayedSitePageViews}</strong>
+              </article>
+              <article>
+                <span>Mỗi khách xem</span>
+                <strong>{trafficAverageViews ? `${trafficAverageViews} trang` : "0 trang"}</strong>
+              </article>
+              <article className={trafficDelta > 0 ? "is-up" : trafficDelta < 0 ? "is-down" : ""}>
+                <span>So với {trafficPeriodLabel}</span>
+                <strong>{trafficDelta > 0 ? "+" : ""}{formatNumber(trafficDelta)} khách</strong>
+              </article>
             </div>
-          </div>
+
+            <div className="admin-dashboard-traffic-chart" onMouseLeave={() => setActiveTrafficPoint(null)}>
+              <svg viewBox={`0 0 ${trafficChart.width} ${trafficChart.height}`} role="img" aria-label={`Biểu đồ khách truy cập ${siteTrafficPreset}`}>
+                <defs>
+                  <linearGradient id="adminTrafficArea" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#2563eb" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#2563eb" stopOpacity="0.02" />
+                  </linearGradient>
+                </defs>
+                {trafficChart.gridLines.map((line) => (
+                  <g key={line.y}>
+                    <line x1={trafficChart.padding.left} x2={trafficChart.width - trafficChart.padding.right} y1={line.y} y2={line.y} />
+                    <text x="8" y={line.y + 4}>{formatNumber(line.value)}</text>
+                  </g>
+                ))}
+                <path className="admin-dashboard-traffic-area" d={trafficChart.areaPath} />
+                <path className="admin-dashboard-traffic-line" d={trafficChart.linePath} />
+                {trafficChart.points.map((point, index) => (
+                  <g key={`${point.bucketStart}-${index}`}>
+                    <circle className="admin-dashboard-traffic-point" cx={point.x} cy={point.y} r="4" />
+                    <circle
+                      className="admin-dashboard-traffic-hit"
+                      cx={point.x}
+                      cy={point.y}
+                      r="13"
+                      tabIndex="0"
+                      onMouseEnter={() => setActiveTrafficPoint(point)}
+                      onFocus={() => setActiveTrafficPoint(point)}
+                      onBlur={() => setActiveTrafficPoint(null)}
+                    />
+                  </g>
+                ))}
+                {trafficChart.points.filter((point) => point.showLabel).map((point) => (
+                  <text key={`${point.bucketStart}-label`} className="admin-dashboard-traffic-axis-label" x={point.x} y={trafficChart.height - 12}>{point.label}</text>
+                ))}
+              </svg>
+              {activeTrafficPoint ? (
+                <div
+                  className="admin-dashboard-traffic-tooltip"
+                  style={{
+                    left: `${(activeTrafficPoint.x / trafficChart.width) * 100}%`,
+                    top: `${(activeTrafficPoint.y / trafficChart.height) * 100}%`
+                  }}
+                >
+                  <span>{activeTrafficPoint.detailLabel}</span>
+                  <strong>{formatNumber(activeTrafficPoint.uniqueVisitors)} khách</strong>
+                  <small>{formatNumber(activeTrafficPoint.pageViews)} lượt xem</small>
+                </div>
+              ) : null}
+            </div>
+            <small className="admin-dashboard-traffic-trend">{trafficTrendLabel}</small>
+          </>
         ) : (
           <div className="admin-dashboard-traffic-empty">
             {dashboardDataStatus?.traffic?.status === "error"

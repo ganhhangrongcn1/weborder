@@ -6,7 +6,7 @@ import {
 import { getAdminDashboardSummaryRpc } from "../../../services/adminDashboardService.js";
 import { getAdminDashboardRevenueSeriesRpc } from "../../../services/adminDashboardRevenueService.js";
 import { getAdminBusinessAnalyticsRpc } from "../../../services/adminBusinessAnalyticsService.js";
-import { getSiteVisitDailyStats } from "../../../services/siteVisitTrackingService.js";
+import { getSiteVisitTrafficStats } from "../../../services/siteVisitTrackingService.js";
 import {
   branchOptionMatchesOrder,
   buildBranchFilterOptions
@@ -234,6 +234,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const [dashboardRevenueSeries, setDashboardRevenueSeries] = useState(null);
   const [businessAnalytics, setBusinessAnalytics] = useState(null);
   const [siteTrafficSummary, setSiteTrafficSummary] = useState(null);
+  const [siteTrafficPreset, setSiteTrafficPreset] = useState("24h");
   const [dashboardDataStatus, setDashboardDataStatus] = useState(createDashboardDataStatus);
   const [crmSnapshot, setCrmSnapshot] = useState({ customers: [], loyaltyConfig: {} });
   const [crmLoadState, setCrmLoadState] = useState({ status: "idle", error: "" });
@@ -324,17 +325,14 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       if (section !== "dashboard") return;
       updateDashboardDataStatus(setDashboardDataStatus, "traffic", "loading");
       try {
-        const nextTraffic = await getSiteVisitDailyStats({
-          dateFrom: dashboardDateFrom,
-          dateTo: dashboardDateTo
-        });
+        const nextTraffic = await getSiteVisitTrafficStats(siteTrafficPreset);
         if (disposed) return;
         if (!nextTraffic) {
           throw new Error("RPC lượt truy cập chưa sẵn sàng.");
         }
         setSiteTrafficSummary(nextTraffic);
         updateDashboardDataStatus(setDashboardDataStatus, "traffic", "ready");
-        recordAdminRequest("read site visit daily stats rpc", "rpc:get_site_visit_daily_stats");
+        recordAdminRequest("read site visit traffic stats rpc", "rpc:get_site_visit_traffic_stats");
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
       } catch (error) {
         if (disposed) return;
@@ -353,7 +351,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardDateFrom, dashboardDateTo]);
+  }, [section, siteTrafficPreset]);
 
   useEffect(() => {
     let disposed = false;
@@ -554,6 +552,8 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     dashboardRevenueSeries,
     businessAnalytics,
     siteTrafficSummary,
+    siteTrafficPreset,
+    setSiteTrafficPreset,
     dashboardDataStatus,
     crmSnapshot,
     setCrmSnapshot,
