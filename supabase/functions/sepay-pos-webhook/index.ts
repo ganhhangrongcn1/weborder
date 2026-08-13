@@ -1115,6 +1115,18 @@ Deno.serve(async (request) => {
       console.error("[sepay-pos-webhook] update order from payment session failed", orderPaymentResult.reason);
     }
 
+    const isWebsitePaymentSession = ["web", "online", "website"].includes(paidSessionSource);
+    const paidWebsiteOrderId = toText(paidSession.order_id);
+    if (isWebsitePaymentSession && paidWebsiteOrderId) {
+      try {
+        await notifyPaidWebsiteOrder(supabase, { id: paidWebsiteOrderId }, {
+          paymentConfirmed: true
+        });
+      } catch (error) {
+        console.error("[sepay-pos-webhook] paid website order Zalo notification failed", error);
+      }
+    }
+
     await tryInsertWebhookLog(supabase, {
       webhook_code: webhookCode,
       transfer_type: transferType,

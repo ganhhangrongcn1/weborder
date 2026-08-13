@@ -172,6 +172,9 @@ const orderActionPanelSource = await readFile(new URL("../src/components/custome
 const momoWebhookSource = await readFile(new URL("../supabase/functions/momo-payment-webhook/index.ts", import.meta.url), "utf8");
 const sepayWebhookSource = await readFile(new URL("../supabase/functions/sepay-pos-webhook/index.ts", import.meta.url), "utf8");
 const orderRepositorySource = await readFile(new URL("../src/services/repositories/orderRepository.js", import.meta.url), "utf8");
+const orderNotificationSource = await readFile(new URL("../src/services/orderNotificationService.js", import.meta.url), "utf8");
+const webOrderNotificationFunctionSource = await readFile(new URL("../supabase/functions/web-order-notification-api/index.ts", import.meta.url), "utf8");
+const webOrderNotificationSharedSource = await readFile(new URL("../supabase/functions/_shared/webOrderPaidNotification.ts", import.meta.url), "utf8");
 
 assert.match(checkoutViewSource, /fulfillmentType === "pickup" \? paymentMethod : "COD"/);
 assert.match(checkoutPricingSource, /isQrCounterOrder \|\| fulfillmentType === "pickup"/);
@@ -207,5 +210,12 @@ assert.match(sepayWebhookSource, /shouldStartPickupKitchen/);
 assert.match(orderRepositorySource, /verifyOrderWasPersistedAfterError/);
 assert.match(orderRepositorySource, /remote-write:verified-after-error/);
 assert.match(orderRepositorySource, /expectedItemCount === 0 \|\| remoteItemCount >= expectedItemCount/);
+assert.match(orderNotificationSource, /functions\.invoke\("web-order-notification-api"/);
+assert.doesNotMatch(orderNotificationSource, /mode:\s*"no-cors"/);
+assert.match(webOrderNotificationFunctionSource, /event:\s*"web_order_created"/);
+assert.match(webOrderNotificationSharedSource, /web_order_notifications/);
+assert.match(webOrderNotificationSharedSource, /paymentConfirmed/);
+assert.match(sepayWebhookSource, /isWebsitePaymentSession/);
+assert.match(sepayWebhookSource, /paymentConfirmed:\s*true/);
 
 console.log("Order Success payment smoke test passed (cash + SePay/MoMo for QR counter and website pickup).");
