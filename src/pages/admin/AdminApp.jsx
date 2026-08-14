@@ -115,6 +115,8 @@ export default function AdminApp({
     setAdminGlobalSearch,
     selectedBranchFilter,
     setSelectedBranchFilter,
+    dashboardBranchFilters,
+    setDashboardBranchFilters,
     activeSubSection,
     setActiveSubSection,
     activeCampaignTab,
@@ -295,6 +297,8 @@ export default function AdminApp({
           dashboardDataStatus={dashboardDataStatus}
           selectedBranchFilter={selectedBranchFilter}
           setSelectedBranchFilter={setSelectedBranchFilter}
+          dashboardBranchFilters={dashboardBranchFilters}
+          setDashboardBranchFilters={setDashboardBranchFilters}
           setOrdersSnapshot={setOrdersSnapshot}
           onOrderUpdated={handleOrderUpdated}
           crmSnapshot={crmSnapshot}

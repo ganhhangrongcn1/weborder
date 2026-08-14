@@ -1,4 +1,9 @@
+import { useEffect, useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
+
+function getGroupId(group, index) {
+  return group.id || `admin-nav-group-${index}`;
+}
 
 export default function AdminSidebar({
   navGroups,
@@ -7,6 +12,33 @@ export default function AdminSidebar({
   onActivateNav,
   notificationCounts = {}
 }) {
+  const activeGroupId = useMemo(() => {
+    const activeIndex = navGroups.findIndex((group) => (
+      group.items.some((item) => item.id === activeAdminNav)
+    ));
+    return activeIndex >= 0 ? getGroupId(navGroups[activeIndex], activeIndex) : "";
+  }, [activeAdminNav, navGroups]);
+  const [openGroupIds, setOpenGroupIds] = useState(() => new Set(activeGroupId ? [activeGroupId] : []));
+
+  useEffect(() => {
+    if (!activeGroupId) return;
+    setOpenGroupIds((current) => {
+      if (current.has(activeGroupId)) return current;
+      const next = new Set(current);
+      next.add(activeGroupId);
+      return next;
+    });
+  }, [activeGroupId]);
+
+  const toggleGroup = (groupId) => {
+    setOpenGroupIds((current) => {
+      const next = new Set(current);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
   return (
     <aside className="admin-sidebar">
       <div className="admin-brand">
@@ -17,10 +49,45 @@ export default function AdminSidebar({
         </div>
       </div>
 
-      {navGroups.map((group) => (
-        <div key={group.title} className="admin-nav-group">
-          <p className="admin-nav-group-title">{group.title}</p>
-          <div className="grid gap-1">
+      <nav className="admin-nav" aria-label="Điều hướng quản trị">
+        {navGroups.map((group, groupIndex) => {
+          const groupId = getGroupId(group, groupIndex);
+          const panelId = `${groupId}-items`;
+          const isOpen = openGroupIds.has(groupId);
+          const isActiveGroup = groupId === activeGroupId;
+          const groupNotificationCount = group.items.reduce(
+            (total, item) => total + Number(notificationCounts[item.id] || 0),
+            0
+          );
+
+          return (
+            <section
+              key={groupId}
+              className={`admin-nav-group${isOpen ? " is-open" : ""}${isActiveGroup ? " is-active" : ""}`}
+            >
+              <button
+                type="button"
+                className="admin-nav-group-toggle"
+                aria-expanded={isOpen}
+                aria-controls={panelId}
+                title={group.title}
+                onClick={() => toggleGroup(groupId)}
+              >
+                <span className="admin-nav-group-icon">
+                  <Icon name={group.icon || "star"} size={17} />
+                </span>
+                <span className="admin-nav-group-copy">
+                  <strong>{group.title}</strong>
+                </span>
+                {groupNotificationCount > 0 ? (
+                  <span className="admin-nav-group-badge" aria-label={`${groupNotificationCount} thông báo`}>
+                    {groupNotificationCount > 99 ? "99+" : groupNotificationCount}
+                  </span>
+                ) : null}
+                <span className="admin-nav-group-chevron" aria-hidden="true" />
+              </button>
+
+              <div id={panelId} className="admin-nav-items" hidden={!isOpen}>
             {group.items.map((item) => {
               const notificationCount = Number(notificationCounts[item.id] || 0);
               return (
@@ -29,6 +96,8 @@ export default function AdminSidebar({
                   type="button"
                   className={`rounded-xl px-3 py-2 text-left text-sm font-semibold ${activeAdminNav === item.id ? "active " : ""}${notificationCount > 0 ? "has-notification" : ""}`.trim()}
                   onClick={() => onActivateNav(item)}
+                  aria-current={activeAdminNav === item.id ? "page" : undefined}
+                  title={item.label}
                 >
                   <Icon name={navIconMap[item.id] || "star"} size={16} />
                   <span className="admin-nav-label">{item.label}</span>
@@ -40,9 +109,11 @@ export default function AdminSidebar({
                 </button>
               );
             })}
-          </div>
-        </div>
-      ))}
+              </div>
+            </section>
+          );
+        })}
+      </nav>
     </aside>
   );
 }

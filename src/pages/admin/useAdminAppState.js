@@ -20,6 +20,7 @@ export default function useAdminAppState(orderStorage, routeState = null, option
     customersDateTo: uiState.customersDateTo,
     dashboardChartPreset: uiState.dashboardChartPreset,
     selectedBranchFilter: uiState.selectedBranchFilter,
+    dashboardBranchFilters: uiState.dashboardBranchFilters,
     branches
   });
   const supabaseConfigSyncEnabled = isSupabaseConfigSyncEnabled();

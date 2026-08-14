@@ -35,6 +35,8 @@ export default function AdminDashboardPage({
   dashboardDataStatus,
   selectedBranchFilter,
   setSelectedBranchFilter,
+  dashboardBranchFilters,
+  setDashboardBranchFilters,
   branches
 }) {
   return (
@@ -73,6 +75,8 @@ export default function AdminDashboardPage({
       dashboardDataStatus={dashboardDataStatus}
       selectedBranchFilter={selectedBranchFilter}
       setSelectedBranchFilter={setSelectedBranchFilter}
+      dashboardBranchFilters={dashboardBranchFilters}
+      setDashboardBranchFilters={setDashboardBranchFilters}
       branches={branches}
     />
   );

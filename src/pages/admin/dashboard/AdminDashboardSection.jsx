@@ -21,6 +21,11 @@ function formatDashboardMoney(value) {
   return formatMoney(Math.round(Number(value || 0)));
 }
 
+function formatDashboardDateLabel(value = "") {
+  const [year, month, day] = String(value).split("-");
+  return year && month && day ? `${day}/${month}/${year}` : "--/--/----";
+}
+
 
 function getChannelLabel(channel = "") {
   const normalized = String(channel || "").toLowerCase();
@@ -52,11 +57,57 @@ function formatComparison(currentValue = 0, previousValue = 0) {
   return `${percent > 0 ? "+" : ""}${percent}%`;
 }
 
+function getRevenueInsight(current = {}, previous = {}) {
+  const currentRevenue = Number(current.netRevenue || 0);
+  const previousRevenue = Number(previous.netRevenue || 0);
+  const currentOrders = Number(current.totalOrders || 0);
+  const previousOrders = Number(previous.totalOrders || 0);
+  const currentAverage = Number(current.averageOrderValue || 0);
+  const previousAverage = Number(previous.averageOrderValue || 0);
+
+  if (!previousRevenue) {
+    return "Chưa đủ dữ liệu kỳ trước để xác định nguyên nhân tăng giảm.";
+  }
+
+  const revenueChange = Math.round(((currentRevenue - previousRevenue) / previousRevenue) * 100);
+  const orderChange = previousOrders ? Math.round(((currentOrders - previousOrders) / previousOrders) * 100) : 0;
+  const averageChange = previousAverage ? Math.round(((currentAverage - previousAverage) / previousAverage) * 100) : 0;
+  const direction = revenueChange >= 0 ? "tăng" : "giảm";
+  const mainDriver = Math.abs(orderChange) >= Math.abs(averageChange)
+    ? `số đơn ${orderChange >= 0 ? "tăng" : "giảm"} ${Math.abs(orderChange)}%`
+    : `giá trị đơn trung bình ${averageChange >= 0 ? "tăng" : "giảm"} ${Math.abs(averageChange)}%`;
+
+  return `Doanh thu ${direction} ${Math.abs(revenueChange)}% so với kỳ trước, chủ yếu do ${mainDriver}.`;
+}
+
 function formatDateLabel(value = "") {
   if (!value) return "";
   const date = new Date(`${value}T12:00:00+07:00`);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+}
+
+function formatWeekdayLabel(value = "") {
+  if (!value) return "--";
+  const date = new Date(`${value}T12:00:00+07:00`);
+  if (Number.isNaN(date.getTime())) return "--";
+  return ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][date.getUTCDay()];
+}
+
+function getBestWeekdayInsight(series = []) {
+  const weekdayMap = new Map();
+  series.forEach((item) => {
+    const current = weekdayMap.get(item.weekday) || { revenue: 0, days: 0 };
+    weekdayMap.set(item.weekday, {
+      revenue: current.revenue + Number(item.revenue || 0),
+      days: current.days + 1
+    });
+  });
+  const ranked = [...weekdayMap.entries()]
+    .map(([weekday, value]) => ({ weekday, average: value.days ? value.revenue / value.days : 0 }))
+    .sort((a, b) => b.average - a.average);
+  if (!ranked.length || !ranked[0].average) return "Chưa đủ dữ liệu để xác định ngày bán tốt nhất.";
+  return `${ranked[0].weekday} đang là ngày bán tốt nhất, tính theo doanh thu trung bình trong kỳ.`;
 }
 
 function formatTrafficPointLabel(value = "", period = "24h", detailed = false) {
@@ -253,13 +304,41 @@ export default function AdminDashboardSection({
   siteTrafficSummary,
   siteTrafficPreset = "24h",
   setSiteTrafficPreset,
+  openAdminNav,
   dashboardDataStatus = {},
   selectedBranchFilter = "all",
   setSelectedBranchFilter,
+  dashboardBranchFilters = [],
+  setDashboardBranchFilters,
   branches = []
 }) {
   const [activeTrafficPoint, setActiveTrafficPoint] = useState(null);
+  const [revenueMetric, setRevenueMetric] = useState("revenue");
+  const [activeRevenuePoint, setActiveRevenuePoint] = useState(null);
   const branchOptions = buildBranchFilterOptions(branches);
+  const [isBranchMenuOpen, setIsBranchMenuOpen] = useState(false);
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
+  const selectedBranchCount = dashboardBranchFilters.length || branchOptions.length;
+  const allBranchesSelected = !dashboardBranchFilters.length || dashboardBranchFilters.length === branchOptions.length;
+  const selectedBranchLabel = allBranchesSelected
+    ? "Tất cả chi nhánh"
+    : dashboardBranchFilters.length === 1
+      ? getBranchShortLabel(branchOptions.find((branch) => branch.value === dashboardBranchFilters[0])?.label || "Chi nhánh")
+      : `${selectedBranchCount}/${branchOptions.length} chi nhánh`;
+
+  const toggleDashboardBranch = (branchValue) => {
+    if (branchValue === "all") {
+      setDashboardBranchFilters?.([]);
+      return;
+    }
+    const allValues = branchOptions.map((branch) => branch.value);
+    const currentValues = allBranchesSelected ? allValues : dashboardBranchFilters;
+    const nextValues = currentValues.includes(branchValue)
+      ? currentValues.filter((value) => value !== branchValue)
+      : [...currentValues, branchValue];
+    if (!nextValues.length) return;
+    setDashboardBranchFilters?.(nextValues.length === allValues.length ? [] : nextValues);
+  };
   const rpcMetrics = dashboardSummary?.source === "rpc" ? dashboardSummary.current : null;
   const displayedOrdersTotal = rpcMetrics ? ordersTotal : null;
   const displayedOrdersNew = rpcMetrics ? ordersNew : null;
@@ -309,6 +388,9 @@ export default function AdminDashboardSection({
   ];
 
   const chartMetrics = dashboardRevenueSeries?.source === "rpc" ? dashboardRevenueSeries.metrics : null;
+  const chartComparisonMetrics = dashboardRevenueSeries?.source === "rpc"
+    ? dashboardRevenueSeries.comparisonMetrics
+    : null;
   const chartOrdersTotal = chartMetrics?.totalOrders ?? null;
   const chartRevenueTotal = chartMetrics?.netRevenue ?? null;
   const chartAverageOrder = chartMetrics?.averageOrderValue ?? null;
@@ -316,22 +398,62 @@ export default function AdminDashboardSection({
     ? dashboardRevenueSeries.dailyRevenue.map((item) => ({
         key: item.date,
         label: formatDateLabel(item.date),
-        value: item.netRevenue
+        weekday: formatWeekdayLabel(item.date),
+        revenue: Number(item.netRevenue || 0),
+        orders: Number(item.totalOrders || 0),
+        averageOrder: Number(item.totalOrders || 0) ? Math.round(Number(item.netRevenue || 0) / Number(item.totalOrders || 0)) : 0
       }))
     : [];
-  const revenueChart = buildRevenueChart(revenueSeries);
-  const chartDailyAverage = revenueSeries.length
-    ? Math.round(Number(chartRevenueTotal || 0) / revenueSeries.length)
-    : 0;
+  const revenueMetricConfig = {
+    revenue: { label: "Doanh thu", format: formatDashboardMoney },
+    orders: { label: "Số đơn", format: (value) => `${formatNumber(value)} đơn` },
+    averageOrder: { label: "Đơn trung bình", format: formatDashboardMoney }
+  }[revenueMetric];
+  const revenueMetricMax = Math.max(...revenueSeries.map((item) => Number(item[revenueMetric] || 0)), 1);
   const chartPeakDay = revenueSeries.length
-    ? revenueSeries.reduce((best, item) => (item.value > best.value ? item : best), revenueSeries[0])
+    ? revenueSeries.reduce((best, item) => (item.revenue > best.revenue ? item : best), revenueSeries[0])
     : null;
+  const revenueInsight = chartMetrics && chartComparisonMetrics
+    ? getRevenueInsight(chartMetrics, chartComparisonMetrics)
+    : "Chưa đủ dữ liệu kỳ trước để xác định nguyên nhân tăng giảm.";
+  const bestWeekdayInsight = getBestWeekdayInsight(revenueSeries);
+  const previousRevenue = Number(chartComparisonMetrics?.netRevenue || 0);
+  const revenueDifference = Number(chartRevenueTotal || 0) - previousRevenue;
+  const revenueDifferencePercent = previousRevenue
+    ? Math.round((revenueDifference / previousRevenue) * 100)
+    : null;
+  const orderDifferencePercent = chartMetrics && chartComparisonMetrics
+    ? formatComparison(chartMetrics.totalOrders, chartComparisonMetrics.totalOrders)
+    : "--";
+  const averageDifferencePercent = chartMetrics && chartComparisonMetrics
+    ? formatComparison(chartMetrics.averageOrderValue, chartComparisonMetrics.averageOrderValue)
+    : "--";
   const trustMeta = getDashboardTrustMeta(dashboardDataStatus);
   const trustUpdatedLabel = formatUpdatedTime(trustMeta.updatedAt);
   const dashboardErrors = Object.values(dashboardDataStatus)
     .filter((item) => item?.status === "error" && item?.error)
     .map((item) => item.error);
+  const operationalAlerts = [
+    dashboardErrors.length
+      ? { tone: "danger", title: "Dữ liệu báo cáo gián đoạn", detail: "Một số nguồn chưa cập nhật đầy đủ.", icon: "warning" }
+      : null,
+    Number(pendingOrders || 0) > 0
+      ? { tone: "warning", title: `${pendingOrders} đơn đang chờ xác nhận`, detail: "Kiểm tra để tránh khách phải đợi lâu.", icon: "clock" }
+      : null,
+    Number(cancelRate || 0) >= 10
+      ? { tone: "danger", title: `Tỷ lệ hủy đang ở mức ${cancelRate}%`, detail: "Nên xem nguyên nhân hủy theo chi nhánh.", icon: "warning" }
+      : null,
+    openBranches < totalBranches
+      ? { tone: "neutral", title: `${totalBranches - openBranches} chi nhánh chưa mở`, detail: "Kiểm tra lịch hoạt động hoặc trạng thái ca.", icon: "store" }
+      : null
+  ].filter(Boolean).slice(0, 3);
   const todayText = toVietnamDateInputValue();
+  const isCurrentPeriodOpen = dashboardRevenueSeries?.comparisonIsProvisional === true;
+  const provisionalTime = new Date().toLocaleTimeString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 
   const applyPreset = (preset) => {
     if (preset === "today") {
@@ -349,6 +471,14 @@ export default function AdminDashboardSection({
       setDashboardDateFrom(addDaysToVietnamDateInput(todayText, -diff));
       setDashboardDateTo(todayText);
     }
+    if (preset === "7d") {
+      setDashboardDateFrom(addDaysToVietnamDateInput(todayText, -6));
+      setDashboardDateTo(todayText);
+    }
+    if (preset === "30d") {
+      setDashboardDateFrom(addDaysToVietnamDateInput(todayText, -29));
+      setDashboardDateTo(todayText);
+    }
     if (preset === "month") {
       setDashboardDateFrom(`${todayText.slice(0, 7)}-01`);
       setDashboardDateTo(todayText);
@@ -361,7 +491,9 @@ export default function AdminDashboardSection({
       <header className="admin-dashboard-command-bar">
         <div className="admin-dashboard-command-title">
           <div>
-            <h1>Tổng quan vận hành</h1>
+            <span className="admin-dashboard-greeting">Xin chào, Chủ cửa hàng!</span>
+            <h1>Tổng quan Gánh Hàng Rong hôm nay</h1>
+            <p>Nắm nhanh doanh thu, đơn hàng và tình hình vận hành toàn hệ thống.</p>
             <small>
               <i className={openBranches === totalBranches ? "is-open" : "is-partial"} />
               {openBranches}/{totalBranches} chi nhánh đang mở
@@ -371,66 +503,127 @@ export default function AdminDashboardSection({
           </div>
         </div>
 
-        <div className="admin-dashboard-branch-switcher">
-          <span>Xem theo chi nhánh</span>
-          <div role="group" aria-label="Chọn chi nhánh">
+        <div className="admin-dashboard-filter-cluster">
+          <div
+            className="admin-dashboard-branch-switcher"
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setIsBranchMenuOpen(false);
+            }}
+          >
             <button
               type="button"
-              className={selectedBranchFilter === "all" ? "is-active" : ""}
-              aria-pressed={selectedBranchFilter === "all"}
-              onClick={() => setSelectedBranchFilter?.("all")}
+              className={`admin-dashboard-branch-select${isBranchMenuOpen ? " is-open" : ""}`}
+              aria-haspopup="listbox"
+              aria-expanded={isBranchMenuOpen}
+              onClick={() => setIsBranchMenuOpen((current) => !current)}
             >
-              Tất cả
+              <Icon name="store" size={16} />
+              <span>{selectedBranchLabel}</span>
+              <span className="admin-dashboard-select-chevron" aria-hidden="true" />
             </button>
-            {branchOptions.map((branch) => (
-              <button
-                type="button"
-                key={branch.value}
-                className={branch.value === selectedBranchFilter ? "is-active" : ""}
-                aria-pressed={branch.value === selectedBranchFilter}
-                onClick={() => setSelectedBranchFilter?.(branch.value)}
-                title={branch.label}
-              >
-                {getBranchShortLabel(branch.label)}
-              </button>
-            ))}
+            {isBranchMenuOpen ? (
+              <div className="admin-dashboard-branch-menu" role="listbox" aria-label="Chọn chi nhánh xem báo cáo">
+                <div className="admin-dashboard-branch-menu-head">
+                  <Icon name="store" size={15} />
+                  <span>Gánh Hàng Rong</span>
+                  <small>{branchOptions.length} chi nhánh</small>
+                </div>
+                {[{ value: "all", label: "Tất cả chi nhánh" }, ...branchOptions.map((branch) => ({ value: branch.value, label: getBranchShortLabel(branch.label) }))].map((branch) => {
+                  const isSelected = branch.value === "all" ? allBranchesSelected : allBranchesSelected || dashboardBranchFilters.includes(branch.value);
+                  return (
+                  <button
+                    key={branch.value}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    className={isSelected ? "is-selected" : ""}
+                    onClick={() => {
+                      toggleDashboardBranch(branch.value);
+                    }}
+                  >
+                    <i className="admin-dashboard-branch-check" aria-hidden="true">{isSelected ? <Icon name="check" size={12} /> : null}</i>
+                    <span>{branch.label}</span>
+                    {branch.value === "all" && isSelected ? <Icon name="check" size={15} /> : null}
+                  </button>
+                  );
+                })}
+                <small className="admin-dashboard-branch-hint">Chọn ít nhất 1 chi nhánh · Có thể chọn nhiều</small>
+              </div>
+            ) : null}
           </div>
-        </div>
 
-        <div className="admin-dashboard-period-controls">
-          <label className="admin-dashboard-period-select">
-            <Icon name="clock" size={16} />
-            <AdminSelect
-              value={dashboardDatePreset || "today"}
-              onChange={(event) => {
-                const nextPreset = event.target.value;
-                if (nextPreset === "custom") {
-                  setDashboardDatePreset("custom");
-                  return;
-                }
-                applyPreset(nextPreset);
-              }}
-              options={[
-                { value: "today", label: "Hôm nay" },
-                { value: "yesterday", label: "Hôm qua" },
-                { value: "week", label: "Tuần này" },
-                { value: "month", label: "Tháng này" },
-                { value: "custom", label: "Tùy chỉnh..." }
-              ]}
-            />
-          </label>
-          {dashboardDatePreset === "custom" ? (
-            <>
-              <label className="admin-dashboard-period-date">
-                <span>Từ</span>
-                <AdminInput type="date" value={dashboardDateFrom || ""} max={dashboardDateTo || todayText} onChange={(event) => { setDashboardDateFrom(event.target.value); setDashboardDatePreset("custom"); }} />
-              </label>
-              <label className="admin-dashboard-period-date">
-                <span>Đến</span>
-                <AdminInput type="date" value={dashboardDateTo || ""} min={dashboardDateFrom || ""} max={todayText} onChange={(event) => { setDashboardDateTo(event.target.value); setDashboardDatePreset("custom"); }} />
-              </label>
-            </>
-          ) : null}
+          <div
+            className="admin-dashboard-period-controls"
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setIsPeriodMenuOpen(false);
+            }}
+          >
+            <button
+              type="button"
+              className={`admin-dashboard-period-trigger${isPeriodMenuOpen ? " is-open" : ""}`}
+              aria-haspopup="dialog"
+              aria-expanded={isPeriodMenuOpen}
+              onClick={() => setIsPeriodMenuOpen((current) => !current)}
+            >
+              <Icon name="calendar" size={16} />
+              <span>
+                <strong>{dashboardDatePreset === "today" ? "Hôm nay" : dashboardDatePreset === "yesterday" ? "Hôm qua" : dashboardDatePreset === "7d" ? "7 ngày" : dashboardDatePreset === "30d" ? "30 ngày" : dashboardDatePreset === "month" ? "Tháng này" : "Tùy chỉnh"}</strong>
+                <small>{dashboardDateFrom === dashboardDateTo ? formatDashboardDateLabel(dashboardDateFrom) : `${formatDashboardDateLabel(dashboardDateFrom)} – ${formatDashboardDateLabel(dashboardDateTo)}`}</small>
+              </span>
+              <span className="admin-dashboard-select-chevron" aria-hidden="true" />
+            </button>
+            {isPeriodMenuOpen ? (
+              <div className="admin-dashboard-period-menu" role="dialog" aria-label="Chọn khoảng thời gian báo cáo">
+                <div className="admin-dashboard-period-presets">
+                  {[
+                    { value: "today", label: "Hôm nay" },
+                    { value: "yesterday", label: "Hôm qua" },
+                    { value: "7d", label: "7 ngày" },
+                    { value: "30d", label: "30 ngày" },
+                    { value: "month", label: "Tháng này" }
+                  ].map((preset) => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      className={dashboardDatePreset === preset.value ? "is-selected" : ""}
+                      onClick={() => applyPreset(preset.value)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="admin-dashboard-period-month">
+                  <span>Chọn tháng</span>
+                  <input
+                    type="month"
+                    value={(dashboardDateFrom || todayText).slice(0, 7)}
+                    max={todayText.slice(0, 7)}
+                    onChange={(event) => {
+                      const month = event.target.value;
+                      if (!month) return;
+                      const monthEnd = new Date(`${month}-01T12:00:00+07:00`);
+                      monthEnd.setMonth(monthEnd.getMonth() + 1, 0);
+                      const endText = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, "0")}-${String(monthEnd.getDate()).padStart(2, "0")}`;
+                      setDashboardDateFrom(`${month}-01`);
+                      setDashboardDateTo(endText > todayText ? todayText : endText);
+                      setDashboardDatePreset("custom");
+                    }}
+                  />
+                </div>
+                <div className="admin-dashboard-period-range">
+                  <label>
+                    <span>Từ ngày</span>
+                    <AdminInput type="date" value={dashboardDateFrom || ""} max={dashboardDateTo || todayText} onChange={(event) => { setDashboardDateFrom(event.target.value); setDashboardDatePreset("custom"); }} />
+                  </label>
+                  <i aria-hidden="true">→</i>
+                  <label>
+                    <span>Đến ngày</span>
+                    <AdminInput type="date" value={dashboardDateTo || ""} min={dashboardDateFrom || ""} max={todayText} onChange={(event) => { setDashboardDateTo(event.target.value); setDashboardDatePreset("custom"); }} />
+                  </label>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
@@ -453,7 +646,7 @@ export default function AdminDashboardSection({
         </div>
       </AdminSettlementSummary>
 
-      <section className="admin-dashboard-traffic-card" aria-label="Khách truy cập website">
+      <section className="admin-dashboard-traffic-card admin-dashboard-traffic-legacy" aria-label="Khách truy cập website">
         <div className="admin-dashboard-traffic-toolbar">
           {[{ value: "24h", label: "24 giờ qua" }, { value: "7d", label: "7 ngày qua" }, { value: "30d", label: "30 ngày qua" }].map((option) => (
             <button
@@ -566,6 +759,32 @@ export default function AdminDashboardSection({
         </div>
       </section>
 
+      <div className="admin-dashboard-action-grid">
+        <section className={`admin-dashboard-alert-center is-compact${operationalAlerts.length ? " has-alerts" : " is-clear"}`} aria-labelledby="dashboard-alert-title">
+          <header>
+            <div className="admin-dashboard-alert-summary">
+              <i><Icon name={operationalAlerts.length ? "warning" : "check"} size={18} /></i>
+              <div>
+                <h2 id="dashboard-alert-title">{operationalAlerts.length ? `${operationalAlerts.length} cảnh báo cần chú ý` : "Vận hành đang ổn định"}</h2>
+                <small>{operationalAlerts.length ? "Kiểm tra các vấn đề dưới đây để xử lý kịp thời." : "Chưa có vấn đề cần xử lý ngay."}</small>
+              </div>
+            </div>
+            <button type="button" onClick={() => openAdminNav?.({ id: "orders-main", label: "Đơn hàng", section: "orders" })}>Xem đơn hàng</button>
+          </header>
+          {operationalAlerts.length ? (
+            <div className="admin-dashboard-alert-list">
+              {operationalAlerts.map((alert) => (
+              <article key={alert.title} className={`is-${alert.tone}`}>
+                <span><Icon name={alert.icon} size={17} /></span>
+                <div><strong>{alert.title}</strong><small>{alert.detail}</small></div>
+              </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
+      </div>
+
       <div className="admin-dashboard-main-grid">
         <AdminPanel
           title="Xu hướng doanh thu"
@@ -586,36 +805,82 @@ export default function AdminDashboardSection({
           {chartMetrics ? (
             <>
               <div className="admin-dashboard-revenue-visual">
-                <strong>{formatDashboardMoney(chartRevenueTotal)}</strong>
-                <span>{chartOrdersTotal} đơn · {formatDashboardMoney(chartAverageOrder)} / đơn</span>
-                <div className="admin-dashboard-revenue-chart">
-                  <svg viewBox={`0 0 ${revenueChart.width} ${revenueChart.height}`} role="img" aria-label="Biểu đồ doanh thu thực nhận">
-                    <defs>
-                      <linearGradient id="adminRevenueArea" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#fb923c" stopOpacity="0.28" />
-                        <stop offset="100%" stopColor="#fb923c" stopOpacity="0.03" />
-                      </linearGradient>
-                    </defs>
-                    {revenueChart.gridLines.map((line) => (
-                      <g key={line.y}>
-                        <line x1={revenueChart.padding.left} x2={revenueChart.width - revenueChart.padding.right} y1={line.y} y2={line.y} />
-                        <text x="10" y={line.y + 4}>{formatDashboardMoney(line.value)}</text>
-                      </g>
+                <div className="admin-dashboard-revenue-heading">
+                  <div>
+                    <strong>{formatDashboardMoney(chartRevenueTotal)}</strong>
+                    <span>{chartOrdersTotal} đơn · {formatDashboardMoney(chartAverageOrder)} / đơn</span>
+                  </div>
+                  <div className="admin-dashboard-revenue-metric-tabs" role="group" aria-label="Chọn chỉ số biểu đồ">
+                    {[
+                      { id: "revenue", label: "Doanh thu" },
+                      { id: "orders", label: "Số đơn" },
+                      { id: "averageOrder", label: "Đơn TB" }
+                    ].map((metric) => (
+                      <button
+                        key={metric.id}
+                        type="button"
+                        className={revenueMetric === metric.id ? "is-active" : ""}
+                        aria-pressed={revenueMetric === metric.id}
+                        onClick={() => { setRevenueMetric(metric.id); setActiveRevenuePoint(null); }}
+                      >
+                        {metric.label}
+                      </button>
                     ))}
-                    <path className="admin-dashboard-revenue-area" d={revenueChart.areaPath} />
-                    <path className="admin-dashboard-revenue-line" d={revenueChart.linePath} />
-                    {revenueChart.points.map((point) => <circle key={point.key} cx={point.x} cy={point.y} r="5" />)}
-                    {revenueChart.points.filter((point) => point.showLabel).map((point) => (
-                      <text key={`${point.key}-label`} className="admin-dashboard-revenue-date" x={point.x} y={revenueChart.height - 10}>{point.label}</text>
-                    ))}
-                  </svg>
+                  </div>
+                </div>
+                <div className="admin-dashboard-revenue-insight">
+                  <Icon name="star" size={17} />
+                  <span><b>{revenueInsight}</b><small>{bestWeekdayInsight}</small></span>
+                </div>
+                <div className="admin-dashboard-revenue-bars" role="img" aria-label={`Biểu đồ ${revenueMetricConfig.label.toLowerCase()} theo ngày`} onMouseLeave={() => setActiveRevenuePoint(null)}>
+                  <div className="admin-dashboard-revenue-scale"><span>{revenueMetricConfig.format(revenueMetricMax)}</span><span>{revenueMetricConfig.format(Math.round(revenueMetricMax / 2))}</span><span>0</span></div>
+                  <div className="admin-dashboard-revenue-bar-grid">
+                    {revenueSeries.map((point) => {
+                      const height = Math.max(point[revenueMetric] ? 7 : 2, (Number(point[revenueMetric] || 0) / revenueMetricMax) * 100);
+                      const isPeak = point.key === chartPeakDay?.key && revenueMetric === "revenue";
+                      return (
+                        <button
+                          key={point.key}
+                          type="button"
+                          className={`${isPeak ? "is-peak " : ""}${activeRevenuePoint?.key === point.key ? "is-active" : ""}`.trim()}
+                          onMouseEnter={() => setActiveRevenuePoint(point)}
+                          onFocus={() => setActiveRevenuePoint(point)}
+                          onBlur={() => setActiveRevenuePoint(null)}
+                          aria-label={`${point.label}: ${revenueMetricConfig.format(point[revenueMetric])}`}
+                        >
+                          {isPeak ? <em>Cao nhất</em> : null}
+                          <i style={{ height: `${height}%` }} />
+                          <span><b>{point.weekday}</b><small>{point.label}</small></span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {activeRevenuePoint ? (
+                    <div className="admin-dashboard-revenue-tooltip">
+                      <strong>{activeRevenuePoint.label}</strong>
+                      <span>{formatDashboardMoney(activeRevenuePoint.revenue)}</span>
+                      <small>{activeRevenuePoint.orders} đơn · {formatDashboardMoney(activeRevenuePoint.averageOrder)} / đơn</small>
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <div className="admin-dashboard-mini-metrics">
-                <span><b>{formatDashboardMoney(chartDailyAverage)}</b> trung bình / ngày</span>
-                <span><b>{chartOrdersTotal}</b> đơn trong kỳ</span>
-                <span><b>{dashboardSummary?.source === "rpc" ? formatComparison(dashboardSummary.current.netRevenue, dashboardSummary.previous.netRevenue) : "--"}</b> so với kỳ trước</span>
-                <span><b>{chartPeakDay ? formatDashboardMoney(chartPeakDay.value) : "--"}</b> cao nhất{chartPeakDay ? ` · ${chartPeakDay.label}` : ""}</span>
+                <span className={revenueDifference < 0 ? "is-negative" : "is-positive"}>
+                  <small>Chênh lệch doanh thu</small>
+                  <b>{revenueDifferencePercent === null ? "--" : `${revenueDifference >= 0 ? "+" : "−"}${formatDashboardMoney(Math.abs(revenueDifference))} · ${revenueDifferencePercent > 0 ? "+" : ""}${revenueDifferencePercent}%`}</b>
+                </span>
+                <span>
+                  <small>Biến động số đơn</small>
+                  <b>{orderDifferencePercent}</b>
+                </span>
+                <span>
+                  <small>Biến động đơn trung bình</small>
+                  <b>{averageDifferencePercent}</b>
+                </span>
+                <span className="is-provisional">
+                  <small>Trạng thái dữ liệu</small>
+                  <b>{isCurrentPeriodOpen ? `Tạm tính đến ${provisionalTime}` : "Đã đủ kỳ"}</b>
+                </span>
               </div>
             </>
           ) : (
@@ -702,6 +967,30 @@ export default function AdminDashboardSection({
         analytics={businessAnalytics}
         status={dashboardDataStatus?.analytics?.status}
       />
+
+      <section className="admin-dashboard-secondary-section" aria-labelledby="dashboard-secondary-title">
+        <header className="admin-dashboard-secondary-heading">
+          <div>
+            <span>Thông tin tham khảo</span>
+            <h2 id="dashboard-secondary-title">Hiệu quả website</h2>
+            <p>Theo dõi mức độ quan tâm của khách; không dùng thay cho doanh thu và đơn hàng.</p>
+          </div>
+          <select value={siteTrafficPreset} onChange={(event) => setSiteTrafficPreset?.(event.target.value)} aria-label="Khoảng thời gian truy cập website">
+            <option value="24h">24 giờ</option>
+            <option value="7d">7 ngày</option>
+            <option value="30d">30 ngày</option>
+          </select>
+        </header>
+        <div className="admin-dashboard-secondary-metrics">
+          <article><span>Khách truy cập</span><strong>{displayedSiteVisitors}</strong></article>
+          <article><span>Lượt xem trang</span><strong>{displayedSitePageViews}</strong></article>
+          <article><span>Mỗi khách xem</span><strong>{trafficAverageViews ? `${trafficAverageViews} trang` : "0 trang"}</strong></article>
+          <footer className={trafficDelta > 0 ? "is-up" : trafficDelta < 0 ? "is-down" : ""}>
+            <Icon name={trafficDelta < 0 ? "warning" : "eye"} size={16} />
+            <span>{trafficTrendLabel}</span>
+          </footer>
+        </div>
+      </section>
     </div>
   );
 }

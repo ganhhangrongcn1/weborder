@@ -1,45 +1,69 @@
 export const navGroups = [
   {
+    id: "overview",
     title: "Tổng quan",
+    icon: "home",
     items: [
-      { id: "dashboard-main", label: "Dashboard", section: "dashboard" },
-      { id: "grab-finance-main", label: "Tài chính Grab", section: "grab-finance" },
+      { id: "dashboard-main", label: "Dashboard", section: "dashboard" }
+    ]
+  },
+  {
+    id: "sales-operations",
+    title: "Bán hàng & vận hành",
+    icon: "bag",
+    items: [
+      { id: "orders-main", label: "Đơn hàng", section: "orders" },
+      { id: "shifts-main", label: "Tổng quan ca", section: "shifts" },
+      { id: "cakes-main", label: "Bánh sinh nhật", section: "cakes" },
+      { id: "partner-reviews-main", label: "Đánh giá đối tác", section: "partner-reviews" },
+      { id: "review-rewards-main", label: "Thưởng điểm đánh giá", section: "review-rewards" }
+    ]
+  },
+  {
+    id: "customers-marketing",
+    title: "Khách hàng & marketing",
+    icon: "user",
+    items: [
+      { id: "customer-main", label: "Khách hàng / CRM", section: "customers" },
+      { id: "promo-campaign", label: "Chương trình khuyến mãi", section: "promo", sub: "campaign" },
       { id: "grab-marketing-main", label: "Hiệu quả Marketing Grab", section: "grab-marketing" }
     ]
   },
   {
-    title: "Vận hành",
-    items: [
-      { id: "orders-main", label: "Đơn hàng", section: "orders" },
-      { id: "partner-reviews-main", label: "Đánh giá đối tác", section: "partner-reviews" },
-      { id: "review-rewards-main", label: "Thưởng điểm đánh giá", section: "review-rewards" },
-      { id: "shifts-main", label: "Tổng quan ca", section: "shifts" },
-      { id: "customer-main", label: "Khách hàng / CRM", section: "customers" },
-      { id: "cakes-main", label: "Bánh sinh nhật", section: "cakes" }
-    ]
-  },
-  {
-    title: "Cửa hàng",
+    id: "store-channels",
+    title: "Cửa hàng & kênh bán",
+    icon: "store",
     items: [
       { id: "menu-main", label: "Menu", section: "menu" },
       { id: "store-branches", label: "Quản lý chi nhánh", section: "store", sub: "branches" },
-      { id: "store-accounts", label: "Tài khoản chi nhánh", section: "store", sub: "accounts" },
-      { id: "store-zalo", label: "Cấu hình Zalo", section: "store", sub: "zalo" },
-      { id: "store-downloads", label: "File APK POS", section: "store", sub: "downloads" }
+      { id: "store-ui", label: "Quản lý giao diện", section: "promo", sub: "ui" }
     ]
   },
   {
+    id: "finance-reports",
+    title: "Tài chính & báo cáo",
+    icon: "wallet",
+    items: [
+      { id: "grab-finance-main", label: "Tài chính Grab", section: "grab-finance" }
+    ]
+  },
+  {
+    id: "people-supervision",
     title: "Nhân sự & giám sát",
+    icon: "user",
     items: [
       { id: "employees-main", label: "Quản lý nhân sự", section: "employees" },
       { id: "supervision-main", label: "Quản lý giám sát", section: "supervision" }
     ]
   },
   {
-    title: "Giao diện & KM",
+    id: "system-settings",
+    title: "Thiết lập hệ thống",
+    icon: "gear",
     items: [
-      { id: "store-ui", label: "Quản lý giao diện", section: "promo", sub: "ui" },
-      { id: "promo-campaign", label: "Chương trình khuyến mãi", section: "promo", sub: "campaign" }
+      { id: "store-accounts", label: "Tài khoản chi nhánh", section: "store", sub: "accounts" },
+      { id: "store-zalo", label: "Cấu hình Zalo", section: "store", sub: "zalo" },
+      { id: "store-downloads", label: "File APK POS", section: "store", sub: "downloads" }
     ]
   }
 ];

@@ -33,6 +33,35 @@ function mapRevenueSeries(row = {}) {
   };
 }
 
+function mergeRevenueSeries(seriesList = []) {
+  const daily = new Map();
+  seriesList.forEach((series) => {
+    (series?.dailyRevenue || []).forEach((item) => {
+      const current = daily.get(item.date) || { date: item.date, totalOrders: 0, netRevenue: 0 };
+      current.totalOrders += toNumber(item.totalOrders);
+      current.netRevenue += toNumber(item.netRevenue);
+      daily.set(item.date, current);
+    });
+  });
+  const totalOrders = seriesList.reduce((sum, item) => sum + toNumber(item?.metrics?.totalOrders), 0);
+  const netRevenue = seriesList.reduce((sum, item) => sum + toNumber(item?.metrics?.netRevenue), 0);
+  const sumMetric = (key) => seriesList.reduce((sum, item) => sum + toNumber(item?.metrics?.[key]), 0);
+  return {
+    source: "rpc",
+    metrics: {
+      totalOrders,
+      netRevenue,
+      averageOrderValue: totalOrders ? netRevenue / totalOrders : 0,
+      pendingOrders: sumMetric("pendingOrders"),
+      preparingOrders: sumMetric("preparingOrders"),
+      deliveringOrders: sumMetric("deliveringOrders"),
+      cancelledOrders: sumMetric("cancelledOrders"),
+      completedOrders: sumMetric("completedOrders"),
+    },
+    dailyRevenue: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
+  };
+}
+
 async function callRevenueRpc(client, dateRange = {}, { includeBranchUuid = true } = {}) {
   const branchName = String(dateRange.branchName || dateRange.branchFilter || "").trim();
   const branchUuid = String(dateRange.branchUuid || "").trim();
@@ -64,6 +93,20 @@ export async function getAdminDashboardRevenueSeriesRpc(dateRange = {}) {
   return row ? mapRevenueSeries(row) : null;
 }
 
+export async function getAdminDashboardRevenueSeriesForBranchesRpc(dateRange = {}, branchOptions = []) {
+  const safeBranches = Array.isArray(branchOptions) ? branchOptions.filter((item) => item?.value) : [];
+  if (!safeBranches.length) return getAdminDashboardRevenueSeriesRpc(dateRange);
+  const series = await Promise.all(safeBranches.map((branch) => getAdminDashboardRevenueSeriesRpc({
+    ...dateRange,
+    branchUuid: branch.value,
+    branchName: branch.label,
+    branchFilter: branch.label,
+  })));
+  const available = series.filter(Boolean);
+  return available.length ? mergeRevenueSeries(available) : null;
+}
+
 export default {
   getAdminDashboardRevenueSeriesRpc,
+  getAdminDashboardRevenueSeriesForBranchesRpc,
 };

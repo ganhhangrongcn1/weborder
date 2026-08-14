@@ -59,6 +59,39 @@ function mapSummary(row = {}) {
   };
 }
 
+function mergeByKey(items = [], keySelector, fields = []) {
+  const merged = new Map();
+  items.forEach((item) => {
+    const key = keySelector(item);
+    const current = merged.get(key) || { ...item };
+    fields.forEach((field) => {
+      current[field] = toNumber(merged.has(key) ? current[field] : 0) + toNumber(item[field]);
+    });
+    merged.set(key, current);
+  });
+  return [...merged.values()];
+}
+
+function mergeBusinessAnalytics(items = []) {
+  const financeFields = ["totalOrders", "grossRevenue", "netRevenue", "discountAmount", "voucherAmount", "platformFee", "revenueGap"];
+  const finance = financeFields.reduce((result, field) => ({
+    ...result,
+    [field]: items.reduce((sum, item) => sum + toNumber(item?.finance?.[field]), 0),
+  }), {});
+  const products = items.flatMap((item) => item?.topByQuantity || []);
+  const productTotals = mergeByKey(products, (item) => item.name, ["quantity", "revenue"]);
+  return {
+    source: "rpc",
+    finance,
+    topByQuantity: [...productTotals].sort((a, b) => b.quantity - a.quantity),
+    topByRevenue: [...productTotals].sort((a, b) => b.revenue - a.revenue),
+    slowProducts: [],
+    hourlyRevenue: mergeByKey(items.flatMap((item) => item?.hourlyRevenue || []), (item) => item.hour, ["totalOrders", "netRevenue"]).sort((a, b) => a.hour - b.hour),
+    branches: items.flatMap((item) => item?.branches || []),
+    channels: mergeByKey(items.flatMap((item) => item?.channels || []), (item) => item.group, ["totalOrders", "grossRevenue", "promotionAmount", "platformFee", "netRevenue"]),
+  };
+}
+
 async function callBusinessAnalyticsRpc(client, dateRange = {}, { includeBranchUuid = true } = {}) {
   const branchName = String(dateRange.branchName || dateRange.branchFilter || "").trim();
   const branchUuid = String(dateRange.branchUuid || "").trim();
@@ -122,6 +155,20 @@ export async function getAdminBusinessAnalyticsRpc(dateRange = {}) {
   return request;
 }
 
+export async function getAdminBusinessAnalyticsForBranchesRpc(dateRange = {}, branchOptions = []) {
+  const safeBranches = Array.isArray(branchOptions) ? branchOptions.filter((item) => item?.value) : [];
+  if (!safeBranches.length) return getAdminBusinessAnalyticsRpc(dateRange);
+  const analytics = await Promise.all(safeBranches.map((branch) => getAdminBusinessAnalyticsRpc({
+    ...dateRange,
+    branchUuid: branch.value,
+    branchName: branch.label,
+    branchFilter: branch.label,
+  })));
+  const available = analytics.filter(Boolean);
+  return available.length ? mergeBusinessAnalytics(available) : null;
+}
+
 export default {
   getAdminBusinessAnalyticsRpc,
+  getAdminBusinessAnalyticsForBranchesRpc,
 };

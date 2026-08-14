@@ -1,0 +1,201 @@
+/* GHR Admin Design System V1: cam là màu nhận diện và hành động chính. */
+.admin-shell {
+  --admin-brand: #f97316;
+  --admin-brand-strong: #ea580c;
+  --admin-brand-soft: #fff7ed;
+  --admin-primary: #ea580c;
+  --admin-primary-hover: #c2410c;
+  --admin-primary-soft: #fff7ed;
+  --admin-bg: #f7f6f2;
+  --admin-border: #e7e3dc;
+  --admin-border-strong: #dcd6cc;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 88% 0, rgba(249, 115, 22, 0.09), transparent 26rem),
+    var(--admin-bg);
+  color: var(--admin-text);
+  font-family: var(--admin-font-family);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-main {
+  min-width: 0;
+  padding: 24px clamp(16px, 2.25vw, 32px) 36px;
+}
+
+.admin-brand {
+  gap: 10px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(234, 88, 12, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fffdf6, var(--admin-brand-soft));
+  padding: 10px;
+}
+
+.admin-brand span {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--admin-brand);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 -2px 0 rgba(124, 45, 18, 0.18);
+}
+
+.admin-brand strong {
+  color: var(--admin-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-brand small {
+  margin-top: 2px;
+  color: var(--admin-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.admin-sidebar {
+  border-color: var(--admin-border);
+  background: rgba(255, 255, 255, 0.97);
+  padding: 16px 14px;
+  font-family: var(--admin-font-family);
+}
+
+.admin-sidebar .admin-nav-group-toggle {
+  color: #475569;
+}
+
+.admin-sidebar .admin-nav-group-toggle:hover {
+  border-color: rgba(234, 88, 12, 0.22);
+  background: var(--admin-brand-soft);
+}
+
+.admin-sidebar .admin-nav-group.is-active > .admin-nav-group-toggle {
+  border-color: rgba(234, 88, 12, 0.3);
+  background: var(--admin-brand-soft);
+  color: var(--admin-primary-hover);
+}
+
+.admin-nav-group-icon {
+  border-radius: 10px;
+  background: #f3f1eb;
+  color: #64748b;
+}
+
+.admin-nav-group.is-active .admin-nav-group-icon {
+  background: #ffedd5;
+  color: var(--admin-primary);
+}
+
+.admin-nav-group-copy strong,
+.admin-sidebar .admin-nav-items > button {
+  font-weight: 600;
+}
+
+.admin-sidebar .admin-nav-items > button.active {
+  border-color: rgba(232, 93, 4, 0.26);
+  background: var(--admin-primary-soft);
+  color: var(--admin-primary-hover);
+  box-shadow: inset 3px 0 0 var(--admin-primary);
+}
+
+.admin-nav-group-badge,
+.admin-nav-badge {
+  background: var(--admin-primary);
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.admin-top-header,
+.admin-page-header,
+.admin-ui-section-head {
+  border-color: var(--admin-border);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--admin-shadow-soft);
+}
+
+.admin-page-header h1,
+.admin-ui-section-head h1 {
+  color: var(--admin-text);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.admin-page-header p,
+.admin-ui-section-head span {
+  color: var(--admin-muted);
+  font-weight: 400;
+}
+
+.admin-ui-card,
+.admin-ui-panel,
+.admin-ui-stat-card,
+.admin-ui-table,
+.admin-ui-tabs {
+  border-color: var(--admin-border);
+}
+
+.admin-shell .admin-ui-button--primary {
+  border-color: var(--admin-primary);
+  background: var(--admin-primary);
+  box-shadow: 0 8px 18px rgba(232, 93, 4, 0.18);
+}
+
+.admin-shell .admin-ui-button--primary:hover {
+  background: var(--admin-primary-hover);
+}
+
+.admin-shell :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(249, 115, 22, 0.28);
+  outline-offset: 2px;
+}
+
+@media (min-width: 1440px) {
+  .admin-main > * {
+    width: min(100%, 1540px);
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 980px) {
+  .admin-main {
+    padding: 16px 16px 112px;
+  }
+
+  .admin-sidebar {
+    border-color: var(--admin-border);
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-main {
+    padding: 10px 10px 104px;
+  }
+
+  .admin-sidebar {
+    position: fixed;
+    inset: auto 8px 8px;
+    z-index: 45;
+    border-radius: 16px;
+    padding: 6px;
+    box-shadow: 0 14px 34px rgba(74, 54, 21, 0.16);
+  }
+
+  .admin-sidebar .admin-nav-group-toggle,
+  .admin-sidebar .admin-nav-items > button {
+    border-radius: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell *,
+  .admin-shell *::before,
+  .admin-shell *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

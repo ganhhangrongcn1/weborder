@@ -3,9 +3,9 @@ import {
   buildCustomersFromCrmAnalyticsAsync,
   buildCustomersFromOrderListAsync
 } from "../../../services/crmService.js";
-import { getAdminDashboardSummaryRpc } from "../../../services/adminDashboardService.js";
-import { getAdminDashboardRevenueSeriesRpc } from "../../../services/adminDashboardRevenueService.js";
-import { getAdminBusinessAnalyticsRpc } from "../../../services/adminBusinessAnalyticsService.js";
+import { getAdminDashboardSummaryForBranchesRpc } from "../../../services/adminDashboardService.js";
+import { getAdminDashboardRevenueSeriesForBranchesRpc } from "../../../services/adminDashboardRevenueService.js";
+import { getAdminBusinessAnalyticsForBranchesRpc } from "../../../services/adminBusinessAnalyticsService.js";
 import { getSiteVisitTrafficStats } from "../../../services/siteVisitTrackingService.js";
 import {
   branchOptionMatchesOrder,
@@ -61,6 +61,24 @@ function buildChartRangeFromPreset(preset = "7d") {
   }
   const days = preset === "30d" ? 30 : 7;
   return buildVietnamDateRange(addDaysToVietnamDateInput(end, -(days - 1)), end);
+}
+
+function buildPreviousChartRange(dateRange = {}) {
+  const currentFrom = new Date(dateRange.dateFrom || "");
+  const currentTo = new Date(dateRange.dateTo || "");
+  if (Number.isNaN(currentFrom.getTime()) || Number.isNaN(currentTo.getTime())) return {};
+
+  const now = new Date();
+  const fullDuration = currentTo.getTime() - currentFrom.getTime();
+  const effectiveCurrentTo = Math.min(currentTo.getTime(), now.getTime());
+  const elapsedDuration = Math.max(0, effectiveCurrentTo - currentFrom.getTime());
+  const previousFrom = currentFrom.getTime() - fullDuration;
+
+  return {
+    dateFrom: new Date(previousFrom).toISOString(),
+    dateTo: new Date(previousFrom + elapsedDuration).toISOString(),
+    isProvisional: effectiveCurrentTo < currentTo.getTime()
+  };
 }
 
 async function loadOrdersSnapshot(
@@ -186,6 +204,13 @@ function filterOrdersByBranch(orders = [], branchOption = null) {
   return (Array.isArray(orders) ? orders : []).filter((order) => branchOptionMatchesOrder(order, branchOption));
 }
 
+function filterOrdersByBranches(orders = [], branchOptions = []) {
+  if (!Array.isArray(branchOptions) || !branchOptions.length) return Array.isArray(orders) ? orders : [];
+  return (Array.isArray(orders) ? orders : []).filter((order) => (
+    branchOptions.some((branchOption) => branchOptionMatchesOrder(order, branchOption))
+  ));
+}
+
 function getWebOrdersOnly(orders = []) {
   return (Array.isArray(orders) ? orders : []).filter((order) => order?.sourceType !== "partner");
 }
@@ -227,6 +252,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     customersDateTo = "",
     dashboardChartPreset = "7d",
     selectedBranchFilter = "all",
+    dashboardBranchFilters = [],
     branches = []
   } = options || {};
   const [ordersSnapshot, setOrdersSnapshot] = useState([]);
@@ -245,6 +271,9 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const selectedBranchOption = getSelectedBranchOption(branches, selectedBranchFilter);
   const selectedBranchUuid = selectedBranchOption?.value || "";
   const selectedBranchName = selectedBranchOption?.label || "";
+  const dashboardBranchOptions = buildBranchFilterOptions(branches).filter((branch) => (
+    dashboardBranchFilters.includes(branch.value)
+  ));
 
   const loadActiveOrdersSnapshot = async ({ force = false } = {}) => {
     const dateRange = buildVietnamDateRange(ordersDateFrom, ordersDateTo);
@@ -274,12 +303,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       updateDashboardDataStatus(setDashboardDataStatus, "summary", "loading");
       try {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
-        const nextSummary = await getAdminDashboardSummaryRpc({
-          ...dateRange,
-          branchFilter: selectedBranchName,
-          branchUuid: selectedBranchUuid,
-          branchName: selectedBranchName
-        }, {
+        const nextSummary = await getAdminDashboardSummaryForBranchesRpc(dateRange, dashboardBranchOptions, {
           force
         });
         if (disposed) return;
@@ -316,7 +340,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       window.clearInterval(timer);
       window.removeEventListener("focus", refreshCurrentDashboard);
     };
-  }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid]);
+  }, [section, dashboardDateFrom, dashboardDateTo, dashboardBranchFilters, branches]);
 
   useEffect(() => {
     let disposed = false;
@@ -361,12 +385,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
       updateDashboardDataStatus(setDashboardDataStatus, "analytics", "loading");
       try {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
-        const nextAnalytics = await getAdminBusinessAnalyticsRpc({
-          ...dateRange,
-          branchFilter: selectedBranchName,
-          branchUuid: selectedBranchUuid,
-          branchName: selectedBranchName
-        });
+        const nextAnalytics = await getAdminBusinessAnalyticsForBranchesRpc(dateRange, dashboardBranchOptions);
         if (disposed) return;
         if (!nextAnalytics) {
           throw new Error("RPC phân tích kinh doanh chưa sẵn sàng.");
@@ -392,7 +411,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardDateFrom, dashboardDateTo, selectedBranchName, selectedBranchUuid]);
+  }, [section, dashboardDateFrom, dashboardDateTo, dashboardBranchFilters, branches]);
 
   useEffect(() => {
     let disposed = false;
@@ -418,7 +437,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         });
         if (disposed) return;
         const safeOrders = Array.isArray(nextOrders) ? nextOrders : [];
-        setOrdersSnapshot(section === "dashboard" ? filterOrdersByBranch(safeOrders, selectedBranchOption) : safeOrders);
+        setOrdersSnapshot(section === "dashboard" ? filterOrdersByBranches(safeOrders, dashboardBranchOptions) : safeOrders);
         if (section === "dashboard") {
           updateDashboardDataStatus(setDashboardDataStatus, "orders", "ready");
         }
@@ -448,26 +467,29 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, branches]);
+  }, [orderStorage, section, dashboardDateFrom, dashboardDateTo, ordersDateFrom, ordersDateTo, customersDateFrom, customersDateTo, selectedBranchFilter, dashboardBranchFilters, branches]);
 
   useEffect(() => {
     let disposed = false;
     const refreshDashboardRevenue = async () => {
       if (section !== "dashboard") return;
       const dateRange = buildChartRangeFromPreset(dashboardChartPreset);
+      const previousDateRange = buildPreviousChartRange(dateRange);
       updateDashboardDataStatus(setDashboardDataStatus, "revenue", "loading");
       try {
-        const nextRevenueSeries = await getAdminDashboardRevenueSeriesRpc({
-          ...dateRange,
-          branchFilter: selectedBranchName,
-          branchUuid: selectedBranchUuid,
-          branchName: selectedBranchName
-        });
+        const [nextRevenueSeries, previousRevenueSeries] = await Promise.all([
+          getAdminDashboardRevenueSeriesForBranchesRpc(dateRange, dashboardBranchOptions),
+          getAdminDashboardRevenueSeriesForBranchesRpc(previousDateRange, dashboardBranchOptions)
+        ]);
         if (disposed) return;
         if (!nextRevenueSeries) {
           throw new Error("RPC biểu đồ doanh thu chưa sẵn sàng.");
         }
-        setDashboardRevenueSeries(nextRevenueSeries);
+        setDashboardRevenueSeries({
+          ...nextRevenueSeries,
+          comparisonMetrics: previousRevenueSeries?.metrics || null,
+          comparisonIsProvisional: previousDateRange.isProvisional === true
+        });
         updateDashboardDataStatus(setDashboardDataStatus, "revenue", "ready");
         recordAdminRequest("read admin dashboard revenue rpc", "rpc:get_admin_dashboard_revenue_series");
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
@@ -487,7 +509,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     return () => {
       disposed = true;
     };
-  }, [section, dashboardChartPreset, selectedBranchName, selectedBranchUuid]);
+  }, [section, dashboardChartPreset, dashboardBranchFilters, branches]);
 
   useEffect(() => {
     if (section !== "customers") {

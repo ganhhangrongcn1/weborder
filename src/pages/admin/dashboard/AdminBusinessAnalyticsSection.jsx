@@ -210,16 +210,8 @@ export default function AdminBusinessAnalyticsSection({ analytics, status = "idl
   return (
     <section className="admin-business-section">
       <div className="admin-business-grid">
-        <AdminPanel title="Top món bán chạy" description="Xếp theo số lượng món trong kỳ đã chọn.">
-          <ProductList rows={analytics.topByQuantity} emptyText="Chưa có dữ liệu món bán trong kỳ đã chọn." />
-        </AdminPanel>
-
         <AdminPanel title="Top món theo doanh thu" description="Xếp theo doanh thu dòng món, chưa phân bổ phí nền tảng.">
           <ProductList rows={analytics.topByRevenue} valueKey="revenue" emptyText="Chưa có dữ liệu doanh thu theo món." />
-        </AdminPanel>
-
-        <AdminPanel title="Món bán chậm 30 ngày" description="Các món đã phát sinh nhưng có số lượng bán thấp nhất trong 30 ngày gần nhất.">
-          <ProductList rows={analytics.slowProducts} emptyText="Chưa có dữ liệu món bán trong 30 ngày." />
         </AdminPanel>
 
         <AdminPanel title="Doanh thu theo khung giờ" description="Doanh thu thực nhận theo múi giờ Việt Nam.">

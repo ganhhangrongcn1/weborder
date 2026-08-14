@@ -25,6 +25,7 @@ export default function useAdminUiState() {
   const [customersDatePreset, setCustomersDatePreset] = useState("all");
   const [adminGlobalSearch, setAdminGlobalSearch] = useState("");
   const [selectedBranchFilter, setSelectedBranchFilter] = useState("all");
+  const [dashboardBranchFilters, setDashboardBranchFilters] = useState([]);
 
   return {
     editingProduct,
@@ -58,6 +59,8 @@ export default function useAdminUiState() {
     adminGlobalSearch,
     setAdminGlobalSearch,
     selectedBranchFilter,
-    setSelectedBranchFilter
+    setSelectedBranchFilter,
+    dashboardBranchFilters,
+    setDashboardBranchFilters
   };
 }
