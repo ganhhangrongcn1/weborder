@@ -10,7 +10,9 @@ export default function AdminSidebar({
   navIconMap,
   activeAdminNav,
   onActivateNav,
-  notificationCounts = {}
+  notificationCounts = {},
+  isMobileOpen = false,
+  onMobileClose
 }) {
   const activeGroupId = useMemo(() => {
     const activeIndex = navGroups.findIndex((group) => (
@@ -30,6 +32,20 @@ export default function AdminSidebar({
     });
   }, [activeGroupId]);
 
+  useEffect(() => {
+    if (!isMobileOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onMobileClose?.();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMobileOpen, onMobileClose]);
+
   const toggleGroup = (groupId) => {
     setOpenGroupIds((current) => {
       const next = new Set(current);
@@ -40,7 +56,27 @@ export default function AdminSidebar({
   };
 
   return (
-    <aside className="admin-sidebar">
+    <>
+      <button
+        type="button"
+        className={`admin-sidebar-backdrop${isMobileOpen ? " is-visible" : ""}`}
+        onClick={onMobileClose}
+        aria-label="Đóng menu quản trị"
+        tabIndex={isMobileOpen ? 0 : -1}
+      />
+      <aside className={`admin-sidebar${isMobileOpen ? " is-mobile-open" : ""}`}>
+      <div className="admin-mobile-sidebar-head">
+        <div className="admin-mobile-brand">
+          <span>GHR</span>
+          <div>
+            <strong>Gánh Hàng Rong</strong>
+            <small>Quản trị cửa hàng</small>
+          </div>
+        </div>
+        <button type="button" className="admin-mobile-sidebar-close" onClick={onMobileClose} aria-label="Đóng menu quản trị">
+          <Icon name="close" size={19} />
+        </button>
+      </div>
       <div className="admin-brand">
         <span>GHR</span>
         <div>
@@ -114,6 +150,7 @@ export default function AdminSidebar({
           );
         })}
       </nav>
-    </aside>
+      </aside>
+    </>
   );
 }

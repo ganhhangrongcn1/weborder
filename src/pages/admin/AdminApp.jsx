@@ -46,6 +46,7 @@ export default function AdminApp({
 }) {
   const navigate = useNavigate();
   const [reviewRewardPendingCount, setReviewRewardPendingCount] = useState(0);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const {
     adminSession = null,
     adminProfile = null,
@@ -179,6 +180,7 @@ export default function AdminApp({
       setActiveSubSection(item.sub || (item.section === "promo" ? "ui" : "branches"));
     }
     navigate(nextPath);
+    setIsMobileNavOpen(false);
   };
 
   useAdminConfigSyncEffect({
@@ -222,6 +224,8 @@ export default function AdminApp({
         activeAdminNav={activeAdminNav}
         onActivateNav={activateNav}
         notificationCounts={{ "review-rewards-main": reviewRewardPendingCount }}
+        isMobileOpen={isMobileNavOpen}
+        onMobileClose={() => setIsMobileNavOpen(false)}
       />
 
       <main className="admin-main admin-content">
@@ -235,6 +239,7 @@ export default function AdminApp({
           adminEmail={adminProfile?.email || adminSession?.user?.email || ""}
           onLogout={isSupabaseAdminMode ? onAdminLogout : null}
           compact={section === "dashboard" || section === "orders"}
+          onOpenMobileNav={() => setIsMobileNavOpen(true)}
         />
 
         {section !== "dashboard" && section !== "grab-finance" && section !== "grab-marketing" && section !== "orders" && section !== "customers" ? (

@@ -10,12 +10,21 @@ export default function AdminTopHeader({
   syncStatusLabel,
   adminEmail = "",
   onLogout = null,
-  compact = false
+  compact = false,
+  onOpenMobileNav
 }) {
   const branchOptions = buildBranchFilterOptions(branches);
 
   return (
     <header className={`admin-top-header ${compact ? "is-dashboard-compact" : ""}`.trim()}>
+      <button
+        type="button"
+        className="admin-mobile-menu-trigger"
+        onClick={onOpenMobileNav}
+        aria-label="Mở menu quản trị"
+      >
+        <Icon name="menu" size={20} />
+      </button>
       {!compact ? (
         <div className="admin-top-header-left">
           <label className="admin-top-search">
