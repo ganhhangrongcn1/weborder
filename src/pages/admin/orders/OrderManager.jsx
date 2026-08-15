@@ -284,9 +284,9 @@ function getUnifiedPointStatusText(order = {}, estimatedPoints = 0) {
 
 function OrderStatsCards({ stats, activeFilter, onSelect }) {
   const cards = [
-    { key: "total", label: "Tổng đơn", value: stats.total, hint: "Theo bộ lọc hiện tại", tone: "orange", icon: "🧾" },
-    { key: "new", label: "Đơn mới", value: stats.new, hint: "Chờ xử lý", tone: "amber", icon: "⏱" },
-    { key: "doing", label: "Đang vận hành", value: stats.doing + stats.delivering, hint: "Đang làm / đang giao", tone: "blue", icon: "👨‍🍳" },
+    { key: "total", label: "Tổng đơn", value: stats.total, hint: "Theo bộ lọc hiện tại", tone: "orange", icon: "∑" },
+    { key: "new", label: "Đơn mới", value: stats.new, hint: "Chờ xử lý", tone: "amber", icon: "+" },
+    { key: "doing", label: "Đang vận hành", value: stats.doing + stats.delivering, hint: "Đang làm / đang giao", tone: "blue", icon: "↻" },
     { key: "done", label: "Hoàn thành", value: stats.done, hint: "Đã xử lý xong", tone: "green", icon: "✓" },
     { key: "overdue", label: "Quá 15 phút", value: stats.overdue, hint: "Cần ưu tiên kiểm tra", tone: stats.overdue > 0 ? "red" : "slate", icon: "!" }
   ];
@@ -1409,16 +1409,18 @@ export default function OrderManager({
         ) : null}
         </section>
 
-        <OrderDetailPanelV2
-          order={activeOrder}
-          updateOrderStatus={safeUpdateOrderStatus}
-          shipperText={activeOrder ? shipperInfoByOrderId[getOrderId(activeOrder)] : ""}
-          copied={activeOrder ? copiedOrderId === getOrderId(activeOrder) : false}
-          onCopyShipper={copyShipperInfo}
-          onClose={() => setDetailPanelOpen(false)}
-          isOpen={detailPanelOpen}
-          registeredCustomersByPhone={registeredCustomersByPhone}
-        />
+        {activeOrder ? (
+          <OrderDetailPanelV2
+            order={activeOrder}
+            updateOrderStatus={safeUpdateOrderStatus}
+            shipperText={shipperInfoByOrderId[getOrderId(activeOrder)] || ""}
+            copied={copiedOrderId === getOrderId(activeOrder)}
+            onCopyShipper={copyShipperInfo}
+            onClose={() => setDetailPanelOpen(false)}
+            isOpen={detailPanelOpen}
+            registeredCustomersByPhone={registeredCustomersByPhone}
+          />
+        ) : null}
       </div>
     </div>
   );

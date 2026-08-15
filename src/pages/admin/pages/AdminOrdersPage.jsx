@@ -3,12 +3,6 @@ import AdminRequestAuditBadge from "../AdminRequestAuditBadge.jsx";
 import { AdminButton, AdminCard, AdminInput, AdminSelect } from "../ui/index.js";
 import { buildBranchFilterOptions } from "../../../services/branchIdentityService.js";
 
-function getBranchShortLabel(label = "") {
-  const text = String(label || "").trim();
-  const match = text.match(/(?:Ganh Hang Rong\s*-\s*)?(.+)/i);
-  return (match?.[1] || text || "Chi nhánh").replace(/\s+/g, " ");
-}
-
 export default function AdminOrdersPage({
   ordersSnapshot,
   setOrdersSnapshot,
@@ -77,34 +71,34 @@ export default function AdminOrdersPage({
 
   return (
     <div className="admin-orders-page">
-      <section className="admin-orders-scope-bar" aria-label="Phạm vi đơn hàng">
-        <div className="admin-orders-branch-switcher">
-          <span>Chi nhánh</span>
-          <div>
-            <button
-              type="button"
-              className={selectedBranchFilter === "all" ? "is-active" : ""}
-              onClick={() => setSelectedBranchFilter?.("all")}
-            >
-              Tất cả
-            </button>
-            {branchOptions.map((branch) => (
-              <button
-                key={branch.value}
-                type="button"
-                className={branch.value === selectedBranchFilter ? "is-active" : ""}
-                onClick={() => setSelectedBranchFilter?.(branch.value)}
-                title={branch.label}
-              >
-                {getBranchShortLabel(branch.label)}
-              </button>
-            ))}
-          </div>
+      <header className="admin-orders-page-head">
+        <div>
+          <span>Bán hàng & vận hành</span>
+          <h1>Đơn hàng</h1>
+          <p>Theo dõi đơn mới, xử lý đúng thứ tự và kiểm soát trạng thái theo từng chi nhánh.</p>
         </div>
+        <div className="admin-orders-page-head-status" aria-label="Trạng thái dữ liệu">
+          <i aria-hidden="true" />
+          <span>Dữ liệu cập nhật trực tiếp</span>
+        </div>
+      </header>
+
+      <section className="admin-orders-scope-bar" aria-label="Phạm vi đơn hàng">
+        <label className="admin-orders-branch-select">
+          <span>Chi nhánh</span>
+          <AdminSelect
+            value={selectedBranchFilter || "all"}
+            onChange={(event) => setSelectedBranchFilter?.(event.target.value)}
+            options={[
+              { value: "all", label: "Tất cả chi nhánh" },
+              ...branchOptions.map((branch) => ({ value: branch.value, label: branch.label }))
+            ]}
+          />
+        </label>
 
         <div className="admin-orders-period-controls">
           <label className="admin-orders-period-select">
-            <span>Ky</span>
+            <span>Kỳ</span>
             <AdminSelect
               value={ordersDatePreset || "today"}
               onChange={(event) => {
