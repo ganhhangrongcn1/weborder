@@ -12,11 +12,7 @@ import {
 } from "./promotionTabUtils.js";
 import PromotionFormSection from "./PromotionFormSection.jsx";
 import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
-import {
-  PromotionSetupWarnings,
-  PromotionSummaryPills,
-  formatSalesChannelSummary
-} from "./PromotionSetupFeedback.jsx";
+import { PromotionSetupWarnings } from "./PromotionSetupFeedback.jsx";
 
 const STATUS_FILTERS = [
   { value: "all", label: "Tất cả" },
@@ -52,13 +48,6 @@ function getEmptyFilterMessage(statusFilter) {
   return "Không tìm thấy chương trình phù hợp.";
 }
 
-function getScopeSummary(promo) {
-  const scope = promo?.condition?.applyScope || "all";
-  if (scope === "category") return `Theo ${toIdList(promo?.condition?.categoryIds).length} danh mục`;
-  if (scope === "product") return `Theo ${toIdList(promo?.condition?.productIds).length} món`;
-  return "Toàn menu";
-}
-
 function buildStrikeWarnings(promo) {
   const warnings = [];
   const scope = promo?.condition?.applyScope || "all";
@@ -84,7 +73,7 @@ export default function StrikePriceTab({
   smartPromotions
 }) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("running");
+  const [statusFilter, setStatusFilter] = useState("all");
   const statusPromotionById = useMemo(
     () => new Map(statusPromotions.map((promo) => [String(promo?.id || ""), promo])),
     [statusPromotions]
@@ -123,10 +112,10 @@ export default function StrikePriceTab({
   const strikeWarnings = visibleSelectedStrikePromo ? buildStrikeWarnings(visibleSelectedStrikePromo) : [];
 
   return strikePromos.length ? (
-    <div className="admin-promo-split grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+    <div className="admin-promo-split">
       <aside className="admin-promo-side rounded-[14px] border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <strong className="text-sm font-black text-slate-800">Danh sách giảm giá món</strong>
+        <div>
+          <strong>Danh sách giảm giá món</strong>
           <button type="button" className="admin-cta" onClick={() => createPromotion("strike_price")}>+ Tạo mới</button>
         </div>
 
@@ -153,7 +142,7 @@ export default function StrikePriceTab({
           </label>
         </div>
 
-        <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
+        <div className="admin-promo-code-list">
           {filteredStrikePromos.map((promo) => {
             const statusSource = statusPromotionById.get(String(promo.id || "")) || promo;
             const status = getStrikeStatus(statusSource);
@@ -179,10 +168,7 @@ export default function StrikePriceTab({
               </button>
             );
           })}
-
-          {!filteredStrikePromos.length ? (
-            <p className="admin-promo-empty-note">{getEmptyFilterMessage(statusFilter)}</p>
-          ) : null}
+          {!filteredStrikePromos.length ? <p className="admin-promo-empty-note">{getEmptyFilterMessage(statusFilter)}</p> : null}
         </div>
       </aside>
 
@@ -201,14 +187,6 @@ export default function StrikePriceTab({
             </div>
 
             <div className="admin-promo-form-flow">
-              <PromotionSummaryPills
-                items={[
-                  getStrikeStatus(visibleStatusPromotion).label,
-                  formatSalesChannelSummary(visibleSelectedStrikePromo),
-                  getScopeSummary(visibleSelectedStrikePromo),
-                  visibleSelectedStrikePromo.reward.type === "percent_discount" ? `Giảm ${Number(visibleSelectedStrikePromo.reward.value || 0)}%` : visibleSelectedStrikePromo.reward.type === "fixed_price" ? `Đồng giá ${formatMoney(visibleSelectedStrikePromo.reward.value || 0)}` : `Giảm ${formatMoney(visibleSelectedStrikePromo.reward.value || 0)}`
-                ]}
-              />
               <PromotionSetupWarnings warnings={strikeWarnings} />
 
               <PromotionFormSection
@@ -384,7 +362,7 @@ export default function StrikePriceTab({
                       </select>
                     </label>
                     <label className="text-[12px] font-semibold text-slate-500">
-                      Priority / Độ ưu tiên
+                      Độ ưu tiên
                       <input className="admin-input mt-1" type="number" min="0" value={Number(selectedStrikePromo.priority || 0)} onChange={(event) => updatePromotion(selectedStrikePromo.id, { priority: Number(event.target.value || 0) })} />
                     </label>
                     <label className="text-[12px] font-semibold text-slate-500">

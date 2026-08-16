@@ -21,6 +21,8 @@ export default function usePromotionTabsState({
   const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedStrikePromoId, setSelectedStrikePromoId] = useState("");
   const [selectedFlashPromoId, setSelectedFlashPromoId] = useState("");
+  const [selectedGiftPromoId, setSelectedGiftPromoId] = useState("");
+  const [selectedFreeShippingPromoId, setSelectedFreeShippingPromoId] = useState("");
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   useEffect(() => {
@@ -38,34 +40,42 @@ export default function usePromotionTabsState({
     setSmartPromotions(smartPromotions.map((item) => (item.id === id ? normalizeSmartPromotion({ ...item, ...patch }) : item)));
   };
 
-  const getPromotionByType = (type) => smartPromotions.find((item) => item.type === type);
-
-  const createPromotion = (type) => {
+  const createPromotion = (type, overrides = {}) => {
     const defaults = promoDefaults[type];
-    if (!defaults) return;
+    if (!defaults) return null;
     const created = normalizeSmartPromotion({
       id: `promo-${type}-${Date.now()}`,
       type,
       ...defaults,
+      ...overrides,
+      condition: {
+        ...defaults.condition,
+        ...(overrides.condition || {})
+      },
       reward: {
         ...defaults.reward,
-        productId: type === "gift_threshold" ? activeProducts[0]?.id || "" : defaults.reward.productId || ""
+        productId: type === "gift_threshold" ? activeProducts[0]?.id || "" : defaults.reward.productId || "",
+        ...(overrides.reward || {})
       }
     });
-    setSmartPromotions([created, ...smartPromotions]);
+    const nextPromotions = type === "free_shipping" && created.active
+      ? [created, ...smartPromotions.map((item) => item.type === "free_shipping" ? normalizeSmartPromotion({ ...item, active: false }) : item)]
+      : [created, ...smartPromotions];
+    setSmartPromotions(nextPromotions);
     if (type === "strike_price") {
       setSelectedStrikePromoId(created.id);
-      setActiveTab("strike_price");
-      return;
     }
     if (type === "flash_sale") {
       setSelectedFlashPromoId(created.id);
-      setActiveTab("flash_sale");
-      return;
+    }
+    if (type === "gift_threshold") {
+      setSelectedGiftPromoId(created.id);
     }
     if (type === "free_shipping") {
-      setActiveTab("free_shipping");
+      setSelectedFreeShippingPromoId(created.id);
     }
+    setActiveTab(type);
+    return created;
   };
 
   const strikePromos = useMemo(
@@ -111,8 +121,16 @@ export default function usePromotionTabsState({
   );
 
   const selectedFlashPromo = flashSalePromos.find((item) => item.id === selectedFlashPromoId) || flashSalePromos[0] || null;
-  const freeShippingPromo = smartPromotions.find((item) => item.type === "free_shipping") || null;
-  const giftPromo = getPromotionByType("gift_threshold");
+  const giftPromos = useMemo(
+    () => smartPromotions.filter((item) => item.type === "gift_threshold").sort((a, b) => Number(a.priority || 0) - Number(b.priority || 0)),
+    [smartPromotions]
+  );
+  const freeShippingPromos = useMemo(
+    () => smartPromotions.filter((item) => item.type === "free_shipping").sort((a, b) => Number(a.priority || 0) - Number(b.priority || 0)),
+    [smartPromotions]
+  );
+  const giftPromo = giftPromos.find((item) => item.id === selectedGiftPromoId) || giftPromos[0] || null;
+  const freeShippingPromo = freeShippingPromos.find((item) => item.id === selectedFreeShippingPromoId) || freeShippingPromos[0] || null;
 
   useEffect(() => {
     if (!flashSalePromos.length) {
@@ -123,6 +141,34 @@ export default function usePromotionTabsState({
       setSelectedFlashPromoId(flashSalePromos[0].id);
     }
   }, [flashSalePromos, selectedFlashPromoId]);
+
+  useEffect(() => {
+    if (!giftPromos.length) {
+      setSelectedGiftPromoId("");
+      return;
+    }
+    if (!selectedGiftPromoId || !giftPromos.some((item) => item.id === selectedGiftPromoId)) {
+      setSelectedGiftPromoId(giftPromos[0].id);
+    }
+  }, [giftPromos, selectedGiftPromoId]);
+
+  useEffect(() => {
+    if (!freeShippingPromos.length) {
+      setSelectedFreeShippingPromoId("");
+      return;
+    }
+    if (!selectedFreeShippingPromoId || !freeShippingPromos.some((item) => item.id === selectedFreeShippingPromoId)) {
+      setSelectedFreeShippingPromoId(freeShippingPromos[0].id);
+    }
+  }, [freeShippingPromos, selectedFreeShippingPromoId]);
+
+  const setExclusiveFreeShippingActive = (id, active) => {
+    setSmartPromotions(smartPromotions.map((item) => {
+      if (item.type !== "free_shipping") return item;
+      const nextActive = item.id === id ? active : active ? false : item.active;
+      return normalizeSmartPromotion({ ...item, active: nextActive });
+    }));
+  };
 
   useEffect(() => {
     if (activeTab !== "flash_sale") return undefined;
@@ -145,6 +191,13 @@ export default function usePromotionTabsState({
     flashSalePromos,
     selectedFlashPromo,
     setSelectedFlashPromoId,
+    giftPromos,
+    selectedGiftPromoId,
+    setSelectedGiftPromoId,
+    freeShippingPromos,
+    selectedFreeShippingPromoId,
+    setSelectedFreeShippingPromoId,
+    setExclusiveFreeShippingActive,
     freeShippingPromo,
     giftPromo
   };

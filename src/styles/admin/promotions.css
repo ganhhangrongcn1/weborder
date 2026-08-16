@@ -39,28 +39,20 @@
 
 .admin-promo-overview {
   display: grid;
-  gap: 10px;
-  border: 1px solid #dfe7f0;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ffffff 0%, #fff8f1 58%, #f5fbff 100%);
-  padding: 12px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.055);
-}
-
-.admin-promo-overview__main {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.85fr) minmax(360px, 1.15fr);
+  grid-template-columns: minmax(220px, 0.72fr) minmax(440px, 1.28fr);
+  align-items: center;
   gap: 12px;
-  align-items: stretch;
+  border: 1px solid #dfe7f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 10px 12px;
 }
 
-.admin-promo-overview__main > div:first-child {
+.admin-promo-overview__heading {
   display: grid;
   align-content: center;
-  gap: 4px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
-  padding: 12px;
+  gap: 3px;
+  min-width: 0;
 }
 
 .admin-promo-overview span {
@@ -69,7 +61,7 @@
   font-weight: 800;
 }
 
-.admin-promo-overview__main > div:first-child > span {
+.admin-promo-overview__heading > div > span {
   color: #ea580c;
   font-size: 11px;
   font-weight: 900;
@@ -78,7 +70,7 @@
 .admin-promo-overview h3 {
   margin: 0;
   color: #0f172a;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.16;
   font-weight: 950;
 }
@@ -87,13 +79,12 @@
   max-width: 58ch;
   margin: 0;
   color: #475569;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.45;
   font-weight: 750;
 }
 
-.admin-promo-health-grid,
-.admin-promo-impact-grid {
+.admin-promo-health-grid {
   display: grid;
   gap: 10px;
 }
@@ -102,57 +93,29 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.admin-promo-impact-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.admin-promo-health-card,
-.admin-promo-impact-card {
+.admin-promo-health-card {
   display: grid;
   min-width: 0;
   align-content: center;
-  gap: 4px;
+  gap: 2px;
   border: 1px solid #e8edf5;
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.88);
-  padding: 12px;
+  padding: 9px 10px;
 }
 
-.admin-promo-health-card strong,
-.admin-promo-impact-card strong {
+.admin-promo-health-card strong {
   color: #0f172a;
-  font-size: 24px;
+  font-size: 18px;
   line-height: 1;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
 }
 
-.admin-promo-health-card span,
-.admin-promo-impact-card span {
+.admin-promo-health-card span {
   color: #334155;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.admin-promo-impact-card {
-  display: flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 7px;
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: #fff;
-}
-
-.admin-promo-impact-card strong {
-  font-size: 16px;
-}
-
-.admin-promo-impact-card span {
-  color: #64748b;
   font-size: 11px;
+  font-weight: 900;
 }
 
 .admin-promo-health-card.is-running {
@@ -268,18 +231,18 @@
   top: 76px;
   z-index: 15;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  margin-bottom: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 2px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.95);
-  padding: 8px;
+  padding: 6px;
 }
 
 .admin-promo-tabs button {
   display: grid;
   min-width: 0;
-  min-height: 66px;
+  min-height: 54px;
   align-content: center;
   gap: 4px;
   text-align: left;
@@ -328,6 +291,14 @@
 .admin-promo-split {
   display: grid;
   gap: 14px;
+}
+
+.admin-promo-single-editor {
+  min-width: 0;
+}
+
+.admin-promo-single-editor .admin-promo-editor {
+  width: 100%;
 }
 
 @media (min-width: 1024px) {
@@ -449,6 +420,15 @@
 
 .admin-promo-list-tools .admin-input {
   width: 100%;
+}
+
+.admin-promo-code-list {
+  display: grid;
+  max-height: 68vh;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-gutter: stable;
 }
 
 .admin-promo-mini-stats {
@@ -789,6 +769,16 @@
   min-width: 0;
 }
 
+.admin-promo-form-grid > label {
+  display: grid;
+  gap: 7px;
+  line-height: 1.4;
+}
+
+.admin-promo-form-grid > label > .admin-input {
+  margin-top: 0 !important;
+}
+
 .admin-promo-form-span-2 {
   grid-column: 1 / -1;
 }
@@ -1058,7 +1048,14 @@
 @media (max-width: 768px) {
   .admin-promo-tabs {
     top: auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(4, minmax(148px, 1fr));
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: inline proximity;
+  }
+
+  .admin-promo-tabs button {
+    scroll-snap-align: start;
   }
 
   .admin-promo-side,
@@ -1066,9 +1063,16 @@
     padding: 14px;
   }
 
-  .admin-promo-overview__main,
+  .admin-promo-code-list {
+    max-height: none;
+  }
+
   .admin-promo-health-grid,
   .admin-promo-preview-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-promo-overview {
     grid-template-columns: 1fr;
   }
 
@@ -1115,9 +1119,8 @@
 }
 
 @media (max-width: 1100px) {
-  .admin-promo-overview__main,
-  .admin-promo-health-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .admin-promo-overview {
+    grid-template-columns: 1fr;
   }
 
   .admin-promo-tabs {
@@ -1126,15 +1129,19 @@
 }
 
 @media (max-width: 768px) {
-  .admin-promo-tabs,
-  .admin-promo-overview__main,
+  .admin-promo-tabs {
+    grid-template-columns: repeat(4, minmax(148px, 1fr));
+  }
+
   .admin-promo-health-grid,
   .admin-promo-preview-meta {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 /* Kho voucher: giao diện vận hành gọn, ưu tiên tìm và chỉnh nhanh. */
+.admin-promo-page--sales > .admin-panel-head,
+.admin-promo-page--sales > .admin-ui-panel-head,
 .admin-promo-page--vouchers > .admin-panel-head,
 .admin-promo-page--vouchers > .admin-ui-panel-head {
   display: none;
@@ -1669,6 +1676,45 @@
   gap: 6px;
   border-top: 1px solid #edf1f5;
   padding-top: 12px;
+}
+
+.admin-promo-create-fixed-channel {
+  margin: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 9px 11px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-promo-create-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+
+.admin-promo-create-status-row > div {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-promo-create-status-row strong {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.admin-promo-create-status-row span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .admin-voucher-create-branches,

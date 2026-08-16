@@ -5,6 +5,7 @@ import StrikePriceTab from "./StrikePriceTab.jsx";
 import GiftThresholdTab from "./GiftThresholdTab.jsx";
 import FlashSaleTab from "./FlashSaleTab.jsx";
 import FreeshipManager from "./FreeshipManager.jsx";
+import PromotionCreateDialog from "./PromotionCreateDialog.jsx";
 import { promoTabs } from "./promotionConfig.js";
 import usePromotionTabsState from "./usePromotionTabsState.js";
 import { catalogConfigRepository, syncPromotionCatalogToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
@@ -14,6 +15,8 @@ import { getLoyaltyRuleConfigAsync } from "../../../services/loyaltyService.js";
 function toArray(value) {
   return Array.isArray(value) ? value : [];
 }
+
+const SALES_TAB_ORDER = ["strike_price", "flash_sale", "gift_threshold", "free_shipping"];
 
 function isDateBeforeToday(dateText) {
   if (!dateText) return false;
@@ -27,11 +30,6 @@ function isDateAfterToday(dateText) {
   const date = new Date(`${dateText}T00:00:00`);
   if (Number.isNaN(date.getTime())) return false;
   return date.getTime() > Date.now();
-}
-
-function hasDisplayPlace(promotion, place) {
-  const places = Array.isArray(promotion?.displayPlaces) ? promotion.displayPlaces : [];
-  return !places.length || places.includes(place);
 }
 
 function getLifecycleCode(item = {}) {
@@ -53,36 +51,15 @@ function countByLifecycle(items = []) {
   );
 }
 
-function buildPromotionOverview({ promos, coupons, smartPromotions }) {
-  const safePromos = toArray(promos);
+function buildPromotionOverview({ coupons, smartPromotions }) {
   const safeCoupons = toArray(coupons);
   const safeSmartPromotions = toArray(smartPromotions);
   const allPrograms = [...safeCoupons, ...safeSmartPromotions];
   const lifecycle = countByLifecycle(allPrograms);
-  const activeCoupons = safeCoupons.filter((coupon) => getLifecycleCode(coupon) === "running");
-  const activeSmartPromotions = safeSmartPromotions.filter((promotion) => getLifecycleCode(promotion) === "running");
 
   return {
     lifecycle,
-    totalPrograms: allPrograms.length,
-    impactCards: [
-      {
-        label: "Checkout",
-        value: activeCoupons.length + activeSmartPromotions.filter((item) => hasDisplayPlace(item, "checkout")).length
-      },
-      {
-        label: "Menu",
-        value: activeSmartPromotions.filter((item) => item.type === "strike_price" || item.type === "flash_sale" || hasDisplayPlace(item, "menu")).length
-      },
-      {
-        label: "Trang chủ",
-        value: safePromos.length + activeSmartPromotions.filter((item) => hasDisplayPlace(item, "home")).length
-      },
-      {
-        label: "Loyalty",
-        value: safeCoupons.filter((coupon) => String(coupon?.voucherType || "") === "loyalty").length
-      }
-    ]
+    totalPrograms: allPrograms.length
   };
 }
 
@@ -96,25 +73,18 @@ function PromotionOverview({ overview }) {
 
   return (
     <section className="admin-promo-overview" aria-label="Tổng quan khuyến mãi">
-      <div className="admin-promo-overview__main">
+      <div className="admin-promo-overview__heading">
         <div>
-          <span>Trung tâm khuyến mãi</span>
-          <h3>{overview.totalPrograms} chương trình đang quản lý</h3>
+          <span>Tình trạng chương trình</span>
+          <h3>{overview.totalPrograms} ưu đãi đang quản lý</h3>
         </div>
-        <div className="admin-promo-health-grid">
-          {lifecycleCards.map((item) => (
-            <article key={item.key} className={`admin-promo-health-card ${item.tone}`}>
-              <strong>{overview.lifecycle[item.key]}</strong>
-              <span>{item.label}</span>
-            </article>
-          ))}
-        </div>
+        <p>Quản lý hỗ trợ ship, giảm giá món, flash sale và tặng món tại một nơi.</p>
       </div>
 
-      <div className="admin-promo-impact-grid">
-        {overview.impactCards.map((item) => (
-          <article key={item.label} className="admin-promo-impact-card">
-            <strong>{item.value}</strong>
+      <div className="admin-promo-health-grid">
+        {lifecycleCards.map((item) => (
+          <article key={item.key} className={`admin-promo-health-card ${item.tone}`}>
+            <strong>{overview.lifecycle[item.key]}</strong>
             <span>{item.label}</span>
           </article>
         ))}
@@ -137,7 +107,7 @@ function PromotionSaveButton({ hasUnsavedChanges, isSaving, onSave, saveLabel = 
 
 export default function PromotionTabsManager({
   mode = "sales",
-  initialTab = "free_shipping",
+  initialTab = "strike_price",
   products,
   branches = [],
   promos,
@@ -151,6 +121,7 @@ export default function PromotionTabsManager({
 }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [createPromotionType, setCreatePromotionType] = useState("");
   const initialLoyaltyConfig = useMemo(() => normalizeLoyaltyProgramConfig({}), []);
   const [draftCoupons, setDraftCouponsState] = useState(() => toArray(coupons));
   const [savedCoupons, setSavedCoupons] = useState(() => toArray(coupons));
@@ -219,6 +190,13 @@ export default function PromotionTabsManager({
     flashSalePromos,
     selectedFlashPromo,
     setSelectedFlashPromoId,
+    giftPromos,
+    selectedGiftPromoId,
+    setSelectedGiftPromoId,
+    freeShippingPromos,
+    selectedFreeShippingPromoId,
+    setSelectedFreeShippingPromoId,
+    setExclusiveFreeShippingActive,
     freeShippingPromo,
     giftPromo
   } = usePromotionTabsState({
@@ -229,9 +207,26 @@ export default function PromotionTabsManager({
     initialTab
   });
 
+  const openCreatePromotionDialog = (type) => {
+    setCreatePromotionType(type || activeTab || "strike_price");
+  };
+
+  const handleCreatePromotion = (draft) => {
+    createPromotion(draft.type, draft);
+    setCreatePromotionType("");
+  };
+
+  const deletePromotionDraft = (promotionId) => {
+    setDraftSmartPromotions((current) =>
+      current.filter((promotion) => promotion.id !== promotionId)
+    );
+  };
+
   const visiblePromoTabs = mode === "vouchers"
     ? promoTabs.filter((tab) => tab.id === "coupon")
-    : promoTabs.filter((tab) => tab.id !== "coupon");
+    : SALES_TAB_ORDER
+      .map((tabId) => promoTabs.find((tab) => tab.id === tabId))
+      .filter(Boolean);
 
   const currentSignature = useMemo(
     () => JSON.stringify({
@@ -261,24 +256,20 @@ export default function PromotionTabsManager({
   );
   const hasUnsavedChanges = currentSignature !== savedSignature || loyaltyConfigSignature !== savedLoyaltyConfigSignature;
   const overview = useMemo(() => {
-    const result = buildPromotionOverview({
-      promos,
+    return buildPromotionOverview({
       coupons: mode === "sales" ? [] : savedCoupons,
       smartPromotions: savedSmartPromotions
     });
-    return mode === "sales"
-      ? { ...result, impactCards: result.impactCards.filter((item) => item.label !== "Loyalty") }
-      : result;
-  }, [mode, promos, savedCoupons, savedSmartPromotions]);
+  }, [mode, savedCoupons, savedSmartPromotions]);
   const tabCounts = useMemo(
     () => ({
       coupon: draftCoupons.length,
-      free_shipping: freeShippingPromo ? 1 : 0,
+      free_shipping: freeShippingPromos.length,
       strike_price: strikePromos.length,
       flash_sale: flashSalePromos.length,
-      gift_threshold: giftPromo ? 1 : 0
+      gift_threshold: giftPromos.length
     }),
-    [draftCoupons.length, freeShippingPromo, strikePromos.length, flashSalePromos.length, giftPromo]
+    [draftCoupons.length, freeShippingPromos.length, strikePromos.length, flashSalePromos.length, giftPromos.length]
   );
 
   const couponsPropSignature = useMemo(() => JSON.stringify(toArray(coupons)), [coupons]);
@@ -384,8 +375,8 @@ export default function PromotionTabsManager({
       description="Tạo nhanh một cấu hình mặc định để bắt đầu chỉnh sửa."
       className="admin-promo-empty-panel"
       action={(
-        <AdminButton type="button" onClick={() => createPromotion(type)}>
-          Tạo cấu hình mặc định
+        <AdminButton type="button" onClick={() => openCreatePromotionDialog(type)}>
+          Tạo chương trình
         </AdminButton>
       )}
     >
@@ -395,11 +386,9 @@ export default function PromotionTabsManager({
 
   return (
     <AdminPanel
-      title={mode === "vouchers" ? null : "Ưu đãi bán hàng"}
-      description={mode === "vouchers"
-        ? null
-        : "Quản lý hỗ trợ ship, giảm giá món, flash sale và tặng món áp dụng trực tiếp khi bán hàng."}
-      className={`admin-promo-v2 admin-promo-page ${mode === "vouchers" ? "admin-promo-page--vouchers" : ""}`}
+      title={null}
+      description={null}
+      className={`admin-promo-v2 admin-promo-page ${mode === "vouchers" ? "admin-promo-page--vouchers" : "admin-promo-page--sales"}`}
       bodyClassName="admin-promo-page-body"
     >
       {mode === "sales" ? <PromotionOverview overview={overview} /> : null}
@@ -439,9 +428,14 @@ export default function PromotionTabsManager({
 
       {activeTab === "free_shipping" && (
         <FreeshipManager
+          freeShippingPromos={freeShippingPromos}
           freeShippingPromo={freeShippingPromo}
-          createPromotion={createPromotion}
+          selectedFreeShippingPromoId={selectedFreeShippingPromoId}
+          setSelectedFreeShippingPromoId={setSelectedFreeShippingPromoId}
+          createPromotion={openCreatePromotionDialog}
           updatePromotion={updatePromotion}
+          onDeletePromotion={deletePromotionDraft}
+          setExclusiveFreeShippingActive={setExclusiveFreeShippingActive}
         />
       )}
 
@@ -451,7 +445,7 @@ export default function PromotionTabsManager({
             strikePromos={strikePromos}
             selectedStrikePromo={selectedStrikePromo}
             setSelectedStrikePromoId={setSelectedStrikePromoId}
-            createPromotion={createPromotion}
+            createPromotion={openCreatePromotionDialog}
             preview={preview}
             updatePromotion={updatePromotion}
             activeCategories={activeCategories}
@@ -469,7 +463,7 @@ export default function PromotionTabsManager({
             flashSalePromos={flashSalePromos}
             selectedFlashPromo={selectedFlashPromo}
             setSelectedFlashPromoId={setSelectedFlashPromoId}
-            createPromotion={createPromotion}
+            createPromotion={openCreatePromotionDialog}
             nowTick={nowTick}
             updatePromotion={updatePromotion}
             activeCategories={activeCategories}
@@ -484,12 +478,26 @@ export default function PromotionTabsManager({
       {activeTab === "gift_threshold" && (
         giftPromo ? (
           <GiftThresholdTab
+            giftPromos={giftPromos}
             giftPromo={giftPromo}
+            selectedGiftPromoId={selectedGiftPromoId}
+            setSelectedGiftPromoId={setSelectedGiftPromoId}
+            createPromotion={openCreatePromotionDialog}
             updatePromotion={updatePromotion}
+            onDeletePromotion={deletePromotionDraft}
             activeProducts={activeProducts}
           />
         ) : renderNotConfigured("gift_threshold")
       )}
+
+      {createPromotionType ? (
+        <PromotionCreateDialog
+          initialType={createPromotionType}
+          activeProducts={activeProducts}
+          onClose={() => setCreatePromotionType("")}
+          onCreate={handleCreatePromotion}
+        />
+      ) : null}
 
       <div className={`admin-promo-save-dock ${hasUnsavedChanges ? "is-dirty" : "is-clean"}`}>
         <div>

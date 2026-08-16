@@ -14,11 +14,7 @@ import {
 } from "./promotionTabUtils.js";
 import PromotionFormSection from "./PromotionFormSection.jsx";
 import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
-import {
-  PromotionSetupWarnings,
-  PromotionSummaryPills,
-  formatSalesChannelSummary
-} from "./PromotionSetupFeedback.jsx";
+import { PromotionSetupWarnings } from "./PromotionSetupFeedback.jsx";
 
 const STATUS_FILTERS = [
   { value: "all", label: "Tất cả" },
@@ -50,12 +46,6 @@ function getEmptyFilterMessage(statusFilter) {
   return "Không tìm thấy flash sale phù hợp.";
 }
 
-function getScopeSummary(promo) {
-  const scope = promo?.condition?.applyScope || "product";
-  if (scope === "category") return `Theo ${toIdList(promo?.condition?.categoryIds).length} danh mục`;
-  return `Theo ${toIdList(promo?.condition?.productIds).length} món`;
-}
-
 function buildFlashWarnings(promo, nowTick) {
   const warnings = [];
   const scope = promo?.condition?.applyScope || "product";
@@ -83,7 +73,7 @@ export default function FlashSaleTab({
   smartPromotions
 }) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("running");
+  const [statusFilter, setStatusFilter] = useState("all");
   const statusPromotionById = useMemo(
     () => new Map(statusPromotions.map((promo) => [String(promo?.id || ""), promo])),
     [statusPromotions]
@@ -122,12 +112,13 @@ export default function FlashSaleTab({
   const flashWarnings = visibleSelectedFlashPromo ? buildFlashWarnings(visibleSelectedFlashPromo, nowTick) : [];
 
   return flashSalePromos.length ? (
-    <div className="admin-promo-split grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+    <div className="admin-promo-split">
       <aside className="admin-promo-side rounded-[14px] border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <strong className="text-sm font-black text-slate-800">Danh sách Flash Sale</strong>
+        <div>
+          <strong>Danh sách Flash sale</strong>
           <button type="button" className="admin-cta" onClick={() => createPromotion("flash_sale")}>+ Tạo mới</button>
         </div>
+
         <div className="admin-promo-list-tools">
           <label>
             <span>Tìm flash sale</span>
@@ -150,7 +141,8 @@ export default function FlashSaleTab({
             </select>
           </label>
         </div>
-        <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
+
+        <div className="admin-promo-code-list">
           {filteredFlashPromos.map((promo) => {
             const statusSource = statusPromotionById.get(String(promo.id || "")) || promo;
             const status = getFlashStatus(statusSource, new Date(nowTick));
@@ -168,18 +160,14 @@ export default function FlashSaleTab({
                   <strong className="text-sm font-black text-slate-900">{promo.title || promo.name || "Flash Sale"}</strong>
                   <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status.className}`}>{status.label}</span>
                 </div>
-                <p className="text-xl font-black text-orange-600">
-                  {formatRewardValue(promo.reward)}
-                </p>
+                <p className="text-xl font-black text-orange-600">{formatRewardValue(promo.reward)}</p>
                 <p className="mt-1 text-xs text-slate-700">{promo.condition?.startTime || "00:00"} - {promo.condition?.endTime || "23:59"}</p>
                 <p className="mt-1 text-[11px] font-bold text-slate-500">{formatWeekdaySummary(promo.condition?.weekdays)}</p>
                 <p className="mt-1 text-[11px] text-slate-500">Đã bán {soldCount}/{totalSlots || 0} suất</p>
               </button>
             );
           })}
-          {!filteredFlashPromos.length ? (
-            <p className="admin-promo-empty-note">{getEmptyFilterMessage(statusFilter)}</p>
-          ) : null}
+          {!filteredFlashPromos.length ? <p className="admin-promo-empty-note">{getEmptyFilterMessage(statusFilter)}</p> : null}
         </div>
       </aside>
 
@@ -219,15 +207,6 @@ export default function FlashSaleTab({
             })()}
 
             <div className="admin-promo-form-flow">
-              <PromotionSummaryPills
-                items={[
-                  getFlashStatus(visibleStatusPromotion, new Date(nowTick)).label,
-                  formatSalesChannelSummary(visibleSelectedFlashPromo),
-                  getScopeSummary(visibleSelectedFlashPromo),
-                  `${visibleSelectedFlashPromo.condition?.startTime || "00:00"} - ${visibleSelectedFlashPromo.condition?.endTime || "23:59"}`,
-                  formatRewardValue(visibleSelectedFlashPromo.reward)
-                ]}
-              />
               <PromotionSetupWarnings warnings={flashWarnings} />
 
               <PromotionFormSection
@@ -357,6 +336,16 @@ export default function FlashSaleTab({
                       onChange={(nextChannels) => updatePromotion(selectedFlashPromo.id, { salesChannels: nextChannels })}
                     />
                   </div>
+                  <div className="admin-promo-active-row admin-promo-form-span-2">
+                    <div>
+                      <strong>Bật Flash sale</strong>
+                      <span>Tắt để giữ cấu hình nhưng chưa áp dụng cho khách.</span>
+                    </div>
+                    <label className="admin-switch">
+                      <input type="checkbox" checked={Boolean(selectedFlashPromo.active)} onChange={(event) => updatePromotion(selectedFlashPromo.id, { active: event.target.checked })} />
+                      <span />
+                    </label>
+                  </div>
                 </div>
                 <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -447,7 +436,7 @@ export default function FlashSaleTab({
                     </select>
                   </label>
                   <label className="text-[12px] font-semibold text-slate-500">
-                    Priority / Độ ưu tiên
+                    Độ ưu tiên
                     <input className="admin-input mt-1" type="number" min="0" value={Number(selectedFlashPromo.priority || 0)} onChange={(event) => updatePromotion(selectedFlashPromo.id, { priority: Number(event.target.value || 0) })} />
                   </label>
                   <label className="text-[12px] font-semibold text-slate-500">
@@ -460,17 +449,8 @@ export default function FlashSaleTab({
                     </div>
                   </label>
                   <label className="text-[12px] font-semibold text-slate-500">
-                    Đã bán (demo/admin)
+                    Số đã bán (quản trị)
                     <input className="admin-input mt-1" type="number" min="0" value={Number(selectedFlashPromo.condition.soldCount || 0)} onChange={(event) => updatePromotion(selectedFlashPromo.id, { condition: { ...selectedFlashPromo.condition, soldCount: Number(event.target.value || 0) } })} />
-                  </label>
-                  <label className="text-[12px] font-semibold text-slate-500">
-                    Bật chương trình
-                    <div className="mt-2">
-                      <label className="admin-switch">
-                        <input type="checkbox" checked={Boolean(selectedFlashPromo.active)} onChange={(event) => updatePromotion(selectedFlashPromo.id, { active: event.target.checked })} />
-                        <span />
-                      </label>
-                    </div>
                   </label>
                 </div>
               </details>
