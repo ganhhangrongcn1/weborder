@@ -208,10 +208,11 @@ export default function usePosComposer() {
       subtotal: baseTotals.subtotal,
       customer: customerLookup.result,
       coupons: rawCoupons,
+      branchId: profile?.branchUuid || "",
       selectedVoucherId,
       pointsInput
     }),
-    [baseTotals.subtotal, customerLookup.result, pointsInput, rawCoupons, selectedVoucherId]
+    [baseTotals.subtotal, customerLookup.result, pointsInput, profile?.branchUuid, rawCoupons, selectedVoucherId]
   );
   const totals = useMemo(() => ({
     ...baseTotals,

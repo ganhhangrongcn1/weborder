@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import CouponManager from "./CouponManager.jsx";
+import CouponManager, { normalizeCoupon } from "./CouponManager.jsx";
 import { AdminButton, AdminPanel } from "../ui/AdminCommon.jsx";
 import StrikePriceTab from "./StrikePriceTab.jsx";
 import GiftThresholdTab from "./GiftThresholdTab.jsx";
@@ -123,20 +123,23 @@ function PromotionOverview({ overview }) {
   );
 }
 
-function PromotionSaveButton({ hasUnsavedChanges, isSaving, onSave }) {
+function PromotionSaveButton({ hasUnsavedChanges, isSaving, onSave, saveLabel = "Lưu thay đổi" }) {
   return (
     <AdminButton
       type="button"
       onClick={onSave}
       disabled={!hasUnsavedChanges || isSaving}
     >
-      {isSaving ? "Đang lưu..." : hasUnsavedChanges ? "Lưu thay đổi" : "Đã đồng bộ"}
+      {isSaving ? "Đang lưu..." : hasUnsavedChanges ? saveLabel : "Đã đồng bộ"}
     </AdminButton>
   );
 }
 
 export default function PromotionTabsManager({
+  mode = "sales",
+  initialTab = "free_shipping",
   products,
+  branches = [],
   promos,
   campaigns,
   coupons,
@@ -222,26 +225,31 @@ export default function PromotionTabsManager({
     products,
     smartPromotions: draftSmartPromotions,
     setSmartPromotions: setDraftSmartPromotions,
-    normalizeSmartPromotion
+    normalizeSmartPromotion,
+    initialTab
   });
+
+  const visiblePromoTabs = mode === "vouchers"
+    ? promoTabs.filter((tab) => tab.id === "coupon")
+    : promoTabs.filter((tab) => tab.id !== "coupon");
 
   const currentSignature = useMemo(
     () => JSON.stringify({
       promos: promos || [],
       campaigns: campaigns || [],
-      coupons: draftCoupons,
+      coupons: draftCoupons.map((coupon) => normalizeCoupon(coupon, loyaltyConfig)),
       smartPromotions: draftSmartPromotions
     }),
-    [promos, campaigns, draftCoupons, draftSmartPromotions]
+    [promos, campaigns, draftCoupons, draftSmartPromotions, loyaltyConfig]
   );
   const savedSignature = useMemo(
     () => JSON.stringify({
       promos: promos || [],
       campaigns: campaigns || [],
-      coupons: savedCoupons,
+      coupons: savedCoupons.map((coupon) => normalizeCoupon(coupon, loyaltyConfig)),
       smartPromotions: savedSmartPromotions
     }),
-    [promos, campaigns, savedCoupons, savedSmartPromotions]
+    [promos, campaigns, savedCoupons, savedSmartPromotions, loyaltyConfig]
   );
   const loyaltyConfigSignature = useMemo(
     () => JSON.stringify(loyaltyConfig || {}),
@@ -252,10 +260,16 @@ export default function PromotionTabsManager({
     [savedLoyaltyConfig]
   );
   const hasUnsavedChanges = currentSignature !== savedSignature || loyaltyConfigSignature !== savedLoyaltyConfigSignature;
-  const overview = useMemo(
-    () => buildPromotionOverview({ promos, coupons: savedCoupons, smartPromotions: savedSmartPromotions }),
-    [promos, savedCoupons, savedSmartPromotions]
-  );
+  const overview = useMemo(() => {
+    const result = buildPromotionOverview({
+      promos,
+      coupons: mode === "sales" ? [] : savedCoupons,
+      smartPromotions: savedSmartPromotions
+    });
+    return mode === "sales"
+      ? { ...result, impactCards: result.impactCards.filter((item) => item.label !== "Loyalty") }
+      : result;
+  }, [mode, promos, savedCoupons, savedSmartPromotions]);
   const tabCounts = useMemo(
     () => ({
       coupon: draftCoupons.length,
@@ -381,37 +395,43 @@ export default function PromotionTabsManager({
 
   return (
     <AdminPanel
-      title="Khuyến mãi"
-      description="Quản lý voucher, hỗ trợ ship, giảm giá món, flash sale và tặng món trong cùng một màn hình."
-      className="admin-promo-v2 admin-promo-page"
+      title={mode === "vouchers" ? null : "Ưu đãi bán hàng"}
+      description={mode === "vouchers"
+        ? null
+        : "Quản lý hỗ trợ ship, giảm giá món, flash sale và tặng món áp dụng trực tiếp khi bán hàng."}
+      className={`admin-promo-v2 admin-promo-page ${mode === "vouchers" ? "admin-promo-page--vouchers" : ""}`}
       bodyClassName="admin-promo-page-body"
     >
-      <PromotionOverview overview={overview} />
+      {mode === "sales" ? <PromotionOverview overview={overview} /> : null}
 
       {saveMessage ? <p className="admin-promo-save-message" aria-live="polite">{saveMessage}</p> : null}
 
-      <div className="admin-menu-tabs admin-promo-tabs">
-        {promoTabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveTab(tab.id)}
-            className={activeTab === tab.id ? "active" : ""}
-            aria-label={`Mở tab ${tab.label}`}
-          >
-            <span>
-              {tab.label}
-              <b>{tabCounts[tab.id] || 0}</b>
-            </span>
-            <small>{tab.description}</small>
-          </button>
-        ))}
-      </div>
+      {mode === "sales" ? (
+        <div className="admin-menu-tabs admin-promo-tabs">
+          {visiblePromoTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={activeTab === tab.id ? "active" : ""}
+              aria-label={`Mở tab ${tab.label}`}
+            >
+              <span>
+                {tab.label}
+                <b>{tabCounts[tab.id] || 0}</b>
+              </span>
+              <small>{tab.description}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {activeTab === "coupon" && (
         <CouponManager
           coupons={draftCoupons}
+          savedCoupons={savedCoupons}
           setCoupons={setDraftCoupons}
+          branches={branches}
           loyaltyConfig={loyaltyConfig}
           setLoyaltyConfig={setDraftLoyaltyConfig}
         />
@@ -473,10 +493,16 @@ export default function PromotionTabsManager({
 
       <div className={`admin-promo-save-dock ${hasUnsavedChanges ? "is-dirty" : "is-clean"}`}>
         <div>
-          <strong>{hasUnsavedChanges ? "Có thay đổi chưa lưu" : "Khuyến mãi đã đồng bộ"}</strong>
+          <strong>
+            {hasUnsavedChanges
+              ? "Có thay đổi chưa lưu"
+              : mode === "vouchers" ? "Kho voucher đã đồng bộ" : "Khuyến mãi đã đồng bộ"}
+          </strong>
           <span>
             {hasUnsavedChanges
-              ? "Chỉ sau khi lưu, trạng thái và cấu hình mới được cập nhật cho Web, QR và POS."
+              ? mode === "vouchers"
+                ? "Các thay đổi mới chỉ là bản nháp. Bấm lưu để cập nhật Web, QR và POS."
+                : "Chỉ sau khi lưu, trạng thái và cấu hình mới được cập nhật cho Web, QR và POS."
               : "Chỉnh form để bắt đầu một bản nháp mới."}
           </span>
         </div>
@@ -493,6 +519,7 @@ export default function PromotionTabsManager({
             hasUnsavedChanges={hasUnsavedChanges}
             isSaving={isSaving}
             onSave={handleSavePromotions}
+            saveLabel={mode === "vouchers" ? "Lưu voucher" : "Lưu thay đổi"}
           />
         </div>
       </div>

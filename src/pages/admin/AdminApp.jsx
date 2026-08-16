@@ -179,6 +179,12 @@ export default function AdminApp({
     if (item.section === "promo" || item.section === "store") {
       setActiveSubSection(item.sub || (item.section === "promo" ? "ui" : "branches"));
     }
+    if (item.section === "promo" && item.campaignTab) {
+      setActiveCampaignTab(item.campaignTab);
+    }
+    if (item.section === "customers" && item.customerTab) {
+      setCustomerAdminTab(item.customerTab);
+    }
     navigate(nextPath);
     setIsMobileNavOpen(false);
   };
@@ -244,7 +250,7 @@ export default function AdminApp({
 
         {section !== "dashboard" && section !== "grab-finance" && section !== "grab-marketing" && section !== "orders" && section !== "customers" ? (
           <AdminPageHeader
-            title={getAdminPageTitle(section)}
+            title={getAdminPageTitle(section, activeAdminNav)}
             description="Quản trị vận hành cửa hàng, dữ liệu vận hành lưu trên Supabase."
             action={isAppearancePage ? <AdminButton onClick={() => setUiDirty(false)}>Lưu thay đổi</AdminButton> : null}
           />

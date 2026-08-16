@@ -1,5 +1,6 @@
 import { getActivePromotions } from "../../utils/pureHelpers.js";
 import { buildUsedVoucherLookupFromOrders } from "../../services/loyaltyService.js";
+import { isVoucherAllowedForBranch } from "../../services/voucherBranchScopeService.js";
 
 function getDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -122,9 +123,17 @@ function sortCheckoutPromos(items = []) {
   });
 }
 
-export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, formatMoney, loyaltyVouchers = [], orders = []) {
+export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, formatMoney, loyaltyVouchers = [], orders = [], branchContext = {}) {
+  const currentBranchId = String(branchContext?.branchId || "").trim();
+  const branchRows = Array.isArray(branchContext?.branches) ? branchContext.branches : [];
+  const couponCatalogByCode = new Map(
+    (Array.isArray(coupons) ? coupons : [])
+      .map((coupon) => [String(coupon?.code || "").trim().toUpperCase(), coupon])
+      .filter(([code]) => code)
+  );
   const adminCheckoutCoupons = (coupons.length ? coupons : fallbackCoupons)
     .filter((coupon) => coupon.active !== false && String(coupon.voucherType || "checkout") !== "loyalty")
+    .filter((coupon) => isVoucherAllowedForBranch(coupon, currentBranchId, branchRows))
     .filter((coupon) => !isExpired(coupon.endAt || coupon.expiry))
     .filter((coupon) => isDateInRange(coupon.startAt, coupon.endAt || coupon.expiry))
     .filter((coupon) => hasRemainingUsage(coupon))
@@ -145,6 +154,10 @@ export function buildCheckoutPromoCodes(coupons, fallbackCoupons, subtotal, form
     .filter((voucher) => voucher.canceled !== true)
     .filter((voucher) => String(voucher.code || "").trim())
     .filter((voucher) => !isExpired(voucher.expiredAt || voucher.endAt || voucher.expiry))
+    .filter((voucher) => {
+      const catalogCoupon = couponCatalogByCode.get(String(voucher.code || "").trim().toUpperCase());
+      return isVoucherAllowedForBranch(catalogCoupon || voucher, currentBranchId, branchRows);
+    })
     .map((coupon) => ({
       id: coupon.id || coupon.code,
       code: coupon.code,

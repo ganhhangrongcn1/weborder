@@ -27,6 +27,19 @@ function isVoucherAllowedForPos(voucher = {}) {
   return normalizeSalesChannels(source).includes("pos");
 }
 
+function normalizeVoucherBranchIds(value) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((item) => toText(item).toLowerCase()).filter(Boolean)));
+}
+
+function isVoucherAllowedForBranch(voucher = {}, branchId = "") {
+  const allowed = normalizeVoucherBranchIds(voucher.branchUuids || voucher.branch_uuids);
+  if (!allowed.length) return true;
+  const currentBranchId = toText(branchId).toLowerCase();
+  if (!currentBranchId) return true;
+  return allowed.includes(currentBranchId);
+}
+
 function greatestCommonDivisor(a = 1, b = 1) {
   let x = Math.abs(Math.floor(toNumber(a, 1))) || 1;
   let y = Math.abs(Math.floor(toNumber(b, 1))) || 1;
@@ -191,6 +204,7 @@ function normalizeCheckoutVoucher(voucher = {}) {
     startAt: toText(voucher.startAt || voucher.start_at),
     endAt: toText(voucher.endAt || voucher.expiry || voucher.end_at),
     expiry: toText(voucher.endAt || voucher.expiry || voucher.end_at),
+    branchUuids: normalizeVoucherBranchIds(voucher.branchUuids || voucher.branch_uuids),
     ...(salesChannels.length ? { salesChannels } : {}),
     active: voucher.active !== false,
     conditionText: minOrder > 0
@@ -199,10 +213,11 @@ function normalizeCheckoutVoucher(voucher = {}) {
   };
 }
 
-function canUseCheckoutVoucher(voucher = {}, customer = null, now = new Date()) {
+function canUseCheckoutVoucher(voucher = {}, customer = null, now = new Date(), branchId = "") {
   if (!voucher || voucher.active === false) return false;
   if (toText(voucher.voucherType).toLowerCase() === "loyalty") return false;
   if (!isVoucherAllowedForPos(voucher)) return false;
+  if (!isVoucherAllowedForBranch(voucher, branchId)) return false;
   if (!isDateActive(voucher.startAt, voucher.endAt || voucher.expiry, now)) return false;
 
   const fulfillmentType = toText(voucher.fulfillmentType).toLowerCase();
@@ -220,6 +235,7 @@ export function buildPosLoyaltyBenefit({
   subtotal = 0,
   customer = null,
   coupons = [],
+  branchId = "",
   selectedVoucherId = "",
   pointsInput = ""
 } = {}) {
@@ -231,15 +247,21 @@ export function buildPosLoyaltyBenefit({
   const redeemValue = Math.max(1, Math.floor(toNumber(loyaltyRule.redeemValue, 1)));
   const pointSpendStep = getPointSpendStep(redeemPointUnit);
   const now = new Date();
+  const couponCatalogByCode = new Map(
+    (Array.isArray(coupons) ? coupons : [])
+      .map((coupon) => [toText(coupon?.code).toUpperCase(), coupon])
+      .filter(([code]) => code)
+  );
 
   const loyaltyVouchers = (Array.isArray(customer?.availableVouchers) ? customer.availableVouchers : [])
     .map(normalizeLoyaltyVoucher)
     .filter((voucher) => !voucher.used && !voucher.canceled && !voucher.cancelled)
-    .filter((voucher) => isDateActive("", voucher.expiredAt || voucher.endAt || voucher.expiry, now));
+    .filter((voucher) => isDateActive("", voucher.expiredAt || voucher.endAt || voucher.expiry, now))
+    .filter((voucher) => isVoucherAllowedForBranch(couponCatalogByCode.get(voucher.code) || voucher, branchId));
 
   const checkoutVouchers = (Array.isArray(coupons) ? coupons : [])
     .map(normalizeCheckoutVoucher)
-    .filter((voucher) => canUseCheckoutVoucher(voucher, customer, now));
+    .filter((voucher) => canUseCheckoutVoucher(voucher, customer, now, branchId));
 
   const availableVouchers = [...loyaltyVouchers, ...checkoutVouchers];
   const selectedVoucher = availableVouchers.find((voucher) => buildVoucherSelectionKey(voucher) === selectedVoucherId) || null;

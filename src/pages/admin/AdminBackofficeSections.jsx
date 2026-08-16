@@ -63,11 +63,14 @@ export default function AdminBackofficeSections({
             />
           )}
 
-          {activeSubSection === "campaign" && (
+          {["campaign", "sales", "vouchers"].includes(activeSubSection) && (
             <PromotionTabsManager
+              mode={activeSubSection === "vouchers" ? "vouchers" : "sales"}
+              initialTab={activeSubSection === "vouchers" ? "coupon" : activeCampaignTab || "free_shipping"}
               activeCampaignTab={activeCampaignTab}
               setActiveCampaignTab={setActiveCampaignTab}
               products={products}
+              branches={branches}
               promos={promos}
               banners={banners}
               setBanners={setBanners}

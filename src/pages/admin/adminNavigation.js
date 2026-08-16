@@ -25,7 +25,8 @@ export const navGroups = [
     icon: "user",
     items: [
       { id: "customer-main", label: "Khách hàng / CRM", section: "customers" },
-      { id: "promo-campaign", label: "Chương trình khuyến mãi", section: "promo", sub: "campaign" },
+      { id: "voucher-main", label: "Kho voucher", section: "promo", sub: "vouchers", campaignTab: "coupon" },
+      { id: "sales-promotions-main", label: "Ưu đãi bán hàng", section: "promo", sub: "sales", campaignTab: "free_shipping" },
       { id: "grab-marketing-main", label: "Hiệu quả Marketing Grab", section: "grab-marketing" }
     ]
   },
@@ -76,7 +77,9 @@ export const navIconMap = {
   "partner-reviews-main": "star",
   "review-rewards-main": "gift",
   "shifts-main": "clock",
+  "sales-promotions-main": "sale",
   "customer-main": "user",
+  "voucher-main": "gift",
   "cakes-main": "gift",
   "menu-main": "menu",
   "store-branches": "home",
@@ -100,10 +103,10 @@ export const dashboardQuickActions = [
   { id: "store-branches", label: "Chi nhánh" },
   { id: "store-accounts", label: "Tài khoản chi nhánh" },
   { id: "store-downloads", label: "File APK POS" },
-  { id: "promo-campaign", label: "Khuyến mãi" }
+  { id: "sales-promotions-main", label: "Ưu đãi bán hàng" }
 ];
 
-export function getAdminPageTitle(section) {
+export function getAdminPageTitle(section, activeAdminNav = "") {
   if (section === "dashboard") return "Dashboard";
   if (section === "grab-finance") return "Tài chính Grab";
   if (section === "grab-marketing") return "Hiệu quả Marketing Grab";
@@ -116,6 +119,8 @@ export function getAdminPageTitle(section) {
   if (section === "menu") return "Quản lý menu";
   if (section === "employees") return "Quản lý nhân sự";
   if (section === "supervision") return "Quản lý giám sát";
-  if (section === "promo") return "Quản lý giao diện / khuyến mãi";
+  if (section === "promo" && activeAdminNav === "voucher-main") return "Kho voucher";
+  if (section === "promo" && activeAdminNav === "sales-promotions-main") return "Ưu đãi bán hàng";
+  if (section === "promo") return "Quản lý khuyến mãi";
   return "Cài đặt cửa hàng";
 }

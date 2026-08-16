@@ -25,15 +25,21 @@ import {
 } from "../../../services/voucherManagementGroupService.js";
 import PromotionFormSection from "./PromotionFormSection.jsx";
 import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
+import VoucherCreateDialog from "./VoucherCreateDialog.jsx";
+import VoucherBranchScopeField from "./VoucherBranchScopeField.jsx";
+import {
+  getVoucherBranchScopeLabel,
+  normalizeVoucherBranchUuids
+} from "../../../services/voucherBranchScopeService.js";
 import {
   PromotionSetupWarnings,
-  PromotionSummaryPills,
   formatSalesChannelSummary
 } from "./PromotionSetupFeedback.jsx";
 
 const STATUS_FILTERS = [
   { value: "all", label: "Tất cả" },
   { value: "running", label: "Đang chạy" },
+  { value: "upcoming", label: "Sắp bắt đầu" },
   { value: "expiring", label: "Sắp hết hạn" },
   { value: "expired", label: "Hết hạn" },
   { value: "off", label: "Đang tắt" }
@@ -57,7 +63,7 @@ function getCouponRef(coupon = {}) {
   return String(coupon?.id || coupon?.code || "").trim();
 }
 
-function normalizeCoupon(coupon = {}, loyaltyConfig = {}) {
+export function normalizeCoupon(coupon = {}, loyaltyConfig = {}) {
   const voucherType = getCouponVoucherType(coupon);
   const endAt = voucherType === "loyalty" ? "" : String(coupon.endAt || coupon.expiry || "");
   const managementGroup = normalizeCouponManagementGroup(coupon, loyaltyConfig);
@@ -87,6 +93,7 @@ function normalizeCoupon(coupon = {}, loyaltyConfig = {}) {
     fulfillmentType: String(coupon.fulfillmentType || "all"),
     scopeType: String(coupon.scopeType || "all"),
     scopeValues: String(coupon.scopeValues || ""),
+    branchUuids: normalizeVoucherBranchUuids(coupon.branchUuids || coupon.branch_uuids),
     salesChannels: normalizeSalesChannels(coupon.salesChannels, ALL_PROMOTION_SALES_CHANNELS),
     stackable: Boolean(coupon.stackable),
     active: coupon.active !== false,
@@ -114,6 +121,12 @@ function getCouponStatus(coupon) {
   }
 
   if (!coupon.active) return { code: "off", label: "Tạm tắt", className: "bg-slate-100 text-slate-600" };
+  if (coupon.startAt) {
+    const startDate = new Date(`${coupon.startAt}T00:00:00`);
+    if (!Number.isNaN(startDate.getTime()) && startDate.getTime() > Date.now()) {
+      return { code: "upcoming", label: "Sắp bắt đầu", className: "bg-sky-100 text-sky-700" };
+    }
+  }
   if (!coupon.endAt) return { code: "running", label: "Đang chạy", className: "bg-emerald-100 text-emerald-700" };
 
   const now = new Date();
@@ -173,40 +186,27 @@ function buildCouponWarnings(coupon) {
   return warnings;
 }
 
-function buildCouponSummary(coupon) {
-  const status = getCouponStatus(coupon).label;
-  const minOrder = Number(coupon?.minOrder || 0) > 0
-    ? `Đơn từ ${Number(coupon.minOrder || 0).toLocaleString("vi-VN")}đ`
-    : "Mọi đơn";
-  const managementLabel = getCouponManagementGroupDefinition(coupon?.managementGroup).label;
-  const audienceLabel = getVoucherAudienceDefinition(coupon?.campaignAudience).label;
-
-  return [
-    status,
-    managementLabel,
-    coupon?.voucherType === "loyalty" ? describeCouponExpiry(coupon, 7) : formatSalesChannelSummary(coupon),
-    coupon?.managementGroup === "loyalty_crm" ? audienceLabel : minOrder
-  ];
-}
-
 function inputClassName(isImportant = false) {
   const baseClass = "admin-input admin-promo-field-input";
   const sizeClass = isImportant ? "admin-promo-field-input--strong" : "";
   return `${baseClass} ${sizeClass}`.trim();
 }
 
-function FieldLabel({ label, children }) {
+function FieldLabel({ label, hint = "", children }) {
   return (
     <label className="admin-promo-field-label">
       {label}
       {children}
+      {hint ? <small className="admin-voucher-field-hint">{hint}</small> : null}
     </label>
   );
 }
 
 export default function CouponManager({
   coupons = [],
+  savedCoupons = [],
   setCoupons,
+  branches = [],
   loyaltyConfig = {},
   setLoyaltyConfig = () => {}
 }) {
@@ -218,11 +218,21 @@ export default function CouponManager({
     () => coupons.map((coupon) => normalizeCoupon(coupon, normalizedLoyaltyConfig)),
     [coupons, normalizedLoyaltyConfig]
   );
+  const safeSavedCoupons = useMemo(
+    () => savedCoupons.map((coupon) => normalizeCoupon(coupon, normalizedLoyaltyConfig)),
+    [savedCoupons, normalizedLoyaltyConfig]
+  );
+  const savedCouponById = useMemo(
+    () => new Map(safeSavedCoupons.map((coupon) => [coupon.id, coupon])),
+    [safeSavedCoupons]
+  );
   const [managementGroupFilter, setManagementGroupFilter] = useState("checkout_sales");
   const [statusFilter, setStatusFilter] = useState("running");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCouponId, setSelectedCouponId] = useState("");
   const [presetMessage, setPresetMessage] = useState("");
+  const [createDialogSeed, setCreateDialogSeed] = useState(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState("");
 
   const couponGroups = useMemo(
     () => COUPON_MANAGEMENT_GROUPS.map((group) => ({
@@ -252,9 +262,10 @@ export default function CouponManager({
       const searchKey = normalizeSearch(`${coupon.code} ${coupon.name}`);
       const matchesStatus = statusFilter === "all" || status.code === statusFilter;
       const matchesSearch = !searchValue || searchKey.includes(searchValue);
-      return matchesStatus && matchesSearch;
+      const isSelected = coupon.id === selectedCouponId;
+      return isSelected || (matchesStatus && matchesSearch);
     });
-  }, [visibleCoupons, searchTerm, statusFilter]);
+  }, [visibleCoupons, searchTerm, statusFilter, selectedCouponId]);
 
   const visibleStats = useMemo(
     () => visibleCoupons.reduce(
@@ -263,7 +274,7 @@ export default function CouponManager({
         total[code] = (total[code] || 0) + 1;
         return total;
       },
-      { running: 0, expiring: 0, expired: 0, off: 0 }
+      { running: 0, upcoming: 0, expiring: 0, expired: 0, off: 0 }
     ),
     [visibleCoupons]
   );
@@ -304,9 +315,15 @@ export default function CouponManager({
   const selectedCoupon = filteredCoupons.find((item) => item.id === selectedCouponId) || null;
   const preview = selectedCoupon ? buildPreviewLines(selectedCoupon) : null;
   const couponWarnings = selectedCoupon ? buildCouponWarnings(selectedCoupon) : [];
-  const couponSummary = selectedCoupon ? buildCouponSummary(selectedCoupon) : [];
+  const selectedSavedCoupon = selectedCoupon ? savedCouponById.get(selectedCoupon.id) : null;
+  const selectedHasUnsavedChanges = Boolean(
+    selectedCoupon && (
+      !selectedSavedCoupon || JSON.stringify(selectedCoupon) !== JSON.stringify(selectedSavedCoupon)
+    )
+  );
 
   const patchCoupon = (couponId, patch) => {
+    if (patch?.managementGroup) setManagementGroupFilter(String(patch.managementGroup));
     setCoupons((current) =>
       (current || []).map((item) => {
         const currentId = getCouponId(item);
@@ -324,10 +341,9 @@ export default function CouponManager({
 
   const addCoupon = () => {
     const voucherType = activeGroup.voucherType;
-    const seed = normalizeCoupon({
-      id: `coupon-${Date.now()}`,
-      code: managementGroupFilter === "loyalty_auto" ? "AUTO10" : managementGroupFilter === "loyalty_crm" ? "CRM10" : "NEW10",
-      name: activeGroup.label,
+    setCreateDialogSeed({
+      code: "",
+      name: "",
       discountType: "fixed",
       value: 10000,
       minOrder: 0,
@@ -337,11 +353,10 @@ export default function CouponManager({
       validDaysAfterGrant: voucherType === "loyalty" ? 7 : 0,
       salesChannels: ["web", "qr"],
       campaignAudience: "all",
-      campaignLabel: activeGroup.label,
+      campaignLabel: "",
+      branchUuids: [],
       active: true
-    }, normalizedLoyaltyConfig);
-
-    insertCoupon(seed);
+    });
   };
 
   const addCouponFromPreset = (presetValue) => {
@@ -349,7 +364,20 @@ export default function CouponManager({
     if (!presetCoupon) return;
     const seed = normalizeCoupon(presetCoupon, normalizedLoyaltyConfig);
     setManagementGroupFilter(seed.managementGroup || managementGroupFilter);
+    setCreateDialogSeed({ ...seed, id: "" });
+  };
+
+  const createCouponDraft = (draft) => {
+    const seed = normalizeCoupon({
+      ...draft,
+      id: `coupon-${Date.now()}`,
+      totalUsed: 0
+    }, normalizedLoyaltyConfig);
+    setManagementGroupFilter(seed.managementGroup || managementGroupFilter);
+    setStatusFilter("all");
+    setSearchTerm("");
     insertCoupon(seed);
+    setCreateDialogSeed(null);
   };
 
   const addLoyaltyPresetPack = () => {
@@ -372,6 +400,7 @@ export default function CouponManager({
 
   const removeCoupon = (couponId) => {
     setCoupons((current) => (current || []).filter((item) => getCouponId(item) !== couponId));
+    setPendingDeleteId("");
   };
 
   const patchWelcomeVoucherConfig = (patch) => {
@@ -382,24 +411,27 @@ export default function CouponManager({
   };
 
   return (
-    <section className="admin-promo-split grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-      <aside className="admin-promo-side rounded-[14px] border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <strong className="text-sm font-black text-slate-800">Danh sách voucher</strong>
-          <button type="button" className="admin-cta" onClick={addCoupon}>+ Tạo trống</button>
+    <section className="admin-voucher-workspace">
+      <header className="admin-voucher-toolbar">
+        <div className="admin-voucher-toolbar__heading">
+          <div>
+            <strong>Quản lý voucher</strong>
+            <span>Chọn nhóm, tìm voucher rồi chỉnh chi tiết ở bên dưới.</span>
+          </div>
+          <button type="button" className="admin-cta" onClick={addCoupon}>+ Tạo voucher</button>
         </div>
 
-        <div className="admin-promo-group-grid">
+        <div className="admin-promo-group-grid" aria-label="Nhóm voucher">
           {couponGroups.map((group) => (
             <button
               key={group.value}
               type="button"
               className={`admin-promo-group-card ${managementGroupFilter === group.value ? "is-active" : ""}`}
               onClick={() => setManagementGroupFilter(group.value)}
+              title={group.description}
             >
               <span>{group.label}</span>
               <strong>{group.count}</strong>
-              <small>{group.description}</small>
             </button>
           ))}
         </div>
@@ -425,17 +457,18 @@ export default function CouponManager({
               ))}
             </select>
           </label>
+          <div className="admin-promo-mini-stats" aria-label="Thống kê trạng thái voucher">
+            <span><b>{visibleStats.running}</b> đang chạy</span>
+            <span><b>{visibleStats.upcoming}</b> sắp bắt đầu</span>
+            <span><b>{visibleStats.expiring}</b> sắp hết hạn</span>
+            <span><b>{visibleStats.expired}</b> hết hạn</span>
+            <span><b>{visibleStats.off}</b> đang tắt</span>
+          </div>
         </div>
+      </header>
 
-        <div className="admin-promo-mini-stats">
-          <span><b>{visibleStats.running}</b> đang chạy</span>
-          <span><b>{visibleStats.expiring}</b> sắp hết hạn</span>
-          <span><b>{visibleStats.expired}</b> hết hạn</span>
-          <span><b>{visibleStats.off}</b> đang tắt</span>
-        </div>
-
-        {managementGroupFilter === "loyalty_auto" ? (
-          <details className="admin-promo-helper-card mb-3">
+      {managementGroupFilter === "loyalty_auto" ? (
+          <details className="admin-promo-helper-card">
             <summary className="admin-promo-helper-summary">
               <div className="admin-promo-helper-copy">
                 <span>Cài nhanh loyalty</span>
@@ -541,10 +574,10 @@ export default function CouponManager({
               </div>
             </div>
           </details>
-        ) : null}
+      ) : null}
 
-        {managementGroupFilter === "loyalty_crm" ? (
-          <section className="admin-promo-context-card mb-3">
+      {managementGroupFilter === "loyalty_crm" ? (
+          <section className="admin-promo-context-card admin-voucher-context-card">
             <div className="admin-promo-context-card__head">
               <div>
                 <span>CRM / chiến dịch</span>
@@ -553,24 +586,18 @@ export default function CouponManager({
               <b>{loyaltyCrmCoupons.length} voucher</b>
             </div>
 
-            <div className="admin-promo-context-list">
-              <span>Khách lâu chưa quay lại 7 ngày / 15 ngày</span>
-              <span>Event tri ân, sinh nhật, mini game</span>
-              <span>Tặng tay từ CRM mà không đụng vào voucher auto</span>
-            </div>
-
             <p className="admin-promo-helper-note">
-              Chặng này mình tách riêng kho voucher CRM trước cho dễ quản lý. Ở chặng sau em sẽ nối thêm rule lọc nhóm khách và campaign tự động.
+              Dùng để tặng tay từ CRM, chăm sóc khách lâu chưa quay lại hoặc chạy event riêng; không ảnh hưởng voucher tự động.
             </p>
           </section>
-        ) : null}
+      ) : null}
 
-        {activeGroupPresets.length ? (
-          <section className="admin-promo-context-card mb-3">
+      {activeGroupPresets.length ? (
+          <section className="admin-promo-context-card admin-voucher-preset-bar">
             <div className="admin-promo-context-card__head">
               <div>
                 <span>Tạo nhanh theo mục đích</span>
-                <strong>Chọn mẫu phù hợp rồi chỉ cần chỉnh lại giá trị nếu cần</strong>
+                <strong>Chọn mẫu rồi chỉnh lại giá trị nếu cần</strong>
               </div>
               <b>{activeGroupPresets.length} mẫu</b>
             </div>
@@ -590,12 +617,29 @@ export default function CouponManager({
               ))}
             </div>
           </section>
-        ) : null}
+      ) : null}
 
-        <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
+      <div className="admin-promo-split admin-voucher-split">
+        <aside className="admin-promo-side admin-voucher-list-panel">
+          <div className="admin-voucher-list-head">
+            <div>
+              <strong>Danh sách voucher</strong>
+              <span>{filteredCoupons.length} kết quả trong nhóm {activeGroup.label.toLowerCase()}</span>
+            </div>
+          </div>
+
+          <div className="admin-voucher-list">
           {filteredCoupons.map((coupon) => {
             const status = getCouponStatus(coupon);
             const isSelected = selectedCoupon?.id === coupon.id;
+            const savedCoupon = savedCouponById.get(coupon.id);
+            const hasLocalChanges = !savedCoupon || JSON.stringify(coupon) !== JSON.stringify(savedCoupon);
+            const displayStatus = hasLocalChanges
+              ? {
+                  label: savedCoupon ? "Chưa lưu" : "Bản nháp",
+                  className: "bg-amber-100 text-amber-700"
+                }
+              : status;
             const audienceLabel = coupon.managementGroup === "loyalty_crm"
               ? getVoucherAudienceDefinition(coupon.campaignAudience).label
               : "";
@@ -604,7 +648,10 @@ export default function CouponManager({
               <button
                 key={coupon.id}
                 type="button"
-                onClick={() => setSelectedCouponId(coupon.id)}
+                onClick={() => {
+                  setSelectedCouponId(coupon.id);
+                  setPendingDeleteId("");
+                }}
                 className={`admin-promo-list-card ${isSelected ? "is-active" : ""}`}
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
@@ -612,7 +659,7 @@ export default function CouponManager({
                     <p className="text-lg font-black tracking-wide text-slate-900">{coupon.code || "---"}</p>
                     <p className="mt-1 text-xs font-bold text-slate-500">{coupon.name || "Chưa đặt tên hiển thị"}</p>
                   </div>
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${status.className}`}>{status.label}</span>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${displayStatus.className}`}>{displayStatus.label}</span>
                 </div>
                 <p className="text-xl font-black text-orange-600">{formatDiscountValue(coupon)}</p>
                 <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
@@ -629,53 +676,48 @@ export default function CouponManager({
           {!filteredCoupons.length ? (
             <p className="admin-promo-empty-note">Chưa có voucher phù hợp trong nhóm {activeGroup.label.toLowerCase()}.</p>
           ) : null}
-        </div>
-      </aside>
+          </div>
+        </aside>
 
-      <div className="admin-promo-editor rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="admin-promo-editor admin-voucher-editor">
         {!selectedCoupon ? (
           <p className="admin-promo-empty-note">Chọn voucher để chỉnh sửa.</p>
         ) : (
           <>
-            <div className="admin-promo-preview-card">
-              <p className="text-xs font-black uppercase tracking-wide text-slate-500">{preview?.title}</p>
-              <p className="text-2xl font-black leading-tight text-orange-600">{preview?.main}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-700">{preview?.condition}</p>
-              <p className="mt-1 text-xs text-slate-500">{preview?.expiry}</p>
-              <div className="admin-promo-preview-meta">
-                <span>Nhóm: {getCouponManagementGroupDefinition(selectedCoupon.managementGroup).label}</span>
-                <span>
-                  {selectedCoupon.managementGroup === "loyalty_crm"
-                    ? `Tệp khách: ${getVoucherAudienceDefinition(selectedCoupon.campaignAudience).label}`
-                    : `Giới hạn: ${Number(selectedCoupon.usageLimit || 0) > 0 ? `${selectedCoupon.totalUsed}/${selectedCoupon.usageLimit} lượt` : "Không giới hạn"}`}
-                </span>
-                <span>
-                  {selectedCoupon.managementGroup === "loyalty_crm"
-                    ? `Nhãn: ${selectedCoupon.campaignLabel || "Chưa đặt nhãn"}`
-                    : `Mỗi khách: ${Number(selectedCoupon.perUserLimit || 1)} lượt`}
-                </span>
+            <div className="admin-promo-preview-card admin-voucher-editor-head">
+              <div className="admin-voucher-editor-head__copy">
+                <div className="admin-voucher-editor-head__eyebrow">
+                  <span>{getCouponManagementGroupDefinition(selectedCoupon.managementGroup).label}</span>
+                  <b className={selectedHasUnsavedChanges ? "is-draft" : "is-saved"}>
+                    {selectedHasUnsavedChanges
+                      ? selectedSavedCoupon ? "Có thay đổi chưa lưu" : "Bản nháp chưa lưu"
+                      : getCouponStatus(selectedCoupon).label}
+                  </b>
+                </div>
+                <p className="admin-voucher-editor-head__value">{preview?.main}</p>
+                <p className="admin-voucher-editor-head__condition">{preview?.condition} · {preview?.expiry}</p>
+                <div className="admin-voucher-editor-head__scope" aria-label="Tóm tắt phạm vi áp dụng">
+                  <span>{selectedCoupon.voucherType === "loyalty" ? describeCouponExpiry(selectedCoupon, 7) : formatSalesChannelSummary(selectedCoupon)}</span>
+                  <span>{getVoucherBranchScopeLabel(selectedCoupon, branches)}</span>
+                  <span>Mỗi khách {Number(selectedCoupon.perUserLimit || 1)} lượt</span>
+                </div>
+              </div>
+              <div className="admin-voucher-editor-head__toggle">
+                <span>{selectedCoupon.active ? "Đang bật" : "Đang tắt"}</span>
+                <label className="admin-switch">
+                  <input type="checkbox" checked={selectedCoupon.active} onChange={(event) => patchCoupon(selectedCoupon.id, { active: event.target.checked })} />
+                  <span />
+                </label>
               </div>
             </div>
 
             <div className="admin-promo-form-flow">
-              <PromotionSummaryPills items={couponSummary} />
               <PromotionSetupWarnings warnings={couponWarnings} />
-
-              <div className="admin-promo-mode-strip" aria-hidden="true">
-                <div className="is-active">
-                  <strong>Cơ bản</strong>
-                  <span>Mã, tên, giảm giá, hạn dùng, kênh áp dụng.</span>
-                </div>
-                <div>
-                  <strong>Nâng cao</strong>
-                  <span>Giới hạn lượt và số đã dùng nếu cần quản lý sâu hơn.</span>
-                </div>
-              </div>
 
               <PromotionFormSection
                 step="1"
-                title="Cơ bản: khách thấy gì?"
-                note="Nhập mã, tên hiển thị, hạn dùng và kênh áp dụng."
+                title="Thông tin và phạm vi áp dụng"
+                note="Tên voucher, thời gian, kênh bán và chi nhánh được sử dụng."
               >
                 <div className="admin-promo-form-grid">
                   <FieldLabel label="Mã voucher">
@@ -721,9 +763,14 @@ export default function CouponManager({
                       />
                     </FieldLabel>
                   ) : (
-                    <FieldLabel label="Ngày hết hạn">
-                      <input className={inputClassName()} type="date" value={selectedCoupon.endAt} onChange={(event) => patchCoupon(selectedCoupon.id, { endAt: event.target.value, expiry: event.target.value })} />
-                    </FieldLabel>
+                    <>
+                      <FieldLabel label="Ngày bắt đầu" hint={selectedCoupon.startAt ? `Hiển thị: ${formatDateShort(selectedCoupon.startAt)}` : "Có hiệu lực ngay khi lưu"}>
+                        <input className={inputClassName()} type="date" value={selectedCoupon.startAt} onChange={(event) => patchCoupon(selectedCoupon.id, { startAt: event.target.value })} />
+                      </FieldLabel>
+                      <FieldLabel label="Ngày hết hạn" hint={selectedCoupon.endAt ? `Hiển thị: ${formatDateShort(selectedCoupon.endAt)}` : "Không giới hạn thời gian"}>
+                        <input className={inputClassName()} type="date" value={selectedCoupon.endAt} onChange={(event) => patchCoupon(selectedCoupon.id, { endAt: event.target.value, expiry: event.target.value })} />
+                      </FieldLabel>
+                    </>
                   )}
 
                   {selectedCoupon.managementGroup === "loyalty_crm" ? (
@@ -759,15 +806,24 @@ export default function CouponManager({
                       onChange={(nextChannels) => patchCoupon(selectedCoupon.id, { salesChannels: nextChannels })}
                     />
                   </div>
+
+                  <div className="admin-promo-form-span-2 admin-voucher-editor-branches">
+                    <span>Áp dụng chi nhánh</span>
+                    <VoucherBranchScopeField
+                      branches={branches}
+                      value={selectedCoupon.branchUuids}
+                      onChange={(branchUuids) => patchCoupon(selectedCoupon.id, { branchUuids })}
+                    />
+                  </div>
                 </div>
               </PromotionFormSection>
 
               <PromotionFormSection
                 step="2"
-                title="Cơ bản: giảm bao nhiêu?"
-                note="Chọn kiểu giảm, giá trị giảm và mốc đơn tối thiểu."
+                title="Mức giảm và điều kiện đơn"
+                note="Thiết lập giá trị ưu đãi và mức đơn tối thiểu để được dùng."
               >
-                <div className="admin-promo-form-grid">
+                <div className="admin-promo-form-grid admin-voucher-discount-grid">
                   <FieldLabel label="Loại giảm">
                     <select className={inputClassName(true)} value={selectedCoupon.discountType} onChange={(event) => patchCoupon(selectedCoupon.id, { discountType: event.target.value, maxDiscount: event.target.value === "percent" ? selectedCoupon.maxDiscount : 0 })}>
                       <option value="fixed">Giảm số tiền</option>
@@ -791,17 +847,6 @@ export default function CouponManager({
                 </div>
               </PromotionFormSection>
 
-              <div className="admin-promo-active-row admin-promo-form-span-2">
-                <div>
-                  <strong>Bật voucher</strong>
-                  <span>Tắt để ẩn khỏi checkout/CRM nhưng vẫn giữ dữ liệu.</span>
-                </div>
-                <label className="admin-switch">
-                  <input type="checkbox" checked={selectedCoupon.active} onChange={(event) => patchCoupon(selectedCoupon.id, { active: event.target.checked })} />
-                  <span />
-                </label>
-              </div>
-
               <details className="admin-promo-form-card">
                 <summary className="admin-promo-details-summary">Nâng cao: giới hạn và thống kê sử dụng</summary>
                 <div className="mt-4 space-y-4">
@@ -816,21 +861,49 @@ export default function CouponManager({
                       <input className={inputClassName()} type="number" min="1" value={selectedCoupon.perUserLimit} onChange={(event) => patchCoupon(selectedCoupon.id, { perUserLimit: Number(event.target.value || 1) })} />
                     </FieldLabel>
                     <FieldLabel label="Đã dùng">
-                      <input className={inputClassName()} type="number" min="0" value={selectedCoupon.totalUsed} onChange={(event) => patchCoupon(selectedCoupon.id, { totalUsed: Number(event.target.value || 0) })} />
+                      <input
+                        className={`${inputClassName()} admin-promo-field-input--readonly`}
+                        type="number"
+                        min="0"
+                        value={selectedCoupon.totalUsed}
+                        readOnly
+                        aria-readonly="true"
+                      />
                     </FieldLabel>
                   </div>
                 </div>
               </details>
             </div>
 
-            <div className="mt-4 flex items-center justify-end">
-              <button type="button" className="admin-danger" onClick={() => removeCoupon(selectedCoupon.id)}>
-                Xóa voucher này
-              </button>
+            <div className="admin-voucher-delete-row">
+              {pendingDeleteId === selectedCoupon.id ? (
+                <div className="admin-voucher-delete-confirm" role="alert">
+                  <span>Voucher chỉ bị xóa khỏi bản nháp. Bấm lưu để áp dụng.</span>
+                  <div>
+                    <button type="button" className="admin-secondary" onClick={() => setPendingDeleteId("")}>Giữ lại</button>
+                    <button type="button" className="admin-danger" onClick={() => removeCoupon(selectedCoupon.id)}>Xác nhận xóa</button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" className="admin-danger" onClick={() => setPendingDeleteId(selectedCoupon.id)}>
+                  Xóa voucher này
+                </button>
+              )}
             </div>
           </>
         )}
+        </div>
       </div>
+
+      {createDialogSeed ? (
+        <VoucherCreateDialog
+          initialValue={createDialogSeed}
+          existingCodes={safeCoupons.map((coupon) => coupon.code)}
+          branches={branches}
+          onClose={() => setCreateDialogSeed(null)}
+          onCreate={createCouponDraft}
+        />
+      ) : null}
     </section>
   );
 }

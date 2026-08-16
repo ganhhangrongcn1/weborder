@@ -30,6 +30,7 @@ export default function useAdminAppState(orderStorage, routeState = null, option
     if (routeState.section) navigationState.setSection(routeState.section);
     if (routeState.activeAdminNav) navigationState.setActiveAdminNav(routeState.activeAdminNav);
     if (routeState.activeSubSection) navigationState.setActiveSubSection(routeState.activeSubSection);
+    if (routeState.activeCampaignTab) navigationState.setActiveCampaignTab(routeState.activeCampaignTab);
     if (routeState.customerAdminTab) orderCrmState.setCustomerAdminTab(routeState.customerAdminTab);
   }, [routeState]);
 

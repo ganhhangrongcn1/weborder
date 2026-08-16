@@ -191,9 +191,25 @@ export default function Checkout({
     return currentTier ? { ...loyaltyRule, ...currentTier } : loyaltyRule;
   }, [checkoutLoyalty?.tierId, loyaltyRule]);
 
+  const currentVoucherBranchId = fulfillmentType === "pickup"
+    ? selectedBranch
+    : selectedDeliveryBranchId ||
+      deliverySourceBranch?.branch_uuid ||
+      deliverySourceBranch?.branchUuid ||
+      deliverySourceBranch?.id ||
+      "";
+
   const allPromoCodes = useMemo(
-    () => buildCheckoutPromoCodes(coupons, checkoutFallbackCoupons, subtotal, formatMoney, checkoutLoyalty?.voucherHistory || [], demoOrders || []),
-    [coupons, subtotal, checkoutLoyalty?.voucherHistory, demoOrders]
+    () => buildCheckoutPromoCodes(
+      coupons,
+      checkoutFallbackCoupons,
+      subtotal,
+      formatMoney,
+      checkoutLoyalty?.voucherHistory || [],
+      demoOrders || [],
+      { branchId: currentVoucherBranchId, branches }
+    ),
+    [branches, checkoutLoyalty?.voucherHistory, coupons, currentVoucherBranchId, demoOrders, subtotal]
   );
 
   const promoCodes = useMemo(() => {

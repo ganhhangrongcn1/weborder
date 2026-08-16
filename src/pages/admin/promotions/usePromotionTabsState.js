@@ -15,12 +15,18 @@ export default function usePromotionTabsState({
   products,
   smartPromotions,
   setSmartPromotions,
-  normalizeSmartPromotion
+  normalizeSmartPromotion,
+  initialTab = "coupon"
 }) {
-  const [activeTab, setActiveTab] = useState("coupon");
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedStrikePromoId, setSelectedStrikePromoId] = useState("");
   const [selectedFlashPromoId, setSelectedFlashPromoId] = useState("");
   const [nowTick, setNowTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!initialTab) return;
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const activeProducts = useMemo(() => products.filter((item) => item.visible !== false), [products]);
   const activeCategories = useMemo(
