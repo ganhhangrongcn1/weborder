@@ -123,6 +123,13 @@ export function adminPathToState(pathname = "/admin") {
       customerAdminTab: "crm"
     };
   }
+  if (path === "/admin/customer-overview") {
+    return {
+      section: "customers",
+      activeAdminNav: "customer-overview",
+      customerAdminTab: "overview"
+    };
+  }
   if (path === "/admin/employees") {
     return { section: "employees", activeAdminNav: "employees-main" };
   }
@@ -132,8 +139,15 @@ export function adminPathToState(pathname = "/admin") {
   if (path === "/admin/loyalty") {
     return {
       section: "customers",
-      activeAdminNav: "customer-main",
+      activeAdminNav: "loyalty-main",
       customerAdminTab: "loyalty"
+    };
+  }
+  if (path === "/admin/campaigns") {
+    return {
+      section: "customers",
+      activeAdminNav: "campaign-main",
+      customerAdminTab: "campaigns"
     };
   }
   if (path === "/admin/vouchers") {
@@ -149,7 +163,7 @@ export function adminPathToState(pathname = "/admin") {
       section: "promo",
       activeAdminNav: "sales-promotions-main",
       activeSubSection: "sales",
-      activeCampaignTab: "free_shipping"
+      activeCampaignTab: "strike_price"
     };
   }
   if (path === "/admin/settings") {
@@ -199,7 +213,7 @@ export function adminPathToState(pathname = "/admin") {
       section: "promo",
       activeAdminNav: "sales-promotions-main",
       activeSubSection: "sales",
-      activeCampaignTab: "free_shipping"
+      activeCampaignTab: "strike_price"
     };
   }
   if (path === "/admin/cakes") {
@@ -225,10 +239,13 @@ export function adminNavToPath(item) {
   if (item.id === "partner-reviews-main") return "/admin/partner-reviews";
   if (item.id === "review-rewards-main") return "/admin/review-rewards";
   if (item.id === "shifts-main") return "/admin/shifts";
-  if (item.id === "customer-main") return "/admin/customers";
   if (item.id === "sales-promotions-main") return "/admin/sales-promotions";
-  if (item.id === "employees-main") return "/admin/employees";
+  if (item.id === "customer-overview") return "/admin/customer-overview";
+  if (item.id === "customer-main") return "/admin/customers";
+  if (item.id === "loyalty-main") return "/admin/loyalty";
   if (item.id === "voucher-main") return "/admin/vouchers";
+  if (item.id === "campaign-main") return "/admin/campaigns";
+  if (item.id === "employees-main") return "/admin/employees";
   if (item.id === "supervision-main") return "/admin/supervision";
   if (item.id === "menu-main") return "/admin/menu";
   if (item.id === "store-branches") return "/admin/settings";

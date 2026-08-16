@@ -151,7 +151,7 @@
 
 .crm-list-panel--customers .crm-filter-bar {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(150px, .32fr)) auto;
+  grid-template-columns: minmax(220px, 1fr) 135px 145px 170px 160px 175px auto;
   gap: 8px;
   padding: 10px 14px;
 }
@@ -166,21 +166,6 @@
 .crm-reset-btn {
   padding: 0 12px;
   white-space: nowrap;
-}
-
-.crm-list-panel--customers .crm-segment-strip {
-  display: flex;
-  gap: 6px;
-  padding: 0 14px 10px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.crm-segment-chip {
-  min-height: 34px;
-  flex: 0 0 auto;
-  border-radius: 9px;
-  padding: 0 10px;
 }
 
 .crm-result-row {
@@ -907,11 +892,11 @@
   }
 
   .crm-list-panel--customers .crm-filter-bar {
-    grid-template-columns: minmax(240px, 1fr) repeat(2, minmax(145px, .45fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .crm-list-panel--customers .crm-filter-bar .crm-segment-select {
-    grid-column: 1 / 3;
+  .crm-list-panel--customers .crm-filter-bar .crm-search {
+    grid-column: span 2;
   }
 
   .crm-analysis-segments {
@@ -1102,10 +1087,6 @@
     grid-column: 1 / -1;
   }
 
-  .crm-list-panel--customers .crm-segment-strip {
-    padding: 0 12px 9px;
-  }
-
   .crm-result-row {
     align-items: flex-start;
     flex-direction: column;
@@ -1135,6 +1116,53 @@
     max-height: calc(100dvh - 76px);
     border-radius: 14px;
   }
+}
+
+.crm-voucher-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.crm-voucher-card-head .crm-card-title {
+  min-width: 0;
+}
+
+.crm-voucher-gift-btn {
+  display: inline-flex;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #ea580c;
+  border-radius: 8px;
+  background: #ea580c;
+  color: #fff;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.crm-voucher-gift-btn:hover:not(:disabled) {
+  background: #c2410c;
+  border-color: #c2410c;
+}
+
+.crm-voucher-gift-btn:focus-visible {
+  outline: 3px solid rgba(234, 88, 12, 0.2);
+  outline-offset: 2px;
+}
+
+.crm-voucher-gift-btn:disabled {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 @media (max-width: 430px) {

@@ -91,17 +91,28 @@ export default function useAdminOrderCrmActions({
       };
     }
 
+    const onProgress = typeof options?.onProgress === "function" ? options.onProgress : null;
+    const persistedOptions = { ...(options || {}) };
+    delete persistedOptions.onProgress;
     const grantBatchId = String(options?.grantBatchId || `crm-bulk-${Date.now()}`).trim();
     const bulkGiftOptions = {
-      ...options,
+      ...persistedOptions,
       sourceType: String(options?.sourceType || "crm_bulk").trim() || "crm_bulk",
       sourceLabel: String(options?.sourceLabel || "CRM - gửi theo nhóm").trim() || "CRM - gửi theo nhóm",
       grantBatchId
     };
 
-    const results = await Promise.allSettled(
-      uniquePhones.map((phone) => giftVoucherToCustomer(phone, voucher, bulkGiftOptions))
-    );
+    const results = [];
+    const batchSize = 20;
+    onProgress?.({ completed: 0, total: uniquePhones.length });
+    for (let start = 0; start < uniquePhones.length; start += batchSize) {
+      const batchPhones = uniquePhones.slice(start, start + batchSize);
+      const batchResults = await Promise.allSettled(
+        batchPhones.map((phone) => giftVoucherToCustomer(phone, voucher, bulkGiftOptions))
+      );
+      results.push(...batchResults);
+      onProgress?.({ completed: results.length, total: uniquePhones.length });
+    }
 
     const successPhones = [];
     const failedPhones = [];
@@ -126,26 +137,34 @@ export default function useAdminOrderCrmActions({
       console.error("[crm] bulk gift voucher failed", { phone, error: result.reason });
     });
 
-    const historyEntry = await appendBulkGiftHistoryAsync({
-      campaignKey: options?.campaignKey || "",
-      campaignLabel: options?.campaignLabel || "Tặng theo bộ lọc CRM",
-      filterValue: options?.filterValue || "all",
-      audience: options?.audience || "all",
-      voucherId: String(voucher?.id || "").trim(),
-      voucherCode: String(voucher?.code || "").trim().toUpperCase(),
-      voucherName: String(voucher?.name || voucher?.title || "Voucher CRM").trim(),
-      sourceType: bulkGiftOptions.sourceType,
-      sourceLabel: bulkGiftOptions.sourceLabel,
-      totalRecipients: uniquePhones.length,
-      successCount: successPhones.length,
-      failedCount: failedPhones.length,
-      duplicateCount: duplicatePhones.length,
-      unregisteredCount: unregisteredPhones.length,
-      successPhones,
-      failedPhones,
-      duplicatePhones,
-      unregisteredPhones
-    });
+    let historyEntry = null;
+    let historySaved = true;
+    try {
+      historyEntry = await appendBulkGiftHistoryAsync({
+        grantBatchId,
+        campaignKey: options?.campaignKey || "",
+        campaignLabel: options?.campaignLabel || "Tặng theo bộ lọc CRM",
+        filterValue: options?.filterValue || "all",
+        audience: options?.audience || "all",
+        voucherId: String(voucher?.id || "").trim(),
+        voucherCode: String(voucher?.code || "").trim().toUpperCase(),
+        voucherName: String(voucher?.name || voucher?.title || "Voucher CRM").trim(),
+        sourceType: bulkGiftOptions.sourceType,
+        sourceLabel: bulkGiftOptions.sourceLabel,
+        totalRecipients: uniquePhones.length,
+        successCount: successPhones.length,
+        failedCount: failedPhones.length,
+        duplicateCount: duplicatePhones.length,
+        unregisteredCount: unregisteredPhones.length,
+        successPhones,
+        failedPhones,
+        duplicatePhones,
+        unregisteredPhones
+      });
+    } catch (historyError) {
+      historySaved = false;
+      console.error("[crm] save bulk gift history failed", historyError);
+    }
 
     return {
       successCount: successPhones.length,
@@ -157,7 +176,8 @@ export default function useAdminOrderCrmActions({
       duplicatePhones,
       unregisteredPhones,
       results,
-      historyEntry
+      historyEntry,
+      historySaved
     };
   };
 

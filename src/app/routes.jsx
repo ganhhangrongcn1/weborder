@@ -74,8 +74,10 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/admin/employees" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/supervision" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/customers" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/customer-overview" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/loyalty" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/vouchers" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/campaigns" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/sales-promotions" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/settings" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/settings/accounts" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />

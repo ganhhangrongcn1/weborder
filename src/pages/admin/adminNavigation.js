@@ -13,10 +13,7 @@ export const navGroups = [
     icon: "bag",
     items: [
       { id: "orders-main", label: "Đơn hàng", section: "orders" },
-      { id: "shifts-main", label: "Tổng quan ca", section: "shifts" },
-      { id: "cakes-main", label: "Bánh sinh nhật", section: "cakes" },
-      { id: "partner-reviews-main", label: "Đánh giá đối tác", section: "partner-reviews" },
-      { id: "review-rewards-main", label: "Thưởng điểm đánh giá", section: "review-rewards" }
+      { id: "shifts-main", label: "Tổng quan ca", section: "shifts" }
     ]
   },
   {
@@ -24,10 +21,30 @@ export const navGroups = [
     title: "Khách hàng & marketing",
     icon: "user",
     items: [
-      { id: "customer-main", label: "Khách hàng / CRM", section: "customers" },
+      { id: "customer-overview", label: "Tổng quan khách hàng", section: "customers", customerTab: "overview" },
+      { id: "customer-main", label: "Khách hàng / CRM", section: "customers", customerTab: "crm" },
+      { id: "loyalty-main", label: "Thành viên & tích điểm", section: "customers", customerTab: "loyalty" },
       { id: "voucher-main", label: "Kho voucher", section: "promo", sub: "vouchers", campaignTab: "coupon" },
-      { id: "sales-promotions-main", label: "Ưu đãi bán hàng", section: "promo", sub: "sales", campaignTab: "free_shipping" },
+      { id: "sales-promotions-main", label: "Ưu đãi bán hàng", section: "promo", sub: "sales", campaignTab: "strike_price" },
+      { id: "campaign-main", label: "Chiến dịch", section: "customers", customerTab: "campaigns" },
       { id: "grab-marketing-main", label: "Hiệu quả Marketing Grab", section: "grab-marketing" }
+    ]
+  },
+  {
+    id: "cake-orders",
+    title: "Bánh sinh nhật",
+    icon: "gift",
+    items: [
+      { id: "cakes-main", label: "Đơn bánh sinh nhật", section: "cakes" }
+    ]
+  },
+  {
+    id: "reviews-feedback",
+    title: "Đánh giá & phản hồi",
+    icon: "star",
+    items: [
+      { id: "partner-reviews-main", label: "Đánh giá đối tác", section: "partner-reviews" },
+      { id: "review-rewards-main", label: "Thưởng điểm đánh giá", section: "review-rewards" }
     ]
   },
   {
@@ -78,8 +95,11 @@ export const navIconMap = {
   "review-rewards-main": "gift",
   "shifts-main": "clock",
   "sales-promotions-main": "sale",
+  "customer-overview": "home",
   "customer-main": "user",
+  "loyalty-main": "star",
   "voucher-main": "gift",
+  "campaign-main": "sale",
   "cakes-main": "gift",
   "menu-main": "menu",
   "store-branches": "home",
