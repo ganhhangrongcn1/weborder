@@ -2772,7 +2772,7 @@ button.payment-card {
 }
 
 .pickup-confirmation__header h2,
-.pickup-confirmation__header span,
+.pickup-confirmation__header > div > span,
 .pickup-confirmation__branch p {
   margin: 0;
 }
@@ -2785,7 +2785,7 @@ button.payment-card {
   line-height: 1.2;
 }
 
-.pickup-confirmation__header span {
+.pickup-confirmation__header > div > span {
   display: block;
   margin-top: 5px;
   color: rgba(255, 255, 255, .94);
