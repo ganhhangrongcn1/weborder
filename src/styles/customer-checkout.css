@@ -2752,8 +2752,12 @@ button.payment-card {
 
 .pickup-confirmation__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f26419, #e95310);
+  padding: 14px;
+  box-shadow: 0 10px 24px rgba(188, 75, 18, .2);
 }
 
 .pickup-confirmation__icon {
@@ -2762,39 +2766,32 @@ button.payment-card {
   height: 46px;
   flex: 0 0 46px;
   place-items: center;
-  border-radius: 16px;
-  background: #fff3e8;
-  color: #df5a16;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .18);
+  color: #fff;
 }
 
-.pickup-confirmation__header p,
 .pickup-confirmation__header h2,
 .pickup-confirmation__header span,
 .pickup-confirmation__branch p {
   margin: 0;
 }
 
-.pickup-confirmation__header p {
-  color: #df5a16;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
 .pickup-confirmation__header h2 {
-  margin-top: 2px;
-  color: #1f2937;
-  font-size: 21px;
-  line-height: 1.25;
+  color: #fff;
+  font-size: 19px;
+  font-weight: 950;
+  letter-spacing: .025em;
+  line-height: 1.2;
 }
 
 .pickup-confirmation__header span {
   display: block;
-  margin-top: 4px;
-  color: #6b7280;
-  font-size: 13px;
-  line-height: 1.45;
+  margin-top: 5px;
+  color: rgba(255, 255, 255, .94);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .pickup-confirmation__branch {

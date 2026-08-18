@@ -1,12 +1,6 @@
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 
-const PAYMENT_LABELS = {
-  momo: "Thanh toán MoMo",
-  bank_qr: "Thanh toán QR ngân hàng",
-  counter: "Thanh toán tại quầy"
-};
-
 export default function PickupOrderConfirmationModal({
   open,
   cart = [],
@@ -23,7 +17,6 @@ export default function PickupOrderConfirmationModal({
 
   const visibleItems = cart.filter((item) => !item?.autoGiftByPromo).slice(0, 4);
   const remainingItems = Math.max(0, cart.filter((item) => !item?.autoGiftByPromo).length - visibleItems.length);
-  const paymentLabel = PAYMENT_LABELS[paymentMethod] || "Xác nhận đặt món";
   const confirmLabel = paymentMethod === "momo"
     ? "Xác nhận & thanh toán MoMo"
     : paymentMethod === "bank_qr"
@@ -53,9 +46,8 @@ export default function PickupOrderConfirmationModal({
             <Icon name="store" size={22} />
           </span>
           <div>
-            <p>Tự đến lấy</p>
-            <h2>Xác nhận đơn ghé lấy</h2>
-            <span>Kiểm tra nhanh trước khi {paymentLabel.toLowerCase()}.</span>
+            <h2>ĐƠN TỰ ĐẾN LẤY</h2>
+            <span>Vui lòng đến đúng chi nhánh bên dưới để nhận món.</span>
           </div>
         </header>
 
