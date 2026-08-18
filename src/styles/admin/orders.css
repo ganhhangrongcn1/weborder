@@ -2199,6 +2199,364 @@
   }
 }
 
+/* ===== Nội dung chi tiết đơn rõ ràng ===== */
+.admin-order-detail-section-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 7px;
+  background: #eef4f8;
+  padding: 8px 10px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.admin-order-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+}
+
+.admin-order-info-grid > div {
+  display: grid;
+  grid-template-columns: minmax(105px, 0.46fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 36px;
+  border-bottom: 1px solid #eef2f7;
+  padding: 6px 2px;
+}
+
+.admin-order-info-grid span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-order-info-grid strong {
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-order-info-grid .is-total strong {
+  color: #ea580c;
+  font-size: 15px;
+}
+
+.admin-order-detail-scroll .admin-order-customer-card {
+  grid-column: 1 / -1;
+}
+
+.admin-order-customer-card .admin-order-customer-box {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 28px;
+}
+
+.admin-order-customer-box > div {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 36px;
+  align-items: center;
+  border-bottom: 1px solid #f1f5f9;
+  padding: 6px 2px;
+}
+
+.admin-order-customer-box > div > span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.admin-order-customer-box > div > strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.admin-order-customer-box > .is-address {
+  grid-column: 1 / -1;
+}
+
+.admin-order-item-table-head,
+.admin-order-items-card .admin-order-detail-item {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 54px 110px 100px 116px;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-order-item-table-head {
+  border-bottom: 1px solid #cbd5e1;
+  padding: 8px 10px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.admin-order-item-table-head span:not(:first-child) {
+  text-align: right;
+}
+
+.admin-order-items-card .admin-order-detail-item {
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 0;
+  padding: 11px 10px;
+}
+
+.admin-order-items-card .admin-order-detail-item > span {
+  background: transparent;
+  text-align: center;
+}
+
+.admin-order-item-unit-price,
+.admin-order-item-discount-value,
+.admin-order-item-line-total {
+  color: #334155;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-order-item-discount-value {
+  color: #94a3b8;
+}
+
+.admin-order-item-discount-value.has-discount {
+  color: #ef4444;
+}
+
+.admin-order-item-line-total {
+  color: #0f172a;
+  font-weight: 950;
+}
+
+@media (max-width: 680px) {
+  .admin-order-info-grid,
+  .admin-order-customer-card .admin-order-customer-box {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-order-customer-box > .is-address {
+    grid-column: auto;
+  }
+
+  .admin-order-item-table-head {
+    display: none;
+  }
+
+  .admin-order-items-card .admin-order-detail-item {
+    grid-template-columns: minmax(0, 1fr) 38px 92px;
+  }
+
+  .admin-order-item-unit-price,
+  .admin-order-item-discount-value {
+    display: none;
+  }
+}
+
+/* ===== Chi tiết đơn dạng cửa sổ nổi ===== */
+.admin-orders-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.admin-order-detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.58);
+  opacity: 0;
+  visibility: hidden;
+  backdrop-filter: blur(3px);
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.admin-order-detail-backdrop.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.admin-orders-workspace .admin-order-detail-panel,
+.admin-order-detail-backdrop .admin-order-detail-panel {
+  position: relative;
+  inset: auto;
+  top: auto;
+  width: min(1040px, calc(100vw - 36px));
+  height: min(820px, calc(100dvh - 36px));
+  min-height: 0;
+  max-height: calc(100dvh - 36px);
+  border-color: rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+  transform: translateY(14px) scale(0.985);
+  transition: transform 0.22s ease;
+}
+
+.admin-order-detail-backdrop.is-open .admin-order-detail-panel {
+  transform: translateY(0) scale(1);
+}
+
+.admin-order-detail-head-v2 {
+  align-items: center;
+  padding: 16px 20px;
+}
+
+.admin-order-detail-title-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: #fff1e6;
+  color: #d95d0b;
+}
+
+.admin-order-detail-title-block {
+  flex: 1 1 auto;
+}
+
+.admin-order-detail-title-block h3 {
+  margin: 2px 0 0;
+  font-size: 20px;
+}
+
+.admin-order-detail-scroll {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  padding: 16px 20px 20px;
+}
+
+.admin-order-detail-summary-card,
+.admin-order-items-card,
+.admin-order-payment-card,
+.admin-order-partner-promotion-card,
+.admin-order-settlement-card,
+.admin-order-detail-scroll > .rounded-2xl {
+  grid-column: 1 / -1;
+}
+
+.admin-order-detail-section-head h4,
+.admin-order-detail-branch > span,
+.admin-order-detail-summary-grid > div > span,
+.admin-order-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.admin-order-detail-section-head h4 svg,
+.admin-order-detail-branch svg,
+.admin-order-detail-summary-grid svg {
+  flex: 0 0 auto;
+  color: #e76510;
+}
+
+.admin-order-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.admin-order-detail-status-line .admin-order-status-badge,
+.admin-order-detail-status-line .admin-order-type-badge,
+.admin-order-waiting-badge {
+  border-radius: 7px;
+  padding-inline: 9px;
+  box-shadow: none;
+}
+
+.admin-order-detail-actions {
+  padding: 10px 20px 14px;
+}
+
+.admin-order-detail-action-row {
+  grid-template-columns: minmax(220px, 1fr) auto;
+  margin-left: auto;
+}
+
+.admin-order-detail-head button:hover {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.admin-order-detail-head button:active {
+  transform: scale(0.96);
+}
+
+.admin-order-detail-head button:focus-visible,
+.admin-order-copy-btn:focus-visible {
+  outline: 3px solid rgba(249, 115, 22, 0.24);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .admin-order-detail-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .admin-orders-workspace .admin-order-detail-panel,
+  .admin-order-detail-backdrop .admin-order-detail-panel {
+    width: 100%;
+    height: min(94dvh, 860px);
+    max-height: 94dvh;
+    border-radius: 20px 20px 0 0;
+    transform: translateY(100%);
+  }
+
+  .admin-order-detail-backdrop.is-open .admin-order-detail-panel {
+    transform: translateY(0);
+  }
+
+  .admin-order-detail-scroll {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .admin-order-detail-summary-card,
+  .admin-order-items-card,
+  .admin-order-payment-card,
+  .admin-order-partner-promotion-card,
+  .admin-order-settlement-card {
+    grid-column: auto;
+  }
+
+  .admin-order-detail-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-order-detail-title-icon {
+    display: none;
+  }
+
+  .admin-order-detail-action-row {
+    width: 100%;
+    grid-template-columns: 1fr auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-order-detail-backdrop,
+  .admin-order-detail-backdrop .admin-order-detail-panel {
+    transition: none;
+  }
+}
+
 @media (max-width: 900px) {
   .admin-orders-compact-head,
   .admin-orders-scope-bar {
@@ -2593,6 +2951,54 @@
   gap: 7px;
 }
 
+.admin-order-financial-label {
+  display: grid;
+  gap: 2px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.admin-order-financial-label small {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.admin-order-promotion-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.admin-order-promotion-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  padding: 2px 6px;
+  color: #c2410c;
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.admin-order-promotion-badge b {
+  font-weight: 800;
+}
+
+.admin-order-promotion-badge code {
+  border-left: 1px solid #fdba74;
+  padding-left: 4px;
+  color: #9a3412;
+  font-family: system-ui, Arial, sans-serif;
+  font-size: 9px;
+  font-weight: 850;
+}
+
 .admin-order-financial-flow > div i {
   display: inline-grid;
   width: 18px;
@@ -2616,6 +3022,16 @@
 .admin-order-financial-flow > div.is-discount strong,
 .admin-order-financial-flow > div.is-fee strong {
   color: #dc2626;
+}
+
+.admin-order-financial-flow .admin-order-tax-rate {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.admin-order-financial-flow > div.is-income strong {
+  color: #047857;
 }
 
 .admin-order-financial-flow > div.is-customer-total {
@@ -2716,7 +3132,7 @@
 
 .admin-orders-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 392px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   height: clamp(370px, calc(100dvh - 280px), 760px);
   min-height: 0;
@@ -2730,14 +3146,6 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-}
-
-.admin-orders-workspace .admin-order-detail-panel {
-  position: sticky;
-  top: 12px;
-  height: 100%;
-  min-height: 0;
-  max-height: none;
 }
 
 .admin-orders-workspace .admin-order-detail-scroll {
@@ -2782,8 +3190,4 @@
     min-height: 0;
   }
 
-  .admin-orders-workspace .admin-order-detail-panel {
-    position: fixed;
-    min-height: 0;
-  }
 }

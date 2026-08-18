@@ -1,4 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  CheckCircle,
+  Clock,
+  Copy,
+  MapPin,
+  Note,
+  Package,
+  Receipt,
+  Tag,
+  Truck,
+  User,
+  Wallet,
+  WarningCircle,
+  X
+} from "@phosphor-icons/react";
 import { formatMoney } from "../../../utils/format.js";
 import { getOrderItemOptionLabels } from "../../../utils/orderItemDisplay.js";
 import { getCustomerKey } from "../../../services/storageService.js";
@@ -226,7 +241,17 @@ function getPointStatusText(order = {}, estimatedPoints = 0) {
 }
 
 function OrderStatusBadge({ status }) {
-  return <span className={`admin-order-status-badge ${getStatusClass(status)}`}>{getStatusLabel(status)}</span>;
+  const StatusIcon = ["done"].includes(status)
+    ? CheckCircle
+    : ["cancelled", "payment_expired"].includes(status)
+      ? WarningCircle
+      : Clock;
+  return (
+    <span className={`admin-order-status-badge ${getStatusClass(status)}`}>
+      <StatusIcon size={13} weight="bold" aria-hidden="true" />
+      {getStatusLabel(status)}
+    </span>
+  );
 }
 
 function getLatePaymentReview(order = {}) {
@@ -635,6 +660,7 @@ function OrderDetailPanel({
   const totalPromotion = Number(order.totalPromotion || order.discountAmount || promoDiscount || 0);
   const coFundPromotion = Number(order.coFundPromotion || 0);
   const appPromotion = Math.max(totalPromotion - coFundPromotion, 0);
+  const otherPartnerPromotion = Number(order.otherPromotion || Math.max(totalPromotion - coFundPromotion, 0));
   const partnerGrossReceived = Number(order.grossReceived || 0);
   const partnerNetReceived = Number(order.netReceivedAmount || order.realReceived || order.netReceived || 0);
   const pointsBaseAmount = Number(
@@ -804,12 +830,19 @@ function OrderDetailPanelV2({
   isOpen,
   registeredCustomersByPhone
 }) {
-  const [isPartnerPromotionOpen, setIsPartnerPromotionOpen] = useState(false);
-  const selectedOrderKey = order ? getOrderId(order) : "";
-
   useEffect(() => {
-    setIsPartnerPromotionOpen(false);
-  }, [selectedOrderKey]);
+    if (!isOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   if (!order) {
     return (
@@ -845,15 +878,40 @@ function OrderDetailPanelV2({
   const totalPromotion = Number(order.totalPromotion || order.discountAmount || promoDiscount || 0);
   const coFundPromotion = Number(order.coFundPromotion || 0);
   const appPromotion = Math.max(totalPromotion - coFundPromotion, 0);
-  const partnerPromotions = Array.isArray(order.promotions) ? order.promotions : [];
-  const partnerPromotionCodes = [...new Set(
-    partnerPromotions.map((promotion) => String(promotion.code || "").trim()).filter(Boolean)
-  )];
-  const otherPartnerPromotion = Math.max(totalPromotion - coFundPromotion, 0);
+  const otherPartnerPromotion = Number(order.otherPromotion || Math.max(totalPromotion - coFundPromotion, 0));
+  const partnerPromotions = (Array.isArray(order.promotions) ? order.promotions : []).filter((promotion) => {
+    const key = String(promotion?.key || "");
+    return Boolean(promotion?.code) && !key.startsWith("item:") && key !== "finance:total_promotion";
+  });
   const partnerNetReceived = Number(order.netReceivedAmount || order.realReceived || order.netReceived || 0);
+  const partnerFinanceData = order.financeData && typeof order.financeData === "object"
+    ? order.financeData
+    : {};
+  const partnerServiceFee = Math.abs(Number(partnerFinanceData.commission || 0));
+  const partnerWithholdingTax = Math.abs(Number(partnerFinanceData.tax || 0));
+  const partnerVatTax = partnerWithholdingTax * (2 / 3);
+  const partnerPersonalIncomeTax = partnerWithholdingTax - partnerVatTax;
+  const partnerTransactionFee = Math.abs(Number(partnerFinanceData.transaction_fee || 0));
+  const partnerOtherFee = Math.abs(Number(partnerFinanceData.other_fee || 0));
+  const partnerAdjustmentFee = Number(partnerFinanceData.adjustment_fee || 0);
+  const partnerAdditionalIncome = Math.abs(Number(partnerFinanceData.additional_income || 0));
+  const hasPartnerFeeBreakdown = [
+    partnerServiceFee,
+    partnerWithholdingTax,
+    partnerTransactionFee,
+    partnerOtherFee,
+    Math.abs(partnerAdjustmentFee),
+    partnerAdditionalIncome
+  ].some((value) => value > 0);
   const partnerPlatformDeduction = partnerNetReceived > 0
     ? Math.max(totalValue - partnerNetReceived, 0)
     : 0;
+  const formatRate = (value, base) => {
+    const safeValue = Number(value || 0);
+    const safeBase = Number(base || 0);
+    if (safeBase <= 0) return "";
+    return `${(safeValue / safeBase * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`;
+  };
   const pointsBaseAmount = Number(
     isPartnerOrder
       ? order.loyaltyEligibleAmount || order.netReceivedAmount || 0
@@ -869,14 +927,22 @@ function OrderDetailPanelV2({
   const isActiveOrder = isActiveOperationalStatus(status);
 
   return (
-    <aside className={`admin-order-detail-panel ${isOpen ? "is-open" : ""}`}>
+    <div className={`admin-order-detail-backdrop ${isOpen ? "is-open" : ""}`} onMouseDown={onClose}>
+    <aside
+      className={`admin-order-detail-panel ${isOpen ? "is-open" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-order-detail-title"
+      onMouseDown={(event) => event.stopPropagation()}
+    >
       <div className="admin-order-detail-head admin-order-detail-head-v2">
+        <span className="admin-order-detail-title-icon" aria-hidden="true"><Receipt size={23} weight="duotone" /></span>
         <div className="admin-order-detail-title-block">
           <span>Chi tiết đơn hàng</span>
-          <h3>{getDisplayOrderCode(order)}</h3>
+          <h3 id="admin-order-detail-title">{getDisplayOrderCode(order)}</h3>
           <small>{formatOrderTime(order.createdAt)}</small>
         </div>
-        <button type="button" onClick={onClose} aria-label="Đóng chi tiết đơn">×</button>
+        <button type="button" onClick={onClose} aria-label="Đóng chi tiết đơn"><X size={19} weight="bold" /></button>
       </div>
 
       <div className="admin-order-detail-scroll">
@@ -889,6 +955,9 @@ function OrderDetailPanelV2({
           </section>
         ) : null}
         <section className="admin-order-detail-summary-card">
+          <div className="admin-order-detail-section-label">
+            <Receipt size={16} weight="duotone" /> Thông tin đơn
+          </div>
           <div className="admin-order-detail-status-line">
             <OrderStatusBadge status={status} />
             <span className={`admin-order-type-badge ${sourceMeta.className}`}>{sourceMeta.label}</span>
@@ -900,37 +969,26 @@ function OrderDetailPanelV2({
             ) : null}
           </div>
 
-          {branchName ? (
-            <div className="admin-order-detail-branch">
-              <span>Chi nhánh xử lý</span>
-              <strong>{branchName}</strong>
-            </div>
-          ) : null}
-
-          <div className="admin-order-detail-summary-grid">
-            <div>
-              <span>Thanh toán</span>
-              <strong>{String(order.paymentMethod || "COD").toUpperCase()} · {getPaymentStateLabel(order)}</strong>
-            </div>
-            <div>
-              <span>Món</span>
-              <strong>{totalItemQuantity}</strong>
-            </div>
-            <div>
-              <span>Tổng thu khách</span>
-              <strong>{formatMoney(totalValue)}</strong>
-            </div>
+          <div className="admin-order-info-grid">
+            <div><span>Mã đơn</span><strong>{getDisplayOrderCode(order)}</strong></div>
+            <div><span>Thời gian tạo</span><strong>{formatOrderTime(order.createdAt)}</strong></div>
+            <div><span>Chi nhánh xử lý</span><strong>{branchName || "—"}</strong></div>
+            <div><span>Nguồn / Loại</span><strong>{sourceMeta.label} · {fulfillmentMeta.label}</strong></div>
+            <div><span>Thanh toán</span><strong>{getPaymentStateLabel(order)}</strong></div>
+            <div><span>Phương thức</span><strong>{String(order.paymentMethod || "COD").toUpperCase()}</strong></div>
+            <div><span>Số lượng món</span><strong>{totalItemQuantity} phần</strong></div>
+            <div className="is-total"><span>Tổng thu khách</span><strong>{formatMoney(totalValue)}</strong></div>
           </div>
         </section>
 
         <section className="admin-order-detail-card admin-order-customer-card">
           <div className="admin-order-detail-section-head">
-            <h4>Khách hàng</h4>
+            <h4><User size={17} weight="duotone" /> Khách hàng</h4>
           </div>
           <div className="admin-order-customer-box">
-            <strong>{orderCustomerName || "Khách lẻ"}</strong>
-            <span>{order.customerPhone || order.phone || "--"}</span>
-            {addressText ? <small>{addressText}</small> : null}
+            <div><span>Khách hàng</span><strong>{orderCustomerName || "Khách lẻ"}</strong></div>
+            <div><span>Số điện thoại</span><strong>{order.customerPhone || order.phone || "—"}</strong></div>
+            <div className="is-address"><span>Địa chỉ / Nhận món</span><strong>{addressText || "—"}</strong></div>
           </div>
           {registeredCustomer ? (
             <div className="admin-order-detail-row">
@@ -942,13 +1000,18 @@ function OrderDetailPanelV2({
 
         <section className="admin-order-detail-card admin-order-items-card">
           <div className="admin-order-detail-section-head">
-            <h4>Danh sách món</h4>
+            <h4><Package size={17} weight="duotone" /> Danh sách món</h4>
             <span>{items.length} món • {totalItemQuantity} phần</span>
           </div>
           <div className="admin-order-item-list">
+            <div className="admin-order-item-table-head" aria-hidden="true">
+              <span>Món</span><span>SL</span><span>Đơn giá</span><span>Giảm giá</span><span>Thành tiền</span>
+            </div>
             {items.map((item, index) => {
-              const lineTotal = Number(item.lineTotal || (item.unitTotal || item.price || 0) * (item.quantity || 1));
-              const originalLineTotal = Number(item.originalUnitPrice || item.price || 0) * Number(item.quantity || 1);
+              const quantity = Number(item.quantity || 1);
+              const lineTotal = Number(item.lineTotal || (item.unitTotal || item.price || 0) * quantity);
+              const originalUnitPrice = Number(item.originalUnitPrice || item.unitTotal || item.price || 0);
+              const originalLineTotal = originalUnitPrice * quantity;
               const itemDiscount = Math.max(
                 Number(item.itemDiscountAmount || 0),
                 originalLineTotal > lineTotal ? originalLineTotal - lineTotal : 0
@@ -959,67 +1022,18 @@ function OrderDetailPanelV2({
                   <div>
                     <strong>{item.name}</strong>
                     {options.length ? <small>{options.join(" • ")}</small> : null}
-                    {isPartnerOrder && itemDiscount > 0 ? (
-                      <small className="admin-order-item-discount">Giảm {formatMoney(itemDiscount)}</small>
-                    ) : null}
                   </div>
-                  <span>x{item.quantity || 1}</span>
-                  <div className="admin-order-item-price">
-                    {isPartnerOrder && originalLineTotal > lineTotal ? <del>{formatMoney(originalLineTotal)}</del> : null}
-                    <em>{formatMoney(lineTotal)}</em>
-                  </div>
+                  <span>{quantity}</span>
+                  <em className="admin-order-item-unit-price">{formatMoney(originalUnitPrice)}</em>
+                  <em className={`admin-order-item-discount-value${itemDiscount > 0 ? " has-discount" : ""}`}>
+                    {itemDiscount > 0 ? `-${formatMoney(itemDiscount)}` : "—"}
+                  </em>
+                  <em className="admin-order-item-line-total">{formatMoney(lineTotal)}</em>
                 </div>
               );
             })}
           </div>
         </section>
-
-        {isPartnerOrder && (totalPromotion > 0 || partnerPromotions.length > 0) ? (
-          <section className={`admin-order-detail-card admin-order-partner-promotion-card ${isPartnerPromotionOpen ? "is-open" : ""}`}>
-            <button
-              type="button"
-              className="admin-order-partner-promotion-toggle"
-              aria-expanded={isPartnerPromotionOpen}
-              onClick={() => setIsPartnerPromotionOpen((current) => !current)}
-            >
-              <span>
-                <b>Chi tiết ưu đãi</b>
-                <small>{isPartnerPromotionOpen ? "Thu gọn" : "Xem cách tính"}</small>
-              </span>
-              <strong>Tổng ưu đãi -{formatMoney(totalPromotion)}</strong>
-            </button>
-            {isPartnerPromotionOpen ? <div className="admin-order-promotion-content">
-              <div className="admin-order-promotion-equation">
-                {coFundPromotion > 0 ? (
-                  <div>
-                    <span>Nền tảng tài trợ</span>
-                    <strong>-{formatMoney(coFundPromotion)}</strong>
-                  </div>
-                ) : null}
-                {otherPartnerPromotion > 0 ? (
-                  <div>
-                    <span>Ưu đãi khác</span>
-                    <strong>-{formatMoney(otherPartnerPromotion)}</strong>
-                  </div>
-                ) : null}
-                <div className="is-total">
-                  <span>Tổng ưu đãi</span>
-                  <strong>-{formatMoney(totalPromotion)}</strong>
-                </div>
-              </div>
-              {partnerPromotionCodes.length > 0 ? (
-                <div className="admin-order-promotion-codes">
-                  <span>Mã áp dụng</span>
-                  <div>{partnerPromotionCodes.map((code) => <b key={code}>{code}</b>)}</div>
-                </div>
-              ) : (
-                <p className="admin-order-promotion-note">
-                  Đơn này không có mã khuyến mãi được đối tác gửi về.
-                </p>
-              )}
-            </div> : null}
-          </section>
-        ) : null}
 
         <section className="admin-order-detail-card admin-order-payment-card">
           <div className="admin-order-payment-highlight">
@@ -1027,30 +1041,112 @@ function OrderDetailPanelV2({
             <strong>{formatMoney(isPartnerOrder && partnerNetReceived > 0 ? partnerNetReceived : totalValue)}</strong>
           </div>
           <div className="admin-order-detail-section-head">
-            <h4>{isPartnerOrder ? "Dòng tiền đơn hàng" : "Thanh toán"}</h4>
+            <h4><Wallet size={17} weight="duotone" /> {isPartnerOrder ? "Dòng tiền đơn hàng" : "Thanh toán"}</h4>
           </div>
           {isPartnerOrder ? (
             <div className="admin-order-financial-flow">
               <div>
-                <span><i>1</i> Giá trị món ban đầu</span>
+                <span><i>1</i> Giá trị món ban đầu <small className="admin-order-tax-rate">100%</small></span>
                 <strong>{formatMoney(subtotalValue)}</strong>
               </div>
-              <div className="is-discount">
-                <span><i>2</i> Tổng khuyến mãi</span>
-                <strong>-{formatMoney(totalPromotion)}</strong>
-              </div>
+              {coFundPromotion > 0 ? (
+                <div className="is-discount">
+                  <span><i>2a</i> Grab đồng tài trợ <small className="admin-order-tax-rate">{formatRate(coFundPromotion, subtotalValue)}</small></span>
+                  <strong>-{formatMoney(coFundPromotion)}</strong>
+                </div>
+              ) : null}
+              {otherPartnerPromotion > 0 ? (
+                <div className="is-discount">
+                  <span>
+                    <i>{coFundPromotion > 0 ? "2b" : "2"}</i>
+                    <b className="admin-order-financial-label">
+                      <span>Giảm giá món / ưu đãi khác <small className="admin-order-tax-rate">{formatRate(otherPartnerPromotion, subtotalValue)}</small></span>
+                      {partnerPromotions.length ? (
+                        <span className="admin-order-promotion-badges">
+                          {partnerPromotions.map((promotion) => (
+                            <span className="admin-order-promotion-badge" key={`${promotion.key}-${promotion.code}-${promotion.amount}`}>
+                              <Tag size={11} weight="duotone" />
+                              <b>{promotion.name || "Khuyến mãi đối tác"}</b>
+                              <code>{promotion.code}</code>
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </b>
+                  </span>
+                  <strong>-{formatMoney(otherPartnerPromotion)}</strong>
+                </div>
+              ) : null}
+              {totalPromotion > 0 && coFundPromotion <= 0 && otherPartnerPromotion <= 0 ? (
+                <div className="is-discount">
+                  <span><i>2</i> Tổng khuyến mãi <small className="admin-order-tax-rate">{formatRate(totalPromotion, subtotalValue)}</small></span>
+                  <strong>-{formatMoney(totalPromotion)}</strong>
+                </div>
+              ) : null}
               <div className="is-customer-total">
-                <span><i>3</i> Khách thanh toán</span>
+                <span><i>3</i> Khách thanh toán <small className="admin-order-tax-rate">{formatRate(totalValue, subtotalValue)}</small></span>
                 <strong>{formatMoney(totalValue)}</strong>
               </div>
               {partnerNetReceived > 0 ? (
                 <>
-                  <div className="is-fee">
-                    <span><i>4</i> Phí và chiết khấu nền tảng</span>
-                    <strong>-{formatMoney(partnerPlatformDeduction)}</strong>
-                  </div>
+                  {hasPartnerFeeBreakdown ? (
+                    <>
+                      {partnerServiceFee > 0 ? (
+                        <div className="is-fee">
+                          <span>
+                            <i>4a</i>
+                            <b className="admin-order-financial-label">
+                              <span>Phí dịch vụ GrabFood <small className="admin-order-tax-rate">{formatRate(partnerServiceFee, totalValue)}</small></span>
+                            </b>
+                          </span>
+                          <strong>-{formatMoney(partnerServiceFee)}</strong>
+                        </div>
+                      ) : null}
+                      {partnerVatTax > 0 ? (
+                        <div className="is-fee">
+                          <span><i>4b</i> Thuế GTGT khấu trừ <small className="admin-order-tax-rate">3%</small></span>
+                          <strong>-{formatMoney(partnerVatTax)}</strong>
+                        </div>
+                      ) : null}
+                      {partnerPersonalIncomeTax > 0 ? (
+                        <div className="is-fee">
+                          <span><i>4c</i> Thuế TNCN khấu trừ <small className="admin-order-tax-rate">1,5%</small></span>
+                          <strong>-{formatMoney(partnerPersonalIncomeTax)}</strong>
+                        </div>
+                      ) : null}
+                      {partnerTransactionFee > 0 ? (
+                        <div className="is-fee">
+                          <span><i>4d</i> Phí giao dịch</span>
+                          <strong>-{formatMoney(partnerTransactionFee)}</strong>
+                        </div>
+                      ) : null}
+                      {partnerOtherFee > 0 ? (
+                        <div className="is-fee">
+                          <span><i>4e</i> Phí khác</span>
+                          <strong>-{formatMoney(partnerOtherFee)}</strong>
+                        </div>
+                      ) : null}
+                      {partnerAdjustmentFee !== 0 ? (
+                        <div className={partnerAdjustmentFee > 0 ? "is-fee" : "is-income"}>
+                          <span><i>4f</i> Điều chỉnh đối soát</span>
+                          <strong>{partnerAdjustmentFee > 0 ? "-" : "+"}{formatMoney(Math.abs(partnerAdjustmentFee))}</strong>
+                        </div>
+                      ) : null}
+                      {partnerAdditionalIncome > 0 ? (
+                        <div className="is-income">
+                          <span><i>4g</i> Thu nhập bổ sung</span>
+                          <strong>+{formatMoney(partnerAdditionalIncome)}</strong>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="is-fee">
+                      <span><i>4</i> Tổng phí và thuế chờ chi tiết</span>
+                      <strong>-{formatMoney(partnerPlatformDeduction)}</strong>
+                    </div>
+                  )}
                   <div className="is-net">
-                    <span><i>5</i> Quán thực nhận</span>
+                    <span><i>5</i> Quán thực nhận <small className="admin-order-tax-rate">{formatRate(partnerNetReceived, totalValue)}</small></span>
                     <strong>{formatMoney(partnerNetReceived)}</strong>
                   </div>
                 </>
@@ -1059,9 +1155,6 @@ function OrderDetailPanelV2({
                   Chưa có dữ liệu tiền thực nhận từ đối tác.
                 </p>
               )}
-              <small>
-                Giá gốc − khuyến mãi = khách trả; khách trả − phí/chiết khấu = quán thực nhận.
-              </small>
             </div>
           ) : <div className="admin-order-total-lines">
             <div><span>Tạm tính</span><strong>{formatMoney(subtotalValue)}</strong></div>
@@ -1091,7 +1184,7 @@ function OrderDetailPanelV2({
         {shouldShowShipperSection ? (
           <section className="admin-order-detail-card admin-order-settlement-card">
             <div className="admin-order-detail-section-head">
-              <h4>Đối soát shipper</h4>
+              <h4><Truck size={17} weight="duotone" /> Đối soát shipper</h4>
             </div>
             <div className="admin-order-total-lines">
               <div><span>Khách trả khi nhận</span><strong>{formatMoney(settlement.customerNeedPayWhenReceive || totalValue)}</strong></div>
@@ -1105,7 +1198,7 @@ function OrderDetailPanelV2({
         {note ? (
           <section className="admin-order-detail-card">
             <div className="admin-order-detail-section-head">
-              <h4>Ghi chú</h4>
+              <h4><Note size={17} weight="duotone" /> Ghi chú</h4>
             </div>
             <p className="admin-order-note">{note}</p>
           </section>
@@ -1114,10 +1207,10 @@ function OrderDetailPanelV2({
         {shouldShowShipperSection ? (
           <section className="admin-order-detail-card">
             <div className="admin-order-detail-section-head">
-              <h4>Thông tin gửi shipper</h4>
+              <h4><MapPin size={17} weight="duotone" /> Thông tin gửi shipper</h4>
             </div>
             <button type="button" className="admin-order-copy-btn" onClick={() => onCopyShipper(orderId)}>
-              {copied ? "Đã copy" : "Copy info shipper"}
+              <Copy size={16} weight="bold" /> {copied ? "Đã sao chép" : "Sao chép thông tin shipper"}
             </button>
             <textarea readOnly value={shipperText || ""} />
           </section>
@@ -1135,6 +1228,7 @@ function OrderDetailPanelV2({
         )}
       </div>
     </aside>
+    </div>
   );
 }
 
@@ -1409,7 +1503,7 @@ export default function OrderManager({
         ) : null}
         </section>
 
-        {activeOrder ? (
+        {activeOrder && detailPanelOpen ? (
           <OrderDetailPanelV2
             order={activeOrder}
             updateOrderStatus={safeUpdateOrderStatus}
