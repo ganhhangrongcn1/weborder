@@ -21,6 +21,7 @@ import HomeInfoCards from "./components/HomeInfoCards.jsx";
 import useHomeComputed from "./useHomeComputed.js";
 import HomeReviewRewardBanner from "./components/HomeReviewRewardBanner.jsx";
 import HomeReviewRewardPopup from "./components/HomeReviewRewardPopup.jsx";
+import DeliveryAppOrderingModal from "../../components/customer/DeliveryAppOrderingModal.jsx";
 import { createHomeActionHandlers } from "./homeActions.js";
 import { createHomeFulfillmentActions } from "./homeFulfillmentActions.js";
 import useHomeEffects from "./useHomeEffects.js";
@@ -139,6 +140,7 @@ export default function Home({
   const [pickupClock, setPickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
   const [homePopupOpen, setHomePopupOpen] = useState(false);
   const [reviewRewardPopupOpen, setReviewRewardPopupOpen] = useState(false);
+  const [deliveryAppOrderingOpen, setDeliveryAppOrderingOpen] = useState(false);
   const [homeClockTick, setHomeClockTick] = useState(() => Date.now());
   const popularProductIds = useHomePopularProducts({
     enabled: products.length > 0,
@@ -246,6 +248,11 @@ export default function Home({
     buildOutOfHoursNotice,
     setHomeFulfillment,
     setDeliveryPlannerOpen,
+    openDeliveryApps: () => {
+      setHomePopupOpen(false);
+      setReviewRewardPopupOpen(false);
+      setDeliveryAppOrderingOpen(true);
+    },
     setPickupPlannerOpen,
     selectedDeliveryBranchInfo,
     isBranchOpenNow,
@@ -301,7 +308,7 @@ export default function Home({
         deliveryAppsBlock={deliveryAppsBlock}
         deliveryAppsList={deliveryAppsList}
         deliveryAppBranches={deliveryAppBranches}
-        deliveryBranches={deliveryBranches}
+        deliveryBranches={branches.length ? branches : defaultPickupBranches}
       />
     ),
     promoVouchers: () => showPromoVouchers ? (
@@ -382,6 +389,12 @@ export default function Home({
           setReviewRewardPopupOpen(false);
           navigate("reviewRewards", "account");
         }}
+      />
+
+      <DeliveryAppOrderingModal
+        open={deliveryAppOrderingOpen}
+        branches={deliveryAppBranches}
+        onClose={() => setDeliveryAppOrderingOpen(false)}
       />
 
       <HomeBranchPlannerModal

@@ -69,7 +69,8 @@ export default function CheckoutFulfillmentSection({
           <button
             type="button"
             onClick={handleSelectDelivery}
-            disabled={deliveryLocked}
+            disabled={forcePickupOnly}
+            aria-disabled={deliveryLocked}
             aria-pressed={fulfillmentType === "delivery"}
             className={`${fulfillmentType === "delivery" ? "active" : ""} ${deliveryLocked ? "is-unavailable" : ""}`}
           >

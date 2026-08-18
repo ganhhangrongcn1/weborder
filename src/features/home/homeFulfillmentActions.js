@@ -8,6 +8,7 @@ export function createHomeFulfillmentActions({
   buildOutOfHoursNotice,
   setHomeFulfillment,
   setDeliveryPlannerOpen,
+  openDeliveryApps,
   setPickupPlannerOpen,
   selectedDeliveryBranchInfo,
   isBranchOpenNow,
@@ -20,7 +21,11 @@ export function createHomeFulfillmentActions({
 }) {
   const openMenuWithDelivery = () => {
     if (!deliveryBranches.length) {
-      setServiceNotice?.(buildDeliveryDisabledNotice?.() || buildStoreOfflineNotice?.());
+      if (openDeliveryApps) {
+        openDeliveryApps();
+      } else {
+        setServiceNotice?.(buildDeliveryDisabledNotice?.() || buildStoreOfflineNotice?.());
+      }
       return;
     }
     setHomeFulfillment("delivery");

@@ -8,6 +8,8 @@ import CheckoutPricingSection from "./components/CheckoutPricingSection.jsx";
 import CheckoutModals from "./components/CheckoutModals.jsx";
 import CheckoutPlacingOverlay from "./components/CheckoutPlacingOverlay.jsx";
 import PickupOrderConfirmationModal from "./components/PickupOrderConfirmationModal.jsx";
+import DeliveryAppOrderingModal from "../../components/customer/DeliveryAppOrderingModal.jsx";
+import { buildDeliveryAppBranches } from "../../services/deliveryAppService.js";
 import { getCheckoutLoyaltyRule } from "../../services/checkoutService.js";
 import {
   clearCheckoutVoucherIntent,
@@ -108,6 +110,7 @@ export default function Checkout({
   deliveryZones = [],
   coupons = [],
   smartPromotions = [],
+  homeContent = [],
   branches = [],
   checkoutPreset,
   setCheckoutPreset,
@@ -138,11 +141,20 @@ export default function Checkout({
   const [checkoutFieldErrors, setCheckoutFieldErrors] = useState({});
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [isPickupConfirmationOpen, setIsPickupConfirmationOpen] = useState(false);
+  const [isDeliveryAppOrderingOpen, setIsDeliveryAppOrderingOpen] = useState(false);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
   const [paymentMethod, setPaymentMethod] = useState(
     isQrCounterOrder || String(checkoutPreset?.fulfillmentType || "").toLowerCase() === "pickup"
       ? "momo"
       : "COD"
+  );
+  const deliveryAppsBlock = useMemo(
+    () => (Array.isArray(homeContent) ? homeContent : homeContent?.items || []).find((block) => block?.id === "deliveryApps"),
+    [homeContent]
+  );
+  const deliveryAppBranches = useMemo(
+    () => buildDeliveryAppBranches(deliveryAppsBlock, branches),
+    [branches, deliveryAppsBlock]
   );
   const [pickupContact, setPickupContact] = useState(() => ({
     name: pickCheckoutCustomerName(userProfile, demoUser),
@@ -644,11 +656,7 @@ export default function Checkout({
           forcePickupOnly={isQrCounterOrder}
           isQrCounterOrder={isQrCounterOrder}
           deliveryAvailable={deliveryAvailable}
-          onUnavailableDelivery={() => setCheckoutNotice({
-            icon: "warning",
-            title: "Tạm ngưng giao hàng",
-            message: "Hiện quán chưa bật tính năng giao hàng. Bạn vui lòng chọn Đến lấy để tiếp tục đặt món."
-          })}
+          onUnavailableDelivery={() => setIsDeliveryAppOrderingOpen(true)}
           hidePickupSchedule={isQrCounterOrder}
           lockPickupBranch={isQrCounterOrder}
           setIsAddressModalOpen={setIsAddressModalOpen}
@@ -773,6 +781,12 @@ export default function Checkout({
         formatMoney={formatMoney}
         onClose={() => setIsPickupConfirmationOpen(false)}
         onConfirm={confirmPickupOrder}
+      />
+
+      <DeliveryAppOrderingModal
+        open={isDeliveryAppOrderingOpen}
+        branches={deliveryAppBranches}
+        onClose={() => setIsDeliveryAppOrderingOpen(false)}
       />
 
       <CheckoutModals

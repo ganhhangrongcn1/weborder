@@ -7,57 +7,7 @@ import { DEFAULT_SHIPPING_CONFIG } from "../../services/shippingService.js";
 import { formatMoney } from "../../utils/format.js";
 import { buildHomeCategories } from "../../utils/pureHelpers.js";
 import { calculateSalePrice, isTopBannerItem, toIdList } from "./homeHelpers.js";
-
-const DEFAULT_DELIVERY_APPS = [
-  { id: "grab", name: "GrabFood", active: true, url: "" },
-  { id: "shopee", name: "ShopeeFood", active: true, url: "" },
-  { id: "xanh-ngon", name: "Xanh Ngon", active: true, url: "" }
-];
-
-function getBranchRawKey(branch, index) {
-  return String(branch?.id || branch?.name || `branch-${index}`);
-}
-
-function getBranchAppKey(branch, index) {
-  return `${getBranchRawKey(branch, index)}::${index}`;
-}
-
-function buildDeliveryAppBranches(deliveryAppsBlock, deliveryBranches) {
-  const savedBranchApps = Array.isArray(deliveryAppsBlock?.branchApps) ? deliveryAppsBlock.branchApps : [];
-  const rawKeyCounts = deliveryBranches.reduce((counts, branch, index) => {
-    const rawKey = getBranchRawKey(branch, index);
-    counts[rawKey] = (counts[rawKey] || 0) + 1;
-    return counts;
-  }, {});
-
-  return deliveryBranches.map((branch, index) => {
-    const rawKey = getBranchRawKey(branch, index);
-    const branchId = getBranchAppKey(branch, index);
-    const savedBranch =
-      savedBranchApps.find((item) => String(item?.branchId || "") === branchId) ||
-      (rawKeyCounts[rawKey] === 1 || index === 0
-        ? savedBranchApps.find((item) => String(item?.branchId || "") === rawKey)
-        : null) ||
-      {};
-    const savedApps = Array.isArray(savedBranch.apps) ? savedBranch.apps : [];
-
-    return {
-      branchId,
-      branchSourceId: rawKey,
-      branchName: branch?.name || savedBranch.branchName || "Chi nhánh",
-      apps: DEFAULT_DELIVERY_APPS.map((app) => {
-        const savedApp = savedApps.find((item) => String(item?.id || "") === app.id || String(item?.name || "") === app.name);
-        return {
-          ...app,
-          ...savedApp,
-          id: app.id,
-          name: savedApp?.name || app.name,
-          active: savedApp?.active !== false
-        };
-      }).filter((app) => app.active !== false)
-    };
-  }).filter((branch) => branch.apps.length);
-}
+import { buildDeliveryAppBranches } from "../../services/deliveryAppService.js";
 
 function hashPopupCampaign(value) {
   const input = String(value || "");
@@ -254,7 +204,10 @@ export default function useHomeComputed({
     (branch) => branch?.shipEnabled !== false
   );
   const selectedDeliveryBranchInfo = deliveryBranches.find((branch) => branch.id === selectedDeliveryBranch) || deliveryBranches[0] || null;
-  const deliveryAppBranches = buildDeliveryAppBranches(deliveryAppsBlock, deliveryBranches);
+  const deliveryAppBranches = buildDeliveryAppBranches(
+    deliveryAppsBlock,
+    branches.length ? branches : defaultPickupBranches
+  );
 
   const visibleCategoryNames = categories.filter((category) => {
     if (category === homeText.all) return true;
