@@ -53,6 +53,7 @@ export function getPointEntryTitle(entry = {}) {
   if (type === "ORDER_SPEND") return orderCode ? `Dùng điểm cho đơn ${orderCode}` : "Dùng điểm thanh toán";
   if (type === "ORDER_EARN_REVERSED") return orderCode ? `Thu hồi điểm đơn ${orderCode}` : "Thu hồi điểm đơn hàng";
   if (type === "ORDER_SPEND_REVERSED") return orderCode ? `Hoàn điểm đơn ${orderCode}` : "Hoàn điểm đơn hàng";
+  if (type === "POINTS_EXPIRED") return "Điểm hết hạn sau 60 ngày";
   if (type === "CHECKIN" || type === "CHECKIN_V2") return "Điểm danh nhận điểm";
   if (type === "MILESTONE") return "Thưởng chuỗi điểm danh";
 

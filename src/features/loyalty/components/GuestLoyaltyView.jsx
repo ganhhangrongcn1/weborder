@@ -35,7 +35,7 @@ export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
   const loyaltyRulesRows = [
     { label: "Tích điểm theo hạng", value: `${minTierRate}% đến ${maxTierRate}%` },
     { label: "Dùng điểm", value: `1 điểm = 1đ, tối đa ${maxRedemptionPercent}%` },
-    { label: "Hạn điểm", value: "12 tháng từ lần mua cuối" }
+    { label: "Hạn điểm", value: "60 ngày riêng cho từng lần nhận điểm" }
   ];
   const safeBonusDisplay = Object.entries(loyaltyRule?.streakRewards || {})
     .map(([days, points]) => ({

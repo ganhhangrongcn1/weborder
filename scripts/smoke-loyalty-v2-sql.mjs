@@ -107,6 +107,12 @@ const CHECKIN_ENABLED_FILE = path.join(
   "migrations",
   "20260723014215_enforce_loyalty_checkin_enabled.sql",
 );
+const ROLLING_EXPIRY_FILE = path.join(
+  ROOT_DIR,
+  "supabase",
+  "migrations",
+  "20260818000639_loyalty_points_rolling_60_day_expiry.sql",
+);
 
 const assertIncludes = (content, expected, message) => {
   if (!content.includes(expected)) {
@@ -114,7 +120,7 @@ const assertIncludes = (content, expected, message) => {
   }
 };
 
-const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper, orderVoucherValidation, loyaltyVoucherValidity, loyaltyVoucherUsageSync, checkin30DayCycle, checkinEnabled] = await Promise.all([
+const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived, tierEngine, defaultActivation, reachableTiers, tierIdentity, atomicCompletion, registrationVoucherFix, voucherSecurity, voucherPolicyHelper, orderVoucherValidation, loyaltyVoucherValidity, loyaltyVoucherUsageSync, checkin30DayCycle, checkinEnabled, rollingExpiry] = await Promise.all([
   readFile(FOUNDATION_FILE, "utf8"),
   readFile(AUDIT_FILE, "utf8"),
   readFile(POSTCHECK_FILE, "utf8"),
@@ -134,6 +140,7 @@ const [foundation, audit, postcheck, cutover, programConfig, partnerNetReceived,
   readFile(LOYALTY_VOUCHER_USAGE_SYNC_FILE, "utf8"),
   readFile(CHECKIN_30_DAY_CYCLE_FILE, "utf8"),
   readFile(CHECKIN_ENABLED_FILE, "utf8"),
+  readFile(ROLLING_EXPIRY_FILE, "utf8"),
 ]);
 
 assertIncludes(foundation, "begin;", "Foundation migration must be transactional");
@@ -497,5 +504,10 @@ assertIncludes(
 );
 assertIncludes(checkinEnabled, "source_config ->> 'checkinEnabled'", "Check-in toggle must be read from the active rule");
 assertIncludes(checkinEnabled, "if not found or not v_checkin_enabled", "Disabled check-in must be rejected by the database");
+assertIncludes(rollingExpiry, "interval '60 days'", "Point lots must expire after exactly 60 days");
+assertIncludes(rollingExpiry, "order by l.expires_at, l.earned_at, l.id", "Point debits must use expiry-first FIFO ordering");
+assertIncludes(rollingExpiry, "loyalty_private.point_lot_allocations", "FIFO consumption must remain auditable");
+assertIncludes(rollingExpiry, "'EXPIRE_POINTS'", "Expired points must create a ledger event");
+assertIncludes(rollingExpiry, "expire-loyalty-point-lots-hourly", "Expired lots must be processed automatically");
 
 console.log("Loyalty V2 SQL smoke test passed.");
