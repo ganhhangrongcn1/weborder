@@ -7,6 +7,7 @@ import CheckoutFulfillmentSection from "./components/CheckoutFulfillmentSection.
 import CheckoutPricingSection from "./components/CheckoutPricingSection.jsx";
 import CheckoutModals from "./components/CheckoutModals.jsx";
 import CheckoutPlacingOverlay from "./components/CheckoutPlacingOverlay.jsx";
+import PickupOrderConfirmationModal from "./components/PickupOrderConfirmationModal.jsx";
 import { getCheckoutLoyaltyRule } from "../../services/checkoutService.js";
 import {
   clearCheckoutVoucherIntent,
@@ -136,6 +137,7 @@ export default function Checkout({
   const [checkoutNotice, setCheckoutNotice] = useState(null);
   const [checkoutFieldErrors, setCheckoutFieldErrors] = useState({});
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [isPickupConfirmationOpen, setIsPickupConfirmationOpen] = useState(false);
   const [selectedDeliveryBranchId, setSelectedDeliveryBranchId] = useState(checkoutPreset?.selectedDeliveryBranch || "");
   const [paymentMethod, setPaymentMethod] = useState(
     isQrCounterOrder || String(checkoutPreset?.fulfillmentType || "").toLowerCase() === "pickup"
@@ -563,6 +565,11 @@ export default function Checkout({
       return;
     }
 
+    if (fulfillmentType === "pickup") {
+      setIsPickupConfirmationOpen(true);
+      return;
+    }
+
     setIsPlacingOrder(true);
     try {
       await executeCheckoutPlaceOrder();
@@ -586,6 +593,17 @@ export default function Checkout({
     }
 
     await handlePlaceOrder();
+  };
+
+  const confirmPickupOrder = async () => {
+    if (isPlacingOrder) return;
+    setIsPickupConfirmationOpen(false);
+    setIsPlacingOrder(true);
+    try {
+      await executeCheckoutPlaceOrder();
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   const cartCount = useMemo(
@@ -743,6 +761,19 @@ export default function Checkout({
       </div>
 
       <CheckoutPlacingOverlay open={isPlacingOrder} />
+
+      <PickupOrderConfirmationModal
+        open={isPickupConfirmationOpen}
+        cart={cart}
+        branch={selectedBranchInfo}
+        pickupTimeText={pickupTimeText}
+        paymentMethod={paymentMethod}
+        total={checkoutTotal}
+        earnedPoints={earnedPreviewPoints}
+        formatMoney={formatMoney}
+        onClose={() => setIsPickupConfirmationOpen(false)}
+        onConfirm={confirmPickupOrder}
+      />
 
       <CheckoutModals
         isPromoModalOpen={isPromoModalOpen}

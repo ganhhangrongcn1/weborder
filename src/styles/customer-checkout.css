@@ -2740,3 +2740,210 @@ button.payment-card {
   }
 }
 
+.pickup-confirmation-sheet {
+  max-width: 520px;
+}
+
+.pickup-confirmation {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 4px;
+}
+
+.pickup-confirmation__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.pickup-confirmation__icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  place-items: center;
+  border-radius: 16px;
+  background: #fff3e8;
+  color: #df5a16;
+}
+
+.pickup-confirmation__header p,
+.pickup-confirmation__header h2,
+.pickup-confirmation__header span,
+.pickup-confirmation__branch p {
+  margin: 0;
+}
+
+.pickup-confirmation__header p {
+  color: #df5a16;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.pickup-confirmation__header h2 {
+  margin-top: 2px;
+  color: #1f2937;
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.pickup-confirmation__header span {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pickup-confirmation__branch {
+  padding: 16px;
+  border: 1px solid #f5b98e;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fff8f1, #fffdf9);
+  box-shadow: 0 8px 24px rgba(131, 70, 29, .08);
+}
+
+.pickup-confirmation__branch > div,
+.pickup-confirmation__branch small,
+.pickup-confirmation__points span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pickup-confirmation__branch > div {
+  color: #a54817;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.pickup-confirmation__branch strong {
+  display: block;
+  margin-top: 8px;
+  color: #8e3510;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.pickup-confirmation__branch p {
+  margin-top: 4px;
+  color: #5f4b3e;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pickup-confirmation__branch small {
+  margin-top: 10px;
+  color: #7b4b2c;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.pickup-confirmation__items {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid #ece7e2;
+  border-bottom: 1px solid #ece7e2;
+}
+
+.pickup-confirmation__items > div,
+.pickup-confirmation__summary > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pickup-confirmation__items span {
+  min-width: 0;
+  overflow: hidden;
+  color: #374151;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickup-confirmation__items b {
+  margin-right: 7px;
+  color: #df5a16;
+}
+
+.pickup-confirmation__items strong {
+  flex: 0 0 auto;
+  color: #374151;
+  font-size: 13px;
+}
+
+.pickup-confirmation__items > small {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.pickup-confirmation__summary {
+  display: grid;
+  gap: 9px;
+}
+
+.pickup-confirmation__summary span {
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.pickup-confirmation__summary > div:first-child strong {
+  color: #111827;
+  font-size: 20px;
+}
+
+.pickup-confirmation__points {
+  padding: 10px 12px;
+  border-radius: 13px;
+  background: #f0f8ee;
+}
+
+.pickup-confirmation__points span,
+.pickup-confirmation__points strong {
+  color: #34753a;
+  font-size: 13px;
+}
+
+.pickup-confirmation__summary > small {
+  color: #6b7280;
+  font-size: 11px;
+  text-align: right;
+}
+
+.pickup-confirmation-sheet__actions {
+  display: grid;
+  grid-template-columns: minmax(96px, .7fr) minmax(0, 1.5fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.pickup-confirmation-sheet__actions .cta,
+.pickup-confirmation-sheet__actions .secondary-cta {
+  min-height: 48px;
+  border-radius: 15px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pickup-confirmation-sheet__actions .secondary-cta {
+  border: 1px solid #e6ded7;
+  background: #fff;
+  color: #5f5047;
+}
+
+@media (max-width: 380px) {
+  .pickup-confirmation-sheet__actions {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .pickup-confirmation-sheet__actions .cta,
+  .pickup-confirmation-sheet__actions .secondary-cta {
+    font-size: 12px;
+  }
+}
