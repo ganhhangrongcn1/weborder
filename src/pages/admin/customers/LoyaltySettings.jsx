@@ -172,7 +172,7 @@ export default function LoyaltySettings({
 
           <div className="admin-loyalty-rule-facts">
             <div><span>Quy đổi</span><strong>1 điểm = 1đ</strong></div>
-            <div><span>Hết hạn điểm</span><strong>60 ngày theo từng lần nhận điểm</strong></div>
+            <div><span>Hết hạn điểm</span><strong>Điểm mới có hạn 60 ngày; điểm cũ giữ nguyên</strong></div>
             <div><span>Chu kỳ xét hạng</span><strong>Theo năm dương lịch</strong></div>
           </div>
         </AdminPanel>

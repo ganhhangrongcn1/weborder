@@ -13,7 +13,7 @@ export const loyaltyBonusDisplay = [
 export const loyaltyRulesRows = [
   { label: "Tích điểm theo hạng", value: "10% đến 15%" },
   { label: "Dùng điểm", value: "1 điểm = 1đ, tối đa 50%" },
-  { label: "Hạn điểm", value: "60 ngày riêng cho từng lần nhận điểm" }
+  { label: "Hạn điểm", value: "Điểm mới có hạn 60 ngày; điểm cũ giữ nguyên" }
 ];
 
 export const loyaltySimpleGuestRows = (currencyPerPoint, pointPerUnit) => [

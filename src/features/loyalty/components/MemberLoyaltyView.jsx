@@ -81,7 +81,7 @@ export default function MemberLoyaltyView({
   const pointRulesRows = [
     { label: "Quy đổi khi thanh toán", value: "1 điểm = 1đ" },
     { label: "Mức dùng tối đa", value: `${tierJourney?.maxRedemptionPercent || 50}% giá trị đơn` },
-    { label: "Hạn điểm", value: "60 ngày riêng cho từng lần nhận điểm" }
+    { label: "Hạn điểm", value: "Điểm mới có hạn 60 ngày; điểm cũ giữ nguyên" }
   ];
   const exampleMaxPoints = Math.floor(
     exampleSpend * Number(tierJourney?.maxRedemptionPercent || 50) / 100
