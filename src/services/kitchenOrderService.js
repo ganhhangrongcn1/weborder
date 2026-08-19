@@ -415,8 +415,7 @@ function isWebsiteOrderReady(order = {}) {
   return status === "ready_for_pickup" || status === "ready_for_delivery";
 }
 
-function shouldHideWebsiteOrderUntilPaid(order = {}) {
-  if (order.sourceType !== KITCHEN_SOURCE.website) return false;
+function shouldHideOrderUntilPaid(order = {}) {
 
   const status = normalizeOrderStatus(order.status);
   const kitchenStatus = normalizeKitchenStatus(order.kitchenStatus);
@@ -1553,7 +1552,7 @@ export async function getWebsiteKitchenOrders(options = {}) {
   return orderRows
     .map((row) => mapWebsiteKitchenOrder(row, itemsByOrderId))
     .filter((order) => matchesBranch(order, options))
-    .filter((order) => !shouldHideWebsiteOrderUntilPaid(order));
+    .filter((order) => !shouldHideOrderUntilPaid(order));
 }
 
 export async function getPartnerKitchenOrders(options = {}) {
