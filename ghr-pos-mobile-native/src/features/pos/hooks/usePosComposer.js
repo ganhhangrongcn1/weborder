@@ -65,7 +65,7 @@ import {
   readPosOfflineOrderQueue,
   removePosOfflineOrder
 } from "../../../services/pos/posOfflineOrderQueueService";
-import { fetchPosProducts } from "../../../services/pos/posProductService";
+import { fetchPosProducts, isPosProductAvailableForBranch } from "../../../services/pos/posProductService";
 import {
   closePosShift,
   fetchActivePosShift,
@@ -181,8 +181,11 @@ export default function usePosComposer() {
   });
 
   const catalog = useMemo(
-    () => buildPosCatalog({ products: rawProducts, categories: rawCategories }),
-    [rawCategories, rawProducts]
+    () => buildPosCatalog({
+      products: rawProducts.filter((product) => isPosProductAvailableForBranch(product, profile?.branchUuid)),
+      categories: rawCategories
+    }),
+    [profile?.branchUuid, rawCategories, rawProducts]
   );
 
   const defaultCategory = useMemo(

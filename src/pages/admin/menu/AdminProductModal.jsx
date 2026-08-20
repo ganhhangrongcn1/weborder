@@ -3,6 +3,7 @@ import { processUploadImage } from "../../../utils/imageUpload.js";
 import { uploadImageToMenuBucket } from "../../../services/supabase/storageService.js";
 import {
   PRODUCT_SALES_CHANNELS,
+  buildBranchChannelMatrix,
   buildProductAvailabilityPatch,
   getBranchAvailabilityValue,
   normalizeProductAvailability
@@ -92,27 +93,38 @@ export default function AdminProductModal({ product, categories, branches = [], 
     })).filter((branch) => branch.id),
     [branches]
   );
-  const availability = normalizeProductAvailability(draft);
+  const branchChannelMatrix = useMemo(
+    () => buildBranchChannelMatrix(draft.availability || draft, branches),
+    [branches, draft]
+  );
 
   const patch = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
-  const patchAvailability = (field, value) => {
+  const patchBranchChannelMatrix = (nextMatrix) => {
     setDraft((current) => ({
       ...current,
       availability: buildProductAvailabilityPatch({
         ...normalizeProductAvailability(current),
-        [field]: value
+        branchChannels: nextMatrix
       })
     }));
   };
 
-  const toggleAvailabilityItem = ({ field, value, checked, allValues }) => {
-    const currentValues = normalizeProductAvailability(draft)[field] || [];
-    const baseValues = currentValues.length ? currentValues : allValues;
-    if (!checked && baseValues.length <= 1) return;
-    const nextValues = checked
-      ? Array.from(new Set([...baseValues, value]))
-      : baseValues.filter((item) => item !== value);
-    patchAvailability(field, nextValues.length === allValues.length ? [] : nextValues);
+  const toggleBranchChannel = (branchId, channelId, checked) => {
+    const currentChannels = branchChannelMatrix[branchId] || [];
+    const nextChannels = checked
+      ? Array.from(new Set([...currentChannels, channelId]))
+      : currentChannels.filter((channel) => channel !== channelId);
+    patchBranchChannelMatrix({
+      ...branchChannelMatrix,
+      [branchId]: nextChannels
+    });
+  };
+
+  const toggleBranchRow = (branchId, checked) => {
+    patchBranchChannelMatrix({
+      ...branchChannelMatrix,
+      [branchId]: checked ? PRODUCT_SALES_CHANNELS.map((channel) => channel.id) : []
+    });
   };
 
   const togglePreset = (presetId) => {
@@ -250,65 +262,47 @@ export default function AdminProductModal({ product, categories, branches = [], 
             <div className="admin-option-head">
               <div>
                 <h3>PHẠM VI BÁN</h3>
-                <p>Bỏ chọn chi nhánh hoặc kênh nào không bán món này.</p>
+                <p>Chọn chính xác kênh bán cho từng chi nhánh.</p>
               </div>
             </div>
 
-            <div className="admin-availability-grid">
-              <div className="admin-availability-group">
-                <strong>Chi nhánh</strong>
-                {branchOptions.length ? (
-                  branchOptions.map((branch) => {
-                    const allBranchIds = branchOptions.map((item) => item.id);
-                    const checked = availability.branchIds.length ? availability.branchIds.includes(branch.id) : true;
-                    return (
-                      <label key={branch.id} className="admin-availability-check">
+            {branchOptions.length ? (
+              <div className="admin-availability-matrix" role="group" aria-label="Phạm vi bán theo chi nhánh và kênh">
+                <div className="admin-availability-matrix__head" aria-hidden="true">
+                  <strong>Chi nhánh</strong>
+                  {PRODUCT_SALES_CHANNELS.map((channel) => <strong key={channel.id}>{channel.label}</strong>)}
+                </div>
+                {branchOptions.map((branch) => {
+                  const allowedChannels = branchChannelMatrix[branch.id] || [];
+                  const branchEnabled = allowedChannels.length > 0;
+                  return (
+                    <div key={branch.id} className={`admin-availability-matrix__row${branchEnabled ? " is-active" : ""}`}>
+                      <label className="admin-availability-matrix__branch">
                         <input
                           type="checkbox"
-                          checked={checked}
-                          onChange={(event) =>
-                            toggleAvailabilityItem({
-                              field: "branchIds",
-                              value: branch.id,
-                              checked: event.target.checked,
-                              allValues: allBranchIds
-                            })
-                          }
+                          checked={branchEnabled}
+                          onChange={(event) => toggleBranchRow(branch.id, event.target.checked)}
                         />
-                        <span>{branch.name}</span>
+                        <span><strong>{branch.name}</strong><small>{allowedChannels.length}/{PRODUCT_SALES_CHANNELS.length} kênh đang bán</small></span>
                       </label>
-                    );
-                  })
-                ) : (
-                  <p className="admin-help-text">Chưa có danh sách chi nhánh.</p>
-                )}
-              </div>
-
-              <div className="admin-availability-group">
-                <strong>Kênh bán</strong>
-                {PRODUCT_SALES_CHANNELS.map((channel) => {
-                  const allChannelIds = PRODUCT_SALES_CHANNELS.map((item) => item.id);
-                  const checked = availability.channels.length ? availability.channels.includes(channel.id) : true;
-                  return (
-                    <label key={channel.id} className="admin-availability-check">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) =>
-                          toggleAvailabilityItem({
-                            field: "channels",
-                            value: channel.id,
-                            checked: event.target.checked,
-                            allValues: allChannelIds
-                          })
-                        }
-                      />
-                      <span>{channel.label}</span>
-                    </label>
+                      <div className="admin-availability-matrix__channels">
+                        {PRODUCT_SALES_CHANNELS.map((channel) => (
+                          <label key={channel.id} className="admin-availability-channel-check">
+                            <input
+                              type="checkbox"
+                              checked={allowedChannels.includes(channel.id)}
+                              onChange={(event) => toggleBranchChannel(branch.id, channel.id, event.target.checked)}
+                              aria-label={`${channel.label} tại ${branch.name}`}
+                            />
+                            <span>{channel.shortLabel || channel.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-            </div>
+            ) : <p className="admin-help-text">Chưa có danh sách chi nhánh.</p>}
           </div>
 
           <div className="admin-option-section menu-item-option-section">

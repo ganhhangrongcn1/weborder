@@ -1,9 +1,9 @@
 import { expandBranchKeys, getBranchCandidates } from "./branchIdentityService.js";
 
 export const PRODUCT_SALES_CHANNELS = [
-  { id: "web", label: "Website đặt hàng" },
-  { id: "qr", label: "QR tại quán" },
-  { id: "pos", label: "POS tại quầy" }
+  { id: "web", label: "Website đặt hàng", shortLabel: "Website" },
+  { id: "qr", label: "QR tại quán", shortLabel: "QR" },
+  { id: "pos", label: "POS tại quầy", shortLabel: "POS" }
 ];
 
 function toText(value = "") {
@@ -22,6 +22,20 @@ function normalizeIdList(values = []) {
 
 function getObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeBranchChannels(value = {}) {
+  const source = getObject(value);
+  return Object.fromEntries(
+    Object.entries(source)
+      .map(([branchId, channels]) => [
+        toText(branchId),
+        normalizeIdList(channels)
+          .map(normalizeChannel)
+          .filter((channel) => PRODUCT_SALES_CHANNELS.some((item) => item.id === channel))
+      ])
+      .filter(([branchId]) => branchId)
+  );
 }
 
 function normalizeChannel(value = "") {
@@ -69,17 +83,53 @@ export function normalizeProductAvailability(product = {}) {
       []
   ).map(normalizeChannel);
 
+  const branchChannels = normalizeBranchChannels(
+    availability.branchChannels ||
+      availability.byBranch ||
+      product.availableBranchChannels ||
+      metadataAvailability.branchChannels ||
+      {}
+  );
+
   return {
     branchIds,
-    channels: channels.filter((channel) => PRODUCT_SALES_CHANNELS.some((item) => item.id === channel))
+    channels: channels.filter((channel) => PRODUCT_SALES_CHANNELS.some((item) => item.id === channel)),
+    branchChannels,
+    hasBranchChannelMatrix: Object.keys(branchChannels).length > 0
   };
 }
 
-export function buildProductAvailabilityPatch({ branchIds = [], channels = [] } = {}) {
+export function buildProductAvailabilityPatch({ branchIds = [], channels = [], branchChannels = {} } = {}) {
+  const normalizedBranchChannels = normalizeBranchChannels(branchChannels);
+  const matrixBranchIds = Object.entries(normalizedBranchChannels)
+    .filter(([, allowedChannels]) => allowedChannels.length > 0)
+    .map(([branchId]) => branchId);
+  const matrixChannels = Array.from(new Set(Object.values(normalizedBranchChannels).flat()));
+
   return {
-    branchIds: normalizeIdList(branchIds),
-    channels: normalizeIdList(channels).map(normalizeChannel)
+    branchIds: Object.keys(normalizedBranchChannels).length ? matrixBranchIds : normalizeIdList(branchIds),
+    channels: Object.keys(normalizedBranchChannels).length
+      ? matrixChannels
+      : normalizeIdList(channels).map(normalizeChannel),
+    ...(Object.keys(normalizedBranchChannels).length ? { branchChannels: normalizedBranchChannels } : {})
   };
+}
+
+export function buildBranchChannelMatrix(availabilityInput = {}, branches = []) {
+  const availability = normalizeProductAvailability({ availability: availabilityInput });
+  const allChannels = PRODUCT_SALES_CHANNELS.map((item) => item.id);
+
+  return Object.fromEntries(
+    (Array.isArray(branches) ? branches : []).map((branch, index) => {
+      const branchId = getBranchAvailabilityValue(branch, index);
+      if (availability.hasBranchChannelMatrix) {
+        return [branchId, availability.branchChannels[branchId] || []];
+      }
+      const branchAllowed = !availability.branchIds.length || availability.branchIds.includes(branchId);
+      const allowedChannels = availability.channels.length ? availability.channels : allChannels;
+      return [branchId, branchAllowed ? allowedChannels : []];
+    })
+  );
 }
 
 function getContextBranchKeys({ branch = null, branchValue = "" } = {}) {
@@ -94,6 +144,17 @@ export function isProductAvailableForContext(product = {}, context = {}) {
 
   const availability = normalizeProductAvailability(product);
   const channel = normalizeChannel(context.channel);
+
+  if (availability.hasBranchChannelMatrix) {
+    const contextBranchKeys = getContextBranchKeys(context);
+    if (contextBranchKeys.length) {
+      const matchingEntry = Object.entries(availability.branchChannels).find(([branchId]) => {
+        const entryKeys = expandBranchKeys([branchId]).map((key) => key.toLowerCase());
+        return entryKeys.some((entryKey) => contextBranchKeys.includes(entryKey));
+      });
+      return Boolean(matchingEntry?.[1]?.includes(channel));
+    }
+  }
 
   if (availability.channels.length && !availability.channels.includes(channel)) {
     return false;

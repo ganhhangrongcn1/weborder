@@ -168,47 +168,108 @@
   color: #64748b;
 }
 
-.admin-availability-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
-  gap: 12px;
-}
-
-.admin-availability-group {
-  display: grid;
-  align-content: start;
-  gap: 8px;
+.admin-availability-matrix {
+  max-height: 430px;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
   background: white;
-  padding: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
-.admin-availability-group > strong {
+.admin-availability-matrix__head {
+  display: none;
+}
+
+.admin-availability-matrix__head strong {
   color: #172033;
-  font-size: 13px;
-  font-weight: 950;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 900;
 }
 
-.admin-availability-check {
-  display: flex !important;
-  min-height: 38px;
+.admin-availability-matrix__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
   align-items: center;
-  gap: 10px;
-  border-radius: 10px;
-  background: #f8fafc;
-  padding: 8px 10px;
+  padding: 11px 12px;
+  border-top: 1px solid #edf2f7;
+  background: #fff;
+}
+
+.admin-availability-matrix__row.is-active {
+  background: #fffaf5;
+}
+
+.admin-availability-matrix__branch,
+.admin-availability-channel-check {
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
   color: #334155 !important;
   font-size: 13px !important;
   font-weight: 850 !important;
   text-transform: none !important;
 }
 
-.admin-availability-check input {
+.admin-availability-matrix__branch input,
+.admin-availability-channel-check input {
   width: 16px;
   height: 16px;
+  flex: 0 0 auto;
   accent-color: #f97316;
+}
+
+.admin-availability-matrix__branch span {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-availability-matrix__branch strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-availability-matrix__branch small {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-availability-matrix__channels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.admin-availability-channel-check {
+  min-height: 36px;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.admin-availability-channel-check:has(input:checked) {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #9a3412 !important;
+}
+
+.admin-availability-channel-check span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-option-section {
@@ -223,8 +284,8 @@
 }
 
 @media (max-width: 720px) {
-  .admin-availability-grid {
-    grid-template-columns: 1fr;
+  .admin-availability-channel-check {
+    min-height: 38px;
   }
 }
 

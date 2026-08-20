@@ -59,6 +59,35 @@ function normalizeCategoryMap(rows = []) {
   return map;
 }
 
+function normalizeAvailability(value = {}) {
+  const source = getObject(value);
+  const branchChannelsSource = getObject(source.branchChannels || source.byBranch);
+  const branchChannels = Object.fromEntries(
+    Object.entries(branchChannelsSource).map(([branchId, channels]) => [
+      toText(branchId),
+      Array.from(new Set((Array.isArray(channels) ? channels : []).map((channel) => toText(channel).toLowerCase()).filter(Boolean)))
+    ])
+  );
+  return {
+    branchIds: Array.isArray(source.branchIds) ? source.branchIds.map(toText).filter(Boolean) : [],
+    channels: Array.isArray(source.channels) ? source.channels.map((channel) => toText(channel).toLowerCase()).filter(Boolean) : [],
+    branchChannels
+  };
+}
+
+export function isPosProductAvailableForBranch(product = {}, branchUuid = "") {
+  const availability = normalizeAvailability(product.availability);
+  const safeBranchUuid = toText(branchUuid).toLowerCase();
+  const matrixEntries = Object.entries(availability.branchChannels);
+  if (matrixEntries.length && safeBranchUuid) {
+    const matched = matrixEntries.find(([branchId]) => branchId.toLowerCase() === safeBranchUuid);
+    return Boolean(matched?.[1]?.includes("pos"));
+  }
+  if (availability.channels.length && !availability.channels.includes("pos")) return false;
+  if (!availability.branchIds.length || !safeBranchUuid) return true;
+  return availability.branchIds.some((branchId) => branchId.toLowerCase() === safeBranchUuid);
+}
+
 function normalizeCategoryData(rows = []) {
   const categoryRows = (Array.isArray(rows) ? rows : []).filter((row) => row?.active !== false);
   const map = normalizeCategoryMap(categoryRows);
@@ -96,6 +125,7 @@ function normalizeProduct(row = {}, index = 0, categoryMap = new Map(), optionGr
     image: toText(row.image || row.image_url || metadata.image || metadata.imageUrl || metadata.image_url),
     short: toText(row.description || metadata.short || metadata.description),
     badge: toText(row.badge || metadata.badge),
+    availability: normalizeAvailability(metadata.availability || row.availability),
     optionGroups: normalizeOptionGroups(linkedGroups.length ? linkedGroups : metadataGroups),
     active: row.active !== false && metadata.active !== false,
     visible: row.visible !== false && metadata.visible !== false,
