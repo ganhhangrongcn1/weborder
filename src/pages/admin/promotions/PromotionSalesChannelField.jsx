@@ -4,8 +4,8 @@ import {
   toggleSalesChannel
 } from "../../../services/promotionChannelService.js";
 
-export default function PromotionSalesChannelField({ value = [], onChange }) {
-  const selectedChannels = getPromotionSalesChannels({ salesChannels: value });
+export default function PromotionSalesChannelField({ value = [], type = "", onChange }) {
+  const selectedChannels = getPromotionSalesChannels({ salesChannels: value, type });
 
   return (
     <div className="admin-promo-channel-options">

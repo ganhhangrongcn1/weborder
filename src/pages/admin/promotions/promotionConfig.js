@@ -57,7 +57,7 @@ export const promoDefaults = {
     icon: "sale",
     active: true,
     displayPlaces: ["home", "menu"],
-    salesChannels: ["web", "qr"],
+    salesChannels: ["web"],
     condition: {
       minSubtotal: 0,
       customerType: "all",
@@ -87,7 +87,7 @@ export const promoDefaults = {
     icon: "sale",
     active: true,
     displayPlaces: ["home", "menu"],
-    salesChannels: ["web", "qr"],
+    salesChannels: ["web", "pos"],
     condition: {
       minSubtotal: 0,
       customerType: "all",

@@ -35,6 +35,7 @@ import { isPromotionAllowedForChannel } from "../../services/promotionChannelSer
 import { hasMenuCategory, isAllMenuCategory, resolveDefaultMenuCategory } from "../../constants/menuCategoryConfig.js";
 import { buildReorderCheckoutPreset } from "../checkout/checkoutDomain.js";
 import { clearCheckoutVoucherIntent } from "../../services/checkoutVoucherIntentService.js";
+import { orderingFeatureFlags } from "../../constants/featureFlags.js";
 
 const userStorage = createUserStorage({
   getCustomerKey,
@@ -54,6 +55,7 @@ function getCheckoutBranchValue(checkoutPreset = {}) {
 }
 
 function getMenuChannel(checkoutPreset = {}) {
+  if (!orderingFeatureFlags.enableQrCounterOrdering) return "web";
   const sourceText = String(
     checkoutPreset?.orderSource ||
       checkoutPreset?.source ||

@@ -5,6 +5,7 @@ import { DEFAULT_SHIPPING_CONFIG } from "../../../services/shippingService.js";
 import { syncBranchesToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
 import { createStableBranchUuid } from "../../../services/branchIdentityService.js";
 import { createQrPngDataUrl, createQrSvg } from "../../../services/qrCodeService.js";
+import { orderingFeatureFlags } from "../../../constants/featureFlags.js";
 import { AdminButton, AdminCard, AdminInput } from "../ui/index.js";
 import GrabAutomationSettings from "./GrabAutomationSettings.jsx";
 
@@ -643,11 +644,11 @@ export default function BranchSettings({
                     <div className="admin-branch-section-heading">
                       <div>
                         <strong>Bán hàng trên website</strong>
-                        <small>QR order và các hình thức thanh toán khách được phép chọn.</small>
+                        <small>Các hình thức thanh toán khách được phép chọn trên website.</small>
                       </div>
                     </div>
                     <div className="admin-branch-website-grid">
-                    <div className="admin-branch-subcard admin-branch-qr-card">
+                    {orderingFeatureFlags.enableQrCounterOrdering ? <div className="admin-branch-subcard admin-branch-qr-card">
                       <span className="text-xs font-semibold text-brown/70">QR order tại quầy</span>
                       <div className="admin-branch-qr-preview">
                         <img
@@ -688,13 +689,13 @@ export default function BranchSettings({
                           In QR
                         </AdminButton>
                       </div>
-                    </div>
+                    </div> : null}
 
                     <div className="admin-branch-subcard admin-branch-payment-card">
                       <div>
                         <strong className="block text-sm font-bold text-brown">Thanh toán trên website</strong>
                         <small className="mt-1 block text-xs text-brown/60">
-                          Áp dụng cho khách đặt đến lấy hoặc quét QR order tại chi nhánh này.
+                          Áp dụng cho khách đặt hàng trực tiếp trên website tại chi nhánh này.
                         </small>
                       </div>
                       <div className="admin-branch-bottom-grid admin-web-payment-grid">
@@ -1031,7 +1032,7 @@ export default function BranchSettings({
         </div>
       ) : null}
 
-      {qrModalBranch ? (
+      {orderingFeatureFlags.enableQrCounterOrdering && qrModalBranch ? (
         <div className="admin-qr-modal-backdrop" role="presentation" onClick={() => setQrModalBranchId("")}>
           <div
             className="admin-qr-modal"

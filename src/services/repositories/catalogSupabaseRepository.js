@@ -1,6 +1,11 @@
 ﻿import { getRepositoryRuntimeInfo, getRuntimeSupabaseClient } from "./repositoryRuntime.js";
 
 import { createStableBranchUuid } from "../branchIdentityService.js";
+import {
+  buildProductChannelPriceMetadata,
+  resolveStoreProductPrice,
+  resolveWebsiteProductPrice
+} from "../productChannelPricingService.js";
 import { isSupabaseRealtimeReady } from "../supabase/supabaseRuntimeClient.js";
 
 const CATALOG_TABLE_BY_KEY = {
@@ -196,14 +201,15 @@ async function readCatalogFromStandardTableInternal(key, fallback) {
       name: row?.name || "",
       description: row?.description || "",
       image: row?.image || "",
-      price: normalizeNumber(row?.price, 0),
       originalPrice: row?.original_price == null ? "" : normalizeNumber(row?.original_price, 0),
       badge: row?.badge || "",
       category: row?.category_id || "",
       visible: normalizeBoolean(row?.visible, true),
       active: normalizeBoolean(row?.active, true),
       sortOrder: normalizeNumber(row?.sort_order, 0),
-      ...(row?.metadata && typeof row.metadata === "object" ? row.metadata : {})
+      ...(row?.metadata && typeof row.metadata === "object" ? row.metadata : {}),
+      price: resolveWebsiteProductPrice(row),
+      posPrice: resolveStoreProductPrice(row)
     }));
   }
   if (key === "ghr_categories") {
@@ -357,13 +363,14 @@ async function writeStructuredProducts(value) {
       name: normalizeText(item?.name, ""),
       description: String(item?.description ?? ""),
       image: String(item?.image ?? ""),
-      price: normalizeNumber(item?.price, 0),
+      // Giữ cột price là giá tại quán để POS cũ vẫn an toàn.
+      price: resolveStoreProductPrice(item),
       badge: String(item?.badge ?? ""),
       category_id: categoryId || null,
       visible: normalizeBoolean(item?.visible, true),
       active: normalizeBoolean(item?.active, true),
       sort_order: normalizeNumber(item?.sortOrder, index),
-      metadata: item
+      metadata: buildProductChannelPriceMetadata(item)
     };
     const originalPriceRaw = item?.originalPrice;
     if (originalPriceRaw !== "" && originalPriceRaw !== null && originalPriceRaw !== undefined) {

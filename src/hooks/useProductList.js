@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { defaultBranches, defaultCampaigns, defaultHomeBanners, defaultStoreHours } from "../data/storeDefaults.js";
 import { isAllMenuCategory } from "../constants/menuCategoryConfig.js";
+import { orderingFeatureFlags } from "../constants/featureFlags.js";
 import {
   catalogConfigRepository,
   CATALOG_CONFIG_KEYS,
@@ -204,6 +205,7 @@ function getActiveRealtimeKeys(currentPage, pathname = "/") {
 }
 
 function getCustomerRuntimeSalesChannel() {
+  if (!orderingFeatureFlags.enableQrCounterOrdering) return "web";
   if (typeof window === "undefined") return "web";
   const path = String(window.location.pathname || "").toLowerCase();
   return path.startsWith("/qr/") ? "qr" : "web";

@@ -1,23 +1,23 @@
 export const PROMOTION_SALES_CHANNELS = [
   { value: "web", label: "Web khách hàng" },
-  { value: "qr", label: "QR order" },
   { value: "pos", label: "POS" }
 ];
 
 export const ALL_PROMOTION_SALES_CHANNELS = PROMOTION_SALES_CHANNELS.map((channel) => channel.value);
+const LEGACY_PROMOTION_SALES_CHANNELS = ["web", "qr", "pos"];
 
 export const DEFAULT_PROMOTION_CHANNELS_BY_TYPE = {
-  coupon: ["web", "qr"],
-  checkout: ["web", "qr"],
-  loyalty: ["web", "qr"],
+  coupon: ["web"],
+  checkout: ["web"],
+  loyalty: ["web"],
   free_shipping: ["web"],
-  strike_price: ["web", "qr"],
-  flash_sale: ["web", "qr"],
-  gift_threshold: ["web", "qr"]
+  strike_price: ["web"],
+  flash_sale: ["web", "pos"],
+  gift_threshold: ["web"]
 };
 
 export function normalizeSalesChannels(value, fallback = ALL_PROMOTION_SALES_CHANNELS) {
-  const allowed = new Set(ALL_PROMOTION_SALES_CHANNELS);
+  const allowed = new Set(LEGACY_PROMOTION_SALES_CHANNELS);
   const source = Array.isArray(value) ? value : fallback;
   const normalized = source
     .map((item) => String(item || "").trim().toLowerCase())
@@ -31,7 +31,18 @@ export function getDefaultSalesChannels(type = "") {
 }
 
 export function getPromotionSalesChannels(promotion = {}, fallback = ALL_PROMOTION_SALES_CHANNELS) {
-  return normalizeSalesChannels(promotion?.salesChannels, fallback);
+  const hasExplicitChannels = Array.isArray(promotion?.salesChannels);
+  const storedChannels = normalizeSalesChannels(promotion?.salesChannels, fallback);
+  const effectiveChannels = storedChannels.filter((channel) => channel !== "qr");
+  const promotionType = String(promotion?.type || promotion?.voucherType || "").trim().toLowerCase();
+
+  // QR tại quầy đã nghỉ. Flash Sale cũ từng chọn Web + QR được chuyển an toàn sang Web + POS.
+  if (promotionType === "flash_sale" && storedChannels.includes("qr") && !effectiveChannels.includes("pos")) {
+    effectiveChannels.push("pos");
+  }
+
+  if (effectiveChannels.length) return Array.from(new Set(effectiveChannels));
+  return hasExplicitChannels ? [] : normalizeSalesChannels(fallback, ALL_PROMOTION_SALES_CHANNELS).filter((channel) => channel !== "qr");
 }
 
 export function isPromotionAllowedForChannel(promotion = {}, channel = "web") {
@@ -43,7 +54,9 @@ export function isPromotionAllowedForChannel(promotion = {}, channel = "web") {
 export function toggleSalesChannel(currentChannels = [], channel = "", fallback = ALL_PROMOTION_SALES_CHANNELS) {
   const normalizedChannel = String(channel || "").trim().toLowerCase();
   if (!ALL_PROMOTION_SALES_CHANNELS.includes(normalizedChannel)) return normalizeSalesChannels(currentChannels, fallback);
-  const current = normalizeSalesChannels(currentChannels, fallback);
+  const current = (Array.isArray(currentChannels) ? currentChannels : fallback)
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter((item) => ALL_PROMOTION_SALES_CHANNELS.includes(item));
   const next = current.includes(normalizedChannel)
     ? current.filter((item) => item !== normalizedChannel)
     : [...current, normalizedChannel];

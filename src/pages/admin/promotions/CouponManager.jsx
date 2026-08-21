@@ -803,6 +803,7 @@ export default function CouponManager({
                     Kênh áp dụng
                     <PromotionSalesChannelField
                       value={selectedCoupon.salesChannels}
+                      type={selectedCoupon.voucherType || "checkout"}
                       onChange={(nextChannels) => patchCoupon(selectedCoupon.id, { salesChannels: nextChannels })}
                     />
                   </div>

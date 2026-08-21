@@ -333,6 +333,7 @@ export default function FlashSaleTab({
                     Kênh áp dụng
                     <PromotionSalesChannelField
                       value={selectedFlashPromo.salesChannels}
+                      type="flash_sale"
                       onChange={(nextChannels) => updatePromotion(selectedFlashPromo.id, { salesChannels: nextChannels })}
                     />
                   </div>

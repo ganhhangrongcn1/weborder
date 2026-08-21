@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppCustomerRoutes from "../features/app/AppCustomerRoutes.jsx";
+import { orderingFeatureFlags } from "../constants/featureFlags.js";
 
 const AppAdminRoutes = lazy(() => import("../features/app/AppAdminRoutes.jsx"));
 const KitchenPage = lazy(() => import("../features/kitchen/KitchenPage.jsx"));
@@ -46,12 +47,12 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/orders" element={<AppCustomerRoutes {...customerRouteProps} />} />
       <Route path="/loyalty" element={<AppCustomerRoutes {...customerRouteProps} />} />
       <Route path="/review-rewards" element={<AppCustomerRoutes {...customerRouteProps} />} />
-      <Route path="/qr/:branchId" element={<AppCustomerRoutes {...customerRouteProps} />} />
-      <Route path="/qr/:branchId/menu" element={<AppCustomerRoutes {...customerRouteProps} />} />
-      <Route path="/qr/:branchId/checkout" element={<AppCustomerRoutes {...customerRouteProps} />} />
-      <Route path="/qr/:branchId/orders" element={<AppCustomerRoutes {...customerRouteProps} />} />
-      <Route path="/qr/:branchId/loyalty" element={<AppCustomerRoutes {...customerRouteProps} />} />
-      <Route path="/qr/:branchId/account" element={<AppCustomerRoutes {...customerRouteProps} />} />
+      <Route path="/qr/:branchId" element={orderingFeatureFlags.enableQrCounterOrdering ? <AppCustomerRoutes {...customerRouteProps} /> : <Navigate to="/home" replace />} />
+      <Route path="/qr/:branchId/menu" element={orderingFeatureFlags.enableQrCounterOrdering ? <AppCustomerRoutes {...customerRouteProps} /> : <Navigate to="/menu" replace />} />
+      <Route path="/qr/:branchId/checkout" element={orderingFeatureFlags.enableQrCounterOrdering ? <AppCustomerRoutes {...customerRouteProps} /> : <Navigate to="/checkout" replace />} />
+      <Route path="/qr/:branchId/orders" element={orderingFeatureFlags.enableQrCounterOrdering ? <AppCustomerRoutes {...customerRouteProps} /> : <Navigate to="/orders" replace />} />
+      <Route path="/qr/:branchId/loyalty" element={orderingFeatureFlags.enableQrCounterOrdering ? <AppCustomerRoutes {...customerRouteProps} /> : <Navigate to="/loyalty" replace />} />
+      <Route path="/qr/:branchId/account" element={orderingFeatureFlags.enableQrCounterOrdering ? <AppCustomerRoutes {...customerRouteProps} /> : <Navigate to="/profile" replace />} />
 
       <Route path="/kitchen" element={<KitchenPage />} />
       <Route path="/download" element={<DownloadPage />} />

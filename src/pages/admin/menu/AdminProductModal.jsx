@@ -10,6 +10,11 @@ import {
 } from "../../../services/productAvailabilityService.js";
 import { AdminSwitch } from "../ui/AdminCommon.jsx";
 import { AdminButton, AdminIconButton, AdminInput, AdminSelect } from "../ui/index.js";
+import { orderingFeatureFlags } from "../../../constants/featureFlags.js";
+
+const CONFIGURABLE_PRODUCT_SALES_CHANNELS = PRODUCT_SALES_CHANNELS.filter(
+  (channel) => channel.id !== "qr" || orderingFeatureFlags.enableQrCounterOrdering
+);
 
 function buildOptionGroupsFromPresets(presetIds, presets) {
   const presetMap = new Map((presets || []).map((item) => [item.id, item]));
@@ -70,6 +75,7 @@ export default function AdminProductModal({ product, categories, branches = [], 
   const [pickerSelectedIds, setPickerSelectedIds] = useState(initialPresetIds);
   const [draft, setDraft] = useState({
     ...product,
+    posPrice: Number(product?.posPrice ?? product?.pos_price ?? product?.price ?? 0),
     optionGroups: buildOptionGroupsFromPresets(initialPresetIds, optionGroupPresets)
   });
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
@@ -123,7 +129,7 @@ export default function AdminProductModal({ product, categories, branches = [], 
   const toggleBranchRow = (branchId, checked) => {
     patchBranchChannelMatrix({
       ...branchChannelMatrix,
-      [branchId]: checked ? PRODUCT_SALES_CHANNELS.map((channel) => channel.id) : []
+      [branchId]: checked ? CONFIGURABLE_PRODUCT_SALES_CHANNELS.map((channel) => channel.id) : []
     });
   };
 
@@ -219,10 +225,22 @@ export default function AdminProductModal({ product, categories, branches = [], 
             <AdminInput placeholder="Ví dụ: Bánh tráng trộn đặc biệt" value={draft.name} onChange={(event) => patch("name", event.target.value)} />
           </label>
 
-          <label>
-            GIÁ *
+          <label className="wide menu-item-channel-price-field">
+            GIÁ WEBSITE *
             <AdminInput type="number" placeholder="Ví dụ: 39000" value={draft.price} onChange={(event) => patch("price", Number(event.target.value || 0))} />
+            <small>Áp dụng cho khách đặt trực tiếp trên website.</small>
           </label>
+
+          <label className="wide menu-item-channel-price-field">
+            GIÁ TẠI QUÁN / POS *
+            <AdminInput type="number" placeholder="Ví dụ: 39000" value={draft.posPrice} onChange={(event) => patch("posPrice", Number(event.target.value || 0))} />
+            <small>Được giữ ở cột giá gốc để cả POS cũ và POS mới đều đọc đúng.</small>
+          </label>
+
+          <div className="wide menu-item-channel-price-note" role="note">
+            <strong>Hai giá được lưu độc lập</strong>
+            <span>Giá Website nằm riêng trong cấu hình món; thay đổi giá Web không làm đổi giá tại quán.</span>
+          </div>
 
           <label className="wide">
             MÔ TẢ
@@ -270,7 +288,7 @@ export default function AdminProductModal({ product, categories, branches = [], 
               <div className="admin-availability-matrix" role="group" aria-label="Phạm vi bán theo chi nhánh và kênh">
                 <div className="admin-availability-matrix__head" aria-hidden="true">
                   <strong>Chi nhánh</strong>
-                  {PRODUCT_SALES_CHANNELS.map((channel) => <strong key={channel.id}>{channel.label}</strong>)}
+                  {CONFIGURABLE_PRODUCT_SALES_CHANNELS.map((channel) => <strong key={channel.id}>{channel.label}</strong>)}
                 </div>
                 {branchOptions.map((branch) => {
                   const allowedChannels = branchChannelMatrix[branch.id] || [];
@@ -283,10 +301,10 @@ export default function AdminProductModal({ product, categories, branches = [], 
                           checked={branchEnabled}
                           onChange={(event) => toggleBranchRow(branch.id, event.target.checked)}
                         />
-                        <span><strong>{branch.name}</strong><small>{allowedChannels.length}/{PRODUCT_SALES_CHANNELS.length} kênh đang bán</small></span>
+                        <span><strong>{branch.name}</strong><small>{allowedChannels.filter((channel) => CONFIGURABLE_PRODUCT_SALES_CHANNELS.some((item) => item.id === channel)).length}/{CONFIGURABLE_PRODUCT_SALES_CHANNELS.length} kênh đang bán</small></span>
                       </label>
                       <div className="admin-availability-matrix__channels">
-                        {PRODUCT_SALES_CHANNELS.map((channel) => (
+                        {CONFIGURABLE_PRODUCT_SALES_CHANNELS.map((channel) => (
                           <label key={channel.id} className="admin-availability-channel-check">
                             <input
                               type="checkbox"
@@ -412,9 +430,15 @@ export default function AdminProductModal({ product, categories, branches = [], 
                 return;
               }
               if (Number(payload.price || 0) <= 0) {
-                alert("Vui lòng nhập giá món lớn hơn 0.");
+                alert("Vui lòng nhập giá Website lớn hơn 0.");
                 return;
               }
+              if (Number(payload.posPrice || 0) <= 0) {
+                alert("Vui lòng nhập giá tại quán/POS lớn hơn 0.");
+                return;
+              }
+              payload.price = Math.max(0, Number(payload.price || 0));
+              payload.posPrice = Math.max(0, Number(payload.posPrice || payload.price || 0));
               payload.badge = String(payload.badge || "").trim();
               payload.category = resolveValidCategory(payload.category, categories);
               payload.optionGroups = buildOptionGroupsFromPresets(selectedPresetIds, optionGroupPresets);

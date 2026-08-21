@@ -5,3 +5,7 @@ export const rewardFeatureFlags = {
   enableMilestoneReward: true,
   enableCustomerTier: false
 };
+
+export const orderingFeatureFlags = {
+  enableQrCounterOrdering: false
+};

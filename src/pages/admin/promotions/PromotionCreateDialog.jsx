@@ -201,9 +201,9 @@ export default function PromotionCreateDialog({
           <div className="admin-voucher-create-channels">
             <span>Kênh áp dụng *</span>
             {draft.type === "free_shipping" ? (
-              <p className="admin-promo-create-fixed-channel">Web khách hàng · Hỗ trợ ship không áp dụng cho QR order và POS.</p>
+              <p className="admin-promo-create-fixed-channel">Chỉ áp dụng trên Website · Không áp dụng tại POS.</p>
             ) : (
-              <PromotionSalesChannelField value={draft.salesChannels} onChange={(salesChannels) => patchDraft({ salesChannels })} />
+              <PromotionSalesChannelField type={draft.type} value={draft.salesChannels} onChange={(salesChannels) => patchDraft({ salesChannels })} />
             )}
             {submitted && errors.salesChannels ? <small role="alert">{errors.salesChannels}</small> : null}
           </div>

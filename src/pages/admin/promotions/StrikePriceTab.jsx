@@ -311,6 +311,7 @@ export default function StrikePriceTab({
                     Kênh áp dụng
                     <PromotionSalesChannelField
                       value={selectedStrikePromo.salesChannels}
+                      type="strike_price"
                       onChange={(nextChannels) => updatePromotion(selectedStrikePromo.id, { salesChannels: nextChannels })}
                     />
                   </div>

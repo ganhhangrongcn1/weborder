@@ -25,6 +25,7 @@ export default function useMenuManagerActions({
       id: `product-${Date.now()}`,
       name: "",
       price: 0,
+      posPrice: 0,
       short: "",
       category: adminCategories[0] || "Danh mục mặc định",
       visible: true,
