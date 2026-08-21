@@ -1,5 +1,8 @@
 import { freeshipMinSubtotal } from "../constants/storeConfig.js";
 import { formatMoney } from "../utils/format.js";
+import { isPromotionAllowedForChannel } from "./promotionChannelService.js";
+
+const PERCENT_DISCOUNT_REFERENCE_SUBTOTAL = 100000;
 
 function toArray(value) {
   return Array.isArray(value) ? value : [];
@@ -38,6 +41,19 @@ function getCouponKey(coupon = {}, prefix = "coupon") {
   return `${prefix}-${coupon.id || coupon.code || coupon.title || coupon.name || "unknown"}`;
 }
 
+function getCouponDiscountSortValue(coupon = {}) {
+  const value = Math.max(0, Number(coupon.value || 0));
+  if (coupon.discountType !== "percent") return value;
+
+  const comparisonSubtotal = Math.max(
+    PERCENT_DISCOUNT_REFERENCE_SUBTOTAL,
+    Number(coupon.minOrder || 0)
+  );
+  const estimatedDiscount = comparisonSubtotal * value / 100;
+  const maxDiscount = Math.max(0, Number(coupon.maxDiscount || 0));
+  return maxDiscount > 0 ? Math.min(estimatedDiscount, maxDiscount) : estimatedDiscount;
+}
+
 function normalizeCouponCard(coupon = {}, source = "coupon") {
   const isLoyalty = source === "loyalty" || String(coupon.voucherType || "") === "loyalty";
   const maxDiscount = Number(coupon.maxDiscount || 0);
@@ -57,11 +73,12 @@ function normalizeCouponCard(coupon = {}, source = "coupon") {
       formatMinimumOrder(coupon.minOrder),
       maxDiscount > 0 ? `Tối đa ${formatMoney(maxDiscount)}` : ""
     ].filter(Boolean),
-    priority: isLoyalty ? 10 : 40
+    priority: isLoyalty ? 10 : 40,
+    discountSortValue: getCouponDiscountSortValue(coupon)
   };
 }
 
-function buildLoyaltyCards(coupons = [], loyalty = {}, now = new Date(), isRegisteredCustomer = false, currentPhone = "") {
+function buildLoyaltyCards(coupons = [], loyalty = {}, now = new Date(), isRegisteredCustomer = false, currentPhone = "", salesChannel = "web") {
   if (!isRegisteredCustomer || !String(currentPhone || "").trim()) return [];
 
   const activeLoyaltyCoupons = toArray(coupons)
@@ -81,6 +98,8 @@ function buildLoyaltyCards(coupons = [], loyalty = {}, now = new Date(), isRegis
       couponByCode[String(voucher.code || "").toUpperCase()] ||
       null;
 
+    if (!isPromotionAllowedForChannel(matchedCoupon || voucher, salesChannel)) return null;
+
     return normalizeCouponCard({
       ...(matchedCoupon || {}),
       id: voucher.id || matchedCoupon?.id,
@@ -92,7 +111,7 @@ function buildLoyaltyCards(coupons = [], loyalty = {}, now = new Date(), isRegis
       minOrder: Number(matchedCoupon?.minOrder || voucher.minOrder || 0),
       voucherType: "loyalty"
     }, "loyalty");
-  });
+  }).filter(Boolean);
 
   return cards;
 }
@@ -104,10 +123,11 @@ function getProductNameById(products = [], productId = "") {
   return String(matchedProduct?.name || "").trim();
 }
 
-function buildGiftCards(smartPromotions = [], products = [], now = new Date()) {
+function buildGiftCards(smartPromotions = [], products = [], now = new Date(), salesChannel = "web") {
   return toArray(smartPromotions)
     .filter((promotion) => promotion?.active !== false)
     .filter((promotion) => promotion?.type === "gift_threshold" || promotion?.reward?.type === "gift")
+    .filter((promotion) => isPromotionAllowedForChannel(promotion, salesChannel))
     .filter((promotion) => isDateInRange(promotion.startAt, promotion.endAt, now))
     .map((promotion) => {
       const minSubtotal = Number(promotion?.condition?.minSubtotal || 0);
@@ -133,10 +153,11 @@ function buildGiftCards(smartPromotions = [], products = [], now = new Date()) {
     });
 }
 
-function buildFreeshipCards(smartPromotions = [], now = new Date()) {
+function buildFreeshipCards(smartPromotions = [], now = new Date(), salesChannel = "web") {
   return toArray(smartPromotions)
     .filter((promotion) => promotion?.active !== false)
     .filter((promotion) => promotion?.type === "free_shipping" || promotion?.reward?.type === "shipping_discount")
+    .filter((promotion) => isPromotionAllowedForChannel(promotion, salesChannel))
     .filter((promotion) => isDateInRange(promotion.startAt, promotion.endAt, now))
     .map((promotion) => {
       const minSubtotal = Number(promotion?.condition?.minSubtotal || freeshipMinSubtotal);
@@ -159,10 +180,11 @@ function buildFreeshipCards(smartPromotions = [], now = new Date()) {
     });
 }
 
-function buildCouponCards(coupons = [], now = new Date()) {
+function buildCouponCards(coupons = [], now = new Date(), salesChannel = "web") {
   return toArray(coupons)
     .filter((coupon) => coupon?.active !== false)
     .filter((coupon) => String(coupon?.voucherType || "checkout") !== "loyalty")
+    .filter((coupon) => isPromotionAllowedForChannel(coupon, salesChannel))
     .filter((coupon) => isDateInRange(coupon.startAt, coupon.endAt || coupon.expiry, now))
     .map((coupon) => normalizeCouponCard(coupon, "coupon"));
 }
@@ -174,13 +196,14 @@ export function buildHomeVoucherCards({
   products = [],
   currentPhone = "",
   isRegisteredCustomer = false,
+  salesChannel = "web",
   now = new Date()
 } = {}) {
   const cards = [
-    ...buildLoyaltyCards(coupons, loyalty, now, isRegisteredCustomer, currentPhone),
-    ...buildGiftCards(smartPromotions, products, now),
-    ...buildFreeshipCards(smartPromotions, now),
-    ...buildCouponCards(coupons, now)
+    ...buildLoyaltyCards(coupons, loyalty, now, isRegisteredCustomer, currentPhone, salesChannel),
+    ...buildGiftCards(smartPromotions, products, now, salesChannel),
+    ...buildFreeshipCards(smartPromotions, now, salesChannel),
+    ...buildCouponCards(coupons, now, salesChannel)
   ];
 
   const seen = new Set();
@@ -191,5 +214,16 @@ export function buildHomeVoucherCards({
       seen.add(key);
       return true;
     })
-    .sort((first, second) => first.priority - second.priority);
+    .sort((first, second) => {
+      const firstIsVoucher = first.type === "loyalty" || first.type === "coupon";
+      const secondIsVoucher = second.type === "loyalty" || second.type === "coupon";
+      if (firstIsVoucher !== secondIsVoucher) return firstIsVoucher ? -1 : 1;
+
+      if (firstIsVoucher && secondIsVoucher) {
+        const discountDifference = Number(second.discountSortValue || 0) - Number(first.discountSortValue || 0);
+        if (discountDifference !== 0) return discountDifference;
+      }
+
+      return first.priority - second.priority;
+    });
 }
