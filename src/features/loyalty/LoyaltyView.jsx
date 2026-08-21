@@ -13,7 +13,9 @@ export default function Loyalty(props) {
     isRegisteredCustomer,
     hasCustomerAuthSession,
     requiresCustomerAuthSession,
-    currentPhone
+    currentPhone,
+    checkoutCoupons,
+    demoOrders
   } = props;
 
   const vm = useLoyaltyViewModel({
@@ -81,6 +83,8 @@ export default function Loyalty(props) {
           ? "Phiên đăng nhập thành viên đã hết. Anh đăng nhập lại để điểm danh và dùng các thao tác tích điểm nhé."
           : ""
       }
+      coupons={checkoutCoupons}
+      orders={demoOrders}
     />
   );
 }

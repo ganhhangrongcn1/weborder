@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { toppings as toppingSeed } from "../../data/products.js";
 import { formatMoney } from "../../utils/format.js";
+import { getDefaultOrderChoices, getRequiredExactAllOptions } from "../../utils/pureHelpers.js";
 import Icon from "../Icon.jsx";
 import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
 
@@ -17,7 +18,13 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
   const finalSubmitLabel = submitLabel || optionModalText.addToCart;
   const customOptionGroups = product.optionGroups?.length ? product.optionGroups : [];
   const usesCustomOptions = customOptionGroups.length > 0;
-  const toppingTotal = selectedToppings.reduce((sum, topping) => sum + Number(topping.price || 0) * (topping.quantity || 1), 0);
+  const requiredExactAllOptions = getRequiredExactAllOptions(product);
+  const effectiveToppingMap = new Map();
+  [...selectedToppings, ...requiredExactAllOptions].forEach((item) => {
+    effectiveToppingMap.set(`${item.groupId || ""}:${item.id || ""}`, item);
+  });
+  const effectiveSelectedToppings = Array.from(effectiveToppingMap.values());
+  const toppingTotal = effectiveSelectedToppings.reduce((sum, topping) => sum + Number(topping.price || 0) * (topping.quantity || 1), 0);
   const productPrice = Number(product.price || 0);
   const originalProductPrice = Number(product.originalPrice || 0);
   const hasStrikePrice = originalProductPrice > productPrice;
@@ -25,19 +32,41 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
   const originalTotal = hasStrikePrice ? (originalProductPrice + toppingTotal) * quantity : 0;
 
   function getToppingQuantity(id, groupId = "") {
-    return selectedToppings.find((item) => item.id === id && (groupId ? item.groupId === groupId : !item.groupId))?.quantity || 0;
+    return effectiveSelectedToppings.find((item) => item.id === id && (groupId ? item.groupId === groupId : !item.groupId))?.quantity || 0;
+  }
+
+  function mustSelectEveryOption(group) {
+    const options = Array.isArray(group?.options) ? group.options : [];
+    const exactCount = Math.min(options.length, Math.max(1, Number(group?.maxSelect || 1)));
+    return group?.required === true && group?.selectionMode === "exact" && options.length > 0 && exactCount === options.length;
   }
 
   useEffect(() => {
     if (!usesCustomOptions) return;
     const requiredGroups = customOptionGroups.filter((group) => group.required && (group.options || []).length > 0);
     if (!requiredGroups.length) return;
+    const defaultOptions = getDefaultOrderChoices(product).toppings;
 
     setSelectedToppings((current) => {
       let next = [...current];
       let changed = false;
 
       requiredGroups.forEach((group) => {
+        const groupDefaults = defaultOptions.filter((item) => item.groupId === group.id);
+        if (groupDefaults.length > 0) {
+          const hasEveryDefault = groupDefaults.every((defaultItem) =>
+            next.some((item) => item.groupId === group.id && item.id === defaultItem.id)
+          );
+          if (hasEveryDefault) return;
+
+          next = [
+            ...next.filter((item) => item.groupId !== group.id),
+            ...groupDefaults.map((item) => ({ ...item, quantity: 1 }))
+          ];
+          changed = true;
+          return;
+        }
+
         const hasSelected = next.some((item) => item.groupId === group.id);
         if (hasSelected) return;
         const firstOption = group.options?.[0];
@@ -50,7 +79,7 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
 
       return changed ? next : current;
     });
-  }, [usesCustomOptions, customOptionGroups, normalizeOrderOption, setSelectedToppings]);
+  }, [product, usesCustomOptions, customOptionGroups, normalizeOrderOption, setSelectedToppings]);
 
   function changeToppingQuantity(topping, delta) {
     setSelectedToppings((current) => {
@@ -63,6 +92,7 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
   }
 
   function toggleCustomOption(group, option) {
+    if (mustSelectEveryOption(group)) return;
     const normalized = normalizeOrderOption(group, option);
     if (group.type === "single") {
       setSelectedSpice(group.name + ": " + option.name);
@@ -73,7 +103,7 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
       return;
     }
     const isActive = isCustomOptionActive(group, option);
-    const selectedCount = selectedToppings.filter((item) => item.groupId === group.id).length;
+    const selectedCount = effectiveSelectedToppings.filter((item) => item.groupId === group.id).length;
     const maxSelect = Math.min((group.options || []).length, Math.max(1, Number(group.maxSelect || 1)));
     if (!isActive && selectedCount >= maxSelect) return;
     changeCustomOptionQuantity(group, option, isActive ? -getToppingQuantity(option.id, group.id) : 1);
@@ -91,8 +121,9 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
   }
 
   function isCustomOptionActive(group, option) {
+    if (mustSelectEveryOption(group)) return true;
     if (group.type === "single") {
-      return selectedToppings.some((item) => item.groupId === group.id && item.id === option.id);
+      return effectiveSelectedToppings.some((item) => item.groupId === group.id && item.id === option.id);
     }
     return getToppingQuantity(option.id, group.id) > 0;
   }
@@ -101,7 +132,7 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
     if (!usesCustomOptions) return false;
     const requiredGroups = customOptionGroups.filter((group) => group.required && (group.options || []).length > 0);
     return requiredGroups.some((group) => {
-      const selectedCount = selectedToppings.filter((item) => item.groupId === group.id).length;
+      const selectedCount = effectiveSelectedToppings.filter((item) => item.groupId === group.id).length;
       if (group.selectionMode === "exact") {
         const exactCount = Math.min((group.options || []).length, Math.max(1, Number(group.maxSelect || 1)));
         return selectedCount !== exactCount;
@@ -114,7 +145,7 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
     if (hasMissingRequiredSelection()) {
       return;
     }
-    onAdd();
+    onAdd(effectiveSelectedToppings);
   }
 
   return (

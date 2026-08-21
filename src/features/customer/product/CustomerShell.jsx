@@ -333,7 +333,7 @@ export default function CustomerShell({
               {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
               {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} setCurrentOrder={setCurrentOrder} onReorder={reorderOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} isOrderRestoring={isSessionRestoring || isSessionBootstrapping || isMomoReturnRecovering} />}
               {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} setCurrentOrder={setCurrentOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} onOrderSheetVisibilityChange={setIsTrackingOrderSheetOpen} />}
-              {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
+              {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} demoOrders={profileOrders} checkoutCoupons={pageProps.checkoutCoupons || pageProps.coupons} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
               {page === "reviewRewards" && <ReviewRewardsPage navigate={pageProps.navigate} branches={pageProps.branches || branches} />}
               {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}
             </div>
@@ -357,12 +357,12 @@ export default function CustomerShell({
                 closeOnlyOnBackdrop={closeOnlyOnBackdrop}
                 OptionGroup={OptionGroup}
                 submitLabel={editingCartId ? optionModalText.updateItem : optionModalText.addToCart}
-                onAdd={() => {
-                  const toppingTotal = selectedToppings.reduce((sum, topping) => sum + topping.price, 0);
+                onAdd={(resolvedToppings = selectedToppings) => {
+                  const toppingTotal = resolvedToppings.reduce((sum, topping) => sum + topping.price, 0);
                   addToCart({
                     product: selectedProduct,
                     spice: selectedSpice,
-                    toppings: selectedToppings,
+                    toppings: resolvedToppings,
                     note,
                     quantity,
                     finalPrice: (selectedProduct.price + toppingTotal) * quantity

@@ -171,6 +171,23 @@ export function normalizeOrderOption(group, option) {
   };
 }
 
+export function getRequiredExactAllOptions(product = {}) {
+  const groups = Array.isArray(product?.optionGroups) ? product.optionGroups : [];
+  return groups.flatMap((group) => {
+    const options = Array.isArray(group?.options) ? group.options : [];
+    const exactCount = Math.min(options.length, Math.max(1, Number(group?.maxSelect || 1)));
+    const mustSelectAll =
+      group?.required === true &&
+      group?.selectionMode === "exact" &&
+      options.length > 0 &&
+      exactCount === options.length;
+
+    return mustSelectAll
+      ? options.map((option) => normalizeOrderOption(group, option))
+      : [];
+  });
+}
+
 export function getDefaultOrderChoices(product, _fallbackToppings = []) {
   const groups = product.optionGroups || [];
   const firstSingleGroup = groups.find((group) => group.type === "single" && group.options?.length);
@@ -179,9 +196,15 @@ export function getDefaultOrderChoices(product, _fallbackToppings = []) {
     firstSingleGroup && firstSingleOption && Number(firstSingleOption.price) > 0
       ? [normalizeOrderOption(firstSingleGroup, firstSingleOption)]
       : [];
+  const requiredExactAllOptions = getRequiredExactAllOptions(product);
+  const defaultOptions = new Map();
+  [...paidDefaultOptions, ...requiredExactAllOptions].forEach((option) => {
+    defaultOptions.set(`${option.groupId}:${option.id}`, option);
+  });
+
   return {
     spice: firstSingleOption ? `${firstSingleGroup.name}: ${firstSingleOption.name}` : "",
-    toppings: groups.length ? paidDefaultOptions : []
+    toppings: groups.length ? Array.from(defaultOptions.values()) : []
   };
 }
 

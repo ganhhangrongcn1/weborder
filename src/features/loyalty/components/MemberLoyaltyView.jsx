@@ -8,6 +8,7 @@ import CouponList from "../../../pages/customer/loyalty/CouponList.jsx";
 import { isVoucherExpired } from "../../../utils/pureHelpers.js";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
 import { saveCheckoutVoucherIntent } from "../../../services/checkoutVoucherIntentService.js";
+import { buildCustomerVoucherLibrary } from "../../../services/customerVoucherLibraryService.js";
 import useLoyaltyEntryPopup from "../hooks/useLoyaltyEntryPopup.js";
 import useTierUpgradeCelebration from "../hooks/useTierUpgradeCelebration.js";
 import LuckyVoucherModal from "./LuckyVoucherModal.jsx";
@@ -60,7 +61,9 @@ export default function MemberLoyaltyView({
   handleCheckin,
   canCheckin,
   canShowLoyaltyPopups,
-  checkinAuthNotice
+  checkinAuthNotice,
+  coupons,
+  orders
 }) {
   const currentTier = tierJourney?.currentTier || {};
   const currencyPerPoint = Math.max(
@@ -78,6 +81,15 @@ export default function MemberLoyaltyView({
       ? loyalty.pointHistory
       : (Array.isArray(userProfile?.pointHistory) ? userProfile.pointHistory : []);
   const safeVoucherHistory = Array.isArray(loyalty?.voucherHistory) ? loyalty.voucherHistory : [];
+  const displayVouchers = useMemo(
+    () => buildCustomerVoucherLibrary({
+      walletVouchers: safeVoucherHistory,
+      coupons,
+      orders,
+      channel: "web"
+    }),
+    [safeVoucherHistory, coupons, orders]
+  );
   const pointRulesRows = [
     { label: "Quy đổi khi thanh toán", value: "1 điểm = 1đ" },
     { label: "Mức dùng tối đa", value: `${tierJourney?.maxRedemptionPercent || 50}% giá trị đơn` },
@@ -90,10 +102,10 @@ export default function MemberLoyaltyView({
   const [activeSheet, setActiveSheet] = useState("");
   const usableVouchers = useMemo(
     () =>
-      safeVoucherHistory.filter(
+      displayVouchers.filter(
         (voucher) => !voucher?.canceled && !voucher?.used && !isVoucherExpired(voucher)
       ),
-    [safeVoucherHistory]
+    [displayVouchers]
   );
   const availableVouchers = usableVouchers.slice(0, 2);
   const voucherHeader = useMemo(() => {
@@ -229,7 +241,7 @@ export default function MemberLoyaltyView({
         loyaltyRule={loyaltyRule}
         today={today}
         recentDays={recentDays}
-        vouchers={safeVoucherHistory}
+        vouchers={displayVouchers}
         pointHistory={safePointHistory}
         pointRulesRows={pointRulesRows}
         pointRulesExample={pointRulesExample}
