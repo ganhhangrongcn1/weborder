@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import MenuGroupEditorModal from "./MenuGroupEditorModal.jsx";
 import MenuCategoryEditorModal from "./MenuCategoryEditorModal.jsx";
 import MenuOverviewPanel from "./components/MenuOverviewPanel.jsx";
@@ -6,7 +6,10 @@ import MenuGroupsPanel from "./components/MenuGroupsPanel.jsx";
 import KitchenOptionSettingsPanel from "./components/KitchenOptionSettingsPanel.jsx";
 import useMenuManagerState from "./hooks/useMenuManagerState.js";
 import useMenuManagerActions from "./hooks/useMenuManagerActions.js";
-import { syncMenuCatalogToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
+import {
+  syncMenuCatalogToSupabase,
+  syncProductsToSupabase
+} from "../../../services/repositories/catalogConfigRepository.js";
 import { AdminButton, AdminCard, AdminInput, AdminTabs } from "../ui/index.js";
 
 export default function MenuManager({
@@ -22,6 +25,8 @@ export default function MenuManager({
 }) {
   const [syncingMenu, setSyncingMenu] = useState(false);
   const [syncStatus, setSyncStatus] = useState("");
+  const [savingProductPriceId, setSavingProductPriceId] = useState("");
+  const priceSaveInFlightRef = useRef(false);
   const canSyncMenu = useMemo(() => Array.isArray(products) && products.length > 0, [products]);
 
   const state = useMenuManagerState({
@@ -65,7 +70,7 @@ export default function MenuManager({
       .filter((group) => (group.options || []).length > 0);
 
   const handleSyncMenuToSupabase = async () => {
-    if (!canSyncMenu || syncingMenu) return;
+    if (!canSyncMenu || syncingMenu || priceSaveInFlightRef.current) return;
     setSyncingMenu(true);
     setSyncStatus("");
     try {
@@ -96,6 +101,55 @@ export default function MenuManager({
     }
   };
 
+  const handleSaveProductPrices = async ({ productId, webPrice, posPrice }) => {
+    if (syncingMenu || priceSaveInFlightRef.current) {
+      return { ok: false, message: "Đang có một lượt lưu khác." };
+    }
+
+    const nextWebPrice = Number(webPrice || 0);
+    const nextPosPrice = Number(posPrice || 0);
+    if (nextWebPrice <= 0 || nextPosPrice <= 0) {
+      return { ok: false, message: "Giá phải lớn hơn 0." };
+    }
+
+    const productExists = (Array.isArray(products) ? products : []).some((item) => item.id === productId);
+    if (!productExists) return { ok: false, message: "Không tìm thấy món cần lưu." };
+
+    priceSaveInFlightRef.current = true;
+    setSavingProductPriceId(productId);
+    setSyncStatus("");
+
+    try {
+      const nextProducts = products.map((item) => (
+        item.id === productId
+          ? { ...item, price: nextWebPrice, posPrice: nextPosPrice }
+          : item
+      ));
+      const result = await syncProductsToSupabase(nextProducts);
+
+      if (!result?.ok) {
+        setSyncStatus("Chưa thể lưu giá lên Supabase ở mode hiện tại.");
+        return { ok: false, message: "Chưa thể lưu giá." };
+      }
+
+      setProducts((current) => (
+        (Array.isArray(current) ? current : []).map((item) => (
+          item.id === productId
+            ? { ...item, price: nextWebPrice, posPrice: nextPosPrice }
+            : item
+        ))
+      ));
+      setSyncStatus("Đã lưu giá Website và giá tại quán/POS.");
+      return { ok: true };
+    } catch {
+      setSyncStatus("Lưu giá thất bại. Vui lòng thử lại.");
+      return { ok: false, message: "Lưu giá thất bại." };
+    } finally {
+      priceSaveInFlightRef.current = false;
+      setSavingProductPriceId("");
+    }
+  };
+
   return (
     <div className="admin-menu-dashboard admin-menu-page">
       <div className="flex items-center justify-between gap-3">
@@ -103,7 +157,7 @@ export default function MenuManager({
         <AdminButton
           variant={canSyncMenu ? "primary" : "secondary"}
           className={!canSyncMenu ? "opacity-70 cursor-not-allowed" : ""}
-          disabled={!canSyncMenu || syncingMenu}
+          disabled={!canSyncMenu || syncingMenu || Boolean(savingProductPriceId)}
           onClick={handleSyncMenuToSupabase}
         >
           {syncingMenu ? "Đang lưu..." : "Lưu menu lên Supabase"}
@@ -145,6 +199,8 @@ export default function MenuManager({
           reorderAdminCategory={actions.reorderAdminCategory}
           filteredAdminProducts={state.filteredAdminProducts}
           setProductVisibility={actions.setProductVisibility}
+          savingProductPriceId={savingProductPriceId}
+          onSaveProductPrices={handleSaveProductPrices}
           onEditProduct={onEditProduct}
         />
       )}

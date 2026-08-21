@@ -1,6 +1,6 @@
 import { ALL_CATEGORY } from "../menuManager.utils.js";
-import { formatMoney } from "../../../../utils/format.js";
 import { AdminButton, AdminCard, AdminIconButton, AdminInput, AdminSelect } from "../../ui/index.js";
+import MenuProductPriceRow from "./MenuProductPriceRow.jsx";
 
 export default function MenuOverviewPanel({
   createMenuOpen,
@@ -21,6 +21,8 @@ export default function MenuOverviewPanel({
   reorderAdminCategory,
   filteredAdminProducts,
   setProductVisibility,
+  savingProductPriceId,
+  onSaveProductPrices,
   onEditProduct
 }) {
   return (
@@ -109,20 +111,15 @@ export default function MenuOverviewPanel({
           <div className="admin-menu-col-head"><strong>Món</strong></div>
           <div className="admin-menu-product-list">
             {filteredAdminProducts.map((product) => (
-              <button key={product.id} type="button" onClick={() => onEditProduct?.(product)} className="admin-menu-product-row">
-                <img src={product.image} alt={product.name} />
-                <span>
-                  <strong>{product.name}</strong>
-                  <em>{formatMoney(product.price)}</em>
-                </span>
-                <div className="flex items-center gap-2">
-                  <i>{product.visible === false ? "Đang ẩn" : "Đang bán"}</i>
-                  <label className="admin-switch" onClick={(event) => event.stopPropagation()}>
-                    <input type="checkbox" checked={product.visible !== false} onChange={(event) => { event.stopPropagation(); setProductVisibility(product.id, event.target.checked); }} />
-                    <span />
-                  </label>
-                </div>
-              </button>
+              <MenuProductPriceRow
+                key={product.id}
+                product={product}
+                saving={savingProductPriceId === product.id}
+                saveDisabled={Boolean(savingProductPriceId) && savingProductPriceId !== product.id}
+                onEditProduct={onEditProduct}
+                onSavePrices={onSaveProductPrices}
+                onToggleVisibility={setProductVisibility}
+              />
             ))}
             {!filteredAdminProducts.length ? <p className="admin-help-text">Không có món phù hợp bộ lọc hiện tại.</p> : null}
           </div>

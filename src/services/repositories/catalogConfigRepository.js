@@ -115,6 +115,19 @@ export async function syncMenuCatalogToSupabase({
   return { ok: true };
 }
 
+export async function syncProductsToSupabase(products = []) {
+  const strategy = getRuntimeStrategy();
+  if (!strategy.shouldReadThroughSupabase) {
+    return { ok: false, reason: "supabase_read_disabled" };
+  }
+
+  await writeCatalogToStandardTable(
+    CATALOG_CONFIG_KEYS.products,
+    Array.isArray(products) ? products : []
+  );
+  return { ok: true };
+}
+
 export async function syncPromotionCatalogToSupabase({
   promos = [],
   campaigns = [],
