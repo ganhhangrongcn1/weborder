@@ -4,6 +4,7 @@ import {
   reviewRewardClaim,
   saveReviewRewardSettings
 } from "../../../services/reviewRewardService.js";
+import { buildGoogleMapsPlaceUrl } from "../../../services/branchNavigationService.js";
 
 const SOURCE_LABELS = {
   grabfood: "GrabFood",
@@ -241,7 +242,25 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
                   {claim.partner_source === "googlemaps" ? null : <div><dt>Giá trị đơn</dt><dd>{formatMoney(claim.order?.total_amount)}</dd></div>}
                   <div className="is-wide">
                     <dt>Chi nhánh</dt>
-                    <dd>{claim.order?.branch_name || claim.metadata?.branch_name || "Chưa có thông tin"}</dd>
+                    <dd>
+                      {claim.order?.branch_name || claim.branch?.name || claim.metadata?.branch_name || "Chưa có thông tin"}
+                      {claim.partner_source === "googlemaps" && buildGoogleMapsPlaceUrl(claim.branch || {
+                        name: claim.metadata?.branch_name,
+                        address: claim.metadata?.branch_address
+                      }) ? (
+                        <a
+                          className="admin-review-reward-branch-link"
+                          href={buildGoogleMapsPlaceUrl(claim.branch || {
+                            name: claim.metadata?.branch_name,
+                            address: claim.metadata?.branch_address
+                          })}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Mở Google Maps ↗
+                        </a>
+                      ) : null}
+                    </dd>
                   </div>
                   {claim.partner_source === "googlemaps" ? null : <div><dt>Thời gian đặt</dt><dd>{formatDate(claim.order?.order_time) || "Chưa có"}</dd></div>}
                   <div>

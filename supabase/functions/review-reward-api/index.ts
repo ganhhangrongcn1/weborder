@@ -421,7 +421,8 @@ async function adminDashboard(client: ReturnType<typeof createClient>, admin: Ro
   const orderIds = [...new Set(claimRows.map((claim) => text(claim.partner_order_id)).filter(Boolean))];
   const authUserIds = [...new Set(claimRows.map((claim) => text(claim.auth_user_id)).filter(Boolean))];
   const customerPhones = [...new Set(claimRows.map((claim) => phoneKey(claim.customer_phone)).filter(Boolean))];
-  const [ordersResult, profilesResult, accountsResult] = await Promise.all([
+  const branchIds = [...new Set(claimRows.map((claim) => text(claim.branch_uuid)).filter(Boolean))];
+  const [ordersResult, profilesResult, accountsResult, branchesResult] = await Promise.all([
     orderIds.length
       ? client.from("partner_orders")
         .select("id,display_order_code,order_code,partner_source,customer_name,customer_phone,branch_name,nexpos_hub_name,total_amount,order_time,created_at,order_status,nexpos_status")
@@ -432,17 +433,26 @@ async function adminDashboard(client: ReturnType<typeof createClient>, admin: Ro
       : Promise.resolve({ data: [], error: null }),
     customerPhones.length
       ? client.from("loyalty_accounts").select("customer_phone,total_points").in("customer_phone", customerPhones)
+      : Promise.resolve({ data: [], error: null }),
+    branchIds.length
+      ? client.from("branches")
+        .select("branch_uuid,name,address,map_url,lat,lng,data")
+        .in("branch_uuid", branchIds)
       : Promise.resolve({ data: [], error: null })
   ]);
 
   if (ordersResult.error) console.error("[review-reward-api] admin partner orders query", ordersResult.error);
   if (profilesResult.error) console.error("[review-reward-api] admin profiles query", profilesResult.error);
   if (accountsResult.error) console.error("[review-reward-api] admin loyalty accounts query", accountsResult.error);
+  if (branchesResult.error) console.error("[review-reward-api] admin branches query", branchesResult.error);
 
   const orderMap = new Map((ordersResult.data || []).map((order) => [text(order.id), order]));
   const profileMap = new Map((profilesResult.data || []).map((profile) => [text(profile.auth_user_id), profile]));
   const accountMap = new Map(
     (accountsResult.data || []).map((account) => [phoneKey(account.customer_phone), account])
+  );
+  const branchMap = new Map(
+    (branchesResult.data || []).map((branch) => [text(branch.branch_uuid), branch])
   );
   const rows = await Promise.all(claimRows.map(async (claim) => {
     let proof_url = "";
@@ -453,6 +463,7 @@ async function adminDashboard(client: ReturnType<typeof createClient>, admin: Ro
     const order = orderMap.get(text(claim.partner_order_id)) || null;
     const profile = profileMap.get(text(claim.auth_user_id)) || null;
     const loyaltyAccount = accountMap.get(phoneKey(claim.customer_phone)) || null;
+    const branch = branchMap.get(text(claim.branch_uuid)) || null;
     return {
       ...claim,
       proof_url,
@@ -468,6 +479,17 @@ async function adminDashboard(client: ReturnType<typeof createClient>, admin: Ro
           total_amount: Number(order.total_amount || 0),
           order_time: order.order_time || order.created_at,
           order_status: text(order.order_status || order.nexpos_status)
+        }
+        : null,
+      branch: branch
+        ? {
+          id: text(branch.branch_uuid),
+          name: text(branch.name),
+          address: text(branch.address),
+          map: text(branch.map_url),
+          googleReviewUrl: text(branch.data?.googleReviewUrl || branch.data?.google_review_url),
+          lat: branch.lat,
+          lng: branch.lng
         }
         : null,
       current_points: Number(loyaltyAccount?.total_points || 0)
