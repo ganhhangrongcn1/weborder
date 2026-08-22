@@ -245,14 +245,17 @@ export default function AdminReviewRewardsPage({ onReviewRewardPendingCountChang
                     <dd>
                       {claim.order?.branch_name || claim.branch?.name || claim.metadata?.branch_name || "Chưa có thông tin"}
                       {claim.partner_source === "googlemaps" && buildGoogleBusinessReviewsUrl(claim.branch) ? (
-                        <a
-                          className="admin-review-reward-branch-link"
-                          href={buildGoogleBusinessReviewsUrl(claim.branch)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Xem đánh giá Google ↗
-                        </a>
+                        <>
+                          <a
+                            className="admin-review-reward-branch-link"
+                            href={buildGoogleBusinessReviewsUrl(claim.branch)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Mở Reviews Google ↗
+                          </a>
+                          <small className="admin-review-reward-sort-hint">Sau khi mở: Sắp xếp → Mới nhất</small>
+                        </>
                       ) : null}
                     </dd>
                   </div>

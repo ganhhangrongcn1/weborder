@@ -63,16 +63,22 @@ export function buildGoogleMapsReviewUrl(branch = {}) {
 export function buildGoogleBusinessReviewsUrl(branch = {}) {
   if (!branch || typeof branch !== "object") return "";
 
+  const savedReviewsUrl = String(
+    branch?.googleReviewsUrl ||
+    branch?.google_reviews_url ||
+    branch?.metadata?.googleReviewsUrl ||
+    ""
+  ).trim();
+  if (/^https?:\/\/www\.google\.[^/]+\/maps\/place\//i.test(savedReviewsUrl) && /!9m1!1b1(?:!|[/?#]|$)/i.test(savedReviewsUrl)) {
+    return savedReviewsUrl;
+  }
+
   const savedReviewUrl = String(
     branch?.googleReviewUrl ||
     branch?.google_review_url ||
     branch?.metadata?.googleReviewUrl ||
     ""
   ).trim();
-
-  if (/^https?:\/\/(?:www\.)?g\.page\/r\/.+\/review\/?(?:[?#].*)?$/i.test(savedReviewUrl)) {
-    return savedReviewUrl.replace(/\/review\/?(?=[?#]|$)/i, "/");
-  }
 
   if (/^https?:\/\/www\.google\.[^/]+\/search\?/i.test(savedReviewUrl) && /(?:[?&])ibp=gwp(?:%3B|;)0(?:%2C|,)7(?:&|$)/i.test(savedReviewUrl)) {
     return savedReviewUrl;

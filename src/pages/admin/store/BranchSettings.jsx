@@ -590,6 +590,20 @@ export default function BranchSettings({
                         <small className="text-[10px] leading-4 text-brown/55">Dán link “Yêu cầu đánh giá” lấy từ Hồ sơ doanh nghiệp Google.</small>
                       </label>
 
+                      <label className="admin-branch-field-card admin-branch-select-field">
+                        <span className="text-xs font-semibold text-brown/70">Link xem Reviews Google</span>
+                        <AdminInput
+                          className="admin-input"
+                          type="url"
+                          name={`branch-google-reviews-${branchId}`}
+                          autoComplete="url"
+                          placeholder="https://www.google.com/maps/place/...!9m1!1b1"
+                          value={branch.googleReviewsUrl ?? branch.google_reviews_url ?? ""}
+                          onChange={(event) => updateBranchField(branch.id, "googleReviewsUrl", event.target.value.trim())}
+                        />
+                        <small className="text-[10px] leading-4 text-brown/55">Link mở thẳng tab Reviews, dùng cho Admin kiểm tra đánh giá.</small>
+                      </label>
+
                       <div className="admin-branch-time-grid">
                         <label className="admin-branch-field-card admin-branch-time-field">
                           <span className="text-xs font-semibold text-brown/70">Mở cửa</span>

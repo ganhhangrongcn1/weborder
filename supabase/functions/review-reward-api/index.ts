@@ -151,6 +151,7 @@ async function customerDashboard(client: ReturnType<typeof createClient>, identi
       address: text(branch.address),
       map: text(branch.map_url),
       googleReviewUrl: text(branch.data?.googleReviewUrl || branch.data?.google_review_url),
+      googleReviewsUrl: text(branch.data?.googleReviewsUrl || branch.data?.google_reviews_url),
       lat: branch.lat,
       lng: branch.lng,
       locked: (claims || []).some((claim) =>
@@ -488,6 +489,7 @@ async function adminDashboard(client: ReturnType<typeof createClient>, admin: Ro
           address: text(branch.address),
           map: text(branch.map_url),
           googleReviewUrl: text(branch.data?.googleReviewUrl || branch.data?.google_review_url),
+          googleReviewsUrl: text(branch.data?.googleReviewsUrl || branch.data?.google_reviews_url),
           lat: branch.lat,
           lng: branch.lng
         }

@@ -226,6 +226,14 @@
   border-radius: 2px;
 }
 
+.admin-review-reward-sort-hint {
+  display: block;
+  margin-top: 3px;
+  color: #7a8492;
+  font-size: 10px;
+  font-weight: 650;
+}
+
 .admin-review-reward-points {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
