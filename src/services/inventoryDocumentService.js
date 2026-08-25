@@ -4,6 +4,10 @@ import {
   initSupabaseRuntimeClient
 } from "./supabase/supabaseRuntimeClient.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
+import {
+  getInventoryDocumentDateTimeBounds,
+  getInventoryDocumentPagination
+} from "./inventoryDocumentFilters.js";
 import { isInventoryRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
 
 const DOCUMENT_TYPES = {
@@ -11,7 +15,8 @@ const DOCUMENT_TYPES = {
   issues: "stock_issue",
   transfers: "transfer",
   disposals: "waste",
-  requisitions: "internal_requisition"
+  requisitions: "internal_requisition",
+  adjustments: "stock_adjustment"
 };
 
 const DOCUMENT_PREFIXES = {
@@ -19,7 +24,8 @@ const DOCUMENT_PREFIXES = {
   stock_issue: "PXK",
   transfer: "CK",
   waste: "PH",
-  internal_requisition: "YCX"
+  internal_requisition: "YCX",
+  stock_adjustment: "DCT"
 };
 
 export const INVENTORY_NAVIGATION_COUNTS_CHANGED_EVENT = "ghr:inventory-navigation-counts-changed";
@@ -43,7 +49,8 @@ const LINE_SELECT = [
   "id", "document_id", "item_id", "unit_id", "conversion_to_base",
   "expected_quantity", "approved_quantity", "shipped_quantity",
   "received_quantity", "actual_quantity", "base_quantity", "unit_price",
-  "variance_reason", "rejection_reason", "notes"
+  "lot_number", "manufactured_on", "expires_on",
+  "variance_reason", "rejection_reason", "adjustment_direction", "notes"
 ].join(",");
 
 function toText(value = "") {
@@ -90,8 +97,12 @@ function normalizeLine(row = {}) {
     actualQuantity: row.actual_quantity == null ? null : Number(row.actual_quantity),
     baseQuantity: Number(row.base_quantity || 0),
     unitPrice: Number(row.unit_price || 0),
+    lotNumber: toText(row.lot_number),
+    manufacturedOn: toText(row.manufactured_on),
+    expiresOn: toText(row.expires_on),
     varianceReason: toText(row.variance_reason),
     rejectionReason: toText(row.rejection_reason),
+    adjustmentDirection: toText(row.adjustment_direction),
     disposalReason: toText(row.notes),
     notes: toText(row.notes)
   };
@@ -144,18 +155,36 @@ export function canApproveInventoryDisposals(roles = []) {
   return roles.some((role) => ["owner", "admin", "central_manager"].includes(toText(role)));
 }
 
-export async function readInventoryDocuments({ domain = "receipts", limit = 200 } = {}) {
+export function canApproveInventoryAdjustments(roles = []) {
+  return roles.some((role) => ["owner", "admin", "central_manager", "branch_manager"].includes(toText(role)));
+}
+
+export async function readInventoryDocuments({
+  domain = "receipts",
+  fromDate = "",
+  toDate = "",
+  status = "all",
+  page = 1,
+  pageSize = 50
+} = {}) {
   const documentType = getInventoryDocumentType(domain);
   if (!documentType) return { ok: false, status: "error", rows: [], message: "Loại chứng từ không hợp lệ." };
   const client = await getInventoryClient();
   if (!client) return { ok: false, status: "setup", rows: [], message: "Chưa kết nối được Supabase cho phân hệ Kho." };
 
-  const { data, error } = await client
+  const dateBounds = getInventoryDocumentDateTimeBounds(fromDate, toDate);
+  const pagination = getInventoryDocumentPagination(page, pageSize);
+  const normalizedStatus = toText(status);
+  let query = client
     .from("inventory_documents")
-    .select(DOCUMENT_SELECT)
-    .eq("document_type", documentType)
+    .select(DOCUMENT_SELECT, { count: "exact" })
+    .eq("document_type", documentType);
+  if (dateBounds.fromDateTime) query = query.gte("occurred_at", dateBounds.fromDateTime);
+  if (dateBounds.toDateTime) query = query.lte("occurred_at", dateBounds.toDateTime);
+  if (normalizedStatus && normalizedStatus !== "all") query = query.eq("status", normalizedStatus);
+  const { data, error, count } = await query
     .order("occurred_at", { ascending: false })
-    .limit(Math.max(20, Math.min(500, Number(limit || 200))));
+    .range(pagination.from, pagination.to);
   recordAdminRequest(`read inventory ${domain}`, "inventory_documents");
   if (error) return { ok: false, ...normalizeReadError(error), rows: [] };
 
@@ -207,7 +236,7 @@ export async function readInventoryDocuments({ domain = "receipts", limit = 200 
   ]));
 
   let permissions = {};
-  if (domain === "disposals") {
+  if (["disposals", "adjustments"].includes(domain)) {
     const actorId = await getActorId(client);
     let approvalRoles = [];
     if (actorId) {
@@ -219,7 +248,8 @@ export async function readInventoryDocuments({ domain = "receipts", limit = 200 
       if (!accessResult.error) approvalRoles = (accessResult.data || []).map((row) => toText(row.role));
     }
     permissions = {
-      canApproveDisposals: canApproveInventoryDisposals(approvalRoles)
+      canApproveDisposals: canApproveInventoryDisposals(approvalRoles),
+      canApproveAdjustments: canApproveInventoryAdjustments(approvalRoles)
     };
   }
 
@@ -230,6 +260,10 @@ export async function readInventoryDocuments({ domain = "receipts", limit = 200 
       { ...row, linkedTransfer: transferByRequisition.get(row.id) || null },
       linesByDocument.get(row.id) || []
     )),
+    totalCount: Math.max(0, Number(count || 0)),
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    pageCount: Math.max(1, Math.ceil(Math.max(0, Number(count || 0)) / pagination.pageSize)),
     permissions,
     message: ""
   };
@@ -274,7 +308,20 @@ export async function readInventoryPendingDisposalCount() {
   return Math.max(0, Number(count || 0));
 }
 
-function validateDraftInput(domain, input = {}) {
+export async function readInventoryPendingAdjustmentCount() {
+  const client = await getInventoryClient();
+  if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
+  const { count, error } = await client
+    .from("inventory_documents")
+    .select("id", { count: "exact", head: true })
+    .eq("document_type", "stock_adjustment")
+    .eq("status", "submitted");
+  recordAdminRequest("count pending inventory adjustments", "inventory_documents");
+  if (error) throw new Error(normalizeReadError(error).message);
+  return Math.max(0, Number(count || 0));
+}
+
+export function validateInventoryDocumentDraftInput(domain, input = {}) {
   const documentType = getInventoryDocumentType(domain);
   if (!documentType) throw new Error("Loại chứng từ không hợp lệ.");
   const lines = (Array.isArray(input.lines) ? input.lines : []).map((line) => ({
@@ -283,7 +330,12 @@ function validateDraftInput(domain, input = {}) {
     conversionToBase: Number(line.conversionToBase || 1),
     quantity: Number(line.quantity || 0),
     unitPrice: Math.max(0, Number(line.unitPrice || 0)),
+    lotNumber: toText(line.lotNumber),
+    manufacturedOn: toText(line.manufacturedOn),
+    expiresOn: toText(line.expiresOn),
+    trackExpiry: line.trackExpiry === true,
     disposalReason: toText(line.disposalReason),
+    adjustmentDirection: toText(line.adjustmentDirection),
     notes: toText(line.notes)
   }));
   if (!lines.length || lines.some((line) => !line.itemId || !line.unitId || line.quantity <= 0 || line.conversionToBase <= 0)) {
@@ -294,17 +346,31 @@ function validateDraftInput(domain, input = {}) {
   }
   const sourceWarehouseId = toText(input.sourceWarehouseId);
   const destinationWarehouseId = toText(input.destinationWarehouseId);
-  if (["issues", "transfers", "disposals"].includes(domain) && !sourceWarehouseId) throw new Error("Vui lòng chọn kho xuất.");
+  if (["issues", "transfers", "disposals", "adjustments"].includes(domain) && !sourceWarehouseId) throw new Error("Vui lòng chọn kho xuất.");
   if (["receipts", "transfers", "requisitions"].includes(domain) && !destinationWarehouseId) throw new Error("Vui lòng chọn kho nhận.");
   if (domain === "transfers" && sourceWarehouseId === destinationWarehouseId) throw new Error("Kho xuất và kho nhận phải khác nhau.");
   if (domain === "issues" && !toText(input.issueReason)) throw new Error("Vui lòng nhập lý do xuất kho.");
   if (domain === "disposals" && !toText(input.disposalReason)) throw new Error("Vui lòng chọn lý do hủy.");
+  if (domain === "adjustments" && !toText(input.adjustmentReason)) throw new Error("Vui lòng nhập lý do điều chỉnh tồn.");
+  if (domain === "adjustments" && lines.some((line) => !["in", "out"].includes(line.adjustmentDirection))) {
+    throw new Error("Mỗi nguyên vật liệu phải chọn Tăng tồn hoặc Giảm tồn.");
+  }
+  if (domain === "receipts" && !toText(input.supplierId)) throw new Error("Vui lòng chọn nhà cung cấp.");
+  if (domain === "receipts" && lines.some((line) => !line.lotNumber)) {
+    throw new Error("Mỗi nguyên vật liệu nhập kho phải có mã lô.");
+  }
+  if (domain === "receipts" && lines.some((line) => line.trackExpiry && !line.expiresOn)) {
+    throw new Error("Nguyên vật liệu đang theo dõi hạn sử dụng phải có ngày hết hạn.");
+  }
+  if (domain === "receipts" && lines.some((line) => line.manufacturedOn && line.expiresOn && line.expiresOn < line.manufacturedOn)) {
+    throw new Error("Hạn sử dụng không được trước ngày sản xuất.");
+  }
   return { documentType, lines, sourceWarehouseId, destinationWarehouseId };
 }
 
 export async function saveInventoryDocumentDraft({ domain = "receipts", input = {} } = {}) {
   if (!canWriteInventoryDocuments()) throw new Error("Ghi dữ liệu Kho đang bị khóa an toàn.");
-  const normalized = validateDraftInput(domain, input);
+  const normalized = validateInventoryDocumentDraftInput(domain, input);
   const client = await getInventoryClient();
   if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
   const actorId = await getActorId(client);
@@ -312,6 +378,7 @@ export async function saveInventoryDocumentDraft({ domain = "receipts", input = 
   const totalAmount = normalized.lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
   const noteText = toText(input.notes);
   const disposalReason = toText(input.disposalReason);
+  const adjustmentReason = toText(input.adjustmentReason);
   const headerPayload = {
     document_no: createDocumentNo(normalized.documentType),
     idempotency_key: createKey("draft"),
@@ -324,7 +391,9 @@ export async function saveInventoryDocumentDraft({ domain = "receipts", input = 
     occurred_at: input.occurredAt || new Date().toISOString(),
     notes: normalized.documentType === "waste"
       ? `${disposalReason}${noteText ? ` — ${noteText}` : ""}`
-      : noteText || null,
+      : normalized.documentType === "stock_adjustment"
+        ? adjustmentReason
+        : noteText || null,
     total_amount: totalAmount,
     metadata: normalized.documentType === "stock_issue"
       ? { issue_reason: toText(input.issueReason) }
@@ -335,7 +404,9 @@ export async function saveInventoryDocumentDraft({ domain = "receipts", input = 
             request_origin: toText(input.requestOrigin) === "admin_on_behalf" ? "admin_on_behalf" : "warehouse_self",
             requested_for_warehouse_id: normalized.destinationWarehouseId
           }
-        : {},
+        : normalized.documentType === "stock_adjustment"
+          ? { adjustment_reason: adjustmentReason }
+          : {},
     created_by: actorId
   };
   const headerResult = await client
@@ -352,15 +423,27 @@ export async function saveInventoryDocumentDraft({ domain = "receipts", input = 
     unit_id: line.unitId,
     conversion_to_base: line.conversionToBase,
     expected_quantity: line.quantity,
-    actual_quantity: ["receipts", "issues", "disposals"].includes(domain) ? line.quantity : null,
+    actual_quantity: ["receipts", "issues", "disposals", "adjustments"].includes(domain) ? line.quantity : null,
     unit_price: domain === "receipts" ? line.unitPrice : 0,
+    lot_number: domain === "receipts" ? line.lotNumber : null,
+    manufactured_on: domain === "receipts" ? line.manufacturedOn || null : null,
+    expires_on: domain === "receipts" ? line.expiresOn || null : null,
+    adjustment_direction: domain === "adjustments" ? line.adjustmentDirection : null,
+    variance_reason: domain === "adjustments" ? adjustmentReason : null,
     notes: domain === "disposals"
       ? line.disposalReason || disposalReason
       : line.notes || null
   }));
   const lineResult = await client.from("inventory_document_lines").insert(linePayload).select(LINE_SELECT);
   recordAdminRequest(`create inventory ${domain} lines`, "inventory_document_lines");
-  if (lineResult.error) throw new Error(normalizeReadError(lineResult.error).message);
+  if (lineResult.error) {
+    await client
+      .from("inventory_documents")
+      .delete()
+      .eq("id", headerResult.data.id)
+      .eq("status", "draft");
+    throw new Error(normalizeReadError(lineResult.error).message);
+  }
   return normalizeDocument(headerResult.data, (lineResult.data || []).map(normalizeLine));
 }
 
@@ -414,6 +497,13 @@ export async function completeSimpleInventoryDocument(documentId = "") {
   recordAdminRequest("complete inventory document", "inventory_complete_simple_document");
   if (error) throw new Error(toText(error.message) || "Không hoàn tất được phiếu.");
   return data;
+}
+
+export async function approveInventoryStockAdjustment(documentId = "") {
+  return callInventoryRpc("inventory_approve_stock_adjustment", {
+    p_document_id: toText(documentId),
+    p_idempotency_key: `inventory-adjustment-approve-${toText(documentId)}`
+  }, "approve inventory stock adjustment", "Không thể duyệt và ghi sổ phiếu điều chỉnh tồn.");
 }
 
 async function callInventoryRpc(functionName, payload, auditLabel, fallbackMessage) {
@@ -502,7 +592,9 @@ export async function fulfillInventoryRequisition(documentId = "") {
 }
 
 export default {
+  approveInventoryStockAdjustment,
   readInventoryDocuments,
+  readInventoryPendingAdjustmentCount,
   saveInventoryDocumentDraft,
   submitInventoryDocument,
   completeSimpleInventoryDocument,

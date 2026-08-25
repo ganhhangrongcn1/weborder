@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  approveInventoryStockAdjustment,
   approveInventoryRequisition,
   canWriteInventoryDocuments,
   completeInventoryTransfer,
@@ -15,26 +16,51 @@ import {
   saveInventoryDocumentDraft,
   submitInventoryDocument
 } from "../services/inventoryDocumentService.js";
+import { createDefaultInventoryDocumentFilters } from "../services/inventoryDocumentFilters.js";
 
-const INITIAL_STATE = { status: "idle", code: "", message: "", rows: [], permissions: {}, loadedAt: "" };
+const INITIAL_STATE = {
+  status: "idle",
+  code: "",
+  message: "",
+  rows: [],
+  totalCount: 0,
+  page: 1,
+  pageSize: 50,
+  pageCount: 1,
+  permissions: {},
+  loadedAt: ""
+};
 
 export default function useInventoryDocuments({ enabled = false, domain = "" } = {}) {
   const [state, setState] = useState(INITIAL_STATE);
   const [mutation, setMutation] = useState({ status: "idle", message: "" });
+  const [filters, setFilters] = useState(() => createDefaultInventoryDocumentFilters());
+
+  const updateFilters = useCallback((patch = {}) => {
+    setFilters((current) => ({
+      ...current,
+      ...patch,
+      page: Object.prototype.hasOwnProperty.call(patch, "page") ? patch.page : 1
+    }));
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!enabled || !domain) return;
     setState((current) => ({ ...current, status: "loading", message: "" }));
-    const result = await readInventoryDocuments({ domain });
+    const result = await readInventoryDocuments({ domain, ...filters });
     setState({
       status: result.status || (result.ok ? "ready" : "error"),
       code: result.code || "",
       message: result.message || "",
       rows: result.rows || [],
+      totalCount: result.totalCount || 0,
+      page: result.page || filters.page,
+      pageSize: result.pageSize || filters.pageSize,
+      pageCount: result.pageCount || 1,
       permissions: result.permissions || {},
       loadedAt: result.ok ? new Date().toISOString() : ""
     });
-  }, [domain, enabled]);
+  }, [domain, enabled, filters]);
 
   useEffect(() => {
     let active = true;
@@ -43,19 +69,23 @@ export default function useInventoryDocuments({ enabled = false, domain = "" } =
       return () => { active = false; };
     }
     setState((current) => ({ ...current, status: "loading", message: "" }));
-    readInventoryDocuments({ domain }).then((result) => {
+    readInventoryDocuments({ domain, ...filters }).then((result) => {
       if (!active) return;
       setState({
         status: result.status || (result.ok ? "ready" : "error"),
         code: result.code || "",
         message: result.message || "",
         rows: result.rows || [],
+        totalCount: result.totalCount || 0,
+        page: result.page || filters.page,
+        pageSize: result.pageSize || filters.pageSize,
+        pageCount: result.pageCount || 1,
         permissions: result.permissions || {},
         loadedAt: result.ok ? new Date().toISOString() : ""
       });
     });
     return () => { active = false; };
-  }, [domain, enabled]);
+  }, [domain, enabled, filters]);
 
   const runMutation = useCallback(async (action, successMessage) => {
     setMutation({ status: "saving", message: "" });
@@ -64,7 +94,7 @@ export default function useInventoryDocuments({ enabled = false, domain = "" } =
       const resolvedMessage = typeof successMessage === "function" ? successMessage(result) : successMessage;
       setMutation({ status: "success", message: resolvedMessage });
       await refresh();
-      if (["requisitions", "transfers", "disposals"].includes(domain) && typeof window !== "undefined") {
+      if (["requisitions", "transfers", "disposals", "adjustments"].includes(domain) && typeof window !== "undefined") {
         window.dispatchEvent(new window.Event(INVENTORY_NAVIGATION_COUNTS_CHANGED_EVENT));
       }
       return result;
@@ -76,6 +106,8 @@ export default function useInventoryDocuments({ enabled = false, domain = "" } =
 
   return {
     ...state,
+    filters,
+    updateFilters,
     refresh,
     writeEnabled: canWriteInventoryDocuments(),
     mutationStatus: mutation.status,
@@ -90,6 +122,10 @@ export default function useInventoryDocuments({ enabled = false, domain = "" } =
     ),
     submit: (id) => runMutation(() => submitInventoryDocument(id), "Đã gửi phiếu để xử lý."),
     complete: (id) => runMutation(() => completeSimpleInventoryDocument(id), "Đã hoàn tất phiếu và cập nhật tồn kho."),
+    approveAdjustment: (id) => runMutation(
+      () => approveInventoryStockAdjustment(id),
+      "Đã duyệt phiếu điều chỉnh và cập nhật tồn kho."
+    ),
     dispatchTransfer: (id, lines) => runMutation(
       () => dispatchInventoryTransfer(id, lines),
       "Đã xác nhận giao hàng và trừ tồn tại kho xuất."

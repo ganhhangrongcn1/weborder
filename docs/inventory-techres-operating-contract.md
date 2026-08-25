@@ -2,7 +2,7 @@
 
 Ngày chốt bản đầu: 2026-08-24
 Phạm vi: thiết kế local cho `inventory-app` và schema `inventory_*`
-Trạng thái production: chưa triển khai bất kỳ bảng hoặc logic Kho nào.
+Trạng thái production: schema Kho, RLS, chứng từ, movement, balance và bộ bảo vệ quy đổi đơn vị đã được triển khai ngày 2026-08-25.
 
 ## Nguyên tắc tham chiếu
 
@@ -43,6 +43,27 @@ Router trên là hợp đồng đích. `inventory-app` hiện vẫn dùng `activ
 - UI không được insert/update/delete trực tiếp movement hoặc balance.
 - Chứng từ đã phát sinh movement không được sửa dòng hoặc xóa. Sai sót phải tạo chứng từ đảo hoặc điều chỉnh có liên kết chứng từ gốc.
 - Mọi thao tác hoàn tất phải có `idempotency_key`; gửi lại cùng khóa phải trả cùng kết quả và không ghi tồn lần hai.
+
+## Hợp đồng quy đổi đơn vị
+
+Đây là quy tắc bắt buộc cho mọi luồng nhập, xuất, chuyển, hủy, kiểm kê, điều chỉnh, BOM và sản xuất:
+
+1. Mỗi nguyên vật liệu có đúng một **đơn vị gốc nhỏ nhất** để lưu tồn, ví dụ `Gram`, `ml`, `cái`.
+2. `inventory_stock_balances.quantity`, `inventory_stock_movements.quantity` và `inventory_document_lines.base_quantity` luôn lưu bằng đơn vị gốc.
+3. Số nhân viên nhập được lưu cùng `unit_id`; `conversion_to_base` là ảnh chụp hệ số tại thời điểm lập chứng từ.
+4. Công thức duy nhất: `base_quantity = quantity × conversion_to_base`.
+5. Supabase là nơi quyết định hệ số cuối cùng:
+   - Dùng đơn vị gốc → hệ số `1`.
+   - Đơn vị thuộc cùng hệ và trỏ về đơn vị gốc → dùng `inventory_units.conversion_factor`.
+   - Đơn vị mua mang tính riêng theo nguyên vật liệu → dùng `purchase_to_base_ratio` khi không có hệ số chung phù hợp.
+   - Khác hệ đơn vị → từ chối ghi chứng từ.
+6. Trigger `inventory_normalize_document_line_unit` chuẩn hóa lại mọi dòng chứng từ trước khi ghi; frontend không được tự quyết định hệ số cuối cùng.
+7. Phiếu điều chỉnh không có bộ chọn đơn vị riêng thì luôn dùng `display_unit_id`, sau đó Supabase tự quy đổi về đơn vị gốc.
+8. Báo cáo chỉ đổi cách nhìn: `display_quantity = base_quantity ÷ conversion_to_base`; không sửa số tồn gốc.
+9. Giá vốn bình quân lưu theo một đơn vị gốc; giá vốn hiển thị theo kg/thùng bằng `base_average_cost × conversion_to_base`.
+10. Không làm tròn trước khi ghi đơn vị gốc. Database dùng `numeric(18,6)`; UI chỉ làm tròn khi hiển thị.
+
+Ví dụ chuẩn: tồn `1.000 gram`, điều chỉnh tăng `1 kg`, hệ số `1.000` → movement tăng `1.000 gram` → tồn mới `2.000 gram` → báo cáo hiển thị `2 kg`.
 
 ## State machine chứng từ
 

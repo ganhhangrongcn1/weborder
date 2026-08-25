@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import { getInventoryItemDisplayUnitConfig } from "../../../services/inventoryUnitConversion.js";
+import InventoryReceiptLineFields from "./InventoryReceiptLineFields.jsx";
+import { getReceiptLineItemDefaults, getSuggestedExpiryDate } from "./inventoryReceiptForm.js";
 
 const DOMAIN_CONFIG = {
   receipts: {
@@ -30,11 +33,32 @@ const DOMAIN_CONFIG = {
     icon: "bell",
     warehouseLabel: "Kho chi nhánh/bộ phận cần hàng",
     submitLabel: "Lưu yêu cầu nháp"
+  },
+  adjustments: {
+    title: "Tạo phiếu điều chỉnh tồn",
+    icon: "edit",
+    warehouseLabel: "Kho điều chỉnh",
+    submitLabel: "Lưu phiếu nháp"
   }
 };
 
 function createLine() {
-  return { key: `${Date.now()}-${Math.random()}`, itemId: "", unitId: "", conversionToBase: 1, quantity: 1, unitPrice: 0, disposalReason: "", notes: "" };
+  return {
+    key: `${Date.now()}-${Math.random()}`,
+    itemId: "",
+    unitId: "",
+    conversionToBase: 1,
+    quantity: 1,
+    unitPrice: 0,
+    lotNumber: "",
+    manufacturedOn: "",
+    expiresOn: "",
+    trackExpiry: false,
+    expiryManuallyEdited: false,
+    disposalReason: "",
+    adjustmentDirection: "",
+    notes: ""
+  };
 }
 
 const DISPOSAL_REASONS = ["Hư hỏng", "Hết hạn", "Lãng phí", "Mất mát", "Hao hụt"];
@@ -48,6 +72,7 @@ export default function InventoryDocumentModal({
   domain,
   warehouses = [],
   items = [],
+  units = [],
   suppliers = [],
   requestCreationMode = "warehouse_self",
   onClose,
@@ -61,6 +86,7 @@ export default function InventoryDocumentModal({
     occurredAt: toLocalDateTimeValue(),
     issueReason: "",
     disposalReason: "",
+    adjustmentReason: "",
     notes: ""
   });
   const [lines, setLines] = useState([createLine()]);
@@ -72,22 +98,44 @@ export default function InventoryDocumentModal({
     : activeWarehouses;
   const activeItems = items.filter((row) => row.isActive !== false);
   const activeSuppliers = suppliers.filter((row) => row.isActive !== false);
+  const unitsById = useMemo(() => new Map(units.map((unit) => [unit.id, unit])), [units]);
   const totalAmount = useMemo(
     () => lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0),
     [lines]
   );
 
-  const updateForm = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const updateForm = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    if (domain !== "receipts" || key !== "occurredAt") return;
+    setLines((current) => current.map((line) => {
+      if (!line.itemId || line.manufacturedOn || line.expiryManuallyEdited) return line;
+      const item = activeItems.find((row) => row.id === line.itemId);
+      return { ...line, expiresOn: getSuggestedExpiryDate(item, value) };
+    }));
+  };
   const updateLine = (key, field, value) => {
     setLines((current) => current.map((line) => {
       if (line.key !== key) return line;
+      if (field === "expiresOn") return { ...line, expiresOn: value, expiryManuallyEdited: true };
+      if (field === "manufacturedOn") {
+        const item = activeItems.find((row) => row.id === line.itemId);
+        return {
+          ...line,
+          manufacturedOn: value,
+          expiresOn: line.expiryManuallyEdited
+            ? line.expiresOn
+            : getSuggestedExpiryDate(item, value ? `${value}T00:00` : form.occurredAt)
+        };
+      }
       if (field !== "itemId") return { ...line, [field]: value };
       const item = activeItems.find((row) => row.id === value);
+      const displayUnit = getInventoryItemDisplayUnitConfig(item, unitsById);
       return {
         ...line,
         itemId: value,
-        unitId: item?.purchaseUnitId || item?.baseUnitId || "",
-        conversionToBase: Number(item?.purchaseToBaseRatio || 1)
+        unitId: displayUnit.unitId,
+        conversionToBase: displayUnit.conversionToBase,
+        ...(domain === "receipts" ? getReceiptLineItemDefaults(item, form.occurredAt) : {})
       };
     }));
   };
@@ -158,7 +206,7 @@ export default function InventoryDocumentModal({
                     {renderWarehouseField("sourceWarehouseId", "Kho xuất", form.destinationWarehouseId)}
                     {renderWarehouseField("destinationWarehouseId", "Kho nhận", form.sourceWarehouseId)}
                   </>
-                : ["issues", "disposals"].includes(domain)
+                : ["issues", "disposals", "adjustments"].includes(domain)
                   ? renderWarehouseField("sourceWarehouseId", config.warehouseLabel)
                   : renderWarehouseField("destinationWarehouseId", config.warehouseLabel)}
               <label className="inventory-form-field">
@@ -167,10 +215,10 @@ export default function InventoryDocumentModal({
               </label>
               {domain === "receipts" ? (
                 <label className="inventory-form-field">
-                  <span className="inventory-field-label"><Icon name="user" size={15} />Nhà cung cấp</span>
+                  <span className="inventory-field-label"><Icon name="user" size={15} />Nhà cung cấp <b>*</b></span>
                   <span className="inventory-control-shell inventory-control-shell--select">
-                    <select value={form.supplierId} onChange={(event) => updateForm("supplierId", event.target.value)}>
-                      <option value="">Không chọn</option>
+                    <select value={form.supplierId} onChange={(event) => updateForm("supplierId", event.target.value)} required>
+                      <option value="">Chọn nhà cung cấp</option>
                       {activeSuppliers.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
                     </select>
                   </span>
@@ -194,6 +242,13 @@ export default function InventoryDocumentModal({
                   <small className="inventory-form-hint">Áp dụng mặc định cho mọi món; chỉ đổi ở từng dòng khi món đó có lý do khác.</small>
                 </label>
               ) : null}
+              {domain === "adjustments" ? (
+                <label className="inventory-form-field full-field">
+                  <span className="inventory-field-label"><Icon name="warning" size={15} />Lý do điều chỉnh <b>*</b></span>
+                  <span className="inventory-control-shell"><input value={form.adjustmentReason} onChange={(event) => updateForm("adjustmentReason", event.target.value)} placeholder="Ví dụ: sửa sai số liệu đầu kỳ, bù lệch đã xác minh…" required /></span>
+                  <small className="inventory-form-hint">Lý do được lưu trong sổ kho để tra cứu về sau.</small>
+                </label>
+              ) : null}
             </div>
           </section>
 
@@ -204,21 +259,47 @@ export default function InventoryDocumentModal({
               <button type="button" onClick={() => setLines((current) => [...current, createLine()])}><Icon name="plus" size={15} />Thêm dòng</button>
             </div>
             <div className="inventory-document-lines">
-              <div className={`inventory-document-lines__header ${domain === "receipts" ? "has-price" : domain === "disposals" ? "has-disposal-reason" : ""}`}>
-                <span>Nguyên vật liệu</span><span>Đơn vị nhập</span><span>Số lượng</span>{domain === "receipts" ? <span>Đơn giá</span> : null}{domain === "disposals" ? <span>Lý do hủy</span> : null}<span />
+              <div className={`inventory-document-lines__header ${domain === "receipts" ? "is-receipt" : domain === "disposals" ? "has-disposal-reason" : domain === "adjustments" ? "has-adjustment-direction" : ""}`}>
+                {domain === "receipts" ? (
+                  <><span>Nguyên vật liệu</span><span>Đơn vị</span><span>Số lượng</span><span>Đơn giá</span><span>Hạn sử dụng</span><span /><span /></>
+                ) : (
+                  <><span>Nguyên vật liệu</span><span>Đơn vị</span>{domain === "adjustments" ? <span>Điều chỉnh</span> : null}<span>Số lượng</span>{domain === "disposals" ? <span>Lý do hủy</span> : null}<span /></>
+                )}
               </div>
               {lines.map((line) => {
                 const item = activeItems.find((row) => row.id === line.itemId);
-                const unitName = item?.purchaseUnit?.name || item?.baseUnit?.name || "—";
+                const selectedUnit = units.find((row) => row.id === line.unitId);
+                const unitName = selectedUnit?.name || item?.purchaseUnit?.name || item?.baseUnit?.name || "—";
+                if (domain === "receipts") {
+                  return (
+                    <InventoryReceiptLineFields
+                      key={line.key}
+                      line={line}
+                      item={item}
+                      unit={unitsById.get(line.unitId)}
+                      items={activeItems}
+                      canDelete={lines.length > 1}
+                      occurredDate={form.occurredAt.slice(0, 10)}
+                      onUpdate={(field, value) => updateLine(line.key, field, value)}
+                      onDelete={() => setLines((current) => current.filter((row) => row.key !== line.key))}
+                    />
+                  );
+                }
                 return (
-                  <div key={line.key} className={`inventory-document-line ${domain === "receipts" ? "has-price" : domain === "disposals" ? "has-disposal-reason" : ""}`}>
+                  <div key={line.key} className={`inventory-document-line ${domain === "disposals" ? "has-disposal-reason" : domain === "adjustments" ? "has-adjustment-direction" : ""}`}>
                     <select value={line.itemId} onChange={(event) => updateLine(line.key, "itemId", event.target.value)} required>
                       <option value="">Chọn nguyên vật liệu</option>
                       {activeItems.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
                     </select>
                     <div className="inventory-document-unit"><strong>{unitName}</strong>{item && line.conversionToBase !== 1 ? <small>1 {unitName} = {line.conversionToBase} {item.baseUnit?.name}</small> : <small>Đơn vị lưu kho</small>}</div>
+                    {domain === "adjustments" ? (
+                      <select value={line.adjustmentDirection} onChange={(event) => updateLine(line.key, "adjustmentDirection", event.target.value)} required aria-label={`Chiều điều chỉnh của ${item?.name || "nguyên vật liệu"}`}>
+                        <option value="">Chọn tăng/giảm</option>
+                        <option value="in">+ Tăng tồn</option>
+                        <option value="out">− Giảm tồn</option>
+                      </select>
+                    ) : null}
                     <input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} required />
-                    {domain === "receipts" ? <input type="number" min="0" step="100" value={line.unitPrice} onChange={(event) => updateLine(line.key, "unitPrice", event.target.value)} /> : null}
                     {domain === "disposals" ? (
                       <select value={line.disposalReason} onChange={(event) => updateLine(line.key, "disposalReason", event.target.value)} aria-label={`Lý do hủy của ${item?.name || "nguyên vật liệu"}`}>
                         <option value="">Theo lý do chung{form.disposalReason ? `: ${form.disposalReason}` : ""}</option>
@@ -242,7 +323,7 @@ export default function InventoryDocumentModal({
 
           {error ? <p className="inventory-form-error" role="alert">{error}</p> : null}
           <footer>
-            <span><Icon name="info" size={16} />{domain === "disposals" ? "Lưu nháp chưa trừ tồn; chỉ hoàn tất phiếu mới trừ kho." : "Lưu nháp chưa cộng hoặc trừ tồn."}</span>
+            <span><Icon name="info" size={16} />{domain === "adjustments" ? "Lưu nháp và gửi duyệt chưa đổi tồn; chỉ Duyệt & ghi sổ mới cập nhật kho." : domain === "disposals" ? "Lưu nháp chưa trừ tồn; chỉ hoàn tất phiếu mới trừ kho." : "Lưu nháp chưa cộng hoặc trừ tồn."}</span>
             <button type="button" onClick={onClose}>Hủy</button>
             <button type="submit" disabled={saving}><Icon name="check" size={16} />{saving ? "Đang lưu…" : config.submitLabel}</button>
           </footer>

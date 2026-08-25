@@ -29,7 +29,7 @@ Danh mục + đơn vị + cấu trúc kho
 | 1 | Kiểm tra schema thật, migration và engine chứng từ | 4–6 ngày | Gần hoàn thành |
 | 2 | Tích hợp ứng dụng kho vào Admin và router URL thật | 3–4 ngày | Hoàn thành |
 | 3 | Danh mục nền và phân quyền theo kho | 3–4 ngày | Hoàn thành |
-| 4 | Nhập, xuất, chuyển kho và yêu cầu cấp hàng | 7–10 ngày | Backend SQL draft một phần |
+| 4 | Nhập, xuất, chuyển kho và yêu cầu cấp hàng | 7–10 ngày | Gần hoàn thành |
 | 5 | Kiểm kê, chênh lệch và sổ kho | 5–7 ngày | Backend SQL draft một phần |
 | 6 | BOM, tự trừ kho theo đơn và giá vốn | 8–12 ngày | Chưa bắt đầu |
 | 7 | Cảnh báo, báo cáo và đối chiếu đơn ↔ kho | 5–7 ngày | Chưa bắt đầu |
@@ -39,16 +39,18 @@ Danh mục + đơn vị + cấu trúc kho
 
 ## Tiến độ hiện tại
 
-- **Toàn bộ lộ trình trước pilot: khoảng 37%.** Đây là tỷ lệ theo khối lượng kỹ thuật đã có bằng chứng, không tính bản nháp chưa chạy như phần đã hoàn thành.
+- **Toàn bộ lộ trình trước pilot: khoảng 62%.** Đây là tỷ lệ theo khối lượng kỹ thuật đã có bằng chứng, không tính bản nháp chưa chạy như phần đã hoàn thành.
 - **Phase 0 — audit và hợp đồng nghiệp vụ: 100%.**
 - **Phase 1 — schema và engine chứng từ: khoảng 98%.** Schema, smoke/concurrency test, postcheck và migration kho đã qua trên bản sao schema-only của production trong Supabase local/PostgreSQL 17. Advisor không có cảnh báo `inventory_*`; lint còn lỗi cũ ở CRM/loyalty/profile ngoài phạm vi Kho. Còn thiết lập baseline migration chính thức cho khả năng dựng toàn hệ từ database trắng; chưa được phép sửa lịch sử thanh toán cũ chỉ để phục vụ Kho.
 - **Phase 2 — router/UI Admin kho: 100%.** Đã có menu Admin hai tầng theo nhóm nghiệp vụ, 14 URL thật, module lazy-load riêng, chính sách quyền giao diện được kiểm thử, khung trạng thái tải/lỗi/dữ liệu cũ/thử lại và giao diện local không ghi dữ liệu. Admin tổng được chọn toàn hệ thống; Admin/nhân viên có chi nhánh bị khóa đúng một chi nhánh; nhân viên thiếu chi nhánh và tài khoản bếp bị chặn. Nhóm Sản xuất hiển thị rõ BOM/Lệnh sản xuất thuộc Phase 6 và bị vô hiệu hóa; URL Kho không hợp lệ được đưa về Tổng quan. RLS và quyền dữ liệu thật vẫn thuộc Phase 3.
 - **Phase 3 — dữ liệu nền/phân quyền: 100%.** Ba migration Kho đã triển khai thành công lên Supabase production ngày 2026-08-24; migration history Local/Remote khớp. Postcheck Phase 1, Phase 3 và P0 form cài đặt đạt, RLS bật, frontend không có quyền ghi trực tiếp sổ/tồn và Security Advisor không có cảnh báo `inventory_*`. Tài khoản Admin hệ thống đang hoạt động đã được cấp đúng một quyền `admin` Kho toàn hệ thống và kiểm tra RLS bằng phiên `authenticated` đạt. UI → hook → service cho tạo/sửa/lưu trữ mềm Kho, Nguyên vật liệu, Danh mục NVL, Đơn vị tính và Nhà cung cấp đã hoàn chỉnh. Đơn vị gốc/quy đổi, mô tả/thứ tự danh mục và mã NVL tự sinh theo loại đã chạy trên production. Local Admin đã mở khóa ghi kép để smoke có kiểm soát; cấu hình mẫu/deploy vẫn mặc định tắt. Bốn kho nền đã được tạo idempotent và đối chiếu đạt: một kho tổng, ba kho chi nhánh mặc định, cả ba cùng nhận cấp hàng từ kho tổng, không trùng mã.
 - **Dữ liệu nền sẵn sàng nhập NVL:** production đã có 9 đơn vị chuẩn (7 gốc, 2 quy đổi) và 7 danh mục NVL có mô tả. Chưa tạo NVL thật, chứng từ, movement hoặc số tồn; tránh suy đoán công thức từ menu bán hàng.
-- **Phase 4 — nhập/xuất/chuyển/cấp hàng: khoảng 25%.** Engine nhập/xuất/chuyển/cấp hàng đã qua smoke test runtime; chưa có UI, lô/hạn dùng và in phiếu.
-- **Phase 5 — kiểm kê/sổ kho: khoảng 20%.** Engine kiểm kê và điều chỉnh chênh lệch đã qua smoke test runtime; chưa có UI, sổ kho và Excel.
-- **Phase 6–8: 0%.** Chưa làm BOM, tự trừ theo đơn, báo cáo, pilot.
-- **Mức sẵn sàng production: khoảng 50%.** Schema, RLS, quyền Admin và bốn kho nền đã có trên production; local Admin đã mở ghi có kiểm soát cho dữ liệu nền. Chưa mở ghi trên bản deploy production và chưa pilot chứng từ/tồn kho thật.
+- **Phase 4 — nhập/xuất/chuyển/cấp hàng: khoảng 82%.** UI và chuỗi xử lý nhập, xuất, chuyển, yêu cầu cấp hàng, phiếu hủy đã nối production. Phiếu nhập mua đã có nhà cung cấp, đơn giá, mã lô, ngày sản xuất và HSD; hoàn tất phiếu ghi movement, balance, giá vốn và lô trong cùng transaction. Còn ảnh/in phiếu, tồn đầu kỳ chính thức và pilot chứng từ thật.
+- **Phase 5 — kiểm kê/sổ kho: khoảng 78%.** UI kiểm kê đã nối engine production; Phiếu điều chỉnh tồn thủ công đã có nháp → gửi duyệt → Admin/quản lý đúng kho duyệt & ghi sổ, bắt buộc lý do và chặn giảm thành tồn âm. Sổ kho chỉ đọc đã có lọc ngày/kho/NVL, phân trang và đối chiếu tồn đầu–nhập–xuất–tồn cuối; còn phạm vi kiểm theo nhóm hàng, cảnh báo giao dịch trong lúc đếm, Excel và pilot chứng từ thật.
+- **Phase 6: 0%.** Chưa làm BOM và tự trừ theo đơn.
+- **Phase 7 — cảnh báo/báo cáo: khoảng 20%.** Báo cáo tồn hiện tại đã có số lượng, giá vốn bình quân, giá trị tồn, trạng thái sắp hết/hết hàng và bộ lọc theo kho/danh mục/NVL; RLS giới hạn đúng phạm vi kho. Còn HSD theo lô, đối chiếu đơn, báo cáo thời gian và RPC tổng hợp quy mô lớn.
+- **Phase 8: 0%.** Chưa pilot vận hành.
+- **Mức sẵn sàng production: khoảng 72%.** Schema, RLS, quyền Admin, bốn kho nền, chuỗi chứng từ Phase 4, kiểm kê và điều chỉnh tồn Phase 5 đã có; local Admin ghi có kiểm soát qua Auth/RLS. Chưa pilot phiếu điều chỉnh/phiếu nhập mua thật, chưa chốt tồn đầu kỳ chính thức và chưa mở bản deploy production cho nhân viên.
 
 Tỷ lệ này được cập nhật theo bằng chứng: audit/tài liệu, code draft, kiểm thử runtime, tích hợp UI và pilot. Viết xong SQL nhưng chưa chạy thử không được tính như tính năng hoàn thành.
 
@@ -182,9 +184,9 @@ Phase 2 đóng ở phạm vi router/UI. Quyền đọc/ghi dữ liệu thật kh
 - [x] Nối thao tác Yêu cầu xuất kho: duyệt/từ chối, bắt buộc lý do khi cắt giảm, tạo duy nhất một phiếu chuyển liên kết và khép yêu cầu sau khi phiếu chuyển hoàn tất.
 - [x] Thêm màn chi tiết chỉ đọc cho cả bốn loại phiếu; chuyển kho và yêu cầu xuất cùng đối chiếu yêu cầu/duyệt/giao/nhận/chênh lệch, đồng thời hiển thị lý do và phiếu chuyển liên kết.
 - [ ] Nhập đầu kỳ.
-- [ ] Nhập mua: nhà cung cấp, đơn giá, chứng từ, lô và hạn dùng.
+- [x] Nhập mua: nhà cung cấp bắt buộc, đơn giá, mã lô tự gợi ý, ngày sản xuất và hạn dùng theo cấu hình NVL; hoàn tất mới cộng tồn, ghi giá vốn và tạo lô tồn kho.
 - [x] Phiếu hủy: chọn kho, ngày hủy và lý do bắt buộc; bản nháp chưa trừ tồn, chỉ khi hoàn tất mới trừ kho nguồn và ghi sổ chuyển động.
-- [ ] Xuất dùng nội bộ với lý do bắt buộc.
+- [x] Xuất dùng nội bộ với lý do bắt buộc; lưu nháp không trừ tồn, hoàn tất mới ghi movement và giảm kho nguồn.
 - [x] Chuyển kho: phiếu tạo tay vẫn có nháp → gửi; phiếu sinh từ yêu cầu đi thẳng tới chờ giao. Giao hàng trừ kho nguồn; nhận đủ tự hoàn tất, nhận lệch dừng lại để Admin đối chiếu.
 - [x] Yêu cầu cấp hàng: kho bộ phận/chi nhánh tạo → kho nguồn duyệt hoặc từ chối. Duyệt tự sinh và gửi một phiếu chuyển; nhận đủ tự khép cả phiếu chuyển lẫn yêu cầu.
 - [ ] Chụp/lưu ảnh chứng từ trong bucket private nếu cần.
@@ -201,11 +203,12 @@ Phase 2 đóng ở phạm vi router/UI. Quyền đọc/ghi dữ liệu thật kh
 
 ### Công việc
 
-- [ ] Tạo đợt kiểm kê theo kho/khu vực/nhóm hàng.
-- [ ] Snapshot tồn hệ thống tại thời điểm bắt đầu. Engine và mốc sequence đã qua smoke test runtime; còn thiếu UI và kiểm thử đồng thời thật.
-- [ ] Nhập số đếm thực tế và nguyên nhân chênh lệch. Engine lưu theo idempotency key đã qua runtime; chưa có UI.
-- [ ] Luồng duyệt chênh lệch trước khi tạo stock adjustment. Engine sinh phiếu điều chỉnh riêng đã qua runtime; chưa có UI.
-- [ ] Sổ kho theo thời gian: tồn đầu, nhập, xuất, tồn cuối.
+- [ ] Tạo đợt kiểm kê theo kho/khu vực/nhóm hàng. Đã có tạo theo kho với toàn bộ NVL đang dùng; còn lọc khu vực/nhóm hàng.
+- [x] Snapshot tồn hệ thống tại thời điểm bắt đầu qua RPC và hiển thị đối chiếu theo đúng đơn vị NVL.
+- [x] Nhập số đếm thực tế, gửi duyệt và bắt buộc nguyên nhân cho từng dòng có chênh lệch.
+- [x] Luồng duyệt chênh lệch trước khi tạo stock adjustment; UI không sửa balance trực tiếp và chỉ gọi RPC idempotent.
+- [x] Phiếu điều chỉnh tồn thủ công: chọn kho, lý do bắt buộc, tăng/giảm theo từng NVL; bản nháp/gửi duyệt chưa đổi tồn, Admin hoặc quản lý đúng kho duyệt mới ghi movement và balance.
+- [x] Sổ kho theo thời gian: lọc theo ngày/kho/NVL; tính tồn đầu, nhập, xuất, tồn cuối từ movement và balance hiện có; danh sách chỉ đọc, phân trang phía Supabase.
 - [ ] Khoá hoặc cảnh báo giao dịch phát sinh trong lúc kiểm kê.
 - [ ] Xuất Excel và lịch sử người thực hiện/người duyệt.
 
@@ -244,7 +247,7 @@ Phase 2 đóng ở phạm vi router/UI. Quyền đọc/ghi dữ liệu thật kh
 - [ ] Sắp hết hạn/đã hết hạn theo lô.
 - [ ] Thiếu nguyên liệu tại kho bộ phận.
 - [ ] Đơn đã trừ/chưa trừ kho và tỷ lệ bao phủ.
-- [ ] Nhập–xuất–tồn, giá trị tồn và giá vốn theo kho/chi nhánh/thời gian.
+- [ ] Nhập–xuất–tồn, giá trị tồn và giá vốn theo kho/chi nhánh/thời gian. Đã có báo cáo tồn hiện tại và giá trị theo kho; còn báo cáo tổng hợp theo thời gian/RPC.
 - [ ] Mỗi cảnh báo phải có nguyên nhân và nút đi thẳng tới cách xử lý.
 - [ ] Dùng RPC tổng hợp, không tải toàn bộ movement lên trình duyệt để tính.
 
@@ -412,3 +415,9 @@ Sau mỗi đợt làm việc:
 | 2026-08-25 | 4 | Thêm Phiếu hủy theo TechRes | Thêm danh sách, form nhập nhanh, chi tiết và route riêng trong Xuất nhập kho; lý do gồm Hư hỏng/Hết hạn/Lãng phí/Mất mát/Hao hụt. Tận dụng engine `waste` hiện có: lưu nháp không trừ tồn, hoàn tất mới trừ kho nguồn và ghi movement; test production chạy trong transaction rồi rollback, không để lại dữ liệu thử |
 | 2026-08-25 | 4 | Cho phép nhiều lý do trong một Phiếu hủy | Lý do chung áp dụng mặc định cho mọi dòng; nhân viên chỉ đổi lý do tại món có nguyên nhân khác. Danh sách hiện `Nhiều lý do`, chi tiết hiện lý do từng món; dữ liệu dòng dùng trường `notes` sẵn có nên không đổi schema hoặc engine trừ tồn |
 | 2026-08-25 | 4 | Khóa duyệt Phiếu hủy và thêm badge chờ | Chi nhánh chỉ tạo/gửi; chỉ `owner`, `admin`, `central_manager` được hoàn tất và trừ tồn. Menu trái đếm phiếu `waste/submitted`, tự cập nhật sau thao tác, focus và mỗi 60 giây. Migration `20260825035625` đã lên production; Admin được phép, `branch_manager` bị chặn và engine nội bộ không còn gọi trực tiếp được |
+| 2026-08-25 | 4/7 | Hoàn thiện phiếu nhập mua và nền cảnh báo HSD | Form nhập mua bắt buộc nhà cung cấp, tự gợi ý mã lô/HSD theo cấu hình NVL, cho nhập ngày sản xuất và đơn giá; migration `20260825061925` tạo bảng lô có RLS và trigger transaction. Dry-run hợp lệ/thiếu HSD đều đạt, build + 4 test + ESLint + kiểm tra trình duyệt đạt; production chưa có phiếu nhập/lô thật sau triển khai |
+| 2026-08-25 | 5 | Mở Sổ kho chỉ đọc | Nối movement, balance và chứng từ hiện có; lọc 30 ngày/kho/NVL, phân trang 50 dòng, liên kết về phiếu nguồn và tính tồn đầu–nhập–xuất–tồn cuối khi chọn một NVL. Test công thức, ESLint, UTF-8, build và kiểm tra trực tiếp dữ liệu Supabase đều đạt; không thêm schema, không ghi hoặc sửa tồn kho. |
+| 2026-08-25 | 7 | Mở Báo cáo tồn kho hiện tại | Hiển thị số lượng tồn, giá vốn bình quân, giá trị tồn và trạng thái còn/sắp hết/hết theo kho × NVL; lọc kho/danh mục/trạng thái/tìm kiếm. Dữ liệu đọc trực tiếp balance theo RLS: tài khoản chi nhánh chỉ nhận kho được cấp quyền, Admin xem toàn hệ thống. Test công thức/quyền giao diện, ESLint, UTF-8, build và kiểm tra dữ liệu Supabase thật đều đạt; không đổi schema hoặc số tồn. |
+| 2026-08-25 | 7 | Sửa hiển thị giá vốn theo đơn vị NVL | Balance tiếp tục lưu bằng đơn vị gốc; báo cáo quy đổi đồng thời số lượng và giá vốn sang đơn vị hiển thị đã cấu hình. Kiểm tra production: `1.000 Gram × 30đ/Gram` được trình bày thành `1 Kilôgam × 30.000đ/Kg`, tổng giá trị vẫn 30.000đ; không sửa dữ liệu hoặc công thức giá trị tồn. |
+| 2026-08-25 | 5 | Mở giao diện kiểm kê kho | Thêm tạo đợt kiểm toàn bộ NVL theo kho, nhập số đếm, gửi duyệt, đối chiếu chênh lệch theo đơn vị hiển thị, bắt buộc lý do và duyệt hoàn tất qua các RPC kiểm kê hiện có. Test công thức kg/gram, ESLint, UTF-8 và build đạt; chưa tạo chứng từ kiểm kê thử trên production. |
+| 2026-08-25 | 5 | Thêm Phiếu điều chỉnh tồn thủ công | Thêm route/menu/badge, form gọn theo đơn vị lưu kho, lý do bắt buộc và tăng/giảm từng dòng. Migration `20260825075132` đã lên production; RPC duyệt nguyên tử chỉ cho owner/admin hoặc quản lý đúng kho, chặn tồn âm, ghi movement/balance đúng một lần. Build, ESLint, RLS/grant postcheck và kiểm tra trình duyệt đạt; không tạo phiếu thử hoặc thay đổi tồn. |

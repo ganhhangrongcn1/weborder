@@ -1,34 +1,23 @@
 import { useEffect } from "react";
-import { NavLink } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
+import useInventoryDashboard from "../../../hooks/useInventoryDashboard.js";
 import useInventoryMasterData from "../../../hooks/useInventoryMasterData.js";
 import useInventoryWarehouses from "../../../hooks/useInventoryWarehouses.js";
 import useInventoryWarehouseDrafts from "../../../hooks/useInventoryWarehouseDrafts.js";
 import useInventoryDocuments from "../../../hooks/useInventoryDocuments.js";
+import useInventoryLedger from "../../../hooks/useInventoryLedger.js";
+import useInventoryStockReport from "../../../hooks/useInventoryStockReport.js";
+import useInventoryCounts from "../../../hooks/useInventoryCounts.js";
 import { getInventoryRoute } from "./inventoryNavigation.js";
 import { getInventoryAccessPolicy } from "./inventoryAccessPolicy.js";
 import InventoryWarehouseManager from "./InventoryWarehouseManager.jsx";
 import InventoryCatalogManager from "./InventoryCatalogManager.jsx";
 import InventoryMasterDataManager from "./InventoryMasterDataManager.jsx";
 import InventoryDocumentManager from "./InventoryDocumentManager.jsx";
-
-const DASHBOARD_GROUPS = [
-  {
-    title: "Xây dữ liệu",
-    description: "Tạo nền kho, nguyên vật liệu, đơn vị tính và nhà cung cấp trước khi phát sinh chứng từ.",
-    pages: ["warehouses", "items", "item-categories", "units", "suppliers"]
-  },
-  {
-    title: "Xuất nhập kho",
-    description: "Vận hành nhập, xuất, chuyển kho, hủy hàng và yêu cầu cấp hàng theo đúng trạng thái chứng từ.",
-    pages: ["receipts", "issues", "transfers", "disposals", "requisitions"]
-  },
-  {
-    title: "Báo cáo và kiểm soát",
-    description: "Giải thích số tồn bằng sổ kho, kiểm kê, báo cáo và đối chiếu đơn bán.",
-    pages: ["counts", "ledger", "reports", "reconciliation"]
-  }
-];
+import InventoryLedger from "./InventoryLedger.jsx";
+import InventoryStockReport from "./InventoryStockReport.jsx";
+import InventoryCountManager from "./InventoryCountManager.jsx";
+import InventoryDashboard from "./InventoryDashboard.jsx";
 
 function InventoryAccessGate({ accessPolicy, children }) {
   if (accessPolicy.allowed) return children;
@@ -101,27 +90,6 @@ function InventoryConnectionState({ status = "disconnected", error = "", isStale
   );
 }
 
-function InventoryDashboard() {
-  return (
-    <div className="inventory-module-grid">
-      {DASHBOARD_GROUPS.map((group) => (
-        <section key={group.title} className="inventory-module-card">
-          <div className="inventory-module-card__head">
-            <span><Icon name="check" size={18} /></span>
-            <div><h3>{group.title}</h3><p>{group.description}</p></div>
-          </div>
-          <div className="inventory-module-card__links">
-            {group.pages.map((page) => {
-              const route = getInventoryRoute(page);
-              return <NavLink key={route.page} to={route.path}>{route.label}<span>→</span></NavLink>;
-            })}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
-
 function InventoryPageEmptyState({ route }) {
   return (
     <section className="inventory-empty-card">
@@ -155,14 +123,18 @@ export default function InventoryWorkspace({
     branches
   });
   const isWarehousePage = currentRoute.page === "warehouses";
-  const documentDomain = ["receipts", "issues", "transfers", "disposals", "requisitions"].includes(currentRoute.page)
+  const isDashboardPage = currentRoute.page === "dashboard";
+  const isLedgerPage = currentRoute.page === "ledger";
+  const isReportPage = currentRoute.page === "reports";
+  const isCountPage = currentRoute.page === "counts";
+  const documentDomain = ["receipts", "issues", "transfers", "disposals", "requisitions", "adjustments"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
   const masterDataDomain = ["items", "item-categories", "units", "suppliers"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
   const warehouseState = useInventoryWarehouses({
-    enabled: (isWarehousePage || Boolean(documentDomain)) && accessPolicy.allowed,
+    enabled: (isWarehousePage || isLedgerPage || isReportPage || isCountPage || Boolean(documentDomain)) && accessPolicy.allowed,
     branchUuid: accessPolicy.scope === "branch" ? accessPolicy.branchUuid : ""
   });
   const masterDataState = useInventoryMasterData({
@@ -170,7 +142,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: currentRoute.page === "items" && accessPolicy.allowed,
+    enabled: (currentRoute.page === "items" || isReportPage || isCountPage) && accessPolicy.allowed,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -178,7 +150,7 @@ export default function InventoryWorkspace({
     domain: "item-categories"
   });
   const documentItemsState = useInventoryMasterData({
-    enabled: Boolean(documentDomain) && accessPolicy.allowed,
+    enabled: (Boolean(documentDomain) || isLedgerPage || isReportPage || isCountPage) && accessPolicy.allowed,
     domain: "items"
   });
   const documentSuppliersState = useInventoryMasterData({
@@ -188,6 +160,18 @@ export default function InventoryWorkspace({
   const documentState = useInventoryDocuments({
     enabled: Boolean(documentDomain) && accessPolicy.allowed,
     domain: documentDomain
+  });
+  const ledgerState = useInventoryLedger({
+    enabled: isLedgerPage && accessPolicy.allowed
+  });
+  const stockReportState = useInventoryStockReport({
+    enabled: isReportPage && accessPolicy.allowed
+  });
+  const countState = useInventoryCounts({
+    enabled: isCountPage && accessPolicy.allowed
+  });
+  const dashboardState = useInventoryDashboard({
+    enabled: isDashboardPage && accessPolicy.allowed
   });
   const warehouseDraftState = useInventoryWarehouseDrafts();
   useEffect(() => {
@@ -200,8 +184,16 @@ export default function InventoryWorkspace({
     warehouseState.warehouses
   ]);
   const visibleWarehouses = [...warehouseState.warehouses, ...warehouseDraftState.drafts];
-  const activeDataState = isWarehousePage
+  const activeDataState = isDashboardPage
+    ? dashboardState
+    : isWarehousePage
     ? warehouseState
+    : isLedgerPage
+      ? ledgerState
+    : isReportPage
+      ? stockReportState
+    : isCountPage
+      ? countState
     : documentDomain
       ? documentState
     : masterDataDomain
@@ -251,8 +243,8 @@ export default function InventoryWorkspace({
           onRetry={retryConnection}
         />
 
-        {currentRoute.page === "dashboard"
-          ? <InventoryDashboard />
+        {isDashboardPage
+          ? <InventoryDashboard data={dashboardState.data} />
           : currentRoute.page === "warehouses"
             ? <InventoryWarehouseManager
                 warehouses={visibleWarehouses}
@@ -272,15 +264,22 @@ export default function InventoryWorkspace({
                     rows={documentState.rows}
                     warehouses={warehouseState.warehouses}
                     items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
                     suppliers={documentSuppliersState.rows}
                     canWrite={canWriteDocuments}
                     canApproveDisposals={Boolean(documentState.permissions?.canApproveDisposals)}
+                    canApproveAdjustments={Boolean(documentState.permissions?.canApproveAdjustments)}
                     mutationStatus={documentState.mutationStatus}
                     mutationMessage={documentState.mutationMessage}
+                    filters={documentState.filters}
+                    totalCount={documentState.totalCount}
+                    pageCount={documentState.pageCount}
+                    onFiltersChange={documentState.updateFilters}
                     onSave={documentState.saveDraft}
                     onDeleteDraft={documentState.deleteDraft}
                     onSubmit={documentState.submit}
                     onComplete={documentState.complete}
+                    onApproveAdjustment={documentState.approveAdjustment}
                     onDispatchTransfer={documentState.dispatchTransfer}
                     onReceiveTransfer={documentState.receiveTransfer}
                     onCompleteTransfer={documentState.completeTransfer}
@@ -289,6 +288,42 @@ export default function InventoryWorkspace({
                     onCreateRequisitionTransfer={documentState.createRequisitionTransfer}
                     onFulfillRequisition={documentState.fulfillRequisition}
                     requestCreationMode={accessPolicy.scope === "global" ? "admin_on_behalf" : "warehouse_self"}
+                  />
+              : isLedgerPage
+                ? <InventoryLedger
+                    rows={ledgerState.rows}
+                    warehouses={warehouseState.warehouses}
+                    items={documentItemsState.rows}
+                    filters={ledgerState.filters}
+                    totalCount={ledgerState.totalCount}
+                    pageCount={ledgerState.pageCount}
+                    summary={ledgerState.summary}
+                    summaryLimited={ledgerState.summaryLimited}
+                    onFiltersChange={ledgerState.updateFilters}
+                  />
+              : isReportPage
+                ? <InventoryStockReport
+                    rows={stockReportState.rows}
+                    warehouses={warehouseState.warehouses}
+                    items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
+                    limited={stockReportState.limited}
+                  />
+              : isCountPage
+                ? <InventoryCountManager
+                    rows={countState.rows}
+                    warehouses={warehouseState.warehouses}
+                    items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
+                    canWrite={countState.writeEnabled && countState.status === "ready"}
+                    canManage={Boolean(countState.permissions?.canManage)}
+                    canCount={Boolean(countState.permissions?.canCount)}
+                    mutationStatus={countState.mutationStatus}
+                    mutationMessage={countState.mutationMessage}
+                    onCreateAndStart={countState.createAndStart}
+                    onRecordAndSubmit={countState.recordAndSubmit}
+                    onApproveAndComplete={countState.approveAndComplete}
+                    onCompleteApproved={countState.completeApproved}
                   />
               : <InventoryPageEmptyState route={currentRoute} />}
       </section>

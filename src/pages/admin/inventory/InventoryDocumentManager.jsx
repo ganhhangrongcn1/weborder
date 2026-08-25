@@ -1,15 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
 import InventoryDocumentActionModal from "./InventoryDocumentActionModal.jsx";
 import InventoryDocumentDetailModal from "./InventoryDocumentDetailModal.jsx";
 import InventoryDocumentModal from "./InventoryDocumentModal.jsx";
+import { getInventoryDocumentDateRange } from "../../../services/inventoryDocumentFilters.js";
 
 const DOMAIN_CONFIG = {
   receipts: { title: "Phiếu nhập kho", action: "Tạo phiếu nhập", icon: "download", warehouseColumn: "Kho nhận", empty: "Chưa có phiếu nhập kho." },
   issues: { title: "Phiếu xuất kho", action: "Tạo phiếu xuất", icon: "share", warehouseColumn: "Kho xuất", empty: "Chưa có phiếu xuất kho." },
   transfers: { title: "Chuyển kho nội bộ", action: "Tạo phiếu chuyển", icon: "refresh", warehouseColumn: "Luồng chuyển", empty: "Chưa có phiếu chuyển kho." },
   disposals: { title: "Phiếu hủy", action: "Tạo phiếu hủy", icon: "trash", warehouseColumn: "Kho hủy", empty: "Chưa có phiếu hủy nào." },
-  requisitions: { title: "Yêu cầu xuất kho", action: "Tạo yêu cầu", icon: "bell", warehouseColumn: "Kho yêu cầu", empty: "Chưa có yêu cầu xuất kho." }
+  requisitions: { title: "Yêu cầu xuất kho", action: "Tạo yêu cầu", icon: "bell", warehouseColumn: "Kho yêu cầu", empty: "Chưa có yêu cầu xuất kho." },
+  adjustments: { title: "Phiếu điều chỉnh tồn", action: "Tạo phiếu điều chỉnh", icon: "edit", warehouseColumn: "Kho điều chỉnh", empty: "Chưa có phiếu điều chỉnh tồn." }
 };
 
 const STATUS_LABELS = {
@@ -35,15 +38,22 @@ export default function InventoryDocumentManager({
   rows = [],
   warehouses = [],
   items = [],
+  units = [],
   suppliers = [],
   canWrite = false,
   canApproveDisposals = false,
+  canApproveAdjustments = false,
   mutationStatus = "idle",
   mutationMessage = "",
+  filters = {},
+  totalCount = 0,
+  pageCount = 1,
+  onFiltersChange,
   onSave,
   onDeleteDraft,
   onSubmit,
   onComplete,
+  onApproveAdjustment,
   onDispatchTransfer,
   onReceiveTransfer,
   onCompleteTransfer,
@@ -54,9 +64,10 @@ export default function InventoryDocumentManager({
   requestCreationMode = "warehouse_self"
 }) {
   const config = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG.receipts;
+  const [searchParams] = useSearchParams();
+  const routeSearch = searchParams.get("q") || "";
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
   const [actionError, setActionError] = useState("");
   const [actionModal, setActionModal] = useState(null);
   const [detailDocument, setDetailDocument] = useState(null);
@@ -67,16 +78,21 @@ export default function InventoryDocumentManager({
     return rows.filter((row) => {
       const lineReasons = row.lines.map((line) => line.disposalReason || line.notes).join(" ");
       const text = [row.documentNo, row.notes, row.metadata?.disposal_reason, lineReasons, supplierMap.get(row.supplierId)].join(" ").toLocaleLowerCase("vi-VN");
-      return (!keyword || text.includes(keyword)) && (status === "all" || row.status === status);
+      return !keyword || text.includes(keyword);
     });
-  }, [rows, search, status, supplierMap]);
-  const draftCount = rows.filter((row) => row.status === "draft").length;
-  const pendingCount = rows.filter((row) => ["submitted", "approved", "in_transit", "received", "received_with_variance"].includes(row.status)).length;
-  const completedCount = rows.filter((row) => ["completed", "fulfilled"].includes(row.status)).length;
+  }, [rows, search, supplierMap]);
+
+  useEffect(() => {
+    setSearch(routeSearch);
+  }, [domain, routeSearch]);
+
+  const applyDatePreset = (datePreset) => {
+    onFiltersChange?.({ datePreset, ...getInventoryDocumentDateRange(datePreset) });
+  };
 
   const getWarehouseLabel = (row) => {
     if (domain === "transfers") return `${warehouseMap.get(row.sourceWarehouseId) || "—"} → ${warehouseMap.get(row.destinationWarehouseId) || "—"}`;
-    const id = ["issues", "disposals"].includes(domain) ? row.sourceWarehouseId : row.destinationWarehouseId;
+    const id = ["issues", "disposals", "adjustments"].includes(domain) ? row.sourceWarehouseId : row.destinationWarehouseId;
     return warehouseMap.get(id) || "—";
   };
 
@@ -120,6 +136,10 @@ export default function InventoryDocumentManager({
       }
       return <button className="is-primary" type="button" disabled={disabled} onClick={() => runAction(() => onComplete(row.id))}>Hoàn tất</button>;
     }
+    if (row.status === "submitted" && domain === "adjustments") {
+      if (!canApproveAdjustments) return <span className="inventory-waiting-approval">Chờ Admin/Quản lý kho duyệt</span>;
+      return <button className="is-primary" type="button" disabled={disabled} onClick={() => runAction(() => onApproveAdjustment(row.id))}>Duyệt & ghi sổ</button>;
+    }
     if (domain === "transfers") {
       if (["submitted", "approved"].includes(row.status)) {
         return <button className="is-primary" type="button" disabled={disabled} onClick={() => setActionModal({ mode: "dispatch", document: row })}>Giao hàng</button>;
@@ -160,36 +180,39 @@ export default function InventoryDocumentManager({
       ? <span><strong>Duyệt</strong> là hệ thống tự tạo phiếu giao hàng. Nhân viên chỉ cần qua <strong>Chuyển kho nội bộ</strong> để giao và nhận.</span>
       : domain === "disposals"
         ? <span><strong>Lưu nháp</strong> chưa trừ tồn. Chỉ khi bấm <strong>Hoàn tất</strong>, hệ thống mới trừ đúng kho và lưu lý do hủy.</span>
+      : domain === "adjustments"
+        ? <span><strong>Gửi xử lý</strong> chưa đổi tồn. Chỉ Admin hoặc quản lý đúng kho bấm <strong>Duyệt & ghi sổ</strong> mới tăng/giảm tồn.</span>
       : <span><strong>Bản nháp</strong> chưa thay đổi tồn kho. Chỉ khi bấm <strong>Hoàn tất</strong> hệ thống mới ghi sổ kho.</span>;
 
   return (
     <section className="inventory-list-card inventory-document-card">
       <div className="inventory-master-intro">
         <span><Icon name={config.icon} size={21} /></span>
-        <div><strong>{config.title}</strong><small>Giao diện nhập nhanh, chỉ giữ các thông tin cần cho vận hành kho hiện tại.</small></div>
+        <div><strong>{config.title}</strong></div>
         <button type="button" disabled={!canWrite} onClick={() => setShowModal(true)}><Icon name="plus" size={16} />{config.action}</button>
       </div>
       <div className="inventory-document-guide">
         <Icon name="info" size={16} />
         {guideText}
       </div>
-      <div className="inventory-summary-grid inventory-document-summary">
-        <div><span>Tổng phiếu</span><strong>{rows.length}</strong></div>
-        <div><span>Bản nháp</span><strong>{draftCount}</strong></div>
-        <div><span>Chờ xử lý</span><strong>{pendingCount}</strong></div>
-        <div><span>Đã hoàn tất</span><strong>{completedCount}</strong></div>
-      </div>
-      <div className="inventory-list-toolbar">
-        <label className="inventory-search-field"><Icon name="search" size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo mã phiếu, ghi chú…" /></label>
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+      <div className="inventory-document-toolbar">
+        <div className="inventory-document-date-presets" aria-label="Lọc nhanh theo ngày">
+          <button className={filters.datePreset === "today" ? "is-active" : ""} type="button" onClick={() => applyDatePreset("today")}>Hôm nay</button>
+          <button className={filters.datePreset === "7d" ? "is-active" : ""} type="button" onClick={() => applyDatePreset("7d")}>7 ngày</button>
+          <button className={filters.datePreset === "30d" ? "is-active" : ""} type="button" onClick={() => applyDatePreset("30d")}>30 ngày</button>
+        </div>
+        <label className="inventory-document-date-field"><span>Từ ngày</span><input type="date" max={filters.toDate || undefined} value={filters.fromDate || ""} onChange={(event) => onFiltersChange?.({ datePreset: "custom", fromDate: event.target.value })} /></label>
+        <label className="inventory-document-date-field"><span>Đến ngày</span><input type="date" min={filters.fromDate || undefined} value={filters.toDate || ""} onChange={(event) => onFiltersChange?.({ datePreset: "custom", toDate: event.target.value })} /></label>
+        <select value={filters.status || "all"} onChange={(event) => onFiltersChange?.({ status: event.target.value })} aria-label="Lọc trạng thái">
           <option value="all">Tất cả trạng thái</option>
           {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
+        <label className="inventory-search-field"><Icon name="search" size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm trong trang hiện tại…" /></label>
       </div>
       {mutationMessage || actionError ? <div className={`inventory-operation-message ${mutationStatus === "error" || actionError ? "is-error" : ""}`}>{actionError || mutationMessage}</div> : null}
       <div className="inventory-table-scroll">
         <table className="inventory-data-table inventory-document-table">
-          <thead><tr><th>Mã phiếu</th><th>{domain === "disposals" ? "Ngày hủy" : "Ngày lập"}</th><th>{config.warehouseColumn}</th>{domain === "receipts" ? <th>Nhà cung cấp</th> : null}{domain === "disposals" ? <th>Lý do hủy</th> : null}<th>Nguyên vật liệu</th>{domain === "receipts" ? <th>Tổng tiền</th> : null}<th>Trạng thái</th><th>Thao tác</th></tr></thead>
+          <thead><tr><th>Mã phiếu</th><th>{domain === "disposals" ? "Ngày hủy" : "Ngày lập"}</th><th>{config.warehouseColumn}</th>{domain === "receipts" ? <th>Nhà cung cấp</th> : null}{domain === "disposals" ? <th>Lý do hủy</th> : null}{domain === "adjustments" ? <th>Lý do điều chỉnh</th> : null}<th>Nguyên vật liệu</th>{domain === "receipts" ? <th>Tổng tiền</th> : null}<th>Trạng thái</th><th>Thao tác</th></tr></thead>
           <tbody>
             {visibleRows.map((row) => (
               <tr key={row.id}>
@@ -198,7 +221,8 @@ export default function InventoryDocumentManager({
                 <td><strong>{getWarehouseLabel(row)}</strong></td>
                 {domain === "receipts" ? <td>{supplierMap.get(row.supplierId) || "—"}</td> : null}
                 {domain === "disposals" ? <td><span className={`inventory-disposal-reason ${getDisposalReasonLabel(row) === "Nhiều lý do" ? "is-multiple" : ""}`}>{getDisposalReasonLabel(row)}</span></td> : null}
-                <td><strong>{row.lines.length} mặt hàng</strong><small>{row.notes || "Không có ghi chú"}</small></td>
+                {domain === "adjustments" ? <td><span className="inventory-adjustment-reason">{row.notes || "—"}</span></td> : null}
+                <td><strong>{row.lines.length} mặt hàng</strong>{row.notes ? <small>{row.notes}</small> : null}</td>
                 {domain === "receipts" ? <td><strong>{row.totalAmount.toLocaleString("vi-VN")} đ</strong></td> : null}
                 <td><span className={`inventory-document-status is-${row.status}`}>{STATUS_LABELS[row.status] || row.status}</span></td>
                 <td>
@@ -212,8 +236,15 @@ export default function InventoryDocumentManager({
           </tbody>
         </table>
       </div>
+      <div className="inventory-document-pagination">
+        <span><strong>{totalCount}</strong> phiếu · Trang {filters.page || 1}/{pageCount}</span>
+        <div>
+          <button type="button" disabled={(filters.page || 1) <= 1} onClick={() => onFiltersChange?.({ page: (filters.page || 1) - 1 })}>Trang trước</button>
+          <button type="button" disabled={(filters.page || 1) >= pageCount} onClick={() => onFiltersChange?.({ page: (filters.page || 1) + 1 })}>Trang sau</button>
+        </div>
+      </div>
       {!visibleRows.length ? <div className="inventory-list-empty"><Icon name={config.icon} size={28} /><strong>{config.empty}</strong><span>Tạo phiếu đầu tiên khi dữ liệu kho và nguyên vật liệu đã sẵn sàng.</span></div> : null}
-      {showModal ? <InventoryDocumentModal domain={domain} warehouses={warehouses} items={items} suppliers={suppliers} requestCreationMode={requestCreationMode} onClose={() => setShowModal(false)} onSave={onSave} /> : null}
+      {showModal ? <InventoryDocumentModal domain={domain} warehouses={warehouses} items={items} units={units} suppliers={suppliers} requestCreationMode={requestCreationMode} onClose={() => setShowModal(false)} onSave={onSave} /> : null}
       {detailDocument ? <InventoryDocumentDetailModal domain={domain} document={detailDocument} warehouses={warehouses} items={items} suppliers={suppliers} onClose={() => setDetailDocument(null)} /> : null}
       {actionModal ? <InventoryDocumentActionModal mode={actionModal.mode} document={actionModal.document} warehouses={warehouses} items={items} onClose={() => setActionModal(null)} onConfirm={confirmModalAction} /> : null}
     </section>

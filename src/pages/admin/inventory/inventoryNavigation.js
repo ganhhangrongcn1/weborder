@@ -109,6 +109,15 @@ export const INVENTORY_ROUTE_ITEMS = [
     description: "Chốt số đếm thực tế và kiểm soát chênh lệch tồn."
   },
   {
+    id: "inventory-adjustments",
+    path: "/admin/inventory/adjustments",
+    page: "adjustments",
+    label: "Điều chỉnh tồn",
+    group: "Kiểm kê & đối soát",
+    icon: "edit",
+    description: "Lập phiếu tăng hoặc giảm tồn có lý do và chờ quản lý duyệt."
+  },
+  {
     id: "inventory-ledger",
     path: "/admin/inventory/ledger",
     page: "ledger",
@@ -154,7 +163,7 @@ const INVENTORY_SECTION_DEFINITIONS = [
     id: "inventory-counting-section",
     title: "Kiểm kê & đối soát",
     icon: "check",
-    pages: ["counts", "reconciliation"]
+    pages: ["counts", "adjustments", "reconciliation"]
   },
   {
     id: "inventory-reporting-section",

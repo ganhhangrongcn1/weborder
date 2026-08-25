@@ -17,10 +17,12 @@ import { getInventoryAccessPolicy } from "./inventory/inventoryAccessPolicy.js";
 import { isSupabaseRuntimeWriteEnabled } from "../../services/supabase/runtimeFlags.js";
 import {
   INVENTORY_NAVIGATION_COUNTS_CHANGED_EVENT,
+  readInventoryPendingAdjustmentCount,
   readInventoryPendingDisposalCount,
   readInventoryPendingRequisitionCount,
   readInventoryPendingTransferCount
 } from "../../services/inventoryDocumentService.js";
+import { readInventoryActionableCount } from "../../services/inventoryCountService.js";
 
 export default function AdminApp({
   products,
@@ -57,6 +59,8 @@ export default function AdminApp({
   const [inventoryPendingRequisitionCount, setInventoryPendingRequisitionCount] = useState(0);
   const [inventoryPendingTransferCount, setInventoryPendingTransferCount] = useState(0);
   const [inventoryPendingDisposalCount, setInventoryPendingDisposalCount] = useState(0);
+  const [inventoryPendingAdjustmentCount, setInventoryPendingAdjustmentCount] = useState(0);
+  const [inventoryActionableCount, setInventoryActionableCount] = useState(0);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const {
     adminSession = null,
@@ -251,21 +255,27 @@ export default function AdminApp({
       setInventoryPendingRequisitionCount(0);
       setInventoryPendingTransferCount(0);
       setInventoryPendingDisposalCount(0);
+      setInventoryPendingAdjustmentCount(0);
+      setInventoryActionableCount(0);
       return undefined;
     }
     let cancelled = false;
 
     const refreshInventoryPendingCount = async () => {
       try {
-        const [requisitionCount, transferCount, disposalCount] = await Promise.all([
+        const [requisitionCount, transferCount, disposalCount, adjustmentCount, actionableCount] = await Promise.all([
           readInventoryPendingRequisitionCount(),
           readInventoryPendingTransferCount(),
-          readInventoryPendingDisposalCount()
+          readInventoryPendingDisposalCount(),
+          readInventoryPendingAdjustmentCount(),
+          readInventoryActionableCount()
         ]);
         if (!cancelled) {
           setInventoryPendingRequisitionCount(requisitionCount);
           setInventoryPendingTransferCount(transferCount);
           setInventoryPendingDisposalCount(disposalCount);
+          setInventoryPendingAdjustmentCount(adjustmentCount);
+          setInventoryActionableCount(actionableCount);
         }
       } catch {
         // Giữ số gần nhất nếu phiên Admin hoặc mạng tạm thời gián đoạn.
@@ -296,7 +306,9 @@ export default function AdminApp({
           "review-rewards-main": reviewRewardPendingCount,
           "inventory-requisitions": inventoryPendingRequisitionCount,
           "inventory-transfers": inventoryPendingTransferCount,
-          "inventory-disposals": inventoryPendingDisposalCount
+          "inventory-disposals": inventoryPendingDisposalCount,
+          "inventory-counts": inventoryActionableCount,
+          "inventory-adjustments": inventoryPendingAdjustmentCount
         }}
         isMobileOpen={isMobileNavOpen}
         onMobileClose={() => setIsMobileNavOpen(false)}

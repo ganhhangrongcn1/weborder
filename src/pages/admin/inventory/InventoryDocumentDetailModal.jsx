@@ -6,7 +6,8 @@ const DOMAIN_CONFIG = {
   issues: { title: "Chi tiết phiếu xuất kho", icon: "share" },
   transfers: { title: "Chi tiết chuyển kho nội bộ", icon: "refresh" },
   disposals: { title: "Chi tiết phiếu hủy", icon: "trash" },
-  requisitions: { title: "Chi tiết yêu cầu xuất kho", icon: "bell" }
+  requisitions: { title: "Chi tiết yêu cầu xuất kho", icon: "bell" },
+  adjustments: { title: "Chi tiết phiếu điều chỉnh tồn", icon: "edit" }
 };
 
 const STATUS_LABELS = {
@@ -25,6 +26,11 @@ const STATUS_LABELS = {
 function formatDate(value = "") {
   if (!value) return "—";
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatDateOnly(value = "") {
+  if (!value) return "Không theo dõi";
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "short" }).format(new Date(`${value}T00:00:00`));
 }
 
 function formatQuantity(value) {
@@ -66,13 +72,14 @@ export default function InventoryDocumentDetailModal({
   const destinationWarehouse = warehouseMap.get(document.destinationWarehouseId) || "—";
   const warehouseFlow = domain === "transfers"
     ? `${sourceWarehouse} → ${destinationWarehouse}`
-    : ["issues", "disposals"].includes(domain) ? sourceWarehouse : destinationWarehouse;
+    : ["issues", "disposals", "adjustments"].includes(domain) ? sourceWarehouse : destinationWarehouse;
 
   const renderLineHeader = () => {
     if (domain === "transfers") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Yêu cầu</th><th>Duyệt</th><th>Đã giao</th><th>Đã nhận</th><th>Chênh lệch</th><th>Lý do</th></tr>;
     if (domain === "requisitions") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Yêu cầu</th><th>Đã duyệt</th><th>Đã giao</th><th>Đã nhận</th><th>Chênh lệch nhận</th><th>Lý do</th></tr>;
-    if (domain === "receipts") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Số trên phiếu</th><th>Thực nhập</th><th>Đơn giá</th><th>Thành tiền</th></tr>;
+    if (domain === "receipts") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Thực nhập</th><th>Mã lô</th><th>Hạn sử dụng</th><th>Đơn giá</th><th>Thành tiền</th></tr>;
     if (domain === "disposals") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Số lượng hủy</th><th>Lý do hủy</th></tr>;
+    if (domain === "adjustments") return <tr><th>Nguyên vật liệu</th><th>Đơn vị lưu kho</th><th>Điều chỉnh</th><th>Số lượng</th><th>Lý do</th></tr>;
     return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Số trên phiếu</th><th>Thực xuất</th><th>Ghi chú</th></tr>;
   };
 
@@ -97,10 +104,16 @@ export default function InventoryDocumentDetailModal({
       return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(line.approvedQuantity)}</td><td>{formatQuantity(transferShipped)}</td><td>{formatQuantity(transferReceived)}</td><td><QuantityDifference available={transferShipped != null && transferReceived != null} value={Number(transferReceived || 0) - Number(transferShipped || 0)} /></td><td>{transferReason}</td></tr>;
     }
     if (domain === "receipts") {
-      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(actual)}</td><td>{formatMoney(line.unitPrice)}</td><td><strong>{formatMoney(actual * Number(line.unitPrice || 0))}</strong></td></tr>;
+      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(actual)}</td><td><span className="inventory-lot-badge">{line.lotNumber || "—"}</span></td><td><span className={`inventory-expiry-badge ${line.expiresOn ? "has-expiry" : ""}`}>{formatDateOnly(line.expiresOn)}</span></td><td>{formatMoney(line.unitPrice)}</td><td><strong>{formatMoney(actual * Number(line.unitPrice || 0))}</strong></td></tr>;
     }
     if (domain === "disposals") {
       return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(actual)}</td><td><span className="inventory-disposal-reason">{line.disposalReason || line.notes || document.metadata?.disposal_reason || "—"}</span></td></tr>;
+    }
+    if (domain === "adjustments") {
+      const isIncrease = line.adjustmentDirection === "in";
+      const isDecrease = line.adjustmentDirection === "out";
+      const directionLabel = isIncrease ? "+ Tăng tồn" : isDecrease ? "− Giảm tồn" : "Theo kiểm kê";
+      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{item?.baseUnit?.name || getUnitName(item)}</td><td><span className={`inventory-adjustment-direction ${isIncrease ? "is-increase" : isDecrease ? "is-decrease" : "is-from-count"}`}>{directionLabel}</span></td><td><strong>{formatQuantity(actual)}</strong></td><td>{document.notes || line.varianceReason || "—"}</td></tr>;
     }
     return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(actual)}</td><td>{line.notes || "—"}</td></tr>;
   };
@@ -123,12 +136,12 @@ export default function InventoryDocumentDetailModal({
             <div><span>Mã phiếu</span><strong>{document.documentNo}</strong></div>
             <div><span>Trạng thái</span><strong><em className={`inventory-document-status is-${document.status}`}>{STATUS_LABELS[document.status] || document.status}</em></strong></div>
             <div><span>Ngày lập</span><strong>{formatDate(document.occurredAt)}</strong></div>
-            <div className={domain === "requisitions" ? "is-destination-warehouse" : ""}><span>{domain === "transfers" ? "Luồng chuyển" : domain === "issues" ? "Kho xuất" : domain === "disposals" ? "Kho hủy" : "Kho nhận"}</span><strong>{warehouseFlow}</strong></div>
+            <div className={domain === "requisitions" ? "is-destination-warehouse" : ""}><span>{domain === "transfers" ? "Luồng chuyển" : domain === "issues" ? "Kho xuất" : domain === "disposals" ? "Kho hủy" : domain === "adjustments" ? "Kho điều chỉnh" : "Kho nhận"}</span><strong>{warehouseFlow}</strong></div>
             {domain === "requisitions" ? <div><span>Cách tạo yêu cầu</span><strong>{document.metadata?.request_origin === "admin_on_behalf" ? "Admin tạo thay chi nhánh" : "Chi nhánh tự tạo"}</strong></div> : null}
             {domain === "receipts" ? <div><span>Nhà cung cấp</span><strong>{supplierMap.get(document.supplierId) || "—"}</strong></div> : null}
             {domain === "receipts" ? <div><span>Tổng tiền</span><strong>{formatMoney(document.totalAmount)}</strong></div> : null}
             {domain === "disposals" ? <div><span>Lý do hủy chung</span><strong>{document.metadata?.disposal_reason || "—"}</strong></div> : null}
-            <div className="is-wide"><span>Ghi chú</span><strong>{document.notes || "Không có ghi chú"}</strong></div>
+            <div className="is-wide"><span>{domain === "adjustments" ? "Lý do điều chỉnh" : "Ghi chú"}</span><strong>{document.notes || "Không có ghi chú"}</strong></div>
             {document.rejectionReason ? <div className="is-wide is-rejection"><span>Lý do từ chối</span><strong>{document.rejectionReason}</strong></div> : null}
           </div>
 
