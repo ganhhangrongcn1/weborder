@@ -7,12 +7,14 @@ import {
   subscribeAdminAuth
 } from "../../../services/adminAuthService.js";
 import AdminAuthGate from "./AdminAuthGate.jsx";
+import { isReadOnlyAdminPreviewEnabled } from "../../../services/supabase/runtimeFlags.js";
 
 const AUTH_LOADING_GUARD_MS = 7000;
 
 export default function AdminAuthBoundary({ children }) {
   const runtimeInfo = getRepositoryRuntimeInfo();
-  const isSupabaseAdminMode = runtimeInfo.source === "supabase";
+  const isReadOnlyPreview = isReadOnlyAdminPreviewEnabled();
+  const isSupabaseAdminMode = runtimeInfo.source === "supabase" && !isReadOnlyPreview;
   const [adminSession, setAdminSession] = useState(null);
   const [adminProfile, setAdminProfile] = useState(null);
   const [blockedAdminSession, setBlockedAdminSession] = useState(null);

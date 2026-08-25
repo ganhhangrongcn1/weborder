@@ -5,6 +5,32 @@ function getGroupId(group, index) {
   return group.id || `admin-nav-group-${index}`;
 }
 
+function AdminNavItem({ item, navIconMap, activeAdminNav, notificationCounts, onActivateNav }) {
+  const notificationCount = Number(notificationCounts[item.id] || 0);
+  const isDisabled = item.disabled === true;
+
+  return (
+    <button
+      type="button"
+      className={`rounded-xl px-3 py-2 text-left text-sm font-semibold ${activeAdminNav === item.id ? "active " : ""}${notificationCount > 0 ? "has-notification " : ""}${isDisabled ? "is-planned" : ""}`.trim()}
+      onClick={isDisabled ? undefined : () => onActivateNav(item)}
+      aria-current={activeAdminNav === item.id ? "page" : undefined}
+      aria-disabled={isDisabled || undefined}
+      disabled={isDisabled}
+      title={isDisabled ? `${item.label} — ${item.statusLabel || "Sắp ra mắt"}` : item.label}
+    >
+      <Icon name={navIconMap[item.id] || item.icon || "star"} size={16} />
+      <span className="admin-nav-label">{item.label}</span>
+      {isDisabled ? <span className="admin-nav-planned-badge">{item.statusLabel || "Sắp ra mắt"}</span> : null}
+      {notificationCount > 0 ? (
+        <span className="admin-nav-badge" aria-label={`${notificationCount} việc cần xử lý`}>
+          {notificationCount > 99 ? "99+" : notificationCount}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 export default function AdminSidebar({
   navGroups,
   navIconMap,
@@ -20,7 +46,17 @@ export default function AdminSidebar({
     ));
     return activeIndex >= 0 ? getGroupId(navGroups[activeIndex], activeIndex) : "";
   }, [activeAdminNav, navGroups]);
+  const activeSubgroupId = useMemo(() => {
+    for (const group of navGroups) {
+      const activeSubgroup = group.subgroups?.find((subgroup) => (
+        subgroup.items.some((item) => item.id === activeAdminNav)
+      ));
+      if (activeSubgroup) return activeSubgroup.id;
+    }
+    return "";
+  }, [activeAdminNav, navGroups]);
   const [openGroupIds, setOpenGroupIds] = useState(() => new Set(activeGroupId ? [activeGroupId] : []));
+  const [openSubgroupIds, setOpenSubgroupIds] = useState(() => new Set(activeSubgroupId ? [activeSubgroupId] : []));
 
   useEffect(() => {
     if (!activeGroupId) return;
@@ -31,6 +67,16 @@ export default function AdminSidebar({
       return next;
     });
   }, [activeGroupId]);
+
+  useEffect(() => {
+    if (!activeSubgroupId) return;
+    setOpenSubgroupIds((current) => {
+      if (current.has(activeSubgroupId)) return current;
+      const next = new Set(current);
+      next.add(activeSubgroupId);
+      return next;
+    });
+  }, [activeSubgroupId]);
 
   useEffect(() => {
     if (!isMobileOpen) return undefined;
@@ -51,6 +97,15 @@ export default function AdminSidebar({
       const next = new Set(current);
       if (next.has(groupId)) next.delete(groupId);
       else next.add(groupId);
+      return next;
+    });
+  };
+
+  const toggleSubgroup = (subgroupId) => {
+    setOpenSubgroupIds((current) => {
+      const next = new Set(current);
+      if (next.has(subgroupId)) next.delete(subgroupId);
+      else next.add(subgroupId);
       return next;
     });
   };
@@ -123,28 +178,79 @@ export default function AdminSidebar({
                 <span className="admin-nav-group-chevron" aria-hidden="true" />
               </button>
 
-              <div id={panelId} className="admin-nav-items" hidden={!isOpen}>
-            {group.items.map((item) => {
-              const notificationCount = Number(notificationCounts[item.id] || 0);
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`rounded-xl px-3 py-2 text-left text-sm font-semibold ${activeAdminNav === item.id ? "active " : ""}${notificationCount > 0 ? "has-notification" : ""}`.trim()}
-                  onClick={() => onActivateNav(item)}
-                  aria-current={activeAdminNav === item.id ? "page" : undefined}
-                  title={item.label}
-                >
-                  <Icon name={navIconMap[item.id] || "star"} size={16} />
-                  <span className="admin-nav-label">{item.label}</span>
-                  {notificationCount > 0 ? (
-                    <span className="admin-nav-badge" aria-label={`${notificationCount} yêu cầu chờ duyệt`}>
-                      {notificationCount > 99 ? "99+" : notificationCount}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
+              <div
+                id={panelId}
+                className={`admin-nav-items${group.subgroups?.length ? " admin-nav-items--nested" : ""}`}
+                hidden={!isOpen}
+              >
+                {group.subgroups?.length ? (
+                  <>
+                    {(group.standaloneItems || []).map((item) => (
+                      <AdminNavItem
+                        key={item.id}
+                        item={item}
+                        navIconMap={navIconMap}
+                        activeAdminNav={activeAdminNav}
+                        notificationCounts={notificationCounts}
+                        onActivateNav={onActivateNav}
+                      />
+                    ))}
+                    {group.subgroups.map((subgroup) => {
+                      const subgroupPanelId = `${subgroup.id}-items`;
+                      const isSubgroupOpen = openSubgroupIds.has(subgroup.id);
+                      const isActiveSubgroup = subgroup.items.some((item) => item.id === activeAdminNav);
+                      const subgroupNotificationCount = subgroup.items.reduce(
+                        (total, item) => total + Number(notificationCounts[item.id] || 0),
+                        0
+                      );
+
+                      return (
+                        <section
+                          key={subgroup.id}
+                          className={`admin-nav-subgroup${isSubgroupOpen ? " is-open" : ""}${isActiveSubgroup ? " is-active" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="admin-nav-subgroup-toggle"
+                            aria-expanded={isSubgroupOpen}
+                            aria-controls={subgroupPanelId}
+                            onClick={() => toggleSubgroup(subgroup.id)}
+                          >
+                            <Icon name={subgroup.icon || "folder"} size={16} />
+                            <span>{subgroup.title}</span>
+                            {subgroupNotificationCount > 0 ? (
+                              <small className="admin-nav-subgroup-badge is-notification" aria-label={`${subgroupNotificationCount} thông báo`}>
+                                {subgroupNotificationCount > 99 ? "99+" : subgroupNotificationCount}
+                              </small>
+                            ) : subgroup.badge ? <small className="admin-nav-subgroup-badge">{subgroup.badge}</small> : null}
+                            <span className="admin-nav-subgroup-chevron" aria-hidden="true" />
+                          </button>
+                          <div id={subgroupPanelId} className="admin-nav-subgroup-items" hidden={!isSubgroupOpen}>
+                            {subgroup.items.map((item) => (
+                              <AdminNavItem
+                                key={item.id}
+                                item={item}
+                                navIconMap={navIconMap}
+                                activeAdminNav={activeAdminNav}
+                                notificationCounts={notificationCounts}
+                                onActivateNav={onActivateNav}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </>
+                ) : group.items.map((item) => (
+                  <AdminNavItem
+                    key={item.id}
+                    item={item}
+                    navIconMap={navIconMap}
+                    activeAdminNav={activeAdminNav}
+                    notificationCounts={notificationCounts}
+                    onActivateNav={onActivateNav}
+                  />
+                ))}
               </div>
             </section>
           );

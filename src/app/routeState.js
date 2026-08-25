@@ -81,6 +81,22 @@ export function bottomTabToPath(tab) {
 export function adminPathToState(pathname = "/admin") {
   const path = normalizePath(pathname);
 
+  const inventoryMatch = path.match(/^\/admin\/inventory\/([^/]+)$/i);
+  if (inventoryMatch) {
+    const allowedPages = new Set([
+      "dashboard", "warehouses", "items", "item-categories", "units", "suppliers", "receipts", "issues",
+      "transfers", "disposals", "requisitions", "counts", "ledger", "reports", "reconciliation"
+    ]);
+    const requestedPage = String(inventoryMatch[1] || "").toLowerCase();
+    const inventoryPage = allowedPages.has(requestedPage) ? requestedPage : "dashboard";
+    return {
+      section: "inventory",
+      activeAdminNav: `inventory-${inventoryPage}`,
+      inventoryPage,
+      inventoryRouteInvalid: !allowedPages.has(requestedPage)
+    };
+  }
+
   if (path === "/admin/grab-finance") {
     return { section: "grab-finance", activeAdminNav: "grab-finance-main" };
   }
@@ -231,6 +247,8 @@ export function adminPathToState(pathname = "/admin") {
 
 export function adminNavToPath(item) {
   if (!item) return "/admin";
+
+  if (item.path) return item.path;
 
   if (item.id === "dashboard-main") return "/admin";
   if (item.id === "grab-finance-main") return "/admin/grab-finance";

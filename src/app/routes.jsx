@@ -88,6 +88,8 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/admin/ui" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/promotions" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/cakes" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/inventory" element={<Navigate to="/admin/inventory/dashboard" replace />} />
+      <Route path="/admin/inventory/*" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
 
       <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>

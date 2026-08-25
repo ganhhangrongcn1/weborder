@@ -1,3 +1,5 @@
+import { INVENTORY_NAV_SECTIONS, INVENTORY_ROUTE_ITEMS } from "./inventory/inventoryNavigation.js";
+
 export const navGroups = [
   {
     id: "overview",
@@ -58,6 +60,22 @@ export const navGroups = [
     ]
   },
   {
+    id: "inventory-management",
+    title: "Quản lý kho",
+    icon: "store",
+    standaloneItems: INVENTORY_ROUTE_ITEMS
+      .filter((item) => item.page === "dashboard")
+      .map((item) => ({ ...item, section: "inventory" })),
+    subgroups: INVENTORY_NAV_SECTIONS.map((subgroup) => ({
+      ...subgroup,
+      items: subgroup.items.map((item) => ({ ...item, section: "inventory" }))
+    })),
+    items: INVENTORY_ROUTE_ITEMS.map((item) => ({
+      ...item,
+      section: "inventory"
+    }))
+  },
+  {
     id: "finance-reports",
     title: "Tài chính & báo cáo",
     icon: "wallet",
@@ -109,7 +127,8 @@ export const navIconMap = {
   "store-ui": "star",
   "promo-campaign": "gift",
   "employees-main": "user",
-  "supervision-main": "star"
+  "supervision-main": "star",
+  ...Object.fromEntries(INVENTORY_ROUTE_ITEMS.map((item) => [item.id, item.icon]))
 };
 
 export const dashboardQuickActions = [
@@ -137,6 +156,7 @@ export function getAdminPageTitle(section, activeAdminNav = "") {
   if (section === "customers") return "Khách hàng / CRM";
   if (section === "cakes") return "Bánh sinh nhật bánh tráng";
   if (section === "menu") return "Quản lý menu";
+  if (section === "inventory") return "Quản lý kho";
   if (section === "employees") return "Quản lý nhân sự";
   if (section === "supervision") return "Quản lý giám sát";
   if (section === "promo" && activeAdminNav === "voucher-main") return "Kho voucher";

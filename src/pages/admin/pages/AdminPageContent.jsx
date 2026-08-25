@@ -11,7 +11,14 @@ import AdminSupervisionPage from "./AdminSupervisionPage.jsx";
 import AdminPartnerReviewsPage from "./AdminPartnerReviewsPage.jsx";
 import AdminReviewRewardsPage from "./AdminReviewRewardsPage.jsx";
 import AdminGrabFinancePage from "./AdminGrabFinancePage.jsx";
+import { lazy, Suspense } from "react";
 import AdminGrabMarketingPage from "./AdminGrabMarketingPage.jsx";
+
+const InventoryWorkspace = lazy(() => import("../inventory/InventoryWorkspace.jsx"));
+
+function InventoryLoadingState() {
+  return <div className="inventory-state inventory-state--loading" role="status">Đang mở Quản lý kho…</div>;
+}
 
 export default function AdminPageContent({ section, ...props }) {
   if (section === "dashboard") {
@@ -57,6 +64,14 @@ export default function AdminPageContent({ section, ...props }) {
 
   if (section === "menu") {
     return <AdminMenuPage {...props} />;
+  }
+
+  if (section === "inventory") {
+    return (
+      <Suspense fallback={<InventoryLoadingState />}>
+        <InventoryWorkspace {...props} />
+      </Suspense>
+    );
   }
 
   if (section === "store") {

@@ -1,0 +1,200 @@
+export const INVENTORY_ROUTE_ITEMS = [
+  {
+    id: "inventory-dashboard",
+    path: "/admin/inventory/dashboard",
+    page: "dashboard",
+    label: "Tổng quan kho",
+    shortLabel: "Tổng quan",
+    group: "Tổng quan",
+    icon: "home",
+    description: "Theo dõi mức sẵn sàng của dữ liệu và các luồng vận hành kho."
+  },
+  {
+    id: "inventory-warehouses",
+    path: "/admin/inventory/warehouses",
+    page: "warehouses",
+    label: "Kho",
+    group: "Xây dữ liệu",
+    icon: "store",
+    description: "Quản lý kho trung tâm, kho chi nhánh và kho bộ phận."
+  },
+  {
+    id: "inventory-items",
+    path: "/admin/inventory/items",
+    page: "items",
+    label: "Nguyên vật liệu",
+    group: "Xây dữ liệu",
+    icon: "bag",
+    description: "Danh mục nguyên vật liệu, bao bì, bán thành phẩm và thành phẩm."
+  },
+  {
+    id: "inventory-item-categories",
+    path: "/admin/inventory/item-categories",
+    page: "item-categories",
+    label: "Danh mục NVL",
+    group: "Xây dữ liệu",
+    icon: "folder",
+    description: "Phân nhóm nguyên vật liệu để tìm kiếm và quản lý thuận tiện hơn."
+  },
+  {
+    id: "inventory-units",
+    path: "/admin/inventory/units",
+    page: "units",
+    label: "Đơn vị tính",
+    group: "Xây dữ liệu",
+    icon: "tag",
+    description: "Đơn vị gốc, đơn vị mua và tỷ lệ quy đổi."
+  },
+  {
+    id: "inventory-suppliers",
+    path: "/admin/inventory/suppliers",
+    page: "suppliers",
+    label: "Nhà cung cấp",
+    group: "Xây dữ liệu",
+    icon: "user",
+    description: "Nhà cung cấp và danh sách mặt hàng theo nhà cung cấp."
+  },
+  {
+    id: "inventory-receipts",
+    path: "/admin/inventory/receipts",
+    page: "receipts",
+    label: "Phiếu nhập kho",
+    group: "Xuất nhập kho",
+    icon: "download",
+    description: "Lập phiếu nhận nguyên vật liệu vào kho theo quy trình gọn, dễ kiểm soát."
+  },
+  {
+    id: "inventory-issues",
+    path: "/admin/inventory/issues",
+    page: "issues",
+    label: "Phiếu xuất kho",
+    group: "Xuất nhập kho",
+    icon: "share",
+    description: "Xuất dùng nội bộ, hao hụt hoặc hủy hàng với lý do rõ ràng."
+  },
+  {
+    id: "inventory-transfers",
+    path: "/admin/inventory/transfers",
+    page: "transfers",
+    label: "Chuyển kho nội bộ",
+    group: "Xuất nhập kho",
+    icon: "refresh",
+    description: "Luân chuyển hàng giữa kho nguồn và kho nhận."
+  },
+  {
+    id: "inventory-disposals",
+    path: "/admin/inventory/disposals",
+    page: "disposals",
+    label: "Phiếu hủy",
+    group: "Xuất nhập kho",
+    icon: "trash",
+    description: "Ghi nhận nguyên vật liệu hư hỏng, hết hạn, lãng phí, mất mát hoặc hao hụt."
+  },
+  {
+    id: "inventory-requisitions",
+    path: "/admin/inventory/requisitions",
+    page: "requisitions",
+    label: "Yêu cầu xuất kho",
+    group: "Xuất nhập kho",
+    icon: "bell",
+    description: "Kho nhận gửi yêu cầu để kho nguồn xét duyệt và chuẩn bị hàng."
+  },
+  {
+    id: "inventory-counts",
+    path: "/admin/inventory/counts",
+    page: "counts",
+    label: "Kiểm kê",
+    group: "Kiểm kê & đối soát",
+    icon: "check",
+    description: "Chốt số đếm thực tế và kiểm soát chênh lệch tồn."
+  },
+  {
+    id: "inventory-ledger",
+    path: "/admin/inventory/ledger",
+    page: "ledger",
+    label: "Sổ kho",
+    group: "Báo cáo & cảnh báo",
+    icon: "menu",
+    description: "Tra cứu biến động tăng, giảm và số dư theo thời gian."
+  },
+  {
+    id: "inventory-reports",
+    path: "/admin/inventory/reports",
+    page: "reports",
+    label: "Báo cáo kho",
+    group: "Báo cáo & cảnh báo",
+    icon: "wallet",
+    description: "Báo cáo tồn, hàng sắp hết và hàng gần hết hạn."
+  },
+  {
+    id: "inventory-reconciliation",
+    path: "/admin/inventory/reconciliation",
+    page: "reconciliation",
+    label: "Đối chiếu đơn ↔ kho",
+    group: "Kiểm kê & đối soát",
+    icon: "warning",
+    description: "Đối chiếu đơn bán, định lượng và movement đã ghi nhận."
+  }
+];
+
+const INVENTORY_SECTION_DEFINITIONS = [
+  {
+    id: "inventory-master-data-section",
+    title: "Xây dữ liệu",
+    icon: "folder",
+    pages: ["warehouses", "items", "item-categories", "units", "suppliers"]
+  },
+  {
+    id: "inventory-operations-section",
+    title: "Xuất nhập kho",
+    icon: "refresh",
+    pages: ["receipts", "issues", "transfers", "disposals", "requisitions"]
+  },
+  {
+    id: "inventory-counting-section",
+    title: "Kiểm kê & đối soát",
+    icon: "check",
+    pages: ["counts", "reconciliation"]
+  },
+  {
+    id: "inventory-reporting-section",
+    title: "Báo cáo & cảnh báo",
+    icon: "warning",
+    pages: ["ledger", "reports"]
+  },
+  {
+    id: "inventory-production-section",
+    title: "Sản xuất",
+    icon: "gear",
+    badge: "Phase 6",
+    plannedItems: [
+      {
+        id: "inventory-boms-planned",
+        label: "Công thức (BOM)",
+        icon: "menu",
+        disabled: true,
+        statusLabel: "Sắp ra mắt"
+      },
+      {
+        id: "inventory-production-orders-planned",
+        label: "Lệnh sản xuất",
+        icon: "gear",
+        disabled: true,
+        statusLabel: "Sắp ra mắt"
+      }
+    ]
+  }
+];
+
+export const INVENTORY_ROUTE_BY_PAGE = new Map(
+  INVENTORY_ROUTE_ITEMS.map((item) => [item.page, item])
+);
+
+export const INVENTORY_NAV_SECTIONS = INVENTORY_SECTION_DEFINITIONS.map((section) => ({
+  ...section,
+  items: section.plannedItems || section.pages.map((page) => INVENTORY_ROUTE_BY_PAGE.get(page)).filter(Boolean)
+}));
+
+export function getInventoryRoute(page = "dashboard") {
+  return INVENTORY_ROUTE_BY_PAGE.get(page) || INVENTORY_ROUTE_BY_PAGE.get("dashboard");
+}

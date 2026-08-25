@@ -14,6 +14,7 @@ function logRuntimeFlagsSnapshot() {
     mode: env.MODE,
     viteDataSource: String(env.VITE_DATA_SOURCE ?? ""),
     viteEnableSupabaseRuntimeWrites: String(env.VITE_ENABLE_SUPABASE_RUNTIME_WRITES ?? ""),
+    viteEnableInventoryRuntimeWrites: String(env.VITE_ENABLE_INVENTORY_RUNTIME_WRITES ?? ""),
     viteEnableSiteVisitTracking: String(env.VITE_ENABLE_SITE_VISIT_TRACKING ?? ""),
     viteSupabaseStrictMode: String(env.VITE_SUPABASE_STRICT_MODE ?? ""),
     viteSupabaseUrlExists: Boolean(String(env.VITE_SUPABASE_URL ?? "").trim()),
@@ -36,6 +37,23 @@ export function isSupabaseSeedMigrationEnabled() {
 export function isSupabaseRuntimeWriteEnabled() {
   logRuntimeFlagsSnapshot();
   return readBooleanEnv(import.meta.env?.VITE_ENABLE_SUPABASE_RUNTIME_WRITES, false);
+}
+
+export function isInventoryRuntimeWriteEnabled() {
+  const inventoryWriteRequested = readBooleanEnv(
+    import.meta.env?.VITE_ENABLE_INVENTORY_RUNTIME_WRITES,
+    false
+  );
+  if (!inventoryWriteRequested) return false;
+
+  return isSupabaseRuntimeWriteEnabled() || Boolean(import.meta.env?.DEV);
+}
+
+export function isReadOnlyAdminPreviewEnabled() {
+  return Boolean(import.meta.env?.DEV)
+    && readBooleanEnv(import.meta.env?.VITE_ENABLE_READ_ONLY_ADMIN_PREVIEW, false)
+    && !isSupabaseRuntimeWriteEnabled()
+    && !isInventoryRuntimeWriteEnabled();
 }
 
 export function isSiteVisitTrackingEnabled() {

@@ -1,6 +1,6 @@
-﻿-- Ganh Hang Rong Inventory MVP
--- Greenfield schema draft: review and execute in a disposable/local database first.
--- Do not apply this draft directly to production; create a real migration only after validation.
+-- Ganh Hang Rong Inventory MVP
+-- Packaged from the runtime-verified local schema on 2026-08-24.
+-- Deployment remains approval-gated: audit the target schema and run a dry run first.
 
 create extension if not exists pgcrypto;
 create schema if not exists private;
@@ -4208,4 +4208,3 @@ grant update (
 grant delete on table public.inventory_document_lines to authenticated;
 
 notify pgrst, 'reload schema';
-

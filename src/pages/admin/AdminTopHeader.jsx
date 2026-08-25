@@ -7,13 +7,17 @@ export default function AdminTopHeader({
   selectedBranchFilter,
   setSelectedBranchFilter,
   branches,
+  branchOptions = null,
+  branchSelectorLocked = false,
   syncStatusLabel,
   adminEmail = "",
   onLogout = null,
   compact = false,
   onOpenMobileNav
 }) {
-  const branchOptions = buildBranchFilterOptions(branches);
+  const resolvedBranchOptions = Array.isArray(branchOptions)
+    ? branchOptions
+    : buildBranchFilterOptions(branches);
 
   return (
     <header className={`admin-top-header ${compact ? "is-dashboard-compact" : ""}`.trim()}>
@@ -45,9 +49,15 @@ export default function AdminTopHeader({
             className="admin-top-branch"
             value={selectedBranchFilter}
             onChange={(event) => setSelectedBranchFilter(event.target.value)}
+            disabled={branchSelectorLocked}
+            aria-label={branchSelectorLocked ? "Chi nhánh được giới hạn theo tài khoản" : "Lọc theo chi nhánh"}
+            title={branchSelectorLocked ? "Phạm vi chi nhánh được khóa theo tài khoản đăng nhập" : undefined}
           >
-            <option value="all">{"Tất cả chi nhánh"}</option>
-            {branchOptions.map((branch) => (
+            {branchSelectorLocked && resolvedBranchOptions.length === 0
+              ? <option value="">Chưa được cấp phạm vi chi nhánh</option>
+              : null}
+            {!branchSelectorLocked ? <option value="all">{"Tất cả chi nhánh"}</option> : null}
+            {resolvedBranchOptions.map((branch) => (
               <option key={branch.value} value={branch.value}>{branch.label}</option>
             ))}
           </select>

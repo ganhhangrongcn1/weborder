@@ -1,5 +1,5 @@
 import "../../styles/admin/admin.css";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminSidebar from "./AdminSidebar.jsx";
 import AdminTopHeader from "./AdminTopHeader.jsx";
@@ -13,6 +13,14 @@ import { adminNavToPath } from "../../app/routeState.js";
 import AdminPageContent from "./pages/AdminPageContent.jsx";
 import { AdminButton, AdminPageHeader } from "./ui/AdminCommon.jsx";
 import { getAdminReviewRewards } from "../../services/reviewRewardService.js";
+import { getInventoryAccessPolicy } from "./inventory/inventoryAccessPolicy.js";
+import { isSupabaseRuntimeWriteEnabled } from "../../services/supabase/runtimeFlags.js";
+import {
+  INVENTORY_NAVIGATION_COUNTS_CHANGED_EVENT,
+  readInventoryPendingDisposalCount,
+  readInventoryPendingRequisitionCount,
+  readInventoryPendingTransferCount
+} from "../../services/inventoryDocumentService.js";
 
 export default function AdminApp({
   products,
@@ -46,6 +54,9 @@ export default function AdminApp({
 }) {
   const navigate = useNavigate();
   const [reviewRewardPendingCount, setReviewRewardPendingCount] = useState(0);
+  const [inventoryPendingRequisitionCount, setInventoryPendingRequisitionCount] = useState(0);
+  const [inventoryPendingTransferCount, setInventoryPendingTransferCount] = useState(0);
+  const [inventoryPendingDisposalCount, setInventoryPendingDisposalCount] = useState(0);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const {
     adminSession = null,
@@ -163,14 +174,27 @@ export default function AdminApp({
   });
 
   const isAppearancePage = section === "promo" && activeSubSection === "ui";
+  const inventoryAccessPolicy = useMemo(() => getInventoryAccessPolicy({
+    adminProfile,
+    isSupabaseAdminMode,
+    branches
+  }), [adminProfile, isSupabaseAdminMode, branches]);
+  const isInventorySection = section === "inventory";
+  const headerSelectedBranchFilter = isInventorySection && inventoryAccessPolicy.branchSelectorLocked
+    ? inventoryAccessPolicy.selectedBranchFilter
+    : selectedBranchFilter;
   const flatAdminNav = navGroups.flatMap((group) => group.items);
   const filteredRecentOrders = filterRecentOrders(ordersSnapshot, dashboardSearch);
   const runtimeInfo = getRepositoryRuntimeInfo();
-  const syncStatusLabel = !supabaseConfigSyncEnabled
-    ? "Sync: Local"
-    : runtimeInfo.effectiveSource === "supabase"
-      ? "Sync: Supabase"
-      : "Sync: Local (fallback)";
+  const supabaseReadOnly = runtimeInfo.effectiveSource === "supabase"
+    && !isSupabaseRuntimeWriteEnabled();
+  const syncStatusLabel = supabaseReadOnly
+    ? "Sync: Supabase (chỉ đọc)"
+    : !supabaseConfigSyncEnabled
+      ? "Sync: Local"
+      : runtimeInfo.effectiveSource === "supabase"
+        ? "Sync: Supabase"
+        : "Sync: Local (fallback)";
 
   const activateNav = (item) => {
     const nextPath = adminNavToPath(item);
@@ -222,6 +246,45 @@ export default function AdminApp({
     };
   }, []);
 
+  useEffect(() => {
+    if (!inventoryAccessPolicy.allowed) {
+      setInventoryPendingRequisitionCount(0);
+      setInventoryPendingTransferCount(0);
+      setInventoryPendingDisposalCount(0);
+      return undefined;
+    }
+    let cancelled = false;
+
+    const refreshInventoryPendingCount = async () => {
+      try {
+        const [requisitionCount, transferCount, disposalCount] = await Promise.all([
+          readInventoryPendingRequisitionCount(),
+          readInventoryPendingTransferCount(),
+          readInventoryPendingDisposalCount()
+        ]);
+        if (!cancelled) {
+          setInventoryPendingRequisitionCount(requisitionCount);
+          setInventoryPendingTransferCount(transferCount);
+          setInventoryPendingDisposalCount(disposalCount);
+        }
+      } catch {
+        // Giữ số gần nhất nếu phiên Admin hoặc mạng tạm thời gián đoạn.
+      }
+    };
+
+    refreshInventoryPendingCount();
+    const intervalId = window.setInterval(refreshInventoryPendingCount, 60000);
+    window.addEventListener("focus", refreshInventoryPendingCount);
+    window.addEventListener(INVENTORY_NAVIGATION_COUNTS_CHANGED_EVENT, refreshInventoryPendingCount);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refreshInventoryPendingCount);
+      window.removeEventListener(INVENTORY_NAVIGATION_COUNTS_CHANGED_EVENT, refreshInventoryPendingCount);
+    };
+  }, [inventoryAccessPolicy.allowed]);
+
   return (
     <div className="admin-app admin-shell admin-layout">
       <AdminSidebar
@@ -229,7 +292,12 @@ export default function AdminApp({
         navIconMap={navIconMap}
         activeAdminNav={activeAdminNav}
         onActivateNav={activateNav}
-        notificationCounts={{ "review-rewards-main": reviewRewardPendingCount }}
+        notificationCounts={{
+          "review-rewards-main": reviewRewardPendingCount,
+          "inventory-requisitions": inventoryPendingRequisitionCount,
+          "inventory-transfers": inventoryPendingTransferCount,
+          "inventory-disposals": inventoryPendingDisposalCount
+        }}
         isMobileOpen={isMobileNavOpen}
         onMobileClose={() => setIsMobileNavOpen(false)}
       />
@@ -238,9 +306,11 @@ export default function AdminApp({
         <AdminTopHeader
           adminGlobalSearch={adminGlobalSearch}
           setAdminGlobalSearch={setAdminGlobalSearch}
-          selectedBranchFilter={selectedBranchFilter}
+          selectedBranchFilter={headerSelectedBranchFilter}
           setSelectedBranchFilter={setSelectedBranchFilter}
           branches={branches}
+          branchOptions={isInventorySection ? inventoryAccessPolicy.branchOptions : null}
+          branchSelectorLocked={isInventorySection && inventoryAccessPolicy.branchSelectorLocked}
           syncStatusLabel={syncStatusLabel}
           adminEmail={adminProfile?.email || adminSession?.user?.email || ""}
           onLogout={isSupabaseAdminMode ? onAdminLogout : null}
@@ -248,7 +318,7 @@ export default function AdminApp({
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
         />
 
-        {section !== "dashboard" && section !== "grab-finance" && section !== "grab-marketing" && section !== "orders" && section !== "customers" ? (
+        {section !== "dashboard" && section !== "grab-finance" && section !== "grab-marketing" && section !== "orders" && section !== "customers" && section !== "inventory" ? (
           <AdminPageHeader
             title={getAdminPageTitle(section, activeAdminNav)}
             description="Quản trị vận hành cửa hàng, dữ liệu vận hành lưu trên Supabase."
@@ -258,6 +328,10 @@ export default function AdminApp({
 
         <AdminPageContent
           section={section}
+          inventoryPage={routeState?.inventoryPage || "dashboard"}
+          adminProfile={adminProfile}
+          isSupabaseAdminMode={isSupabaseAdminMode}
+          inventoryAccessPolicy={inventoryAccessPolicy}
           onReviewRewardPendingCountChange={setReviewRewardPendingCount}
           uiDirty={uiDirty}
           dashboardSearch={dashboardSearch}
