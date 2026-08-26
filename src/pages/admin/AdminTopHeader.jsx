@@ -9,6 +9,7 @@ export default function AdminTopHeader({
   branches,
   branchOptions = null,
   branchSelectorLocked = false,
+  lockedScopeLabel = "",
   syncStatusLabel,
   adminEmail = "",
   onLogout = null,
@@ -54,7 +55,7 @@ export default function AdminTopHeader({
             title={branchSelectorLocked ? "Phạm vi chi nhánh được khóa theo tài khoản đăng nhập" : undefined}
           >
             {branchSelectorLocked && resolvedBranchOptions.length === 0
-              ? <option value="">Chưa được cấp phạm vi chi nhánh</option>
+              ? <option value="">{lockedScopeLabel || "Chưa được cấp phạm vi chi nhánh"}</option>
               : null}
             {!branchSelectorLocked ? <option value="all">{"Tất cả chi nhánh"}</option> : null}
             {resolvedBranchOptions.map((branch) => (

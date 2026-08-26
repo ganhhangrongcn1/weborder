@@ -34,12 +34,14 @@ export function getInventoryAccessPolicy({
       branchOptions: allBranchOptions,
       selectedBranchFilter: "all",
       branchSelectorLocked: false,
+      canManageInventory: true,
       message: ""
     };
   }
 
   const role = toText(adminProfile?.role).toLowerCase();
   const branchUuid = toText(adminProfile?.branchUuid || adminProfile?.branch_uuid);
+  const accountScope = toText(adminProfile?.metadata?.account_scope || adminProfile?.accountScope).toLowerCase();
 
   if (role === "admin" && !branchUuid) {
     return {
@@ -51,6 +53,7 @@ export function getInventoryAccessPolicy({
       branchOptions: allBranchOptions,
       selectedBranchFilter: "all",
       branchSelectorLocked: false,
+      canManageInventory: true,
       message: ""
     };
   }
@@ -71,11 +74,12 @@ export function getInventoryAccessPolicy({
       branchOptions: [assignedOption],
       selectedBranchFilter: assignedOption.value,
       branchSelectorLocked: true,
+      canManageInventory: false,
       message: ""
     };
   }
 
-  if (role === "staff" && !branchUuid) {
+  if (role === "staff" && !branchUuid && accountScope === "central_inventory") {
     return {
       allowed: true,
       role,
@@ -85,6 +89,7 @@ export function getInventoryAccessPolicy({
       branchOptions: [],
       selectedBranchFilter: "",
       branchSelectorLocked: true,
+      canManageInventory: true,
       message: ""
     };
   }
@@ -102,6 +107,7 @@ export function getInventoryAccessPolicy({
     branchOptions: [],
     selectedBranchFilter: "",
     branchSelectorLocked: true,
+    canManageInventory: false,
     message
   };
 }

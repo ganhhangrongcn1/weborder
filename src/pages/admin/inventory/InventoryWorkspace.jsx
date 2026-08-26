@@ -333,7 +333,7 @@ export default function InventoryWorkspace({
   const connectionStatus = activeDataState?.status || dataStatus;
   const connectionError = activeDataState?.message || dataError;
   const retryConnection = activeDataState?.refresh || onRetry;
-  const canManageGlobalData = accessPolicy.scope === "global";
+  const canManageGlobalData = accessPolicy.scope === "global" || accessPolicy.canManageInventory === true;
   const canWriteWarehouses = canManageGlobalData
     && warehouseState.status === "ready"
     && warehouseState.writeEnabled;
@@ -439,7 +439,7 @@ export default function InventoryWorkspace({
                     onRejectRequisition={documentState.rejectRequisition}
                     onCreateRequisitionTransfer={documentState.createRequisitionTransfer}
                     onFulfillRequisition={documentState.fulfillRequisition}
-                    requestCreationMode={accessPolicy.scope === "global" ? "admin_on_behalf" : "warehouse_self"}
+                    requestCreationMode={canManageGlobalData ? "admin_on_behalf" : "warehouse_self"}
                     warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : isLedgerPage

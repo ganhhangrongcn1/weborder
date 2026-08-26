@@ -34,6 +34,7 @@ export function getAdminModuleAccessPolicy({
 
   const role = toText(adminProfile?.role).toLowerCase();
   const branchUuid = toText(adminProfile?.branchUuid || adminProfile?.branch_uuid);
+  const accountScope = toText(adminProfile?.metadata?.account_scope || adminProfile?.accountScope).toLowerCase();
 
   if (role === "admin" && !branchUuid) {
     return { mode: "full", allowedItemIds: null };
@@ -46,7 +47,7 @@ export function getAdminModuleAccessPolicy({
     };
   }
 
-  if (role === "staff" && !branchUuid) {
+  if (role === "staff" && !branchUuid && accountScope === "central_inventory") {
     return {
       mode: "central-inventory",
       allowedItemIds: new Set(["inventory-dashboard", ...INVENTORY_ITEM_IDS])

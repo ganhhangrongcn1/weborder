@@ -373,6 +373,7 @@ export default function AdminApp({
           branches={branches}
           branchOptions={(isInventorySection || section === "shifts") ? inventoryAccessPolicy.branchOptions : null}
           branchSelectorLocked={(isInventorySection || section === "shifts") && inventoryAccessPolicy.branchSelectorLocked}
+          lockedScopeLabel={(isInventorySection || section === "shifts") ? inventoryAccessPolicy.scopeLabel : ""}
           syncStatusLabel={syncStatusLabel}
           adminEmail={adminProfile?.email || adminSession?.user?.email || ""}
           onLogout={isSupabaseAdminMode ? onAdminLogout : null}

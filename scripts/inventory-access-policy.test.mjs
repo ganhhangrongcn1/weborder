@@ -32,6 +32,7 @@ test("global admin can select every configured branch", () => {
   assert.equal(policy.scope, "global");
   assert.equal(policy.selectedBranchFilter, "all");
   assert.equal(policy.branchSelectorLocked, false);
+  assert.equal(policy.canManageInventory, true);
 });
 
 test("branch-scoped staff only receives the assigned branch option", () => {
@@ -46,6 +47,7 @@ test("branch-scoped staff only receives the assigned branch option", () => {
   assert.equal(policy.branchOptions.length, 1);
   assert.equal(policy.branchOptions[0].value, branches[1].branch_uuid);
   assert.equal(policy.scopeLabel, branches[1].name);
+  assert.equal(policy.canManageInventory, false);
 });
 
 test("branch-scoped inventory only exposes warehouses from the assigned branch", () => {
@@ -94,7 +96,7 @@ test("branch-scoped admin is also locked to the assigned branch", () => {
 
 test("central staff can manage all warehouses while branch kitchen stays in its branch", () => {
   const staffPolicy = getInventoryAccessPolicy({
-    adminProfile: { role: "staff" },
+    adminProfile: { role: "staff", metadata: { account_scope: "central_inventory" } },
     isSupabaseAdminMode: true,
     branches
   });
@@ -106,9 +108,11 @@ test("central staff can manage all warehouses while branch kitchen stays in its 
   assert.equal(staffPolicy.allowed, true);
   assert.equal(staffPolicy.scope, "warehouse");
   assert.equal(staffPolicy.branchSelectorLocked, true);
+  assert.equal(staffPolicy.canManageInventory, true);
   assert.equal(kitchenPolicy.allowed, true);
   assert.equal(kitchenPolicy.scope, "branch");
   assert.equal(kitchenPolicy.branchOptions.length, 1);
+  assert.equal(kitchenPolicy.canManageInventory, false);
 });
 
 test("kitchen without an assigned branch remains blocked", () => {
@@ -126,7 +130,7 @@ test("module menu separates branch operations from central inventory", () => {
     isSupabaseAdminMode: true
   });
   const centralPolicy = getAdminModuleAccessPolicy({
-    adminProfile: { role: "staff" },
+    adminProfile: { role: "staff", metadata: { account_scope: "central_inventory" } },
     isSupabaseAdminMode: true
   });
 
@@ -136,6 +140,22 @@ test("module menu separates branch operations from central inventory", () => {
   assert.equal(centralPolicy.mode, "central-inventory");
   assert.equal(centralPolicy.allowedItemIds.has("inventory-warehouses"), true);
   assert.equal(centralPolicy.allowedItemIds.has("shifts-main"), false);
+});
+
+test("unassigned staff without central inventory scope stays blocked", () => {
+  const inventoryPolicy = getInventoryAccessPolicy({
+    adminProfile: { role: "staff" },
+    isSupabaseAdminMode: true,
+    branches
+  });
+  const modulePolicy = getAdminModuleAccessPolicy({
+    adminProfile: { role: "staff" },
+    isSupabaseAdminMode: true
+  });
+
+  assert.equal(inventoryPolicy.allowed, false);
+  assert.equal(inventoryPolicy.canManageInventory, false);
+  assert.equal(modulePolicy.mode, "blocked");
 });
 
 test("unknown inventory child paths are marked for safe redirect", () => {
