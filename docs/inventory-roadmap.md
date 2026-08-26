@@ -1,7 +1,7 @@
 # Lộ trình hoàn thiện Kho Gánh Hàng Rong
 
 Ngày lập: 2026-08-24
-Cập nhật gần nhất: 2026-08-26 — rút gọn chi tiết đối chiếu theo món
+Cập nhật gần nhất: 2026-08-26 — mặc định bộ lọc ngày Kho là hôm nay
 Trạng thái tổng thể: schema Kho đã triển khai production, ghi Kho chỉ mở có kiểm soát trên local Admin
 Phạm vi: `inventory-app`, Supabase `inventory_*`, tích hợp Admin/POS/đơn hàng GHR
 Nguyên tắc: audit trước, triển khai theo phase, không đưa vào vận hành thật khi sổ kho chưa đối chiếu được.
@@ -42,7 +42,7 @@ Danh mục + đơn vị + cấu trúc kho
 
 ## Tiến độ hiện tại
 
-- **Toàn bộ lộ trình trước pilot: khoảng 66%.** Đây là tỷ lệ theo khối lượng kỹ thuật đã có bằng chứng, không tính bản nháp chưa chạy như phần đã hoàn thành.
+- **Toàn bộ lộ trình trước pilot: khoảng 71%.** Đây là tỷ lệ theo khối lượng kỹ thuật đã có bằng chứng, không tính bản nháp chưa chạy như phần đã hoàn thành.
 - **Phase 0 — audit và hợp đồng nghiệp vụ: 100%.**
 - **Phase 1 — schema và engine chứng từ: khoảng 98%.** Schema, smoke/concurrency test, postcheck và migration kho đã qua trên bản sao schema-only của production trong Supabase local/PostgreSQL 17. Advisor không có cảnh báo `inventory_*`; lint còn lỗi cũ ở CRM/loyalty/profile ngoài phạm vi Kho. Còn thiết lập baseline migration chính thức cho khả năng dựng toàn hệ từ database trắng; chưa được phép sửa lịch sử thanh toán cũ chỉ để phục vụ Kho.
 - **Phase 2 — router/UI Admin kho: 100%.** Đã có menu Admin hai tầng theo nhóm nghiệp vụ, module lazy-load riêng, chính sách quyền giao diện được kiểm thử, khung trạng thái tải/lỗi/dữ liệu cũ/thử lại và giao diện local không ghi dữ liệu. Admin tổng được chọn toàn hệ thống; Admin/nhân viên có chi nhánh bị khóa đúng một chi nhánh; nhân viên thiếu chi nhánh và tài khoản bếp bị chặn. Nhóm Sản xuất đã mở Công thức BOM và Lệnh sản xuất. URL Kho không hợp lệ được đưa về Tổng quan. RLS và quyền dữ liệu thật vẫn thuộc Phase 3.
@@ -51,7 +51,7 @@ Danh mục + đơn vị + cấu trúc kho
 - **Phase 4 — nhập/xuất/chuyển/cấp hàng: khoảng 82%.** UI và chuỗi xử lý nhập, xuất, chuyển, yêu cầu cấp hàng, phiếu hủy đã nối production. Phiếu nhập mua đã có nhà cung cấp, đơn giá, mã lô, ngày sản xuất và HSD; hoàn tất phiếu ghi movement, balance, giá vốn và lô trong cùng transaction. Còn ảnh/in phiếu, tồn đầu kỳ chính thức và pilot chứng từ thật.
 - **Phase 5 — kiểm kê/sổ kho: khoảng 78%.** UI kiểm kê đã nối engine production; Phiếu điều chỉnh tồn thủ công đã có nháp → gửi duyệt → Admin/quản lý đúng kho duyệt & ghi sổ, bắt buộc lý do và chặn giảm thành tồn âm. Sổ kho chỉ đọc đã có lọc ngày/kho/NVL, phân trang và đối chiếu tồn đầu–nhập–xuất–tồn cuối; còn phạm vi kiểm theo nhóm hàng, cảnh báo giao dịch trong lúc đếm, Excel và pilot chứng từ thật.
 - **Phase 6: khoảng 72%.** Phase 6A và luồng chính 6B đã hoàn thành. Phase 6C đã có Định lượng món bán, ánh xạ kênh, kho trừ mặc định và hàng đợi tự động `đơn hoàn tất → xuất kho` có idempotency; đơn hủy sau khi đã trừ tạo chứng từ hoàn ngược. Mọi lỗi thiếu định lượng/ánh xạ/kho/tồn đều treo ở màn Đối chiếu đơn ↔ kho, không ghi một phần. Pilot mới chỉ có một định lượng đang áp dụng; các món còn thiếu tiếp tục bị chặn an toàn và chưa trừ tồn.
-- **Phase 7 — cảnh báo/báo cáo: khoảng 45%.** Màn Tồn kho đã có số lượng, giá vốn bình quân, giá trị và trạng thái sắp hết/hết hàng. Màn Lô & hạn sử dụng đọc lô còn tồn, phân loại sắp/đã hết hạn theo cấu hình từng NVL. Cảnh báo kho gom HSD, tồn thấp, tồn âm và chứng từ chờ, có bộ lọc và liên kết xử lý; toàn bộ nguồn đọc được giới hạn tường minh theo kho kết hợp RLS. Còn đối chiếu đơn, báo cáo thời gian và RPC tổng hợp quy mô lớn.
+- **Phase 7 — cảnh báo/báo cáo: khoảng 82%.** Tồn kho, Lô & hạn sử dụng, Cảnh báo kho, Đối chiếu đơn ↔ kho và báo cáo Nhập – Xuất – Tồn theo thời gian đã hoạt động theo quyền kho. RPC tổng hợp security invoker đã triển khai riêng lên Supabase production; smoke Admin và tài khoản chi nhánh đạt, quyền thử được rollback sạch, ESLint/UTF-8/build và route smoke đều qua. Còn thiếu cảnh báo kho bộ phận và kiểm thử tải/pilot trên khối lượng dữ liệu lớn.
 - **Phase 8: 0%.** Chưa pilot vận hành.
 - **Mức sẵn sàng production: khoảng 72%.** Schema, RLS, quyền Admin, bốn kho nền, chuỗi chứng từ Phase 4, kiểm kê và điều chỉnh tồn Phase 5 đã có; local Admin ghi có kiểm soát qua Auth/RLS. Chưa pilot phiếu điều chỉnh/phiếu nhập mua thật, chưa chốt tồn đầu kỳ chính thức và chưa mở bản deploy production cho nhân viên.
 
@@ -355,14 +355,14 @@ Màn **Công thức (BOM)** hiện tại chỉ cho chọn bán thành phẩm đ�
 
 ### Công việc
 
-- [ ] Tồn thấp/dưới điểm đặt hàng.
-- [ ] Tồn âm.
-- [ ] Sắp hết hạn/đã hết hạn theo lô.
+- [x] Tồn thấp/dưới điểm đặt hàng.
+- [x] Tồn âm.
+- [x] Sắp hết hạn/đã hết hạn theo lô.
 - [ ] Thiếu nguyên liệu tại kho bộ phận.
-- [ ] Đơn đã trừ/chưa trừ kho và tỷ lệ bao phủ.
-- [ ] Nhập–xuất–tồn, giá trị tồn và giá vốn theo kho/chi nhánh/thời gian. Đã có báo cáo tồn hiện tại và giá trị theo kho; còn báo cáo tổng hợp theo thời gian/RPC.
-- [ ] Mỗi cảnh báo phải có nguyên nhân và nút đi thẳng tới cách xử lý.
-- [ ] Dùng RPC tổng hợp, không tải toàn bộ movement lên trình duyệt để tính.
+- [x] Đơn đã trừ/chưa trừ kho và tỷ lệ bao phủ.
+- [x] Nhập–xuất–tồn, giá trị tồn và giá vốn theo kho/chi nhánh/thời gian. RPC đã triển khai production và đối chiếu dữ liệu thật theo quyền Admin/chi nhánh; kiểm thử tải lớn tiếp tục thực hiện ở pilot.
+- [x] Mỗi cảnh báo phải có nguyên nhân và nút đi thẳng tới cách xử lý.
+- [x] Dùng RPC tổng hợp, không tải toàn bộ movement lên trình duyệt để tính. RPC security invoker giới hạn tối đa 366 ngày và 500 dòng/trang; chỉ trả dữ liệu thuộc các kho tài khoản được phép xem.
 
 ### Hợp đồng nguồn cảnh báo Tổng quan
 
@@ -567,3 +567,5 @@ Sau mỗi đợt làm việc:
 | 2026-08-25 | 6B | Ghi lô/HSD đầu ra khi hoàn thành lệnh | Mã bán thành phẩm bật theo dõi HSD sẽ tự sinh mã lô theo mã lệnh, lấy ngày hoàn thành làm ngày sản xuất và bắt buộc xác nhận HSD; cùng transaction sẽ ghi vào chứng từ đầu ra và `inventory_stock_lots`. Migration `20260825135937` đã lên production; smoke hoàn thành 1 kg Xoài Sơ Chế tạo đúng lô 1.000 Gram rồi rollback, không còn lệnh/dữ liệu thử. RPC public là invoker, `anon` bị chặn; 15/15 test, ESLint, UTF-8 và build đạt. |
 | 2026-08-26 | 7 | Tách Tồn kho và Lô & hạn sử dụng | Đổi nhãn “Báo cáo kho” thành “Tồn kho” nhưng giữ route cũ để tương thích; thêm route/menu Lô & hạn sử dụng đọc `inventory_stock_lots`, lọc tường minh theo danh sách kho được cấp và tiếp tục chịu RLS. Trạng thái hết hạn lấy ngày lô thật, trạng thái sắp hết hạn dùng ngưỡng cảnh báo của từng NVL; Tổng quan dẫn thẳng cảnh báo HSD về đúng lô. Không ghi schema, chứng từ hoặc số tồn. |
 | 2026-08-26 | 7 | Mở Cảnh báo kho độc lập | Thêm route/menu Cảnh báo kho trong nhóm Báo cáo & cảnh báo, không sửa Tổng quan kho. Màn hình gom cảnh báo HSD, tồn thấp/hết, tồn âm và chứng từ đang chờ; có tab, tìm kiếm, lọc kho/mức độ và nút mở đúng Tồn kho, Lô & HSD hoặc chứng từ. Nguồn đọc lọc tường minh theo kho và tiếp tục chịu RLS; không đổi schema hoặc dữ liệu production. |
+| 2026-08-26 | 7 | Triển khai báo cáo Nhập – Xuất – Tồn | Thêm route `/admin/inventory/stock-flow`, bộ lọc 1/7/30 ngày, kho, danh mục và tìm kiếm; hiển thị tồn đầu, nhập, xuất, tồn cuối cùng giá trị theo kỳ. Chỉ triển khai riêng RPC security invoker lên production, không repair hoặc đẩy hàng loạt lịch sử migration đang lệch. Postcheck quyền hàm đạt; smoke Admin trả đúng dữ liệu toàn hệ thống, smoke chi nhánh chỉ trả đúng Kho CN 30/4 và quyền thử đã rollback về 0. ESLint, UTF-8, build và route smoke đều đạt; không sửa tồn, chứng từ hoặc movement. |
+| 2026-08-26 | 7 | Giảm tải mặc định các màn có bộ lọc ngày | Phiếu nhập/xuất/chuyển/hủy/yêu cầu, Sổ kho, Nhập – Xuất – Tồn, Giá vốn & đối chiếu và Đối chiếu đơn ↔ kho đều mở với Từ ngày/Đến ngày là hôm nay. Người dùng vẫn có thể chọn 7 ngày, 30 ngày hoặc khoảng tùy chỉnh; Supabase chỉ tải khoảng ngày đã chọn. 4/4 test bộ lọc, ESLint, UTF-8 và build đạt. |

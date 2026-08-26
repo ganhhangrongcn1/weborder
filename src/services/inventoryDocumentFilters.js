@@ -13,7 +13,7 @@ export function formatInventoryDateInput(value = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-export function getInventoryDocumentDateRange(preset = "30d", referenceDate = new Date()) {
+export function getInventoryDocumentDateRange(preset = "today", referenceDate = new Date()) {
   const end = toDate(referenceDate);
   const start = new Date(end);
   const days = preset === "today" ? 1 : preset === "7d" ? 7 : 30;
@@ -26,8 +26,8 @@ export function getInventoryDocumentDateRange(preset = "30d", referenceDate = ne
 
 export function createDefaultInventoryDocumentFilters(referenceDate = new Date()) {
   return {
-    datePreset: "30d",
-    ...getInventoryDocumentDateRange("30d", referenceDate),
+    datePreset: "today",
+    ...getInventoryDocumentDateRange("today", referenceDate),
     status: "all",
     page: 1,
     pageSize: 50

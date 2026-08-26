@@ -6,6 +6,7 @@ import useInventoryWarehouses from "../../../hooks/useInventoryWarehouses.js";
 import useInventoryWarehouseDrafts from "../../../hooks/useInventoryWarehouseDrafts.js";
 import useInventoryDocuments from "../../../hooks/useInventoryDocuments.js";
 import useInventoryLedger from "../../../hooks/useInventoryLedger.js";
+import useInventoryStockFlowReport from "../../../hooks/useInventoryStockFlowReport.js";
 import useInventoryStockReport from "../../../hooks/useInventoryStockReport.js";
 import useInventoryLotReport from "../../../hooks/useInventoryLotReport.js";
 import useInventoryAlerts from "../../../hooks/useInventoryAlerts.js";
@@ -22,6 +23,7 @@ import InventoryCatalogManager from "./InventoryCatalogManager.jsx";
 import InventoryMasterDataManager from "./InventoryMasterDataManager.jsx";
 import InventoryDocumentManager from "./InventoryDocumentManager.jsx";
 import InventoryLedger from "./InventoryLedger.jsx";
+import InventoryStockFlowReport from "./InventoryStockFlowReport.jsx";
 import InventoryStockReport from "./InventoryStockReport.jsx";
 import InventoryLotReport from "./InventoryLotReport.jsx";
 import InventoryAlertCenter from "./InventoryAlertCenter.jsx";
@@ -141,6 +143,7 @@ export default function InventoryWorkspace({
   const isWarehousePage = currentRoute.page === "warehouses";
   const isDashboardPage = currentRoute.page === "dashboard";
   const isLedgerPage = currentRoute.page === "ledger";
+  const isStockFlowPage = currentRoute.page === "stock-flow";
   const isReportPage = currentRoute.page === "reports";
   const isLotPage = currentRoute.page === "lots";
   const isAlertPage = currentRoute.page === "alerts";
@@ -158,7 +161,7 @@ export default function InventoryWorkspace({
     : "";
   const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage || isSalesRecipePage;
   const warehouseState = useInventoryWarehouses({
-    enabled: isCostAnalysisPage || ((isWarehousePage || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((isWarehousePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     branchUuid: accessPolicy.scope === "branch" ? accessPolicy.branchUuid : ""
   });
   const masterDataState = useInventoryMasterData({
@@ -166,7 +169,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -174,7 +177,7 @@ export default function InventoryWorkspace({
     domain: "item-categories"
   });
   const documentItemsState = useInventoryMasterData({
-    enabled: isCostAnalysisPage || ((Boolean(documentDomain) || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((Boolean(documentDomain) || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "items"
   });
   const documentSuppliersState = useInventoryMasterData({
@@ -187,6 +190,12 @@ export default function InventoryWorkspace({
   });
   const ledgerState = useInventoryLedger({
     enabled: isLedgerPage && accessPolicy.allowed
+  });
+  const stockFlowState = useInventoryStockFlowReport({
+    enabled: isStockFlowPage && accessPolicy.allowed,
+    warehouseId: accessPolicy.scope === "branch"
+      ? getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy)[0]?.id || ""
+      : ""
   });
   const stockReportState = useInventoryStockReport({
     enabled: isReportPage && accessPolicy.allowed
@@ -298,6 +307,8 @@ export default function InventoryWorkspace({
     ? warehouseState
     : isLedgerPage
       ? ledgerState
+    : isStockFlowPage
+      ? stockFlowState
     : isReportPage
       ? stockReportState
     : isLotPage
@@ -443,6 +454,19 @@ export default function InventoryWorkspace({
                     summary={ledgerState.summary}
                     summaryLimited={ledgerState.summaryLimited}
                     onFiltersChange={ledgerState.updateFilters}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
+                  />
+              : isStockFlowPage
+                ? <InventoryStockFlowReport
+                    rows={stockFlowState.rows}
+                    summary={stockFlowState.summary}
+                    warehouses={scopedWarehouses}
+                    items={documentItemsState.rows}
+                    filters={stockFlowState.filters}
+                    totalCount={stockFlowState.totalCount}
+                    pageCount={stockFlowState.pageCount}
+                    loading={stockFlowState.status === "loading"}
+                    onFiltersChange={stockFlowState.updateFilters}
                     warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : isReportPage

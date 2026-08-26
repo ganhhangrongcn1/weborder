@@ -10,10 +10,10 @@ import {
 
 const referenceDate = new Date("2026-08-25T12:00:00+07:00");
 
-test("mặc định tải 30 ngày gần nhất và 50 phiếu mỗi trang", () => {
+test("mặc định chỉ tải dữ liệu hôm nay và 50 phiếu mỗi trang", () => {
   assert.deepEqual(createDefaultInventoryDocumentFilters(referenceDate), {
-    datePreset: "30d",
-    fromDate: "2026-07-27",
+    datePreset: "today",
+    fromDate: "2026-08-25",
     toDate: "2026-08-25",
     status: "all",
     page: 1,

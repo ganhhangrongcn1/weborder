@@ -127,6 +127,15 @@ export const INVENTORY_ROUTE_ITEMS = [
     description: "Tra cứu biến động tăng, giảm và số dư theo thời gian."
   },
   {
+    id: "inventory-stock-flow",
+    path: "/admin/inventory/stock-flow",
+    page: "stock-flow",
+    label: "Nhập – Xuất – Tồn",
+    group: "Báo cáo & cảnh báo",
+    icon: "menu",
+    description: "Tổng hợp tồn đầu, nhập, xuất, tồn cuối và giá trị theo khoảng thời gian."
+  },
+  {
     id: "inventory-reports",
     path: "/admin/inventory/reports",
     page: "reports",
@@ -223,7 +232,7 @@ const INVENTORY_SECTION_DEFINITIONS = [
     id: "inventory-reporting-section",
     title: "Báo cáo & cảnh báo",
     icon: "warning",
-    pages: ["reports", "lots", "alerts", "cost-analysis", "ledger"]
+    pages: ["reports", "lots", "alerts", "cost-analysis", "stock-flow", "ledger"]
   },
   {
     id: "inventory-production-section",

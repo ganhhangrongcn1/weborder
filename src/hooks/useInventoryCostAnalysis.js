@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { readInventoryCostAnalysis } from "../services/inventoryCostAnalysisService.js";
+import { formatInventoryDateInput } from "../services/inventoryDocumentFilters.js";
 
 function getInitialFilters() {
-  const now = new Date();
-  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  const dateTo = localDate.toISOString().slice(0, 10);
-  const dateFrom = `${dateTo.slice(0, 8)}01`;
-  return { dateFrom, dateTo };
+  const today = formatInventoryDateInput();
+  return { dateFrom: today, dateTo: today };
 }
 
 const INITIAL_STATE = {
