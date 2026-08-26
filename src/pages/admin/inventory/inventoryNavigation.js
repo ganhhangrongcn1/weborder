@@ -154,6 +154,15 @@ export const INVENTORY_ROUTE_ITEMS = [
     description: "Tập trung các cảnh báo cần xử lý và mở thẳng tới đúng dữ liệu liên quan."
   },
   {
+    id: "inventory-cost-analysis",
+    path: "/admin/inventory/cost-analysis",
+    page: "cost-analysis",
+    label: "Giá vốn & đối chiếu",
+    group: "Báo cáo & cảnh báo",
+    icon: "wallet",
+    description: "Theo dõi giá vốn món bán, sai lệch sản xuất và đường truy vết chứng từ."
+  },
+  {
     id: "inventory-reconciliation",
     path: "/admin/inventory/reconciliation",
     page: "reconciliation",
@@ -214,7 +223,7 @@ const INVENTORY_SECTION_DEFINITIONS = [
     id: "inventory-reporting-section",
     title: "Báo cáo & cảnh báo",
     icon: "warning",
-    pages: ["reports", "lots", "alerts", "ledger"]
+    pages: ["reports", "lots", "alerts", "cost-analysis", "ledger"]
   },
   {
     id: "inventory-production-section",

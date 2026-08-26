@@ -23,6 +23,22 @@ import {
   readInventoryPendingTransferCount
 } from "../../services/inventoryDocumentService.js";
 import { readInventoryActionableCount } from "../../services/inventoryCountService.js";
+import { readInventoryCostAnalysisPermission } from "../../services/inventoryCostAnalysisService.js";
+
+const INVENTORY_COST_NAV_ID = "inventory-cost-analysis";
+
+function filterInventoryCostNavigation(groups = [], canViewCostAnalysis = false) {
+  if (canViewCostAnalysis) return groups;
+  const keepItem = (item) => item?.id !== INVENTORY_COST_NAV_ID;
+  return groups.map((group) => ({
+    ...group,
+    standaloneItems: (group.standaloneItems || []).filter(keepItem),
+    subgroups: (group.subgroups || [])
+      .map((subgroup) => ({ ...subgroup, items: (subgroup.items || []).filter(keepItem) }))
+      .filter((subgroup) => subgroup.items.length),
+    items: (group.items || []).filter(keepItem)
+  }));
+}
 
 export default function AdminApp({
   products,
@@ -61,6 +77,7 @@ export default function AdminApp({
   const [inventoryPendingDisposalCount, setInventoryPendingDisposalCount] = useState(0);
   const [inventoryPendingAdjustmentCount, setInventoryPendingAdjustmentCount] = useState(0);
   const [inventoryActionableCount, setInventoryActionableCount] = useState(0);
+  const [canViewInventoryCostAnalysis, setCanViewInventoryCostAnalysis] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const {
     adminSession = null,
@@ -183,11 +200,15 @@ export default function AdminApp({
     isSupabaseAdminMode,
     branches
   }), [adminProfile, isSupabaseAdminMode, branches]);
+  const visibleNavGroups = useMemo(
+    () => filterInventoryCostNavigation(navGroups, canViewInventoryCostAnalysis),
+    [canViewInventoryCostAnalysis]
+  );
   const isInventorySection = section === "inventory";
   const headerSelectedBranchFilter = isInventorySection && inventoryAccessPolicy.branchSelectorLocked
     ? inventoryAccessPolicy.selectedBranchFilter
     : selectedBranchFilter;
-  const flatAdminNav = navGroups.flatMap((group) => group.items);
+  const flatAdminNav = visibleNavGroups.flatMap((group) => group.items);
   const filteredRecentOrders = filterRecentOrders(ordersSnapshot, dashboardSearch);
   const runtimeInfo = getRepositoryRuntimeInfo();
   const supabaseReadOnly = runtimeInfo.effectiveSource === "supabase"
@@ -251,6 +272,18 @@ export default function AdminApp({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    readInventoryCostAnalysisPermission({
+      allowLocalAdmin: !isSupabaseAdminMode && inventoryAccessPolicy.scope === "global"
+    }).then((result) => {
+      if (!cancelled) setCanViewInventoryCostAnalysis(result.canView === true);
+    }).catch(() => {
+      if (!cancelled) setCanViewInventoryCostAnalysis(false);
+    });
+    return () => { cancelled = true; };
+  }, [adminProfile?.auth_user_id, inventoryAccessPolicy.scope, isSupabaseAdminMode]);
+
+  useEffect(() => {
     if (!inventoryAccessPolicy.allowed) {
       setInventoryPendingRequisitionCount(0);
       setInventoryPendingTransferCount(0);
@@ -298,7 +331,7 @@ export default function AdminApp({
   return (
     <div className="admin-app admin-shell admin-layout">
       <AdminSidebar
-        navGroups={navGroups}
+        navGroups={visibleNavGroups}
         navIconMap={navIconMap}
         activeAdminNav={activeAdminNav}
         onActivateNav={activateNav}

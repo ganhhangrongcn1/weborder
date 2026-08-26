@@ -13,6 +13,7 @@ import useInventoryCounts from "../../../hooks/useInventoryCounts.js";
 import useInventoryBoms from "../../../hooks/useInventoryBoms.js";
 import useInventoryProductionOrders from "../../../hooks/useInventoryProductionOrders.js";
 import useInventorySalesConfiguration from "../../../hooks/useInventorySalesConfiguration.js";
+import useInventoryCostAnalysis from "../../../hooks/useInventoryCostAnalysis.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 import { getInventoryRoute } from "./inventoryNavigation.js";
 import { getInventoryAccessPolicy, getInventoryScopedWarehouses } from "./inventoryAccessPolicy.js";
@@ -30,6 +31,7 @@ import InventoryBomManager from "./InventoryBomManager.jsx";
 import InventoryProductionOrderManager from "./InventoryProductionOrderManager.jsx";
 import InventorySalesConfiguration from "./InventorySalesConfiguration.jsx";
 import InventorySalesReconciliation from "./InventorySalesReconciliation.jsx";
+import InventoryCostAnalysis from "./InventoryCostAnalysis.jsx";
 
 function InventoryAccessGate({ accessPolicy, children }) {
   if (accessPolicy.allowed) return children;
@@ -142,6 +144,7 @@ export default function InventoryWorkspace({
   const isReportPage = currentRoute.page === "reports";
   const isLotPage = currentRoute.page === "lots";
   const isAlertPage = currentRoute.page === "alerts";
+  const isCostAnalysisPage = currentRoute.page === "cost-analysis";
   const isCountPage = currentRoute.page === "counts";
   const isBomPage = currentRoute.page === "boms";
   const isProductionPage = currentRoute.page === "production-orders";
@@ -155,7 +158,7 @@ export default function InventoryWorkspace({
     : "";
   const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage || isSalesRecipePage;
   const warehouseState = useInventoryWarehouses({
-    enabled: ((isWarehousePage || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((isWarehousePage || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     branchUuid: accessPolicy.scope === "branch" ? accessPolicy.branchUuid : ""
   });
   const masterDataState = useInventoryMasterData({
@@ -163,7 +166,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: ((currentRoute.page === "items" || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -171,7 +174,7 @@ export default function InventoryWorkspace({
     domain: "item-categories"
   });
   const documentItemsState = useInventoryMasterData({
-    enabled: ((Boolean(documentDomain) || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((Boolean(documentDomain) || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "items"
   });
   const documentSuppliersState = useInventoryMasterData({
@@ -195,6 +198,11 @@ export default function InventoryWorkspace({
   const alertState = useInventoryAlerts({
     enabled: isAlertPage && accessPolicy.allowed,
     warehouseIds: getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy).map((warehouse) => warehouse.id)
+  });
+  const costAnalysisState = useInventoryCostAnalysis({
+    enabled: isCostAnalysisPage,
+    warehouseIds: getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy).map((warehouse) => warehouse.id),
+    allowLocalAdmin: !isSupabaseAdminMode && accessPolicy.scope === "global"
   });
   const countState = useInventoryCounts({
     enabled: isCountPage && accessPolicy.allowed
@@ -254,7 +262,21 @@ export default function InventoryWorkspace({
     ...scopedWarehouses,
     ...(warehouseSelectionLocked ? [] : warehouseDraftState.drafts)
   ];
-  const effectiveAccessPolicy = !accessPolicy.allowed
+  const effectiveAccessPolicy = isCostAnalysisPage
+    ? costAnalysisState.permissions?.canView
+      ? {
+          ...accessPolicy,
+          allowed: true,
+          scope: accessPolicy.scope === "blocked" ? "warehouse" : accessPolicy.scope,
+          scopeLabel: accessPolicy.scope === "blocked" ? "Kho Tổng được cấp" : accessPolicy.scopeLabel,
+          message: ""
+        }
+      : {
+          ...accessPolicy,
+          allowed: false,
+          message: costAnalysisState.message || "Chỉ Admin toàn hệ thống hoặc Quản lý Kho Tổng được xem giá vốn và đối chiếu."
+        }
+    : !accessPolicy.allowed
     && (isBomPage || isProductionPage || isSalesRecipePage)
     && (isProductionPage
       ? productionState.status === "ready" && productionState.permissions?.canManage
@@ -282,6 +304,8 @@ export default function InventoryWorkspace({
       ? lotReportState
     : isAlertPage
       ? alertState
+    : isCostAnalysisPage
+      ? costAnalysisState
     : isCountPage
       ? countState
     : isBomPage
@@ -447,6 +471,20 @@ export default function InventoryWorkspace({
                     units={itemUnitsState.rows}
                     limited={alertState.limited}
                     warehouseSelectionLocked={warehouseSelectionLocked}
+                  />
+              : isCostAnalysisPage
+                ? <InventoryCostAnalysis
+                    salesRows={costAnalysisState.salesRows}
+                    productionRows={costAnalysisState.productionRows}
+                    warehouses={scopedWarehouses}
+                    items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
+                    filters={costAnalysisState.filters}
+                    loading={costAnalysisState.status === "loading"}
+                    message={costAnalysisState.message}
+                    hasMore={costAnalysisState.hasMore}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
+                    onFiltersChange={costAnalysisState.updateFilters}
                   />
               : isCountPage
                 ? <InventoryCountManager

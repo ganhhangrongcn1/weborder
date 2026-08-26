@@ -85,7 +85,7 @@ export function adminPathToState(pathname = "/admin") {
   if (inventoryMatch) {
     const allowedPages = new Set([
       "dashboard", "warehouses", "items", "item-categories", "units", "suppliers", "receipts", "issues",
-      "transfers", "disposals", "requisitions", "counts", "adjustments", "ledger", "reports", "lots", "alerts", "reconciliation", "boms", "production-orders", "sales-recipes"
+      "transfers", "disposals", "requisitions", "counts", "adjustments", "ledger", "reports", "lots", "alerts", "cost-analysis", "reconciliation", "boms", "production-orders", "sales-recipes"
     ]);
     const requestedPage = String(inventoryMatch[1] || "").toLowerCase();
     const inventoryPage = allowedPages.has(requestedPage) ? requestedPage : "dashboard";

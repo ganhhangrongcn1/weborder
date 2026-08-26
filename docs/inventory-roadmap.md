@@ -317,9 +317,12 @@ Màn **Công thức (BOM)** hiện tại chỉ cho chọn bán thành phẩm đ�
 
 #### Phase 6D — Giá vốn và đối chiếu
 
-- [ ] Giá vốn bán thành phẩm gồm giá trị nguyên liệu trực tiếp đã dùng; chi phí nhân công/đóng gói bổ sung chỉ thêm khi có nhu cầu thật.
-- [ ] Chốt phương pháp giá vốn bình quân hoặc FIFO cho lô; không trộn hai cách trong cùng một mã hàng.
+- [x] Giá vốn bán thành phẩm gồm giá trị nguyên liệu trực tiếp đã dùng; chi phí nhân công/đóng gói bổ sung chỉ thêm khi có nhu cầu thật.
+- [x] Chốt **bình quân di động** cho giá vốn; lô/HSD theo dõi luồng vật lý, không dùng FIFO để tính giá trị xuất kho.
 - [ ] Truy ngược được từ đơn bán → món → phiên bản BOM → lệnh sản xuất/lô bán thành phẩm → movement nguyên liệu.
+- [x] Mở báo cáo **Giá vốn & đối chiếu**: đơn bán → phiên bản định lượng → movement và sai lệch cost định mức/thực tế của lệnh sản xuất.
+- [x] Khóa báo cáo **Giá vốn & đối chiếu** cho Admin toàn hệ thống và Quản lý Kho Tổng; tài khoản chi nhánh không thấy menu và không tải dữ liệu báo cáo.
+- [ ] Bổ sung phân bổ lô đích danh cho movement xuất nếu sau pilot thật sự cần truy đến đúng một lô; hiện báo cáo chỉ hiển thị lệnh/lô nguồn gần nhất và ghi rõ đây là tham chiếu.
 - [ ] Pilot với 1 bán thành phẩm Kho tổng, 2 bán thành phẩm sơ chế và 1–2 món bán trước khi mở toàn menu.
 
 ### Công việc
@@ -552,6 +555,9 @@ Sau mỗi đợt làm việc:
 | 2026-08-26 | 6C | Lọc ngày đối chiếu đơn ↔ kho | Mặc định chỉ tải đơn trong ngày hiện tại; người dùng chọn Từ ngày/Đến ngày và Supabase lọc trước khi trả dữ liệu. Truy vấn đối soát được tách khỏi BOM, ánh xạ và giá vốn; mỗi lần chỉ nhận tối đa 200 đơn, có cảnh báo thu hẹp ngày nếu còn dữ liệu, không thay đổi engine tự trừ kho. |
 | 2026-08-26 | 6C | Rút gọn chi tiết đối chiếu theo món | Popup mặc định chỉ hiện mỗi món/lựa chọn một dòng; món lỗi đầu tiên tự mở, các món còn lại thu gọn và người dùng bấm để xem nguyên liệu. Thiếu tồn vẫn phân biệt số món cần với tổng cả đơn cần; dữ liệu sự kiện và engine trừ kho không thay đổi. |
 | 2026-08-26 | 6C | Smoke đơn bán và hoàn tồn production | Tạo riêng đơn test `INVSMOKE-20260826-CANCEL-7F2A` cho Bánh Tráng Trộn Đặc Biệt tại Kho CN 30/4. Đơn hoàn tất trừ đúng 1 gói Bánh Tráng Đóng Gói và 55 g Xoài Sơ Chế; xử lý lặp không tạo thêm bút toán; chuyển đơn sang hủy hoàn lại đúng hai mặt hàng và xử lý lặp vẫn idempotent. Sau kiểm tra đã xóa đơn, dòng món, sự kiện, chứng từ và movement test; đối chiếu còn 0 bản ghi test, tồn trở về 13 gói và 11.890 g như trước khi chạy. |
+| 2026-08-26 | 6C | Smoke chặn toàn đơn hỗn hợp production | Tạo riêng đơn `INVSMOKE-20260826-MIXED-8C4D` gồm Bánh Tráng Trộn Đặc Biệt đã có định lượng và Bánh Tráng Cuốn Bơ chưa có định lượng. Engine chặn đúng `configuration_incomplete`, món thiếu báo `missing_recipe`, không tạo chứng từ/movement và không trừ riêng món hợp lệ. Sau kiểm tra đã xóa sạch order, order_items, event và event_lines; tồn giữ nguyên 13 gói Bánh Tráng Đóng Gói và 11.890 g Xoài Sơ Chế. |
+| 2026-08-26 | 6D | Mở Giá vốn & đối chiếu | Chốt giá vốn bình quân di động, thêm màn báo cáo lọc sẵn theo ngày và kho được phân quyền. Báo cáo tách Giá vốn món bán (lấy đúng unit_cost của movement tại lúc trừ) và Sai lệch sản xuất (cost thực tế trừ định mức), có popup đi từ đơn → món → phiên bản định lượng → movement → lệnh/lô nguồn gần nhất. Chưa khẳng định phân bổ FIFO đích danh; phần lô hiển thị rõ là nguồn tham chiếu để tránh hiểu sai. |
+| 2026-08-26 | 6D | Khóa phạm vi xem giá vốn | Chỉ Admin toàn hệ thống hoặc vai trò Kho `owner/admin/central_manager` được thấy menu và tải báo cáo. Tài khoản gắn chi nhánh hoặc `branch_manager` bị chặn trước truy vấn giá vốn; chưa phát triển thêm chức năng Phase 6D. |
 | 2026-08-25 | 6B | Triển khai Lệnh sản xuất Kho Tổng | Mở route/menu Lệnh sản xuất; thêm service-hook-UI và chuỗi Bản nháp → Đang làm → Hoàn thành/Hủy. Hoàn thành nguyên tử tạo chứng từ tiêu hao/đầu ra, 3 movement cho BOM test, cập nhật balance và giá vốn; chỉ Admin/Owner hoặc `central_manager` đúng Kho Tổng được thao tác. |
 | 2026-08-25 | 6B | Smoke production bằng transaction rollback | Dùng BOM-000002 sản xuất thử 1 Gói: trừ đúng 10 đơn vị gốc Muối Ngọt + 10 đơn vị gốc Bột ớt, nhập đúng 1 Gói, tổng cost thử 200, đúng 2 chứng từ/3 movement; rollback toàn bộ và xác nhận còn 0 phiếu test. RPC quyền cao được chuyển vào `private`, public chỉ là wrapper invoker; build, UTF-8, ESLint và 10/10 test đạt. |
 | 2026-08-25 | 6B | Mở Lệnh sơ chế tại chi nhánh | Dùng chung engine Lệnh sản xuất nhưng phân biệt rõ giao diện Sản xuất/Sơ chế. Migration `20260825125709` đã triển khai production; smoke quyền bằng giao dịch tự rollback đạt: `branch_manager` chỉ quản lý đúng kho chi nhánh, bị chặn Kho Tổng và chi nhánh khác, không để lại quyền thử. Admin/Owner vẫn quản lý toàn hệ thống; `central_manager` chỉ sản xuất tại đúng Kho Tổng. |
