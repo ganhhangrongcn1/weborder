@@ -32,12 +32,15 @@ function formatDate(value = "") {
 }
 
 function getActionHref(action = {}) {
-  const route = getInventoryRoute(action.routePage || "reports");
+  const isExpiryAction = action.kind === "expired" || action.kind === "expiring";
+  const route = getInventoryRoute(isExpiryAction ? "lots" : action.routePage || "reports");
   const params = new URLSearchParams();
   if (action.documentNo && action.kind === "pending_document") params.set("q", action.documentNo);
   if (action.warehouseId) params.set("warehouse", action.warehouseId);
   if (action.itemId) params.set("item", action.itemId);
   if (action.stockState && action.stockState !== "all") params.set("stock", action.stockState);
+  if (isExpiryAction) params.set("expiry", action.kind);
+  if (action.lotNumber) params.set("lot", action.lotNumber);
   const query = params.toString();
   return `${route.path}${query ? `?${query}` : ""}`;
 }
@@ -68,7 +71,7 @@ export default function InventoryDashboard({ data = {} }) {
         <KpiCard icon="wallet" label="Giá trị tồn hiện tại" value={formatMoney(kpis.inventoryValue)} note="Theo giá vốn bình quân" href={getInventoryRoute("reports").path} />
         <KpiCard icon="warning" label="Nguyên vật liệu hết" value={formatNumber(kpis.outOfStockCount)} note="Cần xử lý ngay" tone="danger" href={`${getInventoryRoute("reports").path}?stock=out`} />
         <KpiCard icon="bell" label="Cần đặt hàng" value={formatNumber(kpis.reorderCount)} note="Đã chạm điểm đặt hàng" tone="warning" href={`${getInventoryRoute("reports").path}?stock=low`} />
-        <KpiCard icon="clock" label="Lô sắp / đã hết hạn" value={formatNumber(expiryCount)} note={`${formatNumber(kpis.expiredCount)} lô đã hết hạn`} tone={Number(kpis.expiredCount) > 0 ? "danger" : "warning"} href="#inventory-dashboard-actions" />
+        <KpiCard icon="clock" label="Lô sắp / đã hết hạn" value={formatNumber(expiryCount)} note={`${formatNumber(kpis.expiredCount)} lô đã hết hạn`} tone={Number(kpis.expiredCount) > 0 ? "danger" : "warning"} href={`${getInventoryRoute("lots").path}?expiry=alert`} />
         <KpiCard icon="folder" label="Phiếu đang chờ" value={formatNumber(kpis.pendingCount)} note="Duyệt, giao, nhận hoặc đối chiếu" tone="info" href="#inventory-dashboard-actions" />
       </section>
 

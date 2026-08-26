@@ -75,13 +75,15 @@ export default function InventoryDocumentModal({
   units = [],
   suppliers = [],
   requestCreationMode = "warehouse_self",
+  warehouseSelectionLocked = false,
   onClose,
   onSave
 }) {
   const config = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG.receipts;
+  const assignedWarehouseId = warehouseSelectionLocked && warehouses.length === 1 ? warehouses[0].id : "";
   const [form, setForm] = useState({
-    sourceWarehouseId: "",
-    destinationWarehouseId: "",
+    sourceWarehouseId: ["issues", "disposals", "adjustments"].includes(domain) ? assignedWarehouseId : "",
+    destinationWarehouseId: ["receipts", "requisitions"].includes(domain) ? assignedWarehouseId : "",
     supplierId: "",
     occurredAt: toLocalDateTimeValue(),
     issueReason: "",
@@ -159,7 +161,12 @@ export default function InventoryDocumentModal({
     }
   };
 
-  const renderWarehouseField = (field, label, excludedId = "") => (
+  const renderWarehouseField = (field, label, excludedId = "") => warehouseSelectionLocked && assignedWarehouseId ? (
+    <div className="inventory-form-field">
+      <span className="inventory-field-label"><Icon name="store" size={15} />{label}</span>
+      <div className="inventory-warehouse-fixed"><strong>{warehouses[0].name}</strong><small>Cố định theo tài khoản chi nhánh</small></div>
+    </div>
+  ) : (
     <label className="inventory-form-field">
       <span className="inventory-field-label"><Icon name="store" size={15} />{label} <b>*</b></span>
       <span className="inventory-control-shell inventory-control-shell--select">

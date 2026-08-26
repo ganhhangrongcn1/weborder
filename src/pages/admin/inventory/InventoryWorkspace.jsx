@@ -7,17 +7,25 @@ import useInventoryWarehouseDrafts from "../../../hooks/useInventoryWarehouseDra
 import useInventoryDocuments from "../../../hooks/useInventoryDocuments.js";
 import useInventoryLedger from "../../../hooks/useInventoryLedger.js";
 import useInventoryStockReport from "../../../hooks/useInventoryStockReport.js";
+import useInventoryLotReport from "../../../hooks/useInventoryLotReport.js";
+import useInventoryAlerts from "../../../hooks/useInventoryAlerts.js";
 import useInventoryCounts from "../../../hooks/useInventoryCounts.js";
+import useInventoryBoms from "../../../hooks/useInventoryBoms.js";
+import useInventoryProductionOrders from "../../../hooks/useInventoryProductionOrders.js";
 import { getInventoryRoute } from "./inventoryNavigation.js";
-import { getInventoryAccessPolicy } from "./inventoryAccessPolicy.js";
+import { getInventoryAccessPolicy, getInventoryScopedWarehouses } from "./inventoryAccessPolicy.js";
 import InventoryWarehouseManager from "./InventoryWarehouseManager.jsx";
 import InventoryCatalogManager from "./InventoryCatalogManager.jsx";
 import InventoryMasterDataManager from "./InventoryMasterDataManager.jsx";
 import InventoryDocumentManager from "./InventoryDocumentManager.jsx";
 import InventoryLedger from "./InventoryLedger.jsx";
 import InventoryStockReport from "./InventoryStockReport.jsx";
+import InventoryLotReport from "./InventoryLotReport.jsx";
+import InventoryAlertCenter from "./InventoryAlertCenter.jsx";
 import InventoryCountManager from "./InventoryCountManager.jsx";
 import InventoryDashboard from "./InventoryDashboard.jsx";
+import InventoryBomManager from "./InventoryBomManager.jsx";
+import InventoryProductionOrderManager from "./InventoryProductionOrderManager.jsx";
 
 function InventoryAccessGate({ accessPolicy, children }) {
   if (accessPolicy.allowed) return children;
@@ -126,15 +134,20 @@ export default function InventoryWorkspace({
   const isDashboardPage = currentRoute.page === "dashboard";
   const isLedgerPage = currentRoute.page === "ledger";
   const isReportPage = currentRoute.page === "reports";
+  const isLotPage = currentRoute.page === "lots";
+  const isAlertPage = currentRoute.page === "alerts";
   const isCountPage = currentRoute.page === "counts";
+  const isBomPage = currentRoute.page === "boms";
+  const isProductionPage = currentRoute.page === "production-orders";
   const documentDomain = ["receipts", "issues", "transfers", "disposals", "requisitions", "adjustments"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
   const masterDataDomain = ["items", "item-categories", "units", "suppliers"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
+  const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage;
   const warehouseState = useInventoryWarehouses({
-    enabled: (isWarehousePage || isLedgerPage || isReportPage || isCountPage || Boolean(documentDomain)) && accessPolicy.allowed,
+    enabled: ((isWarehousePage || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage,
     branchUuid: accessPolicy.scope === "branch" ? accessPolicy.branchUuid : ""
   });
   const masterDataState = useInventoryMasterData({
@@ -142,7 +155,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: (currentRoute.page === "items" || isReportPage || isCountPage) && accessPolicy.allowed,
+    enabled: ((currentRoute.page === "items" || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage) && accessPolicy.allowed) || isBomPage || isProductionPage,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -150,7 +163,7 @@ export default function InventoryWorkspace({
     domain: "item-categories"
   });
   const documentItemsState = useInventoryMasterData({
-    enabled: (Boolean(documentDomain) || isLedgerPage || isReportPage || isCountPage) && accessPolicy.allowed,
+    enabled: ((Boolean(documentDomain) || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage) && accessPolicy.allowed) || isBomPage || isProductionPage,
     domain: "items"
   });
   const documentSuppliersState = useInventoryMasterData({
@@ -167,11 +180,28 @@ export default function InventoryWorkspace({
   const stockReportState = useInventoryStockReport({
     enabled: isReportPage && accessPolicy.allowed
   });
+  const lotReportState = useInventoryLotReport({
+    enabled: isLotPage && accessPolicy.allowed,
+    warehouseIds: getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy).map((warehouse) => warehouse.id)
+  });
+  const alertState = useInventoryAlerts({
+    enabled: isAlertPage && accessPolicy.allowed,
+    warehouseIds: getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy).map((warehouse) => warehouse.id)
+  });
   const countState = useInventoryCounts({
     enabled: isCountPage && accessPolicy.allowed
   });
   const dashboardState = useInventoryDashboard({
     enabled: isDashboardPage && accessPolicy.allowed
+  });
+  const bomState = useInventoryBoms({
+    enabled: (isBomPage || isProductionPage) && canLoadBomScope,
+    items: documentItemsState.rows,
+    units: itemUnitsState.rows,
+    warehouses: warehouseState.warehouses
+  });
+  const productionState = useInventoryProductionOrders({
+    enabled: isProductionPage && canLoadBomScope
   });
   const warehouseDraftState = useInventoryWarehouseDrafts();
   useEffect(() => {
@@ -183,7 +213,24 @@ export default function InventoryWorkspace({
     warehouseState.status,
     warehouseState.warehouses
   ]);
-  const visibleWarehouses = [...warehouseState.warehouses, ...warehouseDraftState.drafts];
+  const scopedWarehouses = getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy);
+  const warehouseSelectionLocked = accessPolicy.scope === "branch";
+  const visibleWarehouses = [
+    ...scopedWarehouses,
+    ...(warehouseSelectionLocked ? [] : warehouseDraftState.drafts)
+  ];
+  const effectiveAccessPolicy = !accessPolicy.allowed
+    && (isBomPage || isProductionPage)
+    && (isProductionPage ? productionState.status === "ready" && productionState.permissions?.canManage : bomState.status === "ready" && bomState.permissions?.canManage)
+    ? {
+        ...accessPolicy,
+        allowed: true,
+        role: "central_manager",
+        scope: "warehouse",
+        scopeLabel: warehouseState.warehouses.map((warehouse) => warehouse.name).filter(Boolean).join(", ") || "Kho Tổng được cấp",
+        message: ""
+      }
+    : accessPolicy;
   const activeDataState = isDashboardPage
     ? dashboardState
     : isWarehousePage
@@ -192,8 +239,16 @@ export default function InventoryWorkspace({
       ? ledgerState
     : isReportPage
       ? stockReportState
+    : isLotPage
+      ? lotReportState
+    : isAlertPage
+      ? alertState
     : isCountPage
       ? countState
+    : isBomPage
+      ? bomState
+    : isProductionPage
+      ? productionState
     : documentDomain
       ? documentState
     : masterDataDomain
@@ -215,6 +270,19 @@ export default function InventoryWorkspace({
     && documentItemsState.status === "ready"
     && (documentDomain !== "receipts" || documentSuppliersState.status === "ready")
     && documentState.writeEnabled;
+  const canWriteBoms = (accessPolicy.scope === "global" || Boolean(bomState.permissions?.canManage))
+    && bomState.status === "ready"
+    && warehouseState.status === "ready"
+    && documentItemsState.status === "ready"
+    && itemUnitsState.status === "ready"
+    && bomState.writeEnabled;
+  const canWriteProduction = (accessPolicy.scope === "global" || Boolean(productionState.permissions?.canManage))
+    && productionState.status === "ready"
+    && bomState.status === "ready"
+    && warehouseState.status === "ready"
+    && documentItemsState.status === "ready"
+    && itemUnitsState.status === "ready"
+    && productionState.writeEnabled;
   const publishWarehouseDrafts = async () => {
     const result = await warehouseState.publishDrafts(warehouseDraftState.drafts);
     warehouseDraftState.removeDrafts(result.publishedDraftIds);
@@ -222,7 +290,7 @@ export default function InventoryWorkspace({
   };
 
   return (
-    <InventoryAccessGate accessPolicy={accessPolicy}>
+    <InventoryAccessGate accessPolicy={effectiveAccessPolicy}>
       <section className="inventory-workspace">
         <header className="inventory-page-head">
           <div>
@@ -232,7 +300,7 @@ export default function InventoryWorkspace({
           </div>
           <div className="inventory-scope-badge">
             <Icon name="eye" size={16} />
-            <span>Phạm vi: <strong>{accessPolicy.scopeLabel}</strong></span>
+            <span>Phạm vi: <strong>{effectiveAccessPolicy.scopeLabel}</strong></span>
           </div>
         </header>
 
@@ -262,7 +330,7 @@ export default function InventoryWorkspace({
                 ? <InventoryDocumentManager
                     domain={documentDomain}
                     rows={documentState.rows}
-                    warehouses={warehouseState.warehouses}
+                    warehouses={scopedWarehouses}
                     items={documentItemsState.rows}
                     units={itemUnitsState.rows}
                     suppliers={documentSuppliersState.rows}
@@ -288,31 +356,53 @@ export default function InventoryWorkspace({
                     onCreateRequisitionTransfer={documentState.createRequisitionTransfer}
                     onFulfillRequisition={documentState.fulfillRequisition}
                     requestCreationMode={accessPolicy.scope === "global" ? "admin_on_behalf" : "warehouse_self"}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : isLedgerPage
                 ? <InventoryLedger
                     rows={ledgerState.rows}
-                    warehouses={warehouseState.warehouses}
+                    warehouses={scopedWarehouses}
                     items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
                     filters={ledgerState.filters}
                     totalCount={ledgerState.totalCount}
                     pageCount={ledgerState.pageCount}
                     summary={ledgerState.summary}
                     summaryLimited={ledgerState.summaryLimited}
                     onFiltersChange={ledgerState.updateFilters}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : isReportPage
                 ? <InventoryStockReport
                     rows={stockReportState.rows}
-                    warehouses={warehouseState.warehouses}
+                    warehouses={scopedWarehouses}
                     items={documentItemsState.rows}
                     units={itemUnitsState.rows}
                     limited={stockReportState.limited}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
+                  />
+              : isLotPage
+                ? <InventoryLotReport
+                    rows={lotReportState.rows}
+                    warehouses={scopedWarehouses}
+                    items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
+                    limited={lotReportState.limited}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
+                  />
+              : isAlertPage
+                ? <InventoryAlertCenter
+                    sources={alertState.sources}
+                    warehouses={scopedWarehouses}
+                    items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
+                    limited={alertState.limited}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : isCountPage
                 ? <InventoryCountManager
                     rows={countState.rows}
-                    warehouses={warehouseState.warehouses}
+                    warehouses={scopedWarehouses}
                     items={documentItemsState.rows}
                     units={itemUnitsState.rows}
                     canWrite={countState.writeEnabled && countState.status === "ready"}
@@ -324,6 +414,37 @@ export default function InventoryWorkspace({
                     onRecordAndSubmit={countState.recordAndSubmit}
                     onApproveAndComplete={countState.approveAndComplete}
                     onCompleteApproved={countState.completeApproved}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
+                  />
+              : isBomPage
+                ? <InventoryBomManager
+                    rows={bomState.rows}
+                    items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
+                    warehouses={scopedWarehouses}
+                    canWrite={canWriteBoms}
+                    scopeLabel={effectiveAccessPolicy.scopeLabel}
+                    mutationStatus={bomState.mutationStatus}
+                    mutationMessage={bomState.mutationMessage}
+                    onSave={bomState.saveDraft}
+                    onActivate={bomState.activate}
+                    onDelete={bomState.deleteDraft}
+                    onArchive={bomState.archive}
+                  />
+              : isProductionPage
+                ? <InventoryProductionOrderManager
+                    rows={productionState.rows}
+                    boms={bomState.rows}
+                    warehouses={scopedWarehouses}
+                    canWrite={canWriteProduction}
+                    mutationStatus={productionState.mutationStatus}
+                    mutationMessage={productionState.mutationMessage}
+                    onSave={productionState.saveDraft}
+                    onStart={productionState.start}
+                    onComplete={productionState.complete}
+                    onCancel={productionState.cancel}
+                    onDeleteDraft={productionState.deleteDraft}
+                    warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : <InventoryPageEmptyState route={currentRoute} />}
       </section>

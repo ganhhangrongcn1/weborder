@@ -130,10 +130,28 @@ export const INVENTORY_ROUTE_ITEMS = [
     id: "inventory-reports",
     path: "/admin/inventory/reports",
     page: "reports",
-    label: "Báo cáo kho",
+    label: "Tồn kho",
     group: "Báo cáo & cảnh báo",
     icon: "wallet",
-    description: "Báo cáo tồn, hàng sắp hết và hàng gần hết hạn."
+    description: "Xem số lượng, giá vốn và giá trị tồn hiện tại theo từng kho."
+  },
+  {
+    id: "inventory-lots",
+    path: "/admin/inventory/lots",
+    page: "lots",
+    label: "Lô & hạn sử dụng",
+    group: "Báo cáo & cảnh báo",
+    icon: "clock",
+    description: "Theo dõi số lượng còn lại và hạn sử dụng của từng lô hàng."
+  },
+  {
+    id: "inventory-alerts",
+    path: "/admin/inventory/alerts",
+    page: "alerts",
+    label: "Cảnh báo kho",
+    group: "Báo cáo & cảnh báo",
+    icon: "warning",
+    description: "Tập trung các cảnh báo cần xử lý và mở thẳng tới đúng dữ liệu liên quan."
   },
   {
     id: "inventory-reconciliation",
@@ -143,6 +161,24 @@ export const INVENTORY_ROUTE_ITEMS = [
     group: "Kiểm kê & đối soát",
     icon: "warning",
     description: "Đối chiếu đơn bán, định lượng và movement đã ghi nhận."
+  },
+  {
+    id: "inventory-boms",
+    path: "/admin/inventory/boms",
+    page: "boms",
+    label: "Công thức chế biến",
+    group: "Sản xuất",
+    icon: "menu",
+    description: "Khai báo định mức sản xuất, đóng gói và sơ chế cho bán thành phẩm."
+  },
+  {
+    id: "inventory-production-orders",
+    path: "/admin/inventory/production-orders",
+    page: "production-orders",
+    label: "Lệnh sản xuất",
+    group: "Sản xuất",
+    icon: "gear",
+    description: "Lập lệnh theo công thức, theo dõi thực hiện và cập nhật tồn kho khi hoàn thành."
   }
 ];
 
@@ -169,29 +205,14 @@ const INVENTORY_SECTION_DEFINITIONS = [
     id: "inventory-reporting-section",
     title: "Báo cáo & cảnh báo",
     icon: "warning",
-    pages: ["ledger", "reports"]
+    pages: ["reports", "lots", "alerts", "ledger"]
   },
   {
     id: "inventory-production-section",
-    title: "Sản xuất",
+    title: "Sản xuất & chế biến",
     icon: "gear",
-    badge: "Phase 6",
-    plannedItems: [
-      {
-        id: "inventory-boms-planned",
-        label: "Công thức (BOM)",
-        icon: "menu",
-        disabled: true,
-        statusLabel: "Sắp ra mắt"
-      },
-      {
-        id: "inventory-production-orders-planned",
-        label: "Lệnh sản xuất",
-        icon: "gear",
-        disabled: true,
-        statusLabel: "Sắp ra mắt"
-      }
-    ]
+    badge: "Phase 6B",
+    pages: ["boms", "production-orders"]
   }
 ];
 
@@ -201,7 +222,10 @@ export const INVENTORY_ROUTE_BY_PAGE = new Map(
 
 export const INVENTORY_NAV_SECTIONS = INVENTORY_SECTION_DEFINITIONS.map((section) => ({
   ...section,
-  items: section.plannedItems || section.pages.map((page) => INVENTORY_ROUTE_BY_PAGE.get(page)).filter(Boolean)
+  items: [
+    ...(section.pages || []).map((page) => INVENTORY_ROUTE_BY_PAGE.get(page)).filter(Boolean),
+    ...(section.plannedItems || [])
+  ]
 }));
 
 export function getInventoryRoute(page = "dashboard") {

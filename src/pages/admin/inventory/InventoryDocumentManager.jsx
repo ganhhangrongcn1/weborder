@@ -61,7 +61,8 @@ export default function InventoryDocumentManager({
   onRejectRequisition,
   onCreateRequisitionTransfer,
   onFulfillRequisition,
-  requestCreationMode = "warehouse_self"
+  requestCreationMode = "warehouse_self",
+  warehouseSelectionLocked = false
 }) {
   const config = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG.receipts;
   const [searchParams] = useSearchParams();
@@ -189,7 +190,7 @@ export default function InventoryDocumentManager({
       <div className="inventory-master-intro">
         <span><Icon name={config.icon} size={21} /></span>
         <div><strong>{config.title}</strong></div>
-        <button type="button" disabled={!canWrite} onClick={() => setShowModal(true)}><Icon name="plus" size={16} />{config.action}</button>
+        <button type="button" disabled={!canWrite || (warehouseSelectionLocked && domain === "transfers")} onClick={() => setShowModal(true)}><Icon name="plus" size={16} />{config.action}</button>
       </div>
       <div className="inventory-document-guide">
         <Icon name="info" size={16} />
@@ -244,7 +245,7 @@ export default function InventoryDocumentManager({
         </div>
       </div>
       {!visibleRows.length ? <div className="inventory-list-empty"><Icon name={config.icon} size={28} /><strong>{config.empty}</strong><span>Tạo phiếu đầu tiên khi dữ liệu kho và nguyên vật liệu đã sẵn sàng.</span></div> : null}
-      {showModal ? <InventoryDocumentModal domain={domain} warehouses={warehouses} items={items} units={units} suppliers={suppliers} requestCreationMode={requestCreationMode} onClose={() => setShowModal(false)} onSave={onSave} /> : null}
+      {showModal ? <InventoryDocumentModal domain={domain} warehouses={warehouses} items={items} units={units} suppliers={suppliers} requestCreationMode={requestCreationMode} warehouseSelectionLocked={warehouseSelectionLocked} onClose={() => setShowModal(false)} onSave={onSave} /> : null}
       {detailDocument ? <InventoryDocumentDetailModal domain={domain} document={detailDocument} warehouses={warehouses} items={items} suppliers={suppliers} onClose={() => setDetailDocument(null)} /> : null}
       {actionModal ? <InventoryDocumentActionModal mode={actionModal.mode} document={actionModal.document} warehouses={warehouses} items={items} onClose={() => setActionModal(null)} onConfirm={confirmModalAction} /> : null}
     </section>

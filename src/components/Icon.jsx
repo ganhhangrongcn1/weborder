@@ -1,4 +1,5 @@
 import {
+  Archive,
   Bag,
   Bell,
   Bicycle,
@@ -41,6 +42,7 @@ import {
 } from "@phosphor-icons/react";
 
 const iconComponents = {
+  archive: Archive,
   home: House,
   store: Storefront,
   menu: List,

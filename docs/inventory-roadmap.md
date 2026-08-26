@@ -1,6 +1,7 @@
 # Lộ trình hoàn thiện Kho Gánh Hàng Rong
 
 Ngày lập: 2026-08-24
+Cập nhật gần nhất: 2026-08-25 — chốt ranh giới BOM sản xuất, công thức sơ chế và định lượng món bán
 Trạng thái tổng thể: schema Kho đã triển khai production, ghi Kho chỉ mở có kiểm soát trên local Admin
 Phạm vi: `inventory-app`, Supabase `inventory_*`, tích hợp Admin/POS/đơn hàng GHR
 Nguyên tắc: audit trước, triển khai theo phase, không đưa vào vận hành thật khi sổ kho chưa đối chiếu được.
@@ -16,7 +17,9 @@ Danh mục + đơn vị + cấu trúc kho
 → nhập / xuất / chuyển / kiểm kê
 → sổ biến động bất biến
 → tồn hiện tại + giá vốn
-→ BOM món ăn
+→ BOM nhiều cấp + lệnh sản xuất/đóng gói/sơ chế
+→ bán thành phẩm được nhập kho và chuyển tới nơi sử dụng
+→ Định lượng món bán chỉ dùng nguyên liệu/bán thành phẩm trực tiếp
 → đơn hoàn tất tự trừ kho
 → cảnh báo và đối chiếu đơn ↔ kho
 ```
@@ -31,7 +34,7 @@ Danh mục + đơn vị + cấu trúc kho
 | 3 | Danh mục nền và phân quyền theo kho | 3–4 ngày | Hoàn thành |
 | 4 | Nhập, xuất, chuyển kho và yêu cầu cấp hàng | 7–10 ngày | Gần hoàn thành |
 | 5 | Kiểm kê, chênh lệch và sổ kho | 5–7 ngày | Backend SQL draft một phần |
-| 6 | BOM, tự trừ kho theo đơn và giá vốn | 8–12 ngày | Chưa bắt đầu |
+| 6 | BOM nhiều cấp, lệnh sản xuất/sơ chế, định lượng món bán, tự trừ kho và giá vốn | 10–15 ngày | Phase 6A hoàn thành; Lệnh sản xuất Kho Tổng và quyền sơ chế chi nhánh của Phase 6B đã triển khai |
 | 7 | Cảnh báo, báo cáo và đối chiếu đơn ↔ kho | 5–7 ngày | Chưa bắt đầu |
 | 8 | Pilot 1 chi nhánh, ổn định và mở rộng | 7–14 ngày theo vận hành | Chưa bắt đầu |
 
@@ -42,13 +45,13 @@ Danh mục + đơn vị + cấu trúc kho
 - **Toàn bộ lộ trình trước pilot: khoảng 62%.** Đây là tỷ lệ theo khối lượng kỹ thuật đã có bằng chứng, không tính bản nháp chưa chạy như phần đã hoàn thành.
 - **Phase 0 — audit và hợp đồng nghiệp vụ: 100%.**
 - **Phase 1 — schema và engine chứng từ: khoảng 98%.** Schema, smoke/concurrency test, postcheck và migration kho đã qua trên bản sao schema-only của production trong Supabase local/PostgreSQL 17. Advisor không có cảnh báo `inventory_*`; lint còn lỗi cũ ở CRM/loyalty/profile ngoài phạm vi Kho. Còn thiết lập baseline migration chính thức cho khả năng dựng toàn hệ từ database trắng; chưa được phép sửa lịch sử thanh toán cũ chỉ để phục vụ Kho.
-- **Phase 2 — router/UI Admin kho: 100%.** Đã có menu Admin hai tầng theo nhóm nghiệp vụ, 14 URL thật, module lazy-load riêng, chính sách quyền giao diện được kiểm thử, khung trạng thái tải/lỗi/dữ liệu cũ/thử lại và giao diện local không ghi dữ liệu. Admin tổng được chọn toàn hệ thống; Admin/nhân viên có chi nhánh bị khóa đúng một chi nhánh; nhân viên thiếu chi nhánh và tài khoản bếp bị chặn. Nhóm Sản xuất hiển thị rõ BOM/Lệnh sản xuất thuộc Phase 6 và bị vô hiệu hóa; URL Kho không hợp lệ được đưa về Tổng quan. RLS và quyền dữ liệu thật vẫn thuộc Phase 3.
+- **Phase 2 — router/UI Admin kho: 100%.** Đã có menu Admin hai tầng theo nhóm nghiệp vụ, module lazy-load riêng, chính sách quyền giao diện được kiểm thử, khung trạng thái tải/lỗi/dữ liệu cũ/thử lại và giao diện local không ghi dữ liệu. Admin tổng được chọn toàn hệ thống; Admin/nhân viên có chi nhánh bị khóa đúng một chi nhánh; nhân viên thiếu chi nhánh và tài khoản bếp bị chặn. Nhóm Sản xuất đã mở Công thức BOM và Lệnh sản xuất. URL Kho không hợp lệ được đưa về Tổng quan. RLS và quyền dữ liệu thật vẫn thuộc Phase 3.
 - **Phase 3 — dữ liệu nền/phân quyền: 100%.** Ba migration Kho đã triển khai thành công lên Supabase production ngày 2026-08-24; migration history Local/Remote khớp. Postcheck Phase 1, Phase 3 và P0 form cài đặt đạt, RLS bật, frontend không có quyền ghi trực tiếp sổ/tồn và Security Advisor không có cảnh báo `inventory_*`. Tài khoản Admin hệ thống đang hoạt động đã được cấp đúng một quyền `admin` Kho toàn hệ thống và kiểm tra RLS bằng phiên `authenticated` đạt. UI → hook → service cho tạo/sửa/lưu trữ mềm Kho, Nguyên vật liệu, Danh mục NVL, Đơn vị tính và Nhà cung cấp đã hoàn chỉnh. Đơn vị gốc/quy đổi, mô tả/thứ tự danh mục và mã NVL tự sinh theo loại đã chạy trên production. Local Admin đã mở khóa ghi kép để smoke có kiểm soát; cấu hình mẫu/deploy vẫn mặc định tắt. Bốn kho nền đã được tạo idempotent và đối chiếu đạt: một kho tổng, ba kho chi nhánh mặc định, cả ba cùng nhận cấp hàng từ kho tổng, không trùng mã.
 - **Dữ liệu nền sẵn sàng nhập NVL:** production đã có 9 đơn vị chuẩn (7 gốc, 2 quy đổi) và 7 danh mục NVL có mô tả. Chưa tạo NVL thật, chứng từ, movement hoặc số tồn; tránh suy đoán công thức từ menu bán hàng.
 - **Phase 4 — nhập/xuất/chuyển/cấp hàng: khoảng 82%.** UI và chuỗi xử lý nhập, xuất, chuyển, yêu cầu cấp hàng, phiếu hủy đã nối production. Phiếu nhập mua đã có nhà cung cấp, đơn giá, mã lô, ngày sản xuất và HSD; hoàn tất phiếu ghi movement, balance, giá vốn và lô trong cùng transaction. Còn ảnh/in phiếu, tồn đầu kỳ chính thức và pilot chứng từ thật.
 - **Phase 5 — kiểm kê/sổ kho: khoảng 78%.** UI kiểm kê đã nối engine production; Phiếu điều chỉnh tồn thủ công đã có nháp → gửi duyệt → Admin/quản lý đúng kho duyệt & ghi sổ, bắt buộc lý do và chặn giảm thành tồn âm. Sổ kho chỉ đọc đã có lọc ngày/kho/NVL, phân trang và đối chiếu tồn đầu–nhập–xuất–tồn cuối; còn phạm vi kiểm theo nhóm hàng, cảnh báo giao dịch trong lúc đếm, Excel và pilot chứng từ thật.
-- **Phase 6: 0%.** Chưa làm BOM và tự trừ theo đơn.
-- **Phase 7 — cảnh báo/báo cáo: khoảng 20%.** Báo cáo tồn hiện tại đã có số lượng, giá vốn bình quân, giá trị tồn, trạng thái sắp hết/hết hàng và bộ lọc theo kho/danh mục/NVL; RLS giới hạn đúng phạm vi kho. Còn HSD theo lô, đối chiếu đơn, báo cáo thời gian và RPC tổng hợp quy mô lớn.
+- **Phase 6: khoảng 55%.** Phase 6A đã hoàn thành. Phase 6B đã có Lệnh sản xuất Kho Tổng và Lệnh sơ chế chi nhánh dùng chung chuỗi Bản nháp → Đang làm → Hoàn thành/Hủy; mỗi bán thành phẩm sơ chế chỉ có một công thức chuẩn dùng chung toàn hệ thống, còn kho và số thực dùng/thực nhận được ghi trên từng Lệnh sơ chế. Hoàn thành lệnh ghi giảm đầu vào, tăng bán thành phẩm, movement, balance, giá vốn và lô/HSD đầu ra trong một transaction có idempotency. Còn cảnh báo/badge, lý do sai lệch định mức, Định lượng món bán liên kết Menu và tự trừ kho theo đơn.
+- **Phase 7 — cảnh báo/báo cáo: khoảng 45%.** Màn Tồn kho đã có số lượng, giá vốn bình quân, giá trị và trạng thái sắp hết/hết hàng. Màn Lô & hạn sử dụng đọc lô còn tồn, phân loại sắp/đã hết hạn theo cấu hình từng NVL. Cảnh báo kho gom HSD, tồn thấp, tồn âm và chứng từ chờ, có bộ lọc và liên kết xử lý; toàn bộ nguồn đọc được giới hạn tường minh theo kho kết hợp RLS. Còn đối chiếu đơn, báo cáo thời gian và RPC tổng hợp quy mô lớn.
 - **Phase 8: 0%.** Chưa pilot vận hành.
 - **Mức sẵn sàng production: khoảng 72%.** Schema, RLS, quyền Admin, bốn kho nền, chuỗi chứng từ Phase 4, kiểm kê và điều chỉnh tồn Phase 5 đã có; local Admin ghi có kiểm soát qua Auth/RLS. Chưa pilot phiếu điều chỉnh/phiếu nhập mua thật, chưa chốt tồn đầu kỳ chính thức và chưa mở bản deploy production cho nhân viên.
 
@@ -218,18 +221,113 @@ Phase 2 đóng ở phạm vi router/UI. Quyền đọc/ghi dữ liệu thật kh
 - Chênh lệch đã duyệt sinh movement có thể truy ngược.
 - Công thức tồn đầu + nhập − xuất = tồn cuối khớp theo từng NVL/kho.
 
-## Phase 6 — BOM, đơn hàng và giá vốn
+## Phase 6 — Sản xuất, định lượng món bán và giá vốn
+
+### Mô hình vận hành đã chốt
+
+Không làm BOM một tầng từ món bán xuống toàn bộ nguyên liệu gốc. Hệ thống phải quản lý **BOM nhiều cấp có tồn kho bán thành phẩm**:
+
+```text
+Nguyên liệu gốc tại Kho tổng
+→ Lệnh đóng gói/sản xuất
+→ Bán thành phẩm đóng gói tại Kho tổng
+→ Chuyển kho xuống chi nhánh
+
+Nguyên liệu tươi tại chi nhánh
+→ Phiếu/Lệnh sơ chế
+→ Bán thành phẩm sơ chế tại kho bếp chi nhánh
+
+Bán thành phẩm đóng gói + bán thành phẩm sơ chế
+→ Định lượng món bán liên kết Menu
+→ Đơn hoàn tất trừ đúng các thành phần trực tiếp tại chi nhánh
+```
+
+Ví dụ với **Bánh tráng trộn**:
+
+- Kho tổng dùng bánh tráng, gia vị, đậu phộng và bao bì để sản xuất **Gói bánh tráng gia vị**.
+- Chi nhánh dùng xoài tươi để tạo **Xoài sơ chế**; dùng rau răm tươi để tạo **Rau răm sơ chế**. Hao hụt vỏ, hạt, cuống và phần loại bỏ được ghi tại công đoạn sơ chế.
+- Định lượng món Bánh tráng trộn chỉ trừ Gói bánh tráng gia vị, Xoài sơ chế, Rau răm sơ chế và các thành phần được cho trực tiếp vào món.
+- Không trừ lại bánh tráng, gia vị, đậu phộng, xoài tươi hoặc rau răm tươi khi bán món vì chúng đã được trừ ở công đoạn sản xuất/sơ chế.
+
+### Quy ước tên gọi trên giao diện
+
+Để nhân viên không nhầm giữa công thức kho và công thức món bán, hệ thống dùng bốn khái niệm tách biệt:
+
+| Khái niệm | Chọn đầu ra | Mục đích | Có làm thay đổi tồn ngay không? |
+|---|---|---|---|
+| **Công thức sản xuất (BOM)** | Bán thành phẩm đóng gói | Khai báo một mẻ cần những nguyên liệu/bán thành phẩm trực tiếp nào | Không |
+| **Công thức sơ chế** | Bán thành phẩm sơ chế | Khai báo nguyên liệu tươi, sản lượng thu được và hao hụt sơ chế | Không |
+| **Lệnh sản xuất/sơ chế** | Một BOM đang áp dụng | Ghi số thực dùng, số thực đạt; trừ đầu vào và nhập đầu ra | Có, khi hoàn thành |
+| **Định lượng món bán** | Món/topping có trong Menu | Ghép món bán với nguyên liệu hoặc bán thành phẩm trực tiếp, tính cost và chuẩn bị tự trừ theo đơn | Không; chỉ trừ khi đơn hoàn tất |
+
+Màn **Công thức (BOM)** hiện tại chỉ cho chọn bán thành phẩm đầu ra là đúng phạm vi. Không mở danh sách món Menu tại màn này. Phần chọn món Menu sẽ nằm ở màn riêng **Định lượng món bán** để không trộn logic sản xuất kho với logic bán hàng.
+
+### Nguyên tắc bắt buộc
+
+- Mỗi công đoạn chỉ tiêu hao các nguyên liệu hoặc bán thành phẩm **con trực tiếp** của BOM đó; tuyệt đối không trừ xuyên nhiều cấp.
+- Bán thành phẩm được quản lý như một mã hàng có tồn kho, đơn vị tính, kho lưu, lô, hạn sử dụng và giá vốn riêng.
+- Hoàn thành lệnh sản xuất phải trừ đầu vào và nhập đầu ra trong cùng một transaction, có idempotency key để không ghi hai lần.
+- Lệnh sản xuất tại Kho tổng và lệnh sơ chế tại chi nhánh dùng cùng engine nhưng khác loại công đoạn và kho thực hiện.
+- Sản lượng thực tế có thể khác kế hoạch; hệ thống phải ghi số đầu vào thực dùng, số đầu ra đạt và hao hụt thực tế.
+- Bán thành phẩm chuyển giữa Kho tổng và chi nhánh bằng luồng Chuyển kho nội bộ hiện có, không tạo đường tắt sửa balance.
+- BOM không được tạo vòng lặp, ví dụ A dùng B nhưng B lại dùng A.
+- BOM phải có phiên bản và thời gian hiệu lực; đơn/lệnh cũ giữ nguyên công thức đã sử dụng.
+- Khi bán hàng, chỉ Định lượng món bán đang có hiệu lực tại chi nhánh mới được dùng để trừ kho.
+
+### Thứ tự triển khai
+
+#### Phase 6A — Danh mục bán thành phẩm và BOM nhiều cấp
+
+- [x] Hoàn thiện loại mã Bán thành phẩm cho hàng đóng gói tại Kho tổng và hàng sơ chế tại chi nhánh.
+- [x] Tạo màn Công thức BOM: chọn sản phẩm đầu ra, phiên bản, sản lượng chuẩn, kho/khu vực thực hiện và danh sách thành phần trực tiếp.
+- [x] Cho phép thành phần BOM là nguyên liệu gốc hoặc bán thành phẩm cấp dưới.
+- [x] Định lượng theo phần hoặc theo mẻ, dùng đúng hợp đồng quy đổi đơn vị hiện có.
+- [x] Khai báo tỷ lệ hao hụt kế hoạch theo từng thành phần/công đoạn.
+- [x] Chặn BOM vòng lặp, thành phần trùng và đơn vị khác hệ quy đổi.
+
+#### Phase 6B — Lệnh sản xuất, đóng gói và sơ chế
+
+- [x] Tạo Lệnh sản xuất tại Kho tổng cho các bán thành phẩm đóng gói.
+- [x] Tạo Lệnh sơ chế tại chi nhánh cho xoài, rau răm và các nguyên liệu tươi tương tự.
+- [x] Mỗi mã bán thành phẩm sơ chế có một công thức chuẩn dùng chung toàn hệ thống; kho thực hiện chỉ được chọn trên Lệnh sơ chế và bị giới hạn theo quyền tài khoản.
+- [x] Chuỗi trạng thái gọn cho người có quyền: Bản nháp → Đang làm → Hoàn thành/Hủy.
+- [x] Khi hoàn thành: trừ nguyên liệu đầu vào, nhập bán thành phẩm đầu ra, ghi movement, cập nhật balance và giá vốn trong cùng transaction.
+- [x] Bổ sung lô/HSD cho bán thành phẩm đầu ra khi mã hàng có theo dõi hạn sử dụng.
+- [x] Ghi sản lượng kế hoạch, sản lượng thực tế và nguyên liệu thực dùng.
+- [ ] Ghi lý do khi thực dùng hoặc sản lượng thực tế vượt ngưỡng sai lệch cho phép.
+- [x] Admin/Owner quản lý toàn hệ thống; `central_manager` chỉ sản xuất tại đúng Kho Tổng; `branch_manager` chỉ sơ chế tại đúng kho chi nhánh/kho bộ phận được cấp.
+- [ ] Hiển thị badge cho lệnh đang chờ duyệt/đang làm/quá hạn.
+
+#### Phase 6C — Định lượng món bán và tự trừ theo đơn
+
+- [ ] Tạo màn **Định lượng món bán**: chọn món/topping trực tiếp từ Menu trước, sau đó thêm các thành phần trực tiếp.
+- [ ] Liên kết `product`/topping bằng ID ổn định, không dùng tên món.
+- [ ] Định lượng món bán chỉ chứa nguyên liệu hoặc bán thành phẩm được lấy trực tiếp tại chi nhánh.
+- [ ] Hiển thị định lượng, đơn vị, hao hụt chế biến tại món khi thật sự cần, giá cost từng thành phần, tổng cost món và tỷ lệ cost/giá bán.
+- [ ] Món bán thẳng có thể ánh xạ trực tiếp 1 món Menu → 1 mã hàng tồn, không bắt buộc tạo bán thành phẩm giả.
+- [ ] Xác định kho trừ theo chi nhánh, khu vực chế biến và mã khu đã cấu hình.
+- [ ] Đơn hoàn tất tạo sự kiện trừ kho idempotent; một đơn chỉ trừ một lần.
+- [ ] Huỷ/hoàn đơn tạo movement đảo theo quy tắc rõ ràng, không sửa hoặc xóa movement cũ.
+- [ ] Món chưa có BOM, chi nhánh chưa có kho, thiếu mapping hoặc thiếu tồn phải xuất hiện trong màn đối chiếu, không âm thầm bỏ qua.
+
+#### Phase 6D — Giá vốn và đối chiếu
+
+- [ ] Giá vốn bán thành phẩm gồm giá trị nguyên liệu trực tiếp đã dùng; chi phí nhân công/đóng gói bổ sung chỉ thêm khi có nhu cầu thật.
+- [ ] Chốt phương pháp giá vốn bình quân hoặc FIFO cho lô; không trộn hai cách trong cùng một mã hàng.
+- [ ] Truy ngược được từ đơn bán → món → phiên bản BOM → lệnh sản xuất/lô bán thành phẩm → movement nguyên liệu.
+- [ ] Pilot với 1 bán thành phẩm Kho tổng, 2 bán thành phẩm sơ chế và 1–2 món bán trước khi mở toàn menu.
 
 ### Công việc
 
-- [ ] BOM liên kết `product`/topping bằng ID ổn định, không dùng tên món.
-- [ ] Định lượng theo phần hoặc theo mẻ.
-- [ ] Tỷ lệ hao hụt và khu vực/kho xuất mặc định.
-- [ ] Phiên bản BOM có hiệu lực theo thời gian; không sửa ngược lịch sử.
-- [ ] Đơn hoàn tất tạo sự kiện trừ kho idempotent.
-- [ ] Huỷ/hoàn đơn tạo movement đảo theo quy tắc rõ ràng.
-- [ ] Xử lý món chưa có BOM, chi nhánh chưa có kho và thiếu mapping.
-- [ ] Chốt phương pháp giá vốn: bình quân hoặc FIFO; không trộn hai cách.
+- [ ] Thực hiện lần lượt Phase 6A → 6B → 6C → 6D; không nối tự trừ đơn bán trước khi lệnh sản xuất/sơ chế và tồn bán thành phẩm đã chạy đúng.
+
+### Lộ trình từ trạng thái hiện tại
+
+1. **Khép Phase 6A:** dùng BOM hiện tại để khai báo và kiểm tra một bán thành phẩm đóng gói thật; xác nhận định lượng, quy đổi và hao hụt trước khi mở rộng danh mục.
+2. **Làm Phase 6B trước:** xây Lệnh sản xuất/sơ chế gọn, dùng chung một engine nhưng hiển thị đúng loại công đoạn. Đây là bước cần thiết để bán thành phẩm có tồn kho thật.
+3. **Làm Phase 6C sau khi tồn bán thành phẩm chạy đúng:** tạo màn Định lượng món bán, chọn món từ Menu rồi ghép bán thành phẩm/nguyên liệu trực tiếp và tính cost món.
+4. **Chỉ bật tự trừ theo đơn sau pilot:** thử với Bánh tráng trộn và 1–2 món đơn giản; đối chiếu đơn, movement và tồn thực tế trước khi mở toàn Menu.
+5. **Hoàn thiện Phase 6D:** báo cáo cost, sai lệch định mức/thực tế và truy ngược từ món bán đến lô nguyên liệu.
 
 ### Điều kiện hoàn thành
 
@@ -239,6 +337,13 @@ Phase 2 đóng ở phạm vi router/UI. Quyền đọc/ghi dữ liệu thật kh
 - So sánh tối thiểu 30 đơn giữa đơn hàng, movement và giá vốn đều khớp.
 
 ## Phase 7 — Cảnh báo, báo cáo và đối chiếu
+
+### Cấu trúc màn hình đã chốt
+
+- **Tồn kho:** đổi tên hiển thị từ “Báo cáo kho”; giữ route `/admin/inventory/reports` để không làm hỏng liên kết cũ. Màn này chỉ trả lời đang còn bao nhiêu, giá vốn bình quân và giá trị tồn.
+- **Lô & hạn sử dụng:** route `/admin/inventory/lots`; theo dõi lô còn tồn, ngày sản xuất, hạn dùng, số ngày còn lại và trạng thái theo ngưỡng của từng NVL.
+- **Cảnh báo kho:** route `/admin/inventory/alerts`, gồm tab Tất cả / Hạn sử dụng / Tồn thấp / Tồn âm / Chứng từ chờ; mỗi cảnh báo dẫn về đúng màn xử lý. Màn này độc lập, không thay đổi bố cục hoặc logic Tổng quan kho.
+- **Thiếu ở kho bộ phận:** chưa mở riêng cho tới khi kho bộ phận và tự trừ theo định lượng món bán vận hành thật, tránh menu có nhưng không có dữ liệu đáng tin.
 
 ### Công việc
 
@@ -418,6 +523,22 @@ Sau mỗi đợt làm việc:
 | 2026-08-25 | 4/7 | Hoàn thiện phiếu nhập mua và nền cảnh báo HSD | Form nhập mua bắt buộc nhà cung cấp, tự gợi ý mã lô/HSD theo cấu hình NVL, cho nhập ngày sản xuất và đơn giá; migration `20260825061925` tạo bảng lô có RLS và trigger transaction. Dry-run hợp lệ/thiếu HSD đều đạt, build + 4 test + ESLint + kiểm tra trình duyệt đạt; production chưa có phiếu nhập/lô thật sau triển khai |
 | 2026-08-25 | 5 | Mở Sổ kho chỉ đọc | Nối movement, balance và chứng từ hiện có; lọc 30 ngày/kho/NVL, phân trang 50 dòng, liên kết về phiếu nguồn và tính tồn đầu–nhập–xuất–tồn cuối khi chọn một NVL. Test công thức, ESLint, UTF-8, build và kiểm tra trực tiếp dữ liệu Supabase đều đạt; không thêm schema, không ghi hoặc sửa tồn kho. |
 | 2026-08-25 | 7 | Mở Báo cáo tồn kho hiện tại | Hiển thị số lượng tồn, giá vốn bình quân, giá trị tồn và trạng thái còn/sắp hết/hết theo kho × NVL; lọc kho/danh mục/trạng thái/tìm kiếm. Dữ liệu đọc trực tiếp balance theo RLS: tài khoản chi nhánh chỉ nhận kho được cấp quyền, Admin xem toàn hệ thống. Test công thức/quyền giao diện, ESLint, UTF-8, build và kiểm tra dữ liệu Supabase thật đều đạt; không đổi schema hoặc số tồn. |
+| 2026-08-25 | 6A | Siết phạm vi Công thức chế biến theo kho | Bắt buộc chọn kho thực hiện và khớp loại công thức; tài khoản chi nhánh chỉ đọc đúng kho được cấp, không xem kho tổng/chi nhánh khác; chỉ Admin/Owner hoặc `central_manager` của đúng Kho Tổng được quản lý công thức. Migration production, 7 policy RLS, trigger, index theo kho, 10/10 test và build đạt; không thay đổi tồn kho hoặc chứng từ. |
+| 2026-08-25 | 6A | Tách Xóa bản nháp và Lưu trữ công thức | Bản nháp chưa từng áp dụng có nút Xóa và popup cảnh báo riêng; phiên bản đã ngừng áp dụng chỉ có Lưu trữ với biểu tượng lưu trữ. Supabase chỉ cho xóa trạng thái `draft` theo đúng quyền kho; kiểm thử xóa trong transaction rồi rollback xác nhận công thức thật và hai thành phần vẫn nguyên vẹn. |
+| 2026-08-25 | 6A | Tinh gọn form định lượng công thức | Bỏ mô tả lặp, đổi “Sản lượng/mẻ” thành “Đầu ra”, rút gọn thành phần và ghi chú. Xác minh BTP-000003 chưa có tồn/movement/chứng từ/BOM nên đổi đơn vị từ Phần sang Gói; form hiển thị “Đầu ra 1 Gói”. Cost chưa tính ở bước khai báo định lượng, sẽ lấy từ giá vốn đầu vào khi hoàn thành Lệnh sản xuất ở Phase 6B/6D. |
 | 2026-08-25 | 7 | Sửa hiển thị giá vốn theo đơn vị NVL | Balance tiếp tục lưu bằng đơn vị gốc; báo cáo quy đổi đồng thời số lượng và giá vốn sang đơn vị hiển thị đã cấu hình. Kiểm tra production: `1.000 Gram × 30đ/Gram` được trình bày thành `1 Kilôgam × 30.000đ/Kg`, tổng giá trị vẫn 30.000đ; không sửa dữ liệu hoặc công thức giá trị tồn. |
 | 2026-08-25 | 5 | Mở giao diện kiểm kê kho | Thêm tạo đợt kiểm toàn bộ NVL theo kho, nhập số đếm, gửi duyệt, đối chiếu chênh lệch theo đơn vị hiển thị, bắt buộc lý do và duyệt hoàn tất qua các RPC kiểm kê hiện có. Test công thức kg/gram, ESLint, UTF-8 và build đạt; chưa tạo chứng từ kiểm kê thử trên production. |
 | 2026-08-25 | 5 | Thêm Phiếu điều chỉnh tồn thủ công | Thêm route/menu/badge, form gọn theo đơn vị lưu kho, lý do bắt buộc và tăng/giảm từng dòng. Migration `20260825075132` đã lên production; RPC duyệt nguyên tử chỉ cho owner/admin hoặc quản lý đúng kho, chặn tồn âm, ghi movement/balance đúng một lần. Build, ESLint, RLS/grant postcheck và kiểm tra trình duyệt đạt; không tạo phiếu thử hoặc thay đổi tồn. |
+| 2026-08-25 | 6 | Chốt mô hình BOM nhiều cấp | Kho tổng sản xuất/đóng gói bán thành phẩm; chi nhánh sơ chế nguyên liệu tươi thành bán thành phẩm có tồn; định lượng món bán chỉ trừ thành phần trực tiếp để tránh trừ hai lần. Chia lộ trình thành 6A Danh mục+BOM, 6B Lệnh sản xuất/sơ chế, 6C tự trừ theo đơn và 6D giá vốn/đối chiếu; chưa triển khai code hoặc schema. |
+| 2026-08-25 | 6A | Hoàn thiện và xác thực local Công thức BOM | Mở route/menu Công thức BOM; thêm schema phiên bản/hiệu lực/RLS, service-hook-UI và kiểm tra quy đổi, hao hụt, trùng thành phần, tự tham chiếu, vòng lặp nhiều cấp. 8/8 test, ESLint, UTF-8, build và migration smoke trong PostgreSQL tạm đạt; hai BOM nhiều cấp được kích hoạt, quy đổi kg/gram đúng, vòng lặp bị chặn và toàn bộ dữ liệu test đã rollback. Lệnh sản xuất vẫn khóa, migration BOM chưa triển khai Supabase production và không có thay đổi tồn kho. |
+| 2026-08-25 | 6A | Triển khai schema BOM production | Vì lịch sử migration cũ có timestamp lệch ngoài phạm vi BOM, không dùng `db push` hàng loạt; chạy riêng migration `20260825085405` trong transaction rồi ghi đúng mốc applied. Postcheck đạt: 2 bảng bật RLS, 7 policy, `anon` bị chặn, Admin authenticated đọc/quản lý được, 2 RPC là security invoker, Advisor không có cảnh báo `inventory_bom`; cả hai bảng đang 0 dòng nên không thay đổi tồn kho. |
+| 2026-08-25 | 6 | Chốt ranh giới công thức và lộ trình tiếp theo | Giữ màn BOM hiện tại cho bán thành phẩm sản xuất/sơ chế; Lệnh sản xuất mới làm thay đổi tồn; tạo màn Định lượng món bán riêng để chọn món từ Menu, ghép thành phần trực tiếp, tính cost và chuẩn bị tự trừ theo đơn. Thứ tự tiếp theo: khép 6A → làm 6B → làm 6C → pilot → hoàn thiện 6D. |
+| 2026-08-25 | 6B | Triển khai Lệnh sản xuất Kho Tổng | Mở route/menu Lệnh sản xuất; thêm service-hook-UI và chuỗi Bản nháp → Đang làm → Hoàn thành/Hủy. Hoàn thành nguyên tử tạo chứng từ tiêu hao/đầu ra, 3 movement cho BOM test, cập nhật balance và giá vốn; chỉ Admin/Owner hoặc `central_manager` đúng Kho Tổng được thao tác. |
+| 2026-08-25 | 6B | Smoke production bằng transaction rollback | Dùng BOM-000002 sản xuất thử 1 Gói: trừ đúng 10 đơn vị gốc Muối Ngọt + 10 đơn vị gốc Bột ớt, nhập đúng 1 Gói, tổng cost thử 200, đúng 2 chứng từ/3 movement; rollback toàn bộ và xác nhận còn 0 phiếu test. RPC quyền cao được chuyển vào `private`, public chỉ là wrapper invoker; build, UTF-8, ESLint và 10/10 test đạt. |
+| 2026-08-25 | 6B | Mở Lệnh sơ chế tại chi nhánh | Dùng chung engine Lệnh sản xuất nhưng phân biệt rõ giao diện Sản xuất/Sơ chế. Migration `20260825125709` đã triển khai production; smoke quyền bằng giao dịch tự rollback đạt: `branch_manager` chỉ quản lý đúng kho chi nhánh, bị chặn Kho Tổng và chi nhánh khác, không để lại quyền thử. Admin/Owner vẫn quản lý toàn hệ thống; `central_manager` chỉ sản xuất tại đúng Kho Tổng. |
+| 2026-08-25 | 6B | Thử phương án nhân bản công thức theo chi nhánh | Migration `20260825131404` từng cho phép tạo riêng một bản nháp theo từng kho. Sau khi đối chiếu vận hành thực tế, phương án này được thay thế ngay trong cùng ngày vì làm danh sách dài và khiến một định mức chuẩn bị hiểu nhầm thành nhiều phiên bản. Không có BOM sơ chế hoặc lệnh test nào còn lại trên production. |
+| 2026-08-25 | 6B | Chuẩn hóa một công thức sơ chế dùng chung | Migration `20260825132429` đã triển khai production: BOM sơ chế không gắn kho, chỉ Admin/Owner quản lý định mức; quản lý chi nhánh đọc công thức chung và chọn đúng kho được cấp khi lập Lệnh sơ chế. Smoke transaction đạt cho Admin và `branch_manager`: kho đúng được phép, kho khác bị chặn, không để lại BOM/lệnh/quyền test. 13/13 test, ESLint, UTF-8 và build đạt. |
+| 2026-08-25 | Toàn phân hệ Kho | Khóa giao diện và dữ liệu theo tài khoản chi nhánh | Dùng một danh sách kho đã lọc theo `branch_uuid` cho Tổng quan, báo cáo tồn, sổ kho, chứng từ, kiểm kê, BOM và lệnh sản xuất/sơ chế. Tài khoản chi nhánh chỉ thấy kho được cấp dưới dạng cố định, không còn dropdown kho khác; không tự tạo phiếu chuyển kho chéo mà dùng Yêu cầu xuất kho. Admin/tổng kho giữ nguyên phạm vi toàn hệ thống. RLS hiện hữu tiếp tục chặn đọc/ghi chéo kho; 10/10 test quyền, ESLint, UTF-8 và build đạt; không đổi schema hoặc dữ liệu production. |
+| 2026-08-25 | 6B | Ghi lô/HSD đầu ra khi hoàn thành lệnh | Mã bán thành phẩm bật theo dõi HSD sẽ tự sinh mã lô theo mã lệnh, lấy ngày hoàn thành làm ngày sản xuất và bắt buộc xác nhận HSD; cùng transaction sẽ ghi vào chứng từ đầu ra và `inventory_stock_lots`. Migration `20260825135937` đã lên production; smoke hoàn thành 1 kg Xoài Sơ Chế tạo đúng lô 1.000 Gram rồi rollback, không còn lệnh/dữ liệu thử. RPC public là invoker, `anon` bị chặn; 15/15 test, ESLint, UTF-8 và build đạt. |
+| 2026-08-26 | 7 | Tách Tồn kho và Lô & hạn sử dụng | Đổi nhãn “Báo cáo kho” thành “Tồn kho” nhưng giữ route cũ để tương thích; thêm route/menu Lô & hạn sử dụng đọc `inventory_stock_lots`, lọc tường minh theo danh sách kho được cấp và tiếp tục chịu RLS. Trạng thái hết hạn lấy ngày lô thật, trạng thái sắp hết hạn dùng ngưỡng cảnh báo của từng NVL; Tổng quan dẫn thẳng cảnh báo HSD về đúng lô. Không ghi schema, chứng từ hoặc số tồn. |
+| 2026-08-26 | 7 | Mở Cảnh báo kho độc lập | Thêm route/menu Cảnh báo kho trong nhóm Báo cáo & cảnh báo, không sửa Tổng quan kho. Màn hình gom cảnh báo HSD, tồn thấp/hết, tồn âm và chứng từ đang chờ; có tab, tìm kiếm, lọc kho/mức độ và nút mở đúng Tồn kho, Lô & HSD hoặc chứng từ. Nguồn đọc lọc tường minh theo kho và tiếp tục chịu RLS; không đổi schema hoặc dữ liệu production. |

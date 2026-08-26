@@ -23,6 +23,19 @@ export function getInventoryUnitToBaseFactor(item = {}, unit = {}) {
   return 1;
 }
 
+export function getInventoryCompatibleUnits(item = {}, units = []) {
+  const baseUnitId = String(item.baseUnitId || "").trim();
+  const purchaseUnitId = String(item.purchaseUnitId || "").trim();
+  if (!baseUnitId) return [];
+
+  return units.filter((unit) => {
+    if (!unit?.id || unit.isActive === false) return false;
+    return unit.id === baseUnitId
+      || unit.baseUnitId === baseUnitId
+      || unit.id === purchaseUnitId;
+  });
+}
+
 export function getInventoryItemDisplayUnitConfig(item = {}, unitsById = new Map()) {
   const unit = getInventoryItemDisplayUnit(item, unitsById);
   return {
@@ -35,5 +48,6 @@ export function getInventoryItemDisplayUnitConfig(item = {}, unitsById = new Map
 export default {
   getInventoryItemDisplayUnit,
   getInventoryItemDisplayUnitConfig,
+  getInventoryCompatibleUnits,
   getInventoryUnitToBaseFactor
 };

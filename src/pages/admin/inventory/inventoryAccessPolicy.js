@@ -91,3 +91,22 @@ export function getInventoryAccessPolicy({
     message
   };
 }
+
+export function getInventoryScopedWarehouses(warehouses = [], accessPolicy = {}) {
+  if (accessPolicy?.scope !== "branch") return warehouses;
+
+  const allowedKeys = new Set([
+    accessPolicy.branchUuid,
+    accessPolicy.selectedBranchFilter,
+    ...(accessPolicy.branchOptions || []).flatMap((option) => [option?.value, ...(option?.aliases || [])])
+  ].map(normalizeBranchKey).filter(Boolean));
+
+  if (!allowedKeys.size) return [];
+
+  return warehouses.filter((warehouse) => [
+    warehouse?.branchUuid,
+    warehouse?.branch_uuid,
+    warehouse?.branchId,
+    warehouse?.branch_id
+  ].some((value) => allowedKeys.has(normalizeBranchKey(value))));
+}

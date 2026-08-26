@@ -9,7 +9,7 @@ const DOMAIN_LABELS = {
   items: "nguyên vật liệu"
 };
 
-const SHELF_LIFE_PRESETS = [7, 14, 30, 60, 90, 180, 365];
+const SHELF_LIFE_PRESETS = [1, 3, 7, 14, 30, 60, 90];
 const EXPIRY_WARNING_PRESETS = [1, 3, 7, 30];
 
 const EMPTY_BY_DOMAIN = {
@@ -359,13 +359,13 @@ export default function InventoryMasterDataModal({
                       <div className="inventory-expiry-duration-control">
                         <span className="inventory-control-shell inventory-control-shell--select">
                           <select value={customShelfLife ? "custom" : String(form.shelfLifeDays)} onChange={updateShelfLifePreset} aria-label="Chọn thời hạn mặc định">
+                            <option value="1">1 ngày</option>
+                            <option value="3">3 ngày</option>
                             <option value="7">7 ngày</option>
                             <option value="14">14 ngày</option>
                             <option value="30">30 ngày (1 tháng)</option>
                             <option value="60">60 ngày (2 tháng)</option>
                             <option value="90">90 ngày (3 tháng)</option>
-                            <option value="180">180 ngày (6 tháng)</option>
-                            <option value="365">365 ngày (1 năm)</option>
                             <option value="custom">Tùy chỉnh...</option>
                           </select>
                         </span>

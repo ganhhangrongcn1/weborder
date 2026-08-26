@@ -22,7 +22,7 @@ function formatMoney(value) {
   return `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Number(value || 0))} đ`;
 }
 
-export default function InventoryStockReport({ rows = [], warehouses = [], items = [], units = [], limited = false }) {
+export default function InventoryStockReport({ rows = [], warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false }) {
   const [searchParams] = useSearchParams();
   const routeFilterKey = searchParams.toString();
   const [filters, setFilters] = useState({ warehouseId: "", itemId: "", groupId: "", stockState: "all", search: "" });
@@ -101,10 +101,14 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
           <Icon name="search" size={16} />
           <input value={filters.search} onChange={(event) => updateFilter({ search: event.target.value })} placeholder="Tìm mã hoặc tên nguyên vật liệu..." />
         </label>
-        <select aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
-          <option value="">Tất cả kho được phép xem</option>
-          {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-        </select>
+        {warehouseSelectionLocked && warehouses.length === 1 ? (
+          <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div>
+        ) : (
+          <select aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
+            <option value="">Tất cả kho được phép xem</option>
+            {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+          </select>
+        )}
         <select aria-label="Lọc danh mục" value={filters.groupId} onChange={(event) => updateFilter({ groupId: event.target.value })}>
           <option value="">Tất cả danh mục</option>
           {groups.map(([id, name]) => <option key={id} value={id}>{name}</option>)}

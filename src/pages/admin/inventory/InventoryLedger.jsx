@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
 import { getInventoryDocumentDateRange } from "../../../services/inventoryDocumentFilters.js";
 import { getInventoryDocumentPath } from "../../../services/inventoryLedgerCalculations.js";
+import { getInventoryItemDisplayUnitConfig } from "../../../services/inventoryUnitConversion.js";
 
 const STAGE_LABELS = {
   completion: "Hoàn tất phiếu",
@@ -33,19 +34,33 @@ function formatDateTime(value = "") {
   }).format(date);
 }
 
+function getReferenceUnitCost(item = {}, unitsById = new Map(), unitCost = 0) {
+  const { unit, conversionToBase } = getInventoryItemDisplayUnitConfig(item, unitsById);
+  const baseUnitName = item?.baseUnit?.name || "đơn vị tồn";
+  if (!unit?.name || unit.name === baseUnitName || conversionToBase <= 1) return null;
+
+  return {
+    unitName: unit.name,
+    unitCost: Number(unitCost || 0) * conversionToBase
+  };
+}
+
 export default function InventoryLedger({
   rows = [],
   warehouses = [],
   items = [],
+  units = [],
   filters = {},
   totalCount = 0,
   pageCount = 1,
   summary = null,
   summaryLimited = false,
+  warehouseSelectionLocked = false,
   onFiltersChange
 }) {
   const warehouseById = new Map(warehouses.map((row) => [row.id, row]));
   const itemById = new Map(items.map((row) => [row.id, row]));
+  const unitsById = new Map(units.map((row) => [row.id, row]));
   const selectedItem = itemById.get(filters.itemId);
   const selectedUnit = selectedItem?.baseUnit?.name || "đơn vị tồn";
   const applyDatePreset = (datePreset) => {
@@ -76,13 +91,17 @@ export default function InventoryLedger({
           <span>Đến ngày</span>
           <input type="date" min={filters.fromDate || undefined} value={filters.toDate || ""} onChange={(event) => onFiltersChange?.({ datePreset: "custom", toDate: event.target.value })} />
         </label>
-        <label className="inventory-ledger-select">
-          <span>Kho</span>
-          <select value={filters.warehouseId || ""} onChange={(event) => onFiltersChange?.({ warehouseId: event.target.value })}>
-            <option value="">Tất cả kho</option>
-            {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-          </select>
-        </label>
+        {warehouseSelectionLocked && warehouses.length === 1 ? (
+          <div className="inventory-ledger-select inventory-warehouse-fixed"><span>Kho</span><strong>{warehouses[0].name}</strong><small>Theo tài khoản chi nhánh</small></div>
+        ) : (
+          <label className="inventory-ledger-select">
+            <span>Kho</span>
+            <select value={filters.warehouseId || ""} onChange={(event) => onFiltersChange?.({ warehouseId: event.target.value })}>
+              <option value="">Tất cả kho</option>
+              {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+            </select>
+          </label>
+        )}
         <label className="inventory-ledger-select">
           <span>Nguyên vật liệu</span>
           <select value={filters.itemId || ""} onChange={(event) => onFiltersChange?.({ itemId: event.target.value })}>
@@ -131,7 +150,7 @@ export default function InventoryLedger({
               <th>Nghiệp vụ</th>
               <th className="is-number">Nhập</th>
               <th className="is-number">Xuất</th>
-              <th className="is-number">Đơn giá</th>
+              <th className="is-number">Giá vốn/đơn vị tồn</th>
               <th className="is-number">Thành tiền</th>
             </tr>
           </thead>
@@ -140,6 +159,7 @@ export default function InventoryLedger({
               const warehouse = warehouseById.get(row.warehouseId);
               const item = itemById.get(row.itemId);
               const unitName = item?.baseUnit?.name || "đơn vị tồn";
+              const referenceUnitCost = getReferenceUnitCost(item, unitsById, row.unitCost);
               return (
                 <tr key={row.id}>
                   <td><strong>{formatDateTime(row.occurredAt)}</strong><small>#{row.sequence}</small></td>
@@ -151,7 +171,10 @@ export default function InventoryLedger({
                   <td><span className={`inventory-ledger-direction is-${row.direction}`}>{STAGE_LABELS[row.stage] || row.stage || "Biến động kho"}</span></td>
                   <td className="is-number is-in">{row.direction === "in" ? formatQuantity(row.quantity) : "—"}</td>
                   <td className="is-number is-out">{row.direction === "out" ? formatQuantity(row.quantity) : "—"}</td>
-                  <td className="is-number">{formatMoney(row.unitCost)} đ</td>
+                  <td className="is-number">
+                    <strong>{formatMoney(row.unitCost)} đ/{unitName}</strong>
+                    {referenceUnitCost ? <small>≈ {formatMoney(referenceUnitCost.unitCost)} đ/{referenceUnitCost.unitName}</small> : null}
+                  </td>
                   <td className="is-number"><strong>{formatMoney(row.quantity * row.unitCost)} đ</strong></td>
                 </tr>
               );

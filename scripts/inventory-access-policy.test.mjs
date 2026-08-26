@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { adminPathToState } from "../src/app/routeState.js";
-import { getInventoryAccessPolicy } from "../src/pages/admin/inventory/inventoryAccessPolicy.js";
+import {
+  getInventoryAccessPolicy,
+  getInventoryScopedWarehouses
+} from "../src/pages/admin/inventory/inventoryAccessPolicy.js";
 import { canApproveInventoryDisposals } from "../src/services/inventoryDocumentService.js";
 
 const branches = [
@@ -42,6 +45,38 @@ test("branch-scoped staff only receives the assigned branch option", () => {
   assert.equal(policy.branchOptions.length, 1);
   assert.equal(policy.branchOptions[0].value, branches[1].branch_uuid);
   assert.equal(policy.scopeLabel, branches[1].name);
+});
+
+test("branch-scoped inventory only exposes warehouses from the assigned branch", () => {
+  const policy = getInventoryAccessPolicy({
+    adminProfile: { role: "staff", branchUuid: branches[1].branch_uuid },
+    isSupabaseAdminMode: true,
+    branches
+  });
+  const warehouses = [
+    { id: "warehouse-a", branchUuid: branches[0].branch_uuid, name: "Kho Phú Hòa" },
+    { id: "warehouse-b", branchUuid: branches[1].branch_uuid, name: "Kho Hiệp Thành" },
+    { id: "warehouse-central", branchUuid: "", name: "Kho Tổng" }
+  ];
+
+  assert.deepEqual(
+    getInventoryScopedWarehouses(warehouses, policy).map((warehouse) => warehouse.id),
+    ["warehouse-b"]
+  );
+});
+
+test("global inventory keeps every warehouse option", () => {
+  const policy = getInventoryAccessPolicy({
+    adminProfile: { role: "admin" },
+    isSupabaseAdminMode: true,
+    branches
+  });
+  const warehouses = [
+    { id: "warehouse-a", branchUuid: branches[0].branch_uuid },
+    { id: "warehouse-b", branchUuid: branches[1].branch_uuid }
+  ];
+
+  assert.equal(getInventoryScopedWarehouses(warehouses, policy).length, 2);
 });
 
 test("branch-scoped admin is also locked to the assigned branch", () => {
