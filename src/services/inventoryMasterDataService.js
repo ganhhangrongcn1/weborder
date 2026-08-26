@@ -439,13 +439,40 @@ export async function saveInventoryMasterData({ domain = "units", id = "", input
     updated_by: actorId
   };
 
-  if (!toText(id)) payload.created_by = actorId;
+  const recordId = toText(id);
+  let restoredArchivedRecord = false;
+  let targetId = recordId;
 
-  const query = toText(id)
-    ? client.from(config.table).update(payload).eq("id", toText(id))
-    : client.from(config.table).insert(payload);
+  if (!recordId && payload.code) {
+    const { data: existing, error: lookupError } = await client
+      .from(config.table)
+      .select("id,deleted_at")
+      .eq("code", payload.code)
+      .maybeSingle();
+
+    if (lookupError) {
+      const normalized = getInventoryMasterDataReadError(lookupError, domain);
+      throw new Error(normalized.message);
+    }
+
+    if (existing?.id && existing?.deleted_at) {
+      restoredArchivedRecord = true;
+      targetId = toText(existing.id);
+    } else if (existing?.id) {
+      throw new Error(`Mã ${config.label} đã tồn tại.`);
+    }
+  }
+
+  if (!recordId && !restoredArchivedRecord) payload.created_by = actorId;
+
+  const writePayload = restoredArchivedRecord
+    ? { ...payload, deleted_at: null, deleted_by: null }
+    : payload;
+  const query = targetId
+    ? client.from(config.table).update(writePayload).eq("id", targetId)
+    : client.from(config.table).insert(writePayload);
   const { data, error } = await query.select(config.select).single();
-  recordAdminRequest(`${id ? "update" : "create"} inventory ${domain}`, config.table);
+  recordAdminRequest(`${recordId ? "update" : restoredArchivedRecord ? "restore" : "create"} inventory ${domain}`, config.table);
 
   if (error) {
     if (error.code === "23505") throw new Error(`Mã ${config.label} đã tồn tại.`);
