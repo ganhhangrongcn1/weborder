@@ -29,6 +29,7 @@ import InventoryDashboard from "./InventoryDashboard.jsx";
 import InventoryBomManager from "./InventoryBomManager.jsx";
 import InventoryProductionOrderManager from "./InventoryProductionOrderManager.jsx";
 import InventorySalesConfiguration from "./InventorySalesConfiguration.jsx";
+import InventorySalesReconciliation from "./InventorySalesReconciliation.jsx";
 
 function InventoryAccessGate({ accessPolicy, children }) {
   if (accessPolicy.allowed) return children;
@@ -145,6 +146,7 @@ export default function InventoryWorkspace({
   const isBomPage = currentRoute.page === "boms";
   const isProductionPage = currentRoute.page === "production-orders";
   const isSalesRecipePage = currentRoute.page === "sales-recipes";
+  const isReconciliationPage = currentRoute.page === "reconciliation";
   const documentDomain = ["receipts", "issues", "transfers", "disposals", "requisitions", "adjustments"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
@@ -153,7 +155,7 @@ export default function InventoryWorkspace({
     : "";
   const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage || isSalesRecipePage;
   const warehouseState = useInventoryWarehouses({
-    enabled: ((isWarehousePage || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: ((isWarehousePage || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     branchUuid: accessPolicy.scope === "branch" ? accessPolicy.branchUuid : ""
   });
   const masterDataState = useInventoryMasterData({
@@ -161,7 +163,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: ((currentRoute.page === "items" || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: ((currentRoute.page === "items" || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -169,7 +171,7 @@ export default function InventoryWorkspace({
     domain: "item-categories"
   });
   const documentItemsState = useInventoryMasterData({
-    enabled: ((Boolean(documentDomain) || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: ((Boolean(documentDomain) || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "items"
   });
   const documentSuppliersState = useInventoryMasterData({
@@ -226,7 +228,9 @@ export default function InventoryWorkspace({
     }))
   ], [products, toppings]);
   const salesConfigurationState = useInventorySalesConfiguration({
-    enabled: isSalesRecipePage && canLoadBomScope,
+    enabled: (isSalesRecipePage && canLoadBomScope) || (isReconciliationPage && accessPolicy.allowed),
+    loadConfiguration: isSalesRecipePage,
+    loadSalesEvents: isReconciliationPage,
     menuEntities,
     items: documentItemsState.rows,
     units: itemUnitsState.rows
@@ -284,7 +288,7 @@ export default function InventoryWorkspace({
       ? bomState
     : isProductionPage
       ? productionState
-    : isSalesRecipePage
+    : isSalesRecipePage || isReconciliationPage
       ? salesConfigurationState
     : documentDomain
       ? documentState
@@ -324,6 +328,9 @@ export default function InventoryWorkspace({
     && salesConfigurationState.status === "ready"
     && documentItemsState.status === "ready"
     && itemUnitsState.status === "ready"
+    && salesConfigurationState.writeEnabled;
+  const canRetrySalesEvents = accessPolicy.allowed
+    && salesConfigurationState.status === "ready"
     && salesConfigurationState.writeEnabled;
   const publishWarehouseDrafts = async () => {
     const result = await warehouseState.publishDrafts(warehouseDraftState.drafts);
@@ -488,6 +495,23 @@ export default function InventoryWorkspace({
                     onDeleteDraft={productionState.deleteDraft}
                     warehouseSelectionLocked={warehouseSelectionLocked}
                   />
+              : isReconciliationPage
+                ? <InventorySalesReconciliation
+                    rows={salesConfigurationState.salesEvents}
+                    branches={scopedBranches}
+                    warehouses={scopedWarehouses}
+                    items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
+                    canWrite={canRetrySalesEvents}
+                    mutationStatus={salesConfigurationState.mutationStatus}
+                    mutationMessage={salesConfigurationState.mutationMessage}
+                    message={salesConfigurationState.salesEventMessage}
+                    loading={salesConfigurationState.salesEventStatus === "loading"}
+                    hasMore={salesConfigurationState.salesEventHasMore}
+                    filters={salesConfigurationState.salesEventFilters}
+                    onFiltersChange={salesConfigurationState.updateSalesEventFilters}
+                    onRetry={salesConfigurationState.retrySalesEvent}
+                  />
               : isSalesRecipePage
                 ? <InventorySalesConfiguration
                     recipes={salesConfigurationState.recipes}
@@ -508,6 +532,7 @@ export default function InventoryWorkspace({
                     warehouseMutationMessage={warehouseState.mutationMessage}
                     onSaveRecipe={salesConfigurationState.saveRecipe}
                     onActivateRecipe={salesConfigurationState.activateRecipe}
+                    onDeactivateRecipe={salesConfigurationState.deactivateRecipe}
                     onDeleteRecipe={salesConfigurationState.deleteRecipe}
                     onSaveMapping={salesConfigurationState.saveMapping}
                     onDeleteMapping={salesConfigurationState.deleteMapping}

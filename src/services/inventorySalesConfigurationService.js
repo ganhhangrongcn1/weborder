@@ -29,6 +29,16 @@ const MAPPING_SELECT = `
   )
 `;
 
+const SALES_EVENT_SELECT = `
+  id,source_type,source_order_key,source_row_id,event_type,source_status,branch_uuid,warehouse_id,
+  processing_status,issue_code,issue_message,document_id,reverses_event_id,attempts,available_at,
+  occurred_at,processed_at,created_at,updated_at,
+  lines:inventory_sales_order_event_lines(
+    id,source_line_key,source_line_name,menu_entity_type,menu_entity_id,menu_entity_name,
+    recipe_id,item_id,required_quantity,line_status,issue_code,issue_message,metadata
+  )
+`;
+
 const MISSING_CODES = new Set(["42P01", "PGRST202", "PGRST204", "PGRST205"]);
 
 function toText(value = "") {
@@ -133,6 +143,45 @@ function normalizeCandidate(row = {}) {
   };
 }
 
+function normalizeSalesEvent(row = {}) {
+  return {
+    id: toText(row.id),
+    sourceType: toText(row.source_type),
+    sourceOrderKey: toText(row.source_order_key),
+    sourceRowId: toText(row.source_row_id),
+    eventType: toText(row.event_type),
+    sourceStatus: toText(row.source_status),
+    branchUuid: toText(row.branch_uuid),
+    warehouseId: toText(row.warehouse_id),
+    processingStatus: toText(row.processing_status || "pending"),
+    issueCode: toText(row.issue_code),
+    issueMessage: toText(row.issue_message),
+    documentId: toText(row.document_id),
+    reversesEventId: toText(row.reverses_event_id),
+    attempts: Number(row.attempts || 0),
+    availableAt: toText(row.available_at),
+    occurredAt: toText(row.occurred_at),
+    processedAt: toText(row.processed_at),
+    createdAt: toText(row.created_at),
+    updatedAt: toText(row.updated_at),
+    lines: (Array.isArray(row.lines) ? row.lines : []).map((line) => ({
+      id: toText(line.id),
+      sourceLineKey: toText(line.source_line_key),
+      sourceLineName: toText(line.source_line_name),
+      menuEntityType: toText(line.menu_entity_type),
+      menuEntityId: toText(line.menu_entity_id),
+      menuEntityName: toText(line.menu_entity_name),
+      recipeId: toText(line.recipe_id),
+      itemId: toText(line.item_id),
+      requiredQuantity: Number(line.required_quantity || 0),
+      lineStatus: toText(line.line_status),
+      issueCode: toText(line.issue_code),
+      issueMessage: toText(line.issue_message),
+      metadata: line.metadata && typeof line.metadata === "object" ? line.metadata : {}
+    }))
+  };
+}
+
 function aggregateAverageCosts(rows = []) {
   const totals = new Map();
   rows.forEach((row) => {
@@ -150,6 +199,52 @@ function aggregateAverageCosts(rows = []) {
     itemId,
     value.quantity > 0 ? value.value / value.quantity : value.fallback
   ]));
+}
+
+function addCalendarDays(value = "", days = 0) {
+  const [year, month, day] = toText(value).split("-").map(Number);
+  if (![year, month, day].every(Number.isFinite)) return "";
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return date.toISOString().slice(0, 10);
+}
+
+export async function readInventorySalesOrderEvents({ dateFrom = "", dateTo = "", limit = 200 } = {}) {
+  const client = await getInventoryClient();
+  if (!client) {
+    return {
+      ok: false,
+      status: "setup",
+      rows: [],
+      hasMore: false,
+      message: "Chưa kết nối được Supabase cho phân hệ Kho."
+    };
+  }
+
+  const safeLimit = Math.min(Math.max(Number(limit) || 200, 50), 300);
+  let query = client
+    .from("inventory_sales_order_events")
+    .select(SALES_EVENT_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(safeLimit + 1);
+
+  if (toText(dateFrom)) query = query.gte("occurred_at", `${toText(dateFrom)}T00:00:00+07:00`);
+  if (toText(dateTo)) {
+    const nextDate = addCalendarDays(dateTo, 1);
+    if (nextDate) query = query.lt("occurred_at", `${nextDate}T00:00:00+07:00`);
+  }
+
+  const result = await query;
+  recordAdminRequest("read inventory sales order events", "inventory_sales_order_events");
+  if (result.error) return { ok: false, ...getError(result.error), rows: [], hasMore: false };
+
+  const sourceRows = result.data || [];
+  return {
+    ok: true,
+    status: "ready",
+    rows: sourceRows.slice(0, safeLimit).map(normalizeSalesEvent),
+    hasMore: sourceRows.length > safeLimit,
+    message: ""
+  };
 }
 
 export async function readInventorySalesConfiguration() {
@@ -188,6 +283,16 @@ export async function readInventorySalesConfiguration() {
   };
 }
 
+export async function retryInventorySalesOrderEvent(id = "") {
+  if (!canWriteInventorySalesConfiguration()) throw new Error("Ghi dữ liệu Kho đang bị khóa an toàn.");
+  const client = await getInventoryClient();
+  if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
+  const { error } = await client.rpc("inventory_retry_sales_order_event", { p_event_id: toText(id) });
+  recordAdminRequest("retry inventory sales order event", "inventory_sales_order_events");
+  if (error) throw new Error(getError(error).message);
+  return true;
+}
+
 export function canWriteInventorySalesConfiguration() {
   return isInventoryRuntimeWriteEnabled();
 }
@@ -219,6 +324,16 @@ export async function activateInventorySalesRecipe(id = "") {
   if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
   const { error } = await client.rpc("inventory_activate_sales_recipe", { p_recipe_id: toText(id) });
   recordAdminRequest("activate inventory sales recipe", "inventory_sales_recipes");
+  if (error) throw new Error(getError(error).message);
+  return true;
+}
+
+export async function deactivateInventorySalesRecipe(id = "") {
+  if (!canWriteInventorySalesConfiguration()) throw new Error("Ghi dữ liệu Kho đang bị khóa an toàn.");
+  const client = await getInventoryClient();
+  if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
+  const { error } = await client.rpc("inventory_deactivate_sales_recipe", { p_recipe_id: toText(id) });
+  recordAdminRequest("deactivate inventory sales recipe", "inventory_sales_recipes");
   if (error) throw new Error(getError(error).message);
   return true;
 }
@@ -268,9 +383,12 @@ export async function deleteInventoryChannelMapping(id = "") {
 export default {
   activateInventorySalesRecipe,
   canWriteInventorySalesConfiguration,
+  deactivateInventorySalesRecipe,
   deleteInventoryChannelMapping,
   deleteInventorySalesRecipe,
   readInventorySalesConfiguration,
+  readInventorySalesOrderEvents,
+  retryInventorySalesOrderEvent,
   saveInventoryChannelMapping,
   saveInventorySalesRecipe
 };

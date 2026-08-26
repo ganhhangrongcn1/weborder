@@ -74,7 +74,7 @@ export default function InventoryChannelMappingModal({
           <section className="inventory-sales-form-section">
             <div className="inventory-channel-source">
               <span className={`inventory-channel-badge is-${form.partnerSource}`}>{SOURCE_LABELS[form.partnerSource] || form.partnerSource}</span>
-              <div><strong>{form.mappingKind === "option" ? form.externalOptionName : form.externalItemName}</strong><small>{form.mappingKind === "option" ? `${form.externalItemName === "*" ? "Áp dụng cho mọi món" : form.externalItemName} · ${form.externalOptionGroup}` : form.externalItemId || "Đối chiếu theo tên đã xác nhận"}</small></div>
+              <div><strong>{form.mappingKind === "option" ? form.externalOptionName : form.externalItemName}</strong><small>{form.mappingKind === "option" ? `${form.externalItemName === "*" ? "Áp dụng cho mọi món" : form.externalItemName} · ${form.externalOptionGroup === "*" ? "Dùng chung mọi nhóm lựa chọn" : form.externalOptionGroup}` : form.externalItemId || "Đối chiếu theo tên đã xác nhận"}</small></div>
               <div><span>Phạm vi</span><strong>{form.partnerSource === "shopeefood" ? "Dùng chung ShopeeFood" : branches.find((branch) => branch.id === form.branchUuid)?.name || "Chưa xác định"}</strong></div>
             </div>
           </section>

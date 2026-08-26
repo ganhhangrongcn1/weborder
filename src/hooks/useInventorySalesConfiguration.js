@@ -2,37 +2,52 @@ import { useCallback, useEffect, useState } from "react";
 import {
   activateInventorySalesRecipe,
   canWriteInventorySalesConfiguration,
+  deactivateInventorySalesRecipe,
   deleteInventoryChannelMapping,
   deleteInventorySalesRecipe,
   readInventorySalesConfiguration,
+  readInventorySalesOrderEvents,
+  retryInventorySalesOrderEvent,
   saveInventoryChannelMapping,
   saveInventorySalesRecipe
 } from "../services/inventorySalesConfigurationService.js";
 
 export default function useInventorySalesConfiguration({
   enabled = false,
+  loadConfiguration = true,
+  loadSalesEvents = false,
   menuEntities = [],
   items = [],
   units = []
 } = {}) {
   const [state, setState] = useState({
-    status: enabled ? "loading" : "idle",
+    status: enabled && loadConfiguration ? "loading" : (enabled ? "ready" : "idle"),
     recipes: [],
     mappings: [],
     candidates: [],
     candidateMessage: "",
     averageCosts: {},
+    salesEvents: [],
+    salesEventMessage: "",
     permissions: { canManage: false },
     message: ""
   });
   const [mutationStatus, setMutationStatus] = useState("idle");
   const [mutationMessage, setMutationMessage] = useState("");
+  const [salesEventStatus, setSalesEventStatus] = useState(loadSalesEvents ? "loading" : "idle");
+  const [salesEventHasMore, setSalesEventHasMore] = useState(false);
+  const [salesEventFilters, setSalesEventFilters] = useState(() => {
+    const now = new Date();
+    const localToday = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+    return { dateFrom: localToday, dateTo: localToday, limit: 200 };
+  });
 
-  const refresh = useCallback(async () => {
-    if (!enabled) return;
+  const refreshConfiguration = useCallback(async () => {
+    if (!enabled || !loadConfiguration) return;
     setState((current) => ({ ...current, status: "loading", message: "" }));
     const result = await readInventorySalesConfiguration();
-    setState({
+    setState((current) => ({
+      ...current,
       status: result.status,
       recipes: result.recipes || [],
       mappings: result.mappings || [],
@@ -41,10 +56,32 @@ export default function useInventorySalesConfiguration({
       averageCosts: result.averageCosts || {},
       permissions: result.permissions || { canManage: false },
       message: result.message || ""
-    });
-  }, [enabled]);
+    }));
+  }, [enabled, loadConfiguration]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const refreshSalesEvents = useCallback(async () => {
+    if (!enabled || !loadSalesEvents) return;
+    setSalesEventStatus("loading");
+    setState((current) => ({ ...current, salesEventMessage: "" }));
+    const result = await readInventorySalesOrderEvents(salesEventFilters);
+    setState((current) => ({
+      ...current,
+      salesEvents: result.rows || [],
+      salesEventMessage: result.message || ""
+    }));
+    setSalesEventHasMore(result.hasMore === true);
+    setSalesEventStatus(result.status || (result.ok ? "ready" : "error"));
+  }, [enabled, loadSalesEvents, salesEventFilters]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([
+      loadConfiguration ? refreshConfiguration() : Promise.resolve(),
+      loadSalesEvents ? refreshSalesEvents() : Promise.resolve()
+    ]);
+  }, [loadConfiguration, loadSalesEvents, refreshConfiguration, refreshSalesEvents]);
+
+  useEffect(() => { refreshConfiguration(); }, [refreshConfiguration]);
+  useEffect(() => { refreshSalesEvents(); }, [refreshSalesEvents]);
 
   const runMutation = useCallback(async (action, successMessage) => {
     setMutationStatus("saving");
@@ -67,6 +104,10 @@ export default function useInventorySalesConfiguration({
     writeEnabled: canWriteInventorySalesConfiguration(),
     mutationStatus,
     mutationMessage,
+    salesEventStatus,
+    salesEventHasMore,
+    salesEventFilters,
+    updateSalesEventFilters: (nextFilters) => setSalesEventFilters((current) => ({ ...current, ...nextFilters })),
     refresh,
     saveRecipe: (input) => runMutation(
       () => saveInventorySalesRecipe({ input, menuEntities, items, units }),
@@ -75,6 +116,10 @@ export default function useInventorySalesConfiguration({
     activateRecipe: (id) => runMutation(
       () => activateInventorySalesRecipe(id),
       "Đã áp dụng định lượng món bán."
+    ),
+    deactivateRecipe: (id) => runMutation(
+      () => deactivateInventorySalesRecipe(id),
+      "Đã ngừng áp dụng định lượng món bán."
     ),
     deleteRecipe: (id) => runMutation(
       () => deleteInventorySalesRecipe(id),
@@ -87,6 +132,10 @@ export default function useInventorySalesConfiguration({
     deleteMapping: (id) => runMutation(
       () => deleteInventoryChannelMapping(id),
       "Đã xóa ánh xạ kênh bán."
+    ),
+    retrySalesEvent: (id) => runMutation(
+      () => retryInventorySalesOrderEvent(id),
+      "Đã đưa đơn vào hàng chờ xử lý lại."
     )
   };
 }

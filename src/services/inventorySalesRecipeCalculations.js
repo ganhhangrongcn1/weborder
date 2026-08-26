@@ -152,14 +152,36 @@ export function getChannelCandidateIdentity(row = {}) {
     isOption ? "option" : "item",
     isOption ? "" : toText(row.externalItemId).toLowerCase(),
     isOption ? "*" : canonicalItemName,
-    toText(row.externalOptionGroup).toLocaleLowerCase("vi"),
+    isOption ? "*" : toText(row.externalOptionGroup).toLocaleLowerCase("vi"),
     toText(row.externalOptionName).toLocaleLowerCase("vi")
   ].join("|");
+}
+
+export function isChannelCandidateMapped(candidate = {}, mappings = []) {
+  const isOption = candidate.candidateKind === "option" || candidate.mappingKind === "option";
+  if (!isOption) {
+    const identity = getChannelCandidateIdentity(candidate);
+    return mappings.some((mapping) => getChannelCandidateIdentity(mapping) === identity);
+  }
+
+  const source = toText(candidate.partnerSource).toLowerCase();
+  const branch = toText(candidate.branchUuid).toLowerCase();
+  const optionGroup = toText(candidate.externalOptionGroup).toLocaleLowerCase("vi");
+  const optionName = toText(candidate.externalOptionName).toLocaleLowerCase("vi");
+  return mappings.some((mapping) => {
+    if (mapping.mappingKind !== "option") return false;
+    if (toText(mapping.partnerSource).toLowerCase() !== source) return false;
+    if (source !== "shopeefood" && toText(mapping.branchUuid).toLowerCase() !== branch) return false;
+    if (toText(mapping.externalOptionName).toLocaleLowerCase("vi") !== optionName) return false;
+    const mappedGroup = toText(mapping.externalOptionGroup).toLocaleLowerCase("vi");
+    return mappedGroup === "*" || (optionGroup !== "*" && mappedGroup === optionGroup);
+  });
 }
 
 export default {
   calculateSalesRecipeComponent,
   getChannelCandidateIdentity,
+  isChannelCandidateMapped,
   normalizeInventoryChannelMappingInput,
   normalizeInventorySalesRecipeInput
 };

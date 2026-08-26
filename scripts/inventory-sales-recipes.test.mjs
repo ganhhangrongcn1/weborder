@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   calculateSalesRecipeComponent,
   getChannelCandidateIdentity,
+  isChannelCandidateMapped,
   normalizeInventoryChannelMappingInput,
   normalizeInventorySalesRecipeInput
 } from "../src/services/inventorySalesRecipeCalculations.js";
@@ -85,6 +86,44 @@ test("lựa chọn dùng chung không bị lặp theo từng món cha", () => {
     externalOptionName: "Trứng cút"
   });
   assert.equal(first, second);
+});
+
+test("lựa chọn dùng chung không bị lặp theo từng nhóm combo", () => {
+  const first = getChannelCandidateIdentity({
+    partnerSource: "grabfood",
+    branchUuid: "a",
+    candidateKind: "option",
+    externalOptionGroup: "Chọn Món Combo",
+    externalOptionName: "Bánh Tráng Cuốn Bơ"
+  });
+  const second = getChannelCandidateIdentity({
+    partnerSource: "grabfood",
+    branchUuid: "a",
+    candidateKind: "option",
+    externalOptionGroup: "Chọn Món Combo Cuốn",
+    externalOptionName: "bánh tráng cuốn bơ"
+  });
+  assert.equal(first, second);
+});
+
+test("ánh xạ dùng chung che mọi nhóm còn ánh xạ riêng chỉ che đúng nhóm", () => {
+  const candidate = {
+    partnerSource: "grabfood",
+    branchUuid: "a",
+    candidateKind: "option",
+    externalOptionGroup: "*",
+    externalOptionName: "Bánh Tráng Cuốn Bơ"
+  };
+  const exactMapping = [{
+    partnerSource: "grabfood",
+    branchUuid: "a",
+    mappingKind: "option",
+    externalOptionGroup: "Chọn Món Combo",
+    externalOptionName: "Bánh Tráng Cuốn Bơ"
+  }];
+  const sharedMapping = [{ ...exactMapping[0], externalOptionGroup: "*" }];
+  assert.equal(isChannelCandidateMapped(candidate, exactMapping), false);
+  assert.equal(isChannelCandidateMapped(candidate, sharedMapping), true);
 });
 
 test("hậu tố cách phục vụ không tạo thêm một món cần gán", () => {
