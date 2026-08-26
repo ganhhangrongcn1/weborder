@@ -3,6 +3,7 @@ import {
   archiveInventoryWarehouse,
   canWriteInventoryWarehouses,
   publishInventoryWarehouseDrafts,
+  setInventoryBranchDefaultWarehouse,
   saveInventoryWarehouse,
   readInventoryWarehouses
 } from "../services/inventoryWarehouseService.js";
@@ -84,6 +85,19 @@ export default function useInventoryWarehouses({ enabled = false, branchUuid = "
     }
   }, [refresh]);
 
+  const setBranchDefault = useCallback(async ({ branchUuid = "", warehouseId = "" } = {}) => {
+    setMutation({ status: "saving", message: "" });
+    try {
+      await setInventoryBranchDefaultWarehouse({ branchUuid, warehouseId });
+      setMutation({ status: "success", message: "Đã lưu kho trừ mặc định cho chi nhánh." });
+      await refresh();
+      return warehouseId;
+    } catch (error) {
+      setMutation({ status: "error", message: error.message || "Không thể đổi kho trừ mặc định." });
+      throw error;
+    }
+  }, [refresh]);
+
   const publishDrafts = useCallback(async (drafts = []) => {
     setMutation({ status: "saving", message: "" });
     try {
@@ -107,6 +121,7 @@ export default function useInventoryWarehouses({ enabled = false, branchUuid = "
     ...state,
     refresh,
     save,
+    setBranchDefault,
     publishDrafts,
     archive,
     writeEnabled: canWriteInventoryWarehouses(),

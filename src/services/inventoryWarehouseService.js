@@ -224,6 +224,34 @@ export async function saveInventoryWarehouse({ id = "", input = {} } = {}) {
   return normalizeInventoryWarehouse(data);
 }
 
+export async function setInventoryBranchDefaultWarehouse({ branchUuid = "", warehouseId = "" } = {}) {
+  if (!canWriteInventoryWarehouses()) {
+    throw new Error("Ghi dữ liệu Kho đang bị khóa an toàn.");
+  }
+
+  const normalizedBranchUuid = toText(branchUuid);
+  const normalizedWarehouseId = toText(warehouseId);
+  if (!isUuidLike(normalizedBranchUuid) || !isUuidLike(normalizedWarehouseId)) {
+    throw new Error("Chi nhánh hoặc kho trừ mặc định không hợp lệ.");
+  }
+
+  const client = await getInventoryClient();
+  if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
+
+  const { error } = await client.rpc("inventory_set_branch_default_warehouse", {
+    p_branch_uuid: normalizedBranchUuid,
+    p_warehouse_id: normalizedWarehouseId
+  });
+  recordAdminRequest("set branch default inventory warehouse", "inventory_warehouses");
+
+  if (error) {
+    if (error.code === "42501") throw new Error("Chỉ Admin được đổi kho trừ mặc định của chi nhánh.");
+    throw new Error(getInventoryWarehouseReadError(error).message);
+  }
+
+  return normalizedWarehouseId;
+}
+
 export async function publishInventoryWarehouseDrafts({ drafts = [], existingWarehouses = [] } = {}) {
   if (!canWriteInventoryWarehouses()) {
     throw new Error("Ghi dữ liệu Kho đang bị khóa an toàn.");
@@ -305,6 +333,7 @@ export async function archiveInventoryWarehouse(id = "") {
 
 export default {
   readInventoryWarehouses,
+  setInventoryBranchDefaultWarehouse,
   saveInventoryWarehouse,
   publishInventoryWarehouseDrafts,
   archiveInventoryWarehouse,

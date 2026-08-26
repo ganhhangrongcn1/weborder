@@ -179,6 +179,15 @@ export const INVENTORY_ROUTE_ITEMS = [
     group: "Sản xuất",
     icon: "gear",
     description: "Lập lệnh theo công thức, theo dõi thực hiện và cập nhật tồn kho khi hoàn thành."
+  },
+  {
+    id: "inventory-sales-recipes",
+    path: "/admin/inventory/sales-recipes",
+    page: "sales-recipes",
+    label: "Định lượng món bán",
+    group: "Sản xuất",
+    icon: "tag",
+    description: "Định lượng món Menu và ánh xạ món từ các kênh bán."
   }
 ];
 
@@ -211,8 +220,7 @@ const INVENTORY_SECTION_DEFINITIONS = [
     id: "inventory-production-section",
     title: "Sản xuất & chế biến",
     icon: "gear",
-    badge: "Phase 6B",
-    pages: ["boms", "production-orders"]
+    pages: ["boms", "production-orders", "sales-recipes"]
   }
 ];
 

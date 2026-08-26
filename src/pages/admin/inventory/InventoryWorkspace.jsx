@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import Icon from "../../../components/Icon.jsx";
 import useInventoryDashboard from "../../../hooks/useInventoryDashboard.js";
 import useInventoryMasterData from "../../../hooks/useInventoryMasterData.js";
@@ -12,6 +12,8 @@ import useInventoryAlerts from "../../../hooks/useInventoryAlerts.js";
 import useInventoryCounts from "../../../hooks/useInventoryCounts.js";
 import useInventoryBoms from "../../../hooks/useInventoryBoms.js";
 import useInventoryProductionOrders from "../../../hooks/useInventoryProductionOrders.js";
+import useInventorySalesConfiguration from "../../../hooks/useInventorySalesConfiguration.js";
+import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 import { getInventoryRoute } from "./inventoryNavigation.js";
 import { getInventoryAccessPolicy, getInventoryScopedWarehouses } from "./inventoryAccessPolicy.js";
 import InventoryWarehouseManager from "./InventoryWarehouseManager.jsx";
@@ -26,6 +28,7 @@ import InventoryCountManager from "./InventoryCountManager.jsx";
 import InventoryDashboard from "./InventoryDashboard.jsx";
 import InventoryBomManager from "./InventoryBomManager.jsx";
 import InventoryProductionOrderManager from "./InventoryProductionOrderManager.jsx";
+import InventorySalesConfiguration from "./InventorySalesConfiguration.jsx";
 
 function InventoryAccessGate({ accessPolicy, children }) {
   if (accessPolicy.allowed) return children;
@@ -118,6 +121,8 @@ export default function InventoryWorkspace({
   adminProfile = null,
   isSupabaseAdminMode = false,
   branches = [],
+  products = [],
+  toppings = [],
   inventoryAccessPolicy = null,
   dataStatus = "disconnected",
   dataError = "",
@@ -139,15 +144,16 @@ export default function InventoryWorkspace({
   const isCountPage = currentRoute.page === "counts";
   const isBomPage = currentRoute.page === "boms";
   const isProductionPage = currentRoute.page === "production-orders";
+  const isSalesRecipePage = currentRoute.page === "sales-recipes";
   const documentDomain = ["receipts", "issues", "transfers", "disposals", "requisitions", "adjustments"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
   const masterDataDomain = ["items", "item-categories", "units", "suppliers"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
-  const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage;
+  const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage || isSalesRecipePage;
   const warehouseState = useInventoryWarehouses({
-    enabled: ((isWarehousePage || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage,
+    enabled: ((isWarehousePage || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     branchUuid: accessPolicy.scope === "branch" ? accessPolicy.branchUuid : ""
   });
   const masterDataState = useInventoryMasterData({
@@ -155,7 +161,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: ((currentRoute.page === "items" || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage) && accessPolicy.allowed) || isBomPage || isProductionPage,
+    enabled: ((currentRoute.page === "items" || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -163,7 +169,7 @@ export default function InventoryWorkspace({
     domain: "item-categories"
   });
   const documentItemsState = useInventoryMasterData({
-    enabled: ((Boolean(documentDomain) || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage) && accessPolicy.allowed) || isBomPage || isProductionPage,
+    enabled: ((Boolean(documentDomain) || isLedgerPage || isReportPage || isLotPage || isAlertPage || isCountPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "items"
   });
   const documentSuppliersState = useInventoryMasterData({
@@ -203,6 +209,28 @@ export default function InventoryWorkspace({
   const productionState = useInventoryProductionOrders({
     enabled: isProductionPage && canLoadBomScope
   });
+  const menuEntities = useMemo(() => [
+    ...products.filter((row) => row && row.id && row.isActive !== false).map((row) => ({
+      id: String(row.id),
+      name: row.name || "Món chưa đặt tên",
+      price: Number(row.price || 0),
+      type: "product",
+      category: row.category || row.badge || "Món khác"
+    })),
+    ...toppings.filter((row) => row && row.id && row.isActive !== false).map((row) => ({
+      id: String(row.id),
+      name: row.name || "Topping chưa đặt tên",
+      price: Number(row.price || 0),
+      type: "topping",
+      category: "Topping"
+    }))
+  ], [products, toppings]);
+  const salesConfigurationState = useInventorySalesConfiguration({
+    enabled: isSalesRecipePage && canLoadBomScope,
+    menuEntities,
+    items: documentItemsState.rows,
+    units: itemUnitsState.rows
+  });
   const warehouseDraftState = useInventoryWarehouseDrafts();
   useEffect(() => {
     if (warehouseState.status !== "ready") return;
@@ -214,14 +242,21 @@ export default function InventoryWorkspace({
     warehouseState.warehouses
   ]);
   const scopedWarehouses = getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy);
+  const scopedBranches = accessPolicy.scope === "branch"
+    ? branches.filter((branch) => resolveBranchFromCandidates([accessPolicy.branchUuid], [branch]))
+    : branches;
   const warehouseSelectionLocked = accessPolicy.scope === "branch";
   const visibleWarehouses = [
     ...scopedWarehouses,
     ...(warehouseSelectionLocked ? [] : warehouseDraftState.drafts)
   ];
   const effectiveAccessPolicy = !accessPolicy.allowed
-    && (isBomPage || isProductionPage)
-    && (isProductionPage ? productionState.status === "ready" && productionState.permissions?.canManage : bomState.status === "ready" && bomState.permissions?.canManage)
+    && (isBomPage || isProductionPage || isSalesRecipePage)
+    && (isProductionPage
+      ? productionState.status === "ready" && productionState.permissions?.canManage
+      : isSalesRecipePage
+        ? salesConfigurationState.status === "ready" && salesConfigurationState.permissions?.canManage
+        : bomState.status === "ready" && bomState.permissions?.canManage)
     ? {
         ...accessPolicy,
         allowed: true,
@@ -249,6 +284,8 @@ export default function InventoryWorkspace({
       ? bomState
     : isProductionPage
       ? productionState
+    : isSalesRecipePage
+      ? salesConfigurationState
     : documentDomain
       ? documentState
     : masterDataDomain
@@ -283,6 +320,11 @@ export default function InventoryWorkspace({
     && documentItemsState.status === "ready"
     && itemUnitsState.status === "ready"
     && productionState.writeEnabled;
+  const canWriteSalesConfiguration = (accessPolicy.scope === "global" || Boolean(salesConfigurationState.permissions?.canManage))
+    && salesConfigurationState.status === "ready"
+    && documentItemsState.status === "ready"
+    && itemUnitsState.status === "ready"
+    && salesConfigurationState.writeEnabled;
   const publishWarehouseDrafts = async () => {
     const result = await warehouseState.publishDrafts(warehouseDraftState.drafts);
     warehouseDraftState.removeDrafts(result.publishedDraftIds);
@@ -445,6 +487,31 @@ export default function InventoryWorkspace({
                     onCancel={productionState.cancel}
                     onDeleteDraft={productionState.deleteDraft}
                     warehouseSelectionLocked={warehouseSelectionLocked}
+                  />
+              : isSalesRecipePage
+                ? <InventorySalesConfiguration
+                    recipes={salesConfigurationState.recipes}
+                    mappings={salesConfigurationState.mappings}
+                    candidates={salesConfigurationState.candidates}
+                    candidateMessage={salesConfigurationState.candidateMessage}
+                    menuEntities={menuEntities}
+                    items={documentItemsState.rows}
+                    units={itemUnitsState.rows}
+                    branches={scopedBranches}
+                    warehouses={scopedWarehouses}
+                    averageCosts={salesConfigurationState.averageCosts}
+                    canWrite={canWriteSalesConfiguration}
+                    canManageWarehouseDefaults={canWriteWarehouses}
+                    mutationStatus={salesConfigurationState.mutationStatus}
+                    mutationMessage={salesConfigurationState.mutationMessage}
+                    warehouseMutationStatus={warehouseState.mutationStatus}
+                    warehouseMutationMessage={warehouseState.mutationMessage}
+                    onSaveRecipe={salesConfigurationState.saveRecipe}
+                    onActivateRecipe={salesConfigurationState.activateRecipe}
+                    onDeleteRecipe={salesConfigurationState.deleteRecipe}
+                    onSaveMapping={salesConfigurationState.saveMapping}
+                    onDeleteMapping={salesConfigurationState.deleteMapping}
+                    onSetDefaultWarehouse={warehouseState.setBranchDefault}
                   />
               : <InventoryPageEmptyState route={currentRoute} />}
       </section>

@@ -300,12 +300,16 @@ Màn **Công thức (BOM)** hiện tại chỉ cho chọn bán thành phẩm đ�
 
 #### Phase 6C — Định lượng món bán và tự trừ theo đơn
 
-- [ ] Tạo màn **Định lượng món bán**: chọn món/topping trực tiếp từ Menu trước, sau đó thêm các thành phần trực tiếp.
-- [ ] Liên kết `product`/topping bằng ID ổn định, không dùng tên món.
-- [ ] Định lượng món bán chỉ chứa nguyên liệu hoặc bán thành phẩm được lấy trực tiếp tại chi nhánh.
-- [ ] Hiển thị định lượng, đơn vị, hao hụt chế biến tại món khi thật sự cần, giá cost từng thành phần, tổng cost món và tỷ lệ cost/giá bán.
-- [ ] Món bán thẳng có thể ánh xạ trực tiếp 1 món Menu → 1 mã hàng tồn, không bắt buộc tạo bán thành phẩm giả.
-- [ ] Xác định kho trừ theo chi nhánh, khu vực chế biến và mã khu đã cấu hình.
+- [x] Tạo màn **Định lượng món bán**: chọn món/topping trực tiếp từ Menu trước, sau đó thêm các thành phần trực tiếp.
+- [x] Liên kết `product`/topping bằng ID ổn định, không dùng tên món.
+- [x] Định lượng món bán chỉ chứa nguyên liệu hoặc bán thành phẩm được lấy trực tiếp tại chi nhánh.
+- [x] Hiển thị định lượng, đơn vị, hao hụt chế biến tại món khi thật sự cần, giá cost từng thành phần, tổng cost món và tỷ lệ cost/giá bán.
+- [x] Món bán thẳng có thể ánh xạ trực tiếp 1 món Menu → 1 mã hàng tồn, không bắt buộc tạo bán thành phẩm giả.
+- [x] Thêm thẻ **Ánh xạ kênh bán**: một món/combo app có thể gán một hoặc nhiều món Menu kèm số lượng; combo tự chọn ánh xạ theo từng lựa chọn thực tế.
+- [x] Tối ưu nguồn món kênh bán bằng danh mục tăng dần: nhập lịch sử gần nhất một lần, sau đó mỗi dòng món app mới chỉ cập nhật đúng món/lựa chọn liên quan; màn hình không còn quét lại toàn bộ lịch sử đơn.
+- [x] Danh mục món kênh bán tách biệt đơn hàng và tồn kho, chỉ phục vụ cấu hình ánh xạ; tài khoản chi nhánh chỉ đọc dữ liệu đúng chi nhánh được cấp.
+- [x] Thiết lập một **Kho trừ mặc định** cho từng chi nhánh; Website, POS và app dùng chung cấu hình, chỉ Admin toàn hệ thống được thay đổi.
+- [ ] Chỉ bổ sung ghi đè kho bộ phận/mã khu ở định lượng khi vận hành thực tế phát sinh nhu cầu; không bắt nhân viên chọn kho theo từng đơn.
 - [ ] Đơn hoàn tất tạo sự kiện trừ kho idempotent; một đơn chỉ trừ một lần.
 - [ ] Huỷ/hoàn đơn tạo movement đảo theo quy tắc rõ ràng, không sửa hoặc xóa movement cũ.
 - [ ] Món chưa có BOM, chi nhánh chưa có kho, thiếu mapping hoặc thiếu tồn phải xuất hiện trong màn đối chiếu, không âm thầm bỏ qua.
@@ -533,6 +537,12 @@ Sau mỗi đợt làm việc:
 | 2026-08-25 | 6A | Hoàn thiện và xác thực local Công thức BOM | Mở route/menu Công thức BOM; thêm schema phiên bản/hiệu lực/RLS, service-hook-UI và kiểm tra quy đổi, hao hụt, trùng thành phần, tự tham chiếu, vòng lặp nhiều cấp. 8/8 test, ESLint, UTF-8, build và migration smoke trong PostgreSQL tạm đạt; hai BOM nhiều cấp được kích hoạt, quy đổi kg/gram đúng, vòng lặp bị chặn và toàn bộ dữ liệu test đã rollback. Lệnh sản xuất vẫn khóa, migration BOM chưa triển khai Supabase production và không có thay đổi tồn kho. |
 | 2026-08-25 | 6A | Triển khai schema BOM production | Vì lịch sử migration cũ có timestamp lệch ngoài phạm vi BOM, không dùng `db push` hàng loạt; chạy riêng migration `20260825085405` trong transaction rồi ghi đúng mốc applied. Postcheck đạt: 2 bảng bật RLS, 7 policy, `anon` bị chặn, Admin authenticated đọc/quản lý được, 2 RPC là security invoker, Advisor không có cảnh báo `inventory_bom`; cả hai bảng đang 0 dòng nên không thay đổi tồn kho. |
 | 2026-08-25 | 6 | Chốt ranh giới công thức và lộ trình tiếp theo | Giữ màn BOM hiện tại cho bán thành phẩm sản xuất/sơ chế; Lệnh sản xuất mới làm thay đổi tồn; tạo màn Định lượng món bán riêng để chọn món từ Menu, ghép thành phần trực tiếp, tính cost và chuẩn bị tự trừ theo đơn. Thứ tự tiếp theo: khép 6A → làm 6B → làm 6C → pilot → hoàn thiện 6D. |
+| 2026-08-26 | 6C | Hoàn thành lớp cấu hình món bán | Thêm màn Định lượng món bán và Ánh xạ kênh bán theo kênh + chi nhánh + ID/tên ngoài đã xác nhận; hỗ trợ combo cố định, combo tự chọn và lựa chọn không trừ kho. Mới chỉ lưu cấu hình, chưa nối tự động trừ tồn theo đơn để bảo vệ vận hành hiện tại. |
+| 2026-08-26 | 6C | Tối ưu danh mục món kênh bán | Nhập một lần 15.000 dòng món gần nhất thành 1.349 ứng viên; từ nay mỗi dòng món app mới tự cập nhật danh mục bằng trigger. RPC chỉ đọc bảng nhỏ, giữ RLS theo chi nhánh, không quét lại lịch sử đơn, không tác động đơn hàng hoặc tồn kho; kiểm thử Admin đọc 500 ứng viên khoảng 6,8 ms. |
+| 2026-08-26 | 6C | Làm sạch danh sách cần ánh xạ | Phân biệt món/lựa chọn ảnh hưởng kho với chỉ dẫn phục vụ. Tự ẩn cách chế biến và mức cay; gom topping/lựa chọn dùng chung theo kênh + chi nhánh để chỉ gán một lần; hậu tố Tự trộn/Trộn đều không tạo thêm mã cần gán. Dữ liệu đơn gốc và danh mục thô vẫn được giữ nguyên. |
+| 2026-08-26 | 6C | Giữ nguyên tên món gốc khi ánh xạ | Khóa gom vẫn chuẩn hóa hậu tố phục vụ để tránh ánh xạ trùng, nhưng tên hiển thị lấy nguyên văn phổ biến nhất từ app. Các tên như `Combo 5 Phơi Sương Muối Tắc (Tự Trộn)` không còn bị mất phần trong ngoặc; không sửa đơn hàng hoặc danh mục thô. |
+| 2026-08-26 | 6C | Dùng chung ánh xạ ShopeeFood | Do menu ShopeeFood liên kết và đồng nhất tên món, cùng một món/lựa chọn chỉ cần gán một lần cho toàn bộ chi nhánh. GrabFood và Xanh Ngon vẫn tách theo chi nhánh để tránh gán nhầm dữ liệu khác cấu hình. |
+| 2026-08-26 | 6C | Thiết lập kho trừ mặc định theo chi nhánh | Thêm thẻ cấu hình gọn theo từng chi nhánh, dùng lại cờ kho mặc định hiện có. Admin chỉ thiết lập một lần; thao tác đổi kho chạy nguyên khối trên Supabase, không sửa số tồn hoặc chứng từ. Tài khoản chi nhánh chỉ thấy phạm vi được cấp và không được đổi cấu hình. |
 | 2026-08-25 | 6B | Triển khai Lệnh sản xuất Kho Tổng | Mở route/menu Lệnh sản xuất; thêm service-hook-UI và chuỗi Bản nháp → Đang làm → Hoàn thành/Hủy. Hoàn thành nguyên tử tạo chứng từ tiêu hao/đầu ra, 3 movement cho BOM test, cập nhật balance và giá vốn; chỉ Admin/Owner hoặc `central_manager` đúng Kho Tổng được thao tác. |
 | 2026-08-25 | 6B | Smoke production bằng transaction rollback | Dùng BOM-000002 sản xuất thử 1 Gói: trừ đúng 10 đơn vị gốc Muối Ngọt + 10 đơn vị gốc Bột ớt, nhập đúng 1 Gói, tổng cost thử 200, đúng 2 chứng từ/3 movement; rollback toàn bộ và xác nhận còn 0 phiếu test. RPC quyền cao được chuyển vào `private`, public chỉ là wrapper invoker; build, UTF-8, ESLint và 10/10 test đạt. |
 | 2026-08-25 | 6B | Mở Lệnh sơ chế tại chi nhánh | Dùng chung engine Lệnh sản xuất nhưng phân biệt rõ giao diện Sản xuất/Sơ chế. Migration `20260825125709` đã triển khai production; smoke quyền bằng giao dịch tự rollback đạt: `branch_manager` chỉ quản lý đúng kho chi nhánh, bị chặn Kho Tổng và chi nhánh khác, không để lại quyền thử. Admin/Owner vẫn quản lý toàn hệ thống; `central_manager` chỉ sản xuất tại đúng Kho Tổng. |
