@@ -20,6 +20,10 @@ function normalizeAccount(row = {}) {
     status: toText(row.status || "active"),
     branchUuid: toText(row.branch_uuid || row.branchUuid),
     branchName: toText(row.branch_name || row.branchName),
+    accountScope: toText(row.account_scope || row.accountScope || (row.branch_uuid || row.branchUuid ? "branch" : (row.role === "admin" ? "system_admin" : "central_inventory"))),
+    warehouseId: toText(row.warehouse_id || row.warehouseId),
+    warehouseName: toText(row.warehouse_name || row.warehouseName),
+    inventoryRole: toText(row.inventory_role || row.inventoryRole),
     createdAt: toText(row.created_at || row.createdAt),
     updatedAt: toText(row.updated_at || row.updatedAt)
   };
@@ -100,6 +104,7 @@ export async function createBranchAccount({
   password = "",
   role = "staff",
   branchUuid = "",
+  accountScope = "branch",
   status = "active"
 } = {}) {
   const result = await invokeBranchAccountFunction({
@@ -110,6 +115,7 @@ export async function createBranchAccount({
     password: String(password || ""),
     role: toText(role),
     branch_uuid: toText(branchUuid),
+    account_scope: toText(accountScope) || "branch",
     status: toText(status) || "active"
   });
   if (!result.ok) return result;

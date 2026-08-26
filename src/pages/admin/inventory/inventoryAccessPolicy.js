@@ -55,7 +55,7 @@ export function getInventoryAccessPolicy({
     };
   }
 
-  if ((role === "admin" || role === "staff") && branchUuid) {
+  if (["admin", "staff", "kitchen"].includes(role) && branchUuid) {
     const assignedOption = findAssignedBranchOption(branchUuid, allBranchOptions) || {
       value: branchUuid,
       label: toText(adminProfile?.branchName || adminProfile?.branch_name) || "Chi nhánh được giao",
@@ -75,8 +75,22 @@ export function getInventoryAccessPolicy({
     };
   }
 
+  if (role === "staff" && !branchUuid) {
+    return {
+      allowed: true,
+      role,
+      scope: "warehouse",
+      scopeLabel: "Kho Tổng và các kho chi nhánh",
+      branchUuid: "",
+      branchOptions: [],
+      selectedBranchFilter: "",
+      branchSelectorLocked: true,
+      message: ""
+    };
+  }
+
   const message = role === "kitchen"
-    ? "Tài khoản bếp không được xem dữ liệu tồn kho."
+    ? "Tài khoản bếp cần được gán chi nhánh trước khi mở Quản lý kho."
     : "Tài khoản cần vai trò Admin hoặc nhân viên đã được gán chi nhánh để mở Quản lý kho.";
 
   return {

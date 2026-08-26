@@ -6,6 +6,7 @@ import { AdminEmptyState, AdminSearchInput } from "../ui/AdminCommon.jsx";
 import AdminEmployeeMonthlyReport from "../checklist/AdminEmployeeMonthlyReport.jsx";
 import AdminPositionCatalog from "../checklist/AdminPositionCatalog.jsx";
 import AdminEmployeeFormModal from "../checklist/AdminEmployeeFormModal.jsx";
+import BranchAccountSettings from "../store/BranchAccountSettings.jsx";
 
 const EMPTY_FORM = {
   id: "", employeeCode: "", fullName: "", familyName: "", givenName: "", email: "", phone: "",
@@ -108,7 +109,10 @@ export default function AdminEmployeesPage({ branches = [] }) {
     setForm((current) => ({ ...current, branchUuids: current.branchUuids.includes(branchUuid) ? current.branchUuids.filter((id) => id !== branchUuid) : [...current.branchUuids, branchUuid] }));
   }
 
-  const tabs = [{ id: "list", label: "Danh sách nhân viên" }, { id: "evaluation", label: "Đánh giá tháng" }, { id: "positions", label: "Danh mục vị trí" }];
+  const tabs = [{ id: "list", label: "Danh sách nhân viên" }, { id: "accounts", label: "Tài khoản & phân quyền" }, { id: "evaluation", label: "Đánh giá tháng" }, { id: "positions", label: "Danh mục vị trí" }];
+  if (activeTab === "accounts") {
+    return <div className="checklist-admin-page"><nav className="checklist-admin-tabs">{tabs.map((tab) => <button type="button" key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav><BranchAccountSettings branches={branches} /></div>;
+  }
   if (activeTab === "evaluation") {
     return <div className="checklist-admin-page"><nav className="checklist-admin-tabs">{tabs.map((tab) => <button type="button" key={tab.id} className={activeTab === tab.id ? "active" : ""} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav><AdminEmployeeMonthlyReport branches={branches} /></div>;
   }

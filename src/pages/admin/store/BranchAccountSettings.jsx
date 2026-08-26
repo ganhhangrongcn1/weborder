@@ -42,6 +42,7 @@ function createInitialForm(branches = []) {
     email: "",
     password: "",
     role: "staff",
+    accountScope: "branch",
     branchUuid: getBranchUuid(firstBranch)
   };
 }
@@ -52,6 +53,7 @@ export default function BranchAccountSettings({ branches = [] }) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("");
 
   const branchOptions = useMemo(
     () => (Array.isArray(branches) ? branches : [])
@@ -79,13 +81,17 @@ export default function BranchAccountSettings({ branches = [] }) {
     });
   }, [branchOptions]);
 
-  const loadAccounts = async () => {
+  const loadAccounts = async ({ preserveMessage = false } = {}) => {
     setLoading(true);
-    setMessage("");
+    if (!preserveMessage) {
+      setMessage("");
+      setMessageTone("");
+    }
     const result = await listBranchAccounts();
     setLoading(false);
     if (!result.ok) {
       setMessage(result.message || "Không tải được danh sách tài khoản chi nhánh.");
+      setMessageTone("error");
       return;
     }
     setAccounts(result.accounts || []);
@@ -109,9 +115,11 @@ export default function BranchAccountSettings({ branches = [] }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setMessage("");
+    setMessageTone("");
 
-    if (!toText(form.branchUuid)) {
+    if (form.accountScope === "branch" && !toText(form.branchUuid)) {
       setMessage("Vui lòng chọn chi nhánh cho tài khoản.");
+      setMessageTone("error");
       return;
     }
 
@@ -120,22 +128,24 @@ export default function BranchAccountSettings({ branches = [] }) {
     setSubmitting(false);
 
     if (!result.ok) {
-      setMessage(result.message || "Không tạo được tài khoản chi nhánh.");
+      setMessage(`Chưa tạo tài khoản: ${result.message || "Không tạo được tài khoản chi nhánh."}`);
+      setMessageTone("error");
       return;
     }
 
     setMessage(result.message || "Đã tạo tài khoản chi nhánh.");
+    setMessageTone("success");
     resetForm();
-    await loadAccounts();
+    await loadAccounts({ preserveMessage: true });
   };
 
   return (
     <AdminCard className="admin-panel admin-store-panel admin-branch-account-panel">
       <div className="admin-panel-head">
         <div>
-          <h2>Tài khoản chi nhánh</h2>
+          <h2>Tài khoản & phân quyền</h2>
           <p className="admin-branch-account-note">
-            Tạo tài khoản POS, bếp hoặc quản lý chi nhánh. Mỗi tài khoản sẽ được gán đúng branch_uuid để lọc đơn, bếp và in bill theo chi nhánh.
+            Tài khoản chi nhánh chỉ thấy Tổng quan ca và kho của mình. Quản lý Tổng kho chỉ thấy phân hệ Kho nhưng thao tác được toàn bộ kho.
           </p>
         </div>
         <AdminButton variant="secondary" onClick={loadAccounts} disabled={loading}>
@@ -143,9 +153,28 @@ export default function BranchAccountSettings({ branches = [] }) {
         </AdminButton>
       </div>
 
-      {message ? <p className="admin-store-message">{message}</p> : null}
+      {message ? (
+        <p className={`admin-store-message admin-store-message--${messageTone || "info"}`} role={messageTone === "error" ? "alert" : "status"}>
+          {message}
+        </p>
+      ) : null}
 
       <form className="admin-branch-account-form" onSubmit={handleSubmit}>
+        <select
+          className="admin-input"
+          value={form.accountScope}
+          onChange={(event) => {
+            const accountScope = event.target.value;
+            setForm((current) => ({
+              ...current,
+              accountScope,
+              role: accountScope === "central_inventory" ? "staff" : current.role
+            }));
+          }}
+        >
+          <option value="branch">Tài khoản chi nhánh</option>
+          <option value="central_inventory">Quản lý Tổng kho</option>
+        </select>
         <AdminInput
           placeholder="Tên nhân viên"
           value={form.name}
@@ -172,31 +201,37 @@ export default function BranchAccountSettings({ branches = [] }) {
           minLength={8}
           required
         />
-        <select
-          className="admin-input"
-          value={form.role}
-          onChange={(event) => updateForm("role", event.target.value)}
-        >
-          {ROLE_OPTIONS.map((role) => (
-            <option key={role.value} value={role.value}>
-              {role.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="admin-input"
-          value={form.branchUuid}
-          onChange={(event) => updateForm("branchUuid", event.target.value)}
-          required
-        >
-          <option value="">Chọn chi nhánh</option>
-          {branchOptions.map((branch) => (
-            <option key={branch.uuid} value={branch.uuid}>
-              {branch.code ? `${branch.code} - ${branch.name}` : branch.name}
-            </option>
-          ))}
-        </select>
-        <AdminButton type="submit" disabled={submitting || !branchOptions.length}>
+        {form.accountScope === "branch" ? (
+          <>
+            <select
+              className="admin-input"
+              value={form.role}
+              onChange={(event) => updateForm("role", event.target.value)}
+            >
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="admin-input"
+              value={form.branchUuid}
+              onChange={(event) => updateForm("branchUuid", event.target.value)}
+              required
+            >
+              <option value="">Chọn chi nhánh</option>
+              {branchOptions.map((branch) => (
+                <option key={branch.uuid} value={branch.uuid}>
+                  {branch.code ? `${branch.code} - ${branch.name}` : branch.name}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : (
+          <div className="admin-input" aria-label="Phạm vi tài khoản">Kho Tổng + các kho chi nhánh</div>
+        )}
+        <AdminButton type="submit" disabled={submitting || (form.accountScope === "branch" && !branchOptions.length)}>
           {submitting ? "Đang tạo..." : "Tạo tài khoản"}
         </AdminButton>
       </form>
@@ -217,12 +252,12 @@ export default function BranchAccountSettings({ branches = [] }) {
               <span>{account.email || "Chưa có email"} · {account.phone || "Chưa có số điện thoại"}</span>
             </div>
             <div>
-              <strong>{getRoleLabel(account.role)}</strong>
+              <strong>{account.accountScope === "central_inventory" ? "Quản lý Tổng kho" : account.accountScope === "system_admin" ? "Admin hệ thống" : getRoleLabel(account.role)}</strong>
               <span>{getStatusLabel(account.status)}</span>
             </div>
             <div>
-              <strong>{account.branchName || branchNameByUuid.get(account.branchUuid) || "Global admin"}</strong>
-              <span>{account.branchUuid || "Không gán chi nhánh"}</span>
+              <strong>{account.warehouseName || account.branchName || branchNameByUuid.get(account.branchUuid) || "Chưa gán phạm vi"}</strong>
+              <span>{account.inventoryRole === "central_manager" ? "Toàn bộ hệ thống kho" : account.branchUuid || "Không gán chi nhánh"}</span>
             </div>
           </div>
         ))}

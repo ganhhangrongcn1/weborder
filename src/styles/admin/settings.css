@@ -80,6 +80,26 @@
   line-height: 1.45;
 }
 
+.admin-store-message--success,
+.admin-store-message--error {
+  margin: 0;
+  border: 1px solid;
+  border-radius: 12px;
+  padding: 11px 13px;
+}
+
+.admin-store-message--success {
+  border-color: #b7dfc7;
+  background: #effaf3;
+  color: #237447;
+}
+
+.admin-store-message--error {
+  border-color: #f0c2b8;
+  background: #fff3f0;
+  color: #b54732;
+}
+
 .admin-grab-automation__minutes > div {
   display: flex;
   align-items: center;

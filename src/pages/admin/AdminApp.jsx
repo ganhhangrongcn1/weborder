@@ -24,6 +24,11 @@ import {
 } from "../../services/inventoryDocumentService.js";
 import { readInventoryActionableCount } from "../../services/inventoryCountService.js";
 import { readInventoryCostAnalysisPermission } from "../../services/inventoryCostAnalysisService.js";
+import {
+  filterAdminNavigationByAccess,
+  getAdminModuleAccessPolicy,
+  getFirstAdminNavigationItem
+} from "./adminModuleAccessPolicy.js";
 
 const INVENTORY_COST_NAV_ID = "inventory-cost-analysis";
 
@@ -200,12 +205,16 @@ export default function AdminApp({
     isSupabaseAdminMode,
     branches
   }), [adminProfile, isSupabaseAdminMode, branches]);
-  const visibleNavGroups = useMemo(
-    () => filterInventoryCostNavigation(navGroups, canViewInventoryCostAnalysis),
-    [canViewInventoryCostAnalysis]
-  );
+  const adminModuleAccessPolicy = useMemo(() => getAdminModuleAccessPolicy({
+    adminProfile,
+    isSupabaseAdminMode
+  }), [adminProfile, isSupabaseAdminMode]);
+  const visibleNavGroups = useMemo(() => filterAdminNavigationByAccess(
+    filterInventoryCostNavigation(navGroups, canViewInventoryCostAnalysis),
+    adminModuleAccessPolicy
+  ), [adminModuleAccessPolicy, canViewInventoryCostAnalysis]);
   const isInventorySection = section === "inventory";
-  const headerSelectedBranchFilter = isInventorySection && inventoryAccessPolicy.branchSelectorLocked
+  const headerSelectedBranchFilter = (isInventorySection || section === "shifts") && inventoryAccessPolicy.branchSelectorLocked
     ? inventoryAccessPolicy.selectedBranchFilter
     : selectedBranchFilter;
   const flatAdminNav = visibleNavGroups.flatMap((group) => group.items);
@@ -237,6 +246,14 @@ export default function AdminApp({
     navigate(nextPath);
     setIsMobileNavOpen(false);
   };
+
+  useEffect(() => {
+    if (!isSupabaseAdminMode || adminModuleAccessPolicy.mode === "full") return;
+    const visibleItemIds = new Set(visibleNavGroups.flatMap((group) => group.items.map((item) => item.id)));
+    if (visibleItemIds.has(activeAdminNav)) return;
+    const firstItem = getFirstAdminNavigationItem(visibleNavGroups);
+    if (firstItem) activateNav(firstItem);
+  }, [activeAdminNav, adminModuleAccessPolicy.mode, isSupabaseAdminMode, visibleNavGroups]);
 
   useAdminConfigSyncEffect({
     supabaseConfigSyncEnabled,
@@ -354,8 +371,8 @@ export default function AdminApp({
           selectedBranchFilter={headerSelectedBranchFilter}
           setSelectedBranchFilter={setSelectedBranchFilter}
           branches={branches}
-          branchOptions={isInventorySection ? inventoryAccessPolicy.branchOptions : null}
-          branchSelectorLocked={isInventorySection && inventoryAccessPolicy.branchSelectorLocked}
+          branchOptions={(isInventorySection || section === "shifts") ? inventoryAccessPolicy.branchOptions : null}
+          branchSelectorLocked={(isInventorySection || section === "shifts") && inventoryAccessPolicy.branchSelectorLocked}
           syncStatusLabel={syncStatusLabel}
           adminEmail={adminProfile?.email || adminSession?.user?.email || ""}
           onLogout={isSupabaseAdminMode ? onAdminLogout : null}

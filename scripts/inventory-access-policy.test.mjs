@@ -6,6 +6,7 @@ import {
   getInventoryAccessPolicy,
   getInventoryScopedWarehouses
 } from "../src/pages/admin/inventory/inventoryAccessPolicy.js";
+import { getAdminModuleAccessPolicy } from "../src/pages/admin/adminModuleAccessPolicy.js";
 import { canApproveInventoryDisposals } from "../src/services/inventoryDocumentService.js";
 
 const branches = [
@@ -91,7 +92,7 @@ test("branch-scoped admin is also locked to the assigned branch", () => {
   assert.equal(policy.branchSelectorLocked, true);
 });
 
-test("staff without a branch and kitchen accounts are blocked", () => {
+test("central staff can manage all warehouses while branch kitchen stays in its branch", () => {
   const staffPolicy = getInventoryAccessPolicy({
     adminProfile: { role: "staff" },
     isSupabaseAdminMode: true,
@@ -102,8 +103,39 @@ test("staff without a branch and kitchen accounts are blocked", () => {
     isSupabaseAdminMode: true,
     branches
   });
-  assert.equal(staffPolicy.allowed, false);
-  assert.equal(kitchenPolicy.allowed, false);
+  assert.equal(staffPolicy.allowed, true);
+  assert.equal(staffPolicy.scope, "warehouse");
+  assert.equal(staffPolicy.branchSelectorLocked, true);
+  assert.equal(kitchenPolicy.allowed, true);
+  assert.equal(kitchenPolicy.scope, "branch");
+  assert.equal(kitchenPolicy.branchOptions.length, 1);
+});
+
+test("kitchen without an assigned branch remains blocked", () => {
+  const policy = getInventoryAccessPolicy({
+    adminProfile: { role: "kitchen" },
+    isSupabaseAdminMode: true,
+    branches
+  });
+  assert.equal(policy.allowed, false);
+});
+
+test("module menu separates branch operations from central inventory", () => {
+  const branchPolicy = getAdminModuleAccessPolicy({
+    adminProfile: { role: "kitchen", branch_uuid: branches[0].branch_uuid },
+    isSupabaseAdminMode: true
+  });
+  const centralPolicy = getAdminModuleAccessPolicy({
+    adminProfile: { role: "staff" },
+    isSupabaseAdminMode: true
+  });
+
+  assert.equal(branchPolicy.mode, "branch-operations");
+  assert.equal(branchPolicy.allowedItemIds.has("inventory-requisitions"), true);
+  assert.equal(branchPolicy.allowedItemIds.has("inventory-items"), false);
+  assert.equal(centralPolicy.mode, "central-inventory");
+  assert.equal(centralPolicy.allowedItemIds.has("inventory-warehouses"), true);
+  assert.equal(centralPolicy.allowedItemIds.has("shifts-main"), false);
 });
 
 test("unknown inventory child paths are marked for safe redirect", () => {

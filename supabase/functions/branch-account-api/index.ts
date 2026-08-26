@@ -58,6 +58,10 @@ function mapProfile(profile: JsonRecord, branchName = "") {
     status: toText(profile.status || "active"),
     branch_uuid: toText(profile.branch_uuid),
     branch_name: branchName,
+    account_scope: toText(profile.account_scope || (profile.branch_uuid ? "branch" : (profile.role === "admin" ? "system_admin" : "central_inventory"))),
+    warehouse_id: toText(profile.warehouse_id),
+    warehouse_name: toText(profile.warehouse_name),
+    inventory_role: toText(profile.inventory_role),
     created_at: toText(profile.created_at),
     updated_at: toText(profile.updated_at)
   };
@@ -157,9 +161,35 @@ async function listAccounts(
     });
   }
 
+  const authUserIds = (data || []).map((item: JsonRecord) => toText(item.auth_user_id)).filter(Boolean);
+  const inventoryAccessByUser = new Map<string, JsonRecord>();
+  if (authUserIds.length) {
+    const { data: accessRows } = await serviceClient
+      .from("inventory_user_access")
+      .select("auth_user_id,warehouse_id,role,is_active,inventory_warehouses(name,warehouse_type)")
+      .in("auth_user_id", authUserIds)
+      .eq("is_active", true);
+    (accessRows || []).forEach((access: JsonRecord) => {
+      const authUserId = toText(access.auth_user_id);
+      const warehouse = getObject(access.inventory_warehouses);
+      const current = inventoryAccessByUser.get(authUserId);
+      if (!current || toText(access.role) === "central_manager") {
+        inventoryAccessByUser.set(authUserId, {
+          warehouse_id: toText(access.warehouse_id),
+          warehouse_name: toText(warehouse.name),
+          inventory_role: toText(access.role),
+          account_scope: toText(access.role) === "central_manager" ? "central_inventory" : "branch"
+        });
+      }
+    });
+  }
+
   return response({
     ok: true,
-    accounts: (data || []).map((profile: JsonRecord) => mapProfile(profile, branchNameByUuid.get(toText(profile.branch_uuid)) || ""))
+    accounts: (data || []).map((profile: JsonRecord) => mapProfile({
+      ...profile,
+      ...(inventoryAccessByUser.get(toText(profile.auth_user_id)) || {})
+    }, branchNameByUuid.get(toText(profile.branch_uuid)) || ""))
   });
 }
 
@@ -172,9 +202,10 @@ async function createAccount(
   const name = toText(body.name);
   const email = normalizeEmail(body.email);
   const password = String(body.password ?? "");
-  const role = toText(body.role).toLowerCase() || "staff";
+  const accountScope = toText(body.account_scope || body.accountScope).toLowerCase() || "branch";
+  const role = accountScope === "central_inventory" ? "staff" : toText(body.role).toLowerCase() || "staff";
   const status = toText(body.status).toLowerCase() || "active";
-  const branchUuid = toText(body.branch_uuid || body.branchUuid);
+  const branchUuid = accountScope === "central_inventory" ? "" : toText(body.branch_uuid || body.branchUuid);
 
   if (!phone || phone.length < 9) {
     return response({ ok: false, message: "Số điện thoại tài khoản chưa hợp lệ." }, 400);
@@ -191,16 +222,49 @@ async function createAccount(
   if (!["active", "inactive"].includes(status)) {
     return response({ ok: false, message: "Trạng thái tài khoản không hợp lệ." }, 400);
   }
-  if (!isUuid(branchUuid)) {
+  if (!new Set(["branch", "central_inventory"]).has(accountScope)) {
+    return response({ ok: false, message: "Phạm vi tài khoản không hợp lệ." }, 400);
+  }
+  if (accountScope === "branch" && !isUuid(branchUuid)) {
     return response({ ok: false, message: "Vui lòng chọn chi nhánh hợp lệ cho tài khoản." }, 400);
   }
-  if (!canManageBranch(adminProfile, branchUuid)) {
+  if (accountScope === "branch" && !canManageBranch(adminProfile, branchUuid)) {
     return response({ ok: false, message: "Admin này không có quyền tạo tài khoản cho chi nhánh đã chọn." }, 403);
   }
 
-  const { data: branch, error: branchError } = await readBranch(serviceClient, branchUuid);
-  if (branchError || !branch) {
+  const { data: branch, error: branchError } = accountScope === "branch"
+    ? await readBranch(serviceClient, branchUuid)
+    : { data: null, error: null };
+  if (accountScope === "branch" && (branchError || !branch)) {
     return response({ ok: false, message: "Không tìm thấy chi nhánh trong Supabase." }, 404);
+  }
+  const warehouseResult = accountScope === "central_inventory"
+    ? await serviceClient
+      .from("inventory_warehouses")
+      .select("id,name,branch_uuid,warehouse_type")
+      .eq("is_active", true)
+      .eq("warehouse_type", "central")
+      .order("created_at", { ascending: true })
+      .limit(1)
+    : await serviceClient
+      .from("inventory_warehouses")
+      .select("id,name,branch_uuid,warehouse_type")
+      .eq("is_active", true)
+      .eq("branch_uuid", branchUuid)
+      .order("created_at", { ascending: true })
+      .limit(1);
+  const warehouse = warehouseResult.data?.[0] || null;
+  const warehouseError = warehouseResult.error;
+  if (warehouseError) {
+    console.error("[branch-account-api] warehouse lookup failed", {
+      accountScope,
+      branchUuid,
+      error: warehouseError
+    });
+    return response({ ok: false, message: "Không đọc được dữ liệu kho để cấp quyền tài khoản." }, 500);
+  }
+  if (!warehouse) {
+    return response({ ok: false, message: accountScope === "central_inventory" ? "Chưa tìm thấy Kho Tổng đang hoạt động." : "Chi nhánh chưa có kho đang hoạt động." }, 404);
   }
 
   const { data: existingPhoneProfile } = await serviceClient
@@ -228,7 +292,8 @@ async function createAccount(
       name,
       phone,
       role,
-      branch_uuid: branchUuid
+      branch_uuid: branchUuid || null,
+      account_scope: accountScope
     }
   });
 
@@ -242,9 +307,10 @@ async function createAccount(
   }
 
   const metadata = {
-    branch_uuid: branchUuid,
-    branch_name: toText(branch.name),
-    branch_alias: toText(branch.branch_code).toLowerCase()
+    branch_uuid: branchUuid || null,
+    branch_name: toText(branch?.name),
+    branch_alias: toText(branch?.branch_code).toLowerCase(),
+    account_scope: accountScope
   };
 
   const { data: profile, error: profileError } = await serviceClient
@@ -257,7 +323,7 @@ async function createAccount(
       role,
       status,
       registered: true,
-      branch_uuid: branchUuid,
+      branch_uuid: branchUuid || null,
       metadata,
       updated_at: new Date().toISOString()
     }, { onConflict: "phone" })
@@ -272,10 +338,33 @@ async function createAccount(
     return response({ ok: false, message: "Đã hủy Auth user vì không lưu được profile chi nhánh." }, 500);
   }
 
+
+  const inventoryRole = accountScope === "central_inventory" ? "central_manager" : "branch_manager";
+  const { error: accessError } = await serviceClient
+    .from("inventory_user_access")
+    .upsert({
+      auth_user_id: authUserId,
+      warehouse_id: toText(warehouse.id),
+      role: inventoryRole,
+      is_active: true,
+      created_by: toText(adminProfile.auth_user_id) || null,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "auth_user_id,warehouse_id,role" });
+  if (accessError) {
+    console.error("[branch-account-api] inventory access upsert failed", accessError);
+    return response({ ok: false, message: "Đã tạo tài khoản nhưng chưa cấp được quyền kho. Vui lòng liên hệ Admin." }, 500);
+  }
+
   return response({
     ok: true,
-    message: "Đã tạo tài khoản chi nhánh.",
-    account: mapProfile(profile, toText(branch.name))
+    message: accountScope === "central_inventory" ? "Đã tạo tài khoản Quản lý Tổng kho với phạm vi toàn bộ kho." : "Đã tạo tài khoản chi nhánh.",
+    account: mapProfile({
+      ...profile,
+      account_scope: accountScope,
+      warehouse_id: toText(warehouse.id),
+      warehouse_name: toText(warehouse.name),
+      inventory_role: inventoryRole
+    }, toText(branch?.name))
   });
 }
 

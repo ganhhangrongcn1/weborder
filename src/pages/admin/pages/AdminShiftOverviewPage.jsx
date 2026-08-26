@@ -76,7 +76,8 @@ function ShiftStatusBadge({ health }) {
 export default function AdminShiftOverviewPage({
   branches = [],
   selectedBranchFilter = "all",
-  setSelectedBranchFilter
+  setSelectedBranchFilter,
+  inventoryAccessPolicy = null
 }) {
   const todayText = toVietnamDateInputValue();
   const [datePreset, setDatePreset] = useState("today");
@@ -86,10 +87,19 @@ export default function AdminShiftOverviewPage({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const branchOptions = useMemo(() => buildBranchFilterOptions(branches), [branches]);
+  const branchSelectionLocked = inventoryAccessPolicy?.scope === "branch";
+  const branchOptions = useMemo(
+    () => branchSelectionLocked
+      ? (inventoryAccessPolicy?.branchOptions || [])
+      : buildBranchFilterOptions(branches),
+    [branchSelectionLocked, branches, inventoryAccessPolicy?.branchOptions]
+  );
+  const effectiveBranchFilter = branchSelectionLocked
+    ? inventoryAccessPolicy?.selectedBranchFilter || inventoryAccessPolicy?.branchUuid || ""
+    : selectedBranchFilter;
   const activeBranch = useMemo(
-    () => branchOptions.find((branch) => branch.value === selectedBranchFilter) || null,
-    [branchOptions, selectedBranchFilter]
+    () => branchOptions.find((branch) => branch.value === effectiveBranchFilter) || null,
+    [branchOptions, effectiveBranchFilter]
   );
 
   const applyPreset = (preset) => {
@@ -123,7 +133,7 @@ export default function AdminShiftOverviewPage({
     const range = buildVietnamDateRange(dateFrom, dateTo);
     const result = await readAdminShiftOverview({
       ...range,
-      branchUuid: selectedBranchFilter === "all" ? "" : selectedBranchFilter
+      branchUuid: effectiveBranchFilter === "all" ? "" : effectiveBranchFilter
     });
     setLoading(false);
     setShifts(result.shifts || []);
@@ -138,7 +148,7 @@ export default function AdminShiftOverviewPage({
       const range = buildVietnamDateRange(dateFrom, dateTo);
       const result = await readAdminShiftOverview({
         ...range,
-        branchUuid: selectedBranchFilter === "all" ? "" : selectedBranchFilter
+        branchUuid: effectiveBranchFilter === "all" ? "" : effectiveBranchFilter
       });
       if (disposed) return;
       setLoading(false);
@@ -149,7 +159,7 @@ export default function AdminShiftOverviewPage({
     return () => {
       disposed = true;
     };
-  }, [dateFrom, dateTo, selectedBranchFilter]);
+  }, [dateFrom, dateTo, effectiveBranchFilter]);
 
   const summary = useMemo(() => {
     return shifts.reduce((acc, shift) => {
@@ -177,20 +187,23 @@ export default function AdminShiftOverviewPage({
         <div className="admin-orders-branch-switcher">
           <span>Chi nhánh</span>
           <div>
-            <button
-              type="button"
-              className={selectedBranchFilter === "all" ? "is-active" : ""}
-              onClick={() => setSelectedBranchFilter?.("all")}
-            >
-              Tất cả
-            </button>
+            {!branchSelectionLocked ? (
+              <button
+                type="button"
+                className={effectiveBranchFilter === "all" ? "is-active" : ""}
+                onClick={() => setSelectedBranchFilter?.("all")}
+              >
+                Tất cả
+              </button>
+            ) : null}
             {branchOptions.map((branch) => (
               <button
                 key={branch.value}
                 type="button"
-                className={branch.value === selectedBranchFilter ? "is-active" : ""}
-                onClick={() => setSelectedBranchFilter?.(branch.value)}
+                className={branch.value === effectiveBranchFilter ? "is-active" : ""}
+                onClick={branchSelectionLocked ? undefined : () => setSelectedBranchFilter?.(branch.value)}
                 title={branch.label}
+                disabled={branchSelectionLocked}
               >
                 {getBranchShortLabel(branch.label)}
               </button>
