@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { getInventoryDocumentDateRange } from "../../../services/inventoryDocumentFilters.js";
 import { getInventoryDocumentPath } from "../../../services/inventoryLedgerCalculations.js";
 import { getInventoryItemDisplayUnitConfig } from "../../../services/inventoryUnitConversion.js";
@@ -96,18 +97,18 @@ export default function InventoryLedger({
         ) : (
           <label className="inventory-ledger-select">
             <span>Kho</span>
-            <select value={filters.warehouseId || ""} onChange={(event) => onFiltersChange?.({ warehouseId: event.target.value })}>
+            <InventorySearchableSelect value={filters.warehouseId || ""} onChange={(event) => onFiltersChange?.({ warehouseId: event.target.value })}>
               <option value="">Tất cả kho</option>
               {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-            </select>
+            </InventorySearchableSelect>
           </label>
         )}
         <label className="inventory-ledger-select">
           <span>Nguyên vật liệu</span>
-          <select value={filters.itemId || ""} onChange={(event) => onFiltersChange?.({ itemId: event.target.value })}>
+          <InventorySearchableSelect value={filters.itemId || ""} onChange={(event) => onFiltersChange?.({ itemId: event.target.value })}>
             <option value="">Tất cả nguyên vật liệu</option>
             {items.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.code} · {row.name}</option>)}
-          </select>
+          </InventorySearchableSelect>
         </label>
       </div>
 

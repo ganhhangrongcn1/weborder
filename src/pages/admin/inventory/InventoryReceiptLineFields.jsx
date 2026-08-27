@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 
 export default function InventoryReceiptLineFields({
   line,
@@ -18,10 +19,10 @@ export default function InventoryReceiptLineFields({
   return (
     <div className="inventory-receipt-line">
       <div className="inventory-receipt-row">
-        <select value={line.itemId} onChange={(event) => onUpdate("itemId", event.target.value)} required>
+        <InventorySearchableSelect value={line.itemId} onChange={(event) => onUpdate("itemId", event.target.value)} required>
           <option value="">Chọn nguyên vật liệu</option>
           {items.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-        </select>
+        </InventorySearchableSelect>
         <div className="inventory-document-unit">
           <strong>{unitName}</strong>
           {item && line.conversionToBase !== 1

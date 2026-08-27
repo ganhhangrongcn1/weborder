@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 
 function createTarget() {
   return { menuEntityType: "product", menuEntityId: "", quantity: 1 };
@@ -90,7 +91,7 @@ export default function InventoryChannelMappingModal({
               <div className="inventory-channel-targets">
                 {form.targets.map((target, index) => (
                   <div className="inventory-channel-target" key={`${target.menuEntityType}:${target.menuEntityId}:${index}`}>
-                    <label className="inventory-form-field"><span>Món / topping *</span><select value={`${target.menuEntityType}:${target.menuEntityId}`} onChange={(event) => selectTarget(index, event.target.value)} required><option value="product:">Chọn món Menu</option>{menuEntityGroups.map((group) => <optgroup key={group.category} label={group.category}>{group.entities.map((row) => <option key={`${row.type}:${row.id}`} value={`${row.type}:${row.id}`}>{row.name}</option>)}</optgroup>)}</select></label>
+                    <label className="inventory-form-field"><span>Món / topping *</span><InventorySearchableSelect value={`${target.menuEntityType}:${target.menuEntityId}`} onChange={(event) => selectTarget(index, event.target.value)} required><option value="product:">Chọn món Menu</option>{menuEntityGroups.map((group) => <optgroup key={group.category} label={group.category}>{group.entities.map((row) => <option key={`${row.type}:${row.id}`} value={`${row.type}:${row.id}`}>{row.name}</option>)}</optgroup>)}</InventorySearchableSelect></label>
                     <label className="inventory-form-field"><span>Số lượng *</span><input type="number" min="0.000001" step="any" value={target.quantity} onChange={(event) => updateTarget(index, "quantity", event.target.value)} required /></label>
                     <button type="button" className="inventory-channel-target__remove" disabled={form.targets.length <= 1} onClick={() => setForm((current) => ({ ...current, targets: current.targets.filter((_, targetIndex) => targetIndex !== index) }))} aria-label="Xóa món"><Icon name="trash" size={15} /></button>
                   </div>

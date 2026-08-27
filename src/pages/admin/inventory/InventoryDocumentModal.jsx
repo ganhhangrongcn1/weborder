@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { getInventoryItemDisplayUnitConfig } from "../../../services/inventoryUnitConversion.js";
 import InventoryReceiptLineFields from "./InventoryReceiptLineFields.jsx";
 import { getReceiptLineItemDefaults, getSuggestedExpiryDate } from "./inventoryReceiptForm.js";
@@ -170,12 +171,12 @@ export default function InventoryDocumentModal({
     <label className="inventory-form-field">
       <span className="inventory-field-label"><Icon name="store" size={15} />{label} <b>*</b></span>
       <span className="inventory-control-shell inventory-control-shell--select">
-        <select value={form[field]} onChange={(event) => updateForm(field, event.target.value)} required>
+        <InventorySearchableSelect value={form[field]} onChange={(event) => updateForm(field, event.target.value)} required>
           <option value="">Chọn kho</option>
           {(field === "destinationWarehouseId" ? requestWarehouses : activeWarehouses).filter((row) => row.id !== excludedId).map((row) => (
             <option key={row.id} value={row.id}>{row.name}</option>
           ))}
-        </select>
+        </InventorySearchableSelect>
       </span>
     </label>
   );
@@ -224,10 +225,10 @@ export default function InventoryDocumentModal({
                 <label className="inventory-form-field">
                   <span className="inventory-field-label"><Icon name="user" size={15} />Nhà cung cấp <b>*</b></span>
                   <span className="inventory-control-shell inventory-control-shell--select">
-                    <select value={form.supplierId} onChange={(event) => updateForm("supplierId", event.target.value)} required>
+                    <InventorySearchableSelect value={form.supplierId} onChange={(event) => updateForm("supplierId", event.target.value)} required>
                       <option value="">Chọn nhà cung cấp</option>
                       {activeSuppliers.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-                    </select>
+                    </InventorySearchableSelect>
                   </span>
                 </label>
               ) : null}
@@ -241,10 +242,10 @@ export default function InventoryDocumentModal({
                 <label className="inventory-form-field full-field">
                   <span className="inventory-field-label"><Icon name="warning" size={15} />Lý do hủy chung <b>*</b></span>
                   <span className="inventory-control-shell inventory-control-shell--select">
-                    <select value={form.disposalReason} onChange={(event) => updateForm("disposalReason", event.target.value)} required>
+                    <InventorySearchableSelect value={form.disposalReason} onChange={(event) => updateForm("disposalReason", event.target.value)} required>
                       <option value="">Chọn lý do</option>
                       {DISPOSAL_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
-                    </select>
+                    </InventorySearchableSelect>
                   </span>
                   <small className="inventory-form-hint">Áp dụng mặc định cho mọi món; chỉ đổi ở từng dòng khi món đó có lý do khác.</small>
                 </label>
@@ -294,24 +295,24 @@ export default function InventoryDocumentModal({
                 }
                 return (
                   <div key={line.key} className={`inventory-document-line ${domain === "disposals" ? "has-disposal-reason" : domain === "adjustments" ? "has-adjustment-direction" : ""}`}>
-                    <select value={line.itemId} onChange={(event) => updateLine(line.key, "itemId", event.target.value)} required>
+                    <InventorySearchableSelect value={line.itemId} onChange={(event) => updateLine(line.key, "itemId", event.target.value)} required>
                       <option value="">Chọn nguyên vật liệu</option>
                       {activeItems.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-                    </select>
+                    </InventorySearchableSelect>
                     <div className="inventory-document-unit"><strong>{unitName}</strong>{item && line.conversionToBase !== 1 ? <small>1 {unitName} = {line.conversionToBase} {item.baseUnit?.name}</small> : <small>Đơn vị lưu kho</small>}</div>
                     {domain === "adjustments" ? (
-                      <select value={line.adjustmentDirection} onChange={(event) => updateLine(line.key, "adjustmentDirection", event.target.value)} required aria-label={`Chiều điều chỉnh của ${item?.name || "nguyên vật liệu"}`}>
+                      <InventorySearchableSelect value={line.adjustmentDirection} onChange={(event) => updateLine(line.key, "adjustmentDirection", event.target.value)} required aria-label={`Chiều điều chỉnh của ${item?.name || "nguyên vật liệu"}`}>
                         <option value="">Chọn tăng/giảm</option>
                         <option value="in">+ Tăng tồn</option>
                         <option value="out">− Giảm tồn</option>
-                      </select>
+                      </InventorySearchableSelect>
                     ) : null}
                     <input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} required />
                     {domain === "disposals" ? (
-                      <select value={line.disposalReason} onChange={(event) => updateLine(line.key, "disposalReason", event.target.value)} aria-label={`Lý do hủy của ${item?.name || "nguyên vật liệu"}`}>
+                      <InventorySearchableSelect value={line.disposalReason} onChange={(event) => updateLine(line.key, "disposalReason", event.target.value)} aria-label={`Lý do hủy của ${item?.name || "nguyên vật liệu"}`}>
                         <option value="">Theo lý do chung{form.disposalReason ? `: ${form.disposalReason}` : ""}</option>
                         {DISPOSAL_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
-                      </select>
+                      </InventorySearchableSelect>
                     ) : null}
                     <button type="button" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((row) => row.key !== line.key))} aria-label="Xóa dòng"><Icon name="trash" size={16} /></button>
                   </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 
 function money(value) {
   return `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Number(value || 0))} đ`;
@@ -149,7 +150,7 @@ export default function InventoryCostAnalysis({
         <label className="inventory-search-field"><Icon name="search" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tab === "sales" ? "Tìm mã đơn, món hoặc phiên bản..." : "Tìm mã lệnh, BTP hoặc BOM..."} /></label>
         <label><span>Từ ngày</span><input type="date" value={filters.dateFrom || ""} max={filters.dateTo || undefined} onChange={(event) => updateDate("dateFrom", event.target.value)} /></label>
         <label><span>Đến ngày</span><input type="date" value={filters.dateTo || ""} min={filters.dateFrom || undefined} onChange={(event) => updateDate("dateTo", event.target.value)} /></label>
-        {warehouseSelectionLocked && warehouses.length === 1 ? <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div> : <select aria-label="Lọc kho" value={warehouseFilter} onChange={(event) => setWarehouseFilter(event.target.value)}><option value="">Tất cả kho được phép xem</option>{warehouses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select>}
+        {warehouseSelectionLocked && warehouses.length === 1 ? <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div> : <InventorySearchableSelect aria-label="Lọc kho" value={warehouseFilter} onChange={(event) => setWarehouseFilter(event.target.value)}><option value="">Tất cả kho được phép xem</option>{warehouses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</InventorySearchableSelect>}
       </div>
 
       {hasMore ? <div className="inventory-reconciliation-limit"><Icon name="warning" size={15} />Dữ liệu đã chạm giới hạn an toàn. Thu hẹp khoảng ngày để xem đầy đủ.</div> : null}

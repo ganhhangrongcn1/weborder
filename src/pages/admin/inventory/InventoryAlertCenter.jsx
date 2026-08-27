@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { buildInventoryAlerts, countInventoryAlerts } from "../../../services/inventoryAlertCalculations.js";
 import { getInventoryLotDisplayValues } from "../../../services/inventoryLotReportCalculations.js";
 import { getInventoryStockDisplayValues } from "../../../services/inventoryStockReportCalculations.js";
@@ -127,17 +128,17 @@ export default function InventoryAlertCenter({ sources = {}, warehouses = [], it
         {warehouseSelectionLocked && warehouses.length === 1 ? (
           <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div>
         ) : (
-          <select aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
+          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
             <option value="">Tất cả kho được phép xem</option>
             {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-          </select>
+          </InventorySearchableSelect>
         )}
-        <select aria-label="Lọc mức độ" value={filters.severity} onChange={(event) => updateFilter({ severity: event.target.value })}>
+        <InventorySearchableSelect aria-label="Lọc mức độ" value={filters.severity} onChange={(event) => updateFilter({ severity: event.target.value })}>
           <option value="all">Tất cả mức độ</option>
           <option value="danger">Khẩn cấp</option>
           <option value="warning">Cần xử lý</option>
           <option value="info">Theo dõi</option>
-        </select>
+        </InventorySearchableSelect>
       </div>
 
       {limited ? <div className="inventory-ledger-warning"><Icon name="warning" size={17} />Dữ liệu đã chạm giới hạn đọc an toàn. Hãy thu hẹp phạm vi kho trước khi xử lý.</div> : null}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { getInventoryDocumentDateRange } from "../../../services/inventoryDocumentFilters.js";
 
 function formatQuantity(value) {
@@ -74,9 +75,9 @@ export default function InventoryStockFlowReport({
         {warehouseSelectionLocked && warehouses.length === 1 ? (
           <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div>
         ) : (
-          <label className="inventory-ledger-select"><span>Kho</span><select value={filters.warehouseId || ""} onChange={(event) => onFiltersChange?.({ warehouseId: event.target.value })}><option value="">Tất cả kho được phép xem</option>{warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+          <label className="inventory-ledger-select"><span>Kho</span><InventorySearchableSelect value={filters.warehouseId || ""} onChange={(event) => onFiltersChange?.({ warehouseId: event.target.value })}><option value="">Tất cả kho được phép xem</option>{warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</InventorySearchableSelect></label>
         )}
-        <label className="inventory-ledger-select"><span>Danh mục</span><select value={filters.groupId || ""} onChange={(event) => onFiltersChange?.({ groupId: event.target.value })}><option value="">Tất cả danh mục</option>{groups.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
+        <label className="inventory-ledger-select"><span>Danh mục</span><InventorySearchableSelect value={filters.groupId || ""} onChange={(event) => onFiltersChange?.({ groupId: event.target.value })}><option value="">Tất cả danh mục</option>{groups.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</InventorySearchableSelect></label>
         <form className="inventory-stock-flow-report__search" onSubmit={submitSearch}>
           <label className="inventory-search-field"><Icon name="search" size={16} /><input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Tìm mã hoặc tên nguyên vật liệu..." /></label>
           <button type="submit">Tìm</button>

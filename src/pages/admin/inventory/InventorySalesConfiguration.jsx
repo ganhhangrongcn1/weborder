@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 import {
   calculateSalesRecipeComponent,
@@ -166,16 +167,16 @@ export default function InventorySalesConfiguration({
       {tab !== "warehouses" ? <div className="inventory-list-toolbar inventory-bom-toolbar">
         <label className="inventory-search-field"><Icon name="search" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tab === "recipes" ? "Tìm món hoặc nguyên liệu..." : "Tìm tên món trên app hoặc món Menu..."} /></label>
         {tab === "channels" ? (
-          <select value={channelSource} onChange={(event) => { setChannelSource(event.target.value); setChannelBranch("all"); }} aria-label="Lọc theo kênh bán">
+          <InventorySearchableSelect value={channelSource} onChange={(event) => { setChannelSource(event.target.value); setChannelBranch("all"); }} aria-label="Lọc theo kênh bán">
             <option value="all">Tất cả kênh ({allChannelRows.length})</option>
             {availableChannelSources.map((source) => <option key={source} value={source}>{SOURCE_LABELS[source]} ({channelSourceCounts[source]})</option>)}
-          </select>
+          </InventorySearchableSelect>
         ) : null}
         {tab === "channels" ? (
-          <select value={channelBranch} onChange={(event) => setChannelBranch(event.target.value)} aria-label="Lọc theo chi nhánh">
+          <InventorySearchableSelect value={channelBranch} onChange={(event) => setChannelBranch(event.target.value)} aria-label="Lọc theo chi nhánh">
             <option value="all">Tất cả chi nhánh ({sourceFilteredChannelRows.length})</option>
             {channelBranchOptions.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count})</option>)}
-          </select>
+          </InventorySearchableSelect>
         ) : null}
       </div> : null}
 
@@ -233,7 +234,7 @@ export default function InventorySalesConfiguration({
                 const changed = Boolean(selectedId && selectedId !== row.current?.id);
                 return <tr key={row.branchUuid}>
                   <td><strong>{row.branch.name || "Chi nhánh chưa đặt tên"}</strong><small>Áp dụng cho mọi kênh bán của chi nhánh</small></td>
-                  <td><select value={selectedId} disabled={!canManageWarehouseDefaults || !row.options.length || warehouseMutationStatus === "saving"} onChange={(event) => setDefaultWarehouseSelections((current) => ({ ...current, [row.branchUuid]: event.target.value }))}><option value="">Chọn kho chi nhánh</option>{row.options.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select></td>
+                  <td><InventorySearchableSelect value={selectedId} disabled={!canManageWarehouseDefaults || !row.options.length || warehouseMutationStatus === "saving"} onChange={(event) => setDefaultWarehouseSelections((current) => ({ ...current, [row.branchUuid]: event.target.value }))}><option value="">Chọn kho chi nhánh</option>{row.options.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</InventorySearchableSelect></td>
                   <td>{row.current ? <span className="inventory-bom-status is-active">Đã thiết lập</span> : <span className="inventory-bom-status is-draft">Chưa thiết lập</span>}</td>
                   <td><button type="button" className="inventory-default-warehouse-save" disabled={!canManageWarehouseDefaults || !changed || warehouseMutationStatus === "saving"} onClick={() => saveDefaultWarehouse(row)}><Icon name="check" size={14} />{warehouseMutationStatus === "saving" && changed ? "Đang lưu..." : "Lưu"}</button></td>
                 </tr>;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   calculateInventoryStockReportSummary,
   getInventoryStockDisplayValues,
@@ -104,21 +105,21 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
         {warehouseSelectionLocked && warehouses.length === 1 ? (
           <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div>
         ) : (
-          <select aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
+          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
             <option value="">Tất cả kho được phép xem</option>
             {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-          </select>
+          </InventorySearchableSelect>
         )}
-        <select aria-label="Lọc danh mục" value={filters.groupId} onChange={(event) => updateFilter({ groupId: event.target.value })}>
+        <InventorySearchableSelect aria-label="Lọc danh mục" value={filters.groupId} onChange={(event) => updateFilter({ groupId: event.target.value })}>
           <option value="">Tất cả danh mục</option>
           {groups.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-        </select>
-        <select aria-label="Lọc trạng thái tồn" value={filters.stockState} onChange={(event) => updateFilter({ stockState: event.target.value })}>
+        </InventorySearchableSelect>
+        <InventorySearchableSelect aria-label="Lọc trạng thái tồn" value={filters.stockState} onChange={(event) => updateFilter({ stockState: event.target.value })}>
           <option value="all">Tất cả trạng thái</option>
           <option value="available">Còn hàng</option>
           <option value="low">Sắp hết</option>
           <option value="out">Hết hàng</option>
-        </select>
+        </InventorySearchableSelect>
       </div>
 
       {limited ? <div className="inventory-ledger-warning"><Icon name="warning" size={17} />Báo cáo đã chạm giới hạn 5.000 dòng. Cần bổ sung báo cáo tổng hợp phía máy chủ trước khi dùng ở quy mô lớn hơn.</div> : null}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 
 const STATUS_META = {
   pending: { label: "Chờ xử lý", tone: "draft" },
@@ -202,17 +203,17 @@ export default function InventorySalesReconciliation({
         <label className="inventory-search-field"><Icon name="search" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã đơn hoặc tên món..." /></label>
         <label className="inventory-reconciliation-date"><span>Từ ngày</span><input type="date" value={filters.dateFrom || ""} max={filters.dateTo || undefined} onChange={(event) => updateDateFilter("dateFrom", event.target.value)} /></label>
         <label className="inventory-reconciliation-date"><span>Đến ngày</span><input type="date" value={filters.dateTo || ""} min={filters.dateFrom || undefined} onChange={(event) => updateDateFilter("dateTo", event.target.value)} /></label>
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Lọc trạng thái đối soát">
+        <InventorySearchableSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Lọc trạng thái đối soát">
           <option value="needs_action">Cần xử lý ({needsActionCount})</option>
           <option value="all">Tất cả ({rows.length})</option>
           <option value="completed">Đã ghi kho</option>
           <option value="blocked">Bị chặn</option>
           <option value="ignored">Không trừ kho</option>
-        </select>
-        <select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} aria-label="Lọc đối soát theo chi nhánh">
+        </InventorySearchableSelect>
+        <InventorySearchableSelect value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} aria-label="Lọc đối soát theo chi nhánh">
           <option value="all">Tất cả chi nhánh ({rows.length})</option>
           {branchOptions.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count})</option>)}
-        </select>
+        </InventorySearchableSelect>
       </div>
       {hasMore ? <div className="inventory-reconciliation-limit"><Icon name="warning" size={15} />Đang hiển thị 200 đơn mới nhất trong khoảng ngày đã chọn. Thu hẹp ngày để xem đủ dữ liệu.</div> : null}
 

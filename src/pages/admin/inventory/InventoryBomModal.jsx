@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { calculateBomComponentRequirement } from "../../../services/inventoryBomCalculations.js";
 import {
   getInventoryCompatibleUnits,
@@ -148,10 +149,10 @@ export default function InventoryBomModal({
             <div className="inventory-form-row inventory-form-row--triple">
               <label className="inventory-form-field">
                 <span>Bán thành phẩm đầu ra *</span>
-                <select value={form.outputItemId} disabled={readOnly} onChange={(event) => selectOutputItem(event.target.value)} required>
+                <InventorySearchableSelect value={form.outputItemId} disabled={readOnly} onChange={(event) => selectOutputItem(event.target.value)} required>
                   <option value="">Chọn bán thành phẩm</option>
                   {outputItems.map((item) => <option key={item.id} value={item.id}>{item.name} ({item.code})</option>)}
-                </select>
+                </InventorySearchableSelect>
               </label>
               <label className="inventory-form-field">
                 <span>Số lượng đầu ra *</span>
@@ -159,10 +160,10 @@ export default function InventoryBomModal({
               </label>
               <label className="inventory-form-field">
                 <span>Đơn vị đầu ra *</span>
-                <select value={form.yieldUnitId} disabled={readOnly || !form.outputItemId} onChange={(event) => updateField("yieldUnitId", event.target.value)} required>
+                <InventorySearchableSelect value={form.yieldUnitId} disabled={readOnly || !form.outputItemId} onChange={(event) => updateField("yieldUnitId", event.target.value)} required>
                   <option value="">Chọn đơn vị</option>
                   {outputUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}{unit.symbol ? ` (${unit.symbol})` : ""}</option>)}
-                </select>
+                </InventorySearchableSelect>
               </label>
             </div>
           </section>
@@ -181,9 +182,9 @@ export default function InventoryBomModal({
             <div className="inventory-form-row inventory-form-row--triple">
               <label className="inventory-form-field">
                 <span>Loại công thức *</span>
-                <select value={form.productionScope} disabled={readOnly} onChange={(event) => selectProductionScope(event.target.value)}>
+                <InventorySearchableSelect value={form.productionScope} disabled={readOnly} onChange={(event) => selectProductionScope(event.target.value)}>
                   {scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
+                </InventorySearchableSelect>
               </label>
               {isSharedBranchRecipe ? (
                 <div className="inventory-production-modal__context">
@@ -194,10 +195,10 @@ export default function InventoryBomModal({
               ) : (
                 <label className="inventory-form-field">
                   <span>Kho thực hiện *</span>
-                  <select value={form.defaultWarehouseId} disabled={readOnly} onChange={(event) => updateField("defaultWarehouseId", event.target.value)} required>
+                  <InventorySearchableSelect value={form.defaultWarehouseId} disabled={readOnly} onChange={(event) => updateField("defaultWarehouseId", event.target.value)} required>
                     <option value="">Chọn kho thực hiện</option>
                     {availableWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
-                  </select>
+                  </InventorySearchableSelect>
                 </label>
               )}
               <label className="inventory-form-field">
@@ -231,14 +232,14 @@ export default function InventoryBomModal({
                   <div className="inventory-bom-line" key={`${line.componentItemId || "new"}-${index}`}>
                     <label>
                       <span>Nguyên liệu/BTP *</span>
-                      <select value={line.componentItemId} disabled={readOnly} onChange={(event) => selectComponentItem(index, event.target.value)} required>
+                      <InventorySearchableSelect value={line.componentItemId} disabled={readOnly} onChange={(event) => selectComponentItem(index, event.target.value)} required>
                         <option value="">Chọn thành phần</option>
                         {semiFinishedComponents.length ? <optgroup label="Bán thành phẩm cấp dưới">{semiFinishedComponents.map((option) => <option key={option.id} value={option.id}>{option.name} ({option.code})</option>)}</optgroup> : null}
                         {materialComponents.length ? <optgroup label="Nguyên vật liệu và vật tư">{materialComponents.map((option) => <option key={option.id} value={option.id}>{option.name} ({option.code})</option>)}</optgroup> : null}
-                      </select>
+                      </InventorySearchableSelect>
                     </label>
                     <label><span>Số lượng *</span><input type="number" min="0.000001" step="any" value={line.quantity} disabled={readOnly} onChange={(event) => updateLine(index, "quantity", event.target.value)} required /></label>
-                    <label><span>Đơn vị *</span><select value={line.unitId} disabled={readOnly || !line.componentItemId} onChange={(event) => updateLine(index, "unitId", event.target.value)} required><option value="">Chọn đơn vị</option>{compatibleUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</select></label>
+                    <label><span>Đơn vị *</span><InventorySearchableSelect value={line.unitId} disabled={readOnly || !line.componentItemId} onChange={(event) => updateLine(index, "unitId", event.target.value)} required><option value="">Chọn đơn vị</option>{compatibleUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</InventorySearchableSelect></label>
                     <label><span>Hao hụt (%)</span><input type="number" min="0" max="100" step="0.01" value={line.wastePercent} disabled={readOnly} onChange={(event) => updateLine(index, "wastePercent", event.target.value)} /></label>
                     <div className="inventory-bom-line__gross"><span>Cần dùng</span><strong>{Number.isFinite(gross) ? gross.toLocaleString("vi-VN", { maximumFractionDigits: 3 }) : "0"}</strong><small>{compatibleUnits.find((unit) => unit.id === line.unitId)?.name || "Đơn vị"}</small></div>
                     {!readOnly ? <button type="button" className="inventory-bom-line__remove" onClick={() => setForm((current) => ({ ...current, components: current.components.length > 1 ? current.components.filter((_, lineIndex) => lineIndex !== index) : current.components }))} disabled={form.components.length <= 1} aria-label="Xóa dòng"><Icon name="trash" size={15} /></button> : null}

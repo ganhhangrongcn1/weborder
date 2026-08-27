@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   buildInventoryCountCreationLines,
   getInventoryCountExpectedDisplay,
@@ -53,7 +54,7 @@ export default function InventoryCountModal({ mode = "create", count = null, war
           {isCreate ? <>
             {warehouseSelectionLocked && warehouses.length === 1
               ? <div className="inventory-count-field inventory-warehouse-fixed"><span>Kho kiểm kê</span><strong>{warehouses[0].name}</strong><small>Cố định theo tài khoản chi nhánh</small></div>
-              : <label className="inventory-count-field"><span>Kho kiểm kê *</span><select value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)}><option value="">Chọn kho</option>{warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>}
+              : <label className="inventory-count-field"><span>Kho kiểm kê *</span><InventorySearchableSelect value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)}><option value="">Chọn kho</option>{warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</InventorySearchableSelect></label>}
             <div className="inventory-count-scope"><Icon name="check" size={18} /><div><strong>Kiểm toàn bộ nguyên vật liệu đang sử dụng</strong><span>{items.filter((item) => item.isActive !== false).length} mã hàng sẽ được đưa vào phiếu. Tồn được chụp tại lúc bắt đầu.</span></div></div>
             <label className="inventory-count-field"><span>Ghi chú</span><textarea rows="2" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ví dụ: Kiểm kê cuối tháng..." /></label>
           </> : <div className="inventory-table-scroll inventory-count-table-scroll"><table className={`inventory-data-table inventory-count-lines is-${mode}`}><thead><tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th className="is-number">Tồn hệ thống</th><th className="is-number">Thực tế</th>{!isCount ? <th className="is-number">Chênh lệch</th> : null}{isReview ? <th>Lý do chênh lệch</th> : null}</tr></thead><tbody>{lines.map((line) => {

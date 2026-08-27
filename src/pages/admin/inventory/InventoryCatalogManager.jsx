@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import InventoryMasterDataModal from "./InventoryMasterDataModal.jsx";
 
 const ITEM_TYPE_LABELS = {
@@ -155,16 +156,16 @@ export default function InventoryCatalogManager({
           <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={config.searchPlaceholder} />
         </label>
         {isItems ? (
-          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Lọc loại nguyên vật liệu">
+          <InventorySearchableSelect value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Lọc loại nguyên vật liệu">
             <option value="all">Tất cả loại NVL</option>
             {Object.entries(ITEM_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          </InventorySearchableSelect>
         ) : null}
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Lọc trạng thái">
+        <InventorySearchableSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Lọc trạng thái">
           <option value="all">Tất cả trạng thái</option>
           <option value="active">Đang sử dụng</option>
           <option value="inactive">Ngừng sử dụng</option>
-        </select>
+        </InventorySearchableSelect>
       </div>
 
       {filteredRows.length ? (

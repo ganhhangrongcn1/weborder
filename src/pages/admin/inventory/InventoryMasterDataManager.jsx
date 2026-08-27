@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import InventoryMasterDataModal from "./InventoryMasterDataModal.jsx";
 
 const UNIT_TYPE_LABELS = {
@@ -150,12 +151,12 @@ export default function InventoryMasterDataManager({
           <Icon name="search" size={17} />
           <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={config.searchPlaceholder} />
         </label>
-        {domain === "units" ? <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label="Lọc vai trò đơn vị"><option value="all">Tất cả vai trò</option><option value="base">Đơn vị gốc</option><option value="conversion">Đơn vị quy đổi</option></select> : null}
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Lọc trạng thái">
+        {domain === "units" ? <InventorySearchableSelect value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label="Lọc vai trò đơn vị"><option value="all">Tất cả vai trò</option><option value="base">Đơn vị gốc</option><option value="conversion">Đơn vị quy đổi</option></InventorySearchableSelect> : null}
+        <InventorySearchableSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Lọc trạng thái">
           <option value="all">Tất cả trạng thái</option>
           <option value="active">Đang sử dụng</option>
           <option value="inactive">Ngừng sử dụng</option>
-        </select>
+        </InventorySearchableSelect>
       </div>
 
       {filteredRows.length ? (

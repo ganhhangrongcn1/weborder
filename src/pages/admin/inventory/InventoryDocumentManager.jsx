@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import InventoryDocumentActionModal from "./InventoryDocumentActionModal.jsx";
 import InventoryDocumentDetailModal from "./InventoryDocumentDetailModal.jsx";
 import InventoryDocumentModal from "./InventoryDocumentModal.jsx";
@@ -204,10 +205,10 @@ export default function InventoryDocumentManager({
         </div>
         <label className="inventory-document-date-field"><span>Từ ngày</span><input type="date" max={filters.toDate || undefined} value={filters.fromDate || ""} onChange={(event) => onFiltersChange?.({ datePreset: "custom", fromDate: event.target.value })} /></label>
         <label className="inventory-document-date-field"><span>Đến ngày</span><input type="date" min={filters.fromDate || undefined} value={filters.toDate || ""} onChange={(event) => onFiltersChange?.({ datePreset: "custom", toDate: event.target.value })} /></label>
-        <select value={filters.status || "all"} onChange={(event) => onFiltersChange?.({ status: event.target.value })} aria-label="Lọc trạng thái">
+        <InventorySearchableSelect value={filters.status || "all"} onChange={(event) => onFiltersChange?.({ status: event.target.value })} aria-label="Lọc trạng thái">
           <option value="all">Tất cả trạng thái</option>
           {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
+        </InventorySearchableSelect>
         <label className="inventory-search-field"><Icon name="search" size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm trong trang hiện tại…" /></label>
       </div>
       {mutationMessage || actionError ? <div className={`inventory-operation-message ${mutationStatus === "error" || actionError ? "is-error" : ""}`}>{actionError || mutationMessage}</div> : null}

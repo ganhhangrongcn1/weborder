@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   getInventoryProductionExpiryConfig,
   getInventoryProductionScopeMeta
@@ -113,7 +114,7 @@ export default function InventoryProductionOrderModal({
             <div className="inventory-form-row inventory-form-row--triple">
               <label className="inventory-form-field inventory-production-modal__recipe">
                 <span>Công thức *</span>
-                <select value={form.bomId} disabled={readOnly || completing || Boolean(form.id)} onChange={(event) => {
+                <InventorySearchableSelect value={form.bomId} disabled={readOnly || completing || Boolean(form.id)} onChange={(event) => {
                   const nextBom = activeBoms.find((bom) => bom.id === event.target.value) || {};
                   setForm((current) => ({
                     ...current,
@@ -126,7 +127,7 @@ export default function InventoryProductionOrderModal({
                 }} required>
                   <option value="">Chọn công thức đang áp dụng</option>
                   {activeBoms.map((bom) => <option key={bom.id} value={bom.id}>{bom.outputItem?.name} · {bom.code}</option>)}
-                </select>
+                </InventorySearchableSelect>
               </label>
               <label className="inventory-form-field">
                 <span>{completing ? (scopeMeta.isPreprocessing ? "Số lượng sơ chế thực nhận *" : "Thành phẩm thực nhận *") : "Số lượng cần làm *"}</span>
@@ -143,10 +144,10 @@ export default function InventoryProductionOrderModal({
               {!readOnly && !completing && selectedBom.productionScope === "branch" && !fixedWarehouse ? (
                 <label className="inventory-form-field">
                   <span>Kho sơ chế *</span>
-                  <select value={form.warehouseId} onChange={(event) => setForm((current) => ({ ...current, warehouseId: event.target.value }))} required>
+                  <InventorySearchableSelect value={form.warehouseId} onChange={(event) => setForm((current) => ({ ...current, warehouseId: event.target.value }))} required>
                     <option value="">Chọn kho chi nhánh</option>
                     {availableWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
-                  </select>
+                  </InventorySearchableSelect>
                 </label>
               ) : (
                 <div className="inventory-production-modal__context">

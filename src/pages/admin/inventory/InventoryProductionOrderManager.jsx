@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { getInventoryProductionScopeMeta } from "../../../services/inventoryProductionService.js";
 import InventoryProductionOrderModal from "./InventoryProductionOrderModal.jsx";
 
@@ -87,7 +88,7 @@ export default function InventoryProductionOrderManager({
 
       <div className="inventory-list-toolbar inventory-bom-toolbar">
         <label className="inventory-search-field"><Icon name="search" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã lệnh, thành phẩm, kho..." /></label>
-        <select value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Tất cả trạng thái</option><option value="draft">Bản nháp</option><option value="in_progress">Đang làm</option><option value="completed">Hoàn thành</option><option value="cancelled">Đã hủy</option></select>
+        <InventorySearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">Tất cả trạng thái</option><option value="draft">Bản nháp</option><option value="in_progress">Đang làm</option><option value="completed">Hoàn thành</option><option value="cancelled">Đã hủy</option></InventorySearchableSelect>
       </div>
 
       <div className="inventory-table-scroll">

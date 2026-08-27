@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 
 const WAREHOUSE_TYPE_LABELS = {
@@ -73,12 +74,12 @@ export default function InventoryWarehouseList({ warehouses = [], branches = [],
             placeholder="Tìm mã kho, tên kho, chi nhánh..."
           />
         </label>
-        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Lọc loại kho">
+        <InventorySearchableSelect value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Lọc loại kho">
           <option value="all">Tất cả loại kho</option>
           {Object.entries(WAREHOUSE_TYPE_LABELS).map(([value, label]) => (
             <option key={value} value={value}>{label}</option>
           ))}
-        </select>
+        </InventorySearchableSelect>
       </div>
 
       {filteredWarehouses.length ? (

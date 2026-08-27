@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import InventoryBomModal from "./InventoryBomModal.jsx";
 
 const STATUS_META = {
@@ -106,12 +107,12 @@ export default function InventoryBomManager({
 
       <div className="inventory-list-toolbar inventory-bom-toolbar">
         <label className="inventory-search-field"><Icon name="search" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm mã BOM hoặc bán thành phẩm..." /></label>
-        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+        <InventorySearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}>
           <option value="all">Tất cả trạng thái</option>
           <option value="active">Đang áp dụng</option>
           <option value="draft">Bản nháp</option>
           <option value="inactive">Ngừng áp dụng</option>
-        </select>
+        </InventorySearchableSelect>
       </div>
 
       <div className="inventory-table-scroll">

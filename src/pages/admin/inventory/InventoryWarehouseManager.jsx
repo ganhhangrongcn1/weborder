@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { buildBranchFilterOptions } from "../../../services/branchIdentityService.js";
 import InventoryWarehouseList from "./InventoryWarehouseList.jsx";
 
@@ -141,14 +142,14 @@ function WarehouseCreateModal({ branches, initialType = "branch", record = null,
           <div className={`inventory-form-row full-field${needsBranch ? " inventory-form-row--paired" : ""}`}>
             <label className="inventory-form-field" htmlFor="inventory-warehouse-type">
               <span className="inventory-field-label"><Icon name="folder" size={15} />Loại kho <b>*</b></span>
-              <span className="inventory-control-shell inventory-control-shell--select"><Icon name={TYPE_ICONS[selectedType.value]} size={17} /><select id="inventory-warehouse-type" name="warehouseType" value={form.warehouseType} onChange={update}>{TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label} · {item.level}</option>)}</select></span>
+              <span className="inventory-control-shell inventory-control-shell--select"><Icon name={TYPE_ICONS[selectedType.value]} size={17} /><InventorySearchableSelect id="inventory-warehouse-type" name="warehouseType" value={form.warehouseType} onChange={update}>{TYPE_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label} · {item.level}</option>)}</InventorySearchableSelect></span>
               <span className="inventory-field-help inventory-field-help--type"><Icon name={TYPE_ICONS[selectedType.value]} size={17} /><span><strong>{selectedType.label}<em>{selectedType.level}</em></strong><small>{selectedType.note}</small></span></span>
             </label>
 
             {needsBranch ? (
               <label className="inventory-form-field" htmlFor="inventory-warehouse-branch">
                 <span className="inventory-field-label"><Icon name="home" size={15} />Chi nhánh <b>*</b></span>
-                <span className="inventory-control-shell inventory-control-shell--select"><Icon name="store" size={17} /><select id="inventory-warehouse-branch" name="branchUuid" value={form.branchUuid} onChange={update}><option value="">Chọn chi nhánh</option>{branchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></span>
+                <span className="inventory-control-shell inventory-control-shell--select"><Icon name="store" size={17} /><InventorySearchableSelect id="inventory-warehouse-branch" name="branchUuid" value={form.branchUuid} onChange={update}><option value="">Chọn chi nhánh</option>{branchOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</InventorySearchableSelect></span>
                 <span className="inventory-field-help"><Icon name="gear" size={17} /><small>{form.warehouseType === "branch" ? "Kho này sẽ tự động trừ tồn khi đơn hàng của chi nhánh hoàn tất." : "Kho bộ phận chỉ phục vụ nguyên vật liệu của đúng chi nhánh đã chọn."}</small></span>
               </label>
             ) : null}

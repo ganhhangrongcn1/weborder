@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { createInventoryMasterDataCode } from "../../../services/inventoryMasterDataService.js";
 
 const DOMAIN_LABELS = {
@@ -295,7 +296,7 @@ export default function InventoryMasterDataModal({
                 <div className="inventory-conversion-box full-field">
                   <div className="inventory-form-row inventory-form-row--paired">
                     <Field label="1 đơn vị này bằng" required><span className="inventory-control-shell"><input type="number" min="0.000001" step="any" name="conversionFactor" value={form.conversionFactor} onChange={update} /></span></Field>
-                    <Field label="Đơn vị gốc" required><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><select name="baseUnitId" value={form.baseUnitId} onChange={updateBaseUnit}><option value="">Chọn đơn vị gốc</option>{baseUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}{unit.symbol ? ` (${unit.symbol})` : ""}</option>)}</select></span></Field>
+                    <Field label="Đơn vị gốc" required><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><InventorySearchableSelect name="baseUnitId" value={form.baseUnitId} onChange={updateBaseUnit}><option value="">Chọn đơn vị gốc</option>{baseUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}{unit.symbol ? ` (${unit.symbol})` : ""}</option>)}</InventorySearchableSelect></span></Field>
                   </div>
                   <div className="inventory-conversion-quick"><span>Chọn nhanh:</span>{[1000, 100, 48, 30, 24, 12, 10, 6].map((value) => <button key={value} type="button" onClick={() => setForm((current) => ({ ...current, conversionFactor: value }))}>{value}</button>)}</div>
                 </div>
@@ -325,14 +326,14 @@ export default function InventoryMasterDataModal({
           {isItems ? (
             <>
               <div className="inventory-form-row inventory-form-row--triple full-field">
-                <Field label="Loại nguyên vật liệu" required help="Quyết định cách sử dụng và mã tự sinh."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="bag" size={17} /><select name="itemType" value={form.itemType} onChange={update}><option value="ingredient">Nguyên liệu · NVL</option><option value="semi_finished">Bán thành phẩm · BTP</option><option value="finished_good">Thành phẩm · TP</option><option value="direct_sale">Bán thẳng · BT</option><option value="packaging">Bao bì · BB</option><option value="consumable">Vật tư tiêu hao · VT</option><option value="tool">Công cụ, dụng cụ · CCDC</option></select></span></Field>
-                <Field label="Danh mục NVL"><span className="inventory-control-shell inventory-control-shell--select"><Icon name="folder" size={17} /><select name="groupId" value={form.groupId} onChange={update}><option value="">Chưa phân nhóm</option>{categories.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></span></Field>
+                <Field label="Loại nguyên vật liệu" required help="Quyết định cách sử dụng và mã tự sinh."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="bag" size={17} /><InventorySearchableSelect name="itemType" value={form.itemType} onChange={update}><option value="ingredient">Nguyên liệu · NVL</option><option value="semi_finished">Bán thành phẩm · BTP</option><option value="finished_good">Thành phẩm · TP</option><option value="direct_sale">Bán thẳng · BT</option><option value="packaging">Bao bì · BB</option><option value="consumable">Vật tư tiêu hao · VT</option><option value="tool">Công cụ, dụng cụ · CCDC</option></InventorySearchableSelect></span></Field>
+                <Field label="Danh mục NVL"><span className="inventory-control-shell inventory-control-shell--select"><Icon name="folder" size={17} /><InventorySearchableSelect name="groupId" value={form.groupId} onChange={update}><option value="">Chưa phân nhóm</option>{categories.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</InventorySearchableSelect></span></Field>
                 <Field label="Hao hụt mặc định (%)" help="Dùng gợi ý cho bán thẳng và BOM; hao hụt thực tế ghi riêng."><span className="inventory-control-shell"><input type="number" min="0" max="100" step="0.01" name="defaultWastePercent" value={form.defaultWastePercent} onChange={update} /></span></Field>
               </div>
               {Number(form.defaultWastePercent || 0) < 0 || Number(form.defaultWastePercent || 0) > 100 ? <p className="inventory-form-error full-field">Hao hụt mặc định phải nằm trong khoảng từ 0% đến 100%.</p> : null}
               <div className="inventory-form-row inventory-form-row--paired full-field">
-                <Field label="Đơn vị hiển thị" required help="Có thể chọn Kg hoặc Gram. Kho tự quy đổi và lưu bằng đơn vị gốc."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><select name="displayUnitId" value={form.displayUnitId} onChange={updateItemDisplayUnit}><option value="">Chọn đơn vị hiển thị</option>{inventoryConversionUnits.length ? <optgroup label="Đơn vị quy đổi">{inventoryConversionUnits.map((row) => { const root = inventoryBaseUnits.find((unit) => unit.id === row.baseUnitId); return <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""} — 1 = {row.conversionFactor} {root?.name || "đơn vị gốc"}</option>; })}</optgroup> : null}<optgroup label="Đơn vị gốc">{inventoryBaseUnits.map((row) => <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""} — kho lưu trực tiếp</option>)}</optgroup></select></span></Field>
-                <Field label="Đơn vị mua / nhập" help="Có thể chọn Chai, Hộp, Thùng hoặc đơn vị quy đổi đã tạo."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><select name="purchaseUnitId" value={form.purchaseUnitId} onChange={updateItemPurchaseUnit} disabled={!form.displayUnitId}><option value="">Giống đơn vị hiển thị</option>{purchaseUnits.map((row) => <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""}</option>)}</select></span></Field>
+                <Field label="Đơn vị hiển thị" required help="Có thể chọn Kg hoặc Gram. Kho tự quy đổi và lưu bằng đơn vị gốc."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><InventorySearchableSelect name="displayUnitId" value={form.displayUnitId} onChange={updateItemDisplayUnit}><option value="">Chọn đơn vị hiển thị</option>{inventoryConversionUnits.length ? <optgroup label="Đơn vị quy đổi">{inventoryConversionUnits.map((row) => { const root = inventoryBaseUnits.find((unit) => unit.id === row.baseUnitId); return <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""} — 1 = {row.conversionFactor} {root?.name || "đơn vị gốc"}</option>; })}</optgroup> : null}<optgroup label="Đơn vị gốc">{inventoryBaseUnits.map((row) => <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""} — kho lưu trực tiếp</option>)}</optgroup></InventorySearchableSelect></span></Field>
+                <Field label="Đơn vị mua / nhập" help="Có thể chọn Chai, Hộp, Thùng hoặc đơn vị quy đổi đã tạo."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><InventorySearchableSelect name="purchaseUnitId" value={form.purchaseUnitId} onChange={updateItemPurchaseUnit} disabled={!form.displayUnitId}><option value="">Giống đơn vị hiển thị</option>{purchaseUnits.map((row) => <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""}</option>)}</InventorySearchableSelect></span></Field>
               </div>
               {needsItemPurchaseRatio ? (
                 <Field
@@ -394,7 +395,7 @@ export default function InventoryMasterDataModal({
                     <Field label="Thời hạn mặc định" required help="Dùng để gợi ý khi lập phiếu nhập; có thể sửa theo từng lô.">
                       <div className="inventory-expiry-duration-control">
                         <span className="inventory-control-shell inventory-control-shell--select">
-                          <select value={customShelfLife ? "custom" : String(form.shelfLifeDays)} onChange={updateShelfLifePreset} aria-label="Chọn thời hạn mặc định">
+                          <InventorySearchableSelect value={customShelfLife ? "custom" : String(form.shelfLifeDays)} onChange={updateShelfLifePreset} aria-label="Chọn thời hạn mặc định">
                             <option value="1">1 ngày</option>
                             <option value="3">3 ngày</option>
                             <option value="7">7 ngày</option>
@@ -403,7 +404,7 @@ export default function InventoryMasterDataModal({
                             <option value="60">60 ngày (2 tháng)</option>
                             <option value="90">90 ngày (3 tháng)</option>
                             <option value="custom">Tùy chỉnh...</option>
-                          </select>
+                          </InventorySearchableSelect>
                         </span>
                         {customShelfLife ? <span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="1" step="1" name="shelfLifeDays" value={form.shelfLifeDays} onChange={update} aria-label="Số ngày sử dụng tùy chỉnh" /><b>ngày</b></span> : null}
                       </div>

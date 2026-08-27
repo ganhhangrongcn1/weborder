@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   calculateInventoryLotSummary,
   getInventoryLotDaysRemaining,
@@ -111,23 +112,23 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
         {warehouseSelectionLocked && warehouses.length === 1 ? (
           <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div>
         ) : (
-          <select aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
+          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
             <option value="">Tất cả kho được phép xem</option>
             {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-          </select>
+          </InventorySearchableSelect>
         )}
-        <select aria-label="Lọc nguyên vật liệu" value={filters.itemId} onChange={(event) => updateFilter({ itemId: event.target.value })}>
+        <InventorySearchableSelect aria-label="Lọc nguyên vật liệu" value={filters.itemId} onChange={(event) => updateFilter({ itemId: event.target.value })}>
           <option value="">Tất cả nguyên vật liệu</option>
           {items.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-        </select>
-        <select aria-label="Lọc hạn sử dụng" value={filters.expiryState} onChange={(event) => updateFilter({ expiryState: event.target.value })}>
+        </InventorySearchableSelect>
+        <InventorySearchableSelect aria-label="Lọc hạn sử dụng" value={filters.expiryState} onChange={(event) => updateFilter({ expiryState: event.target.value })}>
           <option value="all">Tất cả hạn sử dụng</option>
           <option value="alert">Sắp hoặc đã hết hạn</option>
           <option value="expired">Đã hết hạn</option>
           <option value="expiring">Sắp hết hạn</option>
           <option value="valid">Còn hạn</option>
           <option value="untracked">Không theo dõi HSD</option>
-        </select>
+        </InventorySearchableSelect>
       </div>
 
       {limited ? <div className="inventory-ledger-warning"><Icon name="warning" size={17} />Danh sách đã chạm giới hạn 5.000 lô. Cần bổ sung phân trang phía máy chủ trước khi dùng ở quy mô lớn hơn.</div> : null}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 
 const MODE_CONFIG = {
   delete: {
@@ -147,10 +148,10 @@ export default function InventoryDocumentActionModal({
             <label className="inventory-form-field">
               <span className="inventory-field-label"><Icon name="store" size={15} />Kho xuất hàng <b>*</b></span>
               <span className="inventory-control-shell inventory-control-shell--select">
-                <select value={sourceWarehouseId} onChange={(event) => setSourceWarehouseId(event.target.value)} required>
+                <InventorySearchableSelect value={sourceWarehouseId} onChange={(event) => setSourceWarehouseId(event.target.value)} required>
                   <option value="">Chọn kho xuất</option>
                   {availableWarehouses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-                </select>
+                </InventorySearchableSelect>
               </span>
             </label>
           ) : null}
