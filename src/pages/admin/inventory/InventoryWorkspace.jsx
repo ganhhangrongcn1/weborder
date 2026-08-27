@@ -172,7 +172,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || isOpeningBalancePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || Boolean(documentDomain) || isOpeningBalancePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -444,6 +444,7 @@ export default function InventoryWorkspace({
                     units={itemUnitsState.rows}
                     suppliers={documentSuppliersState.rows}
                     canWrite={canWriteDocuments}
+                    canReverseReceipts={Boolean(documentState.permissions?.canReverseReceipts)}
                     canApproveDisposals={Boolean(documentState.permissions?.canApproveDisposals)}
                     canApproveAdjustments={Boolean(documentState.permissions?.canApproveAdjustments)}
                     mutationStatus={documentState.mutationStatus}
@@ -456,6 +457,7 @@ export default function InventoryWorkspace({
                     onDeleteDraft={documentState.deleteDraft}
                     onSubmit={documentState.submit}
                     onComplete={documentState.complete}
+                    onReverseReceipt={documentState.reverseReceipt}
                     onApproveAdjustment={documentState.approveAdjustment}
                     onDispatchTransfer={documentState.dispatchTransfer}
                     onReceiveTransfer={documentState.receiveTransfer}

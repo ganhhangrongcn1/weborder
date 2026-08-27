@@ -9,6 +9,12 @@ const MODE_CONFIG = {
     description: "Chỉ xóa phiếu chưa gửi xử lý và chưa làm thay đổi tồn kho.",
     actionLabel: "Xóa bản nháp"
   },
+  reverse: {
+    title: "Hoàn tác phiếu nhập",
+    icon: "refresh",
+    description: "Tạo chứng từ đảo để trừ lại đúng số tồn đã nhập và giữ nguyên lịch sử.",
+    actionLabel: "Xác nhận hoàn tác"
+  },
   dispatch: {
     title: "Xác nhận giao hàng",
     icon: "share",
@@ -75,6 +81,8 @@ export default function InventoryDocumentActionModal({
 
   const validate = () => {
     if (mode === "delete") return "";
+    if (mode === "reverse" && !rejectionReason.trim()) return "Vui lòng nhập lý do hoàn tác phiếu nhập.";
+    if (mode === "reverse") return "";
     if (["approve", "reject"].includes(mode) && !sourceWarehouseId) return "Vui lòng chọn kho xuất hàng.";
     if (mode === "reject" && !rejectionReason.trim()) return "Vui lòng nhập lý do từ chối.";
     if (mode === "reject") return "";
@@ -104,6 +112,7 @@ export default function InventoryDocumentActionModal({
       await onConfirm({
         sourceWarehouseId,
         rejectionReason,
+        reversalReason: mode === "reverse" ? rejectionReason.trim() : "",
         lines: lines.map((line) => ({
           lineId: line.lineId,
           shippedQuantity: mode === "dispatch" ? Number(line.quantity) : undefined,
@@ -147,6 +156,16 @@ export default function InventoryDocumentActionModal({
             </div>
           ) : null}
 
+          {mode === "reverse" ? (
+            <div className="inventory-delete-confirmation">
+              <span><Icon name="warning" size={19} /></span>
+              <div>
+                <strong>Hoàn tác toàn bộ phiếu nhập này?</strong>
+                <p>Hệ thống sẽ tạo chứng từ đảo, trừ lại tồn và cập nhật lô hàng. Phiếu gốc vẫn được giữ để đối chiếu.</p>
+              </div>
+            </div>
+          ) : null}
+
           {mode !== "delete" && ["approve", "reject"].includes(mode) ? (
             <label className="inventory-form-field">
               <span className="inventory-field-label"><Icon name="store" size={15} />Kho xuất hàng <b>*</b></span>
@@ -159,10 +178,10 @@ export default function InventoryDocumentActionModal({
             </label>
           ) : null}
 
-          {mode === "delete" ? null : mode === "reject" ? (
+          {mode === "delete" ? null : ["reject", "reverse"].includes(mode) ? (
             <label className="inventory-form-field">
-              <span className="inventory-field-label"><Icon name="edit" size={15} />Lý do từ chối <b>*</b></span>
-              <span className="inventory-control-shell"><input value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Ví dụ: kho không đủ hàng, yêu cầu chưa đúng…" required /></span>
+              <span className="inventory-field-label"><Icon name="edit" size={15} />{mode === "reverse" ? "Lý do hoàn tác" : "Lý do từ chối"} <b>*</b></span>
+              <span className="inventory-control-shell"><input value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder={mode === "reverse" ? "Ví dụ: nhập nhầm số lượng hoặc sai nguyên vật liệu…" : "Ví dụ: kho không đủ hàng, yêu cầu chưa đúng…"} required /></span>
             </label>
           ) : (
             <div className="inventory-action-lines">
@@ -186,9 +205,9 @@ export default function InventoryDocumentActionModal({
 
           {error ? <p className="inventory-form-error" role="alert">{error}</p> : null}
           <footer>
-            <span><Icon name="info" size={16} />{mode === "delete" ? "Chỉ bản nháp mới được phép xóa." : "Hệ thống chỉ ghi tồn đúng một lần cho mỗi bước."}</span>
+            <span><Icon name="info" size={16} />{mode === "delete" ? "Chỉ bản nháp mới được phép xóa." : mode === "reverse" ? "Chỉ hoàn tác khi kho còn đủ toàn bộ số đã nhập." : "Hệ thống chỉ ghi tồn đúng một lần cho mỗi bước."}</span>
             <button type="button" onClick={onClose}>Hủy</button>
-            <button className={mode === "delete" ? "is-danger" : ""} type="submit" disabled={saving}><Icon name={["delete", "reject"].includes(mode) ? "warning" : "check"} size={16} />{saving ? "Đang xử lý…" : config.actionLabel}</button>
+            <button className={["delete", "reverse"].includes(mode) ? "is-danger" : ""} type="submit" disabled={saving}><Icon name={["delete", "reject", "reverse"].includes(mode) ? "warning" : "check"} size={16} />{saving ? "Đang xử lý…" : config.actionLabel}</button>
           </footer>
         </form>
       </section>

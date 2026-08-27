@@ -42,6 +42,7 @@ export default function InventoryDocumentManager({
   units = [],
   suppliers = [],
   canWrite = false,
+  canReverseReceipts = false,
   canApproveDisposals = false,
   canApproveAdjustments = false,
   mutationStatus = "idle",
@@ -54,6 +55,7 @@ export default function InventoryDocumentManager({
   onDeleteDraft,
   onSubmit,
   onComplete,
+  onReverseReceipt,
   onApproveAdjustment,
   onDispatchTransfer,
   onReceiveTransfer,
@@ -114,13 +116,14 @@ export default function InventoryDocumentManager({
     }
   };
 
-  const confirmModalAction = async ({ sourceWarehouseId, lines, rejectionReason }) => {
+  const confirmModalAction = async ({ sourceWarehouseId, lines, rejectionReason, reversalReason }) => {
     const { mode, document } = actionModal;
     if (mode === "dispatch") return onDispatchTransfer(document.id, lines);
     if (mode === "receive") return onReceiveTransfer(document.id, lines);
     if (mode === "approve") return onApproveRequisition(document.id, sourceWarehouseId, lines);
     if (mode === "reject") return onRejectRequisition(document.id, sourceWarehouseId, rejectionReason);
     if (mode === "delete") return onDeleteDraft(document.id);
+    if (mode === "reverse") return onReverseReceipt(document.id, reversalReason);
     return null;
   };
 
@@ -131,6 +134,9 @@ export default function InventoryDocumentManager({
         <button className="is-danger" type="button" disabled={disabled} onClick={() => setActionModal({ mode: "delete", document: row })}><Icon name="trash" size={14} />Xóa</button>
         <button type="button" disabled={disabled} onClick={() => runAction(() => onSubmit(row.id))}>Gửi xử lý</button>
       </>;
+    }
+    if (domain === "receipts" && row.status === "completed" && canReverseReceipts) {
+      return <button className="is-danger" type="button" disabled={disabled} onClick={() => setActionModal({ mode: "reverse", document: row })}><Icon name="refresh" size={14} />Hoàn tác</button>;
     }
     if (row.status === "submitted" && ["receipts", "issues", "disposals"].includes(domain)) {
       if (domain === "disposals" && !canApproveDisposals) {

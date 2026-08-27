@@ -146,6 +146,7 @@ export default function InventoryDocumentDetailModal({
             {domain === "disposals" ? <div><span>Lý do hủy chung</span><strong>{document.metadata?.disposal_reason || "—"}</strong></div> : null}
             <div className="is-wide"><span>{domain === "adjustments" ? "Lý do điều chỉnh" : "Ghi chú"}</span><strong>{document.notes || "Không có ghi chú"}</strong></div>
             {document.rejectionReason ? <div className="is-wide is-rejection"><span>Lý do từ chối</span><strong>{document.rejectionReason}</strong></div> : null}
+            {document.cancellationReason ? <div className="is-wide is-rejection"><span>Lý do hoàn tác / hủy</span><strong>{document.cancellationReason}</strong></div> : null}
           </div>
 
           {domain === "requisitions" ? (

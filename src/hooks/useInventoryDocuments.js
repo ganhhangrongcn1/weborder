@@ -13,6 +13,7 @@ import {
   readInventoryDocuments,
   receiveInventoryTransfer,
   rejectInventoryRequisition,
+  reverseInventoryPurchaseReceipt,
   saveInventoryDocumentDraft,
   submitInventoryDocument
 } from "../services/inventoryDocumentService.js";
@@ -122,6 +123,10 @@ export default function useInventoryDocuments({ enabled = false, domain = "" } =
     ),
     submit: (id) => runMutation(() => submitInventoryDocument(id), "Đã gửi phiếu để xử lý."),
     complete: (id) => runMutation(() => completeSimpleInventoryDocument(id), "Đã hoàn tất phiếu và cập nhật tồn kho."),
+    reverseReceipt: (id, reason) => runMutation(
+      () => reverseInventoryPurchaseReceipt(id, reason),
+      "Đã hoàn tác phiếu nhập, trừ lại tồn kho và lưu đầy đủ lịch sử."
+    ),
     approveAdjustment: (id) => runMutation(
       () => approveInventoryStockAdjustment(id),
       "Đã duyệt phiếu điều chỉnh và cập nhật tồn kho."

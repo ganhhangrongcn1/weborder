@@ -707,6 +707,8 @@
 .inventory-document-pagination button:disabled { opacity: .4; cursor: not-allowed; }
 .inventory-document-table { min-width: 1040px; }
 .inventory-document-table td { font-variant-numeric: tabular-nums; }
+.inventory-document-table th:last-child,
+.inventory-document-table td:last-child { width: 1%; text-align: right; white-space: nowrap; }
 .inventory-document-status { display: inline-flex; align-items: center; padding: 5px 8px; border: 1px solid #e4ddd7; border-radius: 999px; background: #f5f2ef; color: #76675f; font-size: .69rem; font-weight: 800; white-space: nowrap; }
 .inventory-document-status.is-draft { border-color: #efd1a9; background: #fff5e7; color: #a85b20; }
 .inventory-document-status.is-submitted,
@@ -718,7 +720,7 @@
 .inventory-document-status.is-fulfilled { border-color: #bde1cb; background: #effaf3; color: #247246; }
 .inventory-document-status.is-rejected,
 .inventory-document-status.is-cancelled { border-color: #edc9c5; background: #fff3f2; color: #a54238; }
-.inventory-document-actions { display: inline-flex; align-items: center; gap: 6px; }
+.inventory-document-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
 .inventory-document-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 31px; padding: 0 10px; border: 1px solid #dfd3c9; border-radius: 8px; background: #fff; color: #654d3f; font: inherit; font-size: .72rem; font-weight: 800; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease; }
 .inventory-document-actions button:hover:not(:disabled) { border-color: #cf7b43; background: #fff7ed; color: #b25117; }
 .inventory-document-actions button:active:not(:disabled) { transform: translateY(1px); }

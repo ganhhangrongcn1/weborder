@@ -42,7 +42,8 @@ const TRANSFER_ACTION_STATUSES = [
 const DOCUMENT_SELECT = [
   "id", "document_no", "document_type", "status", "source_warehouse_id",
   "destination_warehouse_id", "supplier_id", "source_document_id", "reference_no", "occurred_at",
-  "notes", "total_amount", "metadata", "rejection_reason", "created_at", "completed_at"
+  "notes", "total_amount", "metadata", "rejection_reason", "cancellation_reason",
+  "created_at", "completed_at", "cancelled_at"
 ].join(",");
 
 const LINE_SELECT = [
@@ -124,8 +125,10 @@ function normalizeDocument(row = {}, lines = []) {
     totalAmount: Number(row.total_amount || 0),
     metadata: row.metadata && typeof row.metadata === "object" ? row.metadata : {},
     rejectionReason: toText(row.rejection_reason),
+    cancellationReason: toText(row.cancellation_reason),
     createdAt: toText(row.created_at),
     completedAt: toText(row.completed_at),
+    cancelledAt: toText(row.cancelled_at),
     linkedTransfer: row.linkedTransfer || null,
     lines
   };
@@ -157,6 +160,10 @@ export function canApproveInventoryDisposals(roles = []) {
 
 export function canApproveInventoryAdjustments(roles = []) {
   return roles.some((role) => ["owner", "admin", "central_manager", "branch_manager"].includes(toText(role)));
+}
+
+export function canReverseInventoryReceipts(roles = []) {
+  return roles.some((role) => ["owner", "admin", "central_manager"].includes(toText(role)));
 }
 
 export async function readInventoryDocuments({
@@ -236,7 +243,7 @@ export async function readInventoryDocuments({
   ]));
 
   let permissions = {};
-  if (["disposals", "adjustments"].includes(domain)) {
+  if (["receipts", "disposals", "adjustments"].includes(domain)) {
     const actorId = await getActorId(client);
     let approvalRoles = [];
     if (actorId) {
@@ -248,6 +255,7 @@ export async function readInventoryDocuments({
       if (!accessResult.error) approvalRoles = (accessResult.data || []).map((row) => toText(row.role));
     }
     permissions = {
+      canReverseReceipts: canReverseInventoryReceipts(approvalRoles),
       canApproveDisposals: canApproveInventoryDisposals(approvalRoles),
       canApproveAdjustments: canApproveInventoryAdjustments(approvalRoles)
     };
@@ -497,6 +505,18 @@ export async function completeSimpleInventoryDocument(documentId = "") {
   recordAdminRequest("complete inventory document", "inventory_complete_simple_document");
   if (error) throw new Error(toText(error.message) || "Không hoàn tất được phiếu.");
   return data;
+}
+
+export async function reverseInventoryPurchaseReceipt(documentId = "", reversalReason = "") {
+  const normalizedId = toText(documentId);
+  const normalizedReason = toText(reversalReason);
+  if (!normalizedId) throw new Error("Không xác định được phiếu nhập cần hoàn tác.");
+  if (!normalizedReason) throw new Error("Vui lòng nhập lý do hoàn tác phiếu nhập.");
+  return callInventoryRpc("inventory_reverse_purchase_receipt", {
+    p_document_id: normalizedId,
+    p_idempotency_key: `inventory-reverse-receipt-${normalizedId}`,
+    p_reversal_reason: normalizedReason
+  }, "reverse inventory purchase receipt", "Không thể hoàn tác phiếu nhập kho.");
 }
 
 export async function approveInventoryStockAdjustment(documentId = "") {
