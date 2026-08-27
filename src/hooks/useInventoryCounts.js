@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   approveAndCompleteInventoryCount,
+  cancelInventoryCount,
   completeApprovedInventoryCount,
   createAndStartInventoryCount,
   readInventoryCounts,
@@ -57,6 +58,7 @@ export default function useInventoryCounts({ enabled = false } = {}) {
     createAndStart: (input) => run(() => createAndStartInventoryCount(input), "Đã bắt đầu đợt kiểm kê."),
     recordAndSubmit: (id, lines) => run(() => recordAndSubmitInventoryCount(id, lines), "Đã lưu số đếm và gửi duyệt."),
     approveAndComplete: (id, lines) => run(() => approveAndCompleteInventoryCount(id, lines), "Đã duyệt chênh lệch và điều chỉnh tồn."),
+    cancel: (id, reason) => run(() => cancelInventoryCount(id, reason), "Đã hủy đợt kiểm kê. Tồn kho không thay đổi."),
     completeApproved: (id) => run(() => completeApprovedInventoryCount(id), "Đã hoàn tất kiểm kê và điều chỉnh tồn.")
   };
 }

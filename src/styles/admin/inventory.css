@@ -107,10 +107,13 @@
 .inventory-count-notice { display: flex; align-items: center; gap: 8px; padding: 11px 15px; border-bottom: 1px solid #cfe7d8; background: #f2fbf5; color: #37734d; font-size: .72rem; font-weight: 700; }
 .inventory-count-notice.is-error { border-color: #efd0ca; background: #fff5f3; color: #a33f35; }
 .inventory-count-table th:last-child,
-.inventory-count-table td:last-child { min-width: 188px; white-space: nowrap; }
-.inventory-row-actions.inventory-count-actions { display: inline-flex; flex-wrap: nowrap; min-width: 0; gap: 6px; }
+.inventory-count-table td:last-child { min-width: 188px; white-space: nowrap; text-align: right; }
+.inventory-row-actions.inventory-count-actions { display: flex; justify-content: flex-end; flex-wrap: nowrap; width: 100%; min-width: 0; gap: 6px; }
 .inventory-row-actions.inventory-count-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; width: auto; min-width: max-content; height: 31px; padding: 0 9px; font-size: .68rem; white-space: nowrap; }
 .inventory-row-actions.inventory-count-actions button.is-primary { border-color: #cf6a22; background: #cf6a22; color: #fff; }
+.inventory-row-actions.inventory-count-actions button.is-danger { border-color: #eccbc5; background: #fff7f5; color: #a7473b; }
+.inventory-row-actions.inventory-count-actions button.is-danger:hover:not(:disabled) { border-color: #d99b91; background: #fff0ed; color: #92372d; }
+.inventory-document-status.is-cancelled { background: #f1eeeb; color: #806f65; }
 .inventory-warehouse-modal.inventory-count-modal { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(1040px, 100%); overflow: hidden; }
 .inventory-count-modal > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; justify-content: normal; }
 .inventory-count-modal > header > span { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: #fff0df; color: #c15d1b; }

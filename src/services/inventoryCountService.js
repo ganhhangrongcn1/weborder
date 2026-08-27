@@ -7,7 +7,7 @@ import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { isInventoryRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
 import { getInventoryCountRecordedQuantity } from "./inventoryCountCalculations.js";
 
-const DOCUMENT_SELECT = "id,document_no,status,source_warehouse_id,occurred_at,notes,created_at,submitted_at,approved_at,completed_at";
+const DOCUMENT_SELECT = "id,document_no,status,source_warehouse_id,occurred_at,notes,created_at,submitted_at,approved_at,completed_at,cancelled_at,cancelled_by,cancellation_reason";
 const LINE_SELECT = "id,document_id,item_id,unit_id,conversion_to_base,counted_quantity,variance_reason";
 const SNAPSHOT_SELECT = "document_id,item_id,system_quantity,expected_quantity_at_count,expected_quantity_at_submit,captured_at,counted_at,submitted_at";
 const COUNT_ACTION_STATUSES = ["draft", "counting", "submitted", "approved"];
@@ -78,6 +78,9 @@ function normalizeDocument(row = {}, lines = []) {
     submittedAt: toText(row.submitted_at),
     approvedAt: toText(row.approved_at),
     completedAt: toText(row.completed_at),
+    cancelledAt: toText(row.cancelled_at),
+    cancelledBy: toText(row.cancelled_by),
+    cancellationReason: toText(row.cancellation_reason),
     lines
   };
 }
@@ -139,7 +142,11 @@ export async function readInventoryCounts() {
     ok: true,
     status: "ready",
     rows: documents.map((row) => normalizeDocument(row, linesByDocument.get(row.id) || [])),
-    permissions: { canManage, canCount: roles.some((role) => ["owner", "admin", "central_manager", "branch_manager", "staff"].includes(role)) }
+    permissions: {
+      canManage,
+      canCancel: roles.some((role) => ["owner", "admin", "central_manager"].includes(role)),
+      canCount: roles.some((role) => ["owner", "admin", "central_manager", "branch_manager", "staff"].includes(role))
+    }
   };
 }
 
@@ -221,8 +228,21 @@ export async function completeApprovedInventoryCount(documentId) {
   }, "Không hoàn tất được kiểm kê.");
 }
 
+export async function cancelInventoryCount(documentId, reason = "") {
+  const normalizedReason = toText(reason);
+  if (!normalizedReason) throw new Error("Vui lòng nhập lý do hủy đợt kiểm kê.");
+  const client = await getInventoryClient();
+  if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
+  return callCountRpc(client, "inventory_cancel_stock_count", {
+    p_document_id: documentId,
+    p_idempotency_key: `count-cancel-${documentId}`,
+    p_cancellation_reason: normalizedReason
+  }, "Không hủy được đợt kiểm kê.");
+}
+
 export default {
   approveAndCompleteInventoryCount,
+  cancelInventoryCount,
   completeApprovedInventoryCount,
   createAndStartInventoryCount,
   readInventoryActionableCount,

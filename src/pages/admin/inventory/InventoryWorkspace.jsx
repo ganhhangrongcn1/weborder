@@ -543,12 +543,14 @@ export default function InventoryWorkspace({
                     units={itemUnitsState.rows}
                     canWrite={countState.writeEnabled && countState.status === "ready"}
                     canManage={Boolean(countState.permissions?.canManage)}
+                    canCancel={Boolean(countState.permissions?.canCancel)}
                     canCount={Boolean(countState.permissions?.canCount)}
                     mutationStatus={countState.mutationStatus}
                     mutationMessage={countState.mutationMessage}
                     onCreateAndStart={countState.createAndStart}
                     onRecordAndSubmit={countState.recordAndSubmit}
                     onApproveAndComplete={countState.approveAndComplete}
+                    onCancel={countState.cancel}
                     onCompleteApproved={countState.completeApproved}
                     warehouseSelectionLocked={warehouseSelectionLocked}
                   />
