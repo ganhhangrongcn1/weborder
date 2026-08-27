@@ -104,11 +104,18 @@ export default function InventoryMasterDataModal({
     () => inventoryUnits.find((unit) => unit.id === (selectedDisplayUnit?.baseUnitId || selectedDisplayUnit?.id)),
     [inventoryUnits, selectedDisplayUnit]
   );
-  const compatiblePurchaseUnits = useMemo(
-    () => units.filter((unit) => unit.isActive !== false && (
-      unit.id === form.baseUnitId || unit.baseUnitId === form.baseUnitId
-    )),
-    [form.baseUnitId, units]
+  const purchaseUnits = useMemo(
+    () => units.filter((unit) => unit.isActive !== false),
+    [units]
+  );
+  const selectedPurchaseUnit = useMemo(
+    () => purchaseUnits.find((unit) => unit.id === form.purchaseUnitId),
+    [form.purchaseUnitId, purchaseUnits]
+  );
+  const needsItemPurchaseRatio = Boolean(
+    selectedPurchaseUnit
+      && selectedPurchaseUnit.id !== form.baseUnitId
+      && selectedPurchaseUnit.baseUnitId !== form.baseUnitId
   );
 
   const update = ({ target }) => {
@@ -176,9 +183,11 @@ export default function InventoryMasterDataModal({
       return {
         ...current,
         purchaseUnitId,
-        purchaseToBaseRatio: purchaseUnit?.baseUnitId === current.baseUnitId
-          ? purchaseUnit.conversionFactor
-          : 1
+        purchaseToBaseRatio: purchaseUnit?.id === current.baseUnitId
+          ? 1
+          : purchaseUnit?.baseUnitId === current.baseUnitId
+            ? purchaseUnit.conversionFactor
+            : ""
       };
     });
   };
@@ -224,6 +233,7 @@ export default function InventoryMasterDataModal({
   const disabled = saving
     || !String(form.name || "").trim()
     || isItems && (!form.displayUnitId || !form.baseUnitId)
+    || isItems && needsItemPurchaseRatio && Number(form.purchaseToBaseRatio || 0) <= 0
     || isItems && Number(form.maximumStock || 0) > 0 && Number(form.maximumStock || 0) < Number(form.minimumStock || 0)
     || isItems && (Number(form.defaultWastePercent || 0) < 0 || Number(form.defaultWastePercent || 0) > 100)
     || isItems && form.trackExpiry && (!Number.isFinite(Number(form.shelfLifeDays)) || Number(form.shelfLifeDays) < 1)
@@ -322,8 +332,34 @@ export default function InventoryMasterDataModal({
               {Number(form.defaultWastePercent || 0) < 0 || Number(form.defaultWastePercent || 0) > 100 ? <p className="inventory-form-error full-field">Hao hụt mặc định phải nằm trong khoảng từ 0% đến 100%.</p> : null}
               <div className="inventory-form-row inventory-form-row--paired full-field">
                 <Field label="Đơn vị hiển thị" required help="Có thể chọn Kg hoặc Gram. Kho tự quy đổi và lưu bằng đơn vị gốc."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><select name="displayUnitId" value={form.displayUnitId} onChange={updateItemDisplayUnit}><option value="">Chọn đơn vị hiển thị</option>{inventoryConversionUnits.length ? <optgroup label="Đơn vị quy đổi">{inventoryConversionUnits.map((row) => { const root = inventoryBaseUnits.find((unit) => unit.id === row.baseUnitId); return <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""} — 1 = {row.conversionFactor} {root?.name || "đơn vị gốc"}</option>; })}</optgroup> : null}<optgroup label="Đơn vị gốc">{inventoryBaseUnits.map((row) => <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""} — kho lưu trực tiếp</option>)}</optgroup></select></span></Field>
-                <Field label="Đơn vị mua / nhập" help="Mặc định giống đơn vị hiển thị; có thể chọn đơn vị khác trong cùng hệ quy đổi."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><select name="purchaseUnitId" value={form.purchaseUnitId} onChange={updateItemPurchaseUnit} disabled={!form.displayUnitId}><option value="">Giống đơn vị hiển thị</option>{compatiblePurchaseUnits.map((row) => <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""}</option>)}</select></span></Field>
+                <Field label="Đơn vị mua / nhập" help="Có thể chọn Chai, Hộp, Thùng hoặc đơn vị quy đổi đã tạo."><span className="inventory-control-shell inventory-control-shell--select"><Icon name="tag" size={17} /><select name="purchaseUnitId" value={form.purchaseUnitId} onChange={updateItemPurchaseUnit} disabled={!form.displayUnitId}><option value="">Giống đơn vị hiển thị</option>{purchaseUnits.map((row) => <option key={row.id} value={row.id}>{row.name}{row.symbol ? ` (${row.symbol})` : ""}</option>)}</select></span></Field>
               </div>
+              {needsItemPurchaseRatio ? (
+                <Field
+                  label="Quy đổi đơn vị nhập"
+                  required
+                  full
+                  help={`Tỷ lệ này chỉ áp dụng cho ${form.name || "nguyên vật liệu này"}; không làm thay đổi đơn vị ${selectedPurchaseUnit?.name || "đã chọn"} ở mặt hàng khác.`}
+                >
+                  <div className="inventory-item-purchase-ratio">
+                    <span>1 <strong>{selectedPurchaseUnit?.symbol || selectedPurchaseUnit?.name}</strong> =</span>
+                    <span className="inventory-control-shell inventory-control-shell--suffix">
+                      <input
+                        type="number"
+                        min="0.000001"
+                        step="any"
+                        name="purchaseToBaseRatio"
+                        value={form.purchaseToBaseRatio}
+                        onChange={update}
+                        placeholder="Ví dụ: 500"
+                        aria-label={`Một ${selectedPurchaseUnit?.name || "đơn vị nhập"} bằng bao nhiêu ${selectedDisplayBaseUnit?.name || "đơn vị tồn kho"}`}
+                      />
+                      <b>{selectedDisplayBaseUnit?.symbol || selectedDisplayBaseUnit?.name || "đơn vị gốc"}</b>
+                    </span>
+                  </div>
+                  {Number(form.purchaseToBaseRatio || 0) <= 0 ? <p className="inventory-form-error">Nhập số lượng quy đổi lớn hơn 0.</p> : null}
+                </Field>
+              ) : null}
               {selectedDisplayUnit ? <div className="inventory-item-storage-summary full-field"><Icon name="refresh" size={18} /><span>Kho lưu: <strong>{selectedDisplayUnit.baseUnitId ? `1 ${selectedDisplayUnit.symbol || selectedDisplayUnit.name} = ${selectedDisplayUnit.conversionFactor} ${selectedDisplayBaseUnit?.name || "đơn vị gốc"}` : selectedDisplayUnit.name}</strong></span><small>{selectedDisplayUnit.baseUnitId ? "Đơn vị hiển thị được tự động quy về đơn vị gốc." : "Đây là đơn vị gốc, kho lưu trực tiếp không cần quy đổi."}</small></div> : null}
               <section className="inventory-item-stock-config full-field" aria-labelledby="inventory-item-stock-config-title">
                 <div className="inventory-item-stock-config__head">

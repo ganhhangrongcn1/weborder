@@ -479,6 +479,10 @@
 .inventory-item-storage-summary span { font-size: .76rem; }
 .inventory-item-storage-summary strong { color: #483329; }
 .inventory-item-storage-summary small { color: #8a776b; font-size: .68rem; line-height: 1.4; }
+.inventory-item-purchase-ratio { display: flex; align-items: center; gap: 10px; }
+.inventory-item-purchase-ratio > span:first-child { flex: 0 0 auto; color: #5e493e; font-size: .82rem; }
+.inventory-item-purchase-ratio .inventory-control-shell { flex: 1 1 260px; max-width: 390px; }
+.inventory-item-purchase-ratio .inventory-form-error { margin: 0; }
 .inventory-warehouse-modal .full-field { grid-column: 1 / -1; }
 .inventory-stock-setting { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 13px; border: 1px solid #e6dbd2; border-radius: 11px; background: #fcfaf7; cursor: pointer; }
 .inventory-setting-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 9px; background: #fff0df; color: #bc5d20; }

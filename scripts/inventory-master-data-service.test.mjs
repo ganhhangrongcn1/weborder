@@ -137,6 +137,21 @@ test("nguyên vật liệu dùng đơn vị tồn làm đơn vị mua mặc đ�
   assert.equal(payload.metadata.track_expiry, false);
 });
 
+test("nguyên vật liệu lưu tỷ lệ quy đổi riêng từ chai sang đơn vị tồn", () => {
+  const payload = normalizeInventoryMasterDataInput("items", {
+    name: "Sốt me",
+    displayUnitId: "unit-ml",
+    baseUnitId: "unit-ml",
+    purchaseUnitId: "unit-chai",
+    purchaseToBaseRatio: 500
+  });
+
+  assert.equal(payload.base_unit_id, "unit-ml");
+  assert.equal(payload.purchase_unit_id, "unit-chai");
+  assert.equal(payload.purchase_to_base_ratio, 500);
+  assert.equal(payload.metadata.display_unit_id, "unit-ml");
+});
+
 test("bán thẳng dùng thành phẩm và lưu cấu hình tồn kho mở rộng", () => {
   const payload = normalizeInventoryMasterDataInput("items", {
     name: "Nước suối chai",
