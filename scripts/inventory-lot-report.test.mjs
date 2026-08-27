@@ -3,6 +3,7 @@ import test from "node:test";
 import { adminPathToState } from "../src/app/routeState.js";
 import {
   calculateInventoryLotSummary,
+  countInventoryLotAttention,
   getInventoryLotDaysRemaining,
   getInventoryLotDisplayValues,
   getInventoryLotExpiryState
@@ -48,6 +49,7 @@ test("tổng hợp trạng thái lô và route Lô hạn sử dụng", () => {
   ];
   const summary = calculateInventoryLotSummary(rows, new Map([["item-1", item]]), "2026-08-26");
   assert.deepEqual(summary, { total: 3, expired: 1, expiring: 1, valid: 0, untracked: 1 });
+  assert.equal(countInventoryLotAttention(rows, new Map([["item-1", item]]), "2026-08-26"), 2);
   assert.equal(adminPathToState("/admin/inventory/lots").inventoryPage, "lots");
   assert.equal(getInventoryRoute("lots").label, "Lô & hạn sử dụng");
   assert.equal(getInventoryRoute("reports").label, "Tồn kho");

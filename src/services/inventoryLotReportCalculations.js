@@ -48,10 +48,18 @@ export function calculateInventoryLotSummary(rows = [], itemById = new Map(), to
   }, { total: 0, expired: 0, expiring: 0, valid: 0, untracked: 0 });
 }
 
+export function countInventoryLotAttention(rows = [], itemById = new Map(), todayKey = getInventoryTodayKey()) {
+  return rows.reduce((count, row) => {
+    const state = getInventoryLotExpiryState(row, itemById.get(row.itemId) || {}, todayKey);
+    return count + (["expired", "expiring"].includes(state) ? 1 : 0);
+  }, 0);
+}
+
 export default {
   getInventoryTodayKey,
   getInventoryLotDaysRemaining,
   getInventoryLotExpiryState,
   getInventoryLotDisplayValues,
-  calculateInventoryLotSummary
+  calculateInventoryLotSummary,
+  countInventoryLotAttention
 };

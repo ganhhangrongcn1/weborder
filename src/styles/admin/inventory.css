@@ -371,6 +371,13 @@
 .inventory-lot-report__table { min-width: 1180px; }
 .inventory-lot-report__table th.is-number,
 .inventory-lot-report__table td.is-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inventory-lot-row { transition: background-color .16s ease, box-shadow .16s ease; }
+.inventory-lot-row.is-expiring { background: #fffaf0; box-shadow: inset 4px 0 0 #e1a348; }
+.inventory-lot-row.is-expired { background: #fff4f2; box-shadow: inset 4px 0 0 #cf6659; }
+.inventory-lot-row.is-expiring:hover { background: #fff5e3; }
+.inventory-lot-row.is-expired:hover { background: #ffebe8; }
+.inventory-lot-row.is-expiring td:nth-child(2) > strong { color: #9d6018; }
+.inventory-lot-row.is-expired td:nth-child(2) > strong { color: #a84439; }
 .inventory-stock-state.is-expired { border-color: #edcbc5; background: #fff1ef; color: #a84a3e; }
 .inventory-stock-state.is-expiring { border-color: #efd5aa; background: #fff7e8; color: #a56516; }
 .inventory-stock-state.is-valid { border-color: #c7e5d4; background: #eef9f3; color: #24744a; }

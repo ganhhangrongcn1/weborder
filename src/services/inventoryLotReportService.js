@@ -4,6 +4,7 @@ import {
   initSupabaseRuntimeClient
 } from "./supabase/supabaseRuntimeClient.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
+import { countInventoryLotAttention } from "./inventoryLotReportCalculations.js";
 
 const REPORT_LIMIT = 5000;
 
@@ -78,4 +79,31 @@ export async function readInventoryLotReport({ warehouseIds = [] } = {}) {
   };
 }
 
-export default { readInventoryLotReport };
+export async function readInventoryLotAttentionCount({ warehouseId = "" } = {}) {
+  const client = await getInventoryClient();
+  if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
+
+  let lotQuery = client
+    .from("inventory_stock_lots")
+    .select("id,warehouse_id,item_id,expires_on,remaining_quantity,status")
+    .gt("remaining_quantity", 0)
+    .not("expires_on", "is", null);
+  if (warehouseId) lotQuery = lotQuery.eq("warehouse_id", warehouseId);
+
+  const [lotResult, itemResult] = await Promise.all([
+    lotQuery.range(0, REPORT_LIMIT - 1),
+    client.from("inventory_items").select("id,metadata").range(0, REPORT_LIMIT - 1)
+  ]);
+  recordAdminRequest("count inventory lot attention", "inventory_stock_lots,inventory_items");
+  const firstError = lotResult.error || itemResult.error;
+  if (firstError) throw new Error(normalizeReadError(firstError).message);
+
+  const items = (itemResult.data || []).map((item) => ({
+    id: toText(item.id),
+    expiryWarningDays: Math.max(0, Math.trunc(Number(item.metadata?.expiry_warning_days || 0)))
+  }));
+  const rows = (lotResult.data || []).map(normalizeLot);
+  return countInventoryLotAttention(rows, new Map(items.map((item) => [item.id, item])));
+}
+
+export default { readInventoryLotAttentionCount, readInventoryLotReport };

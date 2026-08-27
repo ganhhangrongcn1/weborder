@@ -25,6 +25,7 @@ import {
 import { readInventoryActionableCount } from "../../services/inventoryCountService.js";
 import { readInventoryCostAnalysisPermission } from "../../services/inventoryCostAnalysisService.js";
 import { readInventoryStockAttentionCount } from "../../services/inventoryStockReportService.js";
+import { readInventoryLotAttentionCount } from "../../services/inventoryLotReportService.js";
 import {
   filterAdminNavigationByAccess,
   getAdminModuleAccessPolicy,
@@ -84,6 +85,7 @@ export default function AdminApp({
   const [inventoryPendingAdjustmentCount, setInventoryPendingAdjustmentCount] = useState(0);
   const [inventoryActionableCount, setInventoryActionableCount] = useState(0);
   const [inventoryStockAttentionCount, setInventoryStockAttentionCount] = useState(0);
+  const [inventoryLotAttentionCount, setInventoryLotAttentionCount] = useState(0);
   const [inventorySelectedWarehouseId, setInventorySelectedWarehouseId] = useState("");
   const [canViewInventoryCostAnalysis, setCanViewInventoryCostAnalysis] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -311,19 +313,21 @@ export default function AdminApp({
       setInventoryPendingAdjustmentCount(0);
       setInventoryActionableCount(0);
       setInventoryStockAttentionCount(0);
+      setInventoryLotAttentionCount(0);
       return undefined;
     }
     let cancelled = false;
 
     const refreshInventoryPendingCount = async () => {
       try {
-        const [requisitionCount, transferCount, disposalCount, adjustmentCount, actionableCount, stockAttentionCount] = await Promise.all([
+        const [requisitionCount, transferCount, disposalCount, adjustmentCount, actionableCount, stockAttentionCount, lotAttentionCount] = await Promise.all([
           readInventoryPendingRequisitionCount(),
           readInventoryPendingTransferCount(),
           readInventoryPendingDisposalCount(),
           readInventoryPendingAdjustmentCount(),
           readInventoryActionableCount(),
-          readInventoryStockAttentionCount({ warehouseId: inventorySelectedWarehouseId })
+          readInventoryStockAttentionCount({ warehouseId: inventorySelectedWarehouseId }),
+          readInventoryLotAttentionCount({ warehouseId: inventorySelectedWarehouseId })
         ]);
         if (!cancelled) {
           setInventoryPendingRequisitionCount(requisitionCount);
@@ -332,6 +336,7 @@ export default function AdminApp({
           setInventoryPendingAdjustmentCount(adjustmentCount);
           setInventoryActionableCount(actionableCount);
           setInventoryStockAttentionCount(stockAttentionCount);
+          setInventoryLotAttentionCount(lotAttentionCount);
         }
       } catch {
         // Giữ số gần nhất nếu phiên Admin hoặc mạng tạm thời gián đoạn.
@@ -365,7 +370,8 @@ export default function AdminApp({
           "inventory-disposals": inventoryPendingDisposalCount,
           "inventory-counts": inventoryActionableCount,
           "inventory-adjustments": inventoryPendingAdjustmentCount,
-          "inventory-reports": inventoryStockAttentionCount
+          "inventory-reports": inventoryStockAttentionCount,
+          "inventory-lots": inventoryLotAttentionCount
         }}
         isMobileOpen={isMobileNavOpen}
         onMobileClose={() => setIsMobileNavOpen(false)}

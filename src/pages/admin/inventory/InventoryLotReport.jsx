@@ -152,7 +152,7 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
               const daysRemaining = getInventoryLotDaysRemaining(row.expiresOn, todayKey);
               const display = getInventoryLotDisplayValues(row, item, unitById);
               return (
-                <tr key={row.id}>
+                <tr key={row.id} className={`inventory-lot-row is-${state}`}>
                   <td><strong>{warehouse.name || "Kho không còn hoạt động"}</strong><small>{warehouse.code || row.warehouseId}</small></td>
                   <td><strong>{item.name || "NVL không còn hoạt động"}</strong><small>{item.code || row.itemId}</small></td>
                   <td><strong>{row.lotNumber}</strong>{row.sourceDocumentNo ? <small>Nguồn: {row.sourceDocumentNo}</small> : null}</td>
