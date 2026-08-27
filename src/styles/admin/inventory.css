@@ -1091,6 +1091,13 @@
 
 .inventory-production-flow { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 12px 15px 0; padding: 10px 12px; border: 1px solid #d8e6dc; border-radius: 10px; background: #f5faf6; color: #397150; font-size: .68rem; font-weight: 800; }
 .inventory-production-flow svg { color: #91a69a; }
+.inventory-production-prerequisite { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; margin: 12px 15px 0; padding: 12px 13px; border: 1px solid #efd2a7; border-radius: 10px; background: #fff8eb; }
+.inventory-production-prerequisite > span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: #ffebc9; color: #aa641b; }
+.inventory-production-prerequisite > div { display: grid; gap: 3px; }
+.inventory-production-prerequisite strong { color: #754717; font-size: .75rem; }
+.inventory-production-prerequisite small { color: #8a6b49; font-size: .67rem; line-height: 1.45; }
+.inventory-production-prerequisite > button { min-height: 36px; padding: 0 12px; border: 1px solid #d98530; border-radius: 8px; background: #fff; color: #a95a18; font: inherit; font-size: .68rem; font-weight: 850; cursor: pointer; white-space: nowrap; }
+.inventory-production-prerequisite > button:hover { background: #fff1db; }
 .inventory-production-table { min-width: 1380px; }
 .inventory-production-table td > strong,
 .inventory-production-table td > small { display: block; }
@@ -1411,6 +1418,8 @@
   .inventory-bom-modal form > footer { display: grid; grid-template-columns: 1fr 1fr; }
   .inventory-bom-modal form > footer > span { grid-column: 1 / -1; }
   .inventory-production-flow { overflow-x: auto; justify-content: flex-start; white-space: nowrap; }
+  .inventory-production-prerequisite { grid-template-columns: auto 1fr; }
+  .inventory-production-prerequisite > button { grid-column: 1 / -1; width: 100%; }
   .inventory-production-line { grid-template-columns: 1fr; align-items: stretch; }
   .inventory-production-line > strong { text-align: left; }
   .inventory-production-cost-summary { grid-template-columns: 1fr; }

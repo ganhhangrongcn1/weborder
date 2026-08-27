@@ -27,7 +27,8 @@ export default function InventoryProductionOrderManager({
   onStart,
   onComplete,
   onCancel,
-  onDeleteDraft
+  onDeleteDraft,
+  onOpenBoms
 }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -57,6 +58,13 @@ export default function InventoryProductionOrderManager({
       ? "Lệnh sơ chế"
       : "Lệnh sản xuất";
   const createLabel = hasPreprocessing && !hasCentral ? "Tạo lệnh sơ chế" : "Tạo lệnh";
+  const handleCreate = () => {
+    if (!activeBoms.length) {
+      onOpenBoms?.();
+      return;
+    }
+    setModal({ mode: "create", order: {} });
+  };
 
   const confirmAction = async () => {
     if (!confirmation?.order) return;
@@ -72,8 +80,24 @@ export default function InventoryProductionOrderManager({
       <div className="inventory-bom-manager__head">
         <span><Icon name="gear" size={19} /></span>
         <div><strong>{pageTitle}</strong><small>Chọn công thức đúng kho, nhập số lượng cần làm và hoàn thành để cập nhật tồn kho.</small></div>
-        <button type="button" disabled={!canWrite || !activeBoms.length} onClick={() => setModal({ mode: "create", order: {} })}><Icon name="plus" size={16} /> {createLabel}</button>
+        <button
+          type="button"
+          disabled={!canWrite}
+          title={!canWrite ? "Tài khoản hoặc môi trường hiện tại chưa được phép tạo lệnh." : !activeBoms.length ? "Chưa có công thức đang áp dụng. Bấm để mở Công thức chế biến." : createLabel}
+          onClick={handleCreate}
+        ><Icon name="plus" size={16} /> {createLabel}</button>
       </div>
+
+      {canWrite && !activeBoms.length ? (
+        <div className="inventory-production-prerequisite" role="status">
+          <span><Icon name="warning" size={18} /></span>
+          <div>
+            <strong>Chưa có công thức đang áp dụng</strong>
+            <small>Hiện có công thức bản nháp nhưng chưa thể dùng để lập lệnh. Hãy kiểm tra và kích hoạt ít nhất một công thức trước.</small>
+          </div>
+          <button type="button" onClick={onOpenBoms}>Mở Công thức chế biến</button>
+        </div>
+      ) : null}
 
       <div className="inventory-production-flow"><span>1. Tạo lệnh</span><Icon name="share" size={15} /><span>2. Bắt đầu làm</span><Icon name="share" size={15} /><span>3. Hoàn thành</span></div>
 

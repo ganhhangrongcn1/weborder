@@ -165,6 +165,7 @@ export default function InventoryWorkspace({
   toppings = [],
   inventoryAccessPolicy = null,
   onInventoryWarehouseChange,
+  onOpenInventoryBoms,
   dataStatus = "disconnected",
   dataError = "",
   dataIsStale = false,
@@ -660,6 +661,7 @@ export default function InventoryWorkspace({
                     onComplete={productionState.complete}
                     onCancel={productionState.cancel}
                     onDeleteDraft={productionState.deleteDraft}
+                    onOpenBoms={onOpenInventoryBoms}
                     warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : isReconciliationPage

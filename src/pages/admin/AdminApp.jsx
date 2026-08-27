@@ -403,6 +403,10 @@ export default function AdminApp({
           isSupabaseAdminMode={isSupabaseAdminMode}
           inventoryAccessPolicy={inventoryAccessPolicy}
           onInventoryWarehouseChange={setInventorySelectedWarehouseId}
+          onOpenInventoryBoms={() => {
+            const bomNavItem = flatAdminNav.find((item) => item.id === "inventory-boms");
+            if (bomNavItem) activateNav(bomNavItem);
+          }}
           onReviewRewardPendingCountChange={setReviewRewardPendingCount}
           uiDirty={uiDirty}
           dashboardSearch={dashboardSearch}
