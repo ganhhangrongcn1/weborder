@@ -74,7 +74,7 @@ function getAlertMetric(alert, item, unitById) {
   return alert.documentStatus ? DOCUMENT_STATUS_LABELS[alert.documentStatus] || "Đang xử lý" : "Đang chờ xử lý";
 }
 
-export default function InventoryAlertCenter({ sources = {}, warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false }) {
+export default function InventoryAlertCenter({ sources = {}, warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false, selectedWarehouseId = "", onWarehouseChange }) {
   const [searchParams] = useSearchParams();
   const routeFilterKey = searchParams.toString();
   const [filters, setFilters] = useState({ category: "all", warehouseId: "", severity: "all", search: "" });
@@ -96,14 +96,21 @@ export default function InventoryAlertCenter({ sources = {}, warehouses = [], it
 
   useEffect(() => {
     const params = new URLSearchParams(routeFilterKey);
+    const requestedWarehouseId = params.get("warehouse") || "";
     const requestedCategory = params.get("type") || "all";
     setFilters((current) => ({
       ...current,
       category: CATEGORY_OPTIONS.some((option) => option.id === requestedCategory) ? requestedCategory : "all",
-      warehouseId: params.get("warehouse") || "",
+      warehouseId: requestedWarehouseId,
       search: params.get("q") || ""
     }));
-  }, [routeFilterKey]);
+    if (requestedWarehouseId) onWarehouseChange?.(requestedWarehouseId);
+  }, [onWarehouseChange, routeFilterKey]);
+
+  useEffect(() => {
+    if (new URLSearchParams(routeFilterKey).has("warehouse")) return;
+    setFilters((current) => current.warehouseId === selectedWarehouseId ? current : { ...current, warehouseId: selectedWarehouseId });
+  }, [routeFilterKey, selectedWarehouseId]);
 
   const updateFilter = (patch) => setFilters((current) => ({ ...current, ...patch }));
 
@@ -128,7 +135,7 @@ export default function InventoryAlertCenter({ sources = {}, warehouses = [], it
         {warehouseSelectionLocked && warehouses.length === 1 ? (
           <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div>
         ) : (
-          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
+          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => { updateFilter({ warehouseId: event.target.value }); onWarehouseChange?.(event.target.value); }}>
             <option value="">Tất cả kho được phép xem</option>
             {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
           </InventorySearchableSelect>

@@ -4,7 +4,9 @@ import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   calculateInventoryStockReportSummary,
+  buildInventoryStockReportRows,
   getInventoryStockDisplayValues,
+  getInventoryStockPurchaseValues,
   getInventoryStockState
 } from "../../../services/inventoryStockReportCalculations.js";
 
@@ -23,7 +25,7 @@ function formatMoney(value) {
   return `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Number(value || 0))} đ`;
 }
 
-export default function InventoryStockReport({ rows = [], warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false }) {
+export default function InventoryStockReport({ rows = [], warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false, selectedWarehouseId = "", onWarehouseChange }) {
   const [searchParams] = useSearchParams();
   const routeFilterKey = searchParams.toString();
   const [filters, setFilters] = useState({ warehouseId: "", itemId: "", groupId: "", stockState: "all", search: "" });
@@ -38,9 +40,17 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
     });
     return [...values.entries()].sort((left, right) => left[1].localeCompare(right[1], "vi"));
   }, [items]);
+  const reportWarehouses = useMemo(() => (
+    selectedWarehouseId
+      ? warehouses.filter((warehouse) => warehouse.id === selectedWarehouseId)
+      : warehouses
+  ), [selectedWarehouseId, warehouses]);
+  const reportRows = useMemo(() => (
+    buildInventoryStockReportRows(rows, reportWarehouses, items)
+  ), [items, reportWarehouses, rows]);
   const filteredRows = useMemo(() => {
     const search = filters.search.trim().toLocaleLowerCase("vi");
-    return rows.filter((row) => {
+    return reportRows.filter((row) => {
       const item = itemById.get(row.itemId) || {};
       const warehouse = warehouseById.get(row.warehouseId) || {};
       const state = getInventoryStockState(row.quantity, item);
@@ -51,7 +61,7 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
       if (search && !`${item.code || ""} ${item.name || ""} ${warehouse.name || ""}`.toLocaleLowerCase("vi").includes(search)) return false;
       return true;
     });
-  }, [filters, itemById, rows, warehouseById]);
+  }, [filters, itemById, reportRows, warehouseById]);
   const summary = useMemo(() => calculateInventoryStockReportSummary(filteredRows, itemById), [filteredRows, itemById]);
   const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -59,16 +69,24 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
 
   useEffect(() => {
     const params = new URLSearchParams(routeFilterKey);
+    const requestedWarehouseId = params.get("warehouse") || "";
     const stockState = ["available", "low", "out"].includes(params.get("stock")) ? params.get("stock") : "all";
     setFilters((current) => ({
       ...current,
-      warehouseId: params.get("warehouse") || "",
+      warehouseId: requestedWarehouseId,
       itemId: params.get("item") || "",
       stockState,
       search: params.get("q") || ""
     }));
+    if (requestedWarehouseId) onWarehouseChange?.(requestedWarehouseId);
     setPage(1);
-  }, [routeFilterKey]);
+  }, [onWarehouseChange, routeFilterKey]);
+
+  useEffect(() => {
+    if (new URLSearchParams(routeFilterKey).has("warehouse")) return;
+    setFilters((current) => current.warehouseId === selectedWarehouseId ? current : { ...current, warehouseId: selectedWarehouseId });
+    setPage(1);
+  }, [routeFilterKey, selectedWarehouseId]);
 
   const updateFilter = (patch) => {
     setFilters((current) => ({ ...current, ...patch }));
@@ -105,7 +123,7 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
         {warehouseSelectionLocked && warehouses.length === 1 ? (
           <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div>
         ) : (
-          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
+          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => { updateFilter({ warehouseId: event.target.value }); onWarehouseChange?.(event.target.value); }}>
             <option value="">Tất cả kho được phép xem</option>
             {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
           </InventorySearchableSelect>
@@ -126,22 +144,25 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
 
       <div className="inventory-table-scroll">
         <table className="inventory-data-table inventory-stock-report__table">
-          <thead><tr><th>Kho</th><th>Nguyên vật liệu</th><th>Danh mục</th><th className="is-number">Số lượng tồn</th><th>Đơn vị</th><th className="is-number">Giá vốn bình quân</th><th className="is-number">Giá trị tồn</th><th>Trạng thái</th></tr></thead>
+          <thead><tr><th>Kho</th><th>Nguyên vật liệu</th><th>Danh mục</th><th className="is-number">Tồn theo đơn vị mua / nhập</th><th>Đơn vị mua / nhập</th><th className="is-number">Giá vốn bình quân</th><th className="is-number">Giá trị tồn</th><th>Trạng thái</th></tr></thead>
           <tbody>
             {visibleRows.map((row) => {
               const item = itemById.get(row.itemId) || {};
               const warehouse = warehouseById.get(row.warehouseId) || {};
               const state = getInventoryStockState(row.quantity, item);
               const display = getInventoryStockDisplayValues(row, item, unitById);
+              const purchase = getInventoryStockPurchaseValues(row, item, unitById);
+              const hasDifferentDisplayUnit = display.unitSymbol !== purchase.unitSymbol
+                || display.conversionToBase !== purchase.conversionToBase;
               return (
-                <tr key={`${row.warehouseId}-${row.itemId}`}>
+                <tr className={`inventory-stock-row is-${state}`} key={`${row.warehouseId}-${row.itemId}`}>
                   <td><strong>{warehouse.name || "Kho không còn hoạt động"}</strong><small>{warehouse.code || row.warehouseId}</small></td>
-                  <td><strong>{item.name || "NVL không còn hoạt động"}</strong><small>{item.code || row.itemId}</small></td>
+                  <td><strong>{item.name || "NVL không còn hoạt động"}</strong><small>{item.code || row.itemId}</small>{state !== "available" ? <em className={`inventory-stock-attention is-${state}`}>{state === "out" ? "Cần nhập ngay" : "Cần bổ sung"}</em> : null}</td>
                   <td><span className="inventory-data-pill is-category">{item.itemGroup?.name || "Chưa phân nhóm"}</span></td>
-                  <td className="is-number"><strong>{formatQuantity(display.quantity)}</strong></td>
-                  <td><strong>{display.unitName}</strong>{display.conversionToBase > 1 ? <small>1 {display.unitSymbol} = {formatQuantity(display.conversionToBase)} {item.baseUnit?.name || "đơn vị gốc"}</small> : null}</td>
-                  <td className="is-number">{formatMoney(display.averageCost)}<small>/ {display.unitSymbol}</small></td>
-                  <td className="is-number"><strong>{formatMoney(display.totalValue)}</strong></td>
+                  <td className="is-number"><strong>{formatQuantity(purchase.quantity)}</strong>{hasDifferentDisplayUnit ? <small>Tương đương {formatQuantity(display.quantity)} {display.unitSymbol}</small> : null}</td>
+                  <td><strong>{purchase.unitName}</strong>{purchase.conversionToBase > 1 ? <small>1 {purchase.unitSymbol} = {formatQuantity(purchase.conversionToBase)} {purchase.baseUnitName}</small> : <small>Kho lưu trực tiếp theo đơn vị này</small>}{hasDifferentDisplayUnit ? <small>Đơn vị hiển thị: {display.unitName}</small> : null}</td>
+                  <td className="is-number">{formatMoney(purchase.averageCost)}<small>/ {purchase.unitSymbol}</small></td>
+                  <td className="is-number"><strong>{formatMoney(purchase.totalValue)}</strong></td>
                   <td><span className={`inventory-stock-state is-${state}`}>{STOCK_STATE_LABELS[state]}</span></td>
                 </tr>
               );

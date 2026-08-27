@@ -23,6 +23,16 @@ export function getInventoryUnitToBaseFactor(item = {}, unit = {}) {
   return 1;
 }
 
+export function convertInventoryQuantityToBase(quantity = 0, conversionToBase = 1) {
+  const factor = Math.max(0, toNumber(conversionToBase, 1));
+  return toNumber(quantity) * (factor > 0 ? factor : 1);
+}
+
+export function convertInventoryQuantityFromBase(quantity = 0, conversionToBase = 1) {
+  const factor = Math.max(0, toNumber(conversionToBase, 1));
+  return toNumber(quantity) / (factor > 0 ? factor : 1);
+}
+
 export function getInventoryCompatibleUnits(item = {}, units = []) {
   const baseUnitId = String(item.baseUnitId || "").trim();
   const purchaseUnitId = String(item.purchaseUnitId || "").trim();
@@ -60,5 +70,7 @@ export default {
   getInventoryItemDisplayUnitConfig,
   getInventoryItemInputUnitConfig,
   getInventoryCompatibleUnits,
-  getInventoryUnitToBaseFactor
+  getInventoryUnitToBaseFactor,
+  convertInventoryQuantityToBase,
+  convertInventoryQuantityFromBase
 };

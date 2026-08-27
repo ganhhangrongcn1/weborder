@@ -25,7 +25,6 @@ export default function useInventoryStockFlowReport({ enabled = false, warehouse
   const [state, setState] = useState(INITIAL_STATE);
 
   useEffect(() => {
-    if (!warehouseId) return;
     setFilters((current) => current.warehouseId === warehouseId ? current : { ...current, warehouseId, page: 1 });
   }, [warehouseId]);
 

@@ -32,10 +32,14 @@ const INITIAL_STATE = {
   loadedAt: ""
 };
 
-export default function useInventoryDocuments({ enabled = false, domain = "" } = {}) {
+export default function useInventoryDocuments({ enabled = false, domain = "", warehouseId = "" } = {}) {
   const [state, setState] = useState(INITIAL_STATE);
   const [mutation, setMutation] = useState({ status: "idle", message: "" });
-  const [filters, setFilters] = useState(() => createDefaultInventoryDocumentFilters());
+  const [filters, setFilters] = useState(() => ({ ...createDefaultInventoryDocumentFilters(), warehouseId }));
+
+  useEffect(() => {
+    setFilters((current) => current.warehouseId === warehouseId ? current : { ...current, warehouseId, page: 1 });
+  }, [warehouseId]);
 
   const updateFilters = useCallback((patch = {}) => {
     setFilters((current) => ({

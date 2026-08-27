@@ -16,13 +16,17 @@ const INITIAL_STATE = {
   loadedAt: ""
 };
 
-export default function useInventoryLedger({ enabled = false } = {}) {
+export default function useInventoryLedger({ enabled = false, warehouseId = "" } = {}) {
   const [state, setState] = useState(INITIAL_STATE);
   const [filters, setFilters] = useState(() => ({
     ...createDefaultInventoryDocumentFilters(),
-    warehouseId: "",
+    warehouseId,
     itemId: ""
   }));
+
+  useEffect(() => {
+    setFilters((current) => current.warehouseId === warehouseId ? current : { ...current, warehouseId, page: 1 });
+  }, [warehouseId]);
 
   const updateFilters = useCallback((patch = {}) => {
     setFilters((current) => ({

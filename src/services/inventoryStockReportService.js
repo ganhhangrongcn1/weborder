@@ -4,6 +4,10 @@ import {
   initSupabaseRuntimeClient
 } from "./supabase/supabaseRuntimeClient.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
+import {
+  buildInventoryStockReportRows,
+  countInventoryStockAttention
+} from "./inventoryStockReportCalculations.js";
 
 const REPORT_LIMIT = 5000;
 
@@ -60,4 +64,58 @@ export async function readInventoryStockReport() {
   };
 }
 
-export default { readInventoryStockReport };
+export async function readInventoryStockAttentionCount({ warehouseId = "" } = {}) {
+  const client = await getInventoryClient();
+  if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
+
+  let balanceQuery = client
+    .from("inventory_stock_balances")
+    .select("warehouse_id,item_id,quantity");
+  let warehouseQuery = client
+    .from("inventory_warehouses")
+    .select("id,is_active")
+    .eq("is_active", true)
+    .is("deleted_at", null);
+  if (warehouseId) {
+    balanceQuery = balanceQuery.eq("warehouse_id", warehouseId);
+    warehouseQuery = warehouseQuery.eq("id", warehouseId);
+  }
+
+  const [balanceResult, warehouseResult, itemResult] = await Promise.all([
+    balanceQuery.range(0, REPORT_LIMIT - 1),
+    warehouseQuery.range(0, REPORT_LIMIT - 1),
+    client
+      .from("inventory_items")
+      .select("id,minimum_stock,reorder_point,is_active,metadata")
+      .eq("is_active", true)
+      .range(0, REPORT_LIMIT - 1)
+  ]);
+  recordAdminRequest("count inventory stock attention", "inventory_stock_balances,inventory_warehouses,inventory_items");
+  const firstError = balanceResult.error || warehouseResult.error || itemResult.error;
+  if (firstError) throw new Error(normalizeReadError(firstError).message);
+
+  const warehouses = (warehouseResult.data || []).map((warehouse) => ({
+    id: toText(warehouse.id),
+    isActive: warehouse.is_active !== false
+  }));
+  const items = (itemResult.data || []).map((item) => ({
+    id: toText(item.id),
+    minimumStock: Number(item.minimum_stock || 0),
+    reorderPoint: Number(item.reorder_point || 0),
+    warehouseIds: Array.isArray(item.metadata?.warehouse_ids)
+      ? item.metadata.warehouse_ids.map(toText).filter(Boolean)
+      : [],
+    isActive: item.is_active !== false
+  }));
+  const rows = (balanceResult.data || []).map((row) => ({
+    warehouseId: toText(row.warehouse_id),
+    itemId: toText(row.item_id),
+    quantity: Number(row.quantity || 0)
+  }));
+  const completeRows = buildInventoryStockReportRows(rows, warehouses, items);
+  const itemById = new Map(items.map((item) => [item.id, item]));
+
+  return countInventoryStockAttention(completeRows, itemById);
+}
+
+export default { readInventoryStockAttentionCount, readInventoryStockReport };

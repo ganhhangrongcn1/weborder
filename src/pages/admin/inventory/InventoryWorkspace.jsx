@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import useInventoryDashboard from "../../../hooks/useInventoryDashboard.js";
 import useInventoryMasterData from "../../../hooks/useInventoryMasterData.js";
@@ -17,6 +17,7 @@ import useInventorySalesConfiguration from "../../../hooks/useInventorySalesConf
 import useInventoryCostAnalysis from "../../../hooks/useInventoryCostAnalysis.js";
 import useInventoryOpeningBalances from "../../../hooks/useInventoryOpeningBalances.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
+import { filterInventoryItemsByWarehouse } from "../../../services/inventoryMasterDataService.js";
 import { getInventoryRoute } from "./inventoryNavigation.js";
 import { getInventoryAccessPolicy, getInventoryScopedWarehouses } from "./inventoryAccessPolicy.js";
 import InventoryWarehouseManager from "./InventoryWarehouseManager.jsx";
@@ -36,6 +37,38 @@ import InventorySalesConfiguration from "./InventorySalesConfiguration.jsx";
 import InventorySalesReconciliation from "./InventorySalesReconciliation.jsx";
 import InventoryCostAnalysis from "./InventoryCostAnalysis.jsx";
 import InventoryOpeningBalanceManager from "./InventoryOpeningBalanceManager.jsx";
+import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
+
+function rowMatchesWorkspaceWarehouse(row = {}, warehouseId = "") {
+  if (!warehouseId) return true;
+  return [row.warehouseId, row.sourceWarehouseId, row.destinationWarehouseId, row.defaultWarehouseId]
+    .filter(Boolean)
+    .includes(warehouseId);
+}
+
+function filterWorkspaceRows(rows = [], warehouseId = "") {
+  return warehouseId ? rows.filter((row) => rowMatchesWorkspaceWarehouse(row, warehouseId)) : rows;
+}
+
+function scopeDashboardData(data = {}, warehouseId = "") {
+  if (!warehouseId) return data;
+  const warehouse = (data.warehouses || []).find((row) => row.id === warehouseId);
+  if (!warehouse) return { ...data, actions: [], warehouses: [], activity7d: null };
+  return {
+    ...data,
+    kpis: {
+      inventoryValue: warehouse.inventoryValue,
+      outOfStockCount: warehouse.outOfStockCount,
+      reorderCount: warehouse.reorderCount,
+      expiredCount: 0,
+      expiringCount: warehouse.expiryCount,
+      pendingCount: warehouse.pendingCount
+    },
+    activity7d: null,
+    actions: (data.actions || []).filter((row) => rowMatchesWorkspaceWarehouse(row, warehouseId)),
+    warehouses: [warehouse]
+  };
+}
 
 function InventoryAccessGate({ accessPolicy, children }) {
   if (accessPolicy.allowed) return children;
@@ -131,6 +164,7 @@ export default function InventoryWorkspace({
   products = [],
   toppings = [],
   inventoryAccessPolicy = null,
+  onInventoryWarehouseChange,
   dataStatus = "disconnected",
   dataError = "",
   dataIsStale = false,
@@ -164,9 +198,30 @@ export default function InventoryWorkspace({
     : "";
   const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage || isSalesRecipePage;
   const warehouseState = useInventoryWarehouses({
-    enabled: isCostAnalysisPage || ((isWarehousePage || isOpeningBalancePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: accessPolicy.allowed || isCostAnalysisPage || isBomPage || isProductionPage || isSalesRecipePage,
     branchUuid: accessPolicy.scope === "branch" ? accessPolicy.branchUuid : ""
   });
+  const [workspaceWarehouseId, setWorkspaceWarehouseId] = useState("");
+  const warehouseScopeInitialized = useRef(false);
+  const scopedWarehouses = getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy);
+  useEffect(() => {
+    if (warehouseScopeInitialized.current || warehouseState.status !== "ready") return;
+    if (accessPolicy.scope === "branch") {
+      setWorkspaceWarehouseId(scopedWarehouses[0]?.id || "");
+    } else if (accessPolicy.scope === "warehouse") {
+      const centralWarehouse = scopedWarehouses.find((warehouse) => warehouse.warehouseType === "central") || scopedWarehouses[0];
+      setWorkspaceWarehouseId(centralWarehouse?.id || "");
+    }
+    warehouseScopeInitialized.current = true;
+  }, [accessPolicy.scope, scopedWarehouses, warehouseState.status]);
+  useEffect(() => {
+    if (warehouseState.status !== "ready") return;
+    if (!workspaceWarehouseId && ["branch", "warehouse"].includes(accessPolicy.scope)) return;
+    onInventoryWarehouseChange?.(workspaceWarehouseId);
+  }, [accessPolicy.scope, onInventoryWarehouseChange, warehouseState.status, workspaceWarehouseId]);
+  const activeWarehouses = workspaceWarehouseId
+    ? scopedWarehouses.filter((warehouse) => warehouse.id === workspaceWarehouseId)
+    : scopedWarehouses;
   const masterDataState = useInventoryMasterData({
     enabled: Boolean(masterDataDomain) && accessPolicy.allowed,
     domain: masterDataDomain
@@ -189,31 +244,31 @@ export default function InventoryWorkspace({
   });
   const documentState = useInventoryDocuments({
     enabled: Boolean(documentDomain) && accessPolicy.allowed,
-    domain: documentDomain
+    domain: documentDomain,
+    warehouseId: workspaceWarehouseId
   });
   const ledgerState = useInventoryLedger({
-    enabled: isLedgerPage && accessPolicy.allowed
+    enabled: isLedgerPage && accessPolicy.allowed,
+    warehouseId: workspaceWarehouseId
   });
   const stockFlowState = useInventoryStockFlowReport({
     enabled: isStockFlowPage && accessPolicy.allowed,
-    warehouseId: accessPolicy.scope === "branch"
-      ? getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy)[0]?.id || ""
-      : ""
+    warehouseId: workspaceWarehouseId
   });
   const stockReportState = useInventoryStockReport({
     enabled: isReportPage && accessPolicy.allowed
   });
   const lotReportState = useInventoryLotReport({
     enabled: isLotPage && accessPolicy.allowed,
-    warehouseIds: getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy).map((warehouse) => warehouse.id)
+    warehouseIds: activeWarehouses.map((warehouse) => warehouse.id)
   });
   const alertState = useInventoryAlerts({
     enabled: isAlertPage && accessPolicy.allowed,
-    warehouseIds: getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy).map((warehouse) => warehouse.id)
+    warehouseIds: activeWarehouses.map((warehouse) => warehouse.id)
   });
   const costAnalysisState = useInventoryCostAnalysis({
     enabled: isCostAnalysisPage,
-    warehouseIds: getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy).map((warehouse) => warehouse.id),
+    warehouseIds: activeWarehouses.map((warehouse) => warehouse.id),
     allowLocalAdmin: !isSupabaseAdminMode && accessPolicy.scope === "global"
   });
   const countState = useInventoryCounts({
@@ -268,7 +323,6 @@ export default function InventoryWorkspace({
     warehouseState.status,
     warehouseState.warehouses
   ]);
-  const scopedWarehouses = getInventoryScopedWarehouses(warehouseState.warehouses, accessPolicy);
   const scopedBranches = accessPolicy.scope === "branch"
     ? branches.filter((branch) => resolveBranchFromCandidates([accessPolicy.branchUuid], [branch]))
     : branches;
@@ -277,6 +331,13 @@ export default function InventoryWorkspace({
     ...scopedWarehouses,
     ...(warehouseSelectionLocked ? [] : warehouseDraftState.drafts)
   ];
+  const workspaceItems = filterInventoryItemsByWarehouse(documentItemsState.rows, workspaceWarehouseId);
+  const workspaceMasterRows = masterDataDomain === "items"
+    ? filterInventoryItemsByWarehouse(masterDataState.rows, workspaceWarehouseId)
+    : masterDataState.rows;
+  const workspaceWarehouse = scopedWarehouses.find((warehouse) => warehouse.id === workspaceWarehouseId);
+  const workspaceScopeLabel = workspaceWarehouse?.name || accessPolicy.scopeLabel;
+  const workspaceDashboardData = scopeDashboardData(dashboardState.data, workspaceWarehouseId);
   const effectiveAccessPolicy = isCostAnalysisPage
     ? costAnalysisState.permissions?.canView
       ? {
@@ -398,8 +459,17 @@ export default function InventoryWorkspace({
           </div>
           <div className="inventory-scope-badge">
             <Icon name="eye" size={16} />
-            <span>Phạm vi: <strong>{effectiveAccessPolicy.scopeLabel}</strong></span>
+            <span>Phạm vi: <strong>{workspaceScopeLabel}</strong></span>
           </div>
+          {accessPolicy.scope === "warehouse" && scopedWarehouses.length ? (
+            <label className="inventory-page-scope">
+              <span>Kho đang thao tác</span>
+              <InventorySearchableSelect value={workspaceWarehouseId} onChange={(event) => setWorkspaceWarehouseId(event.target.value)} aria-label="Chọn kho đang thao tác">
+                <option value="">Tất cả kho được phép</option>
+                {scopedWarehouses.filter((warehouse) => warehouse.isActive !== false).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+              </InventorySearchableSelect>
+            </label>
+          ) : null}
         </header>
 
         <InventoryConnectionState
@@ -410,12 +480,12 @@ export default function InventoryWorkspace({
         />
 
         {isDashboardPage
-          ? <InventoryDashboard data={dashboardState.data} />
+          ? <InventoryDashboard data={workspaceDashboardData} warehouseScoped={Boolean(workspaceWarehouseId)} />
           : isOpeningBalancePage
             ? <InventoryOpeningBalanceManager
-                rows={openingBalanceState.rows}
-                warehouses={scopedWarehouses}
-                items={documentItemsState.rows}
+                rows={filterWorkspaceRows(openingBalanceState.rows, workspaceWarehouseId)}
+                warehouses={activeWarehouses}
+                items={workspaceItems}
                 units={itemUnitsState.rows}
                 canWrite={canWriteOpeningBalances}
                 mutationStatus={openingBalanceState.mutationStatus}
@@ -433,14 +503,14 @@ export default function InventoryWorkspace({
               />
             : masterDataDomain
               ? ["items", "suppliers"].includes(masterDataDomain)
-                ? <InventoryCatalogManager domain={masterDataDomain} rows={masterDataState.rows} units={itemUnitsState.rows} categories={itemCategoriesState.rows} canWrite={canWriteMasterData} onSave={masterDataState.save} onArchive={masterDataState.archive} />
+                ? <InventoryCatalogManager domain={masterDataDomain} rows={workspaceMasterRows} allRows={masterDataState.rows} units={itemUnitsState.rows} categories={itemCategoriesState.rows} warehouses={scopedWarehouses} selectedWarehouseId={workspaceWarehouseId} canWrite={canWriteMasterData} onSave={masterDataState.save} onArchive={masterDataState.archive} />
                 : <InventoryMasterDataManager domain={masterDataDomain} rows={masterDataState.rows} canWrite={canWriteMasterData} onSave={masterDataState.save} onArchive={masterDataState.archive} />
               : documentDomain
                 ? <InventoryDocumentManager
                     domain={documentDomain}
-                    rows={documentState.rows}
-                    warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    rows={filterWorkspaceRows(documentState.rows, workspaceWarehouseId)}
+                    warehouses={activeWarehouses}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     suppliers={documentSuppliersState.rows}
                     canWrite={canWriteDocuments}
@@ -471,77 +541,83 @@ export default function InventoryWorkspace({
                   />
               : isLedgerPage
                 ? <InventoryLedger
-                    rows={ledgerState.rows}
+                    rows={filterWorkspaceRows(ledgerState.rows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     filters={ledgerState.filters}
                     totalCount={ledgerState.totalCount}
                     pageCount={ledgerState.pageCount}
                     summary={ledgerState.summary}
                     summaryLimited={ledgerState.summaryLimited}
-                    onFiltersChange={ledgerState.updateFilters}
+                    onFiltersChange={(patch) => { if (Object.prototype.hasOwnProperty.call(patch, "warehouseId")) setWorkspaceWarehouseId(patch.warehouseId); ledgerState.updateFilters(patch); }}
                     warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : isStockFlowPage
                 ? <InventoryStockFlowReport
-                    rows={stockFlowState.rows}
+                    rows={filterWorkspaceRows(stockFlowState.rows, workspaceWarehouseId)}
                     summary={stockFlowState.summary}
                     warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    items={workspaceItems}
                     filters={stockFlowState.filters}
                     totalCount={stockFlowState.totalCount}
                     pageCount={stockFlowState.pageCount}
                     loading={stockFlowState.status === "loading"}
-                    onFiltersChange={stockFlowState.updateFilters}
+                    onFiltersChange={(patch) => { if (Object.prototype.hasOwnProperty.call(patch, "warehouseId")) setWorkspaceWarehouseId(patch.warehouseId); stockFlowState.updateFilters(patch); }}
                     warehouseSelectionLocked={warehouseSelectionLocked}
                   />
               : isReportPage
                 ? <InventoryStockReport
-                    rows={stockReportState.rows}
+                    rows={filterWorkspaceRows(stockReportState.rows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     limited={stockReportState.limited}
                     warehouseSelectionLocked={warehouseSelectionLocked}
+                    selectedWarehouseId={workspaceWarehouseId}
+                    onWarehouseChange={setWorkspaceWarehouseId}
                   />
               : isLotPage
                 ? <InventoryLotReport
-                    rows={lotReportState.rows}
+                    rows={filterWorkspaceRows(lotReportState.rows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     limited={lotReportState.limited}
                     warehouseSelectionLocked={warehouseSelectionLocked}
+                    selectedWarehouseId={workspaceWarehouseId}
+                    onWarehouseChange={setWorkspaceWarehouseId}
                   />
               : isAlertPage
                 ? <InventoryAlertCenter
                     sources={alertState.sources}
                     warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     limited={alertState.limited}
                     warehouseSelectionLocked={warehouseSelectionLocked}
+                    selectedWarehouseId={workspaceWarehouseId}
+                    onWarehouseChange={setWorkspaceWarehouseId}
                   />
               : isCostAnalysisPage
                 ? <InventoryCostAnalysis
-                    salesRows={costAnalysisState.salesRows}
-                    productionRows={costAnalysisState.productionRows}
+                    salesRows={filterWorkspaceRows(costAnalysisState.salesRows, workspaceWarehouseId)}
+                    productionRows={filterWorkspaceRows(costAnalysisState.productionRows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     filters={costAnalysisState.filters}
                     loading={costAnalysisState.status === "loading"}
                     message={costAnalysisState.message}
                     hasMore={costAnalysisState.hasMore}
                     warehouseSelectionLocked={warehouseSelectionLocked}
-                    onFiltersChange={costAnalysisState.updateFilters}
+                    onFiltersChange={(patch) => { if (Object.prototype.hasOwnProperty.call(patch, "warehouseId")) setWorkspaceWarehouseId(patch.warehouseId); costAnalysisState.updateFilters(patch); }}
                   />
               : isCountPage
                 ? <InventoryCountManager
-                    rows={countState.rows}
-                    warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    rows={filterWorkspaceRows(countState.rows, workspaceWarehouseId)}
+                    warehouses={activeWarehouses}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     canWrite={countState.writeEnabled && countState.status === "ready"}
                     canManage={Boolean(countState.permissions?.canManage)}
@@ -558,12 +634,12 @@ export default function InventoryWorkspace({
                   />
               : isBomPage
                 ? <InventoryBomManager
-                    rows={bomState.rows}
-                    items={documentItemsState.rows}
+                    rows={filterWorkspaceRows(bomState.rows, workspaceWarehouseId)}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
-                    warehouses={scopedWarehouses}
+                    warehouses={activeWarehouses}
                     canWrite={canWriteBoms}
-                    scopeLabel={effectiveAccessPolicy.scopeLabel}
+                    scopeLabel={workspaceScopeLabel}
                     mutationStatus={bomState.mutationStatus}
                     mutationMessage={bomState.mutationMessage}
                     onSave={bomState.saveDraft}
@@ -573,9 +649,9 @@ export default function InventoryWorkspace({
                   />
               : isProductionPage
                 ? <InventoryProductionOrderManager
-                    rows={productionState.rows}
+                    rows={filterWorkspaceRows(productionState.rows, workspaceWarehouseId)}
                     boms={bomState.rows}
-                    warehouses={scopedWarehouses}
+                    warehouses={activeWarehouses}
                     canWrite={canWriteProduction}
                     mutationStatus={productionState.mutationStatus}
                     mutationMessage={productionState.mutationMessage}
@@ -588,10 +664,10 @@ export default function InventoryWorkspace({
                   />
               : isReconciliationPage
                 ? <InventorySalesReconciliation
-                    rows={salesConfigurationState.salesEvents}
+                    rows={filterWorkspaceRows(salesConfigurationState.salesEvents, workspaceWarehouseId)}
                     branches={scopedBranches}
-                    warehouses={scopedWarehouses}
-                    items={documentItemsState.rows}
+                    warehouses={activeWarehouses}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     canWrite={canRetrySalesEvents}
                     mutationStatus={salesConfigurationState.mutationStatus}
@@ -610,10 +686,10 @@ export default function InventoryWorkspace({
                     candidates={salesConfigurationState.candidates}
                     candidateMessage={salesConfigurationState.candidateMessage}
                     menuEntities={menuEntities}
-                    items={documentItemsState.rows}
+                    items={workspaceItems}
                     units={itemUnitsState.rows}
                     branches={scopedBranches}
-                    warehouses={scopedWarehouses}
+                    warehouses={activeWarehouses}
                     averageCosts={salesConfigurationState.averageCosts}
                     canWrite={canWriteSalesConfiguration}
                     canManageWarehouseDefaults={canWriteWarehouses}

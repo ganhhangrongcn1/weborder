@@ -34,7 +34,7 @@ function formatRemainingDays(days) {
   return `Còn ${days} ngày`;
 }
 
-export default function InventoryLotReport({ rows = [], warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false }) {
+export default function InventoryLotReport({ rows = [], warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false, selectedWarehouseId = "", onWarehouseChange }) {
   const [searchParams] = useSearchParams();
   const routeFilterKey = searchParams.toString();
   const [filters, setFilters] = useState({ warehouseId: "", itemId: "", expiryState: "all", search: "" });
@@ -65,17 +65,25 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
 
   useEffect(() => {
     const params = new URLSearchParams(routeFilterKey);
+    const requestedWarehouseId = params.get("warehouse") || "";
     const requestedExpiry = params.get("expiry") || "all";
     const expiryState = ["all", "alert", "expired", "expiring", "valid", "untracked"].includes(requestedExpiry) ? requestedExpiry : "all";
     setFilters((current) => ({
       ...current,
-      warehouseId: params.get("warehouse") || "",
+      warehouseId: requestedWarehouseId,
       itemId: params.get("item") || "",
       expiryState,
       search: params.get("lot") || params.get("q") || ""
     }));
+    if (requestedWarehouseId) onWarehouseChange?.(requestedWarehouseId);
     setPage(1);
-  }, [routeFilterKey]);
+  }, [onWarehouseChange, routeFilterKey]);
+
+  useEffect(() => {
+    if (new URLSearchParams(routeFilterKey).has("warehouse")) return;
+    setFilters((current) => current.warehouseId === selectedWarehouseId ? current : { ...current, warehouseId: selectedWarehouseId });
+    setPage(1);
+  }, [routeFilterKey, selectedWarehouseId]);
 
   const updateFilter = (patch) => {
     setFilters((current) => ({ ...current, ...patch }));
@@ -112,7 +120,7 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
         {warehouseSelectionLocked && warehouses.length === 1 ? (
           <div className="inventory-warehouse-fixed"><span>Kho đang xem</span><strong>{warehouses[0].name}</strong></div>
         ) : (
-          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => updateFilter({ warehouseId: event.target.value })}>
+          <InventorySearchableSelect aria-label="Lọc kho" value={filters.warehouseId} onChange={(event) => { updateFilter({ warehouseId: event.target.value }); onWarehouseChange?.(event.target.value); }}>
             <option value="">Tất cả kho được phép xem</option>
             {warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
           </InventorySearchableSelect>

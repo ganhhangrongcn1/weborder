@@ -58,7 +58,7 @@ function KpiCard({ icon, label, value, note, tone = "default", href = "" }) {
     : <Link className={`inventory-dashboard-kpi is-${tone}`} to={href}>{content}</Link>;
 }
 
-export default function InventoryDashboard({ data = {} }) {
+export default function InventoryDashboard({ data = {}, warehouseScoped = false }) {
   const kpis = data.kpis || {};
   const activity = data.activity7d || {};
   const actions = Array.isArray(data.actions) ? data.actions : [];
@@ -105,7 +105,7 @@ export default function InventoryDashboard({ data = {} }) {
           </div>
         </section>
 
-        <section className="inventory-dashboard-panel inventory-dashboard-activity">
+        {!warehouseScoped ? <section className="inventory-dashboard-panel inventory-dashboard-activity">
           <header><div><span><Icon name="refresh" size={19} /></span><div><strong>Hoạt động 7 ngày</strong><small>Chỉ giữ các chỉ số giúp kiểm soát dòng hàng.</small></div></div></header>
           <div className="inventory-dashboard-activity__grid">
             <div><span>Giá trị nhập</span><strong>{formatMoney(activity.receiptValue)}</strong></div>
@@ -113,7 +113,7 @@ export default function InventoryDashboard({ data = {} }) {
             <div><span>Lệch sau kiểm kê</span><strong>{formatMoney(activity.countVarianceValue)}</strong></div>
             <div><span>Chuyển kho chưa xong</span><strong>{formatNumber(activity.incompleteTransfers)}</strong></div>
           </div>
-        </section>
+        </section> : <section className="inventory-dashboard-panel inventory-dashboard-activity"><header><div><span><Icon name="store" size={19} /></span><div><strong>Đang xem riêng một kho</strong><small>Chỉ số tồn và danh sách cần xử lý đã lọc theo kho đang chọn. Muốn xem hoạt động 7 ngày toàn hệ thống, hãy chọn “Tất cả kho được phép”.</small></div></div></header></section>}
       </div>
 
       <section className="inventory-dashboard-panel inventory-dashboard-warehouses">

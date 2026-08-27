@@ -5,6 +5,7 @@ import {
 } from "./supabase/supabaseRuntimeClient.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { isInventoryRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
+import { convertInventoryQuantityToBase } from "./inventoryUnitConversion.js";
 
 const MASTER_DATA_CONFIG = {
   items: {
@@ -141,10 +142,11 @@ export function normalizeInventoryMasterDataInput(domain, input = {}) {
 
   if (domain === "items") {
     const ratio = Number(input.purchaseToBaseRatio ?? 1);
-    const minimumStock = Math.max(0, Number(input.minimumStock || 0));
-    const reorderPoint = Math.max(0, Number(input.reorderPoint || 0));
-    const orderQuantity = Math.max(0, Number(input.orderQuantity || 0));
-    const maximumStock = Math.max(0, Number(input.maximumStock || 0));
+    const stockSettingsFactor = input.stockSettingsUnit === "purchase" ? ratio : 1;
+    const minimumStock = Math.max(0, convertInventoryQuantityToBase(input.minimumStock, stockSettingsFactor));
+    const reorderPoint = Math.max(0, convertInventoryQuantityToBase(input.reorderPoint, stockSettingsFactor));
+    const orderQuantity = Math.max(0, convertInventoryQuantityToBase(input.orderQuantity, stockSettingsFactor));
+    const maximumStock = Math.max(0, convertInventoryQuantityToBase(input.maximumStock, stockSettingsFactor));
     const defaultWastePercent = Number(input.defaultWastePercent || 0);
     const trackExpiry = input.trackExpiry === true;
     const shelfLifeDays = Math.trunc(Number(input.shelfLifeDays || 0));
@@ -188,6 +190,11 @@ export function normalizeInventoryMasterDataInput(domain, input = {}) {
     metadata.track_expiry = trackExpiry;
     metadata.shelf_life_days = trackExpiry ? shelfLifeDays : 0;
     metadata.expiry_warning_days = trackExpiry ? expiryWarningDays : 0;
+    const warehouseIds = Array.isArray(input.warehouseIds)
+      ? [...new Set(input.warehouseIds.map(toText).filter(Boolean))]
+      : [];
+    if (warehouseIds.length) metadata.warehouse_ids = warehouseIds;
+    else delete metadata.warehouse_ids;
     return {
       ...(code ? { code } : {}),
       name,
@@ -289,11 +296,26 @@ export function normalizeInventoryItem(row = {}) {
     trackExpiry: metadata.track_expiry === true,
     shelfLifeDays: Math.max(0, Math.trunc(Number(metadata.shelf_life_days ?? 0))),
     expiryWarningDays: Math.max(0, Math.trunc(Number(metadata.expiry_warning_days ?? 0))),
+    warehouseIds: Array.isArray(metadata.warehouse_ids)
+      ? [...new Set(metadata.warehouse_ids.map(toText).filter(Boolean))]
+      : [],
     notes: toText(row.notes),
     metadata,
     isActive: row.is_active !== false,
     updatedAt: toText(row.updated_at)
   };
+}
+
+export function isInventoryItemAvailableAtWarehouse(item = {}, warehouseId = "") {
+  const targetWarehouseId = toText(warehouseId);
+  const warehouseIds = Array.isArray(item.warehouseIds)
+    ? item.warehouseIds.map(toText).filter(Boolean)
+    : [];
+  return !targetWarehouseId || !warehouseIds.length || warehouseIds.includes(targetWarehouseId);
+}
+
+export function filterInventoryItemsByWarehouse(items = [], warehouseId = "") {
+  return items.filter((item) => isInventoryItemAvailableAtWarehouse(item, warehouseId));
 }
 
 export function normalizeInventorySupplier(row = {}) {

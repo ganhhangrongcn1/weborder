@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import InventoryMasterDataModal from "./InventoryMasterDataModal.jsx";
+import { convertInventoryQuantityFromBase } from "../../../services/inventoryUnitConversion.js";
 
 const ITEM_TYPE_LABELS = {
   ingredient: "Nguyên liệu",
@@ -73,11 +74,20 @@ function ItemUnitCell({ row, units }) {
   return <span className="inventory-item-unit-cell"><strong>{unitInfo.primary}</strong><small>{unitInfo.secondary}</small></span>;
 }
 
+function getItemPurchaseStockLabel(row, units) {
+  const purchaseUnit = units.find((unit) => unit.id === row.purchaseUnitId) || row.purchaseUnit || row.baseUnit || {};
+  const factor = Math.max(0, Number(row.purchaseToBaseRatio || 1)) || 1;
+  return `${formatNumber(convertInventoryQuantityFromBase(row.reorderPoint, factor))} ${getUnitShortLabel(purchaseUnit)}`;
+}
+
 export default function InventoryCatalogManager({
   domain = "suppliers",
   rows = [],
+  allRows = rows,
   units = [],
   categories = [],
+  warehouses = [],
+  selectedWarehouseId = "",
   canWrite = false,
   onSave,
   onArchive
@@ -172,7 +182,7 @@ export default function InventoryCatalogManager({
         <div className="inventory-table-scroll">
           {isItems ? (
             <table className="inventory-data-table inventory-catalog-table">
-              <thead><tr><th>Mã NVL</th><th>Tên nguyên vật liệu</th><th>Loại</th><th>Danh mục</th><th>Đơn vị / Quy đổi</th><th>Điểm đặt hàng</th><th>Hạn sử dụng</th><th>Trạng thái</th><th aria-label="Thao tác" /></tr></thead>
+              <thead><tr><th>Mã NVL</th><th>Tên nguyên vật liệu</th><th>Loại</th><th>Danh mục</th><th>Đơn vị / Quy đổi</th><th>Phạm vi kho</th><th>Điểm đặt hàng</th><th>Hạn sử dụng</th><th>Trạng thái</th><th aria-label="Thao tác" /></tr></thead>
               <tbody>{filteredRows.map((row) => (
                 <tr key={row.id || row.code}>
                   <td><strong>{row.code || "—"}</strong></td>
@@ -180,7 +190,8 @@ export default function InventoryCatalogManager({
                   <td><span className="inventory-data-pill is-type">{ITEM_TYPE_LABELS[row.itemType] || ITEM_TYPE_LABELS.other}</span></td>
                   <td><span className={`inventory-data-pill ${row.itemGroup?.name ? "is-category" : "is-muted"}`}>{row.itemGroup?.name || "Chưa phân nhóm"}</span></td>
                   <td><ItemUnitCell row={row} units={units} /></td>
-                  <td>{formatNumber(row.reorderPoint)}</td>
+                  <td><span className={`inventory-data-pill ${row.warehouseIds?.length ? "is-category" : "is-active"}`}>{row.warehouseIds?.length ? row.warehouseIds.map((id) => warehouses.find((warehouse) => warehouse.id === id)?.name).filter(Boolean).join(", ") || `${row.warehouseIds.length} kho` : "Tất cả kho"}</span></td>
+                  <td>{getItemPurchaseStockLabel(row, units)}</td>
                   <td><span className={`inventory-data-pill ${row.trackExpiry ? "is-expiry" : "is-muted"}`} title={row.trackExpiry ? `Cảnh báo trước ${formatNumber(row.expiryWarningDays)} ngày` : "Không theo dõi hạn sử dụng"}>{row.trackExpiry ? `${formatNumber(row.shelfLifeDays)} ngày` : "Không"}</span></td>
                   <td><span className={`inventory-status-pill ${row.isActive ? "is-active" : "is-inactive"}`}>{row.isActive ? "Đang sử dụng" : "Ngừng sử dụng"}</span></td>
                   <td><div className="inventory-row-actions"><button type="button" disabled={!canWrite} onClick={() => openModal(row)} aria-label={`Sửa ${row.name}`}><Icon name="edit" size={16} /></button><button type="button" disabled={!canWrite} onClick={() => archiveRow(row)} aria-label={`Lưu trữ ${row.name}`}><Icon name="trash" size={16} /></button></div></td>
@@ -211,7 +222,7 @@ export default function InventoryCatalogManager({
       )}
 
       <div className={`inventory-readonly-footnote${canWrite ? " is-writable" : ""}`}><Icon name={canWrite ? "check" : "eye"} size={16} /><span>{canWrite ? "Đã mở quản lý dữ liệu Kho theo quyền Admin và RLS." : "Chế độ chỉ đọc: chưa mở tạo, sửa hoặc lưu trữ dữ liệu trên Supabase production."}</span></div>
-      {modalOpen ? <InventoryMasterDataModal domain={domain} record={editingRow} units={units} categories={categories} existingRows={rows} onClose={closeModal} onSave={onSave} /> : null}
+      {modalOpen ? <InventoryMasterDataModal domain={domain} record={editingRow} units={units} categories={categories} warehouses={warehouses} selectedWarehouseId={selectedWarehouseId} existingRows={allRows} onClose={closeModal} onSave={onSave} /> : null}
     </section>
   );
 }

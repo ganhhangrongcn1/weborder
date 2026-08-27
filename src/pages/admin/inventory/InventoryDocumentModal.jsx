@@ -8,6 +8,7 @@ import {
 import InventoryReceiptLineFields from "./InventoryReceiptLineFields.jsx";
 import InventoryLineUnitSelect from "./InventoryLineUnitSelect.jsx";
 import { getReceiptLineItemDefaults, getSuggestedExpiryDate } from "./inventoryReceiptForm.js";
+import { isInventoryItemAvailableAtWarehouse } from "../../../services/inventoryMasterDataService.js";
 
 const DOMAIN_CONFIG = {
   receipts: {
@@ -103,7 +104,9 @@ export default function InventoryDocumentModal({
   const requestWarehouses = domain === "requisitions"
     ? activeWarehouses.filter((row) => ["branch", "department"].includes(row.warehouseType))
     : activeWarehouses;
-  const activeItems = items.filter((row) => row.isActive !== false);
+  const documentWarehouseIds = [form.sourceWarehouseId, form.destinationWarehouseId].filter(Boolean);
+  const activeItems = items.filter((row) => row.isActive !== false
+    && documentWarehouseIds.every((warehouseId) => isInventoryItemAvailableAtWarehouse(row, warehouseId)));
   const activeSuppliers = suppliers.filter((row) => row.isActive !== false);
   const unitsById = useMemo(() => new Map(units.map((unit) => [unit.id, unit])), [units]);
   const totalAmount = useMemo(
@@ -113,6 +116,16 @@ export default function InventoryDocumentModal({
 
   const updateForm = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
+    if (["sourceWarehouseId", "destinationWarehouseId"].includes(key)) {
+      const nextWarehouseIds = [
+        key === "sourceWarehouseId" ? value : form.sourceWarehouseId,
+        key === "destinationWarehouseId" ? value : form.destinationWarehouseId
+      ].filter(Boolean);
+      setLines((current) => current.map((line) => line.itemId && !nextWarehouseIds.every((warehouseId) => {
+        const item = items.find((row) => row.id === line.itemId);
+        return isInventoryItemAvailableAtWarehouse(item, warehouseId);
+      }) ? { ...createLine(), key: line.key } : line));
+    }
     if (domain !== "receipts" || key !== "occurredAt") return;
     setLines((current) => current.map((line) => {
       if (!line.itemId || line.manufacturedOn || line.expiryManuallyEdited) return line;

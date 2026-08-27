@@ -171,6 +171,7 @@ export async function readInventoryDocuments({
   fromDate = "",
   toDate = "",
   status = "all",
+  warehouseId = "",
   page = 1,
   pageSize = 50
 } = {}) {
@@ -189,6 +190,10 @@ export async function readInventoryDocuments({
   if (dateBounds.fromDateTime) query = query.gte("occurred_at", dateBounds.fromDateTime);
   if (dateBounds.toDateTime) query = query.lte("occurred_at", dateBounds.toDateTime);
   if (normalizedStatus && normalizedStatus !== "all") query = query.eq("status", normalizedStatus);
+  const normalizedWarehouseId = toText(warehouseId);
+  if (normalizedWarehouseId) {
+    query = query.or(`source_warehouse_id.eq.${normalizedWarehouseId},destination_warehouse_id.eq.${normalizedWarehouseId}`);
+  }
   const { data, error, count } = await query
     .order("occurred_at", { ascending: false })
     .range(pagination.from, pagination.to);

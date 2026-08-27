@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { createInventoryMasterDataCode } from "../../../services/inventoryMasterDataService.js";
+import { convertInventoryQuantityFromBase } from "../../../services/inventoryUnitConversion.js";
 
 const DOMAIN_LABELS = {
   units: "đơn vị tính",
@@ -34,6 +35,7 @@ const EMPTY_BY_DOMAIN = {
     trackExpiry: false,
     shelfLifeDays: 30,
     expiryWarningDays: 3,
+    warehouseIds: [],
     notes: "",
     metadata: {},
     isActive: true
@@ -43,10 +45,19 @@ const EMPTY_BY_DOMAIN = {
 function buildInitialForm(domain, record) {
   const empty = EMPTY_BY_DOMAIN[domain] || EMPTY_BY_DOMAIN.units;
   if (!record) return { ...empty };
-  return Object.keys(empty).reduce((next, key) => ({
+  const initial = Object.keys(empty).reduce((next, key) => ({
     ...next,
     [key]: record[key] ?? empty[key]
   }), {});
+  if (domain !== "items") return initial;
+  const purchaseFactor = Math.max(0, Number(record.purchaseToBaseRatio || 1)) || 1;
+  return {
+    ...initial,
+    minimumStock: convertInventoryQuantityFromBase(record.minimumStock, purchaseFactor),
+    reorderPoint: convertInventoryQuantityFromBase(record.reorderPoint, purchaseFactor),
+    orderQuantity: convertInventoryQuantityFromBase(record.orderQuantity, purchaseFactor),
+    maximumStock: convertInventoryQuantityFromBase(record.maximumStock, purchaseFactor)
+  };
 }
 
 function Field({ label, required = false, help = "", children, full = false }) {
@@ -64,6 +75,8 @@ export default function InventoryMasterDataModal({
   record = null,
   units = [],
   categories = [],
+  warehouses = [],
+  selectedWarehouseId = "",
   existingRows = [],
   onClose,
   onSave
@@ -74,6 +87,7 @@ export default function InventoryMasterDataModal({
   ));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [warehouseScopeMode, setWarehouseScopeMode] = useState(() => record?.warehouseIds?.length ? "selected" : "all");
   const label = DOMAIN_LABELS[domain] || "dữ liệu";
   const isItems = domain === "items";
   const isSuppliers = domain === "suppliers";
@@ -128,6 +142,12 @@ export default function InventoryMasterDataModal({
       && selectedPurchaseUnit.id !== form.baseUnitId
       && purchaseConversionToBase > 0
   );
+  const activeWarehouses = useMemo(
+    () => warehouses.filter((warehouse) => warehouse.isActive !== false),
+    [warehouses]
+  );
+  const stockUnitLabel = selectedPurchaseUnit?.symbol || selectedPurchaseUnit?.name || selectedDisplayUnit?.symbol || selectedDisplayUnit?.name || "đơn vị nhập";
+  const itemUsesAllWarehouses = warehouseScopeMode === "all";
 
   const update = ({ target }) => {
     const value = target.type === "checkbox" ? target.checked : target.value;
@@ -203,6 +223,26 @@ export default function InventoryMasterDataModal({
     });
   };
 
+  const setItemWarehouseMode = (mode) => {
+    setWarehouseScopeMode(mode);
+    setForm((current) => ({
+      ...current,
+      warehouseIds: mode === "all"
+        ? []
+        : [selectedWarehouseId || activeWarehouses[0]?.id].filter(Boolean)
+    }));
+  };
+
+  const toggleItemWarehouse = (warehouseId) => {
+    setForm((current) => {
+      const currentIds = Array.isArray(current.warehouseIds) ? current.warehouseIds : [];
+      const warehouseIds = currentIds.includes(warehouseId)
+        ? currentIds.filter((id) => id !== warehouseId)
+        : [...currentIds, warehouseId];
+      return { ...current, warehouseIds };
+    });
+  };
+
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -232,7 +272,10 @@ export default function InventoryMasterDataModal({
           code: createInventoryMasterDataCode(`${prefix}_${form.name}`, existingRows.map((item) => item.code))
         };
       }
-      await onSave({ id: record?.id || "", input });
+      const saveInput = isItems
+        ? { ...input, stockSettingsUnit: "purchase", ...(itemUsesAllWarehouses ? { warehouseIds: [] } : {}) }
+        : input;
+      await onSave({ id: record?.id || "", input: saveInput });
       onClose(record ? `Đã cập nhật ${label}.` : `Đã tạo ${label} mới.`);
     } catch (saveError) {
       setError(saveError.message || `Không thể lưu ${label}.`);
@@ -245,6 +288,7 @@ export default function InventoryMasterDataModal({
     || !String(form.name || "").trim()
     || isItems && (!form.displayUnitId || !form.baseUnitId)
     || isItems && needsItemPurchaseRatio && Number(form.purchaseToBaseRatio || 0) <= 0
+    || isItems && !itemUsesAllWarehouses && !form.warehouseIds.length
     || isItems && Number(form.maximumStock || 0) > 0 && Number(form.maximumStock || 0) < Number(form.minimumStock || 0)
     || isItems && (Number(form.defaultWastePercent || 0) < 0 || Number(form.defaultWastePercent || 0) > 100)
     || isItems && form.trackExpiry && (!Number.isFinite(Number(form.shelfLifeDays)) || Number(form.shelfLifeDays) < 1)
@@ -379,18 +423,41 @@ export default function InventoryMasterDataModal({
                 </div>
               ) : null}
               {selectedDisplayUnit ? <div className="inventory-item-storage-summary full-field"><Icon name="refresh" size={18} /><span>Kho lưu: <strong>{selectedDisplayUnit.baseUnitId ? `1 ${selectedDisplayUnit.symbol || selectedDisplayUnit.name} = ${selectedDisplayUnit.conversionFactor} ${selectedDisplayBaseUnit?.name || "đơn vị gốc"}` : selectedDisplayUnit.name}</strong></span><small>{selectedDisplayUnit.baseUnitId ? "Đơn vị hiển thị được tự động quy về đơn vị gốc." : "Đây là đơn vị gốc, kho lưu trực tiếp không cần quy đổi."}</small></div> : null}
+              <section className="inventory-item-warehouse-scope full-field" aria-labelledby="inventory-item-warehouse-scope-title">
+                <div className="inventory-item-stock-config__head">
+                  <Icon name="store" size={16} />
+                  <h4 id="inventory-item-warehouse-scope-title">Phạm vi sử dụng nguyên vật liệu</h4>
+                </div>
+                <div className="inventory-item-warehouse-scope__body">
+                  <p>Chọn ngay tại bước tạo nguyên vật liệu. Chi nhánh chỉ nhìn thấy và thao tác những mã được dùng tại kho của mình.</p>
+                  <div className="inventory-unit-mode__choices">
+                    <button type="button" className={itemUsesAllWarehouses ? "is-active" : ""} onClick={() => setItemWarehouseMode("all")}><Icon name="check" size={17} /><span><strong>Tất cả kho</strong><small>Dùng chung cho Kho Tổng và toàn bộ kho chi nhánh.</small></span></button>
+                    <button type="button" className={!itemUsesAllWarehouses ? "is-active" : ""} disabled={!activeWarehouses.length} onClick={() => setItemWarehouseMode("selected")}><Icon name="store" size={17} /><span><strong>Chỉ các kho được chọn</strong><small>Dùng cho nguyên liệu riêng Kho Tổng hoặc một số chi nhánh.</small></span></button>
+                  </div>
+                  {!itemUsesAllWarehouses ? (
+                    <div className="inventory-item-warehouse-scope__list">
+                      {activeWarehouses.map((warehouse) => (
+                        <label key={warehouse.id}>
+                          <input type="checkbox" checked={form.warehouseIds.includes(warehouse.id)} onChange={() => toggleItemWarehouse(warehouse.id)} />
+                          <span><strong>{warehouse.name}</strong><small>{warehouse.code || "Kho đang hoạt động"}</small></span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </section>
               <section className="inventory-item-stock-config full-field" aria-labelledby="inventory-item-stock-config-title">
                 <div className="inventory-item-stock-config__head">
                   <Icon name="warning" size={16} />
-                  <h4 id="inventory-item-stock-config-title">Cấu hình tồn kho</h4>
+                  <h4 id="inventory-item-stock-config-title">Cấu hình nhập hàng & tồn kho</h4>
                 </div>
                 <div className="inventory-item-stock-config__body">
-                  <p>Chỉ <strong>Điểm đặt hàng lại</strong> sinh cảnh báo. Hai mức tồn dùng để kiểm kê và gợi ý nhập hàng.</p>
+                  <p>Toàn bộ mức dưới đây nhập theo đơn vị mua / nhập: <strong>{stockUnitLabel}</strong>. Hệ thống tự quy đổi về đơn vị gốc để tính tồn và định lượng món.</p>
                   <div className="inventory-form-row inventory-form-row--quad">
-                    <Field label="Điểm đặt hàng lại" help="Chạm mức này sẽ nhắc nhập; 0 = không cảnh báo."><span className="inventory-control-shell"><input type="number" min="0" step="any" name="reorderPoint" value={form.reorderPoint} onChange={update} /></span></Field>
-                    <Field label="Số lượng đặt hàng" help="Số lượng nên mua mỗi lần."><span className="inventory-control-shell"><input type="number" min="0" step="any" name="orderQuantity" value={form.orderQuantity} onChange={update} /></span></Field>
-                    <Field label="Tồn tối thiểu" help="Mức tồn an toàn khi kiểm kê."><span className="inventory-control-shell"><input type="number" min="0" step="any" name="minimumStock" value={form.minimumStock} onChange={update} /></span></Field>
-                    <Field label="Tồn tối đa" help="Mức trữ tối đa; 0 = chưa giới hạn."><span className="inventory-control-shell"><input type="number" min="0" step="any" name="maximumStock" value={form.maximumStock} onChange={update} /></span></Field>
+                    <Field label="Điểm đặt hàng lại" help="Chạm mức này sẽ nhắc nhập; 0 = không cảnh báo."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="reorderPoint" value={form.reorderPoint} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
+                    <Field label="Số lượng đặt hàng" help="Số lượng nên mua mỗi lần."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="orderQuantity" value={form.orderQuantity} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
+                    <Field label="Tồn tối thiểu" help="Mức tồn an toàn khi kiểm kê."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="minimumStock" value={form.minimumStock} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
+                    <Field label="Tồn tối đa" help="Mức trữ tối đa; 0 = chưa giới hạn."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="maximumStock" value={form.maximumStock} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
                   </div>
                   {Number(form.maximumStock || 0) > 0 && Number(form.maximumStock || 0) < Number(form.minimumStock || 0) ? <p className="inventory-form-error">Tồn tối đa phải bằng 0 hoặc lớn hơn tồn tối thiểu.</p> : null}
                 </div>

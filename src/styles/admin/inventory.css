@@ -50,6 +50,9 @@
   color: #624939;
   font-size: .8rem;
 }
+.inventory-page-scope { display: grid; gap: 5px; min-width: min(330px, 100%); }
+.inventory-page-scope > span { color: #8a7466; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.inventory-page-scope .inventory-searchable-select__trigger { min-height: 42px; border-color: #eadaca; background: #fffaf4; font-weight: 750; }
 
 .inventory-state {
   display: flex;
@@ -339,9 +342,20 @@
 .inventory-stock-report__filters .inventory-search-field { min-width: 0; min-height: 39px; }
 .inventory-stock-report__filters select { min-width: 0; min-height: 39px; padding: 0 9px; border: 1px solid #dfd3c8; border-radius: 9px; background: #fff; color: #46352c; font: inherit; font-size: .73rem; outline: 0; }
 .inventory-stock-report__filters select:focus { border-color: #d36b24; box-shadow: 0 0 0 3px rgba(211, 107, 36, .1); }
-.inventory-stock-report__table { min-width: 1160px; }
+.inventory-stock-report__table { min-width: 1280px; }
 .inventory-stock-report__table th.is-number,
 .inventory-stock-report__table td.is-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inventory-stock-row { transition: background-color .16s ease, box-shadow .16s ease; }
+.inventory-stock-row.is-low { background: #fffaf0; box-shadow: inset 4px 0 0 #e1a348; }
+.inventory-stock-row.is-out { background: #fff4f2; box-shadow: inset 4px 0 0 #cf6659; }
+.inventory-stock-row.is-low:hover { background: #fff5e3; }
+.inventory-stock-row.is-out:hover { background: #ffebe8; }
+.inventory-stock-row.is-low td:nth-child(2) > strong,
+.inventory-stock-row.is-low td:nth-child(4) > strong { color: #9d6018; }
+.inventory-stock-row.is-out td:nth-child(2) > strong,
+.inventory-stock-row.is-out td:nth-child(4) > strong { color: #a84439; }
+.inventory-stock-attention { display: block; width: fit-content; margin-top: 5px; padding: 3px 7px; border-radius: 999px; background: #fff0d5; color: #9d6018; font-size: .62rem; font-style: normal; font-weight: 800; white-space: nowrap; }
+.inventory-stock-attention.is-out { background: #ffe0dc; color: #a84439; }
 .inventory-stock-flow-report__filters { display: grid; grid-template-columns: auto auto auto minmax(180px, .8fr) minmax(170px, .75fr); align-items: end; gap: 9px; padding: 12px 14px; border-bottom: 1px solid #eee4db; }
 .inventory-stock-flow-report__search { display: flex; grid-column: 1 / -1; gap: 8px; }
 .inventory-stock-flow-report__search .inventory-search-field { flex: 1; min-width: 0; min-height: 39px; }
@@ -555,6 +569,15 @@
 .inventory-item-stock-config__body { display: grid; gap: 11px; padding: 12px 13px; border: 1px solid #e7ddd5; border-radius: 10px; background: #fcfaf8; }
 .inventory-item-stock-config__body > p { margin: 0; color: #806f64; font-size: .69rem; line-height: 1.4; }
 .inventory-item-stock-config__body strong { color: #5a4032; }
+.inventory-item-warehouse-scope { display: grid; gap: 8px; }
+.inventory-item-warehouse-scope__body { display: grid; gap: 11px; padding: 12px 13px; border: 1px solid #e7ddd5; border-radius: 10px; background: #fcfaf8; }
+.inventory-item-warehouse-scope__body > p { margin: 0; color: #806f64; font-size: .69rem; line-height: 1.4; }
+.inventory-item-warehouse-scope__list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.inventory-item-warehouse-scope__list label { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 10px; border: 1px solid #e5d9cf; border-radius: 9px; background: #fff; cursor: pointer; }
+.inventory-item-warehouse-scope__list input { width: 17px; height: 17px; accent-color: #c9631d; }
+.inventory-item-warehouse-scope__list span { display: grid; min-width: 0; gap: 2px; }
+.inventory-item-warehouse-scope__list strong { overflow: hidden; color: #4f392d; font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-item-warehouse-scope__list small { color: #8b796d; font-size: .65rem; }
 .inventory-item-expiry-config { display: grid; gap: 12px; padding: 12px 13px; border: 1px solid #e7ddd5; border-radius: 10px; background: #fcfaf8; transition: border-color .18s ease, background .18s ease; }
 .inventory-item-expiry-config.is-enabled { border-color: #e8c9aa; background: #fffaf3; }
 .inventory-item-expiry-config__head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
@@ -1354,6 +1377,7 @@
   .inventory-form-row--triple,
   .inventory-form-row--quad { grid-template-columns: 1fr; }
   .inventory-unit-mode__choices { grid-template-columns: 1fr; }
+  .inventory-item-warehouse-scope__list { grid-template-columns: 1fr; }
   .inventory-item-expiry-config__fields { grid-template-columns: 1fr; }
   .inventory-expiry-warning-control { grid-template-columns: 1fr; }
   .inventory-expiry-warning-presets { justify-content: flex-start; }
