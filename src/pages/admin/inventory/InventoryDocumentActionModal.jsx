@@ -42,6 +42,7 @@ function buildActionLines(document, mode) {
   return document.lines.map((line) => ({
     lineId: line.id,
     itemId: line.itemId,
+    unitId: line.unitId,
     expectedQuantity: line.expectedQuantity,
     maximumQuantity: mode === "receive" ? Number(line.shippedQuantity || 0) : Number(line.expectedQuantity || 0),
     quantity: mode === "receive" ? Number(line.shippedQuantity || 0) : Number(line.expectedQuantity || 0),
@@ -54,6 +55,7 @@ export default function InventoryDocumentActionModal({
   document,
   warehouses = [],
   items = [],
+  units = [],
   onClose,
   onConfirm
 }) {
@@ -64,6 +66,7 @@ export default function InventoryDocumentActionModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const itemMap = useMemo(() => new Map(items.map((row) => [row.id, row])), [items]);
+  const unitMap = useMemo(() => new Map(units.map((row) => [row.id, row])), [units]);
   const availableWarehouses = warehouses.filter((row) => row.isActive !== false && !row.isDraft && row.id !== document.destinationWarehouseId);
 
   const updateLine = (lineId, key, value) => {
@@ -166,7 +169,8 @@ export default function InventoryDocumentActionModal({
               <div className="inventory-action-lines__header"><span>Nguyên vật liệu</span><span>Số trên phiếu</span><span>{config.quantityLabel}</span>{["receive", "approve"].includes(mode) ? <span>Lý do nếu lệch</span> : null}</div>
               {lines.map((line) => {
                 const item = itemMap.get(line.itemId);
-                const unitName = item?.purchaseUnit?.name || item?.baseUnit?.name || "đơn vị";
+                const selectedUnit = unitMap.get(line.unitId);
+                const unitName = selectedUnit?.name || selectedUnit?.symbol || item?.purchaseUnit?.name || item?.baseUnit?.name || "đơn vị";
                 const isDifferent = Number(line.quantity) !== line.maximumQuantity;
                 return (
                   <div key={line.lineId} className={`inventory-action-line ${["receive", "approve"].includes(mode) ? "has-reason" : ""}`}>

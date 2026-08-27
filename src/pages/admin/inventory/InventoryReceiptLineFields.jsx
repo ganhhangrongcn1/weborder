@@ -1,11 +1,12 @@
 import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
+import InventoryLineUnitSelect from "./InventoryLineUnitSelect.jsx";
 
 export default function InventoryReceiptLineFields({
   line,
   item,
-  unit,
+  units = [],
   items = [],
   canDelete,
   occurredDate = "",
@@ -13,9 +14,6 @@ export default function InventoryReceiptLineFields({
   onDelete
 }) {
   const [showDetails, setShowDetails] = useState(false);
-  const unitName = unit?.name || item?.purchaseUnit?.name || item?.baseUnit?.name || "—";
-  const baseUnitName = item?.baseUnit?.name || "đơn vị gốc";
-
   return (
     <div className="inventory-receipt-line">
       <div className="inventory-receipt-row">
@@ -23,12 +21,7 @@ export default function InventoryReceiptLineFields({
           <option value="">Chọn nguyên vật liệu</option>
           {items.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
         </InventorySearchableSelect>
-        <div className="inventory-document-unit">
-          <strong>{unitName}</strong>
-          {item && line.conversionToBase !== 1
-            ? <small>1 {unitName} = {line.conversionToBase} {baseUnitName}</small>
-            : <small>Đơn vị lưu kho</small>}
-        </div>
+        <InventoryLineUnitSelect item={item} units={units} value={line.unitId} onChange={(unitId) => onUpdate("unitId", unitId)} ariaLabel={`Đơn vị nhập của ${item?.name || "nguyên vật liệu"}`} />
         <input aria-label="Số lượng nhập" type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => onUpdate("quantity", event.target.value)} required />
         <input aria-label="Đơn giá nhập" type="number" min="0" step="100" value={line.unitPrice} onChange={(event) => onUpdate("unitPrice", event.target.value)} />
         <input aria-label={item?.trackExpiry ? "Hạn sử dụng bắt buộc" : "Hạn sử dụng"} type="date" min={line.manufacturedOn || occurredDate} value={line.expiresOn} onChange={(event) => onUpdate("expiresOn", event.target.value)} required={item?.trackExpiry === true} />

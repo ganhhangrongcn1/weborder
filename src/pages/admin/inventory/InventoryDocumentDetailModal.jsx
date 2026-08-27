@@ -46,8 +46,9 @@ function firstQuantity(...values) {
   return values.find((value) => value != null) ?? 0;
 }
 
-function getUnitName(item) {
-  return item?.purchaseUnit?.name || item?.baseUnit?.name || "Đơn vị";
+function getUnitName(item, line, unitMap) {
+  const unit = unitMap.get(line?.unitId);
+  return unit?.name || unit?.symbol || item?.purchaseUnit?.name || item?.baseUnit?.name || "Đơn vị";
 }
 
 function QuantityDifference({ value, available = true }) {
@@ -61,12 +62,14 @@ export default function InventoryDocumentDetailModal({
   document,
   warehouses = [],
   items = [],
+  units = [],
   suppliers = [],
   onClose
 }) {
   const config = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG.receipts;
   const warehouseMap = useMemo(() => new Map(warehouses.map((row) => [row.id, row.name])), [warehouses]);
   const itemMap = useMemo(() => new Map(items.map((row) => [row.id, row])), [items]);
+  const unitMap = useMemo(() => new Map(units.map((row) => [row.id, row])), [units]);
   const supplierMap = useMemo(() => new Map(suppliers.map((row) => [row.id, row.name])), [suppliers]);
   const sourceWarehouse = warehouseMap.get(document.sourceWarehouseId) || "—";
   const destinationWarehouse = warehouseMap.get(document.destinationWarehouseId) || "—";
@@ -79,7 +82,7 @@ export default function InventoryDocumentDetailModal({
     if (domain === "requisitions") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Yêu cầu</th><th>Đã duyệt</th><th>Đã giao</th><th>Đã nhận</th><th>Chênh lệch nhận</th><th>Lý do</th></tr>;
     if (domain === "receipts") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Thực nhập</th><th>Mã lô</th><th>Hạn sử dụng</th><th>Đơn giá</th><th>Thành tiền</th></tr>;
     if (domain === "disposals") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Số lượng hủy</th><th>Lý do hủy</th></tr>;
-    if (domain === "adjustments") return <tr><th>Nguyên vật liệu</th><th>Đơn vị lưu kho</th><th>Điều chỉnh</th><th>Số lượng</th><th>Lý do</th></tr>;
+    if (domain === "adjustments") return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Điều chỉnh</th><th>Số lượng</th><th>Lý do</th></tr>;
     return <tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th>Số trên phiếu</th><th>Thực xuất</th><th>Ghi chú</th></tr>;
   };
 
@@ -94,28 +97,28 @@ export default function InventoryDocumentDetailModal({
 
     if (domain === "transfers") {
       const hasVariance = line.receivedQuantity != null && line.shippedQuantity != null;
-      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(approved)}</td><td>{formatQuantity(line.shippedQuantity)}</td><td>{formatQuantity(line.receivedQuantity)}</td><td><QuantityDifference available={hasVariance} value={received - shipped} /></td><td>{reason}</td></tr>;
+      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item, line, unitMap)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(approved)}</td><td>{formatQuantity(line.shippedQuantity)}</td><td>{formatQuantity(line.receivedQuantity)}</td><td><QuantityDifference available={hasVariance} value={received - shipped} /></td><td>{reason}</td></tr>;
     }
     if (domain === "requisitions") {
       const transferLine = document.linkedTransfer?.lines?.find((row) => row.itemId === line.itemId);
       const transferShipped = transferLine?.shippedQuantity;
       const transferReceived = transferLine?.receivedQuantity;
       const transferReason = transferLine?.varianceReason || line.rejectionReason || line.notes || "—";
-      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(line.approvedQuantity)}</td><td>{formatQuantity(transferShipped)}</td><td>{formatQuantity(transferReceived)}</td><td><QuantityDifference available={transferShipped != null && transferReceived != null} value={Number(transferReceived || 0) - Number(transferShipped || 0)} /></td><td>{transferReason}</td></tr>;
+      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item, line, unitMap)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(line.approvedQuantity)}</td><td>{formatQuantity(transferShipped)}</td><td>{formatQuantity(transferReceived)}</td><td><QuantityDifference available={transferShipped != null && transferReceived != null} value={Number(transferReceived || 0) - Number(transferShipped || 0)} /></td><td>{transferReason}</td></tr>;
     }
     if (domain === "receipts") {
-      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(actual)}</td><td><span className="inventory-lot-badge">{line.lotNumber || "—"}</span></td><td><span className={`inventory-expiry-badge ${line.expiresOn ? "has-expiry" : ""}`}>{formatDateOnly(line.expiresOn)}</span></td><td>{formatMoney(line.unitPrice)}</td><td><strong>{formatMoney(actual * Number(line.unitPrice || 0))}</strong></td></tr>;
+      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item, line, unitMap)}</td><td>{formatQuantity(actual)}</td><td><span className="inventory-lot-badge">{line.lotNumber || "—"}</span></td><td><span className={`inventory-expiry-badge ${line.expiresOn ? "has-expiry" : ""}`}>{formatDateOnly(line.expiresOn)}</span></td><td>{formatMoney(line.unitPrice)}</td><td><strong>{formatMoney(actual * Number(line.unitPrice || 0))}</strong></td></tr>;
     }
     if (domain === "disposals") {
-      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(actual)}</td><td><span className="inventory-disposal-reason">{line.disposalReason || line.notes || document.metadata?.disposal_reason || "—"}</span></td></tr>;
+      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item, line, unitMap)}</td><td>{formatQuantity(actual)}</td><td><span className="inventory-disposal-reason">{line.disposalReason || line.notes || document.metadata?.disposal_reason || "—"}</span></td></tr>;
     }
     if (domain === "adjustments") {
       const isIncrease = line.adjustmentDirection === "in";
       const isDecrease = line.adjustmentDirection === "out";
       const directionLabel = isIncrease ? "+ Tăng tồn" : isDecrease ? "− Giảm tồn" : "Theo kiểm kê";
-      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{item?.baseUnit?.name || getUnitName(item)}</td><td><span className={`inventory-adjustment-direction ${isIncrease ? "is-increase" : isDecrease ? "is-decrease" : "is-from-count"}`}>{directionLabel}</span></td><td><strong>{formatQuantity(actual)}</strong></td><td>{document.notes || line.varianceReason || "—"}</td></tr>;
+      return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item, line, unitMap)}</td><td><span className={`inventory-adjustment-direction ${isIncrease ? "is-increase" : isDecrease ? "is-decrease" : "is-from-count"}`}>{directionLabel}</span></td><td><strong>{formatQuantity(actual)}</strong></td><td>{document.notes || line.varianceReason || "—"}</td></tr>;
     }
-    return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(actual)}</td><td>{line.notes || "—"}</td></tr>;
+    return <tr key={line.id}><td><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{item?.code || ""}</small></td><td>{getUnitName(item, line, unitMap)}</td><td>{formatQuantity(expected)}</td><td>{formatQuantity(actual)}</td><td>{line.notes || "—"}</td></tr>;
   };
 
   return (

@@ -118,6 +118,16 @@ export default function InventoryMasterDataModal({
       && selectedPurchaseUnit.id !== form.baseUnitId
       && selectedPurchaseUnit.baseUnitId !== form.baseUnitId
   );
+  const purchaseConversionToBase = selectedPurchaseUnit?.id === form.baseUnitId
+    ? 1
+    : selectedPurchaseUnit?.baseUnitId === form.baseUnitId
+      ? Number(selectedPurchaseUnit.conversionFactor || 1)
+      : Number(form.purchaseToBaseRatio || 0);
+  const showPurchaseConversion = Boolean(
+    selectedPurchaseUnit
+      && selectedPurchaseUnit.id !== form.baseUnitId
+      && purchaseConversionToBase > 0
+  );
 
   const update = ({ target }) => {
     const value = target.type === "checkbox" ? target.checked : target.value;
@@ -360,6 +370,13 @@ export default function InventoryMasterDataModal({
                   </div>
                   {Number(form.purchaseToBaseRatio || 0) <= 0 ? <p className="inventory-form-error">Nhập số lượng quy đổi lớn hơn 0.</p> : null}
                 </Field>
+              ) : null}
+              {showPurchaseConversion ? (
+                <div className="inventory-item-purchase-summary full-field">
+                  <Icon name="tag" size={18} />
+                  <span>Đơn vị nhập: <strong>1 {selectedPurchaseUnit?.symbol || selectedPurchaseUnit?.name} = {purchaseConversionToBase.toLocaleString("vi-VN", { maximumFractionDigits: 6 })} {selectedDisplayBaseUnit?.symbol || selectedDisplayBaseUnit?.name || "đơn vị gốc"}</strong></span>
+                  <small>{needsItemPurchaseRatio ? `Tỷ lệ riêng của ${form.name || "nguyên vật liệu này"}.` : "Đang dùng tỷ lệ quy đổi chung đã khai trong Đơn vị tính."}</small>
+                </div>
               ) : null}
               {selectedDisplayUnit ? <div className="inventory-item-storage-summary full-field"><Icon name="refresh" size={18} /><span>Kho lưu: <strong>{selectedDisplayUnit.baseUnitId ? `1 ${selectedDisplayUnit.symbol || selectedDisplayUnit.name} = ${selectedDisplayUnit.conversionFactor} ${selectedDisplayBaseUnit?.name || "đơn vị gốc"}` : selectedDisplayUnit.name}</strong></span><small>{selectedDisplayUnit.baseUnitId ? "Đơn vị hiển thị được tự động quy về đơn vị gốc." : "Đây là đơn vị gốc, kho lưu trực tiếp không cần quy đổi."}</small></div> : null}
               <section className="inventory-item-stock-config full-field" aria-labelledby="inventory-item-stock-config-title">

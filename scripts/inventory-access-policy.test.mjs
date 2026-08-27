@@ -137,8 +137,10 @@ test("module menu separates branch operations from central inventory", () => {
   assert.equal(branchPolicy.mode, "branch-operations");
   assert.equal(branchPolicy.allowedItemIds.has("inventory-requisitions"), true);
   assert.equal(branchPolicy.allowedItemIds.has("inventory-items"), false);
+  assert.equal(branchPolicy.allowedItemIds.has("inventory-opening-balances"), false);
   assert.equal(centralPolicy.mode, "central-inventory");
   assert.equal(centralPolicy.allowedItemIds.has("inventory-warehouses"), true);
+  assert.equal(centralPolicy.allowedItemIds.has("inventory-opening-balances"), true);
   assert.equal(centralPolicy.allowedItemIds.has("shifts-main"), false);
 });
 
@@ -170,6 +172,14 @@ test("disposals route opens the inventory disposal workspace", () => {
   assert.equal(state.section, "inventory");
   assert.equal(state.inventoryPage, "disposals");
   assert.equal(state.activeAdminNav, "inventory-disposals");
+  assert.equal(state.inventoryRouteInvalid, false);
+});
+
+test("opening balances route opens the one-time inventory setup workspace", () => {
+  const state = adminPathToState("/admin/inventory/opening-balances");
+  assert.equal(state.section, "inventory");
+  assert.equal(state.inventoryPage, "opening-balances");
+  assert.equal(state.activeAdminNav, "inventory-opening-balances");
   assert.equal(state.inventoryRouteInvalid, false);
 });
 

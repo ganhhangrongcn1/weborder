@@ -84,7 +84,7 @@ export function adminPathToState(pathname = "/admin") {
   const inventoryMatch = path.match(/^\/admin\/inventory\/([^/]+)$/i);
   if (inventoryMatch) {
     const allowedPages = new Set([
-      "dashboard", "warehouses", "items", "item-categories", "units", "suppliers", "receipts", "issues",
+      "dashboard", "warehouses", "items", "item-categories", "units", "suppliers", "opening-balances", "receipts", "issues",
       "transfers", "disposals", "requisitions", "counts", "adjustments", "ledger", "stock-flow", "reports", "lots", "alerts", "cost-analysis", "reconciliation", "boms", "production-orders", "sales-recipes"
     ]);
     const requestedPage = String(inventoryMatch[1] || "").toLowerCase();

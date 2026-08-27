@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildInventoryCountCreationLines,
   getInventoryCountExpectedDisplay,
+  getInventoryCountRecordedQuantity,
   getInventoryCountVariance
 } from "../src/services/inventoryCountCalculations.js";
 
@@ -17,5 +18,10 @@ const countLine = { conversionToBase: 1000, systemQuantity: 1000, expectedQuanti
 assert.equal(getInventoryCountExpectedDisplay(countLine), 1);
 assert.ok(Math.abs(getInventoryCountVariance(countLine) + 0.1) < 0.000001);
 assert.equal(getInventoryCountVariance({ ...countLine, countedQuantity: 1 }), 0);
+assert.equal(getInventoryCountRecordedQuantity({
+  countedQuantity: 2,
+  conversionToBase: 40,
+  recordedConversionToBase: 1
+}), 80);
 
 console.log("inventory-count calculations: ok");

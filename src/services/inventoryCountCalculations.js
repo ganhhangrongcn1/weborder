@@ -40,10 +40,17 @@ export function getInventoryCountVariance(line = {}) {
   return toNumber(line.countedQuantity) - getInventoryCountExpectedDisplay(line);
 }
 
+export function getInventoryCountRecordedQuantity(line = {}) {
+  const displayFactor = Math.max(toNumber(line.conversionToBase, 1), 0.000001);
+  const recordedFactor = Math.max(toNumber(line.recordedConversionToBase, displayFactor), 0.000001);
+  return toNumber(line.countedQuantity) * displayFactor / recordedFactor;
+}
+
 export default {
   buildInventoryCountCreationLines,
   getInventoryCountDisplayUnit,
   getInventoryCountExpectedBase,
   getInventoryCountExpectedDisplay,
+  getInventoryCountRecordedQuantity,
   getInventoryCountVariance
 };

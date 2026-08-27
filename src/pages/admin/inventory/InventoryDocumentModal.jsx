@@ -1,8 +1,12 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
-import { getInventoryItemDisplayUnitConfig } from "../../../services/inventoryUnitConversion.js";
+import {
+  getInventoryItemInputUnitConfig,
+  getInventoryUnitToBaseFactor
+} from "../../../services/inventoryUnitConversion.js";
 import InventoryReceiptLineFields from "./InventoryReceiptLineFields.jsx";
+import InventoryLineUnitSelect from "./InventoryLineUnitSelect.jsx";
 import { getReceiptLineItemDefaults, getSuggestedExpiryDate } from "./inventoryReceiptForm.js";
 
 const DOMAIN_CONFIG = {
@@ -130,9 +134,14 @@ export default function InventoryDocumentModal({
             : getSuggestedExpiryDate(item, value ? `${value}T00:00` : form.occurredAt)
         };
       }
+      if (field === "unitId") {
+        const item = activeItems.find((row) => row.id === line.itemId);
+        const unit = unitsById.get(value);
+        return { ...line, unitId: value, conversionToBase: getInventoryUnitToBaseFactor(item, unit) };
+      }
       if (field !== "itemId") return { ...line, [field]: value };
       const item = activeItems.find((row) => row.id === value);
-      const displayUnit = getInventoryItemDisplayUnitConfig(item, unitsById);
+      const displayUnit = getInventoryItemInputUnitConfig(item, unitsById, domain === "receipts" ? "purchase" : "display");
       return {
         ...line,
         itemId: value,
@@ -276,15 +285,13 @@ export default function InventoryDocumentModal({
               </div>
               {lines.map((line) => {
                 const item = activeItems.find((row) => row.id === line.itemId);
-                const selectedUnit = units.find((row) => row.id === line.unitId);
-                const unitName = selectedUnit?.name || item?.purchaseUnit?.name || item?.baseUnit?.name || "—";
                 if (domain === "receipts") {
                   return (
                     <InventoryReceiptLineFields
                       key={line.key}
                       line={line}
                       item={item}
-                      unit={unitsById.get(line.unitId)}
+                      units={units}
                       items={activeItems}
                       canDelete={lines.length > 1}
                       occurredDate={form.occurredAt.slice(0, 10)}
@@ -299,7 +306,7 @@ export default function InventoryDocumentModal({
                       <option value="">Chọn nguyên vật liệu</option>
                       {activeItems.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
                     </InventorySearchableSelect>
-                    <div className="inventory-document-unit"><strong>{unitName}</strong>{item && line.conversionToBase !== 1 ? <small>1 {unitName} = {line.conversionToBase} {item.baseUnit?.name}</small> : <small>Đơn vị lưu kho</small>}</div>
+                    <InventoryLineUnitSelect item={item} units={units} value={line.unitId} onChange={(unitId) => updateLine(line.key, "unitId", unitId)} ariaLabel={`Đơn vị của ${item?.name || "nguyên vật liệu"}`} />
                     {domain === "adjustments" ? (
                       <InventorySearchableSelect value={line.adjustmentDirection} onChange={(event) => updateLine(line.key, "adjustmentDirection", event.target.value)} required aria-label={`Chiều điều chỉnh của ${item?.name || "nguyên vật liệu"}`}>
                         <option value="">Chọn tăng/giảm</option>

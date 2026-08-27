@@ -15,6 +15,7 @@ import useInventoryBoms from "../../../hooks/useInventoryBoms.js";
 import useInventoryProductionOrders from "../../../hooks/useInventoryProductionOrders.js";
 import useInventorySalesConfiguration from "../../../hooks/useInventorySalesConfiguration.js";
 import useInventoryCostAnalysis from "../../../hooks/useInventoryCostAnalysis.js";
+import useInventoryOpeningBalances from "../../../hooks/useInventoryOpeningBalances.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 import { getInventoryRoute } from "./inventoryNavigation.js";
 import { getInventoryAccessPolicy, getInventoryScopedWarehouses } from "./inventoryAccessPolicy.js";
@@ -34,6 +35,7 @@ import InventoryProductionOrderManager from "./InventoryProductionOrderManager.j
 import InventorySalesConfiguration from "./InventorySalesConfiguration.jsx";
 import InventorySalesReconciliation from "./InventorySalesReconciliation.jsx";
 import InventoryCostAnalysis from "./InventoryCostAnalysis.jsx";
+import InventoryOpeningBalanceManager from "./InventoryOpeningBalanceManager.jsx";
 
 function InventoryAccessGate({ accessPolicy, children }) {
   if (accessPolicy.allowed) return children;
@@ -153,6 +155,7 @@ export default function InventoryWorkspace({
   const isProductionPage = currentRoute.page === "production-orders";
   const isSalesRecipePage = currentRoute.page === "sales-recipes";
   const isReconciliationPage = currentRoute.page === "reconciliation";
+  const isOpeningBalancePage = currentRoute.page === "opening-balances";
   const documentDomain = ["receipts", "issues", "transfers", "disposals", "requisitions", "adjustments"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
@@ -161,7 +164,7 @@ export default function InventoryWorkspace({
     : "";
   const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage || isSalesRecipePage;
   const warehouseState = useInventoryWarehouses({
-    enabled: isCostAnalysisPage || ((isWarehousePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((isWarehousePage || isOpeningBalancePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage || Boolean(documentDomain)) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     branchUuid: accessPolicy.scope === "branch" ? accessPolicy.branchUuid : ""
   });
   const masterDataState = useInventoryMasterData({
@@ -169,7 +172,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || isOpeningBalancePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -177,7 +180,7 @@ export default function InventoryWorkspace({
     domain: "item-categories"
   });
   const documentItemsState = useInventoryMasterData({
-    enabled: isCostAnalysisPage || ((Boolean(documentDomain) || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((Boolean(documentDomain) || isOpeningBalancePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "items"
   });
   const documentSuppliersState = useInventoryMasterData({
@@ -215,6 +218,9 @@ export default function InventoryWorkspace({
   });
   const countState = useInventoryCounts({
     enabled: isCountPage && accessPolicy.allowed
+  });
+  const openingBalanceState = useInventoryOpeningBalances({
+    enabled: isOpeningBalancePage && accessPolicy.allowed
   });
   const dashboardState = useInventoryDashboard({
     enabled: isDashboardPage && accessPolicy.allowed
@@ -319,6 +325,8 @@ export default function InventoryWorkspace({
       ? costAnalysisState
     : isCountPage
       ? countState
+    : isOpeningBalancePage
+      ? openingBalanceState
     : isBomPage
       ? bomState
     : isProductionPage
@@ -346,6 +354,12 @@ export default function InventoryWorkspace({
     && documentItemsState.status === "ready"
     && (documentDomain !== "receipts" || documentSuppliersState.status === "ready")
     && documentState.writeEnabled;
+  const canWriteOpeningBalances = canManageGlobalData
+    && openingBalanceState.status === "ready"
+    && warehouseState.status === "ready"
+    && documentItemsState.status === "ready"
+    && itemUnitsState.status === "ready"
+    && openingBalanceState.writeEnabled;
   const canWriteBoms = (accessPolicy.scope === "global" || Boolean(bomState.permissions?.canManage))
     && bomState.status === "ready"
     && warehouseState.status === "ready"
@@ -397,6 +411,17 @@ export default function InventoryWorkspace({
 
         {isDashboardPage
           ? <InventoryDashboard data={dashboardState.data} />
+          : isOpeningBalancePage
+            ? <InventoryOpeningBalanceManager
+                rows={openingBalanceState.rows}
+                warehouses={scopedWarehouses}
+                items={documentItemsState.rows}
+                units={itemUnitsState.rows}
+                canWrite={canWriteOpeningBalances}
+                mutationStatus={openingBalanceState.mutationStatus}
+                mutationMessage={openingBalanceState.mutationMessage}
+                onCreate={openingBalanceState.create}
+              />
           : currentRoute.page === "warehouses"
             ? <InventoryWarehouseManager
                 warehouses={visibleWarehouses}

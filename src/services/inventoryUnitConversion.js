@@ -45,9 +45,20 @@ export function getInventoryItemDisplayUnitConfig(item = {}, unitsById = new Map
   };
 }
 
+export function getInventoryItemInputUnitConfig(item = {}, unitsById = new Map(), preference = "display") {
+  const preferredUnitId = preference === "purchase" ? item.purchaseUnitId : item.displayUnitId;
+  const unit = unitsById.get(preferredUnitId) || getInventoryItemDisplayUnit(item, unitsById);
+  return {
+    unit,
+    unitId: unit.id || item.baseUnitId || "",
+    conversionToBase: getInventoryUnitToBaseFactor(item, unit)
+  };
+}
+
 export default {
   getInventoryItemDisplayUnit,
   getInventoryItemDisplayUnitConfig,
+  getInventoryItemInputUnitConfig,
   getInventoryCompatibleUnits,
   getInventoryUnitToBaseFactor
 };

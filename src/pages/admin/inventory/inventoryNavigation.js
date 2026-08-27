@@ -55,6 +55,15 @@ export const INVENTORY_ROUTE_ITEMS = [
     description: "Nhà cung cấp và danh sách mặt hàng theo nhà cung cấp."
   },
   {
+    id: "inventory-opening-balances",
+    path: "/admin/inventory/opening-balances",
+    page: "opening-balances",
+    label: "Tồn đầu kỳ",
+    group: "Xây dữ liệu",
+    icon: "download",
+    description: "Khởi tạo số lượng và giá vốn ban đầu một lần cho từng kho."
+  },
+  {
     id: "inventory-receipts",
     path: "/admin/inventory/receipts",
     page: "receipts",
@@ -214,7 +223,7 @@ const INVENTORY_SECTION_DEFINITIONS = [
     id: "inventory-master-data-section",
     title: "Xây dữ liệu",
     icon: "folder",
-    pages: ["warehouses", "items", "item-categories", "units", "suppliers"]
+    pages: ["warehouses", "items", "item-categories", "units", "suppliers", "opening-balances"]
   },
   {
     id: "inventory-operations-section",

@@ -5,7 +5,11 @@ import {
   hasInventoryBomCycle,
   normalizeInventoryBomDraft
 } from "../src/services/inventoryBomCalculations.js";
-import { getInventoryCompatibleUnits } from "../src/services/inventoryUnitConversion.js";
+import {
+  getInventoryCompatibleUnits,
+  getInventoryItemInputUnitConfig,
+  getInventoryUnitToBaseFactor
+} from "../src/services/inventoryUnitConversion.js";
 import {
   getInventoryProductionExpiryConfig,
   getInventoryProductionScopeMeta,
@@ -54,6 +58,26 @@ test("chỉ trả về đơn vị cùng hệ quy đổi", () => {
     getInventoryCompatibleUnits(items[0], units).map((unit) => unit.id),
     ["gram", "kg"]
   );
+});
+
+test("mặt hàng lưu theo cái vẫn nhập được theo kg bằng tỷ lệ riêng", () => {
+  const mixedUnits = [
+    ...units,
+    { id: "piece", name: "Cái", symbol: "cái", isActive: true }
+  ];
+  const item = {
+    id: "rice-paper",
+    baseUnitId: "piece",
+    displayUnitId: "piece",
+    purchaseUnitId: "kg",
+    purchaseToBaseRatio: 40,
+    isActive: true
+  };
+  const unitsById = new Map(mixedUnits.map((unit) => [unit.id, unit]));
+
+  assert.deepEqual(getInventoryCompatibleUnits(item, mixedUnits).map((unit) => unit.id), ["kg", "piece"]);
+  assert.equal(getInventoryItemInputUnitConfig(item, unitsById, "purchase").unitId, "kg");
+  assert.equal(getInventoryUnitToBaseFactor(item, unitsById.get("kg")), 40);
 });
 
 test("tính lượng cần chuẩn bị gồm hao hụt", () => {

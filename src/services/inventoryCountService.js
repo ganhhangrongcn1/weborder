@@ -5,6 +5,7 @@ import {
 } from "./supabase/supabaseRuntimeClient.js";
 import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { isInventoryRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
+import { getInventoryCountRecordedQuantity } from "./inventoryCountCalculations.js";
 
 const DOCUMENT_SELECT = "id,document_no,status,source_warehouse_id,occurred_at,notes,created_at,submitted_at,approved_at,completed_at";
 const LINE_SELECT = "id,document_id,item_id,unit_id,conversion_to_base,counted_quantity,variance_reason";
@@ -185,7 +186,7 @@ export async function createAndStartInventoryCount({ warehouseId = "", notes = "
 export async function recordAndSubmitInventoryCount(documentId, lines = []) {
   const client = await getInventoryClient();
   if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
-  const payload = lines.map((line) => ({ line_id: line.id, counted_quantity: Number(line.countedQuantity) }));
+  const payload = lines.map((line) => ({ line_id: line.id, counted_quantity: getInventoryCountRecordedQuantity(line) }));
   await callCountRpc(client, "inventory_record_stock_count", {
     p_document_id: documentId,
     p_idempotency_key: createKey(`count-record-${documentId}`),

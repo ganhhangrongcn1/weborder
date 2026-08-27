@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
+import InventoryLineUnitSelect from "./InventoryLineUnitSelect.jsx";
+import { getInventoryUnitToBaseFactor } from "../../../services/inventoryUnitConversion.js";
 import {
   buildInventoryCountCreationLines,
   getInventoryCountExpectedDisplay,
@@ -14,7 +16,11 @@ function formatQuantity(value) {
 export default function InventoryCountModal({ mode = "create", count = null, warehouses = [], items = [], units = [], warehouseSelectionLocked = false, saving = false, onClose, onCreate, onSubmitCount, onApprove }) {
   const [warehouseId, setWarehouseId] = useState(warehouses.find((row) => row.isActive !== false)?.id || "");
   const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState(() => (count?.lines || []).map((line) => ({ ...line })));
+  const [lines, setLines] = useState(() => (count?.lines || []).map((line) => ({
+    ...line,
+    recordedUnitId: line.unitId,
+    recordedConversionToBase: line.conversionToBase
+  })));
   const [error, setError] = useState("");
   const itemById = useMemo(() => new Map(items.map((row) => [row.id, row])), [items]);
   const unitById = useMemo(() => new Map(units.map((row) => [row.id, row])), [units]);
@@ -24,6 +30,14 @@ export default function InventoryCountModal({ mode = "create", count = null, war
   const title = isCreate ? "Tạo đợt kiểm kê" : isCount ? "Nhập số đếm thực tế" : isReview ? "Duyệt chênh lệch kiểm kê" : "Chi tiết kiểm kê";
 
   const updateLine = (id, patch) => setLines((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line));
+  const updateLineUnit = (line, item, unitId) => {
+    const unit = unitById.get(unitId);
+    updateLine(line.id, {
+      unitId,
+      conversionToBase: getInventoryUnitToBaseFactor(item, unit),
+      countedQuantity: ""
+    });
+  };
   const submit = async () => {
     setError("");
     try {
@@ -63,7 +77,7 @@ export default function InventoryCountModal({ mode = "create", count = null, war
             const expected = getInventoryCountExpectedDisplay(line);
             const variance = getInventoryCountVariance(line);
             const hasVariance = variance != null && Math.abs(variance) > 0.000001;
-            return <tr key={line.id}><td><strong>{item.name || "NVL không còn hoạt động"}</strong><small>{item.code || line.itemId}</small></td><td>{unit.symbol || unit.name || "ĐVT"}</td><td className="is-number">{formatQuantity(expected)}</td><td className="is-number">{isCount ? <input type="number" min="0" step="any" value={line.countedQuantity ?? ""} onChange={(event) => updateLine(line.id, { countedQuantity: event.target.value })} aria-label={`Số đếm ${item.name || "nguyên vật liệu"}`} /> : line.countedQuantity == null ? <span className="inventory-count-empty-value">Chưa nhập</span> : <strong>{formatQuantity(line.countedQuantity)}</strong>}</td>{!isCount ? <td className={`is-number inventory-count-variance ${hasVariance ? variance > 0 ? "is-positive" : "is-negative" : "is-zero"}`}>{variance == null ? "—" : `${variance > 0 ? "+" : ""}${formatQuantity(variance)}`}</td> : null}{isReview ? <td>{hasVariance ? <input value={line.varianceReason || ""} onChange={(event) => updateLine(line.id, { varianceReason: event.target.value })} placeholder="Nhập lý do..." /> : <span className="inventory-count-match">Khớp tồn</span>}</td> : null}</tr>;
+            return <tr key={line.id}><td><strong>{item.name || "NVL không còn hoạt động"}</strong><small>{item.code || line.itemId}</small></td><td>{isCount ? <InventoryLineUnitSelect item={item} units={units} value={line.unitId} onChange={(unitId) => updateLineUnit(line, item, unitId)} ariaLabel={`Đơn vị kiểm kê của ${item.name || "nguyên vật liệu"}`} /> : unit.symbol || unit.name || "ĐVT"}</td><td className="is-number">{formatQuantity(expected)}</td><td className="is-number">{isCount ? <input type="number" min="0" step="any" value={line.countedQuantity ?? ""} onChange={(event) => updateLine(line.id, { countedQuantity: event.target.value })} aria-label={`Số đếm ${item.name || "nguyên vật liệu"}`} /> : line.countedQuantity == null ? <span className="inventory-count-empty-value">Chưa nhập</span> : <strong>{formatQuantity(line.countedQuantity)}</strong>}</td>{!isCount ? <td className={`is-number inventory-count-variance ${hasVariance ? variance > 0 ? "is-positive" : "is-negative" : "is-zero"}`}>{variance == null ? "—" : `${variance > 0 ? "+" : ""}${formatQuantity(variance)}`}</td> : null}{isReview ? <td>{hasVariance ? <input value={line.varianceReason || ""} onChange={(event) => updateLine(line.id, { varianceReason: event.target.value })} placeholder="Nhập lý do..." /> : <span className="inventory-count-match">Khớp tồn</span>}</td> : null}</tr>;
           })}</tbody></table></div>}
           {error ? <div className="inventory-count-error" role="alert"><Icon name="warning" size={16} />{error}</div> : null}
         </div>
