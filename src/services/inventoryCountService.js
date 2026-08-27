@@ -165,33 +165,21 @@ export async function createAndStartInventoryCount({ warehouseId = "", notes = "
   if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
   const actorId = await getActorId(client);
   if (!actorId) throw new Error("Phiên đăng nhập đã hết hạn.");
-  const headerResult = await client.from("inventory_documents").insert({
-    document_no: createDocumentNo(),
-    idempotency_key: createKey("count-draft"),
-    document_type: "stock_count",
-    status: "draft",
-    source_warehouse_id: normalizedWarehouseId,
-    occurred_at: new Date().toISOString(),
-    notes: toText(notes) || null,
-    metadata: { count_scope: "all_active_items" },
-    created_by: actorId
-  }).select(DOCUMENT_SELECT).single();
-  recordAdminRequest("create inventory count", "inventory_documents");
-  if (headerResult.error) throw new Error(normalizeReadError(headerResult.error).message);
-  const lineResult = await client.from("inventory_document_lines").insert(normalizedLines.map((line) => ({
-    document_id: headerResult.data.id,
-    item_id: line.itemId,
-    unit_id: line.unitId,
-    conversion_to_base: Number(line.conversionToBase),
-    expected_quantity: 0
-  }))).select(LINE_SELECT);
-  recordAdminRequest("create inventory count lines", "inventory_document_lines");
-  if (lineResult.error) throw new Error(normalizeReadError(lineResult.error).message);
-  await callCountRpc(client, "inventory_start_stock_count", {
-    p_document_id: headerResult.data.id,
-    p_idempotency_key: `count-start-${headerResult.data.id}`
-  }, "Không bắt đầu được đợt kiểm kê.");
-  return headerResult.data.id;
+  const { data, error } = await client.rpc("inventory_create_and_start_stock_count", {
+    p_document_no: createDocumentNo(),
+    p_idempotency_key: createKey("count-create"),
+    p_warehouse_id: normalizedWarehouseId,
+    p_occurred_at: new Date().toISOString(),
+    p_notes: toText(notes) || null,
+    p_lines: normalizedLines.map((line) => ({
+      itemId: line.itemId,
+      unitId: line.unitId,
+      conversionToBase: Number(line.conversionToBase)
+    }))
+  });
+  recordAdminRequest("create and start inventory count", "inventory_create_and_start_stock_count");
+  if (error) throw new Error(toText(error.message) || "Không bắt đầu được đợt kiểm kê.");
+  return toText(data);
 }
 
 export async function recordAndSubmitInventoryCount(documentId, lines = []) {
