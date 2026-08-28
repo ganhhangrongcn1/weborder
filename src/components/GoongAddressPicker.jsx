@@ -60,17 +60,20 @@ function getMapStyle() {
       };
 }
 
-function normalizeChange(data, shippingConfig) {
-  const deliveryFee = calculateDeliveryFee(data.distanceKm, shippingConfig);
+function normalizeChange(data, shippingConfig, maxDistanceKm = null) {
+  const distanceKm = data.distanceKm ?? null;
+  const hasDistanceLimit = Number.isFinite(Number(maxDistanceKm)) && Number(maxDistanceKm) > 0;
+  const isOutOfRange = hasDistanceLimit && Number(distanceKm) >= Number(maxDistanceKm);
+  const deliveryFee = isOutOfRange ? null : calculateDeliveryFee(distanceKm, shippingConfig);
   return {
     addressText: data.addressText || "",
     placeId: data.placeId || "",
     lat: data.lat ?? null,
     lng: data.lng ?? null,
-    distanceKm: data.distanceKm ?? null,
+    distanceKm,
     durationText: data.durationText || "",
     deliveryFee,
-    shippingStatus: deliveryFee === null ? "NEED_CONFIRM" : "OK"
+    shippingStatus: isOutOfRange ? "OUT_OF_RANGE" : (deliveryFee === null ? "NEED_CONFIRM" : "OK")
   };
 }
 
@@ -83,6 +86,7 @@ export default function GoongAddressPicker({
   requireOrigin = false,
   showOriginSummary = false,
   shippingConfig,
+  maxDistanceKm = null,
   inputId,
   inputName = "deliveryAddress",
   inputRef,
@@ -101,7 +105,7 @@ export default function GoongAddressPicker({
       lng: value?.lng,
       distanceKm: value?.distanceKm,
       durationText: value?.durationText
-    }, shippingConfig)
+    }, shippingConfig, maxDistanceKm)
   );
   const [isSearching, setIsSearching] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -203,7 +207,7 @@ export default function GoongAddressPicker({
   }, [showMap]);
 
   async function emitChange(next) {
-    const normalized = normalizeChange(next, shippingConfig);
+    const normalized = normalizeChange(next, shippingConfig, maxDistanceKm);
     setSelected(normalized);
     onChange?.(normalized);
   }
@@ -224,12 +228,14 @@ export default function GoongAddressPicker({
       lng,
       distanceKm: distance?.distanceKm ?? fallbackDistance,
       durationText: distance?.durationText || (fallbackDistance ? "Ước tính" : "")
-    }, shippingConfig);
+    }, shippingConfig, maxDistanceKm);
     await emitChange(next);
     setStatusText(
-      next.shippingStatus === "OK"
-        ? `${distance?.distanceKm ? "Goong" : "Ước tính"} ${next.distanceKm.toFixed(1)}km · Phí ${formatMoney(next.deliveryFee)}`
-        : "Không xác định được phí ship, nhân viên sẽ xác nhận"
+      next.shippingStatus === "OUT_OF_RANGE"
+        ? `Địa chỉ cách quán ${next.distanceKm.toFixed(1)}km, vượt quá phạm vi giao bánh dưới ${Number(maxDistanceKm)}km.`
+        : next.shippingStatus === "OK"
+          ? `${distance?.distanceKm ? "Goong" : "Ước tính"} ${next.distanceKm.toFixed(1)}km · Phí ${formatMoney(next.deliveryFee)}`
+          : "Không xác định được phí ship, nhân viên sẽ xác nhận"
     );
     setIsCalculating(false);
   }
@@ -248,10 +254,13 @@ export default function GoongAddressPicker({
       await updateDistance(addressText, location.lat, location.lng, suggestion.place_id);
     } else {
       const fallbackDistance = estimateDistanceFromText(addressText);
-      await emitChange({ addressText, placeId: suggestion.place_id, distanceKm: fallbackDistance, durationText: fallbackDistance ? "Ước tính" : "" });
+      const fallbackResult = normalizeChange({ addressText, placeId: suggestion.place_id, distanceKm: fallbackDistance, durationText: fallbackDistance ? "Ước tính" : "" }, shippingConfig, maxDistanceKm);
+      await emitChange(fallbackResult);
       setStatusText(
-        fallbackDistance
-          ? `Ước tính ${fallbackDistance.toFixed(1)}km · Phí ${formatMoney(calculateDeliveryFee(fallbackDistance, shippingConfig))}`
+        fallbackResult.shippingStatus === "OUT_OF_RANGE"
+          ? `Địa chỉ cách quán ${fallbackDistance.toFixed(1)}km, vượt quá phạm vi giao bánh dưới ${Number(maxDistanceKm)}km.`
+          : fallbackDistance
+          ? `Ước tính ${fallbackDistance.toFixed(1)}km · Phí ${formatMoney(fallbackResult.deliveryFee)}`
           : "Không xác định được phí ship, nhân viên sẽ xác nhận"
       );
     }
@@ -323,7 +332,7 @@ export default function GoongAddressPicker({
         )}
       </div>
       <div
-        className="flex items-center justify-between gap-2 rounded-2xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700"
+        className={`flex items-center justify-between gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${selected.shippingStatus === "OUT_OF_RANGE" ? "bg-red-50 text-red-700" : "bg-orange-50 text-orange-700"}`}
         role="status"
         aria-live="polite"
       >
@@ -353,7 +362,9 @@ export default function GoongAddressPicker({
           </div>
           <div className="rounded-2xl bg-white px-3 py-2 shadow-sm">
             <span className="block text-brown/45">Phí ship</span>
-            <strong className="text-orange-600">{selected.deliveryFee !== null ? formatMoney(selected.deliveryFee) : "Xác nhận sau"}</strong>
+            <strong className={selected.shippingStatus === "OUT_OF_RANGE" ? "text-red-600" : "text-orange-600"}>
+              {selected.shippingStatus === "OUT_OF_RANGE" ? "Ngoài khu vực giao" : selected.deliveryFee !== null ? formatMoney(selected.deliveryFee) : "Xác nhận sau"}
+            </strong>
           </div>
         </div>
       )}

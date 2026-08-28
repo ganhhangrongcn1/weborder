@@ -13,7 +13,7 @@ export const DEFAULT_CAKE_SHIPPING_CONFIG = {
   supportShippingEnabled: false,
   maxSupportShipFee: 0,
   customerNote: "Bánh sinh nhật cần giao cẩn thận nên phí ship sẽ được tính riêng.",
-  maxRadiusKm: 12,
+  maxRadiusKm: 10,
   sourceBranchId: ""
 };
 
@@ -29,7 +29,7 @@ export const DEFAULT_CAKE_FULFILLMENT_CONFIG = {
   pickupBranchIds: [],
   deliveryEnabled: true,
   deliverySourceBranchId: "",
-  minPickupLeadMinutes: 120
+  minPickupLeadMinutes: 180
 };
 
 const CAKE_VIETNAM_TIMEZONE_OFFSET = "+07:00";
@@ -38,7 +38,7 @@ export const DEFAULT_CAKE_SETTINGS = {
   zaloPhone: "0788422424",
   shippingConfig: DEFAULT_CAKE_SHIPPING_CONFIG,
   cakeFulfillment: DEFAULT_CAKE_FULFILLMENT_CONFIG,
-  orderNotice: "Đặt trước tối thiểu 2 - 4 tiếng để shop chuẩn bị bánh đẹp nhất.",
+  orderNotice: "Đặt trước tối thiểu 3 tiếng để shop chuẩn bị bánh đẹp nhất.",
   pickupAddress: "Gánh Hàng Rong",
   featuredProductIds: [
     "set-trai-tim-couple",
@@ -317,7 +317,9 @@ export function normalizeCakeSettings(settings = {}) {
     ...settings,
     zaloPhone: String(settings.zaloPhone || DEFAULT_CAKE_SETTINGS.zaloPhone).replace(/\D/g, "") || DEFAULT_CAKE_SETTINGS.zaloPhone,
     pickupAddress: String(settings.pickupAddress || DEFAULT_CAKE_SETTINGS.pickupAddress).trim(),
-    orderNotice: String(settings.orderNotice || DEFAULT_CAKE_SETTINGS.orderNotice).trim(),
+    orderNotice: String(settings.orderNotice || "").trim() === "Đặt trước tối thiểu 2 - 4 tiếng để shop chuẩn bị bánh đẹp nhất."
+      ? DEFAULT_CAKE_SETTINGS.orderNotice
+      : String(settings.orderNotice || DEFAULT_CAKE_SETTINGS.orderNotice).trim(),
     featuredProductIds: Array.isArray(settings.featuredProductIds)
       ? settings.featuredProductIds.map((item) => String(item || "").trim()).filter(Boolean)
       : DEFAULT_CAKE_SETTINGS.featuredProductIds,
@@ -328,7 +330,7 @@ export function normalizeCakeSettings(settings = {}) {
       freeShipThreshold: Number(shippingConfig.freeShipThreshold || 0),
       supportShippingEnabled: Boolean(shippingConfig.supportShippingEnabled),
       maxSupportShipFee: Number(shippingConfig.maxSupportShipFee || 0),
-      maxRadiusKm: Number(shippingConfig.maxRadiusKm || DEFAULT_CAKE_SHIPPING_CONFIG.maxRadiusKm),
+      maxRadiusKm: Math.min(10, Number(shippingConfig.maxRadiusKm || DEFAULT_CAKE_SHIPPING_CONFIG.maxRadiusKm)),
       customerNote: String(shippingConfig.customerNote || "").trim(),
       sourceBranchId: String(shippingConfig.sourceBranchId || "").trim()
     },
@@ -339,7 +341,7 @@ export function normalizeCakeSettings(settings = {}) {
         : [],
       deliveryEnabled: cakeFulfillmentSource.deliveryEnabled !== false,
       deliverySourceBranchId: String(cakeFulfillmentSource.deliverySourceBranchId || shippingConfig.sourceBranchId || "").trim(),
-      minPickupLeadMinutes: Math.max(0, Number(cakeFulfillmentSource.minPickupLeadMinutes || DEFAULT_CAKE_FULFILLMENT_CONFIG.minPickupLeadMinutes))
+      minPickupLeadMinutes: Math.max(180, Number(cakeFulfillmentSource.minPickupLeadMinutes || DEFAULT_CAKE_FULFILLMENT_CONFIG.minPickupLeadMinutes))
     },
     addonCatalog: {
       chibi: {

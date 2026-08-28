@@ -27,9 +27,13 @@ const EMPTY_FORM = {
 };
 
 const PICKUP_TIME_WARNING =
-  "Vì là món quà để tặng người thân yêu, quán cần ít nhất 120 phút để chuẩn bị bánh đẹp và chỉn chu.";
-const CAKE_PICKUP_OPEN_MINUTES = 10 * 60;
-const CAKE_PICKUP_CLOSE_MINUTES = 22 * 60;
+  "Vì là món quà để tặng người thân yêu, quán cần ít nhất 3 tiếng để chuẩn bị bánh đẹp và chỉn chu.";
+const PICKUP_HOURS_WARNING = "Quán chỉ nhận bánh trong khung giờ từ 08:00 đến 21:00. Vui lòng chọn lại giờ nhận bánh.";
+const AFTER_HOURS_ORDER_NOTICE = "Hiện tại ngoài giờ làm việc. Quán sẽ liên hệ để hỗ trợ chốt đơn ngay khi làm việc lại.";
+const CAKE_PICKUP_OPEN_MINUTES = 8 * 60;
+const CAKE_PICKUP_CLOSE_MINUTES = 21 * 60;
+const CAKE_MIN_LEAD_MINUTES = 180;
+const CAKE_MAX_DELIVERY_DISTANCE_KM = 10;
 const ZALO_COMPLETION_DELAY_MS = 4000;
 
 async function copyText(text) {
@@ -49,23 +53,23 @@ function formatDateTimeLocal(date) {
   ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function getMinPickupDateTimeValue(minutes = 120) {
+function getMinPickupDateTimeValue(minutes = CAKE_MIN_LEAD_MINUTES) {
   const minDate = roundUpDateToStep(new Date(Date.now() + Math.max(0, Number(minutes || 0)) * 60000));
   const minMinutes = minDate.getHours() * 60 + minDate.getMinutes();
 
   if (minMinutes < CAKE_PICKUP_OPEN_MINUTES) {
-    minDate.setHours(10, 0, 0, 0);
+    minDate.setHours(8, 0, 0, 0);
   }
 
   if (minMinutes > CAKE_PICKUP_CLOSE_MINUTES) {
     minDate.setDate(minDate.getDate() + 1);
-    minDate.setHours(10, 0, 0, 0);
+    minDate.setHours(8, 0, 0, 0);
   }
 
   return formatDateTimeLocal(minDate);
 }
 
-function isPickupTimeTooSoon(value, minutes = 120) {
+function isPickupTimeTooSoon(value, minutes = CAKE_MIN_LEAD_MINUTES) {
   if (!value) return false;
   const selectedTime = new Date(value).getTime();
   if (Number.isNaN(selectedTime)) return false;
@@ -122,23 +126,24 @@ function buildPickupTimeOptions({
   return options;
 }
 
-function getBranchOperatingWindow(branch = {}) {
-  const scheduleText = String(branch.time || branch.openingHours || branch.opening_hours || "").trim();
-  const match = scheduleText.match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/);
-  if (!match) {
-    return {
-      openMinutes: CAKE_PICKUP_OPEN_MINUTES,
-      closeMinutes: CAKE_PICKUP_CLOSE_MINUTES,
-      label: "10:00 - 22:00"
-    };
-  }
+function isPickupTimeOutsideReceivingHours(value) {
+  if (!value) return false;
+  const selectedTime = new Date(value);
+  if (Number.isNaN(selectedTime.getTime())) return false;
+  const selectedMinutes = selectedTime.getHours() * 60 + selectedTime.getMinutes();
+  return selectedMinutes < CAKE_PICKUP_OPEN_MINUTES || selectedMinutes > CAKE_PICKUP_CLOSE_MINUTES;
+}
 
-  const openMinutes = Number(match[1]) * 60 + Number(match[2]);
-  const closeMinutes = Number(match[3]) * 60 + Number(match[4]);
+function isCakeOrderAfterHours(date = new Date()) {
+  const hour = date.getHours();
+  return hour >= 22 || hour < 6;
+}
+
+function getBranchOperatingWindow() {
   return {
-    openMinutes,
-    closeMinutes,
-    label: `${String(match[1]).padStart(2, "0")}:${match[2]} - ${String(match[3]).padStart(2, "0")}:${match[4]}`
+    openMinutes: CAKE_PICKUP_OPEN_MINUTES,
+    closeMinutes: CAKE_PICKUP_CLOSE_MINUTES,
+    label: "08:00 - 21:00"
   };
 }
 
@@ -203,6 +208,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   const [message, setMessage] = useState("");
   const [addonInfoPopup, setAddonInfoPopup] = useState("");
   const [pickupTimeWarningOpen, setPickupTimeWarningOpen] = useState(false);
+  const [pickupTimeWarningMessage, setPickupTimeWarningMessage] = useState(PICKUP_TIME_WARNING);
   const [successOrder, setSuccessOrder] = useState(null);
   const modalRootRef = useRef(null);
   const hasOpenModal = Boolean(selectedProduct || orderingProduct || successOrder || pickupTimeWarningOpen || addonInfoPopup);
@@ -252,13 +258,14 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
   const cakeFulfillment = settings.cakeFulfillment || {};
   const cakeDeliverySourceBranchId = String(cakeFulfillment.deliverySourceBranchId || settings.shippingConfig?.sourceBranchId || "").trim();
-  const minPickupLeadMinutes = Number(cakeFulfillment.minPickupLeadMinutes || 120);
+  const minPickupLeadMinutes = Math.max(CAKE_MIN_LEAD_MINUTES, Number(cakeFulfillment.minPickupLeadMinutes || CAKE_MIN_LEAD_MINUTES));
   const minPickupTimeValue = useMemo(() => getMinPickupDateTimeValue(minPickupLeadMinutes), [minPickupLeadMinutes]);
   const selectedPickupDateValue = formatDateValue(form.pickupTime) || formatDateValue(minPickupTimeValue);
   const selectedPickupTimeValue = formatTimeValue(form.pickupTime) || formatTimeValue(minPickupTimeValue);
   const shippingConfig = useMemo(() => ({
     ...(settings.shippingConfig || {}),
-    sourceBranchId: cakeDeliverySourceBranchId
+    sourceBranchId: cakeDeliverySourceBranchId,
+    maxRadiusKm: Math.min(CAKE_MAX_DELIVERY_DISTANCE_KM, Number(settings.shippingConfig?.maxRadiusKm || CAKE_MAX_DELIVERY_DISTANCE_KM))
   }), [cakeDeliverySourceBranchId, settings.shippingConfig]);
   const allPickupBranches = useMemo(() => resolvePickupBranches(branches), [branches]);
   const pickupBranches = useMemo(() => {
@@ -308,6 +315,8 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
   }, [canSelectChibi, canSelectDecoration, chibiAddon.price, decorationAddon.price, decorationIncluded, decorationOptions, form.chibiSelected, form.decorationOptionId, form.decorationSelected]);
 
   const finalCakePrice = Number(orderingProduct?.price || 0) + addOnTotal;
+  const deliveryDistanceOutOfRange = form.fulfillmentType === "delivery"
+    && Number(addressInfo?.distanceKm) >= CAKE_MAX_DELIVERY_DISTANCE_KM;
 
   const updateForm = (key, value) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -397,6 +406,12 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     event.preventDefault();
     if (!orderingProduct || submitting) return;
     if (isPickupTimeTooSoon(form.pickupTime, minPickupLeadMinutes)) {
+      setPickupTimeWarningMessage(PICKUP_TIME_WARNING);
+      setPickupTimeWarningOpen(true);
+      return;
+    }
+    if (isPickupTimeOutsideReceivingHours(form.pickupTime)) {
+      setPickupTimeWarningMessage(PICKUP_HOURS_WARNING);
       setPickupTimeWarningOpen(true);
       return;
     }
@@ -404,6 +419,15 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       setMessage("Vui lòng chọn địa chỉ giao hàng để quán kiểm tra khoảng cách và phí ship.");
       return;
     }
+    if (form.fulfillmentType === "delivery" && (!Number.isFinite(Number(addressInfo?.distanceKm)) || Number(addressInfo?.distanceKm) <= 0)) {
+      setMessage("Chưa xác định được khoảng cách giao bánh. Vui lòng chọn địa chỉ từ danh sách gợi ý hoặc chọn vị trí trên bản đồ.");
+      return;
+    }
+    if (form.fulfillmentType === "delivery" && Number(addressInfo?.distanceKm) >= CAKE_MAX_DELIVERY_DISTANCE_KM) {
+      setMessage("Địa chỉ này cách quán từ 10 km trở lên nên quán chưa thể giao bánh. Vui lòng chọn địa chỉ gần hơn hoặc chọn tự đến lấy.");
+      return;
+    }
+    const orderedAfterHours = isCakeOrderAfterHours();
     setSubmitting(true);
     setMessage("");
 
@@ -495,6 +519,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
       orderCode: saved.orderCode,
       savedOk: saved.ok,
       productName: orderingProduct.name,
+      orderedAfterHours,
       zaloMessage,
       zaloWebLink: buildZaloLink(settings.zaloPhone, zaloMessage)
     });
@@ -766,6 +791,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                   originAddress={deliveryContext.deliverySourceBranch?.address || ""}
                   requireOrigin
                   shippingConfig={shippingConfig}
+                  maxDistanceKm={CAKE_MAX_DELIVERY_DISTANCE_KM}
                 />
               ) : (
                 <div className="cake-pickup-branches">
@@ -856,8 +882,8 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               </label>
             </section>
 
-            <button className="cake-primary-btn cake-order-submit" type="submit" disabled={submitting} aria-busy={submitting ? "true" : "false"}>
-              {submitting ? "Đang tạo đơn…" : "Tạo đơn và gửi Zalo"}
+            <button className="cake-primary-btn cake-order-submit" type="submit" disabled={submitting || deliveryDistanceOutOfRange} aria-busy={submitting ? "true" : "false"}>
+              {submitting ? "Đang tạo đơn…" : deliveryDistanceOutOfRange ? "Ngoài khu vực giao hàng" : "Tạo đơn và gửi Zalo"}
             </button>
             {message ? <p className="cake-form-message" role="status" aria-live="polite">{message}</p> : null}
             <p className="cake-zalo-copy-note">
@@ -897,6 +923,11 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               <span>Mã tham chiếu</span>
               <strong>{successOrder.orderCode || "Đang tạo"}</strong>
             </div>
+            {successOrder.orderedAfterHours ? (
+              <p className="cake-success-popup__note" role="status">
+                {AFTER_HOURS_ORDER_NOTICE}
+              </p>
+            ) : null}
             {!successOrder.savedOk ? (
               <p className="cake-success-popup__note">
                 Nếu đơn chưa lưu vào hệ thống, CSKH vẫn có thể nhập lại đơn từ nội dung bạn gửi qua Zalo.
@@ -939,7 +970,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             <button className="cake-modal__close" type="button" onClick={() => setPickupTimeWarningOpen(false)} aria-label="Đóng cảnh báo giờ lấy bánh">×</button>
             <div className="cake-addon-popup__body">
               <h3 id="cake-time-warning-title">Chọn lại giờ lấy bánh</h3>
-              <p>{PICKUP_TIME_WARNING}</p>
+              <p>{pickupTimeWarningMessage}</p>
               <button className="cake-primary-btn" type="button" onClick={() => setPickupTimeWarningOpen(false)}>Chọn lại giờ lấy</button>
             </div>
           </div>
