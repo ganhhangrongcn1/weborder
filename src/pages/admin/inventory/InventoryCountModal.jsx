@@ -8,13 +8,17 @@ import {
   getInventoryCountExpectedDisplay,
   getInventoryCountVariance
 } from "../../../services/inventoryCountCalculations.js";
+import { filterInventoryItemsByWarehouse } from "../../../services/inventoryMasterDataService.js";
 
 function formatQuantity(value) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 3 }).format(Number(value || 0));
 }
 
-export default function InventoryCountModal({ mode = "create", count = null, warehouses = [], items = [], units = [], warehouseSelectionLocked = false, saving = false, onClose, onCreate, onSubmitCount, onApprove }) {
-  const [warehouseId, setWarehouseId] = useState(warehouses.find((row) => row.isActive !== false)?.id || "");
+export default function InventoryCountModal({ mode = "create", count = null, warehouses = [], items = [], units = [], warehouseSelectionLocked = false, defaultWarehouseId = "", saving = false, onClose, onCreate, onSubmitCount, onApprove }) {
+  const initialWarehouseId = warehouses.some((row) => row.id === defaultWarehouseId && row.isActive !== false)
+    ? defaultWarehouseId
+    : warehouses.find((row) => row.isActive !== false)?.id || "";
+  const [warehouseId, setWarehouseId] = useState(initialWarehouseId);
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState(() => (count?.lines || []).map((line) => ({
     ...line,
@@ -24,6 +28,10 @@ export default function InventoryCountModal({ mode = "create", count = null, war
   const [error, setError] = useState("");
   const itemById = useMemo(() => new Map(items.map((row) => [row.id, row])), [items]);
   const unitById = useMemo(() => new Map(units.map((row) => [row.id, row])), [units]);
+  const countableItems = useMemo(
+    () => filterInventoryItemsByWarehouse(items, warehouseId).filter((item) => item.isActive !== false),
+    [items, warehouseId]
+  );
   const isCreate = mode === "create";
   const isCount = mode === "count";
   const isReview = mode === "review";
@@ -43,7 +51,7 @@ export default function InventoryCountModal({ mode = "create", count = null, war
     try {
       if (isCreate) {
         if (!warehouseId) throw new Error("Vui lòng chọn kho cần kiểm kê.");
-        const creationLines = buildInventoryCountCreationLines(items, units);
+        const creationLines = buildInventoryCountCreationLines(countableItems, units);
         if (!creationLines.length) throw new Error("Chưa có nguyên vật liệu đang sử dụng để kiểm kê.");
         await onCreate({ warehouseId, notes, lines: creationLines });
       } else if (isCount) {
@@ -69,7 +77,7 @@ export default function InventoryCountModal({ mode = "create", count = null, war
             {warehouseSelectionLocked && warehouses.length === 1
               ? <div className="inventory-count-field inventory-warehouse-fixed"><span>Kho kiểm kê</span><strong>{warehouses[0].name}</strong><small>Cố định theo tài khoản chi nhánh</small></div>
               : <label className="inventory-count-field"><span>Kho kiểm kê *</span><InventorySearchableSelect value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)}><option value="">Chọn kho</option>{warehouses.filter((row) => row.isActive !== false).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</InventorySearchableSelect></label>}
-            <div className="inventory-count-scope"><Icon name="check" size={18} /><div><strong>Kiểm toàn bộ nguyên vật liệu đang sử dụng</strong><span>{items.filter((item) => item.isActive !== false).length} mã hàng sẽ được đưa vào phiếu. Tồn được chụp tại lúc bắt đầu.</span></div></div>
+            <div className="inventory-count-scope"><Icon name="check" size={18} /><div><strong>Kiểm toàn bộ nguyên vật liệu đang sử dụng</strong><span>{countableItems.length} mã hàng thuộc kho đã chọn sẽ được đưa vào phiếu. Tồn được chụp tại lúc bắt đầu.</span></div></div>
             <label className="inventory-count-field"><span>Ghi chú</span><textarea rows="2" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ví dụ: Kiểm kê cuối tháng..." /></label>
           </> : <div className="inventory-table-scroll inventory-count-table-scroll"><table className={`inventory-data-table inventory-count-lines is-${mode}`}><thead><tr><th>Nguyên vật liệu</th><th>Đơn vị</th><th className="is-number">Tồn hệ thống</th><th className="is-number">Thực tế</th>{!isCount ? <th className="is-number">Chênh lệch</th> : null}{isReview ? <th>Lý do chênh lệch</th> : null}</tr></thead><tbody>{lines.map((line) => {
             const item = itemById.get(line.itemId) || {};

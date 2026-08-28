@@ -342,8 +342,8 @@ export default function InventoryWorkspace({
     ...(warehouseSelectionLocked ? [] : warehouseDraftState.drafts)
   ];
   const workspaceItems = filterInventoryItemsByWarehouse(documentItemsState.rows, workspaceWarehouseId);
-  const documentWarehouses = documentDomain === "transfers" ? scopedWarehouses : activeWarehouses;
-  const documentItems = documentDomain === "transfers" ? documentItemsState.rows : workspaceItems;
+  const operationWarehouses = scopedWarehouses;
+  const operationItems = documentItemsState.rows;
   const workspaceMasterRows = masterDataDomain === "items"
     ? filterInventoryItemsByWarehouse(masterDataState.rows, workspaceWarehouseId)
     : masterDataState.rows;
@@ -521,8 +521,8 @@ export default function InventoryWorkspace({
                 ? <InventoryDocumentManager
                     domain={documentDomain}
                     rows={filterWorkspaceRows(documentState.rows, workspaceWarehouseId)}
-                    warehouses={documentWarehouses}
-                    items={documentItems}
+                    warehouses={operationWarehouses}
+                    items={operationItems}
                     units={itemUnitsState.rows}
                     suppliers={documentSuppliersState.rows}
                     canWrite={canWriteDocuments}
@@ -628,8 +628,8 @@ export default function InventoryWorkspace({
               : isCountPage
                 ? <InventoryCountManager
                     rows={filterWorkspaceRows(countState.rows, workspaceWarehouseId)}
-                    warehouses={activeWarehouses}
-                    items={workspaceItems}
+                    warehouses={operationWarehouses}
+                    items={operationItems}
                     units={itemUnitsState.rows}
                     canWrite={countState.writeEnabled && countState.status === "ready"}
                     canManage={Boolean(countState.permissions?.canManage)}
@@ -643,6 +643,7 @@ export default function InventoryWorkspace({
                     onCancel={countState.cancel}
                     onCompleteApproved={countState.completeApproved}
                     warehouseSelectionLocked={warehouseSelectionLocked}
+                    defaultWarehouseId={workspaceWarehouseId}
                   />
               : isBomPage
                 ? <InventoryBomManager
@@ -663,7 +664,7 @@ export default function InventoryWorkspace({
                 ? <InventoryProductionOrderManager
                     rows={filterWorkspaceRows(productionState.rows, workspaceWarehouseId)}
                     boms={bomState.rows}
-                    warehouses={activeWarehouses}
+                    warehouses={operationWarehouses}
                     units={itemUnitsState.rows}
                     canWrite={canWriteProduction}
                     mutationStatus={productionState.mutationStatus}
@@ -680,8 +681,8 @@ export default function InventoryWorkspace({
                 ? <InventorySalesReconciliation
                     rows={filterWorkspaceRows(salesConfigurationState.salesEvents, workspaceWarehouseId)}
                     branches={scopedBranches}
-                    warehouses={activeWarehouses}
-                    items={workspaceItems}
+                    warehouses={operationWarehouses}
+                    items={operationItems}
                     units={itemUnitsState.rows}
                     canWrite={canRetrySalesEvents}
                     mutationStatus={salesConfigurationState.mutationStatus}
@@ -703,7 +704,7 @@ export default function InventoryWorkspace({
                     items={workspaceItems}
                     units={itemUnitsState.rows}
                     branches={scopedBranches}
-                    warehouses={activeWarehouses}
+                    warehouses={operationWarehouses}
                     averageCosts={salesConfigurationState.averageCosts}
                     canWrite={canWriteSalesConfiguration}
                     canManageWarehouseDefaults={canWriteWarehouses}

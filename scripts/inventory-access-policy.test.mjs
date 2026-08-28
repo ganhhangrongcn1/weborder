@@ -109,6 +109,15 @@ test("central staff can manage all warehouses while branch kitchen stays in its 
   assert.equal(staffPolicy.scope, "warehouse");
   assert.equal(staffPolicy.branchSelectorLocked, true);
   assert.equal(staffPolicy.canManageInventory, true);
+  const warehouses = [
+    { id: "warehouse-central", branchUuid: "", name: "Kho Tổng" },
+    { id: "warehouse-a", branchUuid: branches[0].branch_uuid, name: "Kho Phú Hòa" },
+    { id: "warehouse-b", branchUuid: branches[1].branch_uuid, name: "Kho Hiệp Thành" }
+  ];
+  assert.deepEqual(
+    getInventoryScopedWarehouses(warehouses, staffPolicy).map((warehouse) => warehouse.id),
+    ["warehouse-central", "warehouse-a", "warehouse-b"]
+  );
   assert.equal(kitchenPolicy.allowed, true);
   assert.equal(kitchenPolicy.scope, "branch");
   assert.equal(kitchenPolicy.branchOptions.length, 1);
