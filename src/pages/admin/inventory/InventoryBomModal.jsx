@@ -1,17 +1,15 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
-import { calculateBomComponentRequirement } from "../../../services/inventoryBomCalculations.js";
+import {
+  calculateBomComponentRequirement,
+  getInventoryBomScopeOptions,
+  INVENTORY_BOM_SCOPE_OPTIONS
+} from "../../../services/inventoryBomCalculations.js";
 import {
   getInventoryCompatibleUnits,
   getInventoryItemDisplayUnitConfig
 } from "../../../services/inventoryUnitConversion.js";
-
-const SCOPE_OPTIONS = [
-  { value: "central", label: "Sản xuất / đóng gói tại Kho Tổng", warehouseType: "central" },
-  { value: "branch", label: "Sơ chế tại Kho chi nhánh", warehouseType: "branch" },
-  { value: "department", label: "Sơ chế tại Kho bộ phận", warehouseType: "department" }
-];
 
 function createLine() {
   return { componentItemId: "", quantity: 1, unitId: "", wastePercent: 0, notes: "" };
@@ -53,15 +51,22 @@ export default function InventoryBomModal({
 }) {
   const unitsById = useMemo(() => new Map(units.map((unit) => [unit.id, unit])), [units]);
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
-  const [form, setForm] = useState(() => createInitialForm(bom, unitsById));
+  const [form, setForm] = useState(() => {
+    const initial = createInitialForm(bom, unitsById);
+    const availableScopes = getInventoryBomScopeOptions(warehouses);
+    if (!bom.id && !availableScopes.some((option) => option.value === initial.productionScope)) {
+      initial.productionScope = availableScopes[0]?.value || initial.productionScope;
+    }
+    return initial;
+  });
   const [error, setError] = useState("");
   const outputItems = items.filter((item) => item.itemType === "semi_finished" && item.isActive !== false);
   const outputItem = itemsById.get(form.outputItemId) || {};
   const outputUnits = getInventoryCompatibleUnits(outputItem, units);
-  const scopeOptions = warehouses.some((warehouse) => warehouse.warehouseType !== "central")
-    ? SCOPE_OPTIONS
-    : SCOPE_OPTIONS.filter((option) => option.value === "central");
-  const selectedScope = SCOPE_OPTIONS.find((option) => option.value === form.productionScope) || SCOPE_OPTIONS[0];
+  const scopeOptions = getInventoryBomScopeOptions(warehouses);
+  const selectedScope = INVENTORY_BOM_SCOPE_OPTIONS.find((option) => option.value === form.productionScope)
+    || scopeOptions[0]
+    || INVENTORY_BOM_SCOPE_OPTIONS[0];
   const availableWarehouses = warehouses.filter((warehouse) => warehouse.isActive !== false && warehouse.warehouseType === selectedScope.warehouseType);
   const isSharedBranchRecipe = form.productionScope === "branch";
   const availableComponentItems = items.filter((item) => item.isActive !== false && item.id !== form.outputItemId);
@@ -89,7 +94,9 @@ export default function InventoryBomModal({
   };
 
   const selectProductionScope = (productionScope) => {
-    const nextScope = SCOPE_OPTIONS.find((option) => option.value === productionScope) || SCOPE_OPTIONS[0];
+    const nextScope = INVENTORY_BOM_SCOPE_OPTIONS.find((option) => option.value === productionScope)
+      || scopeOptions[0]
+      || INVENTORY_BOM_SCOPE_OPTIONS[0];
     setForm((current) => {
       const currentWarehouse = warehouses.find((warehouse) => warehouse.id === current.defaultWarehouseId);
       return {

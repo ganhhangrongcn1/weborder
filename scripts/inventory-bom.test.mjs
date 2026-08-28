@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   calculateBomComponentRequirement,
+  getInventoryBomScopeOptions,
   hasInventoryBomCycle,
   normalizeInventoryBomDraft
 } from "../src/services/inventoryBomCalculations.js";
@@ -38,6 +39,12 @@ const warehouses = [
   { id: "branch-2", name: "Kho CN LHP", warehouseType: "branch", isActive: true },
   { id: "branch-off", name: "Kho CN cũ", warehouseType: "branch", isActive: false }
 ];
+
+test("công thức sơ chế chi nhánh là một lựa chọn dùng chung cho mọi chi nhánh", () => {
+  const options = getInventoryBomScopeOptions(warehouses);
+  assert.deepEqual(options.map((option) => option.value), ["central", "branch"]);
+  assert.match(options.find((option) => option.value === "branch")?.label || "", /dùng chung.*tất cả Kho chi nhánh/i);
+});
 
 test("gợi ý HSD đầu ra theo thiết lập bán thành phẩm", () => {
   const config = getInventoryProductionExpiryConfig({

@@ -21,6 +21,22 @@ function toWastePercent(value) {
   return parsed;
 }
 
+export const INVENTORY_BOM_SCOPE_OPTIONS = [
+  { value: "central", label: "Sản xuất / đóng gói tại Kho Tổng", warehouseType: "central" },
+  { value: "branch", label: "Sơ chế dùng chung cho tất cả Kho chi nhánh", warehouseType: "branch" },
+  { value: "department", label: "Sơ chế tại Kho bộ phận", warehouseType: "department" }
+];
+
+export function getInventoryBomScopeOptions(warehouses = []) {
+  const availableTypes = new Set(
+    warehouses
+      .filter((warehouse) => warehouse?.isActive !== false)
+      .map((warehouse) => warehouse?.warehouseType)
+      .filter(Boolean)
+  );
+  return INVENTORY_BOM_SCOPE_OPTIONS.filter((option) => availableTypes.has(option.warehouseType));
+}
+
 export function calculateBomComponentRequirement({
   quantity = 0,
   wastePercent = 0,
@@ -151,6 +167,7 @@ export function normalizeInventoryBomDraft(input = {}, { items = [], units = [],
 
 export default {
   calculateBomComponentRequirement,
+  getInventoryBomScopeOptions,
   hasInventoryBomCycle,
   normalizeInventoryBomDraft
 };

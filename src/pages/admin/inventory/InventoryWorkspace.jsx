@@ -46,8 +46,17 @@ function rowMatchesWorkspaceWarehouse(row = {}, warehouseId = "") {
     .includes(warehouseId);
 }
 
-function filterWorkspaceRows(rows = [], warehouseId = "") {
-  return warehouseId ? rows.filter((row) => rowMatchesWorkspaceWarehouse(row, warehouseId)) : rows;
+function filterWorkspaceRows(rows = [], warehouseId = "", warehouses = []) {
+  if (!warehouseId) return rows;
+  const selectedWarehouse = warehouses.find((warehouse) => warehouse.id === warehouseId);
+  return rows.filter((row) => (
+    rowMatchesWorkspaceWarehouse(row, warehouseId)
+    || (
+      row.productionScope === "branch"
+      && !row.defaultWarehouseId
+      && selectedWarehouse?.warehouseType === "branch"
+    )
+  ));
 }
 
 function scopeDashboardData(data = {}, warehouseId = "") {
@@ -635,10 +644,10 @@ export default function InventoryWorkspace({
                   />
               : isBomPage
                 ? <InventoryBomManager
-                    rows={filterWorkspaceRows(bomState.rows, workspaceWarehouseId)}
+                    rows={filterWorkspaceRows(bomState.rows, workspaceWarehouseId, scopedWarehouses)}
                     items={workspaceItems}
                     units={itemUnitsState.rows}
-                    warehouses={activeWarehouses}
+                    warehouses={scopedWarehouses}
                     canWrite={canWriteBoms}
                     scopeLabel={workspaceScopeLabel}
                     mutationStatus={bomState.mutationStatus}
