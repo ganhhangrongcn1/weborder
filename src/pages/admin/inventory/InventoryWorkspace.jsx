@@ -342,6 +342,8 @@ export default function InventoryWorkspace({
     ...(warehouseSelectionLocked ? [] : warehouseDraftState.drafts)
   ];
   const workspaceItems = filterInventoryItemsByWarehouse(documentItemsState.rows, workspaceWarehouseId);
+  const documentWarehouses = documentDomain === "transfers" ? scopedWarehouses : activeWarehouses;
+  const documentItems = documentDomain === "transfers" ? documentItemsState.rows : workspaceItems;
   const workspaceMasterRows = masterDataDomain === "items"
     ? filterInventoryItemsByWarehouse(masterDataState.rows, workspaceWarehouseId)
     : masterDataState.rows;
@@ -519,8 +521,8 @@ export default function InventoryWorkspace({
                 ? <InventoryDocumentManager
                     domain={documentDomain}
                     rows={filterWorkspaceRows(documentState.rows, workspaceWarehouseId)}
-                    warehouses={activeWarehouses}
-                    items={workspaceItems}
+                    warehouses={documentWarehouses}
+                    items={documentItems}
                     units={itemUnitsState.rows}
                     suppliers={documentSuppliersState.rows}
                     canWrite={canWriteDocuments}

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  buildInventoryStockReportRows,
   calculateInventoryStockReportSummary,
   getInventoryStockDisplayValues,
   getInventoryStockState
@@ -36,9 +37,26 @@ assert.deepEqual(getInventoryStockDisplayValues(
 assert.deepEqual(calculateInventoryStockReportSummary(rows, items), {
   totalValue: 2200,
   rowCount: 3,
-  availableCount: 1,
+  availableCount: 2,
   lowCount: 1,
   outCount: 1
 });
+
+const scopedRows = buildInventoryStockReportRows(
+  [{ warehouseId: "central", itemId: "shared", quantity: 2, averageCost: 10 }],
+  [
+    { id: "central", isActive: true },
+    { id: "branch", isActive: true }
+  ],
+  [
+    { id: "shared", isActive: true, warehouseIds: [] },
+    { id: "central-only", isActive: true, warehouseIds: ["central"] }
+  ]
+);
+assert.deepEqual(scopedRows.map((row) => [row.warehouseId, row.itemId, row.quantity]), [
+  ["central", "shared", 2],
+  ["central", "central-only", 0],
+  ["branch", "shared", 0]
+]);
 
 console.log("inventory-stock-report.test.mjs: passed");

@@ -78,8 +78,8 @@ export default function InventoryDashboard({ data = {}, warehouseScoped = false 
       <div className="inventory-dashboard-main">
         <section id="inventory-dashboard-actions" className="inventory-dashboard-panel inventory-dashboard-actions">
           <header>
-            <div><span><Icon name="bell" size={19} /></span><div><strong>Cần xử lý hôm nay</strong><small>Ưu tiên từ rủi ro cao đến việc vận hành đang treo.</small></div></div>
-            <span className="inventory-dashboard-count">{actions.length} việc</span>
+            <div><span><Icon name="bell" size={19} /></span><div><strong>Cần xử lý hôm nay</strong><small>Hiển thị tối đa 20 việc ưu tiên; tổng cảnh báo xem tại các thẻ phía trên.</small></div></div>
+            <span className="inventory-dashboard-count">{actions.length} việc ưu tiên</span>
           </header>
           <div className="inventory-dashboard-actions__list">
             {actions.map((action, index) => {
