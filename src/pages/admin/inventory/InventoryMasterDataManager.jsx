@@ -15,7 +15,7 @@ const DOMAIN_CONFIG = {
   units: {
     icon: "tag",
     title: "Hệ đơn vị tính",
-    description: "Kho lưu tồn bằng đơn vị gốc; đơn vị quy đổi chỉ dùng để nhập liệu và hiển thị, ví dụ 1 Kg = 1000 gram.",
+    description: "Mỗi đơn vị là một đơn vị gốc độc lập. Tỷ lệ giữa đơn vị mua và đơn vị sử dụng được đặt riêng trên từng nguyên vật liệu.",
     searchPlaceholder: "Tìm mã hoặc tên đơn vị...",
     emptyTitle: "Chưa có đơn vị tính",
     emptyDescription: "Sau khi migration và RLS được duyệt, các đơn vị như kg, gram, chai hoặc thùng sẽ xuất hiện tại đây.",
@@ -43,15 +43,6 @@ function formatUpdatedAt(value = "") {
   }).format(date);
 }
 
-function getUnitConversionData(row, rows) {
-  if (!row.baseUnitId) return { prefix: "Kho lưu thẳng bằng", value: row.name };
-  const baseUnit = rows.find((unit) => unit.id === row.baseUnitId);
-  return {
-    prefix: `1 ${row.symbol || row.name} =`,
-    value: `${row.conversionFactor} ${baseUnit?.name || baseUnit?.symbol || "đơn vị gốc"}`
-  };
-}
-
 export default function InventoryMasterDataManager({
   domain = "units",
   rows = [],
@@ -62,7 +53,6 @@ export default function InventoryMasterDataManager({
   const config = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG.units;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [roleFilter, setRoleFilter] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
   const [notice, setNotice] = useState("");
@@ -72,8 +62,6 @@ export default function InventoryMasterDataManager({
     return rows.filter((row) => {
       if (statusFilter === "active" && !row.isActive) return false;
       if (statusFilter === "inactive" && row.isActive) return false;
-      if (domain === "units" && roleFilter === "base" && row.baseUnitId) return false;
-      if (domain === "units" && roleFilter === "conversion" && !row.baseUnitId) return false;
       if (!keyword) return true;
       return [row.code, row.name, row.symbol, row.description, UNIT_TYPE_LABELS[row.unitType]]
         .filter(Boolean)
@@ -81,13 +69,11 @@ export default function InventoryMasterDataManager({
         .toLocaleLowerCase("vi-VN")
         .includes(keyword);
     });
-  }, [domain, roleFilter, rows, search, statusFilter]);
+  }, [rows, search, statusFilter]);
 
   const activeCount = rows.filter((row) => row.isActive).length;
   const inactiveCount = rows.length - activeCount;
-  const highlightedCount = domain === "units"
-    ? rows.filter((row) => !row.baseUnitId).length
-    : rows.filter((row) => row.description).length;
+  const highlightedCount = domain === "units" ? activeCount : rows.filter((row) => row.description).length;
 
   const openCreate = () => {
     setEditingRow(null);
@@ -128,15 +114,15 @@ export default function InventoryMasterDataManager({
 
       {domain === "units" ? (
         <div className="inventory-domain-explainer inventory-unit-guide">
-          <div><Icon name="info" size={18} /><span><strong>Đơn vị tính của kho</strong> tách riêng khỏi đơn vị món ăn. Khai quy đổi bằng một câu — <strong>1 Kg = 1000 gram</strong>. Kho luôn lưu tồn bằng đơn vị gốc.</span></div>
-          <div className="inventory-unit-guide__legend"><span className="is-base"><i />Đơn vị gốc <small>— kho lưu tồn bằng nó</small></span><span className="is-conversion"><i />Đơn vị quy đổi <small>— chỉ để nhìn và nhập liệu</small></span></div>
+          <div><Icon name="info" size={18} /><span><strong>Tất cả đơn vị đều là đơn vị gốc.</strong> Khi một nguyên vật liệu mua theo Kg nhưng sử dụng theo Gram, hãy nhập tỷ lệ riêng tại phần Nguyên vật liệu.</span></div>
+          <div className="inventory-unit-guide__legend"><span className="is-base"><i />Đơn vị độc lập <small>— không khai quy đổi chung tại đây</small></span></div>
         </div>
       ) : (
         <div className="inventory-domain-explainer"><Icon name="info" size={18} /><span><strong>Danh mục</strong> do anh tự đặt như Gia vị, Rau củ. <strong>Loại NVL</strong> là danh sách cố định quyết định tiền tố mã và cách dùng trong sản xuất.</span></div>
       )}
 
       {domain === "units" ? (
-        <div className="inventory-unit-overview" aria-label="Tóm tắt đơn vị tính kho"><strong>Đơn vị tính kho</strong><span>{rows.length} đơn vị · <b>{highlightedCount} gốc</b> · <b>{rows.length - highlightedCount} quy đổi</b></span></div>
+        <div className="inventory-unit-overview" aria-label="Tóm tắt đơn vị tính kho"><strong>Đơn vị tính kho</strong><span>{rows.length} đơn vị gốc · <b>{activeCount} đang dùng</b> · <b>{inactiveCount} tạm ngưng</b></span></div>
       ) : (
         <div className="inventory-summary-grid" aria-label={`Tóm tắt ${config.title}`}>
           <div><span>Tổng danh mục</span><strong>{rows.length}</strong></div>
@@ -151,7 +137,6 @@ export default function InventoryMasterDataManager({
           <Icon name="search" size={17} />
           <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={config.searchPlaceholder} />
         </label>
-        {domain === "units" ? <InventorySearchableSelect value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} aria-label="Lọc vai trò đơn vị"><option value="all">Tất cả vai trò</option><option value="base">Đơn vị gốc</option><option value="conversion">Đơn vị quy đổi</option></InventorySearchableSelect> : null}
         <InventorySearchableSelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Lọc trạng thái">
           <option value="all">Tất cả trạng thái</option>
           <option value="active">Đang sử dụng</option>
@@ -167,13 +152,12 @@ export default function InventoryMasterDataManager({
             </thead>
             <tbody>
               {filteredRows.map((row) => {
-                const conversion = domain === "units" ? getUnitConversionData(row, rows) : null;
                 return <tr key={row.id || row.code}>
                   {domain === "units" ? <>
-                    <td><span className={`inventory-unit-name ${row.baseUnitId ? "is-conversion" : "is-base"}`}><i /><strong>{row.name || "Chưa đặt tên"}</strong></span></td>
+                    <td><span className="inventory-unit-name is-base"><i /><strong>{row.name || "Chưa đặt tên"}</strong></span></td>
                     <td>{row.symbol || "—"}</td>
-                    <td><span className={`inventory-unit-role-badge ${row.baseUnitId ? "is-conversion" : "is-base"}`}>{row.baseUnitId ? "Quy đổi" : "Đơn vị gốc"}</span></td>
-                    <td><span className="inventory-unit-storage">{conversion.prefix} <strong>{conversion.value}</strong></span></td>
+                    <td><span className="inventory-unit-role-badge is-base">Đơn vị gốc</span></td>
+                    <td><span className="inventory-unit-storage">Kho lưu trực tiếp bằng <strong>{row.name}</strong></span></td>
                   </> : <>
                     <td><strong>{row.code || "—"}</strong></td>
                     <td><strong>{row.name || "Chưa đặt tên"}</strong><small>{formatUpdatedAt(row.updatedAt)}</small></td>

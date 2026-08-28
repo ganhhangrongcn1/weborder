@@ -60,21 +60,17 @@ test("đơn vị tự sinh mã và nhận diện loại đo lường", () => {
   assert.equal(countUnit.unit_type, "count");
 });
 
-test("chuẩn hoá đơn vị quy đổi và từ chối hệ số không hợp lệ", () => {
-  assert.deepEqual(normalizeInventoryMasterDataInput("units", {
+test("mọi đơn vị tính đều được lưu thành đơn vị gốc", () => {
+  const payload = normalizeInventoryMasterDataInput("units", {
     code: "KG",
     name: "Kilôgam",
     unitType: "weight",
     baseUnitId: "unit-gram",
     conversionFactor: 1000
-  }).conversion_factor, 1000);
+  });
 
-  assert.throws(() => normalizeInventoryMasterDataInput("units", {
-    code: "KG",
-    name: "Kilôgam",
-    baseUnitId: "unit-gram",
-    conversionFactor: 0
-  }), /lớn hơn 0/i);
+  assert.equal(payload.base_unit_id, null);
+  assert.equal(payload.conversion_factor, 1);
 });
 
 test("chuẩn hoá mô tả và thứ tự danh mục", () => {

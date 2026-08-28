@@ -25,6 +25,18 @@ test("quy đổi hai chiều không làm sai số lượng", () => {
   assert.equal(convertInventoryQuantityFromBase(baseQuantity, 200), 2.5);
 });
 
+test("service luôn lưu đơn vị tính dưới dạng đơn vị gốc", () => {
+  const payload = normalizeInventoryMasterDataInput("units", {
+    name: "Kilogram",
+    symbol: "Kg",
+    baseUnitId: "unit-gram",
+    conversionFactor: 1000
+  });
+
+  assert.equal(payload.base_unit_id, null);
+  assert.equal(payload.conversion_factor, 1);
+});
+
 test("service lưu bốn mức tồn theo đơn vị gốc", () => {
   const payload = normalizeInventoryMasterDataInput("items", {
     name: "Bánh Tráng Đỏ",

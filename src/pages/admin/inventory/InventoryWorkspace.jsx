@@ -653,6 +653,7 @@ export default function InventoryWorkspace({
                     rows={filterWorkspaceRows(productionState.rows, workspaceWarehouseId)}
                     boms={bomState.rows}
                     warehouses={activeWarehouses}
+                    units={itemUnitsState.rows}
                     canWrite={canWriteProduction}
                     mutationStatus={productionState.mutationStatus}
                     mutationMessage={productionState.mutationMessage}

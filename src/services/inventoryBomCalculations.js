@@ -115,7 +115,7 @@ export function normalizeInventoryBomDraft(input = {}, { items = [], units = [],
     const unitId = toText(component.unitId);
     const compatibleUnits = getInventoryCompatibleUnits(componentItem, units);
     const unit = compatibleUnits.find((option) => option.id === unitId);
-    if (!unit) throw new Error(`Đơn vị dòng ${index + 1} không cùng hệ quy đổi với nguyên vật liệu.`);
+    if (!unit) throw new Error(`Đơn vị dòng ${index + 1} chưa được cấu hình là đơn vị sử dụng hoặc mua / nhập của nguyên vật liệu.`);
 
     return {
       componentItemId,

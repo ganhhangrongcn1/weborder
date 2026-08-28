@@ -14,9 +14,6 @@ export function getInventoryItemDisplayUnit(item = {}, unitsById = new Map()) {
 
 export function getInventoryUnitToBaseFactor(item = {}, unit = {}) {
   if (!unit?.id || unit.id === item.baseUnitId) return 1;
-  if (unit.baseUnitId === item.baseUnitId && toNumber(unit.conversionFactor) > 0) {
-    return toNumber(unit.conversionFactor);
-  }
   if (unit.id === item.purchaseUnitId && toNumber(item.purchaseToBaseRatio) > 0) {
     return toNumber(item.purchaseToBaseRatio);
   }
@@ -41,7 +38,6 @@ export function getInventoryCompatibleUnits(item = {}, units = []) {
   return units.filter((unit) => {
     if (!unit?.id || unit.isActive === false) return false;
     return unit.id === baseUnitId
-      || unit.baseUnitId === baseUnitId
       || unit.id === purchaseUnitId;
   });
 }

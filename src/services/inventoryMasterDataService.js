@@ -96,22 +96,17 @@ export function normalizeInventoryMasterDataInput(domain, input = {}) {
   }
 
   if (domain === "units") {
-    const baseUnitId = toText(input.baseUnitId);
-    const conversionFactor = baseUnitId ? Number(input.conversionFactor) : 1;
     const unitType = ["count", "weight", "volume", "length", "other"].includes(input.unitType)
       ? input.unitType
       : inferUnitType(input);
-    if (baseUnitId && (!Number.isFinite(conversionFactor) || conversionFactor <= 0)) {
-      throw new Error("Hệ số quy đổi phải lớn hơn 0.");
-    }
     return {
       code,
       name,
       symbol: toText(input.symbol) || null,
       unit_type: unitType,
       decimal_places: unitType === "count" ? 0 : 3,
-      base_unit_id: baseUnitId || null,
-      conversion_factor: baseUnitId ? conversionFactor : 1,
+      base_unit_id: null,
+      conversion_factor: 1,
       display_order: Math.max(0, Math.trunc(Number(input.displayOrder || 0))),
       is_active: input.isActive !== false
     };

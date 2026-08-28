@@ -3,6 +3,7 @@ import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   getInventoryProductionExpiryConfig,
+  getInventoryProductionOutputPreview,
   getInventoryProductionScopeMeta
 } from "../../../services/inventoryProductionService.js";
 
@@ -32,6 +33,7 @@ export default function InventoryProductionOrderModal({
   order = {},
   boms = [],
   warehouses = [],
+  units = [],
   warehouseSelectionLocked = false,
   isSaving = false,
   onClose,
@@ -40,6 +42,7 @@ export default function InventoryProductionOrderModal({
 }) {
   const [form, setForm] = useState(() => initialForm(order));
   const [error, setError] = useState("");
+  const unitById = useMemo(() => new Map(units.map((unit) => [unit.id, unit])), [units]);
   const readOnly = mode === "view";
   const completing = mode === "complete";
   const activeBoms = boms.filter((bom) => bom.status === "active" && !bom.deletedAt);
@@ -49,6 +52,20 @@ export default function InventoryProductionOrderModal({
   );
   const scopeMeta = getInventoryProductionScopeMeta(selectedBom.productionScope || order.productionScope);
   const outputItem = selectedBom.outputItem || order.outputItem || {};
+  const outputUnit = unitById.get(selectedBom.yieldUnitId || order.outputUnitId)
+    || selectedBom.yieldUnit
+    || order.outputUnit
+    || {};
+  const baseUnit = unitById.get(outputItem.baseUnitId) || outputItem.baseUnit || {};
+  const outputConversionToBase = Number(selectedBom.yieldConversionToBase || order.outputConversionToBase || 1);
+  const outputPreview = getInventoryProductionOutputPreview(
+    completing ? form.actualOutputQuantity : form.plannedOutputQuantity,
+    outputConversionToBase
+  );
+  const outputQuantity = outputPreview.quantity;
+  const outputUnitLabel = outputUnit.symbol || outputUnit.name || "đơn vị";
+  const baseUnitLabel = baseUnit.symbol || baseUnit.name || "đơn vị lưu kho";
+  const outputBaseQuantity = outputPreview.baseQuantity;
   const expiryConfig = getInventoryProductionExpiryConfig(outputItem);
   const availableWarehouses = warehouses.filter((warehouse) => (
     warehouse.isActive !== false
@@ -130,7 +147,7 @@ export default function InventoryProductionOrderModal({
                 </InventorySearchableSelect>
               </label>
               <label className="inventory-form-field">
-                <span>{completing ? (scopeMeta.isPreprocessing ? "Số lượng sơ chế thực nhận *" : "Thành phẩm thực nhận *") : "Số lượng cần làm *"}</span>
+                <span>{completing ? (scopeMeta.isPreprocessing ? `Số lượng sơ chế thực nhận (${outputUnitLabel}) *` : `Thành phẩm thực nhận (${outputUnitLabel}) *`) : `Số lượng cần làm (${outputUnitLabel}) *`}</span>
                 <input
                   type="number"
                   min="0.000001"
@@ -140,6 +157,9 @@ export default function InventoryProductionOrderModal({
                   onChange={(event) => setForm((current) => ({ ...current, [completing ? "actualOutputQuantity" : "plannedOutputQuantity"]: event.target.value }))}
                   required
                 />
+                <small className="inventory-production-output-conversion">
+                  {formatQuantity(outputQuantity)} {outputUnitLabel} = {formatQuantity(outputBaseQuantity)} {baseUnitLabel} tồn kho
+                </small>
               </label>
               {!readOnly && !completing && selectedBom.productionScope === "branch" && !fixedWarehouse ? (
                 <label className="inventory-form-field">
@@ -153,7 +173,7 @@ export default function InventoryProductionOrderModal({
                 <div className="inventory-production-modal__context">
                   <span>{scopeMeta.warehouseLabel}</span>
                   <strong>{fixedWarehouse?.name || selectedWarehouse.name || "Theo công thức"}</strong>
-                  <small>{fixedWarehouse ? "Cố định theo tài khoản chi nhánh" : `${selectedBom.outputItem?.name || order.outputItem?.name || "Chưa chọn công thức"} · ${selectedBom.yieldUnit?.name || order.outputUnit?.name || "Đơn vị"}`}</small>
+                  <small>{fixedWarehouse ? "Cố định theo tài khoản chi nhánh" : `${selectedBom.outputItem?.name || order.outputItem?.name || "Chưa chọn công thức"} · ${outputUnit.name || outputUnitLabel}`}</small>
                 </div>
               )}
             </div>

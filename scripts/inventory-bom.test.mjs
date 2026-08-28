@@ -11,7 +11,9 @@ import {
   getInventoryUnitToBaseFactor
 } from "../src/services/inventoryUnitConversion.js";
 import {
+  enrichInventoryProductionError,
   getInventoryProductionExpiryConfig,
+  getInventoryProductionOutputPreview,
   getInventoryProductionScopeMeta,
   normalizeInventoryProductionOrder
 } from "../src/services/inventoryProductionService.js";
@@ -20,7 +22,7 @@ import { INVENTORY_NAV_SECTIONS, getInventoryRoute } from "../src/pages/admin/in
 
 const units = [
   { id: "gram", name: "Gram", isActive: true },
-  { id: "kg", name: "Kilôgam", baseUnitId: "gram", conversionFactor: 1000, isActive: true },
+  { id: "kg", name: "Kilôgam", isActive: true },
   { id: "ml", name: "Mililít", isActive: true }
 ];
 
@@ -53,7 +55,33 @@ test("không yêu cầu HSD khi bán thành phẩm không theo dõi hạn", () =
   assert.equal(config.suggestedExpiresOn, "");
 });
 
-test("chỉ trả về đơn vị cùng hệ quy đổi", () => {
+test("hiển thị đúng sản lượng theo đơn vị sản xuất và đơn vị lưu kho", () => {
+  assert.deepEqual(getInventoryProductionOutputPreview(6, 500), {
+    quantity: 6,
+    conversionToBase: 500,
+    baseQuantity: 3000
+  });
+});
+
+test("thông báo thiếu tồn hiển thị tên và mã nguyên liệu", () => {
+  const itemId = "18ba93d0-cd22-40b2-b895-ab11b84ad97b";
+  const message = enrichInventoryProductionError(
+    new Error(`Tồn kho không đủ cho ${itemId}. Hiện có 0.000000, cần dùng 1000.000000 (đơn vị lưu kho).`),
+    [{
+      itemId,
+      conversionToBase: 1000,
+      unit: { name: "Chai" },
+      item: { name: "Cốt Chanh Dây", code: "NVL-000024" }
+    }]
+  );
+
+  assert.equal(
+    message,
+    "Tồn kho không đủ cho Cốt Chanh Dây (NVL-000024). Hiện có 0 Chai, cần dùng 1 Chai."
+  );
+});
+
+test("chỉ trả về đơn vị sử dụng và đơn vị mua của nguyên vật liệu", () => {
   assert.deepEqual(
     getInventoryCompatibleUnits(items[0], units).map((unit) => unit.id),
     ["gram", "kg"]
@@ -140,14 +168,14 @@ test("chặn vòng lặp giữa hai bán thành phẩm", () => {
   }), true);
 });
 
-test("chặn đơn vị khác hệ tồn kho", () => {
+test("chặn đơn vị chưa được cấu hình cho nguyên vật liệu", () => {
   assert.throws(() => normalizeInventoryBomDraft({
     outputItemId: "pack",
     yieldQuantity: 1,
     yieldUnitId: "kg",
     defaultWarehouseId: "central",
     components: [{ componentItemId: "raw-spice", quantity: 1, unitId: "ml" }]
-  }, { items, units, warehouses }), /không cùng hệ quy đổi/i);
+  }, { items, units, warehouses }), /chưa được cấu hình/i);
 });
 
 test("bắt buộc chọn kho thực hiện", () => {

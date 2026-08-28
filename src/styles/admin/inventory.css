@@ -1262,6 +1262,7 @@
 .inventory-production-modal__context span { color: #826e61; font-size: .62rem; font-weight: 800; }
 .inventory-production-modal__context strong { color: #49352b; font-size: .75rem; }
 .inventory-production-modal__context small { color: #8a776b; font-size: .61rem; }
+.inventory-production-output-conversion { color: #a45c1c !important; font-weight: 800; }
 .inventory-production-modal__line-count { color: #806e62; font-size: .64rem; font-weight: 750; }
 .inventory-production-lines { display: grid; }
 .inventory-production-line { display: grid; grid-template-columns: minmax(240px, 1.35fr) minmax(120px, .6fr) minmax(120px, .6fr); align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid #eee7e1; }

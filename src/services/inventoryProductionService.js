@@ -50,6 +50,66 @@ export function getInventoryProductionScopeMeta(scope = "central") {
   };
 }
 
+export function getInventoryProductionOutputPreview(quantity = 0, conversionToBase = 1) {
+  const normalizedQuantity = Number(quantity || 0);
+  const normalizedConversion = Number(conversionToBase || 1);
+  return {
+    quantity: Number.isFinite(normalizedQuantity) ? normalizedQuantity : 0,
+    conversionToBase: Number.isFinite(normalizedConversion) && normalizedConversion > 0 ? normalizedConversion : 1,
+    baseQuantity: (Number.isFinite(normalizedQuantity) ? normalizedQuantity : 0)
+      * (Number.isFinite(normalizedConversion) && normalizedConversion > 0 ? normalizedConversion : 1)
+  };
+}
+
+function formatProductionQuantity(value = 0) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized)
+    ? normalized.toLocaleString("vi-VN", { maximumFractionDigits: 6 })
+    : toText(value);
+}
+
+export function enrichInventoryProductionError(error = {}, lines = []) {
+  const rawMessage = toText(error?.message || error);
+  if (!rawMessage) return "Không xử lý được lệnh sản xuất.";
+
+  const ingredientLineById = new Map((Array.isArray(lines) ? lines : []).map((line) => [
+    toText(line.itemId || line.item_id),
+    line
+  ]));
+  const insufficientMatch = rawMessage.match(
+    /^Tồn kho không đủ cho ([0-9a-f-]{36})\. Hiện có (-?\d+(?:\.\d+)?), cần dùng (-?\d+(?:\.\d+)?) \(đơn vị lưu kho\)\.?$/i
+  );
+
+  if (insufficientMatch) {
+    const [, itemId, availableBase, requiredBase] = insufficientMatch;
+    const line = ingredientLineById.get(toText(itemId));
+    if (line) {
+      const item = line.item || line.componentItem || {};
+      const itemName = toText(item.name) || "Nguyên liệu";
+      const itemCode = toText(item.code);
+      const itemLabel = itemCode ? `${itemName} (${itemCode})` : itemName;
+      const conversionToBase = Number(line.conversionToBase || line.conversion_to_base || 1);
+      const safeConversion = Number.isFinite(conversionToBase) && conversionToBase > 0 ? conversionToBase : 1;
+      const unit = line.unit || {};
+      const unitLabel = toText(unit.symbol || unit.name) || "đơn vị";
+      return `Tồn kho không đủ cho ${itemLabel}. Hiện có ${formatProductionQuantity(Number(availableBase) / safeConversion)} ${unitLabel}, cần dùng ${formatProductionQuantity(Number(requiredBase) / safeConversion)} ${unitLabel}.`;
+    }
+  }
+
+  return rawMessage
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, (itemId) => {
+      const line = ingredientLineById.get(toText(itemId));
+      const item = line?.item || line?.componentItem;
+      if (!item) return itemId;
+      const name = toText(item.name) || "Nguyên liệu";
+      const code = toText(item.code);
+      return code ? `${name} (${code})` : name;
+    })
+    .replace(/Hiện có\s+(-?\d+(?:\.\d+)?),\s*cần dùng\s+(-?\d+(?:\.\d+)?)/i, (_, available, required) => (
+      `Hiện có ${formatProductionQuantity(available)}, cần dùng ${formatProductionQuantity(required)}`
+    ));
+}
+
 function toLocalDateValue(value = new Date()) {
   const date = value instanceof Date ? new Date(value) : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -235,7 +295,9 @@ export function completeInventoryProductionOrder(order, input = {}) {
     p_actual_inputs: (input.lines || []).map((line) => ({ lineId: line.id, actualQuantity: Number(line.actualQuantity) })),
     p_output_expires_on: expiryConfig.trackExpiry ? outputExpiresOn : null,
     p_idempotency_key: createOperationKey("complete", order.id)
-  }, "complete production order");
+  }, "complete production order").catch((error) => {
+    throw new Error(enrichInventoryProductionError(error, order.lines));
+  });
 }
 
 export function cancelInventoryProductionOrder(orderId, reason) {

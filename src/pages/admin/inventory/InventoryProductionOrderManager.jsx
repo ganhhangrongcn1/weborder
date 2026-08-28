@@ -19,6 +19,7 @@ export default function InventoryProductionOrderManager({
   rows = [],
   boms = [],
   warehouses = [],
+  units = [],
   warehouseSelectionLocked = false,
   canWrite = false,
   mutationStatus = "idle",
@@ -148,7 +149,7 @@ export default function InventoryProductionOrderManager({
         </table>
       </div>
 
-      {modal ? <InventoryProductionOrderModal mode={modal.mode} order={modal.order} boms={boms} warehouses={warehouses} warehouseSelectionLocked={warehouseSelectionLocked} isSaving={busy} onClose={() => setModal(null)} onSave={onSave} onComplete={onComplete} /> : null}
+      {modal ? <InventoryProductionOrderModal mode={modal.mode} order={modal.order} boms={boms} warehouses={warehouses} units={units} warehouseSelectionLocked={warehouseSelectionLocked} isSaving={busy} onClose={() => setModal(null)} onSave={onSave} onComplete={onComplete} /> : null}
 
       {confirmation ? (
         <div className="inventory-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setConfirmation(null)}>
