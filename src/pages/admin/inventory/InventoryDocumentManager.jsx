@@ -65,7 +65,10 @@ export default function InventoryDocumentManager({
   onCreateRequisitionTransfer,
   onFulfillRequisition,
   requestCreationMode = "warehouse_self",
-  warehouseSelectionLocked = false
+  warehouseSelectionLocked = false,
+  actingWarehouseId = "",
+  canActAcrossWarehouses = false,
+  canApproveRequisitions = false
 }) {
   const config = DOMAIN_CONFIG[domain] || DOMAIN_CONFIG.receipts;
   const [searchParams] = useSearchParams();
@@ -75,7 +78,17 @@ export default function InventoryDocumentManager({
   const [actionError, setActionError] = useState("");
   const [actionModal, setActionModal] = useState(null);
   const [detailDocument, setDetailDocument] = useState(null);
-  const warehouseMap = useMemo(() => new Map(warehouses.map((row) => [row.id, row.name])), [warehouses]);
+  const displayWarehouses = useMemo(() => {
+    const result = [...warehouses];
+    const knownIds = new Set(result.map((warehouse) => warehouse.id).filter(Boolean));
+    warehouses.forEach((warehouse) => {
+      if (!warehouse.supplyWarehouseId || knownIds.has(warehouse.supplyWarehouseId)) return;
+      knownIds.add(warehouse.supplyWarehouseId);
+      result.push({ id: warehouse.supplyWarehouseId, name: "Kho Tổng", warehouseType: "central", isReferenceOnly: true });
+    });
+    return result;
+  }, [warehouses]);
+  const warehouseMap = useMemo(() => new Map(displayWarehouses.map((row) => [row.id, row.name])), [displayWarehouses]);
   const supplierMap = useMemo(() => new Map(suppliers.map((row) => [row.id, row.name])), [suppliers]);
   const visibleRows = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase("vi-VN");
@@ -129,6 +142,8 @@ export default function InventoryDocumentManager({
 
   const renderRowActions = (row) => {
     const disabled = !canWrite || mutationStatus === "saving";
+    const canActAtWarehouse = (warehouseId) => canActAcrossWarehouses
+      || Boolean(actingWarehouseId && warehouseId === actingWarehouseId);
     if (row.status === "draft") {
       return <>
         <button className="is-danger" type="button" disabled={disabled} onClick={() => setActionModal({ mode: "delete", document: row })}><Icon name="trash" size={14} />Xóa</button>
@@ -150,29 +165,44 @@ export default function InventoryDocumentManager({
     }
     if (domain === "transfers") {
       if (["submitted", "approved"].includes(row.status)) {
+        if (!canActAtWarehouse(row.sourceWarehouseId)) {
+          return <span className="inventory-waiting-approval">Chờ kho nguồn giao hàng</span>;
+        }
         return <button className="is-primary" type="button" disabled={disabled} onClick={() => setActionModal({ mode: "dispatch", document: row })}>Giao hàng</button>;
       }
       if (row.status === "in_transit") {
+        if (!canActAtWarehouse(row.destinationWarehouseId)) {
+          return <span className="inventory-waiting-approval">Chờ kho nhận xác nhận</span>;
+        }
         return <button className="is-primary" type="button" disabled={disabled} onClick={() => setActionModal({ mode: "receive", document: row })}>Nhận hàng</button>;
       }
       if (row.status === "received_with_variance") {
+        if (!canActAtWarehouse(row.sourceWarehouseId)) {
+          return <span className="inventory-waiting-approval">Chờ kho nguồn đối chiếu</span>;
+        }
         return <button className="is-primary" type="button" disabled={disabled} onClick={() => runAction(() => onCompleteTransfer(row.id))}>Đối chiếu & khép phiếu</button>;
       }
       if (row.status === "received") {
+        if (!canActAtWarehouse(row.sourceWarehouseId)) return <span>—</span>;
         return <button type="button" disabled={disabled} onClick={() => runAction(() => onCompleteTransfer(row.id))}>Khép phiếu cũ</button>;
       }
     }
     if (domain === "requisitions") {
       if (row.status === "submitted") {
+        if (!canApproveRequisitions) {
+          return <span className="inventory-waiting-approval">Chờ Kho Tổng duyệt</span>;
+        }
         return <>
           <button className="is-primary" type="button" disabled={disabled} onClick={() => setActionModal({ mode: "approve", document: row })}>Duyệt</button>
           <button type="button" disabled={disabled} onClick={() => setActionModal({ mode: "reject", document: row })}>Từ chối</button>
         </>;
       }
       if (row.status === "approved" && !row.linkedTransfer) {
+        if (!canApproveRequisitions) return <span className="inventory-waiting-approval">Chờ Kho Tổng tạo phiếu giao</span>;
         return <button type="button" disabled={disabled} onClick={() => runAction(() => onCreateRequisitionTransfer(row.id))}>Tạo phiếu còn thiếu</button>;
       }
       if (row.status === "approved" && row.linkedTransfer?.status === "completed") {
+        if (!canApproveRequisitions) return <span>—</span>;
         return <button type="button" disabled={disabled} onClick={() => runAction(() => onFulfillRequisition(row.id))}>Khép yêu cầu cũ</button>;
       }
       if (row.status === "approved" && row.linkedTransfer) {
@@ -185,12 +215,17 @@ export default function InventoryDocumentManager({
   const guideText = domain === "transfers"
     ? <span><strong>Giao hàng</strong> trừ kho xuất. <strong>Nhận đủ</strong> cộng kho nhận và tự khép phiếu. Nhận lệch sẽ chờ đối chiếu.</span>
     : domain === "requisitions"
-      ? <span><strong>Duyệt</strong> là hệ thống tự tạo phiếu giao hàng. Nhân viên chỉ cần qua <strong>Chuyển kho nội bộ</strong> để giao và nhận.</span>
+      ? canApproveRequisitions
+        ? <span><strong>Duyệt</strong> là hệ thống tự tạo phiếu giao hàng. Kho nguồn qua <strong>Chuyển kho nội bộ</strong> để giao và kho nhận xác nhận hàng.</span>
+        : <span>Chi nhánh tạo và theo dõi yêu cầu tại đây. Chỉ <strong>Kho Tổng</strong> được duyệt hoặc từ chối.</span>
       : domain === "disposals"
         ? <span><strong>Lưu nháp</strong> chưa trừ tồn. Chỉ khi bấm <strong>Hoàn tất</strong>, hệ thống mới trừ đúng kho và lưu lý do hủy.</span>
       : domain === "adjustments"
         ? <span><strong>Gửi xử lý</strong> chưa đổi tồn. Chỉ Admin hoặc quản lý đúng kho bấm <strong>Duyệt & ghi sổ</strong> mới tăng/giảm tồn.</span>
       : <span><strong>Bản nháp</strong> chưa thay đổi tồn kho. Chỉ khi bấm <strong>Hoàn tất</strong> hệ thống mới ghi sổ kho.</span>;
+  const actionWarehouses = ["approve", "reject"].includes(actionModal?.mode)
+    ? warehouses.filter((warehouse) => warehouse.warehouseType === "central")
+    : warehouses;
 
   return (
     <section className="inventory-list-card inventory-document-card">
@@ -253,8 +288,8 @@ export default function InventoryDocumentManager({
       </div>
       {!visibleRows.length ? <div className="inventory-list-empty"><Icon name={config.icon} size={28} /><strong>{config.empty}</strong><span>Tạo phiếu đầu tiên khi dữ liệu kho và nguyên vật liệu đã sẵn sàng.</span></div> : null}
       {showModal ? <InventoryDocumentModal domain={domain} warehouses={warehouses} items={items} units={units} suppliers={suppliers} requestCreationMode={requestCreationMode} warehouseSelectionLocked={warehouseSelectionLocked} onClose={() => setShowModal(false)} onSave={onSave} /> : null}
-      {detailDocument ? <InventoryDocumentDetailModal domain={domain} document={detailDocument} warehouses={warehouses} items={items} units={units} suppliers={suppliers} onClose={() => setDetailDocument(null)} /> : null}
-      {actionModal ? <InventoryDocumentActionModal mode={actionModal.mode} document={actionModal.document} warehouses={warehouses} items={items} units={units} onClose={() => setActionModal(null)} onConfirm={confirmModalAction} /> : null}
+      {detailDocument ? <InventoryDocumentDetailModal domain={domain} document={detailDocument} warehouses={displayWarehouses} items={items} units={units} suppliers={suppliers} onClose={() => setDetailDocument(null)} /> : null}
+      {actionModal ? <InventoryDocumentActionModal mode={actionModal.mode} document={actionModal.document} warehouses={actionWarehouses} items={items} units={units} onClose={() => setActionModal(null)} onConfirm={confirmModalAction} /> : null}
     </section>
   );
 }

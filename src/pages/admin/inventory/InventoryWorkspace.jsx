@@ -232,6 +232,10 @@ export default function InventoryWorkspace({
   const activeWarehouses = workspaceWarehouseId
     ? scopedWarehouses.filter((warehouse) => warehouse.id === workspaceWarehouseId)
     : scopedWarehouses;
+  const workspaceWarehouse = scopedWarehouses.find((warehouse) => warehouse.id === workspaceWarehouseId);
+  const readsRequisitionNetwork = documentDomain === "requisitions"
+    && workspaceWarehouse?.warehouseType === "central"
+    && accessPolicy.scope !== "branch";
   const masterDataState = useInventoryMasterData({
     enabled: Boolean(masterDataDomain) && accessPolicy.allowed,
     domain: masterDataDomain
@@ -255,7 +259,7 @@ export default function InventoryWorkspace({
   const documentState = useInventoryDocuments({
     enabled: Boolean(documentDomain) && accessPolicy.allowed,
     domain: documentDomain,
-    warehouseId: workspaceWarehouseId
+    warehouseId: readsRequisitionNetwork ? "" : workspaceWarehouseId
   });
   const ledgerState = useInventoryLedger({
     enabled: isLedgerPage && accessPolicy.allowed,
@@ -347,7 +351,6 @@ export default function InventoryWorkspace({
   const workspaceMasterRows = masterDataDomain === "items"
     ? filterInventoryItemsByWarehouse(masterDataState.rows, workspaceWarehouseId)
     : masterDataState.rows;
-  const workspaceWarehouse = scopedWarehouses.find((warehouse) => warehouse.id === workspaceWarehouseId);
   const workspaceScopeLabel = workspaceWarehouse?.name || accessPolicy.scopeLabel;
   const workspaceDashboardData = scopeDashboardData(dashboardState.data, workspaceWarehouseId);
   const effectiveAccessPolicy = isCostAnalysisPage
@@ -520,7 +523,9 @@ export default function InventoryWorkspace({
               : documentDomain
                 ? <InventoryDocumentManager
                     domain={documentDomain}
-                    rows={filterWorkspaceRows(documentState.rows, workspaceWarehouseId)}
+                    rows={readsRequisitionNetwork
+                      ? documentState.rows
+                      : filterWorkspaceRows(documentState.rows, workspaceWarehouseId)}
                     warehouses={operationWarehouses}
                     items={operationItems}
                     units={itemUnitsState.rows}
@@ -550,6 +555,9 @@ export default function InventoryWorkspace({
                     onFulfillRequisition={documentState.fulfillRequisition}
                     requestCreationMode={canManageGlobalData ? "admin_on_behalf" : "warehouse_self"}
                     warehouseSelectionLocked={warehouseSelectionLocked}
+                    actingWarehouseId={workspaceWarehouseId}
+                    canActAcrossWarehouses={accessPolicy.scope === "global"}
+                    canApproveRequisitions={accessPolicy.scope !== "branch"}
                   />
               : isLedgerPage
                 ? <InventoryLedger
