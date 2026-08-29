@@ -9,12 +9,13 @@ import {
 } from "../src/services/inventorySalesRecipeCalculations.js";
 import { adminPathToState } from "../src/app/routeState.js";
 import { getInventoryRoute } from "../src/pages/admin/inventory/inventoryNavigation.js";
+import { buildInventoryMenuEntities } from "../src/services/inventoryMenuEntityService.js";
 
 const units = [
   { id: "gram", name: "Gram", isActive: true },
   { id: "kg", name: "Kilôgam", baseUnitId: "gram", conversionFactor: 1000, isActive: true }
 ];
-const items = [{ id: "item-1", name: "Xoài sơ chế", baseUnitId: "gram", purchaseUnitId: "kg", isActive: true }];
+const items = [{ id: "item-1", name: "Xoài sơ chế", baseUnitId: "gram", purchaseUnitId: "kg", purchaseToBaseRatio: 1000, isActive: true }];
 const menuEntities = [
   { id: "menu-1", name: "Bánh tráng trộn", type: "product", price: 35000 },
   { id: "menu-2", name: "Trà tắc", type: "product", price: 15000 }
@@ -47,6 +48,52 @@ test("combo app có thể gán nhiều món Menu mà không cần tạo combo m�
   }, { menuEntities });
   assert.equal(result.targets.length, 1);
   assert.equal(result.targets[0].quantity, 5);
+});
+
+test("lựa chọn trong nhóm được đưa vào danh sách định lượng mà không trộn với món cùng tên", () => {
+  const entities = buildInventoryMenuEntities({
+    products: [{ id: "product-cuon-bo", name: "Bánh Tráng Cuốn Bơ", price: 30000 }],
+    optionGroupPresets: [{
+      id: "combo-choice",
+      name: "Chọn Món Combo",
+      options: [
+        { id: "option-cuon-bo", name: "Bánh Tráng Cuốn Bơ", price: 0, active: true },
+        { id: "option-sot-me", name: "Sốt Me Bơ", price: 0, active: true }
+      ]
+    }]
+  });
+
+  assert.equal(entities.length, 3);
+  assert.equal(entities.find((row) => row.id === "product-cuon-bo")?.type, "product");
+  assert.equal(entities.find((row) => row.id === "option-cuon-bo")?.type, "topping");
+  assert.equal(entities.find((row) => row.id === "option-sot-me")?.category, "Lựa chọn · Chọn Món Combo");
+});
+
+test("mức cay và cách chế biến không xuất hiện trong danh sách tạo định lượng", () => {
+  const entities = buildInventoryMenuEntities({
+    optionGroupPresets: [
+      { id: "spice", name: "Mức Độ Cay", options: [{ id: "hot", name: "Cay Sấp Mặt", active: true }] },
+      { id: "prepare", name: "Chọn Cách Chế Biến", options: [{ id: "mix", name: "Trộn Đều Topping", active: true }] },
+      { id: "sauce", name: "Chọn Loại Sốt", options: [{ id: "satay", name: "Sốt Sate Bò", active: true }] }
+    ]
+  });
+
+  assert.deepEqual(entities.map((row) => row.id), ["satay"]);
+});
+
+test("combo tự chọn có thể dùng chung định lượng món bán lẻ theo tỷ lệ một phần", () => {
+  const result = normalizeInventoryChannelMappingInput({
+    partnerSource: "grabfood",
+    branchUuid: "branch-1",
+    mappingKind: "option",
+    externalItemName: "Combo tự chọn",
+    externalOptionGroup: "Chọn Món Combo",
+    externalOptionName: "Bánh Tráng Cuốn Bơ",
+    targets: [{ menuEntityType: "product", menuEntityId: "menu-1", quantity: 1 }]
+  }, { menuEntities });
+
+  assert.equal(result.targets[0].menuEntityType, "product");
+  assert.equal(result.targets[0].quantity, 1);
 });
 
 test("lựa chọn mức cay có thể đánh dấu không trừ kho", () => {

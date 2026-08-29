@@ -7,6 +7,7 @@ import {
   getInventoryItemDisplayUnitConfig,
   getInventoryUnitToBaseFactor
 } from "../../../services/inventoryUnitConversion.js";
+import { getInventoryMenuEntityKindLabel } from "../../../services/inventoryMenuEntityService.js";
 
 function createLine() {
   return { itemId: "", quantity: 1, unitId: "", wastePercent: 0, notes: "" };
@@ -54,6 +55,17 @@ export default function InventorySalesRecipeModal({
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const unitsById = useMemo(() => new Map(units.map((unit) => [unit.id, unit])), [units]);
   const selectedEntity = menuEntities.find((entity) => entity.id === form.menuEntityId && entity.type === form.menuEntityType);
+  const menuEntityGroups = useMemo(() => {
+    const groups = new Map();
+    menuEntities.forEach((entity) => {
+      const category = entity.type === "product"
+        ? `Món · ${entity.category || "Món khác"}`
+        : entity.category || "Topping bán thêm";
+      if (!groups.has(category)) groups.set(category, []);
+      groups.get(category).push(entity);
+    });
+    return Array.from(groups, ([category, entities]) => ({ category, entities }));
+  }, [menuEntities]);
   const activeItems = items.filter((item) => item.isActive !== false);
   const directMaterials = activeItems.filter((item) => item.itemType !== "semi_finished");
   const semiFinished = activeItems.filter((item) => item.itemType === "semi_finished");
@@ -108,12 +120,12 @@ export default function InventorySalesRecipeModal({
           <button type="button" onClick={onClose} aria-label="Đóng"><Icon name="close" size={18} /></button>
         </header>
         <form onSubmit={submit}>
-          <div className="inventory-sales-safe-note"><Icon name="check" size={17} /> Chỉ lưu cấu hình, chưa tự động trừ tồn theo đơn.</div>
+          <div className="inventory-sales-safe-note"><Icon name="check" size={17} /> Món chính và lựa chọn có định lượng riêng. Mức cay hoặc cách chế biến không cần tạo định lượng.</div>
 
           <section className="inventory-sales-form-section">
             <div className="inventory-sales-form-section__title"><Icon name="bag" size={16} /><strong>Món bán</strong></div>
             <div className="inventory-form-row inventory-form-row--triple">
-              <label className="inventory-form-field"><span>Món / topping trong Menu *</span><InventorySearchableSelect value={`${form.menuEntityType}:${form.menuEntityId}`} disabled={readOnly || Boolean(form.id)} onChange={(event) => { const [type, ...id] = event.target.value.split(":"); setForm((current) => ({ ...current, menuEntityType: type || "product", menuEntityId: id.join(":") })); }} required><option value="product:">Chọn món Menu</option>{menuEntities.filter((row) => row.type === "product").map((row) => <option key={`product:${row.id}`} value={`product:${row.id}`}>{row.name}</option>)}{menuEntities.some((row) => row.type === "topping") ? <optgroup label="Topping">{menuEntities.filter((row) => row.type === "topping").map((row) => <option key={`topping:${row.id}`} value={`topping:${row.id}`}>{row.name}</option>)}</optgroup> : null}</InventorySearchableSelect></label>
+              <label className="inventory-form-field"><span>Món / lựa chọn / topping *</span><InventorySearchableSelect value={`${form.menuEntityType}:${form.menuEntityId}`} disabled={readOnly || Boolean(form.id)} onChange={(event) => { const [type, ...id] = event.target.value.split(":"); setForm((current) => ({ ...current, menuEntityType: type || "product", menuEntityId: id.join(":") })); }} required><option value="product:">Chọn đối tượng định lượng</option>{menuEntityGroups.map((group) => <optgroup key={group.category} label={group.category}>{group.entities.map((row) => <option key={`${row.type}:${row.id}`} value={`${row.type}:${row.id}`}>{row.name}</option>)}</optgroup>)}</InventorySearchableSelect>{selectedEntity ? <small>{getInventoryMenuEntityKindLabel(selectedEntity)}</small> : null}</label>
               <label className="inventory-form-field"><span>Áp dụng tại</span><InventorySearchableSelect value={form.branchUuid} disabled={readOnly} onChange={(event) => update("branchUuid", event.target.value)}><option value="">Tất cả chi nhánh</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</InventorySearchableSelect></label>
               <label className="inventory-form-field"><span>Số phần chuẩn *</span><input type="number" min="0.000001" step="any" value={form.yieldQuantity} disabled={readOnly} onChange={(event) => update("yieldQuantity", event.target.value)} required /></label>
             </div>

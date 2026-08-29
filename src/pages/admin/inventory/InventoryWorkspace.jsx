@@ -18,6 +18,7 @@ import useInventoryCostAnalysis from "../../../hooks/useInventoryCostAnalysis.js
 import useInventoryOpeningBalances from "../../../hooks/useInventoryOpeningBalances.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
 import { filterInventoryItemsByWarehouse } from "../../../services/inventoryMasterDataService.js";
+import { buildInventoryMenuEntities } from "../../../services/inventoryMenuEntityService.js";
 import { getInventoryRoute } from "./inventoryNavigation.js";
 import { getInventoryAccessPolicy, getInventoryScopedWarehouses } from "./inventoryAccessPolicy.js";
 import InventoryWarehouseManager from "./InventoryWarehouseManager.jsx";
@@ -172,6 +173,7 @@ export default function InventoryWorkspace({
   branches = [],
   products = [],
   toppings = [],
+  optionGroupPresets = [],
   inventoryAccessPolicy = null,
   onInventoryWarehouseChange,
   onOpenInventoryBoms,
@@ -303,22 +305,11 @@ export default function InventoryWorkspace({
   const productionState = useInventoryProductionOrders({
     enabled: isProductionPage && canLoadBomScope
   });
-  const menuEntities = useMemo(() => [
-    ...products.filter((row) => row && row.id && row.isActive !== false).map((row) => ({
-      id: String(row.id),
-      name: row.name || "Món chưa đặt tên",
-      price: Number(row.price || 0),
-      type: "product",
-      category: row.category || row.badge || "Món khác"
-    })),
-    ...toppings.filter((row) => row && row.id && row.isActive !== false).map((row) => ({
-      id: String(row.id),
-      name: row.name || "Topping chưa đặt tên",
-      price: Number(row.price || 0),
-      type: "topping",
-      category: "Topping"
-    }))
-  ], [products, toppings]);
+  const menuEntities = useMemo(() => buildInventoryMenuEntities({
+    products,
+    toppings,
+    optionGroupPresets
+  }), [optionGroupPresets, products, toppings]);
   const salesConfigurationState = useInventorySalesConfiguration({
     enabled: (isSalesRecipePage && canLoadBomScope) || (isReconciliationPage && accessPolicy.allowed),
     loadConfiguration: isSalesRecipePage,

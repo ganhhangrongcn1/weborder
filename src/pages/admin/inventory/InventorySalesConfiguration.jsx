@@ -9,6 +9,7 @@ import {
 } from "../../../services/inventorySalesRecipeCalculations.js";
 import InventoryChannelMappingModal from "./InventoryChannelMappingModal.jsx";
 import InventorySalesRecipeModal from "./InventorySalesRecipeModal.jsx";
+import { getInventoryMenuEntityKindLabel } from "../../../services/inventoryMenuEntityService.js";
 
 const STATUS_META = {
   draft: { label: "Bản nháp", tone: "draft" },
@@ -79,6 +80,7 @@ export default function InventorySalesConfiguration({
   const [search, setSearch] = useState("");
   const [channelSource, setChannelSource] = useState("all");
   const [channelBranch, setChannelBranch] = useState("all");
+  const [channelKind, setChannelKind] = useState("item");
   const [recipeModal, setRecipeModal] = useState(null);
   const [mappingModal, setMappingModal] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
@@ -93,13 +95,21 @@ export default function InventorySalesConfiguration({
     ...unmappedCandidates.map((candidate) => ({ ...candidate, rowType: "candidate" })),
     ...mappings.map((mapping) => ({ ...mapping, rowType: "mapping" }))
   ].map((row) => ({ ...row, channelBranch: getChannelBranch(row, branches) }));
-  const channelSourceCounts = allChannelRows.reduce((counts, row) => {
+  const channelKindCounts = allChannelRows.reduce((counts, row) => {
+    const kind = (row.mappingKind || row.candidateKind) === "option" ? "option" : "item";
+    counts[kind] = (counts[kind] || 0) + 1;
+    return counts;
+  }, { item: 0, option: 0 });
+  const channelKindRows = allChannelRows.filter((row) => (
+    ((row.mappingKind || row.candidateKind) === "option" ? "option" : "item") === channelKind
+  ));
+  const channelSourceCounts = channelKindRows.reduce((counts, row) => {
     const source = row.partnerSource || "other";
     counts[source] = (counts[source] || 0) + 1;
     return counts;
   }, {});
   const availableChannelSources = SOURCE_ORDER.filter((source) => channelSourceCounts[source]);
-  const sourceFilteredChannelRows = allChannelRows.filter((row) => channelSource === "all" || (row.partnerSource || "other") === channelSource);
+  const sourceFilteredChannelRows = channelKindRows.filter((row) => channelSource === "all" || (row.partnerSource || "other") === channelSource);
   const channelBranchOptions = Array.from(sourceFilteredChannelRows.reduce((options, row) => {
     const current = options.get(row.channelBranch.value) || { ...row.channelBranch, count: 0 };
     current.count += 1;
@@ -155,11 +165,15 @@ export default function InventorySalesConfiguration({
 
       <div className="inventory-sales-tabs" role="tablist">
         <button type="button" className={tab === "recipes" ? "is-active" : ""} onClick={() => { setTab("recipes"); setSearch(""); }}><Icon name="menu" size={16} /> Định lượng món bán <span>{recipes.length}</span></button>
-        <button type="button" className={tab === "channels" ? "is-active" : ""} onClick={() => { setTab("channels"); setSearch(""); setChannelSource("all"); setChannelBranch("all"); }}><Icon name="share" size={16} /> Ánh xạ kênh bán {unmappedCandidates.length ? <span className="is-alert">{unmappedCandidates.length}</span> : <span>{mappings.length}</span>}</button>
+        <button type="button" className={tab === "channels" ? "is-active" : ""} onClick={() => { setTab("channels"); setSearch(""); setChannelKind("item"); setChannelSource("all"); setChannelBranch("all"); }}><Icon name="share" size={16} /> Ánh xạ kênh bán {unmappedCandidates.length ? <span className="is-alert">{unmappedCandidates.length}</span> : <span>{mappings.length}</span>}</button>
         <button type="button" className={tab === "warehouses" ? "is-active" : ""} onClick={() => { setTab("warehouses"); setSearch(""); }}><Icon name="store" size={16} /> Kho trừ mặc định <span>{warehouseRows.filter((row) => row.current).length}/{warehouseRows.length}</span></button>
       </div>
 
       <div className="inventory-sales-safe-note"><Icon name="check" size={16} /> {tab === "warehouses" ? "Thiết lập một lần cho mỗi chi nhánh. Thao tác này không làm thay đổi số tồn hiện tại." : "Hoàn tất định lượng và ánh xạ trước khi đơn bán được ghi giảm tồn."}</div>
+      {tab === "channels" ? <div className="inventory-channel-kind-cards" role="tablist" aria-label="Loại ánh xạ kênh bán">
+        <button type="button" role="tab" aria-selected={channelKind === "item"} className={channelKind === "item" ? "is-active" : ""} onClick={() => { setChannelKind("item"); setSearch(""); setChannelSource("all"); setChannelBranch("all"); }}><span><Icon name="bag" size={19} /></span><div><strong>Gán món chính</strong><small>Món lẻ hoặc combo bên ngoài đơn hàng</small></div><b>{channelKindCounts.item}</b></button>
+        <button type="button" role="tab" aria-selected={channelKind === "option"} className={channelKind === "option" ? "is-active" : ""} onClick={() => { setChannelKind("option"); setSearch(""); setChannelSource("all"); setChannelBranch("all"); }}><span><Icon name="tag" size={19} /></span><div><strong>Gán lựa chọn / topping</strong><small>Sốt, topping và món tự chọn trong combo</small></div><b>{channelKindCounts.option}</b></button>
+      </div> : null}
       {tab === "channels" && candidateMessage ? <div className="inventory-count-notice is-error"><Icon name="warning" size={16} />{candidateMessage}</div> : null}
       {tab === "channels" && !candidateMessage ? <div className="inventory-channel-filter-note"><Icon name="eyeOff" size={16} />Đã tự ẩn cách chế biến và mức cay vì không làm thay đổi tồn kho. Lựa chọn dùng chung chỉ cần gán một lần.</div> : null}
       {tab !== "warehouses" && mutationMessage ? <div className={`inventory-count-notice${mutationStatus === "error" ? " is-error" : ""}`}><Icon name={mutationStatus === "error" ? "warning" : "check"} size={16} />{mutationMessage}</div> : null}
@@ -168,7 +182,7 @@ export default function InventorySalesConfiguration({
         <label className="inventory-search-field"><Icon name="search" size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tab === "recipes" ? "Tìm món hoặc nguyên liệu..." : "Tìm tên món trên app hoặc món Menu..."} /></label>
         {tab === "channels" ? (
           <InventorySearchableSelect value={channelSource} onChange={(event) => { setChannelSource(event.target.value); setChannelBranch("all"); }} aria-label="Lọc theo kênh bán">
-            <option value="all">Tất cả kênh ({allChannelRows.length})</option>
+            <option value="all">Tất cả kênh ({channelKindRows.length})</option>
             {availableChannelSources.map((source) => <option key={source} value={source}>{SOURCE_LABELS[source]} ({channelSourceCounts[source]})</option>)}
           </InventorySearchableSelect>
         ) : null}
@@ -190,7 +204,7 @@ export default function InventorySalesConfiguration({
               const cost = recipeCost(recipe, averageCosts);
               const costRate = Number(entity?.price || 0) > 0 ? cost / Number(entity.price) * 100 : 0;
               return <tr key={recipe.id}>
-                <td><strong>{recipe.menuEntityName}</strong><small>{recipe.code} · {recipe.menuEntityType === "topping" ? "Topping" : "Món Menu"}</small></td>
+                <td><strong>{recipe.menuEntityName}</strong><small>{recipe.code} · {getInventoryMenuEntityKindLabel(entity || { type: recipe.menuEntityType })}</small></td>
                 <td><span className="inventory-bom-scope">{branches.find((branch) => branch.id === recipe.branchUuid)?.name || "Tất cả chi nhánh"}</span><small>{recipe.yieldQuantity} phần chuẩn</small></td>
                 <td><strong>{recipe.components.length} thành phần</strong><small>{recipe.components.slice(0, 3).map((line) => line.item?.name).filter(Boolean).join(", ")}</small></td>
                 <td><strong>{money(cost)} / phần</strong><small>{costRate ? `${costRate.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}% giá bán` : "Chưa có giá bán"}</small></td>
@@ -212,13 +226,13 @@ export default function InventorySalesConfiguration({
                 <td><span className={`inventory-channel-badge is-${row.partnerSource}`}>{SOURCE_LABELS[row.partnerSource] || row.partnerSource}</span></td>
                 <td><strong>{title}</strong><small>{(row.mappingKind || row.candidateKind) === "option" ? `${itemScope} · ${row.externalOptionGroup === "*" ? "Dùng chung mọi nhóm lựa chọn" : row.externalOptionGroup}` : row.externalItemId || `${row.occurrences || 0} lần xuất hiện`}</small></td>
                 <td><strong>{row.channelBranch.label}</strong></td>
-                <td>{row.rowType === "candidate" ? <span>—</span> : row.ignoreInventory ? <span className="inventory-channel-ignore-badge">Không trừ kho</span> : <><strong>{row.targets.map((target) => `${target.menuEntityName} × ${target.quantity}`).join(" + ")}</strong><small>{row.targets.length > 1 ? "Combo ghép từ món lẻ" : "Gán trực tiếp"}</small></>}</td>
+                <td>{row.rowType === "candidate" ? <span>—</span> : row.ignoreInventory ? <span className="inventory-channel-ignore-badge">Không trừ kho</span> : <><strong>{row.targets.map((target) => `${target.menuEntityName} × ${target.quantity}`).join(" + ")}</strong><small>{row.targets.length > 1 ? "Cộng định lượng theo từng phần" : (row.mappingKind === "option" ? "Định lượng lựa chọn riêng" : "Gán trực tiếp")}</small></>}</td>
                 <td>{row.rowType === "candidate" ? <span className="inventory-bom-status is-draft">Chưa ánh xạ</span> : <span className="inventory-bom-status is-active">Đã gán</span>}</td>
-                <td><div className="inventory-row-actions inventory-sales-actions">{row.rowType === "candidate" ? <button type="button" className="is-primary" disabled={!canWrite} onClick={() => setMappingModal(row)}><Icon name="plus" size={14} /> Gán món</button> : <><button type="button" disabled={!canWrite} onClick={() => setMappingModal(row)}><Icon name="edit" size={14} /> Sửa</button><button type="button" className="is-danger" disabled={!canWrite} onClick={() => setConfirmation({ type: "delete-mapping", id: row.id, label: title })}><Icon name="trash" size={14} /> Xóa</button></>}</div></td>
+                <td><div className="inventory-row-actions inventory-sales-actions">{row.rowType === "candidate" ? <button type="button" className="is-primary" disabled={!canWrite} onClick={() => setMappingModal(row)}><Icon name="plus" size={14} />{channelKind === "option" ? "Gán lựa chọn" : "Gán món"}</button> : <><button type="button" disabled={!canWrite} onClick={() => setMappingModal(row)}><Icon name="edit" size={14} /> Sửa</button><button type="button" className="is-danger" disabled={!canWrite} onClick={() => setConfirmation({ type: "delete-mapping", id: row.id, label: title })}><Icon name="trash" size={14} /> Xóa</button></>}</div></td>
               </tr>;
             })}</tbody>
           </table>
-          {!channelRows.length ? <div className="inventory-list-empty"><span><Icon name="share" size={24} /></span><strong>{channelSource !== "all" || channelBranch !== "all" || query ? "Không có món phù hợp bộ lọc" : "Chưa có món app cần ánh xạ"}</strong><span>{channelSource !== "all" || channelBranch !== "all" || query ? "Đổi kênh bán, chi nhánh hoặc từ khóa để xem lại." : "Dữ liệu sẽ xuất hiện khi Supabase nhận đơn từ GrabFood, ShopeeFood hoặc kênh đối tác."}</span></div> : null}
+          {!channelRows.length ? <div className="inventory-list-empty"><span><Icon name={channelKind === "option" ? "tag" : "share"} size={24} /></span><strong>{channelSource !== "all" || channelBranch !== "all" || query ? "Không có dữ liệu phù hợp bộ lọc" : channelKind === "option" ? "Chưa có lựa chọn hoặc topping cần gán" : "Chưa có món app cần ánh xạ"}</strong><span>{channelSource !== "all" || channelBranch !== "all" || query ? "Đổi kênh bán, chi nhánh hoặc từ khóa để xem lại." : "Dữ liệu sẽ xuất hiện khi Supabase nhận đơn từ GrabFood, ShopeeFood hoặc kênh đối tác."}</span></div> : null}
         </div>
       ) : tab === "warehouses" ? (
         <div className="inventory-default-warehouse-panel">
