@@ -21,11 +21,17 @@ const ADMIN_ORDER_SOURCE_TONES = {
     strong: "#1e3a8a"
   },
   counter: {
-    background: "#f7e7df",
-    soft: "#fcf3ee",
-    border: "#8b5a43",
-    color: "#6b3a29",
-    strong: "#3f2118"
+    background: "#cffafe",
+    soft: "#ecfeff",
+    border: "#67e8f9",
+    color: "#0891b2",
+    strong: "#164e63",
+    cardBackground: "#cffafe",
+    cardSoft: "#ecfeff",
+    cardBorder: "#0891b2",
+    cardButton: "#0e7490",
+    cardCode: "#0e7490",
+    cardText: "#164e63"
   },
   delivery: {
     background: "#dcfce7",
