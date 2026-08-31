@@ -130,3 +130,38 @@ export function getInventoryScopedWarehouses(warehouses = [], accessPolicy = {})
     warehouse?.branch_id
   ].some((value) => allowedKeys.has(normalizeBranchKey(value))));
 }
+
+export function canManageInventoryAcrossWarehouses(accessPolicy = {}) {
+  return accessPolicy?.scope === "global" || accessPolicy?.canManageInventory === true;
+}
+
+export function rowMatchesInventoryWarehouse(row = {}, warehouseId = "") {
+  if (!warehouseId) return true;
+
+  return [
+    row.warehouseId,
+    row.sourceWarehouseId,
+    row.destinationWarehouseId,
+    row.defaultWarehouseId
+  ].some((value) => value === warehouseId);
+}
+
+export function filterInventoryRowsByWarehouse(
+  rows = [],
+  warehouseId = "",
+  warehouses = [],
+  { includeSharedBranchRows = false } = {}
+) {
+  if (!warehouseId) return rows;
+
+  const selectedWarehouse = warehouses.find((warehouse) => warehouse.id === warehouseId);
+
+  return rows.filter((row) => {
+    if (rowMatchesInventoryWarehouse(row, warehouseId)) return true;
+
+    const isSharedBranchRow = row.productionScope === "branch" && !row.defaultWarehouseId;
+    if (!isSharedBranchRow) return false;
+
+    return selectedWarehouse?.warehouseType === "branch" || includeSharedBranchRows;
+  });
+}

@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { adminPathToState } from "../src/app/routeState.js";
 import {
+  canManageInventoryAcrossWarehouses,
+  filterInventoryRowsByWarehouse,
   getInventoryAccessPolicy,
   getInventoryScopedWarehouses
 } from "../src/pages/admin/inventory/inventoryAccessPolicy.js";
@@ -109,6 +111,7 @@ test("central staff can manage all warehouses while branch kitchen stays in its 
   assert.equal(staffPolicy.scope, "warehouse");
   assert.equal(staffPolicy.branchSelectorLocked, true);
   assert.equal(staffPolicy.canManageInventory, true);
+  assert.equal(canManageInventoryAcrossWarehouses(staffPolicy), true);
   const warehouses = [
     { id: "warehouse-central", branchUuid: "", name: "Kho Tổng" },
     { id: "warehouse-a", branchUuid: branches[0].branch_uuid, name: "Kho Phú Hòa" },
@@ -122,6 +125,36 @@ test("central staff can manage all warehouses while branch kitchen stays in its 
   assert.equal(kitchenPolicy.scope, "branch");
   assert.equal(kitchenPolicy.branchOptions.length, 1);
   assert.equal(kitchenPolicy.canManageInventory, false);
+  assert.equal(canManageInventoryAcrossWarehouses(kitchenPolicy), false);
+});
+
+test("central inventory sees shared branch recipes while warehouse filtering stays scoped", () => {
+  const centralWarehouse = { id: "warehouse-central", warehouseType: "central" };
+  const branchWarehouse = { id: "warehouse-branch", warehouseType: "branch" };
+  const rows = [
+    { id: "central-recipe", defaultWarehouseId: centralWarehouse.id, productionScope: "central" },
+    { id: "shared-branch-recipe", defaultWarehouseId: "", productionScope: "branch" },
+    { id: "other-branch-recipe", defaultWarehouseId: branchWarehouse.id, productionScope: "branch" }
+  ];
+  const warehouses = [centralWarehouse, branchWarehouse];
+
+  assert.deepEqual(
+    filterInventoryRowsByWarehouse(rows, centralWarehouse.id, warehouses).map((row) => row.id),
+    ["central-recipe"]
+  );
+  assert.deepEqual(
+    filterInventoryRowsByWarehouse(
+      rows,
+      centralWarehouse.id,
+      warehouses,
+      { includeSharedBranchRows: true }
+    ).map((row) => row.id),
+    ["central-recipe", "shared-branch-recipe"]
+  );
+  assert.deepEqual(
+    filterInventoryRowsByWarehouse(rows, branchWarehouse.id, warehouses).map((row) => row.id),
+    ["shared-branch-recipe", "other-branch-recipe"]
+  );
 });
 
 test("kitchen without an assigned branch remains blocked", () => {

@@ -20,7 +20,13 @@ import { resolveBranchFromCandidates } from "../../../services/branchIdentitySer
 import { filterInventoryItemsByWarehouse } from "../../../services/inventoryMasterDataService.js";
 import { buildInventoryMenuEntities } from "../../../services/inventoryMenuEntityService.js";
 import { getInventoryRoute } from "./inventoryNavigation.js";
-import { getInventoryAccessPolicy, getInventoryScopedWarehouses } from "./inventoryAccessPolicy.js";
+import {
+  canManageInventoryAcrossWarehouses,
+  filterInventoryRowsByWarehouse,
+  getInventoryAccessPolicy,
+  getInventoryScopedWarehouses,
+  rowMatchesInventoryWarehouse
+} from "./inventoryAccessPolicy.js";
 import InventoryWarehouseManager from "./InventoryWarehouseManager.jsx";
 import InventoryCatalogManager from "./InventoryCatalogManager.jsx";
 import InventoryMasterDataManager from "./InventoryMasterDataManager.jsx";
@@ -40,26 +46,6 @@ import InventoryCostAnalysis from "./InventoryCostAnalysis.jsx";
 import InventoryOpeningBalanceManager from "./InventoryOpeningBalanceManager.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 
-function rowMatchesWorkspaceWarehouse(row = {}, warehouseId = "") {
-  if (!warehouseId) return true;
-  return [row.warehouseId, row.sourceWarehouseId, row.destinationWarehouseId, row.defaultWarehouseId]
-    .filter(Boolean)
-    .includes(warehouseId);
-}
-
-function filterWorkspaceRows(rows = [], warehouseId = "", warehouses = []) {
-  if (!warehouseId) return rows;
-  const selectedWarehouse = warehouses.find((warehouse) => warehouse.id === warehouseId);
-  return rows.filter((row) => (
-    rowMatchesWorkspaceWarehouse(row, warehouseId)
-    || (
-      row.productionScope === "branch"
-      && !row.defaultWarehouseId
-      && selectedWarehouse?.warehouseType === "branch"
-    )
-  ));
-}
-
 function scopeDashboardData(data = {}, warehouseId = "") {
   if (!warehouseId) return data;
   const warehouse = (data.warehouses || []).find((row) => row.id === warehouseId);
@@ -75,7 +61,7 @@ function scopeDashboardData(data = {}, warehouseId = "") {
       pendingCount: warehouse.pendingCount
     },
     activity7d: null,
-    actions: (data.actions || []).filter((row) => rowMatchesWorkspaceWarehouse(row, warehouseId)),
+    actions: (data.actions || []).filter((row) => rowMatchesInventoryWarehouse(row, warehouseId)),
     warehouses: [warehouse]
   };
 }
@@ -408,7 +394,7 @@ export default function InventoryWorkspace({
   const connectionStatus = activeDataState?.status || dataStatus;
   const connectionError = activeDataState?.message || dataError;
   const retryConnection = activeDataState?.refresh || onRetry;
-  const canManageGlobalData = accessPolicy.scope === "global" || accessPolicy.canManageInventory === true;
+  const canManageGlobalData = canManageInventoryAcrossWarehouses(accessPolicy);
   const canWriteWarehouses = canManageGlobalData
     && warehouseState.status === "ready"
     && warehouseState.writeEnabled;
@@ -489,7 +475,7 @@ export default function InventoryWorkspace({
           ? <InventoryDashboard data={workspaceDashboardData} warehouseScoped={Boolean(workspaceWarehouseId)} />
           : isOpeningBalancePage
             ? <InventoryOpeningBalanceManager
-                rows={filterWorkspaceRows(openingBalanceState.rows, workspaceWarehouseId)}
+                rows={filterInventoryRowsByWarehouse(openingBalanceState.rows, workspaceWarehouseId)}
                 warehouses={activeWarehouses}
                 items={workspaceItems}
                 units={itemUnitsState.rows}
@@ -516,7 +502,7 @@ export default function InventoryWorkspace({
                     domain={documentDomain}
                     rows={readsRequisitionNetwork
                       ? documentState.rows
-                      : filterWorkspaceRows(documentState.rows, workspaceWarehouseId)}
+                      : filterInventoryRowsByWarehouse(documentState.rows, workspaceWarehouseId)}
                     warehouses={operationWarehouses}
                     items={operationItems}
                     units={itemUnitsState.rows}
@@ -547,12 +533,12 @@ export default function InventoryWorkspace({
                     requestCreationMode={canManageGlobalData ? "admin_on_behalf" : "warehouse_self"}
                     warehouseSelectionLocked={warehouseSelectionLocked}
                     actingWarehouseId={workspaceWarehouseId}
-                    canActAcrossWarehouses={accessPolicy.scope === "global"}
+                    canActAcrossWarehouses={canManageGlobalData}
                     canApproveRequisitions={accessPolicy.scope !== "branch"}
                   />
               : isLedgerPage
                 ? <InventoryLedger
-                    rows={filterWorkspaceRows(ledgerState.rows, workspaceWarehouseId)}
+                    rows={filterInventoryRowsByWarehouse(ledgerState.rows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
                     items={workspaceItems}
                     units={itemUnitsState.rows}
@@ -566,7 +552,7 @@ export default function InventoryWorkspace({
                   />
               : isStockFlowPage
                 ? <InventoryStockFlowReport
-                    rows={filterWorkspaceRows(stockFlowState.rows, workspaceWarehouseId)}
+                    rows={filterInventoryRowsByWarehouse(stockFlowState.rows, workspaceWarehouseId)}
                     summary={stockFlowState.summary}
                     warehouses={scopedWarehouses}
                     items={workspaceItems}
@@ -579,7 +565,7 @@ export default function InventoryWorkspace({
                   />
               : isReportPage
                 ? <InventoryStockReport
-                    rows={filterWorkspaceRows(stockReportState.rows, workspaceWarehouseId)}
+                    rows={filterInventoryRowsByWarehouse(stockReportState.rows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
                     items={workspaceItems}
                     units={itemUnitsState.rows}
@@ -590,7 +576,7 @@ export default function InventoryWorkspace({
                   />
               : isLotPage
                 ? <InventoryLotReport
-                    rows={filterWorkspaceRows(lotReportState.rows, workspaceWarehouseId)}
+                    rows={filterInventoryRowsByWarehouse(lotReportState.rows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
                     items={workspaceItems}
                     units={itemUnitsState.rows}
@@ -612,8 +598,8 @@ export default function InventoryWorkspace({
                   />
               : isCostAnalysisPage
                 ? <InventoryCostAnalysis
-                    salesRows={filterWorkspaceRows(costAnalysisState.salesRows, workspaceWarehouseId)}
-                    productionRows={filterWorkspaceRows(costAnalysisState.productionRows, workspaceWarehouseId)}
+                    salesRows={filterInventoryRowsByWarehouse(costAnalysisState.salesRows, workspaceWarehouseId)}
+                    productionRows={filterInventoryRowsByWarehouse(costAnalysisState.productionRows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
                     items={workspaceItems}
                     units={itemUnitsState.rows}
@@ -626,7 +612,7 @@ export default function InventoryWorkspace({
                   />
               : isCountPage
                 ? <InventoryCountManager
-                    rows={filterWorkspaceRows(countState.rows, workspaceWarehouseId)}
+                    rows={filterInventoryRowsByWarehouse(countState.rows, workspaceWarehouseId)}
                     warehouses={operationWarehouses}
                     items={operationItems}
                     units={itemUnitsState.rows}
@@ -646,7 +632,12 @@ export default function InventoryWorkspace({
                   />
               : isBomPage
                 ? <InventoryBomManager
-                    rows={filterWorkspaceRows(bomState.rows, workspaceWarehouseId, scopedWarehouses)}
+                    rows={filterInventoryRowsByWarehouse(
+                      bomState.rows,
+                      workspaceWarehouseId,
+                      scopedWarehouses,
+                      { includeSharedBranchRows: canManageGlobalData }
+                    )}
                     items={workspaceItems}
                     units={itemUnitsState.rows}
                     warehouses={scopedWarehouses}
@@ -661,7 +652,7 @@ export default function InventoryWorkspace({
                   />
               : isProductionPage
                 ? <InventoryProductionOrderManager
-                    rows={filterWorkspaceRows(productionState.rows, workspaceWarehouseId)}
+                    rows={filterInventoryRowsByWarehouse(productionState.rows, workspaceWarehouseId)}
                     boms={bomState.rows}
                     warehouses={operationWarehouses}
                     units={itemUnitsState.rows}
@@ -678,7 +669,7 @@ export default function InventoryWorkspace({
                   />
               : isReconciliationPage
                 ? <InventorySalesReconciliation
-                    rows={filterWorkspaceRows(salesConfigurationState.salesEvents, workspaceWarehouseId)}
+                    rows={filterInventoryRowsByWarehouse(salesConfigurationState.salesEvents, workspaceWarehouseId)}
                     branches={scopedBranches}
                     warehouses={operationWarehouses}
                     items={operationItems}
