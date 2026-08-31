@@ -125,6 +125,12 @@ export default function InventoryMasterDataModal({
       && selectedPurchaseUnit.id !== form.baseUnitId
       && purchaseConversionToBase > 0
   );
+  const isChangingBaseUnit = Boolean(
+    record?.id
+      && record.baseUnitId
+      && form.baseUnitId
+      && record.baseUnitId !== form.baseUnitId
+  );
   const activeWarehouses = useMemo(
     () => warehouses.filter((warehouse) => warehouse.isActive !== false),
     [warehouses]
@@ -371,6 +377,13 @@ export default function InventoryMasterDataModal({
                   <Icon name="tag" size={18} />
                   <span>Đơn vị nhập: <strong>1 {selectedPurchaseUnit?.symbol || selectedPurchaseUnit?.name} = {purchaseConversionToBase.toLocaleString("vi-VN", { maximumFractionDigits: 6 })} {selectedDisplayBaseUnit?.symbol || selectedDisplayBaseUnit?.name || "đơn vị gốc"}</strong></span>
                   <small>Tỷ lệ riêng của {form.name || "nguyên vật liệu này"}.</small>
+                </div>
+              ) : null}
+              {isChangingBaseUnit ? (
+                <div className="inventory-item-purchase-summary full-field">
+                  <Icon name="refresh" size={18} />
+                  <span>Đang đổi đơn vị tồn kho từ <strong>{record.baseUnit?.name || "đơn vị cũ"}</strong> sang <strong>{selectedDisplayUnit?.name || "đơn vị mới"}</strong></span>
+                  <small>Khi lưu, hệ thống sẽ tự quy đổi số tồn, giá vốn và sổ kho để giữ nguyên lượng hàng và tổng giá trị.</small>
                 </div>
               ) : null}
               {selectedDisplayUnit ? <div className="inventory-item-storage-summary full-field"><Icon name="refresh" size={18} /><span>Kho theo dõi tồn bằng: <strong>{selectedDisplayUnit.name}</strong></span><small>Đơn vị mua / nhập sẽ được tính theo tỷ lệ riêng của nguyên vật liệu này.</small></div> : null}
