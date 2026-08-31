@@ -992,6 +992,7 @@
 .inventory-bom-guide span { color: #64806f; }
 .inventory-bom-summary { margin-top: 12px; border-top: 1px solid #eee4dc; border-bottom: 1px solid #eee4dc; }
 .inventory-bom-toolbar { grid-template-columns: minmax(280px, 1fr) 190px; }
+.inventory-bom-toolbar.is-channel-filters { grid-template-columns: minmax(280px, 1fr) repeat(3, minmax(165px, 190px)); }
 .inventory-reconciliation-toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(145px, 170px)) minmax(160px, 190px) minmax(190px, 240px); align-items: stretch; }
 .inventory-reconciliation-date { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 7px; min-height: 39px; padding: 0 10px; border: 1px solid #dfd3c8; border-radius: 10px; background: #fff; color: #756154; }
 .inventory-reconciliation-date span { font-size: .68rem; font-weight: 800; white-space: nowrap; }
@@ -1141,6 +1142,13 @@
 .inventory-sales-tabs button span { min-width: 21px; padding: 2px 6px; border-radius: 999px; background: #eee7e1; color: #67564d; font-size: .7rem; }
 .inventory-sales-tabs button span.is-alert { background: #d96c17; color: #fff; }
 .inventory-sales-safe-note { display: flex; align-items: center; gap: 8px; margin: 10px 14px 0; padding: 9px 11px; border: 1px solid #c9e5d2; border-radius: 9px; background: #f2fbf5; color: #34704a; font-size: .77rem; font-weight: 700; }
+.inventory-recipe-coverage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; padding: 10px 14px 0; }
+.inventory-recipe-coverage button { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border: 1px solid #eadfd5; border-radius: 10px; background: #fff; text-align: left; cursor: pointer; }
+.inventory-recipe-coverage button.is-active { border-color: #dd7b31; box-shadow: 0 0 0 2px rgba(221, 123, 49, .12); }
+.inventory-recipe-coverage button > span { justify-self: start; }
+.inventory-recipe-coverage button > strong { color: #4d392e; font-size: 1.05rem; }
+.inventory-recipe-coverage button > small { grid-column: 1 / -1; color: #8c786b; }
+.inventory-sales-missing-row { background: #fcfaf8; }
 .inventory-sales-table { min-width: 980px; }
 .inventory-channel-table { min-width: 1050px; }
 .inventory-sales-events-table { min-width: 1120px; }
@@ -1189,6 +1197,8 @@
 .inventory-bom-status.is-warning { background: #fff0dc; color: #b65a13; }
 .inventory-sales-actions { flex-wrap: nowrap; }
 .inventory-sales-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; width: auto; min-width: max-content; padding: 0 9px; white-space: nowrap; }
+.inventory-sales-actions button.is-muted { border-color: #ded5ce; background: #f7f4f1; color: #705f55; }
+.inventory-sales-actions button.is-muted:hover:not(:disabled) { border-color: #c8b8ac; background: #eee8e3; }
 .inventory-channel-filter-note { display: flex; align-items: center; gap: 8px; margin: 8px 14px 0; color: #7a685d; font-size: .75rem; font-weight: 650; }
 .inventory-channel-kind-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px 14px 2px; }
 .inventory-channel-kind-cards > button { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 68px; padding: 11px 12px; border: 1px solid #e2d5ca; border-radius: 11px; background: #fff; color: #5f4a3e; font: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease; }
@@ -1199,13 +1209,14 @@
 .inventory-channel-kind-cards strong, .inventory-channel-kind-cards small { display: block; }
 .inventory-channel-kind-cards strong { font-size: .78rem; }
 .inventory-channel-kind-cards small { margin-top: 3px; color: #8b786c; font-size: .66rem; }
-.inventory-channel-kind-cards b { min-width: 29px; padding: 5px 7px; border-radius: 999px; background: #eee7e1; color: #705e53; font-size: .7rem; text-align: center; }
+.inventory-channel-kind-cards b { min-width: 29px; padding: 5px 8px; border-radius: 999px; background: #eee7e1; color: #705e53; font-size: .67rem; text-align: center; white-space: nowrap; }
 .inventory-channel-kind-cards > button.is-active b { background: #d96c17; color: #fff; }
-.inventory-channel-badge, .inventory-channel-ignore-badge { display: inline-flex; align-items: center; width: max-content; padding: 4px 8px; border-radius: 999px; background: #eef4ff; color: #3569a9; font-size: .7rem; font-weight: 800; }
+.inventory-channel-badge, .inventory-channel-ignore-badge, .inventory-channel-discontinued-badge { display: inline-flex; align-items: center; width: max-content; padding: 4px 8px; border-radius: 999px; background: #eef4ff; color: #3569a9; font-size: .7rem; font-weight: 800; }
 .inventory-channel-badge.is-grabfood { background: #eaf8ef; color: #177346; }
 .inventory-channel-badge.is-shopeefood { background: #fff0eb; color: #c84f28; }
 .inventory-channel-badge.is-xanhngon { background: #eaf8f7; color: #14786e; }
 .inventory-channel-ignore-badge { background: #f1ede9; color: #715e53; }
+.inventory-channel-discontinued-badge { background: #f9e9e6; color: #a64d3f; }
 .inventory-default-warehouse-panel { margin-top: 10px; border-top: 1px solid #eadfd5; }
 .inventory-default-warehouse-panel__intro { display: flex; align-items: center; gap: 10px; padding: 13px 16px; background: #fcfaf8; }
 .inventory-default-warehouse-panel__intro > span { display: grid; width: 34px; height: 34px; place-items: center; flex: 0 0 auto; border-radius: 9px; background: #fff0dc; color: #c85e12; }
@@ -1238,6 +1249,16 @@
 .inventory-sales-form-section__title.is-actions { justify-content: space-between; }
 .inventory-sales-form-section__title.is-actions > div { display: flex; align-items: center; gap: 7px; }
 .inventory-sales-form-section__title button { min-height: 31px; padding: 0 10px; border-color: #dfc8b7; background: #fff; color: #b85710; font-size: .74rem; }
+.inventory-sales-recipe-mode { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 12px; }
+.inventory-sales-recipe-mode button { display: flex; gap: 10px; align-items: flex-start; min-height: 68px; padding: 12px; border: 1px solid #e2d5cb; border-radius: 10px; background: #fff; color: #6d584c; text-align: left; cursor: pointer; }
+.inventory-sales-recipe-mode button.is-active { border-color: #df721f; background: #fff8ef; color: #b9550d; box-shadow: 0 0 0 2px rgba(223, 114, 31, .1); }
+.inventory-sales-recipe-mode button:disabled { cursor: default; }
+.inventory-sales-recipe-mode button span, .inventory-sales-recipe-mode button strong, .inventory-sales-recipe-mode button small { display: block; }
+.inventory-sales-recipe-mode button small { margin-top: 4px; color: #8b786c; font-weight: 600; }
+.inventory-sales-shared-select { padding: 0 12px 12px; }
+.inventory-sales-shared-note { display: flex; gap: 10px; align-items: center; padding: 13px; border: 1px solid #d8e3ed; border-radius: 10px; background: #f5f9fc; color: #49677d; }
+.inventory-sales-shared-note strong, .inventory-sales-shared-note span { display: block; }
+.inventory-sales-shared-note span { margin-top: 3px; color: #6e8290; font-size: .75rem; }
 .inventory-sales-lines, .inventory-channel-targets { display: grid; }
 .inventory-sales-line { display: grid; grid-template-columns: minmax(210px, 2fr) minmax(92px, .7fr) minmax(130px, 1fr) minmax(95px, .7fr) minmax(90px, .7fr) 38px; gap: 9px; align-items: end; padding: 11px 12px; border-top: 1px solid #f0e7e0; }
 .inventory-sales-line:first-child { border-top: 0; }
@@ -1256,6 +1277,7 @@
 .inventory-channel-source strong, .inventory-channel-source small, .inventory-channel-source span { display: block; }
 .inventory-channel-source small, .inventory-channel-source > div:last-child span { margin-top: 3px; color: #8d7a6e; font-size: .7rem; }
 .inventory-channel-ignore { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #e5d9d0; border-radius: 10px; background: #fbf9f7; cursor: pointer; }
+.inventory-channel-ignore.is-selected { border-color: #d2b79f; background: #fff8ef; }
 .inventory-channel-ignore input { width: 18px; height: 18px; accent-color: #d96c17; }
 .inventory-channel-ignore strong, .inventory-channel-ignore small { display: block; }
 .inventory-channel-ignore small { margin-top: 3px; color: #8c796d; }
@@ -1358,6 +1380,7 @@
 }
 
 @media (max-width: 700px) {
+  .inventory-recipe-coverage, .inventory-sales-recipe-mode { grid-template-columns: 1fr; }
   .inventory-page-head { display: grid; }
   .inventory-scope-badge { min-width: 0; width: fit-content; }
   .inventory-state { align-items: flex-start; flex-wrap: wrap; }

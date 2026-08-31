@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   calculateSalesRecipeComponent,
+  getInventorySalesRecipeCoverage,
+  getInventorySalesRecipeScopeConflict,
   getChannelCandidateIdentity,
   isChannelCandidateMapped,
   normalizeInventoryChannelMappingInput,
@@ -18,7 +20,8 @@ const units = [
 const items = [{ id: "item-1", name: "Xoài sơ chế", baseUnitId: "gram", purchaseUnitId: "kg", purchaseToBaseRatio: 1000, isActive: true }];
 const menuEntities = [
   { id: "menu-1", name: "Bánh tráng trộn", type: "product", price: 35000 },
-  { id: "menu-2", name: "Trà tắc", type: "product", price: 15000 }
+  { id: "menu-2", name: "Trà tắc", type: "product", price: 15000 },
+  { id: "topping-1", name: "Hành Phi", type: "topping", price: 0 }
 ];
 
 test("quy đổi định lượng và hao hụt về đúng đơn vị tồn", () => {
@@ -36,6 +39,49 @@ test("định lượng món bán giữ liên kết bằng ID ổn định", () =
   }, { menuEntities, items, units });
   assert.equal(result.menuEntityId, "menu-1");
   assert.equal(result.components[0].conversionToBase, 1000);
+});
+
+test("món trùng tên có thể dùng chung một định lượng gốc", () => {
+  const result = normalizeInventorySalesRecipeInput({
+    menuEntityType: "topping",
+    menuEntityId: "topping-1",
+    recipeMode: "shared",
+    sharedMenuEntityType: "product",
+    sharedMenuEntityId: "menu-1",
+    yieldQuantity: 1,
+    components: [{ itemId: "item-1", quantity: 5, unitId: "gram" }]
+  }, { menuEntities, items, units });
+  assert.equal(result.sharedMenuEntityId, "menu-1");
+  assert.equal(result.sharedMenuEntityName, "Bánh tráng trộn");
+  assert.deepEqual(result.components, []);
+});
+
+test("không cho một món dùng chung định lượng với chính nó", () => {
+  assert.throws(() => normalizeInventorySalesRecipeInput({
+    menuEntityType: "product",
+    menuEntityId: "menu-1",
+    recipeMode: "shared",
+    sharedMenuEntityType: "product",
+    sharedMenuEntityId: "menu-1"
+  }, { menuEntities, items, units }), /chính nó/);
+});
+
+test("trạng thái bao phủ ưu tiên đang áp dụng rồi đến bản nháp", () => {
+  assert.equal(getInventorySalesRecipeCoverage(menuEntities[0], [
+    { menuEntityType: "product", menuEntityId: "menu-1", status: "draft" },
+    { menuEntityType: "product", menuEntityId: "menu-1", status: "active" }
+  ]), "active");
+  assert.equal(getInventorySalesRecipeCoverage(menuEntities[1], []), "missing");
+});
+
+test("chặn bản nháp trùng nhưng cho phép tạo phiên bản mới từ bản đang áp dụng", () => {
+  const recipes = [
+    { id: "draft-1", menuEntityType: "product", menuEntityId: "menu-1", branchUuid: "", status: "draft" },
+    { id: "active-1", menuEntityType: "product", menuEntityId: "menu-2", branchUuid: "", status: "active" }
+  ];
+  assert.equal(getInventorySalesRecipeScopeConflict({ recipes, menuEntityId: "menu-1" })?.type, "draft");
+  assert.equal(getInventorySalesRecipeScopeConflict({ recipes, menuEntityId: "menu-2" })?.type, "active");
+  assert.equal(getInventorySalesRecipeScopeConflict({ recipes, menuEntityId: "menu-2", allowActiveVersion: true }), null);
 });
 
 test("combo app có thể gán nhiều món Menu mà không cần tạo combo mới", () => {
@@ -106,6 +152,23 @@ test("lựa chọn mức cay có thể đánh dấu không trừ kho", () => {
     externalOptionName: "Cay vừa",
     ignoreInventory: true
   }, { menuEntities });
+  assert.deepEqual(result.targets, []);
+});
+
+test("món ngưng bán là trạng thái riêng và không cần gán Menu", () => {
+  const result = normalizeInventoryChannelMappingInput({
+    partnerSource: "xanhngon",
+    branchUuid: "branch-1",
+    mappingKind: "item",
+    externalItemId: "old-item-1",
+    externalItemName: "Món ngưng bán",
+    status: "inactive",
+    ignoreInventory: false,
+    notes: "Món ngưng bán"
+  }, { menuEntities });
+  assert.equal(result.status, "inactive");
+  assert.equal(result.ignoreInventory, false);
+  assert.equal(result.notes, "Món ngưng bán");
   assert.deepEqual(result.targets, []);
 });
 

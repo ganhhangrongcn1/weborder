@@ -12,7 +12,9 @@ import {
 
 const RECIPE_SELECT = `
   id,code,menu_entity_type,menu_entity_id,menu_entity_name,branch_uuid,version,
-  yield_quantity,status,effective_from,effective_to,notes,metadata,created_at,updated_at,deleted_at,
+  yield_quantity,status,effective_from,effective_to,notes,metadata,
+  shared_menu_entity_type,shared_menu_entity_id,shared_menu_entity_name,
+  created_at,updated_at,deleted_at,
   components:inventory_sales_recipe_components(
     id,recipe_id,item_id,quantity,unit_id,conversion_to_base,base_quantity,waste_percent,
     display_order,notes,
@@ -84,6 +86,9 @@ function normalizeRecipe(row = {}) {
     effectiveFrom: toText(row.effective_from),
     effectiveTo: toText(row.effective_to),
     notes: toText(row.notes),
+    sharedMenuEntityType: toText(row.shared_menu_entity_type),
+    sharedMenuEntityId: toText(row.shared_menu_entity_id),
+    sharedMenuEntityName: toText(row.shared_menu_entity_name),
     components: (Array.isArray(row.components) ? row.components : []).map((component) => ({
       id: toText(component.id),
       itemId: toText(component.item_id),
@@ -302,7 +307,7 @@ export async function saveInventorySalesRecipe({ input = {}, menuEntities = [], 
   const client = await getInventoryClient();
   if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
   const draft = normalizeInventorySalesRecipeInput(input, { menuEntities, items, units });
-  const { data, error } = await client.rpc("inventory_save_sales_recipe_draft", {
+  const { data, error } = await client.rpc("inventory_save_sales_recipe_draft_v2", {
     p_recipe_id: draft.id || null,
     p_menu_entity_type: draft.menuEntityType,
     p_menu_entity_id: draft.menuEntityId,
@@ -311,6 +316,9 @@ export async function saveInventorySalesRecipe({ input = {}, menuEntities = [], 
     p_yield_quantity: draft.yieldQuantity,
     p_effective_from: draft.effectiveFrom,
     p_notes: draft.notes || null,
+    p_shared_menu_entity_type: draft.sharedMenuEntityType || null,
+    p_shared_menu_entity_id: draft.sharedMenuEntityId || null,
+    p_shared_menu_entity_name: draft.sharedMenuEntityName || null,
     p_components: draft.components
   });
   recordAdminRequest(`${draft.id ? "update" : "create"} inventory sales recipe`, "inventory_sales_recipes");
@@ -352,7 +360,7 @@ export async function saveInventoryChannelMapping({ input = {}, menuEntities = [
   if (!canWriteInventorySalesConfiguration()) throw new Error("Ghi dữ liệu Kho đang bị khóa an toàn.");
   const client = await getInventoryClient();
   const mapping = normalizeInventoryChannelMappingInput(input, { menuEntities });
-  const { data, error } = await client.rpc("inventory_save_channel_mapping", {
+  const { data, error } = await client.rpc("inventory_save_channel_mapping_v2", {
     p_mapping_id: mapping.id || null,
     p_partner_source: mapping.partnerSource,
     p_branch_uuid: mapping.branchUuid,
@@ -362,6 +370,7 @@ export async function saveInventoryChannelMapping({ input = {}, menuEntities = [
     p_external_option_group: mapping.externalOptionGroup,
     p_external_option_name: mapping.externalOptionName,
     p_ignore_inventory: mapping.ignoreInventory,
+    p_status: mapping.status,
     p_notes: mapping.notes || null,
     p_targets: mapping.targets
   });

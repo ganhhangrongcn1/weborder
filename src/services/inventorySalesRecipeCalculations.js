@@ -48,9 +48,23 @@ export function normalizeInventorySalesRecipeInput(input = {}, {
   const menuEntity = menuEntities.find((entity) => entity.id === menuEntityId && entity.type === menuEntityType);
   if (!menuEntity) throw new Error("Vui lòng chọn món hoặc topping trong Menu.");
 
+  const sharedMenuEntityType = input.recipeMode === "shared"
+    ? (input.sharedMenuEntityType === "topping" ? "topping" : "product")
+    : "";
+  const sharedMenuEntityId = input.recipeMode === "shared" ? toText(input.sharedMenuEntityId) : "";
+  const sharedMenuEntity = sharedMenuEntityId
+    ? menuEntities.find((entity) => entity.id === sharedMenuEntityId && entity.type === sharedMenuEntityType)
+    : null;
+  if (input.recipeMode === "shared" && !sharedMenuEntity) {
+    throw new Error("Vui lòng chọn định lượng gốc muốn dùng chung.");
+  }
+  if (sharedMenuEntity && sharedMenuEntity.id === menuEntityId && sharedMenuEntity.type === menuEntityType) {
+    throw new Error("Một món không thể dùng chung định lượng với chính nó.");
+  }
+
   const yieldQuantity = toPositiveNumber(input.yieldQuantity || 1, "Số phần chuẩn phải lớn hơn 0.");
   const usedItems = new Set();
-  const components = (Array.isArray(input.components) ? input.components : []).map((component, index) => {
+  const components = (sharedMenuEntity ? [] : (Array.isArray(input.components) ? input.components : [])).map((component, index) => {
     const itemId = toText(component.itemId);
     const item = items.find((row) => row.id === itemId && row.isActive !== false);
     if (!item) throw new Error(`Thành phần dòng ${index + 1} không còn sử dụng.`);
@@ -73,7 +87,7 @@ export function normalizeInventorySalesRecipeInput(input = {}, {
       conversionToBase: getInventoryUnitToBaseFactor(item, unit)
     };
   });
-  if (!components.length) throw new Error("Định lượng món bán phải có ít nhất một thành phần.");
+  if (!sharedMenuEntity && !components.length) throw new Error("Định lượng món bán phải có ít nhất một thành phần.");
 
   return {
     id: toText(input.id),
@@ -84,8 +98,45 @@ export function normalizeInventorySalesRecipeInput(input = {}, {
     yieldQuantity,
     effectiveFrom: toText(input.effectiveFrom) || new Date().toISOString().slice(0, 10),
     notes: toText(input.notes),
+    sharedMenuEntityType: sharedMenuEntity?.type || "",
+    sharedMenuEntityId: sharedMenuEntity?.id || "",
+    sharedMenuEntityName: toText(sharedMenuEntity?.name),
     components
   };
+}
+
+export function getInventorySalesRecipeCoverage(menuEntity = {}, recipes = []) {
+  const related = recipes.filter((recipe) => (
+    recipe.menuEntityType === menuEntity.type
+    && recipe.menuEntityId === menuEntity.id
+    && !recipe.deletedAt
+  ));
+  if (related.some((recipe) => recipe.status === "active")) return "active";
+  if (related.some((recipe) => recipe.status === "draft")) return "draft";
+  return "missing";
+}
+
+export function getInventorySalesRecipeScopeConflict({
+  recipes = [],
+  menuEntityType = "product",
+  menuEntityId = "",
+  branchUuid = "",
+  recipeId = "",
+  allowActiveVersion = false
+} = {}) {
+  if (!menuEntityId) return null;
+  const related = recipes.filter((recipe) => (
+    recipe.id !== recipeId
+    && recipe.menuEntityType === menuEntityType
+    && recipe.menuEntityId === menuEntityId
+    && String(recipe.branchUuid || "") === String(branchUuid || "")
+    && !recipe.deletedAt
+  ));
+  const draft = related.find((recipe) => recipe.status === "draft");
+  if (draft) return { type: "draft", recipe: draft };
+  const active = related.find((recipe) => recipe.status === "active");
+  if (active && !allowActiveVersion) return { type: "active", recipe: active };
+  return null;
 }
 
 export function normalizeInventoryChannelMappingInput(input = {}, { menuEntities = [] } = {}) {
@@ -98,6 +149,7 @@ export function normalizeInventoryChannelMappingInput(input = {}, { menuEntities
   const externalOptionGroup = mappingKind === "option" ? toText(input.externalOptionGroup) : "";
   const externalOptionName = mappingKind === "option" ? toText(input.externalOptionName) : "";
   const ignoreInventory = input.ignoreInventory === true;
+  const status = input.status === "inactive" ? "inactive" : "active";
   if (!branchUuid) throw new Error("Vui lòng chọn chi nhánh của món app.");
   if (!externalItemName) throw new Error("Vui lòng nhập tên món trên app.");
   if (mappingKind === "option" && (!externalOptionGroup || !externalOptionName)) {
@@ -105,7 +157,7 @@ export function normalizeInventoryChannelMappingInput(input = {}, { menuEntities
   }
 
   const usedTargets = new Set();
-  const targets = ignoreInventory ? [] : (Array.isArray(input.targets) ? input.targets : []).map((target, index) => {
+  const targets = ignoreInventory || status === "inactive" ? [] : (Array.isArray(input.targets) ? input.targets : []).map((target, index) => {
     const menuEntityType = target.menuEntityType === "topping" ? "topping" : "product";
     const menuEntityId = toText(target.menuEntityId);
     const entity = menuEntities.find((row) => row.id === menuEntityId && row.type === menuEntityType);
@@ -121,7 +173,7 @@ export function normalizeInventoryChannelMappingInput(input = {}, { menuEntities
       displayOrder: index
     };
   });
-  if (!ignoreInventory && !targets.length) {
+  if (status === "active" && !ignoreInventory && !targets.length) {
     throw new Error("Vui lòng gán ít nhất một món Menu hoặc chọn Không trừ kho.");
   }
 
@@ -135,6 +187,7 @@ export function normalizeInventoryChannelMappingInput(input = {}, { menuEntities
     externalOptionGroup,
     externalOptionName,
     ignoreInventory,
+    status,
     notes: toText(input.notes),
     targets
   };
@@ -180,6 +233,8 @@ export function isChannelCandidateMapped(candidate = {}, mappings = []) {
 
 export default {
   calculateSalesRecipeComponent,
+  getInventorySalesRecipeCoverage,
+  getInventorySalesRecipeScopeConflict,
   getChannelCandidateIdentity,
   isChannelCandidateMapped,
   normalizeInventoryChannelMappingInput,

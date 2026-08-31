@@ -17,6 +17,7 @@ function initialForm(source = {}) {
     externalOptionGroup: source.externalOptionGroup || "",
     externalOptionName: source.externalOptionName || "",
     ignoreInventory: source.ignoreInventory === true,
+    status: source.status === "inactive" ? "inactive" : "active",
     notes: source.notes || "",
     targets: source.targets?.length ? source.targets.map((target) => ({ ...target })) : [createTarget()]
   };
@@ -83,12 +84,17 @@ export default function InventoryChannelMappingModal({
             </div>
           </section>
 
-          <label className="inventory-channel-ignore">
-            <input type="checkbox" checked={form.ignoreInventory} onChange={(event) => update("ignoreInventory", event.target.checked)} />
-            <span><strong>Không trừ kho</strong><small>{isOptionMapping ? "Dùng cho mức cay, cách chế biến hoặc lựa chọn không làm thay đổi định lượng." : "Chỉ dùng khi món này không tạo ra bất kỳ phần xuất kho nào."}</small></span>
+          <label className={`inventory-channel-ignore is-discontinued${form.status === "inactive" ? " is-selected" : ""}`}>
+            <input type="checkbox" checked={form.status === "inactive"} onChange={(event) => setForm((current) => ({ ...current, status: event.target.checked ? "inactive" : "active", ignoreInventory: event.target.checked ? false : current.ignoreInventory }))} />
+            <span><strong>Ngưng bán</strong><small>Món hoặc lựa chọn không còn kinh doanh. Hệ thống ẩn khỏi danh sách cần gán nhưng không xem đây là món “không trừ kho”.</small></span>
           </label>
 
-          {!form.ignoreInventory ? (
+          {form.status !== "inactive" ? <label className={`inventory-channel-ignore${form.ignoreInventory ? " is-selected" : ""}`}>
+            <input type="checkbox" checked={form.ignoreInventory} onChange={(event) => update("ignoreInventory", event.target.checked)} />
+            <span><strong>Không trừ kho</strong><small>{isOptionMapping ? "Dùng cho mức cay, cách chế biến hoặc lựa chọn không làm thay đổi định lượng." : "Món vẫn đang bán nhưng không tạo ra bất kỳ phần xuất kho nào."}</small></span>
+          </label> : null}
+
+          {form.status === "active" && !form.ignoreInventory ? (
             <section className="inventory-sales-form-section">
               <div className="inventory-sales-form-section__title is-actions"><div><Icon name="tag" size={16} /><strong>{isOptionMapping ? "Định lượng được ghi nhận" : "Món Menu được ghi nhận"}</strong></div><button type="button" onClick={() => setForm((current) => ({ ...current, targets: [...current.targets, createTarget()] }))}><Icon name="plus" size={15} /> Thêm dòng</button></div>
               {isOptionMapping ? <div className="inventory-channel-target-hint"><Icon name="check" size={15} /> Nếu lựa chọn là một món bán lẻ, hãy gán thẳng vào món đó với số lượng 1 để dùng chung định lượng.</div> : null}
