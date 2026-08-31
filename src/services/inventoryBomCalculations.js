@@ -42,12 +42,34 @@ export function calculateBomComponentRequirement({
   wastePercent = 0,
   conversionToBase = 1
 } = {}) {
-  const netBaseQuantity = Number(quantity || 0) * Number(conversionToBase || 1);
-  const grossBaseQuantity = netBaseQuantity * (1 + Number(wastePercent || 0) / 100);
+  const grossBaseQuantity = Number(quantity || 0) * Number(conversionToBase || 1);
+  const safeWastePercent = Math.max(0, Math.min(100, Number(wastePercent || 0)));
+  const netBaseQuantity = grossBaseQuantity * (1 - safeWastePercent / 100);
   return {
     netBaseQuantity,
     grossBaseQuantity,
     wasteBaseQuantity: grossBaseQuantity - netBaseQuantity
+  };
+}
+
+export function calculateBomYieldFromInput({
+  quantity = 0,
+  wastePercent = 0,
+  inputConversionToBase = 1,
+  outputConversionToBase = 1
+} = {}) {
+  const requirement = calculateBomComponentRequirement({
+    quantity,
+    wastePercent,
+    conversionToBase: inputConversionToBase
+  });
+  const safeOutputConversion = Number(outputConversionToBase || 1) > 0
+    ? Number(outputConversionToBase)
+    : 1;
+  return {
+    ...requirement,
+    inputQuantity: Number(quantity || 0),
+    outputQuantity: requirement.netBaseQuantity / safeOutputConversion
   };
 }
 
@@ -167,6 +189,7 @@ export function normalizeInventoryBomDraft(input = {}, { items = [], units = [],
 
 export default {
   calculateBomComponentRequirement,
+  calculateBomYieldFromInput,
   getInventoryBomScopeOptions,
   hasInventoryBomCycle,
   normalizeInventoryBomDraft

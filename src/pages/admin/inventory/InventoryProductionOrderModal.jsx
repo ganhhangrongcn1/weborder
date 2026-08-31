@@ -100,7 +100,7 @@ export default function InventoryProductionOrderModal({
       : sourceComponents.map((line) => ({
         ...line,
         item: line.componentItem,
-        plannedQuantity: line.quantity * factor * (1 + Number(line.wastePercent || 0) / 100)
+        plannedQuantity: line.quantity * factor
       }));
   const sourceComponent = sourceComponents.find((line) => line.componentItemId === inputPlan.componentItemId) || {};
   const sourceUnit = sourceComponent.unit || unitById.get(sourceComponent.unitId) || {};

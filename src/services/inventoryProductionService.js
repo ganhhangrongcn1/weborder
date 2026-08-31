@@ -71,8 +71,7 @@ export function getInventoryProductionInputPlan({
     || components[0]
     || null;
   const normalizedInputQuantity = Number(inputQuantity);
-  const sourceQuantityPerBatch = Number(sourceComponent?.quantity || 0)
-    * (1 + Number(sourceComponent?.wastePercent || 0) / 100);
+  const sourceQuantityPerBatch = Number(sourceComponent?.quantity || 0);
   const factor = sourceQuantityPerBatch > 0 && Number.isFinite(normalizedInputQuantity) && normalizedInputQuantity > 0
     ? normalizedInputQuantity / sourceQuantityPerBatch
     : 0;
@@ -88,9 +87,7 @@ export function getInventoryProductionInputPlan({
     lines: components.map((line) => ({
       ...line,
       item: line.componentItem,
-      plannedQuantity: Number(line.quantity || 0)
-        * factor
-        * (1 + Number(line.wastePercent || 0) / 100)
+      plannedQuantity: Number(line.quantity || 0) * factor
     }))
   };
 }

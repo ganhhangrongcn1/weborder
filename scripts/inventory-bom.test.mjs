@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   calculateBomComponentRequirement,
+  calculateBomYieldFromInput,
   getInventoryBomScopeOptions,
   hasInventoryBomCycle,
   normalizeInventoryBomDraft
@@ -157,11 +158,40 @@ test("mặt hàng lưu theo cái vẫn nhập được theo kg bằng tỷ lệ 
   assert.equal(getInventoryUnitToBaseFactor(item, unitsById.get("kg")), 40);
 });
 
-test("tính lượng cần chuẩn bị gồm hao hụt", () => {
+test("hao hụt làm giảm đầu ra thay vì cộng thêm nguyên liệu", () => {
   assert.deepEqual(
     calculateBomComponentRequirement({ quantity: 2, wastePercent: 5, conversionToBase: 1000 }),
-    { netBaseQuantity: 2000, grossBaseQuantity: 2100, wasteBaseQuantity: 100 }
+    { netBaseQuantity: 1900, grossBaseQuantity: 2000, wasteBaseQuantity: 100 }
   );
+  assert.deepEqual(
+    calculateBomYieldFromInput({
+      quantity: 1,
+      wastePercent: 30,
+      inputConversionToBase: 1000,
+      outputConversionToBase: 1000
+    }),
+    {
+      inputQuantity: 1,
+      grossBaseQuantity: 1000,
+      netBaseQuantity: 700,
+      wasteBaseQuantity: 300,
+      outputQuantity: 0.7
+    }
+  );
+});
+
+test("lệnh sơ chế trừ đúng lượng nguyên liệu ban đầu, không cộng hao hụt lần hai", () => {
+  const plan = getInventoryProductionInputPlan({
+    bom: {
+      yieldQuantity: 0.7,
+      components: [{ componentItemId: "raw-herb", quantity: 1, wastePercent: 30, unitId: "kg" }]
+    },
+    componentItemId: "raw-herb",
+    inputQuantity: 10
+  });
+
+  assert.equal(plan.plannedOutputQuantity, 7);
+  assert.equal(plan.lines[0].plannedQuantity, 10);
 });
 
 test("chuẩn hóa BOM nhiều cấp hợp lệ và giữ hệ số quy đổi", () => {

@@ -3,12 +3,14 @@ import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   calculateBomComponentRequirement,
+  calculateBomYieldFromInput,
   getInventoryBomScopeOptions,
   INVENTORY_BOM_SCOPE_OPTIONS
 } from "../../../services/inventoryBomCalculations.js";
 import {
   getInventoryCompatibleUnits,
-  getInventoryItemDisplayUnitConfig
+  getInventoryItemDisplayUnitConfig,
+  getInventoryUnitToBaseFactor
 } from "../../../services/inventoryUnitConversion.js";
 
 function createLine() {
@@ -74,9 +76,42 @@ export default function InventoryBomModal({
   const materialComponents = availableComponentItems.filter((item) => item.itemType !== "semi_finished");
   const hasOutputItem = Boolean(form.outputItemId && outputItem.id);
 
-  const updateField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const getSingleComponentYield = (draft) => {
+    if (!draft.outputItemId || draft.components.length !== 1) return null;
+    const draftOutputItem = itemsById.get(draft.outputItemId) || {};
+    const line = draft.components[0];
+    const componentItem = itemsById.get(line.componentItemId) || {};
+    if (!componentItem.id || !draftOutputItem.id || componentItem.baseUnitId !== draftOutputItem.baseUnitId) return null;
+    const inputUnit = unitsById.get(line.unitId);
+    const outputUnit = unitsById.get(draft.yieldUnitId);
+    if (!inputUnit || !outputUnit) return null;
+    const result = calculateBomYieldFromInput({
+      quantity: line.quantity,
+      wastePercent: line.wastePercent,
+      inputConversionToBase: getInventoryUnitToBaseFactor(componentItem, inputUnit),
+      outputConversionToBase: getInventoryUnitToBaseFactor(draftOutputItem, outputUnit)
+    });
+    return {
+      ...result,
+      componentItem,
+      inputUnit,
+      outputItem: draftOutputItem,
+      outputUnit
+    };
+  };
+  const syncSingleComponentYield = (draft) => {
+    const preview = getSingleComponentYield(draft);
+    if (!preview || !Number.isFinite(preview.outputQuantity) || preview.outputQuantity <= 0) return draft;
+    return { ...draft, yieldQuantity: Number(preview.outputQuantity.toFixed(6)) };
+  };
+  const singleComponentYield = getSingleComponentYield(form);
+
+  const updateField = (field, value) => setForm((current) => {
+    const next = { ...current, [field]: value };
+    return field === "yieldUnitId" ? syncSingleComponentYield(next) : next;
+  });
   const updateLine = (index, field, value) => {
-    setForm((current) => ({
+    setForm((current) => syncSingleComponentYield({
       ...current,
       components: current.components.map((line, lineIndex) => lineIndex === index ? { ...line, [field]: value } : line)
     }));
@@ -85,7 +120,7 @@ export default function InventoryBomModal({
   const selectOutputItem = (itemId) => {
     const item = itemsById.get(itemId) || {};
     const config = getInventoryItemDisplayUnitConfig(item, unitsById);
-    setForm((current) => ({
+    setForm((current) => syncSingleComponentYield({
       ...current,
       outputItemId: itemId,
       yieldUnitId: config.unitId || "",
@@ -112,7 +147,7 @@ export default function InventoryBomModal({
   const selectComponentItem = (index, itemId) => {
     const item = itemsById.get(itemId) || {};
     const config = getInventoryItemDisplayUnitConfig(item, unitsById);
-    setForm((current) => ({
+    setForm((current) => syncSingleComponentYield({
       ...current,
       components: current.components.map((line, lineIndex) => lineIndex === index
         ? { ...line, componentItemId: itemId, unitId: config.unitId || "", wastePercent: item.defaultWastePercent || 0 }
@@ -164,6 +199,12 @@ export default function InventoryBomModal({
               <label className="inventory-form-field">
                 <span>Số lượng đầu ra *</span>
                 <input type="number" min="0.000001" step="any" value={form.yieldQuantity} disabled={readOnly} onChange={(event) => updateField("yieldQuantity", event.target.value)} required />
+                {singleComponentYield ? (
+                  <small>
+                    Tự tính: {Number(singleComponentYield.inputQuantity).toLocaleString("vi-VN", { maximumFractionDigits: 6 })} {singleComponentYield.inputUnit.name} {singleComponentYield.componentItem.name}
+                    {" → "}{Number(singleComponentYield.outputQuantity).toLocaleString("vi-VN", { maximumFractionDigits: 6 })} {singleComponentYield.outputUnit.name} {singleComponentYield.outputItem.name}
+                  </small>
+                ) : null}
               </label>
               <label className="inventory-form-field">
                 <span>Đơn vị đầu ra *</span>
@@ -234,7 +275,8 @@ export default function InventoryBomModal({
               ) : form.components.map((line, index) => {
                 const item = itemsById.get(line.componentItemId) || {};
                 const compatibleUnits = getInventoryCompatibleUnits(item, units);
-                const gross = calculateBomComponentRequirement({ quantity: line.quantity, wastePercent: line.wastePercent }).grossBaseQuantity;
+                const requirement = calculateBomComponentRequirement({ quantity: line.quantity, wastePercent: line.wastePercent });
+                const remaining = requirement.netBaseQuantity;
                 return (
                   <div className="inventory-bom-line" key={`${line.componentItemId || "new"}-${index}`}>
                     <label>
@@ -248,8 +290,8 @@ export default function InventoryBomModal({
                     <label><span>Số lượng *</span><input type="number" min="0.000001" step="any" value={line.quantity} disabled={readOnly} onChange={(event) => updateLine(index, "quantity", event.target.value)} required /></label>
                     <label><span>Đơn vị *</span><InventorySearchableSelect value={line.unitId} disabled={readOnly || !line.componentItemId} onChange={(event) => updateLine(index, "unitId", event.target.value)} required><option value="">Chọn đơn vị</option>{compatibleUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}</InventorySearchableSelect></label>
                     <label><span>Hao hụt (%)</span><input type="number" min="0" max="100" step="0.01" value={line.wastePercent} disabled={readOnly} onChange={(event) => updateLine(index, "wastePercent", event.target.value)} /></label>
-                    <div className="inventory-bom-line__gross"><span>Cần dùng</span><strong>{Number.isFinite(gross) ? gross.toLocaleString("vi-VN", { maximumFractionDigits: 3 }) : "0"}</strong><small>{compatibleUnits.find((unit) => unit.id === line.unitId)?.name || "Đơn vị"}</small></div>
-                    {!readOnly ? <button type="button" className="inventory-bom-line__remove" onClick={() => setForm((current) => ({ ...current, components: current.components.length > 1 ? current.components.filter((_, lineIndex) => lineIndex !== index) : current.components }))} disabled={form.components.length <= 1} aria-label="Xóa dòng"><Icon name="trash" size={15} /></button> : null}
+                    <div className="inventory-bom-line__gross"><span>Sau hao hụt còn</span><strong>{Number.isFinite(remaining) ? remaining.toLocaleString("vi-VN", { maximumFractionDigits: 3 }) : "0"}</strong><small>{compatibleUnits.find((unit) => unit.id === line.unitId)?.name || "Đơn vị"}</small></div>
+                    {!readOnly ? <button type="button" className="inventory-bom-line__remove" onClick={() => setForm((current) => syncSingleComponentYield({ ...current, components: current.components.length > 1 ? current.components.filter((_, lineIndex) => lineIndex !== index) : current.components }))} disabled={form.components.length <= 1} aria-label="Xóa dòng"><Icon name="trash" size={15} /></button> : null}
                   </div>
                 );
               })}
