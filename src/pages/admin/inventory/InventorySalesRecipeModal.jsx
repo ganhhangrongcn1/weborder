@@ -17,6 +17,10 @@ function createLine() {
   return { itemId: "", quantity: 1, unitId: "", wastePercent: 0, notes: "" };
 }
 
+function createSourceLine() {
+  return { menuEntityType: "product", menuEntityId: "", quantity: 1 };
+}
+
 function initialForm(recipe = {}) {
   return {
     id: recipe.id || "",
@@ -26,9 +30,16 @@ function initialForm(recipe = {}) {
     yieldQuantity: recipe.yieldQuantity || 1,
     effectiveFrom: recipe.effectiveFrom || new Date().toISOString().slice(0, 10),
     notes: recipe.notes || "",
-    recipeMode: recipe.sharedMenuEntityId ? "shared" : "direct",
+    recipeMode: recipe.sharedMenuEntityId ? "shared" : recipe.sources?.length ? "composed" : "direct",
     sharedMenuEntityType: recipe.sharedMenuEntityType || "product",
     sharedMenuEntityId: recipe.sharedMenuEntityId || "",
+    sources: recipe.sources?.length
+      ? recipe.sources.map((source) => ({
+          menuEntityType: source.menuEntityType || "product",
+          menuEntityId: source.menuEntityId || "",
+          quantity: source.quantity || 1
+        }))
+      : [createSourceLine()],
     components: recipe.components?.length
       ? recipe.components.map((line) => ({
           itemId: line.itemId,
@@ -80,7 +91,6 @@ export default function InventorySalesRecipeModal({
     if (entity.id === form.menuEntityId && entity.type === form.menuEntityType) return false;
     return recipes.some((candidate) => (
       candidate.status === "active"
-      && !candidate.sharedMenuEntityId
       && candidate.menuEntityId === entity.id
       && candidate.menuEntityType === entity.type
       && (!candidate.branchUuid || candidate.branchUuid === form.branchUuid)
@@ -106,6 +116,10 @@ export default function InventorySalesRecipeModal({
     ...current,
     components: current.components.map((line, lineIndex) => lineIndex === index ? { ...line, [field]: value } : line)
   }));
+  const updateSource = (index, field, value) => setForm((current) => ({
+    ...current,
+    sources: current.sources.map((line, lineIndex) => lineIndex === index ? { ...line, [field]: value } : line)
+  }));
   const selectItem = (index, itemId) => {
     const item = itemsById.get(itemId) || {};
     const config = getInventoryItemDisplayUnitConfig(item, unitsById);
@@ -117,7 +131,7 @@ export default function InventorySalesRecipeModal({
     }));
   };
 
-  const costLines = (form.recipeMode === "shared" ? [] : form.components).map((line) => {
+  const costLines = (form.recipeMode === "direct" ? form.components : []).map((line) => {
     const item = itemsById.get(line.itemId) || {};
     const unit = unitsById.get(line.unitId) || {};
     const result = calculateSalesRecipeComponent({
@@ -161,7 +175,7 @@ export default function InventorySalesRecipeModal({
           <section className="inventory-sales-form-section">
             <div className="inventory-sales-form-section__title"><Icon name="bag" size={16} /><strong>Món bán</strong></div>
             <div className="inventory-form-row inventory-form-row--triple">
-              <label className="inventory-form-field"><span>Món / lựa chọn / topping *</span><InventorySearchableSelect value={`${form.menuEntityType}:${form.menuEntityId}`} disabled={readOnly || Boolean(form.id)} onChange={(event) => { const [type, ...id] = event.target.value.split(":"); setForm((current) => ({ ...current, menuEntityType: type || "product", menuEntityId: id.join(":"), sharedMenuEntityId: "" })); }} required><option value="product:">Chọn đối tượng định lượng</option>{menuEntityGroups.map((group) => <optgroup key={group.category} label={group.category}>{group.entities.map((row) => { const coverage = getInventorySalesRecipeCoverage(row, recipes); return <option key={`${row.type}:${row.id}`} value={`${row.type}:${row.id}`}>{row.name} · {coverage === "active" ? "Đang áp dụng" : coverage === "draft" ? "Có bản nháp" : "Chưa định lượng"}</option>; })}</optgroup>)}</InventorySearchableSelect>{selectedEntity ? <small>{getInventoryMenuEntityKindLabel(selectedEntity)}</small> : null}</label>
+              <label className="inventory-form-field"><span>Món / lựa chọn / topping *</span><InventorySearchableSelect value={`${form.menuEntityType}:${form.menuEntityId}`} disabled={readOnly || Boolean(form.id)} onChange={(event) => { const [type, ...id] = event.target.value.split(":"); setForm((current) => ({ ...current, menuEntityType: type || "product", menuEntityId: id.join(":"), sharedMenuEntityId: "", sources: [createSourceLine()] })); }} required><option value="product:">Chọn đối tượng định lượng</option>{menuEntityGroups.map((group) => <optgroup key={group.category} label={group.category}>{group.entities.map((row) => { const coverage = getInventorySalesRecipeCoverage(row, recipes); return <option key={`${row.type}:${row.id}`} value={`${row.type}:${row.id}`}>{row.name} · {coverage === "active" ? "Đang áp dụng" : coverage === "draft" ? "Có bản nháp" : "Chưa định lượng"}</option>; })}</optgroup>)}</InventorySearchableSelect>{selectedEntity ? <small>{getInventoryMenuEntityKindLabel(selectedEntity)}</small> : null}</label>
               <label className="inventory-form-field"><span>Áp dụng tại</span><InventorySearchableSelect value={form.branchUuid} disabled={readOnly} onChange={(event) => update("branchUuid", event.target.value)}><option value="">Tất cả chi nhánh</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</InventorySearchableSelect></label>
               <label className="inventory-form-field"><span>Số phần chuẩn *</span><input type="number" min="0.000001" step="any" value={form.yieldQuantity} disabled={readOnly} onChange={(event) => update("yieldQuantity", event.target.value)} required /></label>
             </div>
@@ -172,9 +186,22 @@ export default function InventorySalesRecipeModal({
             <div className="inventory-sales-recipe-mode" role="radiogroup">
               <button type="button" className={form.recipeMode === "direct" ? "is-active" : ""} disabled={readOnly} onClick={() => update("recipeMode", "direct")}><Icon name="gear" size={17} /><span><strong>Khai báo thành phần riêng</strong><small>Tự nhập nguyên liệu cho đúng mã Menu này.</small></span></button>
               <button type="button" className={form.recipeMode === "shared" ? "is-active" : ""} disabled={readOnly} onClick={() => update("recipeMode", "shared")}><Icon name="share" size={17} /><span><strong>Dùng chung định lượng gốc</strong><small>Phù hợp khi nhiều mục thực chất là cùng một món.</small></span></button>
+              <button type="button" className={form.recipeMode === "composed" ? "is-active" : ""} disabled={readOnly} onClick={() => update("recipeMode", "composed")}><Icon name="menu" size={17} /><span><strong>Ghép nhiều định lượng gốc</strong><small>Dùng cho combo, chọn từng món và số lượng đi kèm.</small></span></button>
             </div>
             {form.recipeMode === "shared" ? <label className="inventory-form-field inventory-sales-shared-select"><span>Dùng định lượng của *</span><InventorySearchableSelect value={`${form.sharedMenuEntityType}:${form.sharedMenuEntityId}`} disabled={readOnly} onChange={(event) => { const [type, ...id] = event.target.value.split(":"); setForm((current) => ({ ...current, sharedMenuEntityType: type || "product", sharedMenuEntityId: id.join(":") })); }} required><option value="product:">Chọn món đã có định lượng đang áp dụng</option>{sharedRecipeOptions.map((row) => <option key={`${row.type}:${row.id}`} value={`${row.type}:${row.id}`}>{row.name} · {getInventoryMenuEntityKindLabel(row)}</option>)}</InventorySearchableSelect><small>{selectedSharedEntity ? `Đơn bán sẽ trừ kho theo định lượng của ${selectedSharedEntity.name}.` : "Cần áp dụng định lượng gốc trước khi liên kết."}</small></label> : null}
           </section>
+
+          {form.recipeMode === "composed" ? <section className="inventory-sales-form-section">
+            <div className="inventory-sales-form-section__title is-actions"><div><Icon name="menu" size={16} /><strong>Các món trong combo</strong></div>{!readOnly ? <button type="button" onClick={() => setForm((current) => ({ ...current, sources: [...current.sources, createSourceLine()] }))}><Icon name="plus" size={15} /> Thêm món</button> : null}</div>
+            <div className="inventory-sales-source-lines">
+              {form.sources.map((source, index) => <div className="inventory-sales-source-line" key={`${source.menuEntityType}:${source.menuEntityId || "new"}:${index}`}>
+                <label><span>Định lượng gốc *</span><InventorySearchableSelect value={`${source.menuEntityType}:${source.menuEntityId}`} disabled={readOnly} onChange={(event) => { const [type, ...id] = event.target.value.split(":"); updateSource(index, "menuEntityType", type || "product"); updateSource(index, "menuEntityId", id.join(":")); }} required><option value="product:">Chọn món đã có định lượng đang áp dụng</option>{sharedRecipeOptions.map((row) => <option key={`${row.type}:${row.id}`} value={`${row.type}:${row.id}`}>{row.name} · {getInventoryMenuEntityKindLabel(row)}</option>)}</InventorySearchableSelect></label>
+                <label><span>Số lượng *</span><input type="number" min="0.000001" step="any" value={source.quantity} disabled={readOnly} onChange={(event) => updateSource(index, "quantity", event.target.value)} required /></label>
+                {!readOnly ? <button type="button" className="is-danger" disabled={form.sources.length <= 1} onClick={() => setForm((current) => ({ ...current, sources: current.sources.filter((_, sourceIndex) => sourceIndex !== index) }))} aria-label="Xóa món"><Icon name="trash" size={15} /></button> : null}
+              </div>)}
+            </div>
+            <small className="inventory-sales-source-help">Ví dụ: combo Cuốn Bơ + Trà Tắc chọn 2 dòng, mỗi dòng số lượng 1. Combo 10 bịch chọn món gốc và nhập số lượng 10.</small>
+          </section> : null}
 
           {form.recipeMode === "direct" ? <section className="inventory-sales-form-section">
             <div className="inventory-sales-form-section__title is-actions"><div><Icon name="gear" size={16} /><strong>Thành phần trực tiếp</strong></div>{!readOnly ? <button type="button" onClick={() => setForm((current) => ({ ...current, components: [...current.components, createLine()] }))}><Icon name="plus" size={15} /> Thêm dòng</button> : null}</div>
@@ -195,7 +222,7 @@ export default function InventorySalesRecipeModal({
                 );
               })}
             </div>
-          </section> : <div className="inventory-sales-shared-note"><Icon name="share" size={18} /><div><strong>Không cần nhập lại nguyên liệu</strong><span>Hệ thống giữ riêng mã Menu nhưng dùng đúng thành phần và cost của định lượng gốc.</span></div></div>}
+          </section> : form.recipeMode === "shared" ? <div className="inventory-sales-shared-note"><Icon name="share" size={18} /><div><strong>Không cần nhập lại nguyên liệu</strong><span>Hệ thống giữ riêng mã Menu nhưng dùng đúng thành phần và cost của định lượng gốc.</span></div></div> : <div className="inventory-sales-shared-note"><Icon name="menu" size={18} /><div><strong>Tự cộng định lượng theo combo</strong><span>Khi bán, hệ thống nhân số lượng từng món, cộng các nguyên liệu trùng nhau và trừ kho một lần.</span></div></div>}
 
           {form.recipeMode === "direct" ? <div className="inventory-sales-cost-summary"><span>Giá bán <strong>{money(selectedEntity?.price)}</strong></span><span>Cost ước tính <strong>{money(unitCost)}</strong></span><span>Tỷ lệ cost <strong>{costRate ? `${costRate.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%` : "—"}</strong></span></div> : null}
           <div className="inventory-form-row inventory-form-row--double"><label className="inventory-form-field"><span>Hiệu lực từ *</span><input type="date" value={form.effectiveFrom} disabled={readOnly} onChange={(event) => update("effectiveFrom", event.target.value)} required /></label><label className="inventory-form-field"><span>Ghi chú</span><input value={form.notes} disabled={readOnly} onChange={(event) => update("notes", event.target.value)} placeholder="Không bắt buộc" /></label></div>

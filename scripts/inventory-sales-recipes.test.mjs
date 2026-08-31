@@ -66,6 +66,58 @@ test("không cho một món dùng chung định lượng với chính nó", () =
   }, { menuEntities, items, units }), /chính nó/);
 });
 
+test("combo có thể ghép nhiều định lượng gốc với số lượng riêng", () => {
+  const recipes = [
+    { id: "recipe-1", menuEntityType: "product", menuEntityId: "menu-1", status: "active", branchUuid: "", effectiveFrom: "2026-01-01", version: 1, sources: [] },
+    { id: "recipe-2", menuEntityType: "product", menuEntityId: "menu-2", status: "active", branchUuid: "", effectiveFrom: "2026-01-01", version: 1, sources: [] }
+  ];
+  const result = normalizeInventorySalesRecipeInput({
+    menuEntityType: "topping",
+    menuEntityId: "topping-1",
+    recipeMode: "composed",
+    effectiveFrom: "2026-08-31",
+    yieldQuantity: 1,
+    sources: [
+      { menuEntityType: "product", menuEntityId: "menu-1", quantity: 1 },
+      { menuEntityType: "product", menuEntityId: "menu-2", quantity: 2 }
+    ]
+  }, { menuEntities, items, units, recipes });
+
+  assert.deepEqual(result.components, []);
+  assert.deepEqual(result.sources.map((source) => source.quantity), [1, 2]);
+});
+
+test("combo không cho lặp món gốc hoặc tạo vòng tham chiếu", () => {
+  const recipes = [{
+    id: "recipe-1",
+    menuEntityType: "product",
+    menuEntityId: "menu-1",
+    status: "active",
+    branchUuid: "",
+    effectiveFrom: "2026-01-01",
+    version: 1,
+    sources: [{ menuEntityType: "topping", menuEntityId: "topping-1", quantity: 1 }]
+  }];
+  assert.throws(() => normalizeInventorySalesRecipeInput({
+    menuEntityType: "topping",
+    menuEntityId: "topping-1",
+    recipeMode: "composed",
+    effectiveFrom: "2026-08-31",
+    sources: [{ menuEntityType: "product", menuEntityId: "menu-1", quantity: 1 }]
+  }, { menuEntities, items, units, recipes }), /vòng lặp/);
+
+  assert.throws(() => normalizeInventorySalesRecipeInput({
+    menuEntityType: "topping",
+    menuEntityId: "topping-1",
+    recipeMode: "composed",
+    effectiveFrom: "2026-08-31",
+    sources: [
+      { menuEntityType: "product", menuEntityId: "menu-1", quantity: 1 },
+      { menuEntityType: "product", menuEntityId: "menu-1", quantity: 2 }
+    ]
+  }, { menuEntities, items, units, recipes: [{ ...recipes[0], sources: [] }] }), /chỉ được thêm một lần/);
+});
+
 test("trạng thái bao phủ ưu tiên đang áp dụng rồi đến bản nháp", () => {
   assert.equal(getInventorySalesRecipeCoverage(menuEntities[0], [
     { menuEntityType: "product", menuEntityId: "menu-1", status: "draft" },

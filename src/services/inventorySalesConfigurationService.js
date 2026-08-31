@@ -15,6 +15,9 @@ const RECIPE_SELECT = `
   yield_quantity,status,effective_from,effective_to,notes,metadata,
   shared_menu_entity_type,shared_menu_entity_id,shared_menu_entity_name,
   created_at,updated_at,deleted_at,
+  sources:inventory_sales_recipe_sources(
+    id,recipe_id,menu_entity_type,menu_entity_id,menu_entity_name,quantity,display_order
+  ),
   components:inventory_sales_recipe_components(
     id,recipe_id,item_id,quantity,unit_id,conversion_to_base,base_quantity,waste_percent,
     display_order,notes,
@@ -89,6 +92,14 @@ function normalizeRecipe(row = {}) {
     sharedMenuEntityType: toText(row.shared_menu_entity_type),
     sharedMenuEntityId: toText(row.shared_menu_entity_id),
     sharedMenuEntityName: toText(row.shared_menu_entity_name),
+    sources: (Array.isArray(row.sources) ? row.sources : []).map((source) => ({
+      id: toText(source.id),
+      menuEntityType: toText(source.menu_entity_type || "product"),
+      menuEntityId: toText(source.menu_entity_id),
+      menuEntityName: toText(source.menu_entity_name),
+      quantity: Number(source.quantity || 1),
+      displayOrder: Number(source.display_order || 0)
+    })).sort((left, right) => left.displayOrder - right.displayOrder),
     components: (Array.isArray(row.components) ? row.components : []).map((component) => ({
       id: toText(component.id),
       itemId: toText(component.item_id),
@@ -302,12 +313,12 @@ export function canWriteInventorySalesConfiguration() {
   return isInventoryRuntimeWriteEnabled();
 }
 
-export async function saveInventorySalesRecipe({ input = {}, menuEntities = [], items = [], units = [] } = {}) {
+export async function saveInventorySalesRecipe({ input = {}, menuEntities = [], items = [], units = [], recipes = [] } = {}) {
   if (!canWriteInventorySalesConfiguration()) throw new Error("Ghi dữ liệu Kho đang bị khóa an toàn.");
   const client = await getInventoryClient();
   if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
-  const draft = normalizeInventorySalesRecipeInput(input, { menuEntities, items, units });
-  const { data, error } = await client.rpc("inventory_save_sales_recipe_draft_v2", {
+  const draft = normalizeInventorySalesRecipeInput(input, { menuEntities, items, units, recipes });
+  const { data, error } = await client.rpc("inventory_save_sales_recipe_draft_v3", {
     p_recipe_id: draft.id || null,
     p_menu_entity_type: draft.menuEntityType,
     p_menu_entity_id: draft.menuEntityId,
@@ -319,7 +330,8 @@ export async function saveInventorySalesRecipe({ input = {}, menuEntities = [], 
     p_shared_menu_entity_type: draft.sharedMenuEntityType || null,
     p_shared_menu_entity_id: draft.sharedMenuEntityId || null,
     p_shared_menu_entity_name: draft.sharedMenuEntityName || null,
-    p_components: draft.components
+    p_components: draft.components,
+    p_sources: draft.sources
   });
   recordAdminRequest(`${draft.id ? "update" : "create"} inventory sales recipe`, "inventory_sales_recipes");
   if (error) throw new Error(getError(error).message);

@@ -110,7 +110,7 @@ export default function useInventorySalesConfiguration({
     updateSalesEventFilters: (nextFilters) => setSalesEventFilters((current) => ({ ...current, ...nextFilters })),
     refresh,
     saveRecipe: (input) => runMutation(
-      () => saveInventorySalesRecipe({ input, menuEntities, items, units }),
+      () => saveInventorySalesRecipe({ input, menuEntities, items, units, recipes: state.recipes }),
       "Đã lưu bản nháp định lượng món bán."
     ),
     activateRecipe: (id) => runMutation(

@@ -118,7 +118,7 @@ export default function InventorySalesConfiguration({
     .map((recipe) => ({ ...recipe, rowType: "recipe" }));
   const filteredRecipes = [...visibleRecipeRows, ...missingRecipeRows]
     .filter((row) => recipeStatus === "all" || row.status === recipeStatus)
-    .filter((row) => !query || [row.code, row.menuEntityName, row.sharedMenuEntityName, ...(row.components || []).map((line) => line.item?.name)].some((value) => String(value || "").toLocaleLowerCase("vi").includes(query)));
+    .filter((row) => !query || [row.code, row.menuEntityName, row.sharedMenuEntityName, ...(row.sources || []).map((source) => source.menuEntityName), ...(row.components || []).map((line) => line.item?.name)].some((value) => String(value || "").toLocaleLowerCase("vi").includes(query)));
   const allChannelRows = [
     ...unmappedCandidates.map((candidate) => ({ ...candidate, rowType: "candidate" })),
     ...mappings.map((mapping) => ({ ...mapping, rowType: "mapping" }))
@@ -266,13 +266,14 @@ export default function InventorySalesConfiguration({
               </tr>;
               const status = STATUS_META[recipe.status] || STATUS_META.draft;
               const entity = menuEntities.find((row) => row.id === recipe.menuEntityId && row.type === recipe.menuEntityType);
-              const cost = recipe.sharedMenuEntityId ? 0 : recipeCost(recipe, averageCosts);
+              const usesRecipeSource = Boolean(recipe.sharedMenuEntityId || recipe.sources?.length);
+              const cost = usesRecipeSource ? 0 : recipeCost(recipe, averageCosts);
               const costRate = Number(entity?.price || 0) > 0 ? cost / Number(entity.price) * 100 : 0;
               return <tr key={recipe.id}>
                 <td><strong>{recipe.menuEntityName}</strong><small>{recipe.code} · {getInventoryMenuEntityKindLabel(entity || { type: recipe.menuEntityType })}</small></td>
                 <td><span className="inventory-bom-scope">{branches.find((branch) => branch.id === recipe.branchUuid)?.name || "Tất cả chi nhánh"}</span><small>{recipe.yieldQuantity} phần chuẩn</small></td>
-                <td>{recipe.sharedMenuEntityId ? <><strong>Dùng chung định lượng</strong><small>{recipe.sharedMenuEntityName}</small></> : <><strong>{recipe.components.length} thành phần</strong><small>{recipe.components.slice(0, 3).map((line) => line.item?.name).filter(Boolean).join(", ")}</small></>}</td>
-                <td>{recipe.sharedMenuEntityId ? <><strong>Theo định lượng gốc</strong><small>Không nhập lại thành phần</small></> : <><strong>{money(cost)} / phần</strong><small>{costRate ? `${costRate.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}% giá bán` : "Chưa có giá bán"}</small></>}</td>
+                <td>{recipe.sharedMenuEntityId ? <><strong>Dùng chung định lượng</strong><small>{recipe.sharedMenuEntityName}</small></> : recipe.sources?.length ? <><strong>Ghép {recipe.sources.length} định lượng gốc</strong><small>{recipe.sources.map((source) => `${source.menuEntityName} × ${source.quantity}`).join(" + ")}</small></> : <><strong>{recipe.components.length} thành phần</strong><small>{recipe.components.slice(0, 3).map((line) => line.item?.name).filter(Boolean).join(", ")}</small></>}</td>
+                <td>{usesRecipeSource ? <><strong>Theo định lượng gốc</strong><small>{recipe.sources?.length ? "Tự cộng theo số lượng combo" : "Không nhập lại thành phần"}</small></> : <><strong>{money(cost)} / phần</strong><small>{costRate ? `${costRate.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}% giá bán` : "Chưa có giá bán"}</small></>}</td>
                 <td><span className={`inventory-bom-status is-${status.tone}`}>{status.label}</span></td>
                 <td><div className="inventory-row-actions inventory-sales-actions"><button type="button" onClick={() => setRecipeModal({ mode: "view", recipe })}><Icon name="eye" size={14} /> Xem</button>{canWrite && recipe.status === "draft" ? <button type="button" onClick={() => setRecipeModal({ mode: "edit", recipe })}><Icon name="edit" size={14} /> Sửa</button> : null}{canWrite && recipe.status === "active" ? <button type="button" onClick={() => setRecipeModal({ mode: "new-version", recipe: { ...recipe, id: "", code: "", status: "draft", effectiveFrom: new Date().toISOString().slice(0, 10) } })}><Icon name="edit" size={14} /> Tạo bản mới</button> : null}{canWrite && recipe.status === "draft" ? <button type="button" className="is-primary" onClick={() => setConfirmation({ type: "activate", id: recipe.id, label: recipe.menuEntityName })}><Icon name="check" size={14} /> Áp dụng</button> : null}{canWrite && recipe.status === "active" ? <button type="button" className="is-danger" onClick={() => setConfirmation({ type: "deactivate", id: recipe.id, label: recipe.menuEntityName })}><Icon name="close" size={14} /> Ngừng</button> : null}{canWrite && recipe.status === "draft" ? <button type="button" className="is-danger" onClick={() => setConfirmation({ type: "delete-recipe", id: recipe.id, label: recipe.menuEntityName })}><Icon name="trash" size={14} /> Xóa</button> : null}</div></td>
               </tr>;
