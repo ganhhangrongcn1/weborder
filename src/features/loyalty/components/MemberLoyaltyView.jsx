@@ -92,13 +92,10 @@ export default function MemberLoyaltyView({
   );
   const pointRulesRows = [
     { label: "Quy đổi khi thanh toán", value: "1 điểm = 1đ" },
-    { label: "Mức dùng tối đa", value: `${tierJourney?.maxRedemptionPercent || 50}% giá trị đơn` },
+    { label: "Số điểm có thể dùng", value: "Hiển thị tại bước thanh toán" },
     { label: "Hạn điểm", value: "60 ngày" }
   ];
-  const exampleMaxPoints = Math.floor(
-    exampleSpend * Number(tierJourney?.maxRedemptionPercent || 50) / 100
-  );
-  const pointRulesExample = `Ví dụ: Đơn ${exampleSpend.toLocaleString("vi-VN")}đ có thể dùng tối đa ${exampleMaxPoints.toLocaleString("vi-VN")} điểm; phần còn lại thanh toán như bình thường.`;
+  const pointRulesExample = "Số điểm dùng được sẽ tự tính theo giá trị đơn và voucher đang áp dụng.";
   const [activeSheet, setActiveSheet] = useState("");
   const usableVouchers = useMemo(
     () =>
@@ -163,7 +160,7 @@ export default function MemberLoyaltyView({
         expiryText={`Hạn điểm ${formatCustomerDate(tierJourney?.pointsExpiresAt)}`}
         progressPercent={tierJourney?.progressPercent}
         progressMessage={progressMessage}
-        metaSecondaryNote={`Dùng tối đa ${tierJourney?.maxRedemptionPercent || 50}% giá trị đơn`}
+        metaSecondaryNote="1 điểm = 1đ khi thanh toán"
         metaDisclosureLabel="Quyền lợi hạng"
         metaSummaryText={`Tích ${Number(currentTier.earnPercent || 10).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}% · Hạn ${formatCustomerDate(tierJourney?.pointsExpiresAt)}`}
         onOpenTierDetails={() => setActiveSheet("tiers")}

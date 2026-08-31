@@ -24,17 +24,12 @@ export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
   const minTierRate = Math.min(...tierRates);
   const maxTierRate = Math.max(...tierRates);
   const exampleSpend = 100000;
-  const configuredMaxRedemption = Number(loyaltyRule?.maxRedemptionPercent || 50);
-  const maxRedemptionPercent = Number.isFinite(configuredMaxRedemption)
-    ? Math.min(100, Math.max(0, configuredMaxRedemption))
-    : 50;
   const minExamplePoints = Math.round((exampleSpend * minTierRate) / 100);
   const maxExamplePoints = Math.round((exampleSpend * maxTierRate) / 100);
-  const maxExampleRedeem = Math.floor((exampleSpend * maxRedemptionPercent) / 100);
-  const pointRulesExample = `Ví dụ: Đơn ${exampleSpend.toLocaleString("vi-VN")}đ có thể dùng tối đa ${maxExampleRedeem.toLocaleString("vi-VN")} điểm; phần còn lại thanh toán như bình thường.`;
+  const pointRulesExample = "Số điểm dùng được sẽ tự tính theo giá trị đơn và voucher đang áp dụng.";
   const loyaltyRulesRows = [
     { label: "Tích điểm theo hạng", value: `${minTierRate}% đến ${maxTierRate}%` },
-    { label: "Dùng điểm", value: `1 điểm = 1đ, tối đa ${maxRedemptionPercent}%` },
+    { label: "Dùng điểm", value: "1 điểm = 1đ" },
     { label: "Hạn điểm", value: "60 ngày" }
   ];
   const safeBonusDisplay = Object.entries(loyaltyRule?.streakRewards || {})
@@ -61,7 +56,7 @@ export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
         tierRateText={`Tích ${minTierRate}% đến ${maxTierRate}%`}
         ratioText={`${exampleSpend.toLocaleString("vi-VN")}đ = ${minExamplePoints.toLocaleString("vi-VN")} đến ${maxExamplePoints.toLocaleString("vi-VN")} điểm`}
         expiryText="1 điểm = 1đ"
-        metaSecondaryNote={`Dùng tối đa ${maxRedemptionPercent}% giá trị đơn`}
+        metaSecondaryNote="1 điểm = 1đ khi thanh toán"
         ctaLabel="Đăng nhập để bắt đầu tích điểm"
         onCta={openAccount}
         isGuest
@@ -124,7 +119,7 @@ export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
             <span className="loyalty-action-row__icon is-green"><Icon name="star" size={17} /></span>
             <span className="loyalty-action-row__copy">
               <strong>Điểm dùng thế nào?</strong>
-              <small>Xem cách đổi điểm, giới hạn và thời hạn</small>
+              <small>Xem cách đổi điểm và thời hạn sử dụng</small>
             </span>
             <Icon name="back" size={16} className="loyalty-action-row__arrow" />
           </button>

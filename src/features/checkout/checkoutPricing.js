@@ -223,6 +223,8 @@ export function buildShippingZonesFromConfig(shippingConfig, deliveryFee, freesh
   ];
 }
 
+export const MAX_COMBINED_BENEFIT_PERCENT = 40;
+
 export function calculateCheckoutPricing({
   fulfillmentType,
   baseShippingByConfig,
@@ -263,7 +265,12 @@ export function calculateCheckoutPricing({
   const pointsBaseAmount = Math.max(Number(subtotal || 0) - Number(promoDiscount || 0), 0);
   const earnedPreviewPoints = Math.floor((pointsBaseAmount / currencyPerPoint) * pointPerUnit);
   const maxRedeemUnitsByPoints = Math.floor(Number(availablePoints || 0) / redeemPointUnit);
-  const maxPointDiscount = Math.floor(pointsBaseAmount * maxRedemptionPercent / 100);
+  const configuredPointDiscountLimit = Math.floor(pointsBaseAmount * maxRedemptionPercent / 100);
+  const combinedBenefitLimit = Math.floor(
+    Math.max(Number(subtotal || 0), 0) * MAX_COMBINED_BENEFIT_PERCENT / 100
+  );
+  const remainingCombinedBenefit = Math.max(combinedBenefitLimit - Number(promoDiscount || 0), 0);
+  const maxPointDiscount = Math.min(configuredPointDiscountLimit, remainingCombinedBenefit);
   const maxRedeemUnitsByTotal = Math.floor(maxPointDiscount / redeemValue);
   const spendUnits = usePoints ? Math.max(0, Math.min(maxRedeemUnitsByPoints, maxRedeemUnitsByTotal)) : 0;
   const pointsSpent = spendUnits * redeemPointUnit;

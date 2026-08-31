@@ -288,7 +288,6 @@ export default function Checkout({
     configSupportLimit,
     promoDiscount,
     earnedPreviewPoints,
-    maxRedemptionPercent,
     maxPointDiscount,
     pointsSpent,
     pointsDiscount,
@@ -715,7 +714,6 @@ export default function Checkout({
           usePoints={usePoints}
           setUsePoints={setUsePoints}
           pointsDiscount={pointsDiscount}
-          maxRedemptionPercent={maxRedemptionPercent}
           maxPointDiscount={maxPointDiscount}
           earnedPreviewPoints={earnedPreviewPoints}
           originalSubtotal={originalSubtotal}

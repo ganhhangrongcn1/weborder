@@ -12,7 +12,7 @@ export const loyaltyBonusDisplay = [
 
 export const loyaltyRulesRows = [
   { label: "Tích điểm theo hạng", value: "10% đến 15%" },
-  { label: "Dùng điểm", value: "1 điểm = 1đ, tối đa 50%" },
+  { label: "Dùng điểm", value: "1 điểm = 1đ" },
   { label: "Hạn điểm", value: "60 ngày" }
 ];
 

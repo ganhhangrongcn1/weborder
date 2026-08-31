@@ -21,7 +21,6 @@ export default function CheckoutPricingSection({
   usePoints,
   setUsePoints,
   pointsDiscount,
-  maxRedemptionPercent = 50,
   maxPointDiscount = 0,
   earnedPreviewPoints,
   originalSubtotal,
@@ -103,7 +102,7 @@ export default function CheckoutPricingSection({
                       : `Bạn có ${formattedAvailablePoints} điểm`}
                 </span>
                 <small className="points-limit-note">
-                  Đặt đơn này nhận thêm +{formattedEarnedPoints} điểm. Có thể dùng điểm cho tối đa {maxRedemptionPercent}% tiền món sau ưu đãi.
+                  Đặt đơn này nhận thêm +{formattedEarnedPoints} điểm.
                 </small>
               </div>
               <input

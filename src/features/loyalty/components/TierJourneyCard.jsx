@@ -104,7 +104,7 @@ export default function TierJourneyCard({ journey }) {
       </details>
 
       <div className="loyalty-tier-benefits">
-        <span><Icon name="tag" size={16} />Dùng điểm tối đa {journey?.maxRedemptionPercent || 50}%</span>
+        <span><Icon name="tag" size={16} />1 điểm = 1đ khi thanh toán</span>
         <span><Icon name="clock" size={16} />Giữ hạng đến hết {journey?.cycleYear}</span>
       </div>
     </section>
