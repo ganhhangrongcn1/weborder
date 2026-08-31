@@ -3,6 +3,7 @@ import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   getInventoryProductionExpiryConfig,
+  getInventoryProductionInputPlan,
   getInventoryProductionOutputPreview,
   getInventoryProductionScopeMeta
 } from "../../../services/inventoryProductionService.js";
@@ -18,6 +19,9 @@ function initialForm(order = {}) {
     bomId: order.bomId || "",
     warehouseId: order.warehouseId || "",
     plannedOutputQuantity: order.plannedOutputQuantity || 1,
+    planningMode: "output",
+    sourceComponentItemId: "",
+    sourceInputQuantity: 1,
     actualOutputQuantity: order.actualOutputQuantity || order.plannedOutputQuantity || 1,
     outputExpiresOn: order.outputExpiresOn || expiryConfig.suggestedExpiresOn,
     notes: order.notes || "",
@@ -58,8 +62,18 @@ export default function InventoryProductionOrderModal({
     || {};
   const baseUnit = unitById.get(outputItem.baseUnitId) || outputItem.baseUnit || {};
   const outputConversionToBase = Number(selectedBom.yieldConversionToBase || order.outputConversionToBase || 1);
+  const sourceComponents = selectedBom.components || [];
+  const inputPlan = getInventoryProductionInputPlan({
+    bom: selectedBom,
+    componentItemId: form.sourceComponentItemId,
+    inputQuantity: form.sourceInputQuantity
+  });
+  const planningFromInput = !readOnly && !completing && form.planningMode === "input";
+  const effectivePlannedOutputQuantity = planningFromInput
+    ? inputPlan.plannedOutputQuantity
+    : Number(form.plannedOutputQuantity || 0);
   const outputPreview = getInventoryProductionOutputPreview(
-    completing ? form.actualOutputQuantity : form.plannedOutputQuantity,
+    completing ? form.actualOutputQuantity : effectivePlannedOutputQuantity,
     outputConversionToBase
   );
   const outputQuantity = outputPreview.quantity;
@@ -78,21 +92,32 @@ export default function InventoryProductionOrderModal({
     || order.warehouse
     || selectedBom.defaultWarehouse
     || {};
-  const factor = selectedBom.yieldQuantity > 0 ? Number(form.plannedOutputQuantity || 0) / selectedBom.yieldQuantity : 0;
+  const factor = selectedBom.yieldQuantity > 0 ? effectivePlannedOutputQuantity / selectedBom.yieldQuantity : 0;
   const previewLines = order.lines?.length
     ? form.lines
-    : (selectedBom.components || []).map((line) => ({
+    : planningFromInput
+      ? inputPlan.lines
+      : sourceComponents.map((line) => ({
         ...line,
         item: line.componentItem,
         plannedQuantity: line.quantity * factor * (1 + Number(line.wastePercent || 0) / 100)
       }));
+  const sourceComponent = sourceComponents.find((line) => line.componentItemId === inputPlan.componentItemId) || {};
+  const sourceUnit = sourceComponent.unit || unitById.get(sourceComponent.unitId) || {};
+  const sourceUnitLabel = sourceUnit.symbol || sourceUnit.name || "đơn vị";
+  const validPlanningQuantity = Number.isFinite(effectivePlannedOutputQuantity) && effectivePlannedOutputQuantity > 0;
 
   const submit = async (event) => {
     event.preventDefault();
     setError("");
     try {
       if (completing) await onComplete(order, form);
-      else await onSave(form);
+      else await onSave({
+        ...form,
+        plannedOutputQuantity: planningFromInput
+          ? inputPlan.plannedOutputQuantity
+          : form.plannedOutputQuantity
+      });
       onClose();
     } catch (saveError) {
       setError(saveError?.message || `Không thể lưu ${scopeMeta.title.toLocaleLowerCase("vi")}.`);
@@ -136,6 +161,7 @@ export default function InventoryProductionOrderModal({
                   setForm((current) => ({
                     ...current,
                     bomId: event.target.value,
+                    sourceComponentItemId: nextBom.components?.[0]?.componentItemId || "",
                     warehouseId: nextBom.defaultWarehouseId
                       || (warehouseSelectionLocked && nextBom.productionScope === "branch"
                         ? warehouses.find((warehouse) => warehouse.isActive !== false && warehouse.warehouseType === "branch")?.id || ""
@@ -146,21 +172,35 @@ export default function InventoryProductionOrderModal({
                   {activeBoms.map((bom) => <option key={bom.id} value={bom.id}>{bom.outputItem?.name} · {bom.code}</option>)}
                 </InventorySearchableSelect>
               </label>
-              <label className="inventory-form-field">
-                <span>{completing ? (scopeMeta.isPreprocessing ? `Số lượng sơ chế thực nhận (${outputUnitLabel}) *` : `Thành phẩm thực nhận (${outputUnitLabel}) *`) : `Số lượng cần làm (${outputUnitLabel}) *`}</span>
-                <input
-                  type="number"
-                  min="0.000001"
-                  step="any"
-                  value={completing ? form.actualOutputQuantity : form.plannedOutputQuantity}
-                  disabled={readOnly}
-                  onChange={(event) => setForm((current) => ({ ...current, [completing ? "actualOutputQuantity" : "plannedOutputQuantity"]: event.target.value }))}
-                  required
-                />
-                <small className="inventory-production-output-conversion">
-                  {formatQuantity(outputQuantity)} {outputUnitLabel} = {formatQuantity(outputBaseQuantity)} {baseUnitLabel} tồn kho
-                </small>
-              </label>
+              {readOnly || completing ? (
+                <label className="inventory-form-field">
+                  <span>{completing ? (scopeMeta.isPreprocessing ? `Số lượng sơ chế thực nhận (${outputUnitLabel}) *` : `Thành phẩm thực nhận (${outputUnitLabel}) *`) : `Số lượng cần làm (${outputUnitLabel}) *`}</span>
+                  <input
+                    type="number"
+                    min="0.000001"
+                    step="any"
+                    value={completing ? form.actualOutputQuantity : form.plannedOutputQuantity}
+                    disabled={readOnly}
+                    onChange={(event) => setForm((current) => ({ ...current, [completing ? "actualOutputQuantity" : "plannedOutputQuantity"]: event.target.value }))}
+                    required
+                  />
+                  <small className="inventory-production-output-conversion">
+                    {formatQuantity(outputQuantity)} {outputUnitLabel} = {formatQuantity(outputBaseQuantity)} {baseUnitLabel} tồn kho
+                  </small>
+                </label>
+              ) : (
+                <label className="inventory-form-field">
+                  <span>Cách tính số lượng *</span>
+                  <InventorySearchableSelect value={form.planningMode} disabled={!form.bomId} onChange={(event) => setForm((current) => ({
+                    ...current,
+                    planningMode: event.target.value,
+                    sourceComponentItemId: current.sourceComponentItemId || sourceComponents[0]?.componentItemId || ""
+                  }))}>
+                    <option value="output">Theo thành phẩm cần làm</option>
+                    <option value="input">Theo nguyên liệu đang có</option>
+                  </InventorySearchableSelect>
+                </label>
+              )}
               {!readOnly && !completing && selectedBom.productionScope === "branch" && !fixedWarehouse ? (
                 <label className="inventory-form-field">
                   <span>Kho sơ chế *</span>
@@ -177,6 +217,43 @@ export default function InventoryProductionOrderModal({
                 </div>
               )}
             </div>
+
+            {!readOnly && !completing ? (
+              <div className="inventory-form-row inventory-form-row--triple">
+                {planningFromInput ? (
+                  <>
+                    <label className="inventory-form-field">
+                      <span>Nguyên liệu làm mốc *</span>
+                      <InventorySearchableSelect value={inputPlan.componentItemId} disabled={!form.bomId} onChange={(event) => setForm((current) => ({ ...current, sourceComponentItemId: event.target.value }))} required>
+                        <option value="">Chọn nguyên liệu</option>
+                        {sourceComponents.map((line) => <option key={line.componentItemId} value={line.componentItemId}>{line.componentItem?.name || "Nguyên liệu"} · {line.unit?.name || "Đơn vị"}</option>)}
+                      </InventorySearchableSelect>
+                    </label>
+                    <label className="inventory-form-field">
+                      <span>Số lượng nguyên liệu đang có ({sourceUnitLabel}) *</span>
+                      <input type="number" min="0.000001" step="any" value={form.sourceInputQuantity} disabled={!form.bomId} onChange={(event) => setForm((current) => ({ ...current, sourceInputQuantity: event.target.value }))} required />
+                    </label>
+                    <div className="inventory-production-modal__context">
+                      <span>Thành phẩm dự kiến</span>
+                      <strong>{formatQuantity(effectivePlannedOutputQuantity)} {outputUnitLabel}</strong>
+                      <small>Từ {formatQuantity(form.sourceInputQuantity)} {sourceUnitLabel} nguyên liệu làm mốc</small>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <label className="inventory-form-field">
+                      <span>Số lượng cần làm ({outputUnitLabel}) *</span>
+                      <input type="number" min="0.000001" step="any" value={form.plannedOutputQuantity} disabled={!form.bomId} onChange={(event) => setForm((current) => ({ ...current, plannedOutputQuantity: event.target.value }))} required />
+                    </label>
+                    <div className="inventory-production-modal__context">
+                      <span>Quy đổi tồn kho</span>
+                      <strong>{formatQuantity(outputBaseQuantity)} {baseUnitLabel}</strong>
+                      <small>{formatQuantity(outputQuantity)} {outputUnitLabel} thành phẩm</small>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
           </section>
 
           {completing && expiryConfig.trackExpiry ? (
@@ -242,7 +319,7 @@ export default function InventoryProductionOrderModal({
           <footer>
             <span />
             <button type="button" onClick={onClose}>Đóng</button>
-            {!readOnly ? <button type="submit" className="is-primary" disabled={isSaving || !previewLines.length}><Icon name="check" size={16} />{isSaving ? "Đang xử lý..." : completing ? "Xác nhận hoàn thành" : "Lưu bản nháp"}</button> : null}
+            {!readOnly ? <button type="submit" className="is-primary" disabled={isSaving || !previewLines.length || !validPlanningQuantity}><Icon name="check" size={16} />{isSaving ? "Đang xử lý..." : completing ? "Xác nhận hoàn thành" : "Lưu bản nháp"}</button> : null}
           </footer>
         </form>
       </section>

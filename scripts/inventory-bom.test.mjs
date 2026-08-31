@@ -14,6 +14,7 @@ import {
 import {
   enrichInventoryProductionError,
   getInventoryProductionExpiryConfig,
+  getInventoryProductionInputPlan,
   getInventoryProductionOutputPreview,
   getInventoryProductionScopeMeta,
   normalizeInventoryProductionOrder
@@ -68,6 +69,47 @@ test("hiển thị đúng sản lượng theo đơn vị sản xuất và đơn 
     conversionToBase: 500,
     baseQuantity: 3000
   });
+});
+
+test("tính ngược sản lượng sơ chế từ nguyên liệu đầu vào", () => {
+  const plan = getInventoryProductionInputPlan({
+    bom: {
+      yieldQuantity: 0.7,
+      components: [{
+        componentItemId: "raw-mango",
+        quantity: 1,
+        wastePercent: 0,
+        unitId: "kg",
+        unit: { id: "kg", name: "Kilogram" },
+        componentItem: { id: "raw-mango", name: "Xoài" }
+      }]
+    },
+    componentItemId: "raw-mango",
+    inputQuantity: 10
+  });
+
+  assert.equal(plan.plannedOutputQuantity, 7);
+  assert.equal(plan.lines[0].plannedQuantity, 10);
+  assert.equal(plan.inputUnitId, "kg");
+});
+
+test("nguyên liệu làm mốc tự co giãn các thành phần còn lại", () => {
+  const plan = getInventoryProductionInputPlan({
+    bom: {
+      yieldQuantity: 5,
+      components: [
+        { componentItemId: "main", quantity: 2, wastePercent: 0, unitId: "kg" },
+        { componentItemId: "seasoning", quantity: 0.1, wastePercent: 0, unitId: "kg" }
+      ]
+    },
+    componentItemId: "main",
+    inputQuantity: 6
+  });
+
+  assert.equal(plan.factor, 3);
+  assert.equal(plan.plannedOutputQuantity, 15);
+  assert.equal(plan.lines[0].plannedQuantity, 6);
+  assert.ok(Math.abs(plan.lines[1].plannedQuantity - 0.3) < 1e-9);
 });
 
 test("thông báo thiếu tồn hiển thị tên và mã nguyên liệu", () => {

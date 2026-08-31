@@ -61,6 +61,40 @@ export function getInventoryProductionOutputPreview(quantity = 0, conversionToBa
   };
 }
 
+export function getInventoryProductionInputPlan({
+  bom = {},
+  componentItemId = "",
+  inputQuantity = 0
+} = {}) {
+  const components = Array.isArray(bom.components) ? bom.components : [];
+  const sourceComponent = components.find((line) => line.componentItemId === componentItemId)
+    || components[0]
+    || null;
+  const normalizedInputQuantity = Number(inputQuantity);
+  const sourceQuantityPerBatch = Number(sourceComponent?.quantity || 0)
+    * (1 + Number(sourceComponent?.wastePercent || 0) / 100);
+  const factor = sourceQuantityPerBatch > 0 && Number.isFinite(normalizedInputQuantity) && normalizedInputQuantity > 0
+    ? normalizedInputQuantity / sourceQuantityPerBatch
+    : 0;
+  const yieldQuantity = Number(bom.yieldQuantity || 0);
+
+  return {
+    componentItemId: toText(sourceComponent?.componentItemId),
+    inputQuantity: Number.isFinite(normalizedInputQuantity) ? normalizedInputQuantity : 0,
+    inputUnitId: toText(sourceComponent?.unitId),
+    inputUnit: sourceComponent?.unit || {},
+    factor,
+    plannedOutputQuantity: Number.isFinite(yieldQuantity) ? yieldQuantity * factor : 0,
+    lines: components.map((line) => ({
+      ...line,
+      item: line.componentItem,
+      plannedQuantity: Number(line.quantity || 0)
+        * factor
+        * (1 + Number(line.wastePercent || 0) / 100)
+    }))
+  };
+}
+
 function formatProductionQuantity(value = 0) {
   const normalized = Number(value);
   return Number.isFinite(normalized)
@@ -316,6 +350,7 @@ export default {
   cancelInventoryProductionOrder,
   completeInventoryProductionOrder,
   deleteInventoryProductionDraft,
+  getInventoryProductionInputPlan,
   readInventoryProductionOrders,
   saveInventoryProductionDraft,
   startInventoryProductionOrder
