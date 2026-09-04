@@ -182,7 +182,9 @@ test("module menu separates branch operations from central inventory", () => {
   assert.equal(branchPolicy.allowedItemIds.has("inventory-opening-balances"), false);
   assert.equal(centralPolicy.mode, "central-inventory");
   assert.equal(centralPolicy.allowedItemIds.has("inventory-warehouses"), true);
+  assert.equal(centralPolicy.allowedItemIds.has("inventory-purchase-prices"), true);
   assert.equal(centralPolicy.allowedItemIds.has("inventory-opening-balances"), true);
+  assert.equal(branchPolicy.allowedItemIds.has("inventory-purchase-prices"), false);
   assert.equal(centralPolicy.allowedItemIds.has("shifts-main"), false);
 });
 

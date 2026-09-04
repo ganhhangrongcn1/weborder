@@ -63,6 +63,7 @@ const INVENTORY_ITEM_IDS = [
   "inventory-item-categories",
   "inventory-units",
   "inventory-suppliers",
+  "inventory-purchase-prices",
   "inventory-opening-balances",
   "inventory-receipts",
   "inventory-issues",
