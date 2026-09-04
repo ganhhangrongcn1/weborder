@@ -148,6 +148,21 @@ test("nguyên vật liệu lưu tỷ lệ quy đổi riêng từ chai sang đơn
   assert.equal(payload.metadata.display_unit_id, "unit-ml");
 });
 
+test("đơn vị hiển thị luôn là đơn vị gốc dù dữ liệu cũ còn giữ đơn vị khác", () => {
+  const payload = normalizeInventoryMasterDataInput("items", {
+    name: "Dầu Ớt",
+    displayUnitId: "unit-bich",
+    baseUnitId: "unit-gram",
+    purchaseUnitId: "unit-kg",
+    purchaseToBaseRatio: 200
+  });
+
+  assert.equal(payload.base_unit_id, "unit-bich");
+  assert.equal(payload.purchase_unit_id, "unit-kg");
+  assert.equal(payload.purchase_to_base_ratio, 200);
+  assert.equal(payload.metadata.display_unit_id, "unit-bich");
+});
+
 test("bán thẳng dùng thành phẩm và lưu cấu hình tồn kho mở rộng", () => {
   const payload = normalizeInventoryMasterDataInput("items", {
     name: "Nước suối chai",

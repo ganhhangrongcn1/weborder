@@ -50,9 +50,12 @@ function buildInitialForm(domain, record) {
     [key]: record[key] ?? empty[key]
   }), {});
   if (domain !== "items") return initial;
+  const displayUnitId = record.displayUnitId || record.purchaseUnitId || record.baseUnitId || "";
   const purchaseFactor = Math.max(0, Number(record.purchaseToBaseRatio || 1)) || 1;
   return {
     ...initial,
+    displayUnitId,
+    baseUnitId: displayUnitId,
     minimumStock: convertInventoryQuantityFromBase(record.minimumStock, purchaseFactor),
     reorderPoint: convertInventoryQuantityFromBase(record.reorderPoint, purchaseFactor),
     orderQuantity: convertInventoryQuantityFromBase(record.orderQuantity, purchaseFactor),

@@ -136,7 +136,10 @@ export function normalizeInventoryMasterDataInput(domain, input = {}) {
   }
 
   if (domain === "items") {
-    const ratio = Number(input.purchaseToBaseRatio ?? 1);
+    const displayUnitId = toText(input.displayUnitId) || toText(input.purchaseUnitId) || toText(input.baseUnitId);
+    const purchaseUnitId = toText(input.purchaseUnitId) || displayUnitId;
+    const requestedRatio = Number(input.purchaseToBaseRatio ?? 1);
+    const ratio = purchaseUnitId === displayUnitId ? 1 : requestedRatio;
     const stockSettingsFactor = input.stockSettingsUnit === "purchase" ? ratio : 1;
     const minimumStock = Math.max(0, convertInventoryQuantityToBase(input.minimumStock, stockSettingsFactor));
     const reorderPoint = Math.max(0, convertInventoryQuantityToBase(input.reorderPoint, stockSettingsFactor));
@@ -149,13 +152,11 @@ export function normalizeInventoryMasterDataInput(domain, input = {}) {
     const requestedItemType = toText(input.itemType).toLowerCase();
     const isDirectSale = requestedItemType === "direct_sale";
     const isTool = requestedItemType === "tool";
-    const displayUnitId = toText(input.displayUnitId) || toText(input.purchaseUnitId) || toText(input.baseUnitId);
-    const purchaseUnitId = toText(input.purchaseUnitId) || displayUnitId || toText(input.baseUnitId);
     const metadata = input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
       ? { ...input.metadata }
       : {};
-    if (!toText(input.baseUnitId)) throw new Error("Vui lòng chọn đơn vị tồn kho.");
-    if (!Number.isFinite(ratio) || ratio <= 0) throw new Error("Tỷ lệ quy đổi mua phải lớn hơn 0.");
+    if (!displayUnitId) throw new Error("Vui lòng chọn đơn vị tồn kho.");
+    if (!Number.isFinite(requestedRatio) || requestedRatio <= 0) throw new Error("Tỷ lệ quy đổi mua phải lớn hơn 0.");
     if (!Number.isFinite(defaultWastePercent) || defaultWastePercent < 0 || defaultWastePercent > 100) {
       throw new Error("Hao hụt mặc định phải nằm trong khoảng từ 0% đến 100%.");
     }
@@ -201,7 +202,7 @@ export function normalizeInventoryMasterDataInput(domain, input = {}) {
         ? requestedItemType
         : "ingredient",
       group_id: toText(input.groupId) || null,
-      base_unit_id: toText(input.baseUnitId),
+      base_unit_id: displayUnitId,
       purchase_unit_id: purchaseUnitId,
       purchase_to_base_ratio: ratio,
       minimum_stock: minimumStock,
