@@ -435,6 +435,13 @@
 .inventory-master-intro small { max-width: 720px; color: #806d61; font-size: .76rem; line-height: 1.45; }
 .inventory-master-intro button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 39px; padding: 0 13px; border: 0; border-radius: 9px; background: #db681c; color: #fff; font-weight: 800; cursor: pointer; }
 .inventory-master-intro button:disabled { background: #e7dfd8; color: #8b796d; cursor: not-allowed; }
+.inventory-purchase-price-error { margin: 12px 18px 0; }
+.inventory-purchase-price-table td:nth-child(4) { min-width: 240px; }
+.inventory-inline-price-input { display: flex; align-items: center; gap: 8px; min-width: 220px; }
+.inventory-inline-price-input input { width: 130px; min-height: 38px; padding: 0 10px; border: 1px solid #dfcfc1; border-radius: 9px; background: #fff; color: #3f2c22; font: inherit; font-weight: 700; }
+.inventory-inline-price-input input:focus { border-color: #db681c; outline: 3px solid rgba(219, 104, 28, .1); }
+.inventory-inline-price-input span { color: #806d61; font-size: .75rem; white-space: nowrap; }
+.inventory-price-actions { min-width: 82px; }
 .inventory-domain-explainer { display: flex; align-items: flex-start; gap: 9px; padding: 11px 18px; border-bottom: 1px solid #eee4db; background: #fffbf6; color: #765f51; font-size: .76rem; line-height: 1.5; }
 .inventory-domain-explainer > svg { margin-top: 1px; flex: 0 0 auto; color: #c16120; }
 .inventory-domain-explainer strong { color: #51392c; }

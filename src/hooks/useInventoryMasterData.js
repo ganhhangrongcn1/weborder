@@ -3,7 +3,8 @@ import {
   archiveInventoryMasterData,
   canWriteInventoryMasterData,
   readInventoryMasterData,
-  saveInventoryMasterData
+  saveInventoryMasterData,
+  updateInventoryItemDefaultPurchasePrice
 } from "../services/inventoryMasterDataService.js";
 
 const INITIAL_STATE = {
@@ -78,11 +79,25 @@ export default function useInventoryMasterData({ enabled = false, domain = "" } 
     }
   }, [domain, refresh]);
 
+  const saveDefaultPurchasePrice = useCallback(async ({ id = "", value = 0 } = {}) => {
+    setMutation({ status: "saving", message: "" });
+    try {
+      const saved = await updateInventoryItemDefaultPurchasePrice({ id, value });
+      setMutation({ status: "success", message: "Đã cập nhật bảng giá nguyên vật liệu." });
+      await refresh();
+      return saved;
+    } catch (error) {
+      setMutation({ status: "error", message: error.message || "Không thể cập nhật bảng giá." });
+      throw error;
+    }
+  }, [refresh]);
+
   return {
     ...state,
     refresh,
     save,
     archive,
+    saveDefaultPurchasePrice,
     writeEnabled: canWriteInventoryMasterData(),
     mutationStatus: mutation.status,
     mutationMessage: mutation.message

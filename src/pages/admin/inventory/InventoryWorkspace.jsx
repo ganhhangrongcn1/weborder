@@ -44,6 +44,7 @@ import InventorySalesConfiguration from "./InventorySalesConfiguration.jsx";
 import InventorySalesReconciliation from "./InventorySalesReconciliation.jsx";
 import InventoryCostAnalysis from "./InventoryCostAnalysis.jsx";
 import InventoryOpeningBalanceManager from "./InventoryOpeningBalanceManager.jsx";
+import InventoryPurchasePriceManager from "./InventoryPurchasePriceManager.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 
 function scopeDashboardData(data = {}, warehouseId = "") {
@@ -188,10 +189,13 @@ export default function InventoryWorkspace({
   const isSalesRecipePage = currentRoute.page === "sales-recipes";
   const isReconciliationPage = currentRoute.page === "reconciliation";
   const isOpeningBalancePage = currentRoute.page === "opening-balances";
+  const isPurchasePricePage = currentRoute.page === "purchase-prices";
   const documentDomain = ["receipts", "issues", "transfers", "disposals", "requisitions", "adjustments"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
-  const masterDataDomain = ["items", "item-categories", "units", "suppliers"].includes(currentRoute.page)
+  const masterDataDomain = isPurchasePricePage
+    ? "items"
+    : ["items", "item-categories", "units", "suppliers"].includes(currentRoute.page)
     ? currentRoute.page
     : "";
   const canLoadBomScope = accessPolicy.allowed || isBomPage || isProductionPage || isSalesRecipePage;
@@ -229,7 +233,7 @@ export default function InventoryWorkspace({
     domain: masterDataDomain
   });
   const itemUnitsState = useInventoryMasterData({
-    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || Boolean(documentDomain) || isOpeningBalancePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
+    enabled: isCostAnalysisPage || ((currentRoute.page === "items" || isPurchasePricePage || Boolean(documentDomain) || isOpeningBalancePage || isLedgerPage || isStockFlowPage || isReportPage || isLotPage || isAlertPage || isCountPage || isReconciliationPage) && accessPolicy.allowed) || isBomPage || isProductionPage || isSalesRecipePage,
     domain: "units"
   });
   const itemCategoriesState = useInventoryMasterData({
@@ -325,7 +329,9 @@ export default function InventoryWorkspace({
   const workspaceItems = filterInventoryItemsByWarehouse(documentItemsState.rows, workspaceWarehouseId);
   const operationWarehouses = scopedWarehouses;
   const operationItems = documentItemsState.rows;
-  const workspaceMasterRows = masterDataDomain === "items"
+  const workspaceMasterRows = isPurchasePricePage
+    ? masterDataState.rows
+    : masterDataDomain === "items"
     ? filterInventoryItemsByWarehouse(masterDataState.rows, workspaceWarehouseId)
     : masterDataState.rows;
   const workspaceScopeLabel = workspaceWarehouse?.name || accessPolicy.scopeLabel;
@@ -493,6 +499,13 @@ export default function InventoryWorkspace({
                 onArchive={warehouseState.archive}
                 onPublishDrafts={publishWarehouseDrafts}
               />
+            : isPurchasePricePage
+              ? <InventoryPurchasePriceManager
+                  rows={masterDataState.rows}
+                  canWrite={canWriteMasterData}
+                  mutationStatus={masterDataState.mutationStatus}
+                  onSavePrice={masterDataState.saveDefaultPurchasePrice}
+                />
             : masterDataDomain
               ? ["items", "suppliers"].includes(masterDataDomain)
                 ? <InventoryCatalogManager domain={masterDataDomain} rows={workspaceMasterRows} allRows={masterDataState.rows} units={itemUnitsState.rows} categories={itemCategoriesState.rows} warehouses={scopedWarehouses} selectedWarehouseId={workspaceWarehouseId} canWrite={canWriteMasterData} onSave={masterDataState.save} onArchive={masterDataState.archive} />

@@ -278,6 +278,8 @@ test("chặn loại công thức không khớp loại kho", () => {
 });
 
 test("route BOM và lệnh sản xuất đều mở thật", () => {
+  assert.equal(adminPathToState("/admin/inventory/purchase-prices").inventoryPage, "purchase-prices");
+  assert.equal(getInventoryRoute("purchase-prices").path, "/admin/inventory/purchase-prices");
   assert.equal(adminPathToState("/admin/inventory/boms").inventoryPage, "boms");
   assert.equal(getInventoryRoute("boms").path, "/admin/inventory/boms");
   assert.equal(adminPathToState("/admin/inventory/production-orders").inventoryPage, "production-orders");

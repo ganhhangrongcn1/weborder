@@ -32,14 +32,27 @@ export function getSuggestedExpiryDate(item = {}, occurredAt = "") {
   return toDateOnly(date);
 }
 
+export function getReceiptUnitPrice(item = {}, unitId = "") {
+  if (item.itemType !== "ingredient") return 0;
+  const purchasePrice = Math.max(0, Number(item.defaultPurchasePrice || 0));
+  if (!purchasePrice) return 0;
+  const selectedUnitId = toText(unitId) || toText(item.purchaseUnitId) || toText(item.baseUnitId);
+  const usesBaseUnit = selectedUnitId === toText(item.baseUnitId)
+    && selectedUnitId !== toText(item.purchaseUnitId);
+  if (!usesBaseUnit) return purchasePrice;
+  const ratio = Math.max(0, Number(item.purchaseToBaseRatio || 1)) || 1;
+  return purchasePrice / ratio;
+}
+
 export function getReceiptLineItemDefaults(item = {}, occurredAt = "") {
   if (!item.id) {
-    return { lotNumber: "", manufacturedOn: "", expiresOn: "", trackExpiry: false, expiryManuallyEdited: false };
+    return { lotNumber: "", manufacturedOn: "", expiresOn: "", unitPrice: 0, trackExpiry: false, expiryManuallyEdited: false };
   }
   return {
     lotNumber: createReceiptLotNumber(item, occurredAt),
     manufacturedOn: "",
     expiresOn: getSuggestedExpiryDate(item, occurredAt),
+    unitPrice: getReceiptUnitPrice(item, item.purchaseUnitId),
     trackExpiry: item.trackExpiry === true,
     expiryManuallyEdited: false
   };
@@ -48,5 +61,6 @@ export function getReceiptLineItemDefaults(item = {}, occurredAt = "") {
 export default {
   createReceiptLotNumber,
   getSuggestedExpiryDate,
+  getReceiptUnitPrice,
   getReceiptLineItemDefaults
 };

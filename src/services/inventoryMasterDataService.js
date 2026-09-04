@@ -13,7 +13,7 @@ const MASTER_DATA_CONFIG = {
     label: "nguyên vật liệu",
     select: `
       id,code,name,item_type,group_id,base_unit_id,purchase_unit_id,
-      purchase_to_base_ratio,minimum_stock,reorder_point,is_active,notes,metadata,updated_at,
+      purchase_to_base_ratio,default_purchase_price,minimum_stock,reorder_point,is_active,notes,metadata,updated_at,
       itemGroup:inventory_item_groups!inventory_items_group_id_fkey(id,code,name),
       baseUnit:inventory_units!inventory_items_base_unit_id_fkey(id,code,name),
       purchaseUnit:inventory_units!inventory_items_purchase_unit_id_fkey(id,code,name)
@@ -284,6 +284,7 @@ export function normalizeInventoryItem(row = {}) {
     purchaseUnitId: toText(row.purchase_unit_id),
     purchaseUnit: normalizeReference(row.purchaseUnit),
     purchaseToBaseRatio: Math.max(0, Number(row.purchase_to_base_ratio ?? 1)),
+    defaultPurchasePrice: Math.max(0, Number(row.default_purchase_price ?? 0)),
     minimumStock: Math.max(0, Number(row.minimum_stock ?? 0)),
     reorderPoint: Math.max(0, Number(row.reorder_point ?? 0)),
     orderQuantity: Math.max(0, Number(metadata.order_quantity ?? 0)),
@@ -437,6 +438,44 @@ export function canWriteInventoryMasterData() {
   return isInventoryRuntimeWriteEnabled();
 }
 
+export async function updateInventoryItemDefaultPurchasePrice({ id = "", value = 0 } = {}) {
+  const itemId = toText(id);
+  const defaultPurchasePrice = Number(value);
+  if (!itemId) throw new Error("Nguyên vật liệu cần cập nhật không hợp lệ.");
+  if (!Number.isFinite(defaultPurchasePrice) || defaultPurchasePrice < 0) {
+    throw new Error("Giá mua mặc định phải từ 0 đồng trở lên.");
+  }
+  if (!canWriteInventoryMasterData()) {
+    throw new Error("Ghi dữ liệu Kho đang bị khóa an toàn.");
+  }
+
+  const client = await getInventoryClient();
+  if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");
+  const actorId = await getActorId(client);
+  if (!actorId) throw new Error("Phiên đăng nhập Admin đã hết hạn.");
+
+  const { data, error } = await client
+    .from(MASTER_DATA_CONFIG.items.table)
+    .update({
+      default_purchase_price: defaultPurchasePrice,
+      updated_at: new Date().toISOString(),
+      updated_by: actorId
+    })
+    .eq("id", itemId)
+    .eq("item_type", "ingredient")
+    .is("deleted_at", null)
+    .select(MASTER_DATA_CONFIG.items.select)
+    .maybeSingle();
+  recordAdminRequest("update inventory item default purchase price", MASTER_DATA_CONFIG.items.table);
+
+  if (error) {
+    const normalized = getInventoryMasterDataReadError(error, "items");
+    throw new Error(normalized.message);
+  }
+  if (!data) throw new Error("Chỉ nguyên vật liệu mới được thiết lập giá mua mặc định.");
+  return normalizeInventoryItem(data);
+}
+
 export async function saveInventoryMasterData({ domain = "units", id = "", input = {} } = {}) {
   const config = MASTER_DATA_CONFIG[domain];
   if (!config) throw new Error("Loại dữ liệu nền không hợp lệ.");
@@ -534,5 +573,6 @@ export default {
   readInventoryMasterData,
   saveInventoryMasterData,
   archiveInventoryMasterData,
+  updateInventoryItemDefaultPurchasePrice,
   canWriteInventoryMasterData
 };

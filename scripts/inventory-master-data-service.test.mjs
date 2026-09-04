@@ -256,6 +256,8 @@ test("chuẩn hoá dữ liệu đọc cho các màn Phase 3", () => {
   assert.equal(normalizeInventoryItem({ metadata: { order_quantity: 24, maximum_stock: 120 } }).orderQuantity, 24);
   assert.equal(normalizeInventoryItem({ metadata: { order_quantity: 24, maximum_stock: 120 } }).maximumStock, 120);
   assert.equal(normalizeInventoryItem({ purchase_unit_id: "unit-kg", metadata: { display_unit_id: "unit-g" } }).displayUnitId, "unit-g");
+  assert.equal(normalizeInventoryItem({ default_purchase_price: 35000 }).defaultPurchasePrice, 35000);
+  assert.equal(normalizeInventoryItem({ default_purchase_price: -1 }).defaultPurchasePrice, 0);
   assert.equal(normalizeInventoryItem({ metadata: { default_waste_percent: 4.5 } }).defaultWastePercent, 4.5);
   assert.equal(normalizeInventoryItem({ metadata: { track_expiry: true, shelf_life_days: 45, expiry_warning_days: 5 } }).trackExpiry, true);
   assert.equal(normalizeInventoryItem({ metadata: { track_expiry: true, shelf_life_days: 45, expiry_warning_days: 5 } }).shelfLifeDays, 45);

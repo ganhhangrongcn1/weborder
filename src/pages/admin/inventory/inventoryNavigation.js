@@ -37,6 +37,15 @@ export const INVENTORY_ROUTE_ITEMS = [
     description: "Phân nhóm nguyên vật liệu để tìm kiếm và quản lý thuận tiện hơn."
   },
   {
+    id: "inventory-purchase-prices",
+    path: "/admin/inventory/purchase-prices",
+    page: "purchase-prices",
+    label: "Bảng giá NVL",
+    group: "Xây dữ liệu",
+    icon: "wallet",
+    description: "Khai báo giá mua mặc định để tự điền khi lập phiếu nhập kho."
+  },
+  {
     id: "inventory-units",
     path: "/admin/inventory/units",
     page: "units",
@@ -223,7 +232,7 @@ const INVENTORY_SECTION_DEFINITIONS = [
     id: "inventory-master-data-section",
     title: "Xây dữ liệu",
     icon: "folder",
-    pages: ["warehouses", "items", "item-categories", "units", "suppliers", "opening-balances"]
+    pages: ["warehouses", "items", "item-categories", "units", "suppliers", "purchase-prices", "opening-balances"]
   },
   {
     id: "inventory-operations-section",

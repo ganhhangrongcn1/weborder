@@ -7,7 +7,7 @@ import {
 } from "../../../services/inventoryUnitConversion.js";
 import InventoryReceiptLineFields from "./InventoryReceiptLineFields.jsx";
 import InventoryLineUnitSelect from "./InventoryLineUnitSelect.jsx";
-import { getReceiptLineItemDefaults, getSuggestedExpiryDate } from "./inventoryReceiptForm.js";
+import { getReceiptLineItemDefaults, getReceiptUnitPrice, getSuggestedExpiryDate } from "./inventoryReceiptForm.js";
 import { isInventoryItemAvailableAtWarehouse } from "../../../services/inventoryMasterDataService.js";
 
 const DOMAIN_CONFIG = {
@@ -150,7 +150,12 @@ export default function InventoryDocumentModal({
       if (field === "unitId") {
         const item = activeItems.find((row) => row.id === line.itemId);
         const unit = unitsById.get(value);
-        return { ...line, unitId: value, conversionToBase: getInventoryUnitToBaseFactor(item, unit) };
+        return {
+          ...line,
+          unitId: value,
+          conversionToBase: getInventoryUnitToBaseFactor(item, unit),
+          ...(domain === "receipts" ? { unitPrice: getReceiptUnitPrice(item, value) } : {})
+        };
       }
       if (field !== "itemId") return { ...line, [field]: value };
       const item = activeItems.find((row) => row.id === value);
