@@ -330,12 +330,15 @@ export default function PromotionTabsManager({
         catalogConfigRepository.setAsync("ghr_smart_promotions", draftSmartPromotions),
         Promise.resolve(onSaveLoyaltyConfig?.(loyaltyConfig))
       ]);
-      await syncPromotionCatalogToSupabase({
+      const syncResult = await syncPromotionCatalogToSupabase({
         promos,
         campaigns,
         coupons: draftCoupons,
         smartPromotions: draftSmartPromotions
       });
+      if (!syncResult?.ok) {
+        throw new Error(syncResult?.reason || "promotion_catalog_sync_failed");
+      }
 
       couponDraftDirtyRef.current = false;
       smartPromotionDraftDirtyRef.current = false;
@@ -349,7 +352,12 @@ export default function PromotionTabsManager({
       setSaveMessage("Đã lưu và đồng bộ Web, QR và POS.");
     } catch (error) {
       console.warn("[PromotionTabsManager] save promotions failed", error);
-      setSaveMessage("Lưu khuyến mãi thất bại. Kiểm tra RLS policy write cho catalog.");
+      const reason = String(error?.message || "");
+      setSaveMessage(
+        reason === "supabase_write_disabled"
+          ? "Không thể lưu vì quyền ghi dữ liệu đang bị tắt. Vui lòng liên hệ quản trị hệ thống."
+          : "Lưu voucher thất bại. Dữ liệu chưa được đồng bộ lên hệ thống, vui lòng thử lại."
+      );
     } finally {
       setIsSaving(false);
     }
