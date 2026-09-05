@@ -33,7 +33,7 @@ export function buildInventoryAlerts({ sources = {}, itemById = new Map(), wareh
     const warehouse = warehouseById.get(row.warehouseId);
     if (!item || item.isActive === false || !warehouse) return;
     const quantity = Number(row.quantity || 0);
-    const stockState = getInventoryStockState(quantity, item);
+    const stockState = getInventoryStockState(quantity, item, warehouse);
     if (stockState === "available") return;
     const isNegative = quantity < 0;
     const isOut = quantity === 0;

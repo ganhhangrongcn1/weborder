@@ -73,7 +73,7 @@ export async function readInventoryStockAttentionCount({ warehouseId = "" } = {}
     .select("warehouse_id,item_id,quantity");
   let warehouseQuery = client
     .from("inventory_warehouses")
-    .select("id,is_active")
+    .select("id,is_active,warehouse_type")
     .eq("is_active", true)
     .is("deleted_at", null);
   if (warehouseId) {
@@ -96,12 +96,14 @@ export async function readInventoryStockAttentionCount({ warehouseId = "" } = {}
 
   const warehouses = (warehouseResult.data || []).map((warehouse) => ({
     id: toText(warehouse.id),
+    warehouseType: toText(warehouse.warehouse_type),
     isActive: warehouse.is_active !== false
   }));
   const items = (itemResult.data || []).map((item) => ({
     id: toText(item.id),
     minimumStock: Number(item.minimum_stock || 0),
     reorderPoint: Number(item.reorder_point || 0),
+    metadata: item.metadata || {},
     warehouseIds: Array.isArray(item.metadata?.warehouse_ids)
       ? item.metadata.warehouse_ids.map(toText).filter(Boolean)
       : [],

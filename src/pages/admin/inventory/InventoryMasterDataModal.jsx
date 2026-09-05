@@ -3,6 +3,8 @@ import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { createInventoryMasterDataCode } from "../../../services/inventoryMasterDataService.js";
 import { convertInventoryQuantityFromBase } from "../../../services/inventoryUnitConversion.js";
+import { normalizeInventoryStockThresholds } from "../../../services/inventoryStockThresholds.js";
+import InventoryStockThresholdFields from "./InventoryStockThresholdFields.jsx";
 
 const DOMAIN_LABELS = {
   units: "đơn vị tính",
@@ -29,6 +31,7 @@ const EMPTY_BY_DOMAIN = {
     purchaseToBaseRatio: 1,
     minimumStock: 0,
     reorderPoint: 0,
+    stockThresholds: { branch: null, warehouses: {} },
     orderQuantity: 0,
     maximumStock: 0,
     defaultWastePercent: 0,
@@ -58,6 +61,7 @@ function buildInitialForm(domain, record) {
     baseUnitId: displayUnitId,
     minimumStock: convertInventoryQuantityFromBase(record.minimumStock, purchaseFactor),
     reorderPoint: convertInventoryQuantityFromBase(record.reorderPoint, purchaseFactor),
+    stockThresholds: normalizeInventoryStockThresholds(record.stockThresholds || record.metadata?.stock_thresholds, 1 / purchaseFactor),
     orderQuantity: convertInventoryQuantityFromBase(record.orderQuantity, purchaseFactor),
     maximumStock: convertInventoryQuantityFromBase(record.maximumStock, purchaseFactor)
   };
@@ -420,10 +424,9 @@ export default function InventoryMasterDataModal({
                 </div>
                 <div className="inventory-item-stock-config__body">
                   <p>Toàn bộ mức dưới đây nhập theo đơn vị mua / nhập: <strong>{stockUnitLabel}</strong>. Hệ thống tự quy đổi về đơn vị gốc để tính tồn và định lượng món.</p>
-                  <div className="inventory-form-row inventory-form-row--quad">
-                    <Field label="Điểm đặt hàng lại" help="Chạm mức này sẽ nhắc nhập; 0 = không cảnh báo."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="reorderPoint" value={form.reorderPoint} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
+                  <InventoryStockThresholdFields form={form} setForm={setForm} warehouses={activeWarehouses} unitLabel={stockUnitLabel} />
+                  <div className="inventory-form-row inventory-form-row--paired">
                     <Field label="Số lượng đặt hàng" help="Số lượng nên mua mỗi lần."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="orderQuantity" value={form.orderQuantity} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
-                    <Field label="Tồn tối thiểu" help="Mức tồn an toàn khi kiểm kê."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="minimumStock" value={form.minimumStock} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
                     <Field label="Tồn tối đa" help="Mức trữ tối đa; 0 = chưa giới hạn."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="maximumStock" value={form.maximumStock} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
                   </div>
                   {Number(form.maximumStock || 0) > 0 && Number(form.maximumStock || 0) < Number(form.minimumStock || 0) ? <p className="inventory-form-error">Tồn tối đa phải bằng 0 hoặc lớn hơn tồn tối thiểu.</p> : null}

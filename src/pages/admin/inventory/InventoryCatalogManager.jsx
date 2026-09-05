@@ -3,6 +3,7 @@ import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import InventoryMasterDataModal from "./InventoryMasterDataModal.jsx";
 import { convertInventoryQuantityFromBase } from "../../../services/inventoryUnitConversion.js";
+import { getInventoryStockThresholds } from "../../../services/inventoryStockThresholds.js";
 
 const ITEM_TYPE_LABELS = {
   ingredient: "Nguyên liệu",
@@ -74,10 +75,10 @@ function ItemUnitCell({ row, units }) {
   return <span className="inventory-item-unit-cell"><strong>{unitInfo.primary}</strong><small>{unitInfo.secondary}</small></span>;
 }
 
-function getItemPurchaseStockLabel(row, units) {
+function getItemPurchaseStockLabel(row, units, warehouse) {
   const purchaseUnit = units.find((unit) => unit.id === row.purchaseUnitId) || row.purchaseUnit || row.baseUnit || {};
   const factor = Math.max(0, Number(row.purchaseToBaseRatio || 1)) || 1;
-  return `${formatNumber(convertInventoryQuantityFromBase(row.reorderPoint, factor))} ${getUnitShortLabel(purchaseUnit)}`;
+  return `${formatNumber(convertInventoryQuantityFromBase(getInventoryStockThresholds(row, warehouse).reorderPoint, factor))} ${getUnitShortLabel(purchaseUnit)}`;
 }
 
 export default function InventoryCatalogManager({
@@ -117,9 +118,10 @@ export default function InventoryCatalogManager({
   }, [isItems, rows, search, statusFilter, typeFilter]);
 
   const activeCount = rows.filter((row) => row.isActive).length;
+  const selectedWarehouse = warehouses.find((warehouse) => warehouse.id === selectedWarehouseId);
   const inactiveCount = rows.length - activeCount;
   const attentionCount = isItems
-    ? rows.filter((row) => row.reorderPoint > 0).length
+    ? rows.filter((row) => getInventoryStockThresholds(row, selectedWarehouse).reorderPoint > 0).length
     : rows.filter((row) => row.phone || row.email).length;
 
   const openModal = (row = null) => {
@@ -191,7 +193,7 @@ export default function InventoryCatalogManager({
                   <td><span className={`inventory-data-pill ${row.itemGroup?.name ? "is-category" : "is-muted"}`}>{row.itemGroup?.name || "Chưa phân nhóm"}</span></td>
                   <td><ItemUnitCell row={row} units={units} /></td>
                   <td><span className={`inventory-data-pill ${row.warehouseIds?.length ? "is-category" : "is-active"}`}>{row.warehouseIds?.length ? row.warehouseIds.map((id) => warehouses.find((warehouse) => warehouse.id === id)?.name).filter(Boolean).join(", ") || `${row.warehouseIds.length} kho` : "Tất cả kho"}</span></td>
-                  <td>{getItemPurchaseStockLabel(row, units)}</td>
+                  <td>{getItemPurchaseStockLabel(row, units, selectedWarehouse)}<small>{selectedWarehouse?.name || "Mức Kho Tổng"}</small></td>
                   <td><span className={`inventory-data-pill ${row.trackExpiry ? "is-expiry" : "is-muted"}`} title={row.trackExpiry ? `Cảnh báo trước ${formatNumber(row.expiryWarningDays)} ngày` : "Không theo dõi hạn sử dụng"}>{row.trackExpiry ? `${formatNumber(row.shelfLifeDays)} ngày` : "Không"}</span></td>
                   <td><span className={`inventory-status-pill ${row.isActive ? "is-active" : "is-inactive"}`}>{row.isActive ? "Đang sử dụng" : "Ngừng sử dụng"}</span></td>
                   <td><div className="inventory-row-actions"><button type="button" disabled={!canWrite} onClick={() => openModal(row)} aria-label={`Sửa ${row.name}`}><Icon name="edit" size={16} /></button><button type="button" disabled={!canWrite} onClick={() => archiveRow(row)} aria-label={`Lưu trữ ${row.name}`}><Icon name="trash" size={16} /></button></div></td>

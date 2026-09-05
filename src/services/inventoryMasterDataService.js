@@ -7,6 +7,8 @@ import { recordAdminRequest } from "./adminRequestAuditService.js";
 import { isInventoryRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
 import { convertInventoryQuantityToBase } from "./inventoryUnitConversion.js";
 
+import { normalizeInventoryStockThresholds } from "./inventoryStockThresholds.js";
+
 const MASTER_DATA_CONFIG = {
   items: {
     table: "inventory_items",
@@ -182,6 +184,9 @@ export function normalizeInventoryMasterDataInput(domain, input = {}) {
     metadata.display_unit_id = displayUnitId;
     metadata.order_quantity = orderQuantity;
     metadata.maximum_stock = maximumStock;
+    if (input.stockThresholds !== undefined) {
+      metadata.stock_thresholds = normalizeInventoryStockThresholds(input.stockThresholds, stockSettingsFactor, true);
+    }
     metadata.default_waste_percent = defaultWastePercent;
     metadata.track_expiry = trackExpiry;
     metadata.shelf_life_days = trackExpiry ? shelfLifeDays : 0;
@@ -287,6 +292,7 @@ export function normalizeInventoryItem(row = {}) {
     defaultPurchasePrice: Math.max(0, Number(row.default_purchase_price ?? 0)),
     minimumStock: Math.max(0, Number(row.minimum_stock ?? 0)),
     reorderPoint: Math.max(0, Number(row.reorder_point ?? 0)),
+    stockThresholds: normalizeInventoryStockThresholds(metadata.stock_thresholds),
     orderQuantity: Math.max(0, Number(metadata.order_quantity ?? 0)),
     maximumStock: Math.max(0, Number(metadata.maximum_stock ?? 0)),
     defaultWastePercent: Math.max(0, Math.min(100, Number(metadata.default_waste_percent ?? 0))),

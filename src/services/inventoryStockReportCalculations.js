@@ -3,6 +3,8 @@ import {
   getInventoryItemInputUnitConfig
 } from "./inventoryUnitConversion.js";
 
+import { getInventoryStockThresholds } from "./inventoryStockThresholds.js";
+
 function toNumber(value) {
   const number = Number(value || 0);
   return Number.isFinite(number) ? number : 0;
@@ -19,10 +21,9 @@ function isItemAvailableAtWarehouse(item = {}, warehouseId = "") {
   return !allowedWarehouseIds.length || allowedWarehouseIds.includes(toText(warehouseId));
 }
 
-export function getInventoryStockState(quantity, item = {}) {
+export function getInventoryStockState(quantity, item = {}, warehouse = {}) {
   const current = toNumber(quantity);
-  const reorderPoint = toNumber(item.reorderPoint);
-  const minimumStock = toNumber(item.minimumStock);
+  const { reorderPoint, minimumStock } = getInventoryStockThresholds(item, warehouse);
   if (current <= 0) return "out";
   if ((reorderPoint > 0 && current <= reorderPoint) || (minimumStock > 0 && current < minimumStock)) return "low";
   return "available";
@@ -64,7 +65,7 @@ export function calculateInventoryStockReportSummary(rows = [], itemsById = new 
   return rows.reduce((summary, row) => {
     const quantity = toNumber(row.quantity);
     const averageCost = toNumber(row.averageCost);
-    const state = getInventoryStockState(quantity, itemsById.get(row.itemId));
+    const state = getInventoryStockState(quantity, itemsById.get(row.itemId), row);
     summary.totalValue += quantity * averageCost;
     summary.rowCount += 1;
     if (quantity > 0) summary.availableCount += 1;
@@ -88,14 +89,14 @@ export function buildInventoryStockReportRows(rows = [], warehouses = [], items 
         .filter((item) => item?.id && item.isActive !== false && isItemAvailableAtWarehouse(item, warehouse.id))
         .forEach((item) => {
           const key = `${toText(warehouse.id)}:${toText(item.id)}`;
-          result.push(balanceByWarehouseItem.get(key) || {
+          result.push({ ...(balanceByWarehouseItem.get(key) || {
             warehouseId: toText(warehouse.id),
             itemId: toText(item.id),
             quantity: 0,
             averageCost: 0,
             updatedAt: "",
             isVirtualBalance: true
-          });
+          }), warehouseType: warehouse.warehouseType || warehouse.warehouse_type });
         });
     });
 
@@ -104,7 +105,7 @@ export function buildInventoryStockReportRows(rows = [], warehouses = [], items 
 
 export function countInventoryStockAttention(rows = [], itemsById = new Map()) {
   return rows.reduce((count, row) => (
-    getInventoryStockState(row.quantity, itemsById.get(row.itemId)) === "available"
+    getInventoryStockState(row.quantity, itemsById.get(row.itemId), row) === "available"
       ? count
       : count + 1
   ), 0);

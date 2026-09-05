@@ -53,7 +53,7 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
     return reportRows.filter((row) => {
       const item = itemById.get(row.itemId) || {};
       const warehouse = warehouseById.get(row.warehouseId) || {};
-      const state = getInventoryStockState(row.quantity, item);
+      const state = getInventoryStockState(row.quantity, item, row);
       if (filters.warehouseId && row.warehouseId !== filters.warehouseId) return false;
       if (filters.itemId && row.itemId !== filters.itemId) return false;
       if (filters.groupId && item.groupId !== filters.groupId) return false;
@@ -149,7 +149,7 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
             {visibleRows.map((row) => {
               const item = itemById.get(row.itemId) || {};
               const warehouse = warehouseById.get(row.warehouseId) || {};
-              const state = getInventoryStockState(row.quantity, item);
+              const state = getInventoryStockState(row.quantity, item, row);
               const display = getInventoryStockDisplayValues(row, item, unitById);
               const purchase = getInventoryStockPurchaseValues(row, item, unitById);
               const hasDifferentDisplayUnit = display.unitSymbol !== purchase.unitSymbol

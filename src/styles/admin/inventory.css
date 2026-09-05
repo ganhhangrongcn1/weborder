@@ -435,6 +435,14 @@
 .inventory-master-intro small { max-width: 720px; color: #806d61; font-size: .76rem; line-height: 1.45; }
 .inventory-master-intro button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 39px; padding: 0 13px; border: 0; border-radius: 9px; background: #db681c; color: #fff; font-weight: 800; cursor: pointer; }
 .inventory-master-intro button:disabled { background: #e7dfd8; color: #8b796d; cursor: not-allowed; }
+.inventory-stock-thresholds { display: grid; gap: 12px; margin-bottom: 16px; }
+.inventory-stock-thresholds__group { padding: 14px; border: 1px solid #eaded2; border-radius: 10px; background: #fff; }
+.inventory-stock-thresholds__group > strong, .inventory-stock-thresholds__group > summary { display: block; margin-bottom: 10px; color: #59402e; font-weight: 700; }
+.inventory-stock-thresholds__group > summary { display: list-item; cursor: pointer; }
+.inventory-stock-thresholds__toggle { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+.inventory-stock-thresholds__toggle input { width: 17px; height: 17px; accent-color: #d66918; flex-shrink: 0; }
+.inventory-stock-thresholds small { display: block; color: #806d61; font-size: .76rem; line-height: 1.5; }
+.inventory-stock-thresholds__warehouse { padding: 12px 0; border-top: 1px solid #eee4db; }
 .inventory-purchase-price-error { margin: 12px 18px 0; }
 .inventory-purchase-price-table td:nth-child(4) { min-width: 240px; }
 .inventory-inline-price-input { display: flex; align-items: center; gap: 8px; min-width: 220px; }
