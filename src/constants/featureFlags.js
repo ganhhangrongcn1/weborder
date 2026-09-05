@@ -1,4 +1,5 @@
 export const rewardFeatureFlags = {
+  enableWelcomeVoucher: true,
   enableCheckIn: true,
   enableLuckyDraw: false,
   enableComebackReward: false,
@@ -8,4 +9,9 @@ export const rewardFeatureFlags = {
 
 export const orderingFeatureFlags = {
   enableQrCounterOrdering: false
+};
+
+// Only controls Admin settings visibility; existing voucher rules remain intact.
+export const adminFeatureFlags = {
+  showLoyaltyVoucherSettings: false
 };

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { adminFeatureFlags } from "../../../constants/featureFlags.js";
 import { buildLoyaltyVoucherChecklist } from "../../../services/loyaltyVoucherPresetService.js";
 import { getLoyaltyTierIconSymbol } from "../../../services/loyaltyProgramConfigService.js";
 import { AdminInput, AdminPanel, AdminSelect } from "../ui/index.js";
@@ -34,9 +35,12 @@ export default function LoyaltyRewardsSettings({
   return (
     <AdminPanel
       title="Thưởng tự động"
-      description="Gắn quà theo hạng và bật những chương trình thưởng đang thực sự sử dụng."
+      description={adminFeatureFlags.showLoyaltyVoucherSettings
+        ? "Gắn quà theo hạng và bật những chương trình thưởng đang thực sự sử dụng."
+        : "Cài đặt thưởng điểm danh và chuỗi ngày ghé Gánh."}
       className="admin-loyalty-card"
     >
+      {adminFeatureFlags.showLoyaltyVoucherSettings ? (
       <section className="admin-loyalty-reward-section">
         <div className="admin-loyalty-section-head">
           <div>
@@ -80,6 +84,7 @@ export default function LoyaltyRewardsSettings({
           ))}
         </div>
       </section>
+      ) : null}
 
       <details className="admin-loyalty-subdetails">
         <summary>

@@ -167,12 +167,13 @@ export default function MemberLoyaltyView({
       />
 
       <div className="loyalty-page__content">
+        {displayVouchers.length > 0 ? (
         <section className="loyalty-vouchers" aria-labelledby="loyalty-voucher-heading">
           <div className="loyalty-section-head">
             <div className="loyalty-section-head__title">
               <span><Icon name="gift" size={18} /></span>
               <div>
-                <small>Quà ngon đang chờ</small>
+                <small>Ưu đãi của bạn</small>
                 <h2 id="loyalty-voucher-heading">{voucherHeader}</h2>
               </div>
             </div>
@@ -195,6 +196,7 @@ export default function MemberLoyaltyView({
             />
           </div>
         </section>
+        ) : null}
 
         {checkinEnabled ? (
           <CheckinCard

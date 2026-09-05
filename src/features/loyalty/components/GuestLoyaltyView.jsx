@@ -80,8 +80,8 @@ export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
               <p><strong>Tích điểm từ đơn đầu</strong><small>Mỗi hạng được cộng từ {minTierRate}% đến {maxTierRate}%</small></p>
             </div>
             <div>
-              <span className="is-green"><Icon name="gift" size={17} /></span>
-              <p><strong>Quà tự đến khi lên hạng</strong><small>Voucher được tặng đúng mốc, không cần săn mã</small></p>
+              <span className="is-green"><Icon name="star" size={17} /></span>
+              <p><strong>Dùng điểm cho lần đặt sau</strong><small>1 điểm = 1đ khi thanh toán</small></p>
             </div>
             {checkinEnabled ? (
               <div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { adminFeatureFlags } from "../../../constants/featureFlags.js";
 import { ALL_PROMOTION_SALES_CHANNELS, normalizeSalesChannels } from "../../../services/promotionChannelService.js";
 import {
   COUPON_MANAGEMENT_GROUPS,
@@ -18,7 +19,10 @@ function todayText() {
 }
 
 function buildInitialDraft(initialValue = {}) {
-  const managementGroup = String(initialValue.managementGroup || "checkout_sales");
+  const requestedGroup = String(initialValue.managementGroup || "checkout_sales");
+  const managementGroup = !adminFeatureFlags.showLoyaltyVoucherSettings && requestedGroup === "loyalty_auto"
+    ? "checkout_sales"
+    : requestedGroup;
   const group = getCouponManagementGroupDefinition(managementGroup);
 
   return {
@@ -144,7 +148,9 @@ export default function VoucherCreateDialog({
               value={draft.managementGroup}
               onChange={(event) => handleGroupChange(event.target.value)}
             >
-              {COUPON_MANAGEMENT_GROUPS.map((group) => (
+              {COUPON_MANAGEMENT_GROUPS
+                .filter((group) => adminFeatureFlags.showLoyaltyVoucherSettings || group.value !== "loyalty_auto")
+                .map((group) => (
                 <option key={group.value} value={group.value}>{group.label}</option>
               ))}
             </select>

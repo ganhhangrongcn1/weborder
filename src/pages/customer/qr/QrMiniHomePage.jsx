@@ -479,7 +479,7 @@ export default function QrMiniHomePage({
           <span><Icon name="star" size={18} /></span>
           <div>
             <strong>Đăng ký để sử dụng điểm tích lũy và ưu đãi</strong>
-            <small>Tích điểm, voucher hàng tháng, theo dõi đơn hàng</small>
+            <small>Tích điểm, đổi điểm, theo dõi đơn hàng</small>
           </div>
           <button type="button" onClick={() => navigate("account", "account")}>Đăng ký ngay</button>
         </section>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { adminFeatureFlags } from "../../../constants/featureFlags.js";
 import {
   getLoyaltyEarnPercent,
   normalizeLoyaltyProgramConfig
@@ -121,7 +122,9 @@ export default function LoyaltySettings({
           <div><span>Số hạng</span><strong>{config.tiers.length}</strong></div>
           <div><span>Tích điểm</span><strong>{formatPercent(minEarnPercent)}–{formatPercent(maxEarnPercent)}%</strong></div>
           <div><span>Dùng tối đa</span><strong>{config.maxRedemptionPercent}%</strong></div>
-          <div><span>Voucher đã gắn</span><strong>{assignedVoucherCount}/{config.tiers.length}</strong></div>
+          {adminFeatureFlags.showLoyaltyVoucherSettings ? (
+            <div><span>Voucher đã gắn</span><strong>{assignedVoucherCount}/{config.tiers.length}</strong></div>
+          ) : null}
         </div>
 
         <AdminButton className="admin-loyalty-save-button" onClick={handleSave} disabled={isSaving}>

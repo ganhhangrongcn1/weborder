@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { adminFeatureFlags } from "../../../constants/featureFlags.js";
+import WelcomeVoucherSettings from "./WelcomeVoucherSettings.jsx";
 import {
   applyLoyaltyVoucherPresets,
   LOYALTY_VOUCHER_PRESETS
@@ -226,7 +228,10 @@ export default function CouponManager({
     () => new Map(safeSavedCoupons.map((coupon) => [coupon.id, coupon])),
     [safeSavedCoupons]
   );
-  const [managementGroupFilter, setManagementGroupFilter] = useState("checkout_sales");
+  const [selectedManagementGroup, setManagementGroupFilter] = useState("checkout_sales");
+  const managementGroupFilter = !adminFeatureFlags.showLoyaltyVoucherSettings && selectedManagementGroup === "loyalty_auto"
+    ? "checkout_sales"
+    : selectedManagementGroup;
   const [statusFilter, setStatusFilter] = useState("running");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCouponId, setSelectedCouponId] = useState("");
@@ -235,7 +240,9 @@ export default function CouponManager({
   const [pendingDeleteId, setPendingDeleteId] = useState("");
 
   const couponGroups = useMemo(
-    () => COUPON_MANAGEMENT_GROUPS.map((group) => ({
+    () => COUPON_MANAGEMENT_GROUPS
+      .filter((group) => adminFeatureFlags.showLoyaltyVoucherSettings || group.value !== "loyalty_auto")
+      .map((group) => ({
       ...group,
       count: safeCoupons.filter((coupon) => coupon.managementGroup === group.value).length
     })),
@@ -467,7 +474,11 @@ export default function CouponManager({
         </div>
       </header>
 
-      {managementGroupFilter === "loyalty_auto" ? (
+      {!adminFeatureFlags.showLoyaltyVoucherSettings ? (
+        <WelcomeVoucherSettings config={normalizedLoyaltyConfig} coupons={loyaltyCoupons} onChange={patchWelcomeVoucherConfig} />
+      ) : null}
+
+      {adminFeatureFlags.showLoyaltyVoucherSettings && managementGroupFilter === "loyalty_auto" ? (
           <details className="admin-promo-helper-card">
             <summary className="admin-promo-helper-summary">
               <div className="admin-promo-helper-copy">
@@ -740,7 +751,9 @@ export default function CouponManager({
                         value={selectedCoupon.managementGroup}
                         onChange={(event) => patchCoupon(selectedCoupon.id, { managementGroup: event.target.value })}
                       >
-                        {listCouponManagementGroupsForVoucherType(selectedCoupon.voucherType).map((group) => (
+                        {listCouponManagementGroupsForVoucherType(selectedCoupon.voucherType)
+                          .filter((group) => adminFeatureFlags.showLoyaltyVoucherSettings || group.value !== "loyalty_auto")
+                          .map((group) => (
                           <option key={group.value} value={group.value}>{group.label}</option>
                         ))}
                       </select>

@@ -1,3 +1,5 @@
+import { rewardFeatureFlags } from "../constants/featureFlags.js";
+
 export const LOYALTY_PROGRAM_SCHEMA_VERSION = 5;
 
 export const LOYALTY_TIER_ICON_OPTIONS = [
@@ -173,7 +175,7 @@ export function normalizeLoyaltyProgramConfig(config = {}) {
       config?.checkinDailyPoints,
       DEFAULT_LOYALTY_PROGRAM_CONFIG.checkinDailyPoints
     ),
-    welcomeVoucherEnabled: config?.welcomeVoucherEnabled === true,
+    welcomeVoucherEnabled: rewardFeatureFlags.enableWelcomeVoucher && config?.welcomeVoucherEnabled === true,
     welcomeVoucherId: String(config?.welcomeVoucherId || "").trim(),
     welcomeVoucherValidityDays: Math.min(
       60,

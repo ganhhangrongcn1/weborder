@@ -1,4 +1,5 @@
 import { defaultLoyaltyData, normalizeLoyaltyData } from "./loyaltyService.js";
+import { rewardFeatureFlags } from "../constants/featureFlags.js";
 import { normalizeLoyaltyProgramConfig } from "./loyaltyProgramConfigService.js";
 import { catalogConfigRepository } from "./repositories/catalogConfigRepository.js";
 import { loyaltyRepository } from "./repositories/loyaltyRepository.js";
@@ -85,6 +86,9 @@ function buildGrantedVoucher(coupon = {}, config = {}, now = new Date()) {
 }
 
 export async function grantWelcomeVoucherToNewMemberIfEligible(phone = "", options = {}) {
+  if (!rewardFeatureFlags.enableWelcomeVoucher) {
+    return { ok: true, granted: false, reason: "welcome_voucher_disabled" };
+  }
   const key = getCustomerKey(phone);
   if (!key) return { ok: false, granted: false, reason: "invalid_phone" };
 

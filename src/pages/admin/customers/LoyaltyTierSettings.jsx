@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { adminFeatureFlags } from "../../../constants/featureFlags.js";
 import {
   getLoyaltyEarnPercent,
   getLoyaltyTierIconSymbol,
@@ -31,7 +32,7 @@ export default function LoyaltyTierSettings({
         <div className="admin-loyalty-panel-summary">
           <span>{tiers.length} hạng</span>
           <span>Cao nhất {formatPercent(maxEarnPercent)}%</span>
-          <span>{assignedVoucherCount} voucher đã gắn</span>
+          {adminFeatureFlags.showLoyaltyVoucherSettings ? <span>{assignedVoucherCount} voucher đã gắn</span> : null}
         </div>
       )}
     >
@@ -142,7 +143,10 @@ export default function LoyaltyTierSettings({
           );
         })}
       </div>
-      <p className="admin-loyalty-note">Đơn tiền lẻ được làm tròn xuống. Voucher của từng hạng được quản lý tại thẻ Thưởng tự động.</p>
+      <p className="admin-loyalty-note">
+        Đơn tiền lẻ được làm tròn xuống.
+        {adminFeatureFlags.showLoyaltyVoucherSettings ? " Voucher của từng hạng được quản lý tại thẻ Thưởng tự động." : ""}
+      </p>
     </AdminPanel>
   );
 }
