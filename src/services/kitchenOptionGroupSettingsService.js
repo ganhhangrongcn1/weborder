@@ -675,6 +675,7 @@ export function buildKitchenChecklistOptions(options, source, settingsValue) {
           id: `${setting.id}-option-${index}`,
           group,
           value: observed.optionName,
+          sourceLabel: observed.groupName ? `${observed.groupName}: ${observed.optionName}` : observed.optionName,
           label,
           kitchenType: setting.kitchenType,
           sortOrder: setting.sortOrder
@@ -694,6 +695,7 @@ export function buildKitchenChecklistOptions(options, source, settingsValue) {
       id: `${setting.id}-${index}`,
       group: setting.kitchenLabel || setting.groupName,
       value,
+      sourceLabel: `${group.groupName || setting.groupName}: ${value}`,
       label: `${setting.kitchenLabel || setting.groupName}: ${value}`,
       kitchenType: setting.kitchenType,
       sortOrder: setting.sortOrder
@@ -726,6 +728,7 @@ export function buildKitchenChecklistOptions(options, source, settingsValue) {
         id: `${setting.id}-flat-${result.length}`,
         group: setting.kitchenLabel || setting.groupName,
         value: optionValue,
+        sourceLabel: label,
         label: checklistLabel,
         kitchenType: setting.kitchenType,
         sortOrder: setting.sortOrder

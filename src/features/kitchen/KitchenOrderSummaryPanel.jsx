@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   normalizeKitchenOptionText,
+  buildKitchenChecklistOptionKeys,
   normalizeKitchenOptionMatchText,
   parseKitchenOptionLabel
 } from "./kitchenOptionDisplay.js";
@@ -31,16 +32,7 @@ function getChecklistOptions(item = {}) {
 }
 
 function getDisplayOptions(item = {}, checklistOptions = []) {
-  const checklistKeys = new Set(
-    checklistOptions
-      .flatMap((option) => [
-        option.label,
-        option.value,
-        option.group && option.value ? `${option.group}: ${option.value}` : ""
-      ])
-      .map(normalizeKitchenOptionMatchText)
-      .filter(Boolean)
-  );
+  const checklistKeys = buildKitchenChecklistOptionKeys(checklistOptions);
 
   return (Array.isArray(item.options) ? item.options : [])
     .filter(Boolean)

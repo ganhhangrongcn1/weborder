@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   getKitchenRecipeOptions,
-  isKitchenPaidToppingGroup,
+  buildKitchenChecklistOptionKeys,
   isKitchenRecipeOnlyGroup,
   isKitchenRecipeOnlyOption,
   normalizeKitchenOptionText,
@@ -112,16 +112,7 @@ function groupKitchenChecklistOptions(options = []) {
 }
 
 function buildPaidToppingOptionKeys(paidToppings = []) {
-  return new Set(
-    (paidToppings || [])
-      .flatMap((option) => [
-        option.label,
-        option.value,
-        option.group && option.value ? `${option.group}: ${option.value}` : ""
-      ])
-      .map(normalizeKitchenOptionMatchText)
-      .filter(Boolean)
-  );
+  return buildKitchenChecklistOptionKeys(paidToppings);
 }
 
 function getKitchenItemProgressKey(order = {}, item = {}) {
@@ -155,8 +146,6 @@ function areUnitToppingsDone(progress = {}, itemKey = "", unitIndex = 0, paidTop
 }
 
 function isPaidToppingDisplayOption(option = "", paidToppingKeys = new Set()) {
-  const parsed = parseKitchenOptionLabel(option);
-  if (isKitchenPaidToppingGroup(parsed.group)) return true;
   return paidToppingKeys.has(normalizeKitchenOptionMatchText(option));
 }
 

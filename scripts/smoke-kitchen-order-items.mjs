@@ -2,7 +2,43 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { buildOrderItemStableId, isOrderItemUuid } from "../src/services/orderItemIdentityService.js";
 import { mapWebsiteKitchenItem, resolveWebsiteKitchenItems } from "../src/services/kitchenOrderService.js";
-import { normalizeKitchenOptionMatchText } from "../src/features/kitchen/kitchenOptionDisplay.js";
+import { buildKitchenChecklistOptionKeys, getKitchenRecipeOptions, normalizeKitchenOptionMatchText } from "../src/features/kitchen/kitchenOptionDisplay.js";
+import { buildKitchenChecklistOptions } from "../src/services/kitchenOptionGroupSettingsService.js";
+
+const comboValues = ["Bánh Tráng Cuốn Bơ", "Bánh Tráng Cuốn Chấm Sốt", "Bánh Tráng Ps Cuốn Tóp Mỡ"];
+const comboGroup = "Chọn Món Combo Cuốn";
+const comboLabels = comboValues.map((value) => `${comboGroup}: ${value}`);
+const recipeLabels = ["Chọn Loại Sốt: Sốt Bơ Bò", "Mức Độ Cay: Không Cay", "Size: L", "Chọn Cách Chế Biến: Để riêng"];
+const groupSetting = { source: "pos", groupName: comboGroup, kitchenLabel: "Chọn món combo", enabled: true };
+const settingsCases = [
+  { version: 3, groups: [groupSetting] },
+  { version: 3, groups: comboValues.map((optionName) => ({ ...groupSetting, optionName })) }
+];
+for (const settings of settingsCases) {
+  for (const options of [comboLabels, comboValues.map((name) => ({ groupName: comboGroup, name }))]) {
+    const checklist = buildKitchenChecklistOptions(options, "pos", settings);
+    assert.equal(checklist.length, 3, "All selected combo dishes must remain actionable");
+    const keys = buildKitchenChecklistOptionKeys(checklist);
+    const visible = getKitchenRecipeOptions([...comboLabels, ...recipeLabels])
+      .filter((option) => !keys.has(normalizeKitchenOptionMatchText(option.label)))
+      .map((option) => option.label);
+    assert.deepEqual(visible, recipeLabels, "Renamed combo groups must not duplicate recipe badges");
+    assert.equal(keys.has(normalizeKitchenOptionMatchText(`Nhóm khác: ${comboValues[0]}`)), false,
+      "Equal values in different named groups must not be hidden");
+    assert.equal(keys.has(normalizeKitchenOptionMatchText(comboLabels[0].replace(":", ""))), true,
+      "Partner labels without separators must still match their source group");
+  }
+}
+for (const groupName of ["Ngon Hơn Khi Ăn Cùng", "Ưu Đãi Khi Mua Kèm", "Topping thêm", "Thêm kèm"]) {
+  const label = `${groupName}: Hành Phi`;
+  const checklist = buildKitchenChecklistOptions([label], "pos", {
+    version: 3, groups: [{ source: "pos", groupName, kitchenLabel: "Món thêm", enabled: true }]
+  });
+  assert.equal(checklist.length, 1);
+  assert.equal(buildKitchenChecklistOptionKeys(checklist).has(normalizeKitchenOptionMatchText(label)), true);
+  assert.equal(buildKitchenChecklistOptionKeys([]).has(normalizeKitchenOptionMatchText(label)), false,
+    "A topping without an active checklist must stay visible");
+}
 
 assert.equal(
   normalizeKitchenOptionMatchText("Chọn Món Combo: Bánh Tráng Cuốn Bơ"),

@@ -34,6 +34,18 @@ export function normalizeKitchenOptionMatchText(value = "") {
     .trim();
 }
 
+// Keep the original group identity when the kitchen uses a custom display name.
+export function buildKitchenChecklistOptionKeys(options = []) {
+  return new Set(
+    options.flatMap((option) => [
+      option.sourceLabel,
+      option.label,
+      option.value,
+      option.group && option.value ? `${option.group}: ${option.value}` : ""
+    ]).map(normalizeKitchenOptionMatchText).filter(Boolean)
+  );
+}
+
 function normalizeGroupKey(value = "") {
   return normalizeKitchenOptionText(value).replace(/[^a-z0-9]+/g, " ").trim();
 }
