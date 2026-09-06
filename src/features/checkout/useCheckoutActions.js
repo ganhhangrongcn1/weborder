@@ -1,6 +1,6 @@
 ﻿import { buildCreateOrderPayload, validateCheckoutContact } from "../../services/checkoutOrderService.js";
 
-import { getCheckoutVoucherErrorMessage } from "../../services/checkoutOrderService.js";
+import { getCheckoutPointsErrorMessage, getCheckoutVoucherErrorMessage } from "../../services/checkoutOrderService.js";
 import { prewarmQrOrderPaymentSession } from "../../services/qrPaymentService.js";
 
 export default function useCheckoutActions({
@@ -123,6 +123,15 @@ export default function useCheckoutActions({
         details: error?.details || "",
         hint: error?.hint || ""
       });
+      const pointsMessage = getCheckoutPointsErrorMessage(error);
+      if (pointsMessage) {
+        if (typeof onNotice === "function") {
+          onNotice({ title: "Cần cập nhật số điểm sử dụng", message: pointsMessage, icon: "warning" });
+        } else {
+          alert(pointsMessage);
+        }
+        return;
+      }
       const voucherMessage = getCheckoutVoucherErrorMessage(error);
       if (voucherMessage) {
         if (typeof onVoucherRejected === "function") onVoucherRejected();

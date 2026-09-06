@@ -31,6 +31,11 @@ function createVoucherValidationError(reason = "voucher_invalid") {
   return error;
 }
 
+export function getCheckoutPointsErrorMessage(error) {
+  if (error?.code !== "P4001" && !String(error?.message || "").includes("LOYALTY_COMBINED_BENEFIT_LIMIT")) return "";
+  return "Số điểm sử dụng cần được cập nhật theo ưu đãi hiện tại. Anh/chị tải lại trang, kiểm tra số điểm và tổng thanh toán rồi đặt lại.";
+}
+
 export function getCheckoutVoucherErrorMessage(error) {
   if (error?.code === "CHECKOUT_VOUCHER_INVALID") {
     return VOUCHER_REASON_MESSAGES[error?.reason] || error.message || "Voucher không còn hợp lệ.";
