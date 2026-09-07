@@ -97,9 +97,7 @@ export default function CheckoutPricingSection({
                 <span>
                   {usePoints
                     ? `Đơn hàng đã được trừ ${formatMoney(pointsDiscount)}.`
-                    : canUsePoints
-                      ? `Bạn có ${formattedAvailablePoints} điểm • Giảm tối đa ${formatMoney(maxPointDiscount)}`
-                      : `Bạn có ${formattedAvailablePoints} điểm`}
+                    : `Bạn có ${formattedAvailablePoints} điểm`}
                 </span>
                 <small className="points-limit-note">
                   Đặt đơn này nhận thêm +{formattedEarnedPoints} điểm.
