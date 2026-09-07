@@ -35,7 +35,7 @@ test("voucher exhausting allowance permits no further points; shipping is exclud
 test("cap rejection explains recovery without exposing a percentage", () => {
   for (const error of [{ code: "P4001" }, { message: "LOYALTY_COMBINED_BENEFIT_LIMIT" }]) {
     const message = getCheckoutPointsErrorMessage(error);
-    assert.ok(message.includes("tải lại trang"));
+    assert.ok(message.includes("Giỏ hàng vẫn được giữ nguyên"));
     assert.ok(!message.includes("%"));
   }
   assert.equal(getCheckoutPointsErrorMessage({ code: "P0001", message: "Network failure" }), "");

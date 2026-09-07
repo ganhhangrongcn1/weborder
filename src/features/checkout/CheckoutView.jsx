@@ -43,6 +43,7 @@ import useCheckoutPickupBranchState from "./hooks/useCheckoutPickupBranchState.j
 import useCheckoutGiftPromotions from "./hooks/useCheckoutGiftPromotions.js";
 import useCheckoutDeliveryBranchSync from "./hooks/useCheckoutDeliveryBranchSync.js";
 import useCheckoutLoyaltyRuleSync from "./hooks/useCheckoutLoyaltyRuleSync.js";
+import useCheckoutPricingRefresh from "./hooks/useCheckoutPricingRefresh.js";
 import useCheckoutPickupContactSync from "./hooks/useCheckoutPickupContactSync.js";
 
 function isPlaceholderCustomerName(name = "") {
@@ -305,6 +306,18 @@ export default function Checkout({
     loyaltyRule: effectiveLoyaltyRule
   });
 
+  const refreshCheckoutPricing = useCheckoutPricingRefresh({
+    pricingInput: {
+      fulfillmentType, baseShippingByConfig, smartPromotions, subtotal,
+      shippingConfig, freeshipMinSubtotal, selectedPromo, availablePoints, usePoints
+    },
+    tierId: checkoutLoyalty?.tierId,
+    promoCodes,
+    displayedPricing: { checkoutTotal, promoDiscount, pointsDiscount, pointsSpent },
+    setLoyaltyRule,
+    setSelectedPromo
+  });
+
   const originalSubtotal = useMemo(
     () =>
       cart.reduce((sum, item) => {
@@ -397,6 +410,7 @@ export default function Checkout({
     setCart,
     createOrderFromCheckout,
     repriceCartNow,
+    refreshCheckoutPricing,
     checkoutTotal,
     subtotal,
     checkoutShip,

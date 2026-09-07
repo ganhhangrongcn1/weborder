@@ -1437,12 +1437,20 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
 }
 
 async function upsertOrderToTable(order = {}, options = {}) {
-  if (!isSupabaseReady()) return order;
+  const unavailable = () => {
+    if (options.requireRemote) {
+      const error = new Error("Chưa thể ghi đơn lên hệ thống. Giỏ hàng vẫn được giữ nguyên.");
+      error.code = "ORDER_REMOTE_UNAVAILABLE";
+      throw error;
+    }
+    return order;
+  };
+  if (!isSupabaseReady()) return unavailable();
   const client = await getSupabaseClientAsync();
-  if (!client) return order;
+  if (!client) return unavailable();
   const normalizedOrder = await enrichOrderBranchUuids(order);
   const mapped = toOrderRows(normalizedOrder);
-  if (!mapped) return order;
+  if (!mapped) return unavailable();
   const { orderRow } = mapped;
 
   await upsertOrderRowWithSchemaFallback(client, orderRow, options?.signal || null);

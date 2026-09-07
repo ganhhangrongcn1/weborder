@@ -591,10 +591,16 @@ export const orderRepository = {
     const localPendingOrder = withOrderSyncStatus(nextOrder, ORDER_SYNC_STATUS.pending);
     const runtime = getRuntimeStrategy();
     const shouldWriteOrders = canWriteOrdersToSupabase();
+    const isPosOrder = isPosOrderForSync(nextOrder);
+    if (!shouldWriteOrders && !isPosOrder) {
+      const error = new Error("Chưa thể kết nối để xác nhận đơn hàng. Giỏ hàng vẫn được giữ nguyên.");
+      error.code = "ORDER_REMOTE_UNAVAILABLE";
+      throw error;
+    }
     const shouldWaitForLocalBeforeRemote = !shouldWriteOrders || isCashPaidPosOrder(nextOrder);
-    if (shouldWaitForLocalBeforeRemote) {
+    if (isPosOrder && shouldWaitForLocalBeforeRemote) {
       await persistOrderLocalAsync(localPendingOrder, key);
-    } else {
+    } else if (isPosOrder) {
       // Một số trình duyệt nhúng trên iPhone có thể treo IndexedDB. Không để
       // bộ nhớ cục bộ chặn việc ghi đơn lên Supabase.
       persistOrderLocalAsync(localPendingOrder, key).catch((localSyncError) => {
@@ -618,7 +624,7 @@ export const orderRepository = {
           orderCode: nextOrder.orderCode
         });
         await runOrderTaskWithTimeout(
-          (signal) => coreSupabaseRepository.upsertOrderToTable(nextOrder, { signal }),
+          (signal) => coreSupabaseRepository.upsertOrderToTable(nextOrder, { signal, requireRemote: !isPosOrder }),
           CUSTOMER_ORDER_REMOTE_WRITE_TIMEOUT_MS,
           "ORDER_REMOTE_WRITE_TIMEOUT"
         );
@@ -627,6 +633,10 @@ export const orderRepository = {
           orderId: nextOrder.id
         });
       } catch (error) {
+        // A rejected benefit is definitive; do not treat an older order as a successful retry.
+        if (!isPosOrder && (error?.code === "P4001" || String(error?.message || "").includes("LOYALTY_COMBINED_BENEFIT_LIMIT"))) {
+          throw error;
+        }
         remoteWriteConfirmed = await verifyOrderWasPersistedAfterError(nextOrder);
         if (remoteWriteConfirmed) {
           console.warn("[orderRepository] write response failed but order is already complete in Supabase", {
@@ -659,7 +669,7 @@ export const orderRepository = {
 
       if (remoteWriteConfirmed) {
         const syncedOrder = withOrderSyncStatus(nextOrder, ORDER_SYNC_STATUS.synced);
-        if (syncedOrder !== nextOrder) {
+        if (!isPosOrder || syncedOrder !== nextOrder) {
           // Supabase is the source of truth at this point. Do not keep the
           // checkout overlay waiting for browser storage, which can stall in
           // mobile in-app browsers even though the order is already complete.

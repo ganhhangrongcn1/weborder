@@ -26,7 +26,8 @@ export default function useCheckoutActions({
   navigate,
   onNotice,
   onVoucherRejected,
-  repriceCartNow
+  repriceCartNow,
+  refreshCheckoutPricing
 }) {
   const updateQty = (cartId, delta) => setCart((items) => items.map((item) => {
     if (item.cartId !== cartId) return item;
@@ -84,6 +85,20 @@ export default function useCheckoutActions({
       return;
     }
 
+    try {
+      if (await refreshCheckoutPricing?.()) {
+        const message = "Ưu đãi đã được cập nhật. Anh/chị kiểm tra tổng tiền rồi xác nhận đặt món.";
+        if (onNotice) onNotice({ title: "Cập nhật ưu đãi", message, icon: "info" });
+        else alert(message);
+        return;
+      }
+    } catch {
+      const message = "Chưa thể cập nhật ưu đãi. Giỏ hàng vẫn được giữ nguyên, anh/chị vui lòng thử lại.";
+      if (onNotice) onNotice({ title: "Chưa thể xác nhận đơn", message, icon: "warning" });
+      else alert(message);
+      return;
+    }
+
     const orderPayload = buildCreateOrderPayload({
       checkoutTotal,
       subtotal,
@@ -125,6 +140,11 @@ export default function useCheckoutActions({
       });
       const pointsMessage = getCheckoutPointsErrorMessage(error);
       if (pointsMessage) {
+        try {
+          await refreshCheckoutPricing?.();
+        } catch {
+          // Keep the cart and current amount; no order has been confirmed.
+        }
         if (typeof onNotice === "function") {
           onNotice({ title: "Cần cập nhật số điểm sử dụng", message: pointsMessage, icon: "warning" });
         } else {
@@ -149,7 +169,8 @@ export default function useCheckoutActions({
       const isOrderTimeout = [
         "CHECKOUT_ORDER_TIMEOUT",
         "ORDER_REMOTE_WRITE_TIMEOUT",
-        "ORDER_REMOTE_VERIFY_TIMEOUT"
+        "ORDER_REMOTE_VERIFY_TIMEOUT",
+        "ORDER_REMOTE_UNAVAILABLE"
       ].includes(String(error?.code || ""));
       if (typeof onNotice === "function") {
         onNotice({
