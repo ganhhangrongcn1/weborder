@@ -37,7 +37,7 @@ const MAPPING_SELECT = `
 const SALES_EVENT_SELECT = `
   id,source_type,source_order_key,source_row_id,event_type,source_status,branch_uuid,warehouse_id,
   processing_status,issue_code,issue_message,document_id,reverses_event_id,attempts,available_at,
-  occurred_at,processed_at,created_at,updated_at,
+  occurred_at,processed_at,created_at,updated_at,metadata,
   lines:inventory_sales_order_event_lines(
     id,source_line_key,source_line_name,menu_entity_type,menu_entity_id,menu_entity_name,
     recipe_id,item_id,required_quantity,line_status,issue_code,issue_message,metadata
@@ -170,6 +170,7 @@ function normalizeSalesEvent(row = {}) {
     branchUuid: toText(row.branch_uuid),
     warehouseId: toText(row.warehouse_id),
     processingStatus: toText(row.processing_status || "pending"),
+    deductionExcluded: Boolean(row.metadata?.sales_deduction_excluded),
     issueCode: toText(row.issue_code),
     issueMessage: toText(row.issue_message),
     documentId: toText(row.document_id),

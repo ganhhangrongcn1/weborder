@@ -45,6 +45,7 @@ import InventorySalesReconciliation from "./InventorySalesReconciliation.jsx";
 import InventoryCostAnalysis from "./InventoryCostAnalysis.jsx";
 import InventoryOpeningBalanceManager from "./InventoryOpeningBalanceManager.jsx";
 import InventoryPurchasePriceManager from "./InventoryPurchasePriceManager.jsx";
+import InventorySalesDeductionSettings from "./InventorySalesDeductionSettings.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 
 function scopeDashboardData(data = {}, warehouseId = "") {
@@ -470,14 +471,16 @@ export default function InventoryWorkspace({
           ) : null}
         </header>
 
-        <InventoryConnectionState
+        {currentRoute.page !== "settings" ? <InventoryConnectionState
           status={connectionStatus}
           error={connectionError}
           isStale={dataIsStale}
           onRetry={retryConnection}
-        />
+        /> : null}
 
-        {isDashboardPage
+        {currentRoute.page === "settings"
+          ? <InventorySalesDeductionSettings />
+          : isDashboardPage
           ? <InventoryDashboard data={workspaceDashboardData} warehouseScoped={Boolean(workspaceWarehouseId)} />
           : isOpeningBalancePage
             ? <InventoryOpeningBalanceManager

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import InventoryCountModal from "./InventoryCountModal.jsx";
+import InventoryManualCountNotice from "./InventoryManualCountNotice.jsx";
 
 const STATUS = {
   draft: { label: "Bản nháp", className: "is-draft" },
@@ -57,6 +58,7 @@ export default function InventoryCountManager({ rows = [], warehouses = [], item
 
   return (
     <section className="inventory-list-card inventory-count-manager">
+      <InventoryManualCountNotice warehouses={warehouses} />
       {(mutationMessage || localNotice) ? <div className={`inventory-count-notice ${mutationStatus === "error" ? "is-error" : ""}`}><Icon name={mutationStatus === "error" ? "warning" : "check"} size={17} />{localNotice || mutationMessage}</div> : null}
       <header className="inventory-count-manager__head"><span><Icon name="check" size={21} /></span><div><strong>Đợt kiểm kê kho</strong><small>Đếm thực tế, đối chiếu chênh lệch rồi mới điều chỉnh tồn sau khi quản lý duyệt.</small></div><button type="button" disabled={!canWrite || !canManage} onClick={() => setModal({ mode: "create" })}><Icon name="plus" size={17} />Tạo đợt kiểm kê</button></header>
       <div className="inventory-summary-grid"><div><span>Tổng đợt kiểm</span><strong>{rows.length}</strong></div><div><span>Đang xử lý</span><strong>{activeCount}</strong></div><div className="is-warning"><span>Chờ duyệt</span><strong>{pendingCount}</strong></div><div><span>Hoàn tất</span><strong>{rows.filter((row) => row.status === "completed").length}</strong></div></div>

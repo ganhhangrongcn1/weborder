@@ -1,5 +1,14 @@
 export const INVENTORY_ROUTE_ITEMS = [
   {
+    id: "inventory-settings",
+    path: "/admin/inventory/settings",
+    page: "settings",
+    label: "Cài đặt kho",
+    group: "Cài đặt",
+    icon: "gear",
+    description: "Bật hoặc tắt tự trừ tồn khi bán theo từng chi nhánh."
+  },
+  {
     id: "inventory-dashboard",
     path: "/admin/inventory/dashboard",
     page: "dashboard",
@@ -228,6 +237,7 @@ export const INVENTORY_ROUTE_ITEMS = [
 ];
 
 const INVENTORY_SECTION_DEFINITIONS = [
+  { id: "inventory-settings-section", title: "Cài đặt", icon: "gear", pages: ["settings"] },
   {
     id: "inventory-master-data-section",
     title: "Xây dữ liệu",

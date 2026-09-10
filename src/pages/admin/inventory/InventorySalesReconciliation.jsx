@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
+import { canRetrySalesDeduction } from "../../../services/inventorySalesDeductionService.js";
 
 const STATUS_META = {
   pending: { label: "Chờ xử lý", tone: "draft" },
@@ -231,7 +232,7 @@ export default function InventorySalesReconciliation({
               <td><strong>{branch?.name || "Chưa xác định chi nhánh"}</strong><small>{warehouse?.name || "Chưa xác định kho"}</small></td>
               <td><strong>{event.issueMessage || (event.documentId ? "Đã tạo chứng từ kho" : "Đang chờ xử lý")}</strong><small>{blockedLines.slice(0, 2).map((line) => line.sourceLineName || line.issueMessage).filter(Boolean).join(", ")}</small></td>
               <td><span className={`inventory-bom-status is-${status.tone}`}>{status.label}</span></td>
-              <td><div className="inventory-row-actions inventory-sales-actions"><button type="button" onClick={(clickEvent) => { clickEvent.stopPropagation(); openEvent(event); }}><Icon name="eye" size={14} /> Xem</button>{["blocked", "ignored"].includes(event.processingStatus) ? <button type="button" className="is-primary" disabled={!canWrite || mutationStatus === "saving"} onClick={(clickEvent) => { clickEvent.stopPropagation(); onRetry?.(event.id); }}><Icon name="refresh" size={14} /> Thử lại</button> : null}</div></td>
+              <td><div className="inventory-row-actions inventory-sales-actions"><button type="button" onClick={(clickEvent) => { clickEvent.stopPropagation(); openEvent(event); }}><Icon name="eye" size={14} /> Xem</button>{canRetrySalesDeduction(event) ? <button type="button" className="is-primary" disabled={!canWrite || mutationStatus === "saving"} onClick={(clickEvent) => { clickEvent.stopPropagation(); onRetry?.(event.id); }}><Icon name="refresh" size={14} /> Thử lại</button> : null}</div></td>
             </tr>;
           })}</tbody>
         </table>
@@ -305,7 +306,7 @@ export default function InventorySalesReconciliation({
                 })}
               </div>
             </div>
-            <footer className="inventory-bom-confirm-modal__footer"><a className="inventory-modal-link" href="/admin/inventory/sales-recipes">Mở định lượng món bán</a><button type="button" onClick={() => setSelectedEvent(null)}>Đóng</button>{["blocked", "ignored"].includes(selectedEvent.processingStatus) ? <button type="button" className="is-primary" disabled={!canWrite || mutationStatus === "saving"} onClick={() => onRetry?.(selectedEvent.id)}><Icon name="refresh" size={14} /> Thử lại</button> : null}</footer>
+            <footer className="inventory-bom-confirm-modal__footer"><a className="inventory-modal-link" href="/admin/inventory/sales-recipes">Mở định lượng món bán</a><button type="button" onClick={() => setSelectedEvent(null)}>Đóng</button>{canRetrySalesDeduction(selectedEvent) ? <button type="button" className="is-primary" disabled={!canWrite || mutationStatus === "saving"} onClick={() => onRetry?.(selectedEvent.id)}><Icon name="refresh" size={14} /> Thử lại</button> : null}</footer>
           </section>
         </div>;
       })() : null}

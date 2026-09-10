@@ -58,6 +58,7 @@ export function getAdminModuleAccessPolicy({
 }
 
 const INVENTORY_ITEM_IDS = [
+  "inventory-settings",
   "inventory-warehouses",
   "inventory-items",
   "inventory-item-categories",
