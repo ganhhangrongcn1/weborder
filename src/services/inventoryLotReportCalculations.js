@@ -28,6 +28,13 @@ export function getInventoryLotExpiryState(row = {}, item = {}, todayKey = getIn
   return daysRemaining <= warningDays ? "expiring" : "valid";
 }
 
+export function matchesInventoryLotExpiryFilter(state, filter = "tracked") {
+  if (filter === "all") return true;
+  if (filter === "tracked") return state !== "untracked";
+  if (filter === "alert") return ["expired", "expiring"].includes(state);
+  return state === filter;
+}
+
 export function getInventoryLotDisplayValues(row = {}, item = {}, unitsById = new Map()) {
   const displayUnit = getInventoryItemDisplayUnitConfig(item, unitsById);
   const factor = displayUnit.conversionToBase > 0 ? displayUnit.conversionToBase : 1;
@@ -59,6 +66,7 @@ export default {
   getInventoryTodayKey,
   getInventoryLotDaysRemaining,
   getInventoryLotExpiryState,
+  matchesInventoryLotExpiryFilter,
   getInventoryLotDisplayValues,
   calculateInventoryLotSummary,
   countInventoryLotAttention

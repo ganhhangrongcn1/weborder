@@ -6,7 +6,8 @@ import {
   countInventoryLotAttention,
   getInventoryLotDaysRemaining,
   getInventoryLotDisplayValues,
-  getInventoryLotExpiryState
+  getInventoryLotExpiryState,
+  matchesInventoryLotExpiryFilter
 } from "../src/services/inventoryLotReportCalculations.js";
 import { getInventoryRoute } from "../src/pages/admin/inventory/inventoryNavigation.js";
 
@@ -14,6 +15,8 @@ const item = {
   id: "item-1",
   baseUnitId: "gram",
   displayUnitId: "kg",
+  purchaseUnitId: "kg",
+  purchaseToBaseRatio: 1000,
   expiryWarningDays: 3,
   baseUnit: { id: "gram", name: "Gram", symbol: "g" }
 };
@@ -21,6 +24,21 @@ const units = new Map([
   ["gram", { id: "gram", name: "Gram", symbol: "g" }],
   ["kg", { id: "kg", name: "Kilôgam", symbol: "kg", baseUnitId: "gram", conversionFactor: 1000 }]
 ]);
+
+test("lọc nhanh có hạn mặc định và vẫn xem được toàn bộ lô không có hạn", () => {
+  const states = ["expired", "expiring", "valid", "untracked"];
+  assert.deepEqual(states.filter((state) => matchesInventoryLotExpiryFilter(state)), ["expired", "expiring", "valid"]);
+  assert.deepEqual(states.filter((state) => matchesInventoryLotExpiryFilter(state, "all")), states);
+  assert.deepEqual(states.filter((state) => matchesInventoryLotExpiryFilter(state, "untracked")), ["untracked"]);
+});
+
+test("lọc nhanh cảnh báo không thay đổi các bộ lọc trạng thái chi tiết", () => {
+  const states = ["expired", "expiring", "valid", "untracked"];
+  assert.deepEqual(states.filter((state) => matchesInventoryLotExpiryFilter(state, "alert")), ["expired", "expiring"]);
+  for (const filter of states) {
+    assert.deepEqual(states.filter((state) => matchesInventoryLotExpiryFilter(state, filter)), [filter]);
+  }
+});
 
 test("phân loại lô theo đúng ngưỡng cảnh báo của nguyên vật liệu", () => {
   assert.equal(getInventoryLotExpiryState({ expiresOn: "2026-08-25" }, item, "2026-08-26"), "expired");
@@ -39,6 +57,15 @@ test("quy đổi số lượng lô từ đơn vị gốc sang đơn vị hiển 
   assert.equal(display.remainingQuantity, 1.5);
   assert.equal(display.receivedQuantity, 2);
   assert.equal(display.unitSymbol, "kg");
+});
+
+test("tồn lô dùng đơn vị gốc không bị chia thêm lần nữa", () => {
+  const display = getInventoryLotDisplayValues(
+    { remainingQuantity: 2369, receivedQuantity: 7000 },
+    { ...item, displayUnitId: "gram" }, units
+  );
+  assert.equal(display.remainingQuantity, 2369);
+  assert.equal(display.receivedQuantity, 7000);
 });
 
 test("tổng hợp trạng thái lô và route Lô hạn sử dụng", () => {

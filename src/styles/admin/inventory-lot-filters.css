@@ -1,0 +1,40 @@
+.inventory-lot-report .inventory-lot-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid #eee2d6;
+}
+
+.inventory-lot-report .inventory-lot-quick-filters button {
+  width: auto;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid #dfcec0;
+  border-radius: 8px;
+  background: #fff;
+  color: #624936;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inventory-lot-report .inventory-lot-quick-filters button[aria-pressed="true"] {
+  background: #fff2e3;
+  border-color: #c66a13;
+  color: #984b09;
+}
+
+.inventory-lot-report .inventory-lot-quick-filters button:focus-visible {
+  outline: 2px solid #c66a13;
+  outline-offset: 2px;
+}
+
+.inventory-lot-report .inventory-lot-quick-filters > span {
+  margin-left: auto;
+  color: #806e60;
+  font-size: 12px;
+}

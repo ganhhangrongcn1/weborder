@@ -2,15 +2,23 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
+import "../../../styles/admin/inventory-lot-filters.css";
 import {
   calculateInventoryLotSummary,
   getInventoryLotDaysRemaining,
   getInventoryLotDisplayValues,
   getInventoryLotExpiryState,
+  matchesInventoryLotExpiryFilter,
   getInventoryTodayKey
 } from "../../../services/inventoryLotReportCalculations.js";
 
 const PAGE_SIZE = 50;
+const QUICK_FILTERS = [
+  { value: "tracked", label: "Có hạn sử dụng" },
+  { value: "alert", label: "Sắp / đã hết hạn" },
+  { value: "untracked", label: "Không có hạn" },
+  { value: "all", label: "Tất cả" }
+];
 const EXPIRY_STATE_LABELS = {
   expired: "Đã hết hạn",
   expiring: "Sắp hết hạn",
@@ -37,7 +45,7 @@ function formatRemainingDays(days) {
 export default function InventoryLotReport({ rows = [], warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false, selectedWarehouseId = "", onWarehouseChange }) {
   const [searchParams] = useSearchParams();
   const routeFilterKey = searchParams.toString();
-  const [filters, setFilters] = useState({ warehouseId: "", itemId: "", expiryState: "all", search: "" });
+  const [filters, setFilters] = useState({ warehouseId: "", itemId: "", expiryState: "tracked", search: "" });
   const [page, setPage] = useState(1);
   const todayKey = getInventoryTodayKey();
   const warehouseById = useMemo(() => new Map(warehouses.map((row) => [row.id, row])), [warehouses]);
@@ -52,8 +60,7 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
       const state = getInventoryLotExpiryState(row, item, todayKey);
       if (filters.warehouseId && row.warehouseId !== filters.warehouseId) return false;
       if (filters.itemId && row.itemId !== filters.itemId) return false;
-      if (filters.expiryState === "alert" && !["expired", "expiring"].includes(state)) return false;
-      if (!["all", "alert"].includes(filters.expiryState) && state !== filters.expiryState) return false;
+      if (!matchesInventoryLotExpiryFilter(state, filters.expiryState)) return false;
       if (search && !`${row.lotNumber} ${row.sourceDocumentNo} ${item.code || ""} ${item.name || ""} ${warehouse.name || ""}`.toLocaleLowerCase("vi").includes(search)) return false;
       return true;
     });
@@ -66,8 +73,8 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
   useEffect(() => {
     const params = new URLSearchParams(routeFilterKey);
     const requestedWarehouseId = params.get("warehouse") || "";
-    const requestedExpiry = params.get("expiry") || "all";
-    const expiryState = ["all", "alert", "expired", "expiring", "valid", "untracked"].includes(requestedExpiry) ? requestedExpiry : "all";
+    const requestedExpiry = params.get("expiry") || (["lot", "q", "item"].some((key) => params.get(key)) ? "all" : "tracked");
+    const expiryState = ["all", "tracked", "alert", "expired", "expiring", "valid", "untracked"].includes(requestedExpiry) ? requestedExpiry : "tracked";
     setFilters((current) => ({
       ...current,
       warehouseId: requestedWarehouseId,
@@ -131,12 +138,23 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
         </InventorySearchableSelect>
         <InventorySearchableSelect aria-label="Lọc hạn sử dụng" value={filters.expiryState} onChange={(event) => updateFilter({ expiryState: event.target.value })}>
           <option value="all">Tất cả hạn sử dụng</option>
+          <option value="tracked">Có hạn sử dụng</option>
           <option value="alert">Sắp hoặc đã hết hạn</option>
           <option value="expired">Đã hết hạn</option>
           <option value="expiring">Sắp hết hạn</option>
           <option value="valid">Còn hạn</option>
-          <option value="untracked">Không theo dõi HSD</option>
+          <option value="untracked">Không có hạn sử dụng</option>
         </InventorySearchableSelect>
+      </div>
+
+      <div className="inventory-lot-quick-filters" role="group" aria-label="Lọc nhanh lô theo hạn sử dụng">
+        {QUICK_FILTERS.map((filter) => (
+          <button key={filter.value} type="button" aria-pressed={filters.expiryState === filter.value}
+            onClick={() => updateFilter({ expiryState: filter.value })}>
+            {filter.label}
+          </button>
+        ))}
+        <span>{filteredRows.length} lô phù hợp</span>
       </div>
 
       {limited ? <div className="inventory-ledger-warning"><Icon name="warning" size={17} />Danh sách đã chạm giới hạn 5.000 lô. Cần bổ sung phân trang phía máy chủ trước khi dùng ở quy mô lớn hơn.</div> : null}
