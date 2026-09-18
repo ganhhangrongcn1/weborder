@@ -283,7 +283,7 @@ export function getChannelCandidateIdentity(row = {}) {
   const isOption = row.candidateKind === "option" || row.mappingKind === "option";
   const partnerSource = toText(row.partnerSource).toLowerCase();
   const canonicalItemName = toText(row.externalItemName)
-    .replace(/\s*\((?:tự trộn|trộn đều topping|trộn đều|trộn sẵn|để riêng tự trộn)\)\s*$/iu, "")
+    .replace(/\s+/gu, " ")
     .toLocaleLowerCase("vi");
   return [
     partnerSource,

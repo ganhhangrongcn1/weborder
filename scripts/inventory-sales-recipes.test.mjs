@@ -288,10 +288,13 @@ test("ánh xạ dùng chung che mọi nhóm còn ánh xạ riêng chỉ che đú
   assert.equal(isChannelCandidateMapped(candidate, sharedMapping), true);
 });
 
-test("hậu tố cách phục vụ không tạo thêm một món cần gán", () => {
+test("giữ hậu tố cách phục vụ để không gộp các định lượng khác nhau", () => {
   const first = getChannelCandidateIdentity({ partnerSource: "grabfood", branchUuid: "a", externalItemName: "Combo 5 Phơi Sương Muối Tắc" });
   const second = getChannelCandidateIdentity({ partnerSource: "grabfood", branchUuid: "a", externalItemName: "Combo 5 Phơi Sương Muối Tắc (Tự Trộn)" });
-  assert.equal(first, second);
+  assert.notEqual(first, second);
+  const third = getChannelCandidateIdentity({ partnerSource: "grabfood", branchUuid: "a", externalItemName: "Combo 5 Phơi Sương Muối Tắc (Xé Và Trộn Sẵn)" });
+  assert.notEqual(second, third);
+  assert.equal(second, getChannelCandidateIdentity({ partnerSource: "grabfood", branchUuid: "a", externalItemName: "  COMBO  5 Phơi Sương Muối Tắc (Tự Trộn) " }));
 });
 
 test("món ShopeeFood dùng chung ánh xạ giữa các chi nhánh", () => {
