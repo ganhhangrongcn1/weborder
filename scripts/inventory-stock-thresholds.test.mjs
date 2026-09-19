@@ -63,6 +63,10 @@ test("lưu và mở lại ngưỡng theo kg với tồn theo gram, giữ metadat
 test("chặn ngưỡng âm/không hợp lệ và giữ cấu hình khi bên gọi không gửi field mới", () => {
   assert.throws(() => normalizeInventoryStockThresholds({ branch: { minimumStock: -1, reorderPoint: 1 } }, 1, true), /Ngưỡng tồn/);
   assert.throws(() => normalizeInventoryStockThresholds({ branch: { minimumStock: "bad", reorderPoint: 1 } }, 1, true), /Ngưỡng tồn/);
+  assert.deepEqual(
+    normalizeInventoryStockThresholds({ branch: { minimumStock: 1, reorderPoint: 2, targetStock: 5 } }, 1000, true).branch,
+    { minimumStock: 1000, reorderPoint: 2000, targetStock: 5000 }
+  );
   const payload = normalizeInventoryMasterDataInput("items", { name: "Xoài", displayUnitId: "gram", metadata: { stock_thresholds: config } });
   assert.deepEqual(payload.metadata.stock_thresholds, config);
 });

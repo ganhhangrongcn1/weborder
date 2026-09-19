@@ -425,11 +425,7 @@ export default function InventoryMasterDataModal({
                 <div className="inventory-item-stock-config__body">
                   <p>Toàn bộ mức dưới đây nhập theo đơn vị mua / nhập: <strong>{stockUnitLabel}</strong>. Hệ thống tự quy đổi về đơn vị gốc để tính tồn và định lượng món.</p>
                   <InventoryStockThresholdFields form={form} setForm={setForm} warehouses={activeWarehouses} unitLabel={stockUnitLabel} />
-                  <div className="inventory-form-row inventory-form-row--paired">
-                    <Field label="Số lượng đặt hàng" help="Số lượng nên mua mỗi lần."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="orderQuantity" value={form.orderQuantity} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
-                    <Field label="Tồn tối đa" help="Mức trữ tối đa; 0 = chưa giới hạn."><span className="inventory-control-shell inventory-control-shell--suffix"><input type="number" min="0" step="any" name="maximumStock" value={form.maximumStock} onChange={update} /><b>{stockUnitLabel}</b></span></Field>
-                  </div>
-                  {Number(form.maximumStock || 0) > 0 && Number(form.maximumStock || 0) < Number(form.minimumStock || 0) ? <p className="inventory-form-error">Tồn tối đa phải bằng 0 hoặc lớn hơn tồn tối thiểu.</p> : null}
+                  {Number(form.maximumStock || 0) > 0 && Number(form.maximumStock || 0) < Number(form.minimumStock || 0) ? <p className="inventory-form-error">Tồn mục tiêu phải bằng 0 hoặc lớn hơn tồn tối thiểu.</p> : null}
                 </div>
               </section>
               <section className={`inventory-item-expiry-config full-field${form.trackExpiry ? " is-enabled" : ""}`} aria-labelledby="inventory-item-expiry-config-title">

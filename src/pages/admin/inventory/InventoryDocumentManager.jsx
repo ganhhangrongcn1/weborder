@@ -41,6 +41,10 @@ export default function InventoryDocumentManager({
   items = [],
   units = [],
   suppliers = [],
+  stockRows = [],
+  pendingInboundRows = [],
+  pendingInboundWarehouseId = "",
+  onLoadPendingInbound,
   canWrite = false,
   canReverseReceipts = false,
   canApproveDisposals = false,
@@ -287,7 +291,7 @@ export default function InventoryDocumentManager({
         </div>
       </div>
       {!visibleRows.length ? <div className="inventory-list-empty"><Icon name={config.icon} size={28} /><strong>{config.empty}</strong><span>Tạo phiếu đầu tiên khi dữ liệu kho và nguyên vật liệu đã sẵn sàng.</span></div> : null}
-      {showModal ? <InventoryDocumentModal domain={domain} warehouses={warehouses} items={items} units={units} suppliers={suppliers} requestCreationMode={requestCreationMode} warehouseSelectionLocked={warehouseSelectionLocked} onClose={() => setShowModal(false)} onSave={onSave} /> : null}
+      {showModal ? <InventoryDocumentModal domain={domain} warehouses={warehouses} items={items} units={units} suppliers={suppliers} stockRows={stockRows} pendingInboundRows={pendingInboundRows} pendingInboundWarehouseId={pendingInboundWarehouseId} onLoadPendingInbound={onLoadPendingInbound} requestCreationMode={requestCreationMode} warehouseSelectionLocked={warehouseSelectionLocked} onClose={() => setShowModal(false)} onSave={onSave} /> : null}
       {detailDocument ? <InventoryDocumentDetailModal domain={domain} document={detailDocument} warehouses={displayWarehouses} items={items} units={units} suppliers={suppliers} onClose={() => setDetailDocument(null)} /> : null}
       {actionModal ? <InventoryDocumentActionModal mode={actionModal.mode} document={actionModal.document} warehouses={actionWarehouses} items={items} units={units} onClose={() => setActionModal(null)} onConfirm={confirmModalAction} /> : null}
     </section>

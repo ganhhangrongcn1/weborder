@@ -308,6 +308,45 @@ export async function readInventoryPendingTransferCount() {
   return Math.max(0, Number(count || 0));
 }
 
+export async function readInventoryPendingInboundQuantities(warehouseId = "") {
+  const normalizedWarehouseId = toText(warehouseId);
+  if (!normalizedWarehouseId) return { ok: true, rows: [] };
+  const client = await getInventoryClient();
+  if (!client) return { ok: false, rows: [], message: "Chưa kết nối được Supabase cho phân hệ Kho." };
+  const documentResult = await client
+    .from("inventory_documents")
+    .select(DOCUMENT_SELECT)
+    .eq("destination_warehouse_id", normalizedWarehouseId)
+    .in("document_type", ["internal_requisition", "transfer"])
+    .in("status", ["submitted", "approved", "in_transit"]);
+  recordAdminRequest("read pending inventory inbound", "inventory_documents");
+  if (documentResult.error) return { ok: false, rows: [], message: normalizeReadError(documentResult.error).message };
+  const documents = Array.isArray(documentResult.data) ? documentResult.data : [];
+  const transfers = documents.filter((row) => row.document_type === "transfer");
+  const linkedRequisitionIds = new Set(transfers.map((row) => toText(row.source_document_id)).filter(Boolean));
+  const countedDocuments = documents.filter((row) => row.document_type === "transfer"
+    || !linkedRequisitionIds.has(toText(row.id)));
+  const documentIds = countedDocuments.map((row) => row.id).filter(Boolean);
+  if (!documentIds.length) return { ok: true, rows: [] };
+  const lineResult = await client
+    .from("inventory_document_lines")
+    .select(LINE_SELECT)
+    .in("document_id", documentIds);
+  if (lineResult.error) return { ok: false, rows: [], message: normalizeReadError(lineResult.error).message };
+  const documentById = new Map(countedDocuments.map((row) => [row.id, row]));
+  const quantityByItem = new Map();
+  (Array.isArray(lineResult.data) ? lineResult.data : []).forEach((row) => {
+    const document = documentById.get(row.document_id);
+    const quantity = document?.document_type === "transfer" && document.status === "in_transit"
+      ? Number(row.shipped_quantity ?? row.approved_quantity ?? row.expected_quantity ?? 0)
+      : Number(row.approved_quantity ?? row.expected_quantity ?? 0);
+    const baseQuantity = Math.max(0, quantity * Math.max(0, Number(row.conversion_to_base || 1)));
+    const itemId = toText(row.item_id);
+    if (itemId && baseQuantity > 0) quantityByItem.set(itemId, Number(quantityByItem.get(itemId) || 0) + baseQuantity);
+  });
+  return { ok: true, rows: [...quantityByItem].map(([itemId, quantity]) => ({ itemId, quantity })) };
+}
+
 export async function readInventoryPendingDisposalCount() {
   const client = await getInventoryClient();
   if (!client) throw new Error("Chưa kết nối được Supabase cho phân hệ Kho.");

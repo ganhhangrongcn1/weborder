@@ -13,6 +13,14 @@ function normalizePair(value, factor, strict) {
     }
     result[field] = Math.round(number * factor * 1e6) / 1e6;
   }
+  if (value.targetStock != null && value.targetStock !== "") {
+    const targetStock = Number(value.targetStock);
+    if (!Number.isFinite(targetStock) || targetStock < 0) {
+      if (strict) throw new Error("Tồn mục tiêu phải là số từ 0 trở lên.");
+      return null;
+    }
+    result.targetStock = Math.round(targetStock * factor * 1e6) / 1e6;
+  }
   return result;
 }
 
@@ -27,7 +35,13 @@ export function normalizeInventoryStockThresholds(value = {}, factor = 1, strict
 }
 
 export function getInventoryStockThresholds(item = {}, warehouse = {}) {
-  const defaults = { minimumStock: Number(item.minimumStock || 0), reorderPoint: Number(item.reorderPoint || 0) };
+  const defaults = {
+    minimumStock: Number(item.minimumStock || 0),
+    reorderPoint: Number(item.reorderPoint || 0),
+    ...(Number(item.maximumStock || 0) > 0
+      ? { targetStock: Number(item.maximumStock) }
+      : {})
+  };
   const type = warehouse.warehouseType || warehouse.warehouse_type;
   if (type !== "branch") return defaults;
   const config = item.stockThresholds || item.metadata?.stock_thresholds || {};

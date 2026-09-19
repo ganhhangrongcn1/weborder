@@ -791,7 +791,10 @@
 .inventory-document-section__head strong { color: #493329; font-size: .82rem; }
 .inventory-document-section__head small { color: #89766b; font-size: .69rem; }
 .inventory-document-section__head--actions { grid-template-columns: auto minmax(0, 1fr) auto; }
-.inventory-document-section__head--actions > button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid #e0d4ca; border-radius: 8px; background: #fff; color: #b75b1d; font-size: .72rem; font-weight: 800; cursor: pointer; }
+.inventory-document-section__buttons { display: flex !important; grid-template-columns: none !important; flex-wrap: wrap; justify-content: flex-end; gap: 7px !important; }
+.inventory-document-section__buttons > button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border: 1px solid #e0d4ca; border-radius: 8px; background: #fff; color: #b75b1d; font-size: .72rem; font-weight: 800; cursor: pointer; }
+.inventory-document-section__buttons > button.is-primary { border-color: #cb681f; background: #d46d20; color: #fff; }
+.inventory-requisition-suggestion-message { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border: 1px solid #c7e2d1; border-radius: 9px; background: #f2faf5; color: #2c7450; font-size: .71rem; font-weight: 700; line-height: 1.4; }
 .inventory-form-hint { color: #8b7569; font-size: .67rem; font-weight: 500; line-height: 1.4; }
 .inventory-document-lines { display: grid; overflow-x: auto; }
 .inventory-document-lines__header,
@@ -1463,7 +1466,8 @@
   .inventory-warehouse-modal footer { margin: 0 -17px -20px; padding: 14px 17px; }
   .inventory-document-section { padding: 12px; }
   .inventory-document-section__head--actions { grid-template-columns: auto 1fr; }
-  .inventory-document-section__head--actions > button { grid-column: 1 / -1; justify-content: center; width: 100%; }
+  .inventory-document-section__buttons { grid-column: 1 / -1; width: 100%; }
+  .inventory-document-section__buttons > button { flex: 1 1 180px; justify-content: center; }
   .inventory-document-bottom { grid-template-columns: 1fr; }
   .inventory-document-total { justify-items: start; min-width: 0; }
   .inventory-document-modal footer { display: grid; grid-template-columns: 1fr 1fr; }

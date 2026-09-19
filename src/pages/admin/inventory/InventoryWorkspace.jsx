@@ -8,6 +8,7 @@ import useInventoryDocuments from "../../../hooks/useInventoryDocuments.js";
 import useInventoryLedger from "../../../hooks/useInventoryLedger.js";
 import useInventoryStockFlowReport from "../../../hooks/useInventoryStockFlowReport.js";
 import useInventoryStockReport from "../../../hooks/useInventoryStockReport.js";
+import useInventoryPendingInbound from "../../../hooks/useInventoryPendingInbound.js";
 import useInventoryLotReport from "../../../hooks/useInventoryLotReport.js";
 import useInventoryAlerts from "../../../hooks/useInventoryAlerts.js";
 import useInventoryCounts from "../../../hooks/useInventoryCounts.js";
@@ -263,7 +264,12 @@ export default function InventoryWorkspace({
     warehouseId: workspaceWarehouseId
   });
   const stockReportState = useInventoryStockReport({
-    enabled: isReportPage && accessPolicy.allowed
+    enabled: (isReportPage || documentDomain === "requisitions") && accessPolicy.allowed
+  });
+  const pendingInboundState = useInventoryPendingInbound({
+    enabled: documentDomain === "requisitions" && accessPolicy.allowed,
+    warehouseId: workspaceWarehouseId,
+    refreshKey: documentState.loadedAt
   });
   const lotReportState = useInventoryLotReport({
     enabled: isLotPage && accessPolicy.allowed,
@@ -523,6 +529,10 @@ export default function InventoryWorkspace({
                     items={operationItems}
                     units={itemUnitsState.rows}
                     suppliers={documentSuppliersState.rows}
+                    stockRows={stockReportState.rows}
+                    pendingInboundRows={pendingInboundState.rows}
+                    pendingInboundWarehouseId={pendingInboundState.warehouseId}
+                    onLoadPendingInbound={pendingInboundState.loadForWarehouse}
                     canWrite={canWriteDocuments}
                     canReverseReceipts={Boolean(documentState.permissions?.canReverseReceipts)}
                     canApproveDisposals={Boolean(documentState.permissions?.canApproveDisposals)}

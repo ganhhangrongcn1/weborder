@@ -9,6 +9,7 @@ import InventoryReceiptLineFields from "./InventoryReceiptLineFields.jsx";
 import InventoryLineUnitSelect from "./InventoryLineUnitSelect.jsx";
 import { getReceiptLineItemDefaults, getReceiptUnitPrice, getSuggestedExpiryDate } from "./inventoryReceiptForm.js";
 import { isInventoryItemAvailableAtWarehouse } from "../../../services/inventoryMasterDataService.js";
+import { buildInventoryRequisitionSuggestions } from "../../../services/inventoryRequisitionSuggestionService.js";
 
 const DOMAIN_CONFIG = {
   receipts: {
@@ -80,6 +81,10 @@ export default function InventoryDocumentModal({
   items = [],
   units = [],
   suppliers = [],
+  stockRows = [],
+  pendingInboundRows = [],
+  pendingInboundWarehouseId = "",
+  onLoadPendingInbound,
   requestCreationMode = "warehouse_self",
   warehouseSelectionLocked = false,
   onClose,
@@ -100,6 +105,7 @@ export default function InventoryDocumentModal({
   const [lines, setLines] = useState([createLine()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [suggestionMessage, setSuggestionMessage] = useState("");
   const activeWarehouses = warehouses.filter((row) => row.isActive !== false && !row.isDraft);
   const requestWarehouses = domain === "requisitions"
     ? activeWarehouses.filter((row) => ["branch", "department"].includes(row.warehouseType))
@@ -159,7 +165,7 @@ export default function InventoryDocumentModal({
       }
       if (field !== "itemId") return { ...line, [field]: value };
       const item = activeItems.find((row) => row.id === value);
-      const displayUnit = getInventoryItemInputUnitConfig(item, unitsById, domain === "receipts" ? "purchase" : "display");
+      const displayUnit = getInventoryItemInputUnitConfig(item, unitsById, ["receipts", "requisitions"].includes(domain) ? "purchase" : "display");
       return {
         ...line,
         itemId: value,
@@ -168,6 +174,43 @@ export default function InventoryDocumentModal({
         ...(domain === "receipts" ? getReceiptLineItemDefaults(item, form.occurredAt) : {})
       };
     }));
+  };
+
+  const fillRequisitionSuggestions = async () => {
+    const warehouse = activeWarehouses.find((row) => row.id === form.destinationWarehouseId);
+    if (!warehouse) {
+      setSuggestionMessage("Vui lòng chọn kho cần hàng trước khi tự điền.");
+      return;
+    }
+    try {
+      const resolvedPendingRows = pendingInboundWarehouseId === warehouse.id
+        ? pendingInboundRows
+        : await onLoadPendingInbound?.(warehouse.id) || [];
+      const suggestions = buildInventoryRequisitionSuggestions({
+        warehouse,
+        items: activeItems,
+        units,
+        stockRows,
+        pendingRows: resolvedPendingRows
+      });
+      if (!suggestions.length) {
+        setSuggestionMessage("Không có mã nào cần bổ sung sau khi trừ hàng đang chờ nhận.");
+        return;
+      }
+      setLines((current) => {
+      const existingItemIds = new Set(current.map((line) => line.itemId).filter(Boolean));
+      const additions = suggestions
+        .filter((row) => !existingItemIds.has(row.itemId))
+        .map((row) => ({ ...createLine(), ...row }));
+      const kept = current.filter((line) => line.itemId || current.length === 1 && !additions.length);
+      setSuggestionMessage(additions.length
+        ? `Đã thêm ${additions.length} mã. Lượng gợi ý đã trừ tồn và hàng chờ nhận; ${additions.filter((line) => line.needsManualQuantity).length} mã chưa đặt mức bổ sung cần nhập số lượng.`
+        : "Các mã cần bổ sung đã có trong phiếu; hệ thống giữ nguyên số lượng anh đã nhập.");
+        return [...kept, ...additions];
+      });
+    } catch (nextError) {
+      setSuggestionMessage(nextError.message || "Không thể tính lượng hàng cần bổ sung.");
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -291,8 +334,12 @@ export default function InventoryDocumentModal({
             <div className="inventory-document-section__head inventory-document-section__head--actions">
               <span><Icon name="bag" size={18} /></span>
               <div><strong>{domain === "disposals" ? "Nguyên vật liệu hủy" : "Nguyên vật liệu"}</strong><small>Mỗi nguyên vật liệu chỉ thêm một dòng.</small></div>
-              <button type="button" onClick={() => setLines((current) => [...current, createLine()])}><Icon name="plus" size={15} />Thêm dòng</button>
+              <div className="inventory-document-section__buttons">
+                {domain === "requisitions" ? <button className="is-primary" type="button" onClick={fillRequisitionSuggestions}><Icon name="refresh" size={15} />Tự điền hàng cần bổ sung</button> : null}
+                <button type="button" onClick={() => setLines((current) => [...current, createLine()])}><Icon name="plus" size={15} />Thêm dòng</button>
+              </div>
             </div>
+            {domain === "requisitions" && suggestionMessage ? <div className="inventory-requisition-suggestion-message" role="status"><Icon name="info" size={15} />{suggestionMessage}</div> : null}
             <div className="inventory-document-lines">
               <div className={`inventory-document-lines__header ${domain === "receipts" ? "is-receipt" : domain === "disposals" ? "has-disposal-reason" : domain === "adjustments" ? "has-adjustment-direction" : ""}`}>
                 {domain === "receipts" ? (
@@ -332,7 +379,7 @@ export default function InventoryDocumentModal({
                         <option value="out">− Giảm tồn</option>
                       </InventorySearchableSelect>
                     ) : null}
-                    <input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} required />
+                    <label><input aria-label={`Số lượng ${item?.name || "nguyên vật liệu"}`} type="number" min="0.001" step="0.001" value={line.quantity} placeholder={line.needsManualQuantity ? "Nhập số lượng" : undefined} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} required />{line.needsManualQuantity && line.quantity === "" ? <small className="inventory-form-hint">Chưa đặt mức bổ sung</small> : null}</label>
                     {domain === "disposals" ? (
                       <InventorySearchableSelect value={line.disposalReason} onChange={(event) => updateLine(line.key, "disposalReason", event.target.value)} aria-label={`Lý do hủy của ${item?.name || "nguyên vật liệu"}`}>
                         <option value="">Theo lý do chung{form.disposalReason ? `: ${form.disposalReason}` : ""}</option>
