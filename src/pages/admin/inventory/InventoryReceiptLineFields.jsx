@@ -17,14 +17,14 @@ export default function InventoryReceiptLineFields({
   return (
     <div className="inventory-receipt-line">
       <div className="inventory-receipt-row">
-        <InventorySearchableSelect value={line.itemId} onChange={(event) => onUpdate("itemId", event.target.value)} required>
+        <div className="inventory-mobile-field" data-label="Nguyên vật liệu"><InventorySearchableSelect value={line.itemId} onChange={(event) => onUpdate("itemId", event.target.value)} required>
           <option value="">Chọn nguyên vật liệu</option>
           {items.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-        </InventorySearchableSelect>
-        <InventoryLineUnitSelect item={item} units={units} value={line.unitId} onChange={(unitId) => onUpdate("unitId", unitId)} ariaLabel={`Đơn vị nhập của ${item?.name || "nguyên vật liệu"}`} />
-        <input aria-label="Số lượng nhập" type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => onUpdate("quantity", event.target.value)} required />
-        <input aria-label="Đơn giá nhập" type="number" min="0" step="100" value={line.unitPrice} onChange={(event) => onUpdate("unitPrice", event.target.value)} />
-        <input aria-label={item?.trackExpiry ? "Hạn sử dụng bắt buộc" : "Hạn sử dụng"} type="date" min={line.manufacturedOn || occurredDate} value={line.expiresOn} onChange={(event) => onUpdate("expiresOn", event.target.value)} required={item?.trackExpiry === true} />
+        </InventorySearchableSelect></div>
+        <div className="inventory-mobile-field" data-label="Đơn vị"><InventoryLineUnitSelect item={item} units={units} value={line.unitId} onChange={(unitId) => onUpdate("unitId", unitId)} ariaLabel={`Đơn vị nhập của ${item?.name || "nguyên vật liệu"}`} /></div>
+        <label className="inventory-mobile-field" data-label="Số lượng"><input aria-label="Số lượng nhập" type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => onUpdate("quantity", event.target.value)} required /></label>
+        <label className="inventory-mobile-field" data-label="Đơn giá"><input aria-label="Đơn giá nhập" type="number" min="0" step="100" value={line.unitPrice} onChange={(event) => onUpdate("unitPrice", event.target.value)} /></label>
+        <label className="inventory-mobile-field" data-label="Hạn sử dụng"><input aria-label={item?.trackExpiry ? "Hạn sử dụng bắt buộc" : "Hạn sử dụng"} type="date" min={line.manufacturedOn || occurredDate} value={line.expiresOn} onChange={(event) => onUpdate("expiresOn", event.target.value)} required={item?.trackExpiry === true} /></label>
         <button className={`inventory-receipt-detail-button ${showDetails ? "is-active" : ""}`} type="button" onClick={() => setShowDetails((current) => !current)} aria-expanded={showDetails}>
           <Icon name="edit" size={14} />{showDetails ? "Ẩn" : "Chi tiết"}
         </button>

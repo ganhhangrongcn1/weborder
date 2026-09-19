@@ -126,14 +126,14 @@ export default function InventoryProductionOrderManager({
               const outputQuantity = order.actualOutputQuantity || order.plannedOutputQuantity;
               return (
                 <tr key={order.id}>
-                  <td><strong>{order.orderNo}</strong><small>{new Date(order.createdAt).toLocaleString("vi-VN")}</small></td>
-                  <td><strong>{order.outputItem?.name || "Bán thành phẩm"}</strong><small>{order.outputItem?.code || ""}</small></td>
-                  <td><strong>{formatQuantity(outputQuantity)} {order.outputUnit?.name || ""}</strong><small>{order.actualOutputQuantity ? "Thực nhận" : "Dự kiến"}</small></td>
-                  <td><strong>{order.warehouse?.name || "Kho thực hiện"}</strong><small>{scopeMeta.processLabel}</small></td>
-                  <td><strong>{order.lines.length} thành phần</strong><small>{order.lines.slice(0, 2).map((line) => line.item?.name).filter(Boolean).join(", ")}</small></td>
-                  <td><strong>{order.status === "completed" ? `${Number(order.actualTotalCost || 0).toLocaleString("vi-VN")} đ` : `${Number(order.estimatedTotalCost || 0).toLocaleString("vi-VN")} đ`}</strong><small>{order.status === "completed" ? "Thực tế" : "Tạm tính"}</small></td>
-                  <td><span className={`inventory-bom-status is-${meta.tone}`}>{meta.label}</span></td>
-                  <td><div className="inventory-row-actions inventory-production-actions">
+                  <td data-label="Mã lệnh"><strong>{order.orderNo}</strong><small>{new Date(order.createdAt).toLocaleString("vi-VN")}</small></td>
+                  <td data-label="Bán thành phẩm"><strong>{order.outputItem?.name || "Bán thành phẩm"}</strong><small>{order.outputItem?.code || ""}</small></td>
+                  <td data-label="Số lượng"><strong>{formatQuantity(outputQuantity)} {order.outputUnit?.name || ""}</strong><small>{order.actualOutputQuantity ? "Thực nhận" : "Dự kiến"}</small></td>
+                  <td data-label="Kho làm"><strong>{order.warehouse?.name || "Kho thực hiện"}</strong><small>{scopeMeta.processLabel}</small></td>
+                  <td data-label="Nguyên liệu"><strong>{order.lines.length} thành phần</strong><small>{order.lines.slice(0, 2).map((line) => line.item?.name).filter(Boolean).join(", ")}</small></td>
+                  <td data-label="Giá vốn"><strong>{order.status === "completed" ? `${Number(order.actualTotalCost || 0).toLocaleString("vi-VN")} đ` : `${Number(order.estimatedTotalCost || 0).toLocaleString("vi-VN")} đ`}</strong><small>{order.status === "completed" ? "Thực tế" : "Tạm tính"}</small></td>
+                  <td data-label="Trạng thái"><span className={`inventory-bom-status is-${meta.tone}`}>{meta.label}</span></td>
+                  <td data-label="Thao tác"><div className="inventory-row-actions inventory-production-actions">
                     <button type="button" onClick={() => setModal({ mode: "view", order })}><Icon name="eye" size={14} /> Xem</button>
                     {canWrite && order.status === "draft" ? <button type="button" onClick={() => setModal({ mode: "edit", order })}><Icon name="edit" size={14} /> Sửa</button> : null}
                     {canWrite && order.status === "draft" ? <button type="button" className="is-primary" onClick={() => setConfirmation({ type: "start", order })}><Icon name="play" size={14} /> Bắt đầu</button> : null}

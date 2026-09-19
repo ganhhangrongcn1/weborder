@@ -171,14 +171,14 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
               const display = getInventoryLotDisplayValues(row, item, unitById);
               return (
                 <tr key={row.id} className={`inventory-lot-row is-${state}`}>
-                  <td><strong>{warehouse.name || "Kho không còn hoạt động"}</strong><small>{warehouse.code || row.warehouseId}</small></td>
-                  <td><strong>{item.name || "NVL không còn hoạt động"}</strong><small>{item.code || row.itemId}</small></td>
-                  <td><strong>{row.lotNumber}</strong>{row.sourceDocumentNo ? <small>Nguồn: {row.sourceDocumentNo}</small> : null}</td>
-                  <td className="is-number"><strong>{formatQuantity(display.remainingQuantity)} {display.unitSymbol}</strong><small>Nhập {formatQuantity(display.receivedQuantity)} {display.unitSymbol}</small></td>
-                  <td>{formatDate(row.manufacturedOn)}</td>
-                  <td><strong>{formatDate(row.expiresOn)}</strong></td>
-                  <td><span className={`inventory-lot-days is-${state}`}>{formatRemainingDays(daysRemaining)}</span></td>
-                  <td><span className={`inventory-stock-state is-${state}`}>{EXPIRY_STATE_LABELS[state]}</span></td>
+                  <td data-label="Kho"><strong>{warehouse.name || "Kho không còn hoạt động"}</strong><small>{warehouse.code || row.warehouseId}</small></td>
+                  <td data-label="Nguyên vật liệu"><strong>{item.name || "NVL không còn hoạt động"}</strong><small>{item.code || row.itemId}</small></td>
+                  <td data-label="Mã lô"><strong>{row.lotNumber}</strong>{row.sourceDocumentNo ? <small>Nguồn: {row.sourceDocumentNo}</small> : null}</td>
+                  <td data-label="Số lượng còn" className="is-number"><strong>{formatQuantity(display.remainingQuantity)} {display.unitSymbol}</strong><small>Nhập {formatQuantity(display.receivedQuantity)} {display.unitSymbol}</small></td>
+                  <td data-label="Ngày sản xuất">{formatDate(row.manufacturedOn)}</td>
+                  <td data-label="Hạn sử dụng"><strong>{formatDate(row.expiresOn)}</strong></td>
+                  <td data-label="Còn lại"><span className={`inventory-lot-days is-${state}`}>{formatRemainingDays(daysRemaining)}</span></td>
+                  <td data-label="Trạng thái"><span className={`inventory-stock-state is-${state}`}>{EXPIRY_STATE_LABELS[state]}</span></td>
                 </tr>
               );
             })}

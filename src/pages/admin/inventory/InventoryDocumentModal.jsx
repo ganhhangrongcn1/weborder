@@ -367,24 +367,24 @@ export default function InventoryDocumentModal({
                 }
                 return (
                   <div key={line.key} className={`inventory-document-line ${domain === "disposals" ? "has-disposal-reason" : domain === "adjustments" ? "has-adjustment-direction" : ""}`}>
-                    <InventorySearchableSelect value={line.itemId} onChange={(event) => updateLine(line.key, "itemId", event.target.value)} required>
+                    <div className="inventory-mobile-field" data-label="Nguyên vật liệu"><InventorySearchableSelect value={line.itemId} onChange={(event) => updateLine(line.key, "itemId", event.target.value)} required>
                       <option value="">Chọn nguyên vật liệu</option>
                       {activeItems.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
-                    </InventorySearchableSelect>
-                    <InventoryLineUnitSelect item={item} units={units} value={line.unitId} onChange={(unitId) => updateLine(line.key, "unitId", unitId)} ariaLabel={`Đơn vị của ${item?.name || "nguyên vật liệu"}`} />
+                    </InventorySearchableSelect></div>
+                    <div className="inventory-mobile-field" data-label="Đơn vị"><InventoryLineUnitSelect item={item} units={units} value={line.unitId} onChange={(unitId) => updateLine(line.key, "unitId", unitId)} ariaLabel={`Đơn vị của ${item?.name || "nguyên vật liệu"}`} /></div>
                     {domain === "adjustments" ? (
-                      <InventorySearchableSelect value={line.adjustmentDirection} onChange={(event) => updateLine(line.key, "adjustmentDirection", event.target.value)} required aria-label={`Chiều điều chỉnh của ${item?.name || "nguyên vật liệu"}`}>
+                      <div className="inventory-mobile-field" data-label="Điều chỉnh"><InventorySearchableSelect value={line.adjustmentDirection} onChange={(event) => updateLine(line.key, "adjustmentDirection", event.target.value)} required aria-label={`Chiều điều chỉnh của ${item?.name || "nguyên vật liệu"}`}>
                         <option value="">Chọn tăng/giảm</option>
                         <option value="in">+ Tăng tồn</option>
                         <option value="out">− Giảm tồn</option>
-                      </InventorySearchableSelect>
+                      </InventorySearchableSelect></div>
                     ) : null}
-                    <label><input aria-label={`Số lượng ${item?.name || "nguyên vật liệu"}`} type="number" min="0.001" step="0.001" value={line.quantity} placeholder={line.needsManualQuantity ? "Nhập số lượng" : undefined} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} required />{line.needsManualQuantity && line.quantity === "" ? <small className="inventory-form-hint">Chưa đặt mức bổ sung</small> : null}</label>
+                    <label className="inventory-mobile-field" data-label="Số lượng"><input aria-label={`Số lượng ${item?.name || "nguyên vật liệu"}`} type="number" min="0.001" step="0.001" value={line.quantity} placeholder={line.needsManualQuantity ? "Nhập số lượng" : undefined} onChange={(event) => updateLine(line.key, "quantity", event.target.value)} required />{line.needsManualQuantity && line.quantity === "" ? <small className="inventory-form-hint">Chưa đặt mức bổ sung</small> : null}</label>
                     {domain === "disposals" ? (
-                      <InventorySearchableSelect value={line.disposalReason} onChange={(event) => updateLine(line.key, "disposalReason", event.target.value)} aria-label={`Lý do hủy của ${item?.name || "nguyên vật liệu"}`}>
+                      <div className="inventory-mobile-field" data-label="Lý do hủy"><InventorySearchableSelect value={line.disposalReason} onChange={(event) => updateLine(line.key, "disposalReason", event.target.value)} aria-label={`Lý do hủy của ${item?.name || "nguyên vật liệu"}`}>
                         <option value="">Theo lý do chung{form.disposalReason ? `: ${form.disposalReason}` : ""}</option>
                         {DISPOSAL_REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
-                      </InventorySearchableSelect>
+                      </InventorySearchableSelect></div>
                     ) : null}
                     <button type="button" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((row) => row.key !== line.key))} aria-label="Xóa dòng"><Icon name="trash" size={16} /></button>
                   </div>

@@ -194,9 +194,9 @@ export default function InventoryDocumentActionModal({
                 return (
                   <div key={line.lineId} className={`inventory-action-line ${["receive", "approve"].includes(mode) ? "has-reason" : ""}`}>
                     <div><strong>{item?.name || "Nguyên vật liệu"}</strong><small>{unitName}</small></div>
-                    <span>{line.maximumQuantity.toLocaleString("vi-VN")}</span>
-                    <input type="number" min={mode === "dispatch" ? "0.001" : "0"} max={line.maximumQuantity} step="0.001" value={line.quantity} onChange={(event) => updateLine(line.lineId, "quantity", event.target.value)} required />
-                    {["receive", "approve"].includes(mode) ? <input className={isDifferent ? "is-required" : ""} value={line.reason} onChange={(event) => updateLine(line.lineId, "reason", event.target.value)} placeholder={isDifferent ? "Bắt buộc nhập lý do" : "Không cần nếu đủ"} /> : null}
+                    <span className="inventory-mobile-field" data-label="Số trên phiếu">{line.maximumQuantity.toLocaleString("vi-VN")}</span>
+                    <label className="inventory-mobile-field" data-label={config.quantityLabel}><input aria-label={`${config.quantityLabel} ${item?.name || "nguyên vật liệu"}`} type="number" min={mode === "dispatch" ? "0.001" : "0"} max={line.maximumQuantity} step="0.001" value={line.quantity} onChange={(event) => updateLine(line.lineId, "quantity", event.target.value)} required /></label>
+                    {["receive", "approve"].includes(mode) ? <label className="inventory-mobile-field" data-label="Lý do nếu lệch"><input aria-label={`Lý do chênh lệch ${item?.name || "nguyên vật liệu"}`} className={isDifferent ? "is-required" : ""} value={line.reason} onChange={(event) => updateLine(line.lineId, "reason", event.target.value)} placeholder={isDifferent ? "Bắt buộc nhập lý do" : "Không cần nếu đủ"} /></label> : null}
                   </div>
                 );
               })}

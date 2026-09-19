@@ -1,0 +1,38 @@
+.inventory-branch-stock { display: none; }
+
+@media (max-width: 767px) {
+  .inventory-stock-report--branch > .inventory-stock-report__head,
+  .inventory-stock-report--branch > .inventory-stock-report__scope,
+  .inventory-stock-report--branch > .inventory-stock-report__summary,
+  .inventory-stock-report--branch > .inventory-stock-report__filters,
+  .inventory-stock-report--branch > .inventory-table-scroll { display: none; }
+
+  .inventory-stock-report--branch { min-width: 0; max-width: 100%; }
+  .inventory-branch-stock { display: block; min-width: 0; color: #594637; }
+  .inventory-branch-stock__head { display: grid; gap: 4px; padding: 14px; border-bottom: 1px solid #eadfd5; }
+  .inventory-branch-stock__head > span { font-size: 13px; color: #776759; }
+  .inventory-branch-stock__controls { padding: 12px; display: grid; gap: 10px; }
+  .inventory-branch-stock input[type="search"] { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #dbcabb; border-radius: 9px; padding: 10px; font: inherit; background: white; }
+  .inventory-branch-stock__statuses { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .inventory-branch-stock__statuses button { min-width: 0; min-height: 44px; padding: 6px 2px; border: 1px solid #eadfd5; border-radius: 8px; background: #fff; color: #655244; font: inherit; font-size: 12px; cursor: pointer; }
+  .inventory-branch-stock__statuses button[aria-pressed="true"] { background: #c76b13; color: #fff; border-color: #c76b13; font-weight: 700; }
+  .inventory-branch-stock__filters > summary { min-height: 44px; align-content: center; cursor: pointer; font-size: 13px; }
+  .inventory-branch-stock__context { padding: 10px; border-radius: 8px; background: #fff6e9; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+  .inventory-branch-stock__context button { display: block; min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: #94500e; text-decoration: underline; font: inherit; cursor: pointer; }
+  .inventory-branch-stock__columns { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; background: #f8f4ef; font-size: 11px; color: #7c6a5a; }
+  .inventory-branch-stock__row { border-bottom: 1px solid #eadfd5; border-left: 3px solid transparent; }
+  .inventory-branch-stock__row.is-low { border-left-color: #d49534; background: #fffaf0; }
+  .inventory-branch-stock__row.is-out { border-left-color: #c76855; background: #fff5f3; }
+  .inventory-branch-stock__row > summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(70px, 35%) 12px; gap: 8px; align-items: center; padding: 14px 10px; min-height: 64px; cursor: pointer; list-style: none; }
+  .inventory-branch-stock__row > summary::-webkit-details-marker { display: none; }
+  .inventory-branch-stock__name { display: grid; gap: 5px; font-size: 14px; overflow-wrap: anywhere; }
+  .inventory-branch-stock__name small { color: #9c4a20; font-size: 11px; }
+  .inventory-branch-stock__quantity { text-align: right; font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .inventory-branch-stock__quantity > span { display: block; font-size: 12px; font-weight: 400; color: #7c6a5a; }
+  .inventory-branch-stock__chevron { color: #8f7c6c; }
+  .inventory-branch-stock__row[open] .inventory-branch-stock__chevron { transform: rotate(180deg); }
+  .inventory-branch-stock__detail { display: grid; gap: 5px; padding: 0 14px 14px; font-size: 12px; color: #7c6a5a; overflow-wrap: anywhere; }
+  .inventory-branch-stock :is(button, input, summary):focus-visible { outline: 2px solid #b75c0a; outline-offset: 2px; }
+  .inventory-stock-report--branch > .inventory-document-pagination { flex-wrap: wrap; gap: 8px; }
+  .inventory-stock-report--branch > .inventory-document-pagination button { min-height: 44px; }
+}

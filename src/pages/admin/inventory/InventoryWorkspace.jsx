@@ -48,6 +48,7 @@ import InventoryOpeningBalanceManager from "./InventoryOpeningBalanceManager.jsx
 import InventoryPurchasePriceManager from "./InventoryPurchasePriceManager.jsx";
 import InventorySalesDeductionSettings from "./InventorySalesDeductionSettings.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
+import "./inventoryBranchMobile.css";
 
 function scopeDashboardData(data = {}, warehouseId = "") {
   if (!warehouseId) return data;
@@ -455,7 +456,7 @@ export default function InventoryWorkspace({
 
   return (
     <InventoryAccessGate accessPolicy={effectiveAccessPolicy}>
-      <section className="inventory-workspace">
+      <section className={`inventory-workspace${accessPolicy.scope === "branch" && accessPolicy.role !== "admin" ? " inventory-workspace--branch-mobile" : ""}`}>
         <header className="inventory-page-head">
           <div>
             <p className="inventory-eyebrow">Quản lý kho</p>
@@ -591,6 +592,7 @@ export default function InventoryWorkspace({
                   />
               : isReportPage
                 ? <InventoryStockReport
+                    branchMobileView={accessPolicy.scope === "branch" && accessPolicy.role !== "admin"}
                     rows={filterInventoryRowsByWarehouse(stockReportState.rows, workspaceWarehouseId)}
                     warehouses={scopedWarehouses}
                     items={workspaceItems}

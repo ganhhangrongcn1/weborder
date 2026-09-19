@@ -263,16 +263,16 @@ export default function InventoryDocumentManager({
           <tbody>
             {visibleRows.map((row) => (
               <tr key={row.id}>
-                <td><strong>{row.documentNo}</strong></td>
-                <td>{formatDate(row.occurredAt)}</td>
-                <td><strong>{getWarehouseLabel(row)}</strong></td>
-                {domain === "receipts" ? <td>{supplierMap.get(row.supplierId) || "—"}</td> : null}
-                {domain === "disposals" ? <td><span className={`inventory-disposal-reason ${getDisposalReasonLabel(row) === "Nhiều lý do" ? "is-multiple" : ""}`}>{getDisposalReasonLabel(row)}</span></td> : null}
-                {domain === "adjustments" ? <td><span className="inventory-adjustment-reason">{row.notes || "—"}</span></td> : null}
-                <td><strong>{row.lines.length} mặt hàng</strong>{row.notes ? <small>{row.notes}</small> : null}</td>
-                {domain === "receipts" ? <td><strong>{row.totalAmount.toLocaleString("vi-VN")} đ</strong></td> : null}
-                <td><span className={`inventory-document-status is-${row.status}`}>{STATUS_LABELS[row.status] || row.status}</span></td>
-                <td>
+                <td data-label="Mã phiếu"><strong>{row.documentNo}</strong></td>
+                <td data-label={domain === "disposals" ? "Ngày hủy" : "Ngày lập"}>{formatDate(row.occurredAt)}</td>
+                <td data-label="Kho"><strong>{getWarehouseLabel(row)}</strong></td>
+                {domain === "receipts" ? <td data-label="Nhà cung cấp">{supplierMap.get(row.supplierId) || "—"}</td> : null}
+                {domain === "disposals" ? <td data-label="Lý do hủy"><span className={`inventory-disposal-reason ${getDisposalReasonLabel(row) === "Nhiều lý do" ? "is-multiple" : ""}`}>{getDisposalReasonLabel(row)}</span></td> : null}
+                {domain === "adjustments" ? <td data-label="Lý do điều chỉnh"><span className="inventory-adjustment-reason">{row.notes || "—"}</span></td> : null}
+                <td data-label="Nguyên vật liệu"><strong>{row.lines.length} mặt hàng</strong>{row.notes ? <small>{row.notes}</small> : null}</td>
+                {domain === "receipts" ? <td data-label="Tổng tiền"><strong>{row.totalAmount.toLocaleString("vi-VN")} đ</strong></td> : null}
+                <td data-label="Trạng thái"><span className={`inventory-document-status is-${row.status}`}>{STATUS_LABELS[row.status] || row.status}</span></td>
+                <td data-label="Thao tác">
                   <div className="inventory-document-actions">
                     <button type="button" onClick={() => setDetailDocument(row)}><Icon name="eye" size={14} />Xem</button>
                     {renderRowActions(row)}

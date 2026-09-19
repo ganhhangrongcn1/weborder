@@ -1,0 +1,380 @@
+.inventory-mobile-field {
+  display: contents;
+}
+
+@media (max-width: 700px) {
+  .inventory-workspace--branch-mobile {
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-page-head {
+    gap: 9px;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-page-head > div:first-child > p:last-child,
+  .inventory-workspace--branch-mobile .inventory-document-guide {
+    font-size: .72rem;
+    line-height: 1.5;
+  }
+
+  .inventory-workspace--branch-mobile :is(button, input, textarea, .inventory-searchable-select__trigger) {
+    touch-action: manipulation;
+  }
+
+  .inventory-workspace--branch-mobile :is(.inventory-master-intro, .inventory-bom-manager__head, .inventory-stock-report__head) {
+    padding: 12px;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventory-workspace--branch-mobile .inventory-summary-grid > div {
+    min-height: 74px;
+    padding: 11px;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-table-scroll {
+    overflow-x: visible;
+  }
+
+  .inventory-workspace--branch-mobile :is(
+    .inventory-document-table,
+    .inventory-lot-report__table,
+    .inventory-count-table,
+    .inventory-count-lines,
+    .inventory-detail-table,
+    .inventory-production-table,
+    .inventory-dashboard-warehouse-table
+  ) {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border-collapse: separate;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-mobile-field {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-mobile-field::before {
+    color: #806d61;
+    content: attr(data-label);
+    font-size: .66rem;
+    font-weight: 800;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-mobile-field > :is(input, .inventory-searchable-select, .inventory-document-unit--editable) {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .inventory-workspace--branch-mobile :is(
+    .inventory-document-table,
+    .inventory-lot-report__table,
+    .inventory-count-table,
+    .inventory-count-lines,
+    .inventory-detail-table,
+    .inventory-production-table,
+    .inventory-dashboard-warehouse-table
+  ) > thead {
+    display: none;
+  }
+
+  .inventory-workspace--branch-mobile :is(
+    .inventory-document-table,
+    .inventory-lot-report__table,
+    .inventory-count-table,
+    .inventory-count-lines,
+    .inventory-detail-table,
+    .inventory-production-table,
+    .inventory-dashboard-warehouse-table
+  ) > tbody {
+    display: grid;
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .inventory-workspace--branch-mobile :is(
+    .inventory-document-table,
+    .inventory-lot-report__table,
+    .inventory-count-table,
+    .inventory-count-lines,
+    .inventory-detail-table,
+    .inventory-production-table,
+    .inventory-dashboard-warehouse-table
+  ) > tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    overflow: hidden;
+    border: 1px solid #eadfd5;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .inventory-workspace--branch-mobile :is(
+    .inventory-document-table,
+    .inventory-lot-report__table,
+    .inventory-count-table,
+    .inventory-count-lines,
+    .inventory-detail-table,
+    .inventory-production-table,
+    .inventory-dashboard-warehouse-table
+  ) > tbody > tr > td {
+    display: block;
+    grid-column: 1 / -1;
+    align-items: start;
+    width: auto;
+    min-width: 0;
+    padding: 9px 11px;
+    border: 0;
+    border-bottom: 1px solid #f0e8e1;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .inventory-workspace--branch-mobile :is(
+    .inventory-document-table,
+    .inventory-lot-report__table,
+    .inventory-count-table,
+    .inventory-count-lines,
+    .inventory-detail-table,
+    .inventory-production-table,
+    .inventory-dashboard-warehouse-table
+  ) td::before {
+    display: block;
+    margin-bottom: 4px;
+    color: #8a776a;
+    content: attr(data-label);
+    font-size: .66rem;
+    font-weight: 750;
+  }
+
+  .inventory-workspace--branch-mobile :is(
+    .inventory-document-table,
+    .inventory-lot-report__table,
+    .inventory-count-table,
+    .inventory-production-table,
+    .inventory-dashboard-warehouse-table
+  ) td:last-child {
+    border-bottom: 0;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-document-table td:last-child {
+    background: #fffaf4;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-document-actions,
+  .inventory-workspace--branch-mobile .inventory-production-actions,
+  .inventory-workspace--branch-mobile .inventory-count-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    gap: 7px;
+  }
+
+  .inventory-workspace--branch-mobile :is(.inventory-document-actions, .inventory-production-actions, .inventory-count-actions) button {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-lot-report__table td:first-child {
+    display: none;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-lot-report__table td:nth-child(2) {
+    background: #fffaf4;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-lot-report__table td:nth-child(4) strong {
+    font-size: .94rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-production-table td::before,
+  .inventory-workspace--branch-mobile .inventory-count-table td::before,
+  .inventory-workspace--branch-mobile .inventory-dashboard-warehouse-table td::before {
+    color: #8a776a;
+    font-size: .66rem;
+    font-weight: 750;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(1)::before { content: "Mã lệnh"; }
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(2)::before { content: "Bán thành phẩm"; }
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(3)::before { content: "Số lượng"; }
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(4)::before { content: "Kho làm"; }
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(5)::before { content: "Nguyên liệu"; }
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(6) { display: none; }
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(7)::before { content: "Trạng thái"; }
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(8)::before { content: "Thao tác"; }
+
+  .inventory-workspace--branch-mobile .inventory-dashboard-warehouse-table td:nth-child(1)::before { content: "Kho"; }
+  .inventory-workspace--branch-mobile .inventory-dashboard-warehouse-table td:nth-child(2) { display: none; }
+  .inventory-workspace--branch-mobile .inventory-dashboard-warehouse-table td:nth-child(3)::before { content: "Hết hàng"; }
+  .inventory-workspace--branch-mobile .inventory-dashboard-warehouse-table td:nth-child(4)::before { content: "Cần đặt"; }
+  .inventory-workspace--branch-mobile .inventory-dashboard-warehouse-table td:nth-child(5)::before { content: "Sắp / hết hạn"; }
+  .inventory-workspace--branch-mobile .inventory-dashboard-warehouse-table td:nth-child(6)::before { content: "Phiếu chờ"; }
+  .inventory-workspace--branch-mobile .inventory-dashboard-warehouse-table td:nth-child(7)::before { content: "Mở kho"; }
+
+  .inventory-workspace--branch-mobile .inventory-count-table td::before,
+  .inventory-workspace--branch-mobile .inventory-production-table td::before { content: attr(data-label); }
+
+  .inventory-workspace--branch-mobile .inventory-count-lines td:nth-child(1)::before { content: "Nguyên vật liệu"; }
+  .inventory-workspace--branch-mobile .inventory-count-lines td:nth-child(2)::before { content: "Đơn vị"; }
+  .inventory-workspace--branch-mobile .inventory-count-lines td:nth-child(3)::before { content: "Tồn hệ thống"; }
+  .inventory-workspace--branch-mobile .inventory-count-lines td:nth-child(4)::before { content: "Thực tế"; }
+  .inventory-workspace--branch-mobile .inventory-count-lines td:nth-child(5)::before { content: "Chênh lệch"; }
+  .inventory-workspace--branch-mobile .inventory-count-lines td:nth-child(6)::before { content: "Lý do"; }
+
+  .inventory-workspace--branch-mobile .inventory-detail-table td:nth-child(1)::before { content: "Nguyên vật liệu"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table td:nth-child(2)::before { content: "Đơn vị"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-transfers td:nth-child(3)::before,
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-requisitions td:nth-child(3)::before { content: "Yêu cầu"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-transfers td:nth-child(4)::before { content: "Duyệt"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-requisitions td:nth-child(4)::before { content: "Đã duyệt"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table:is(.is-transfers, .is-requisitions) td:nth-child(5)::before { content: "Đã giao"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table:is(.is-transfers, .is-requisitions) td:nth-child(6)::before { content: "Đã nhận"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table:is(.is-transfers, .is-requisitions) td:nth-child(7)::before { content: "Chênh lệch"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table:is(.is-transfers, .is-requisitions) td:nth-child(8)::before { content: "Lý do"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-receipts td:nth-child(3)::before { content: "Thực nhập"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-receipts td:nth-child(4)::before { content: "Mã lô"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-receipts td:nth-child(5)::before { content: "Hạn sử dụng"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-receipts td:nth-child(6)::before { content: "Đơn giá"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-receipts td:nth-child(7)::before { content: "Thành tiền"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-disposals td:nth-child(3)::before { content: "Số lượng hủy"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-disposals td:nth-child(4)::before { content: "Lý do hủy"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-adjustments td:nth-child(3)::before { content: "Điều chỉnh"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-adjustments td:nth-child(4)::before { content: "Số lượng"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-adjustments td:nth-child(5)::before { content: "Lý do"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-issues td:nth-child(3)::before { content: "Số trên phiếu"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-issues td:nth-child(4)::before { content: "Thực xuất"; }
+  .inventory-workspace--branch-mobile .inventory-detail-table.is-issues td:nth-child(5)::before { content: "Ghi chú"; }
+
+  .inventory-workspace--branch-mobile .inventory-count-lines > tbody > tr,
+  .inventory-workspace--branch-mobile .inventory-detail-table > tbody > tr {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inventory-workspace--branch-mobile .inventory-count-table-scroll,
+  .inventory-workspace--branch-mobile .inventory-detail-section .inventory-table-scroll {
+    overflow-x: hidden;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-count-lines td input,
+  .inventory-workspace--branch-mobile .inventory-count-lines td .inventory-searchable-select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(4),
+  .inventory-workspace--branch-mobile .inventory-production-table td:nth-child(6) {
+    display: none;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-count-table td input,
+  .inventory-workspace--branch-mobile .inventory-count-table td .inventory-searchable-select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  .inventory-workspace--branch-mobile :is(.inventory-document-lines__header, .inventory-action-lines__header) {
+    display: none;
+  }
+
+  .inventory-workspace--branch-mobile :is(
+    .inventory-document-line,
+    .inventory-document-line.has-price,
+    .inventory-document-line.has-disposal-reason,
+    .inventory-document-line.has-adjustment-direction,
+    .inventory-receipt-row,
+    .inventory-action-line,
+    .inventory-action-line.has-reason
+  ) {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    gap: 9px;
+    padding: 12px;
+  }
+
+  .inventory-workspace--branch-mobile :is(.inventory-document-lines, .inventory-action-lines, .inventory-receipt-line) {
+    min-width: 0;
+    overflow-x: visible;
+  }
+
+  .inventory-workspace--branch-mobile :is(.inventory-document-line, .inventory-receipt-row, .inventory-action-line) input,
+  .inventory-workspace--branch-mobile :is(.inventory-document-line, .inventory-receipt-row, .inventory-action-line) button,
+  .inventory-workspace--branch-mobile :is(.inventory-document-line, .inventory-receipt-row, .inventory-action-line) .inventory-searchable-select__trigger {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-receipt-details {
+    grid-template-columns: 1fr;
+    margin: 0 12px 10px;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-receipt-details > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-action-line > span {
+    padding: 8px 0;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-warehouse-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - 12px);
+    border-radius: 16px 16px 0 0;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-modal-backdrop {
+    padding: 6px 6px 0;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-warehouse-modal :is(input, textarea) {
+    font-size: 16px;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-warehouse-modal > footer,
+  .inventory-workspace--branch-mobile .inventory-warehouse-modal form > footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: #fff;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+
+  .inventory-workspace--branch-mobile .inventory-production-flow {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-production-flow .icon-ux {
+    margin-left: 14px;
+    transform: rotate(90deg);
+  }
+
+  .inventory-workspace--branch-mobile .inventory-alert-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .inventory-workspace--branch-mobile .inventory-alert-tabs button {
+    min-width: 0;
+    min-height: 44px;
+    white-space: normal;
+  }
+}

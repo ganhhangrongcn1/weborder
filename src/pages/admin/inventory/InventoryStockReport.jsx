@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
+import InventoryBranchStockMobile from "./InventoryBranchStockMobile.jsx";
+import "./inventoryBranchStockMobile.css";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import {
   calculateInventoryStockReportSummary,
@@ -25,7 +27,7 @@ function formatMoney(value) {
   return `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Number(value || 0))} đ`;
 }
 
-export default function InventoryStockReport({ rows = [], warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false, selectedWarehouseId = "", onWarehouseChange }) {
+export default function InventoryStockReport({ rows = [], warehouses = [], items = [], units = [], limited = false, warehouseSelectionLocked = false, selectedWarehouseId = "", onWarehouseChange, branchMobileView = false }) {
   const [searchParams] = useSearchParams();
   const routeFilterKey = searchParams.toString();
   const [filters, setFilters] = useState({ warehouseId: "", itemId: "", groupId: "", stockState: "all", search: "" });
@@ -94,7 +96,13 @@ export default function InventoryStockReport({ rows = [], warehouses = [], items
   };
 
   return (
-    <section className="inventory-list-card inventory-stock-report">
+    <section className={`inventory-list-card inventory-stock-report${branchMobileView ? " inventory-stock-report--branch" : ""}`}>
+      {branchMobileView ? <InventoryBranchStockMobile
+        rows={visibleRows} filters={filters} groups={groups} warehouses={warehouses}
+        itemById={itemById} unitById={unitById} totalCount={filteredRows.length}
+        onFilterChange={updateFilter} onWarehouseChange={onWarehouseChange}
+        formatQuantity={formatQuantity}
+      /> : null}
       <header className="inventory-stock-report__head">
         <span><Icon name="wallet" size={20} /></span>
         <div>
