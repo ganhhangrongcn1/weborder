@@ -51,6 +51,9 @@ export default function AdminPageContent({ section, ...props }) {
   }
 
   if (section === "review-rewards") {
+    if (String(props.adminProfile?.role || "").trim().toLowerCase() !== "admin") {
+      return <div role="status">Tài khoản chưa có quyền quản trị thưởng đánh giá.</div>;
+    }
     return <AdminReviewRewardsPage {...props} />;
   }
 

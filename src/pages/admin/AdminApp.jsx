@@ -12,7 +12,6 @@ import { getRepositoryRuntimeInfo } from "../../services/repositories/repository
 import { adminNavToPath } from "../../app/routeState.js";
 import AdminPageContent from "./pages/AdminPageContent.jsx";
 import { AdminButton, AdminPageHeader } from "./ui/AdminCommon.jsx";
-import { getAdminReviewRewards } from "../../services/reviewRewardService.js";
 import { getInventoryAccessPolicy } from "./inventory/inventoryAccessPolicy.js";
 import { isSupabaseRuntimeWriteEnabled } from "../../services/supabase/runtimeFlags.js";
 import {
@@ -268,30 +267,10 @@ export default function AdminApp({
     setOptionGroupPresetsState
   });
 
+  // The review page updates its badge when opened and after a review decision.
   useEffect(() => {
-    let cancelled = false;
-
-    const refreshPendingCount = async () => {
-      try {
-        const result = await getAdminReviewRewards();
-        if (cancelled) return;
-        const pendingCount = (result?.claims || []).filter((claim) => claim.status === "pending").length;
-        setReviewRewardPendingCount(pendingCount);
-      } catch {
-        // Keep the last known count when the admin session or network is temporarily unavailable.
-      }
-    };
-
-    refreshPendingCount();
-    const intervalId = window.setInterval(refreshPendingCount, 60000);
-    window.addEventListener("focus", refreshPendingCount);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", refreshPendingCount);
-    };
-  }, []);
+    setReviewRewardPendingCount(0);
+  }, [adminProfile?.auth_user_id, adminProfile?.role]);
 
   useEffect(() => {
     let cancelled = false;
