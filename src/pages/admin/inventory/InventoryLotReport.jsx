@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
+import InventoryLotDisposalModal from "./InventoryLotDisposalModal.jsx";
+import useInventoryLotDisposal from "../../../hooks/useInventoryLotDisposal.js";
+import { canWriteInventoryDocuments } from "../../../services/inventoryDocumentService.js";
 import "../../../styles/admin/inventory-lot-filters.css";
 import {
   calculateInventoryLotSummary,
@@ -47,6 +50,8 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
   const routeFilterKey = searchParams.toString();
   const [filters, setFilters] = useState({ warehouseId: "", itemId: "", expiryState: "tracked", search: "" });
   const [page, setPage] = useState(1);
+  const disposal = useInventoryLotDisposal();
+  const canDispose = canWriteInventoryDocuments();
   const todayKey = getInventoryTodayKey();
   const warehouseById = useMemo(() => new Map(warehouses.map((row) => [row.id, row])), [warehouses]);
   const itemById = useMemo(() => new Map(items.map((row) => [row.id, row])), [items]);
@@ -178,7 +183,10 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
                   <td data-label="Ngày sản xuất">{formatDate(row.manufacturedOn)}</td>
                   <td data-label="Hạn sử dụng"><strong>{formatDate(row.expiresOn)}</strong></td>
                   <td data-label="Còn lại"><span className={`inventory-lot-days is-${state}`}>{formatRemainingDays(daysRemaining)}</span></td>
-                  <td data-label="Trạng thái"><span className={`inventory-stock-state is-${state}`}>{EXPIRY_STATE_LABELS[state]}</span></td>
+                  <td data-label="Trạng thái"><div className="inventory-lot-status-actions"><span className={`inventory-stock-state is-${state}`}>{EXPIRY_STATE_LABELS[state]}</span>
+                    {canDispose && row.status === "active" && row.remainingQuantity > 0 ? <button className="inventory-lot-disposal-action" type="button" onClick={() => disposal.open(row)}>Hủy lô này</button> : null}
+                  </div>
+                  </td>
                 </tr>
               );
             })}
@@ -192,6 +200,9 @@ export default function InventoryLotReport({ rows = [], warehouses = [], items =
         <span>{filteredRows.length} lô · Trang {safePage}/{pageCount}</span>
         <div><button type="button" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>Trang trước</button><button type="button" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Trang sau</button></div>
       </footer>
+      {disposal.selection ? <InventoryLotDisposalModal state={disposal}
+        item={itemById.get(disposal.selection.itemId)} warehouse={warehouseById.get(disposal.selection.warehouseId)}
+        unit={unitById.get(itemById.get(disposal.selection.itemId)?.baseUnitId)} /> : null}
     </section>
   );
 }

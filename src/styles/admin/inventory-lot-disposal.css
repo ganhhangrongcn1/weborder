@@ -1,0 +1,35 @@
+.inventory-lot-disposal { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border: 1px solid #e5d8ca; border-radius: 16px; padding: 24px; color: #594738; background: #fff; }
+.inventory-lot-disposal::backdrop { background: #0006; }
+.inventory-lot-disposal h2 { font-size: 20px; margin: 0 0 16px; }
+.inventory-lot-disposal p { margin: 12px 0; overflow-wrap: anywhere; }
+.inventory-lot-disposal label { display: grid; gap: 8px; margin: 16px 0 8px; }
+.inventory-lot-disposal input { width: 100%; box-sizing: border-box; min-height: 44px; border: 1px solid #d9caba; border-radius: 8px; padding: 10px; font: inherit; }
+.inventory-lot-disposal footer { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; flex-wrap: wrap; }
+.inventory-lot-disposal button, .inventory-lot-disposal-action { min-height: 44px; padding: 8px 12px; border: 1px solid #d9caba; border-radius: 8px; background: #fff8ef; color: #974600; cursor: pointer; }
+.inventory-lot-disposal button:disabled { opacity: .5; cursor: wait; }
+.inventory-lot-disposal [role="alert"] { color: #b42318; }
+.inventory-lot-status-actions { display: grid; grid-template-columns: repeat(2, 112px); align-items: center; gap: 12px; min-width: 0; }
+.inventory-lot-status-actions > * { white-space: nowrap; }
+.inventory-lot-report__table .inventory-lot-status-actions > .inventory-stock-state,
+.inventory-lot-report__table .inventory-lot-status-actions > .inventory-lot-disposal-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 112px;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 12px;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+}
+.inventory-lot-status-actions .inventory-lot-disposal-action { margin: 0; border-radius: 999px; touch-action: manipulation; }
+.inventory-lot-disposal-action:hover { background: #ffeed8; border-color: #b87938; }
+.inventory-lot-disposal-action:focus-visible { outline: 2px solid #974600; outline-offset: 3px; }
