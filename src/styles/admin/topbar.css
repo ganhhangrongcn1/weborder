@@ -159,11 +159,19 @@
   }
 
   .admin-top-icon-btn,
-  .admin-top-logout-btn,
   .admin-top-avatar,
   .admin-topbar,
   .admin-page-header {
     display: none;
+  }
+
+  .admin-top-header-right .admin-top-logout-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .admin-top-header-right .admin-top-avatar {
