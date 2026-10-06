@@ -1,10 +1,15 @@
 import { getAdminSupabaseClient } from "./supabase/adminSupabaseClient.js";
+import createSessionCacheBoundary from "./supabase/sessionCacheBoundary.js";
 
 const DASHBOARD_SUMMARY_RPC = "get_admin_dashboard_summary";
 const MISSING_RPC_CODES = new Set(["42883", "PGRST202"]);
 const DASHBOARD_SUMMARY_CACHE_TTL_MS = 60000;
 const dashboardSummaryCache = new Map();
 const dashboardSummaryInFlight = new Map();
+const sessionBoundary = createSessionCacheBoundary(() => {
+  dashboardSummaryCache.clear();
+  dashboardSummaryInFlight.clear();
+});
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -117,6 +122,8 @@ function buildDashboardSummaryCacheKey(dateRange = {}) {
 export async function getAdminDashboardSummaryRpc(dateRange = {}, { force = false } = {}) {
   const client = await getAdminSupabaseClient();
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
+  const context = await sessionBoundary.enter(client);
+  if (!context?.isCurrent()) return null;
 
   const cacheKey = buildDashboardSummaryCacheKey(dateRange);
   const cached = dashboardSummaryCache.get(cacheKey);
@@ -131,6 +138,7 @@ export async function getAdminDashboardSummaryRpc(dateRange = {}, { force = fals
     const { data, error } = await callDashboardSummaryRpc(client, dateRange, {
       includeBranchUuid: true,
     });
+    if (!context.isCurrent()) return null;
 
     if (error) {
       if (MISSING_RPC_CODES.has(String(error.code || ""))) return null;
@@ -147,7 +155,7 @@ export async function getAdminDashboardSummaryRpc(dateRange = {}, { force = fals
     }
     return value;
   })().finally(() => {
-    dashboardSummaryInFlight.delete(cacheKey);
+    if (dashboardSummaryInFlight.get(cacheKey) === request) dashboardSummaryInFlight.delete(cacheKey);
   });
 
   dashboardSummaryInFlight.set(cacheKey, request);
@@ -157,12 +165,17 @@ export async function getAdminDashboardSummaryRpc(dateRange = {}, { force = fals
 export async function getAdminDashboardSummaryForBranchesRpc(dateRange = {}, branchOptions = [], options = {}) {
   const safeBranches = Array.isArray(branchOptions) ? branchOptions.filter((item) => item?.value) : [];
   if (!safeBranches.length) return getAdminDashboardSummaryRpc(dateRange, options);
+  const client = await getAdminSupabaseClient();
+  if (!client) return null;
+  const context = await sessionBoundary.enter(client);
+  if (!context?.isCurrent()) return null;
   const summaries = await Promise.all(safeBranches.map((branch) => getAdminDashboardSummaryRpc({
     ...dateRange,
     branchUuid: branch.value,
     branchName: branch.label,
     branchFilter: branch.label,
   }, options)));
+  if (!context.isCurrent()) return null;
   const available = summaries.filter(Boolean);
   return available.length ? mergeDashboardSummaries(available) : null;
 }

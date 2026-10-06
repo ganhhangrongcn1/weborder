@@ -1,10 +1,15 @@
 import { getAdminSupabaseClient } from "./supabase/adminSupabaseClient.js";
+import createSessionCacheBoundary from "./supabase/sessionCacheBoundary.js";
 
 const BUSINESS_ANALYTICS_RPC = "get_admin_business_analytics";
 const MISSING_RPC_CODES = new Set(["42883", "PGRST202"]);
 const BUSINESS_ANALYTICS_CACHE_TTL_MS = 5 * 60 * 1000;
 const businessAnalyticsCache = new Map();
 const businessAnalyticsInFlight = new Map();
+const sessionBoundary = createSessionCacheBoundary(() => {
+  businessAnalyticsCache.clear();
+  businessAnalyticsInFlight.clear();
+});
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -118,6 +123,8 @@ function buildBusinessAnalyticsCacheKey(dateRange = {}) {
 export async function getAdminBusinessAnalyticsRpc(dateRange = {}) {
   const client = await getAdminSupabaseClient();
   if (!client || !dateRange.dateFrom || !dateRange.dateTo) return null;
+  const context = await sessionBoundary.enter(client);
+  if (!context?.isCurrent()) return null;
 
   const cacheKey = buildBusinessAnalyticsCacheKey(dateRange);
   const cached = businessAnalyticsCache.get(cacheKey);
@@ -132,6 +139,7 @@ export async function getAdminBusinessAnalyticsRpc(dateRange = {}) {
     const { data, error } = await callBusinessAnalyticsRpc(client, dateRange, {
       includeBranchUuid: true,
     });
+    if (!context.isCurrent()) return null;
 
     if (error) {
       if (MISSING_RPC_CODES.has(String(error.code || ""))) return null;
@@ -148,7 +156,7 @@ export async function getAdminBusinessAnalyticsRpc(dateRange = {}) {
     }
     return value;
   })().finally(() => {
-    businessAnalyticsInFlight.delete(cacheKey);
+    if (businessAnalyticsInFlight.get(cacheKey) === request) businessAnalyticsInFlight.delete(cacheKey);
   });
 
   businessAnalyticsInFlight.set(cacheKey, request);
@@ -158,12 +166,17 @@ export async function getAdminBusinessAnalyticsRpc(dateRange = {}) {
 export async function getAdminBusinessAnalyticsForBranchesRpc(dateRange = {}, branchOptions = []) {
   const safeBranches = Array.isArray(branchOptions) ? branchOptions.filter((item) => item?.value) : [];
   if (!safeBranches.length) return getAdminBusinessAnalyticsRpc(dateRange);
+  const client = await getAdminSupabaseClient();
+  if (!client) return null;
+  const context = await sessionBoundary.enter(client);
+  if (!context?.isCurrent()) return null;
   const analytics = await Promise.all(safeBranches.map((branch) => getAdminBusinessAnalyticsRpc({
     ...dateRange,
     branchUuid: branch.value,
     branchName: branch.label,
     branchFilter: branch.label,
   })));
+  if (!context.isCurrent()) return null;
   const available = analytics.filter(Boolean);
   return available.length ? mergeBusinessAnalytics(available) : null;
 }
