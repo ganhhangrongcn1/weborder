@@ -9,6 +9,16 @@ const MISSING_RPC_CODES = new Set(["42883", "PGRST202"]);
 const CRM_ANALYTICS_CACHE_TTL_MS = 60000;
 let crmAnalyticsCache = { value: null, cachedAt: 0 };
 let crmAnalyticsInFlight = null;
+let crmAnalyticsGeneration = 0;
+
+function isMissingAnalyticsRpc(error, operation) {
+  const message = String(error?.message || "").toLowerCase();
+  const namesTarget = message.includes("function public." + operation + "(") ||
+    message.includes("function public." + operation + " ") ||
+    message.endsWith("function public." + operation);
+  return namesTarget && (MISSING_RPC_CODES.has(String(error?.code || "")) ||
+    message.includes("could not find the function public." + operation));
+}
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -90,20 +100,11 @@ async function loadAdminCrmAnalyticsRpc({ force = false } = {}) {
     let { data, error } = await client.rpc(CRM_ANALYTICS_CACHED_RPC, {
       p_force_refresh: force
     });
-    if (error && (
-      MISSING_RPC_CODES.has(String(error.code || "")) ||
-      String(error.message || "").toLowerCase().includes("could not find the function") ||
-      String(error.message || "").toLowerCase().includes("does not exist")
-    )) {
+    if (error && isMissingAnalyticsRpc(error, CRM_ANALYTICS_CACHED_RPC)) {
       ({ data, error } = await client.rpc(CRM_ANALYTICS_RPC));
     }
     if (error) {
-      const message = String(error.message || "").toLowerCase();
-      if (
-        MISSING_RPC_CODES.has(String(error.code || "")) ||
-        message.includes("could not find the function") ||
-        message.includes("does not exist")
-      ) {
+      if (isMissingAnalyticsRpc(error, CRM_ANALYTICS_RPC)) {
         return null;
       }
       console.warn("[adminCrmAnalyticsService] crm analytics rpc unavailable", error);
@@ -124,16 +125,18 @@ export async function getAdminCrmAnalyticsRpc({ force = false } = {}) {
   }
   if (!force && crmAnalyticsInFlight) return crmAnalyticsInFlight;
 
-  crmAnalyticsInFlight = loadAdminCrmAnalyticsRpc({ force })
+  const generation = ++crmAnalyticsGeneration;
+  const request = loadAdminCrmAnalyticsRpc({ force })
     .then((value) => {
-      crmAnalyticsCache = { value, cachedAt: Date.now() };
+      if (generation === crmAnalyticsGeneration) crmAnalyticsCache = { value, cachedAt: Date.now() };
       return value;
     })
     .finally(() => {
-      crmAnalyticsInFlight = null;
+      if (crmAnalyticsInFlight === request) crmAnalyticsInFlight = null;
     });
 
-  return crmAnalyticsInFlight;
+  crmAnalyticsInFlight = request;
+  return request;
 }
 
 export default {
