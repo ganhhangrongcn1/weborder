@@ -4,12 +4,12 @@
 
 Đây là ước lượng phạm vi công việc hiện đã rà soát, không phải phần trăm giảm tải hoặc tốc độ. Chưa có danh mục tối ưu đóng kín cho toàn ứng dụng; các phát hiện mới có thể làm thay đổi mẫu số.
 
-Sáu nhóm công việc bên dưới được phân trọng số để việc báo tiến độ có cơ sở rõ hơn. Đây là cách ước lượng mới, không phải kế hoạch phần trăm đã cam kết từ đầu. Tổng điểm hoàn thành hiện khoảng 46/100.
+Sáu nhóm công việc bên dưới được phân trọng số để việc báo tiến độ có cơ sở rõ hơn. Đây là cách ước lượng mới, không phải kế hoạch phần trăm đã cam kết từ đầu. Tổng điểm hoàn thành hiện khoảng 48/100 sau đợt 7.
 
 | Nhóm | Trọng số | Hoàn thành ước lượng | Căn cứ |
 |---|---:|---:|---|
 | Refresh/cache frontend | 15 | 15 | Hai phần đã triển khai production, test hook/service đạt |
-| Truy vấn/chỉ mục chính | 30 | 21 | Analytics, customer count, rule cardinality, dashboard và một index trùng đã sửa; còn workload khác |
+| Truy vấn/chỉ mục chính | 30 | 23 | Analytics, customer count, rule cardinality, dashboard và ba index trùng đã sửa; còn workload khác |
 | Lỗi vận hành | 15 | 5 | Sửa NULL-name; lỗi column/permission/cancellation còn cần xác định từng caller |
 | Tải Realtime | 10 | 0 | Đã rà ban đầu, chưa thay subscription và chưa đo fan-out |
 | Quyền truy cập/RLS | 15 | 2 | Có audit và đường gọi cần giữ; chưa áp dụng thu hẹp quyền khi thiếu ma trận vai trò thật |
@@ -17,9 +17,9 @@ Sáu nhóm công việc bên dưới được phân trọng số để việc b�
 
 ## Đã hoàn thành
 
-Frontend commit 4d18853 đã production. Sáu migration live: UUID join analytics, filter-before-status customer count, ROWS1 rule, active-period dashboard, empty-name profile fix, remove one duplicate orders index. Năm migration đầu cùng validation/rollback đã lưu GitHub commit1395a9c trên nhánh tối ưu riêng.
+Frontend commit 4d18853 đã production. Tám migration live: UUID join analytics, filter-before-status customer count, ROWS1 rule, active-period dashboard, empty-name profile fix và ba migration bỏ index trùng orders/order_items/partner_orders. Năm migration đầu cùng validation/rollback đã lưu GitHub commit1395a9c; đợt 6 đã lưu commit9b525a4 trên nhánh tối ưu riêng.
 
-Giữ nguyên công thức tích điểm/nhận điểm, điều kiện hết hạn, source of truth ledger/accounts, checkout, thanh toán và nhận đơn POS/Kitchen. Đợt 5 sửa biểu thức tên trong profile RPC; đợt 6 chỉ bỏ một index vật lý dư.
+Giữ nguyên công thức tích điểm/nhận điểm, điều kiện hết hạn, source of truth ledger/accounts, checkout, thanh toán và nhận đơn POS/Kitchen. Đợt 5 sửa biểu thức tên trong profile RPC; đợt 6–7 chỉ bỏ ba index vật lý dư.
 
 ## Thứ tự tiếp theo
 
