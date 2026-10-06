@@ -2,6 +2,7 @@ import {
   getSupabaseRuntimeClient,
   initSupabaseRuntimeClient,
 } from "./supabase/supabaseRuntimeClient.js";
+import createSessionCacheBoundary from "./supabase/sessionCacheBoundary.js";
 
 const CRM_ANALYTICS_RPC = "get_admin_crm_analytics";
 const CRM_ANALYTICS_CACHED_RPC = "get_admin_crm_analytics_cached";
@@ -10,6 +11,11 @@ const CRM_ANALYTICS_CACHE_TTL_MS = 60000;
 let crmAnalyticsCache = { value: null, cachedAt: 0 };
 let crmAnalyticsInFlight = null;
 let crmAnalyticsGeneration = 0;
+const sessionBoundary = createSessionCacheBoundary(() => {
+  crmAnalyticsGeneration++;
+  crmAnalyticsCache = { value: null, cachedAt: 0 };
+  crmAnalyticsInFlight = null;
+});
 
 function isMissingAnalyticsRpc(error, operation) {
   const message = String(error?.message || "").toLowerCase();
@@ -92,8 +98,7 @@ function mapSummary(row = {}) {
   };
 }
 
-async function loadAdminCrmAnalyticsRpc({ force = false } = {}) {
-  const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
+async function loadAdminCrmAnalyticsRpc(client, { force = false } = {}) {
   if (!client) return null;
 
   try {
@@ -120,14 +125,19 @@ async function loadAdminCrmAnalyticsRpc({ force = false } = {}) {
 }
 
 export async function getAdminCrmAnalyticsRpc({ force = false } = {}) {
+  const client = getSupabaseRuntimeClient() || (await initSupabaseRuntimeClient());
+  if (!client) return null;
+  const context = await sessionBoundary.enter(client);
+  if (!context?.isCurrent()) return null;
   if (!force && crmAnalyticsCache.cachedAt && Date.now() - crmAnalyticsCache.cachedAt < CRM_ANALYTICS_CACHE_TTL_MS) {
     return crmAnalyticsCache.value;
   }
   if (!force && crmAnalyticsInFlight) return crmAnalyticsInFlight;
 
   const generation = ++crmAnalyticsGeneration;
-  const request = loadAdminCrmAnalyticsRpc({ force })
+  const request = loadAdminCrmAnalyticsRpc(client, { force })
     .then((value) => {
+      if (!context.isCurrent()) return null;
       if (generation === crmAnalyticsGeneration) crmAnalyticsCache = { value, cachedAt: Date.now() };
       return value;
     })
