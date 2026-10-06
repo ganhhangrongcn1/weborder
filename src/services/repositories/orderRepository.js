@@ -592,7 +592,7 @@ export const orderRepository = {
     const runtime = getRuntimeStrategy();
     const shouldWriteOrders = canWriteOrdersToSupabase();
     const isPosOrder = isPosOrderForSync(nextOrder);
-    if (!shouldWriteOrders && !isPosOrder) {
+    if (!shouldWriteOrders && (!isPosOrder || nextOrder.stampGiftProductId)) {
       const error = new Error("Chưa thể kết nối để xác nhận đơn hàng. Giỏ hàng vẫn được giữ nguyên.");
       error.code = "ORDER_REMOTE_UNAVAILABLE";
       throw error;
@@ -634,6 +634,7 @@ export const orderRepository = {
         });
       } catch (error) {
         // A rejected benefit is definitive; do not treat an older order as a successful retry.
+        if (nextOrder.stampGiftProductId && /^(P|22|23|42)/.test(String(error?.code || ""))) throw error;
         if (!isPosOrder && (error?.code === "P4001" || String(error?.message || "").includes("LOYALTY_COMBINED_BENEFIT_LIMIT"))) {
           throw error;
         }

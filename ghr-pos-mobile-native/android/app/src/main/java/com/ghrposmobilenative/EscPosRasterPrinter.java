@@ -243,6 +243,8 @@ final class EscPosRasterPrinter {
         for (String line : lines) {
             if ("@@QR".equals(line) && qrBitmap != null) {
                 height += qrBitmap.getHeight() + 14;
+            } else if (line.startsWith("@@STAMPS:")) {
+                height += 48;
             } else if (line.startsWith("@@BIG:")) {
                 height += BIG_LINE_HEIGHT;
             } else if (line.startsWith(BOLD_ROW_PREFIX) || line.startsWith(BOLD_CENTER_PREFIX)) {
@@ -259,6 +261,30 @@ final class EscPosRasterPrinter {
     }
 
     private static int drawReceiptLine(Canvas canvas, Paint paint, String line, int padding, int y, int width) {
+        if (line.startsWith("@@STAMPS:")) {
+            int count = 0;
+            try {
+                count = Math.max(0, Math.min(10, Integer.parseInt(line.substring(9).trim())));
+            } catch (NumberFormatException ignored) {
+                // An invalid balance must not prevent the rest of the bill from printing.
+            }
+            float cellWidth = (width - padding * 2) / 10f;
+            float radius = Math.min(17f, cellWidth / 3f);
+            paint.setColor(Color.BLACK);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(3f);
+            for (int index = 0; index < 10; index++) {
+                float x = padding + (index + 0.5f) * cellWidth;
+                float cy = y + 24;
+                canvas.drawCircle(x, cy, radius, paint);
+                if (index < count) {
+                    canvas.drawLine(x - 8, cy, x - 3, cy + 6, paint);
+                    canvas.drawLine(x - 3, cy + 6, x + 9, cy - 7, paint);
+                }
+            }
+            paint.setStyle(Paint.Style.FILL);
+            return y + 48;
+        }
         if (SPACE_MARKER.equals(line)) {
             return y + SPACE_LINE_HEIGHT;
         }
@@ -366,7 +392,8 @@ final class EscPosRasterPrinter {
                 continue;
             }
             if (
-                    line.startsWith("@@BIG:")
+                    line.startsWith("@@STAMPS:")
+                    || line.startsWith("@@BIG:")
                     || line.startsWith("@@CENTER:")
                     || line.startsWith(BOLD_CENTER_PREFIX)
                     || "@@QR".equals(line)

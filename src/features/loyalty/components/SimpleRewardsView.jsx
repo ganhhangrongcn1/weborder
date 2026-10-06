@@ -6,6 +6,7 @@ import { getLoyaltySimpleGuestRows, getLoyaltyText } from "../../../services/loy
 import { getPointEntryTitle } from "./PointHistoryList.jsx";
 
 export default function SimpleRewardsView({
+  stampCard = null,
   navigate,
   isRegisteredCustomer,
   currencyPerPoint,
@@ -28,6 +29,7 @@ export default function SimpleRewardsView({
             {loyaltyText.authCta}
           </button>
         </div>
+        {stampCard}
         <div className="space-y-4 px-4 pt-4">
           <AppEmptyState icon={null} message={loyaltyText.signedOutPointHistoryMessage} />
         </div>
@@ -43,6 +45,7 @@ export default function SimpleRewardsView({
         subtitle={loyaltyText.memberPointsSubtitle}
         ratioText={`${currencyPerPoint.toLocaleString("vi-VN")}đ = ${pointPerUnit} điểm`}
       />
+      {stampCard}
       <div className="space-y-4 px-4 pt-4">
         <PointsCard rows={getLoyaltySimpleGuestRows(currencyPerPoint, pointPerUnit)} />
         <AppSectionTitle title={loyaltyText.pointsHistoryTitle} />

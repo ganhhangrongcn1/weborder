@@ -1,17 +1,15 @@
 import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
-import { CustomerButton, CustomerCard } from "../../../components/customer/CustomerUI.jsx";
+import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
 import PointsCard from "../../../pages/customer/loyalty/PointsCard.jsx";
-import { getLoyaltyText } from "../../../services/loyaltyConfigService.js";
 import {
   getLoyaltyEarnPercent,
   getLoyaltyTierIconSymbol
 } from "../../../services/loyaltyProgramConfigService.js";
 
-export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
-  const loyaltyText = getLoyaltyText();
+export default function GuestLoyaltyView({ navigate, loyaltyRule, stampCard = null }) {
   const [showRules, setShowRules] = useState(false);
   const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
   const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 10));
@@ -62,7 +60,11 @@ export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
         isGuest
       />
 
+      {stampCard}
+
       <div className="loyalty-page__content">
+        <details className="loyalty-guest-overview">
+          <summary>Quyền lợi thành viên</summary>
         <CustomerCard className="loyalty-guest-benefits" padding="md">
           <div className="loyalty-section-head">
             <div className="loyalty-section-head__title">
@@ -114,6 +116,8 @@ export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
           </CustomerCard>
         ) : null}
 
+        </details>
+
         <CustomerCard className="loyalty-action-list" padding="none">
           <button type="button" className="loyalty-action-row" onClick={() => setShowRules(true)}>
             <span className="loyalty-action-row__icon is-green"><Icon name="star" size={17} /></span>
@@ -133,9 +137,6 @@ export default function GuestLoyaltyView({ navigate, loyaltyRule }) {
           </div>
         </CustomerCard>
 
-        <CustomerButton full variant="secondary" onClick={openAccount}>
-          {loyaltyText.authCta}
-        </CustomerButton>
       </div>
 
       {showRules ? (

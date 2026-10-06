@@ -201,19 +201,6 @@ function formatOrderTiming(order = {}) {
   return isKitchenOrderDone(order) ? formatDoneTime(order) : formatWaitingMinutes(order);
 }
 
-function formatClaimedGiftTime(value = "") {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toLocaleString("vi-VN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "2-digit"
-  });
-}
-
 function getStatusTone(status = "") {
   if (["done", "ready"].includes(status)) {
     return { background: "#f1f5f9", border: "#cbd5e1", color: "#334155" };

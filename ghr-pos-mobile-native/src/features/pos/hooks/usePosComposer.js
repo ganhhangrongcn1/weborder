@@ -83,6 +83,7 @@ import {
 } from "../../../shared/pos/posCart";
 import { buildPosLoyaltyBenefit, buildVoucherSelectionKey } from "../../../shared/pos/posLoyalty";
 import { calculateCashChange, getCashPaymentSummary, normalizeCashReceived } from "../../../shared/pos/posPayment";
+import { makePosStampGift, withPosStampSummary } from "../../../services/pos/posStampService";
 import { applyPosPricePromotionToProduct, buildPosPromotionHints, syncAutoGiftItems } from "../../../shared/pos/posPromotions";
 
 const POS_PAYMENT_POLL_FALLBACK_MS = 5000;
@@ -313,6 +314,7 @@ export default function usePosComposer() {
   };
 
   const printCounterOrderBills = async (billData = {}) => {
+    billData = { ...billData, order: await withPosStampSummary(billData.order, billData.customerPhone) };
     const failures = [];
     try {
       await printLocalReceipt({
@@ -351,7 +353,7 @@ export default function usePosComposer() {
       };
     }
 
-    const printableOrder = result.printableOrder;
+    const printableOrder = await withPosStampSummary(result.printableOrder);
     const receiptText = buildPosCustomerBillText({
       order: printableOrder,
       cart: printableOrder.cart,
@@ -1306,6 +1308,7 @@ export default function usePosComposer() {
       current
         .map((item) => {
           if (item.cartId !== cartId) return item;
+          if (item.stampGift) return delta < 0 ? null : item;
           const nextQuantity = Number(item.quantity || 1) + delta;
           return nextQuantity <= 0 ? null : updatePosCartItemQuantity(item, nextQuantity);
         })
@@ -1315,7 +1318,7 @@ export default function usePosComposer() {
   };
 
   const updateCartItem = async (cartId, product, config = {}) => {
-    if (!cartId) return;
+    if (!cartId || cart.some((item) => item.cartId === cartId && item.stampGift)) return;
     if (qrSession?.id) {
       const cancelled = await cancelPendingQrForBillChange("POS mobile sửa món làm thay đổi bill trước khi thanh toán");
       if (!cancelled) return;
@@ -2158,7 +2161,7 @@ export default function usePosComposer() {
         return;
       }
 
-      const printableOrder = result.printableOrder;
+      const printableOrder = await withPosStampSummary(result.printableOrder);
       const receiptText = buildPosCustomerBillText({
         order: printableOrder,
         cart: printableOrder.cart,
@@ -2531,7 +2534,17 @@ export default function usePosComposer() {
     }
   };
 
+  const addStampGift = async (product) => {
+    if (!product || busy || paymentConfirmed || !/^0[35789]\d{8}$/.test(normalizeCustomerPhone(customerPhone))) return false;
+    if (qrSession?.id && !await cancelPendingQrForBillChange("Đổi món quà tích tem")) return false;
+    setCart((items) => [...items.filter((item) => !item.stampGift), makePosStampGift(product, customerPhone)]);
+    setPaymentConfirmed(null);
+    setShiftMessage("Đã thêm món quà 0đ. Tem được kiểm tra lại khi xác nhận đơn.");
+    return true;
+  };
+
   return {
+    addStampGift,
     email,
     setEmail,
     password,

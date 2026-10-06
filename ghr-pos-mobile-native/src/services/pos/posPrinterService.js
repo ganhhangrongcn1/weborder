@@ -1,3 +1,4 @@
+import { placeStampsAfterLoyaltyQr } from "./posStampReceipt";
 import { NativeModules, Platform } from "react-native";
 
 import { getCashBreakdownEntries } from "./posCashBreakdownService";
@@ -197,11 +198,12 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
   const safeSourceType = toText(sourceType).toLowerCase();
   const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN");
   const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType) && !isPreparationTicket;
+  const positioned = placeStampsAfterLoyaltyQr(text, toText(footerText) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_TEXT : ""));
   return printerModule.printReceipt({
-    text,
+    text: positioned.text,
     qrUrl,
     sourceType: safeSourceType || sourceType,
-    footerText: toText(footerText) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_TEXT : ""),
+    footerText: positioned.footerText,
     footerQrUrl: toText(footerQrUrl) || (shouldUseDefaultFooter ? buildReceiptFooterQrUrl(customerPhone) : "")
   });
 }
@@ -280,6 +282,16 @@ export function buildPosCustomerBillText({
   lines.push("@@CENTER:*** KHÔNG THU THÊM TIỀN ***");
   lines.push("@@RULE");
   lines.push(buildReceiptRow("Thanh toán", `${paymentLabel} - Đã thanh toán`));
+  if (order.stampSummary?.enabled) {
+    lines.push("@@RULE", "@@CENTER:TÍCH TEM NHẬN QUÀ", `@@STAMPS:${order.stampSummary.available}`);
+    lines.push(`Bạn có ${order.stampSummary.available}/10 tem khả dụng`);
+    if (order.stampSummary.held > 0) lines.push(`${order.stampSummary.held} tem đang giữ cho đơn đổi quà`);
+    lines.push(order.stampSummary.available >= 10 ? "Đủ tem: chọn 1 món quà tại quán!" : `Còn ${10 - order.stampSummary.available} tem để nhận quà`);
+    if (order.stampSummary.earnedToday) lines.push("Hôm nay đã nhận tem.");
+    lines.push("Mỗi ngày tối đa 1 tem / số điện thoại", "@@STAMPEND");
+  } else if (customerPhone && !order.stampSummary) {
+    lines.push("Tem: chưa cập nhật được, vui lòng xem trên website.");
+  }
 
   if (paymentConfirmed?.method === "cash") {
     lines.push(buildReceiptRow("Khách đưa", formatMoney(paymentConfirmed.received || 0)));

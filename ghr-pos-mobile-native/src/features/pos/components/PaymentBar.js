@@ -76,13 +76,13 @@ export default function PaymentBar({
         >
           <View style={styles.buttonRow}>
             <PosIcon name="cash" size={16} color={disabled ? POS_COLORS.muted : POS_COLORS.slate} />
-            <Text style={[styles.secondaryText, disabled && styles.disabledText]}>Tiền mặt</Text>
+            <Text style={[styles.secondaryText, disabled && styles.disabledText]}>{total === 0 ? "Xác nhận tại quầy" : "Tiền mặt"}</Text>
           </View>
         </Pressable>
         <Pressable
           style={[styles.secondary, qrLoading && styles.qrLoadingButton, disabled && styles.disabledButton]}
           onPress={onOpenQrPayment}
-          disabled={disabled || qrLoading}
+          disabled={disabled || qrLoading || total <= 0}
         >
           <View style={styles.buttonRow}>
             {qrLoading ? (

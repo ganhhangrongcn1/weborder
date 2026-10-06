@@ -32,7 +32,7 @@ function ActionRow({ icon, title, description, onClick, tone = "orange" }) {
       </span>
       <span className="loyalty-action-row__copy">
         <strong>{title}</strong>
-        <small>{description}</small>
+        {description && <small>{description}</small>}
       </span>
       <Icon name="back" size={16} className="loyalty-action-row__arrow" />
     </button>
@@ -40,6 +40,7 @@ function ActionRow({ icon, title, description, onClick, tone = "orange" }) {
 }
 
 export default function MemberLoyaltyView({
+  stampCard = null,
   navigate,
   currentPhone,
   loyaltyRule,
@@ -66,16 +67,6 @@ export default function MemberLoyaltyView({
   orders
 }) {
   const currentTier = tierJourney?.currentTier || {};
-  const currencyPerPoint = Math.max(
-    1,
-    Number(currentTier.currencyPerPoint || loyaltyRule?.currencyPerPoint || 100)
-  );
-  const pointPerUnit = Math.max(
-    1,
-    Number(currentTier.pointPerUnit || loyaltyRule?.pointPerUnit || 10)
-  );
-  const exampleSpend = 100000;
-  const examplePoints = Math.round((exampleSpend / currencyPerPoint) * pointPerUnit);
   const safePointHistory =
     Array.isArray(loyalty?.pointHistory) && loyalty.pointHistory.length
       ? loyalty.pointHistory
@@ -152,7 +143,7 @@ export default function MemberLoyaltyView({
         title="Cấp hiện tại"
         pointsValue={loyalty.totalPoints.toLocaleString("vi-VN")}
         subtitle="điểm"
-        ratioText={`${exampleSpend.toLocaleString("vi-VN")}đ = ${examplePoints.toLocaleString("vi-VN")} điểm`}
+
         tierName={currentTier.name || "Khách Mới"}
         tierIconKey={currentTier.iconKey}
         tierMessage={tierMessages[currentTier.id] || "Ăn ngon, tích điểm vui cùng Gánh"}
@@ -165,6 +156,8 @@ export default function MemberLoyaltyView({
         metaSummaryText={`Tích ${Number(currentTier.earnPercent || 10).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}% · Hạn ${formatCustomerDate(tierJourney?.pointsExpiresAt)}`}
         onOpenTierDetails={() => setActiveSheet("tiers")}
       />
+
+      {stampCard}
 
       <div className="loyalty-page__content">
         {displayVouchers.length > 0 ? (
@@ -219,14 +212,14 @@ export default function MemberLoyaltyView({
           <ActionRow
             icon="clock"
             title={`Nhật ký điểm của bạn${safePointHistory.length ? ` (${safePointHistory.length})` : ""}`}
-            description="Xem điểm đến từ đâu và đã dùng khi nào"
+
             onClick={() => setActiveSheet("history")}
           />
           <ActionRow
             icon="star"
             tone="green"
             title="Điểm dùng thế nào?"
-            description="Cách đổi điểm, giới hạn và thời hạn"
+
             onClick={() => setActiveSheet("rules")}
           />
         </CustomerCard>

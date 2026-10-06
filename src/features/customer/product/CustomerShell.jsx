@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "../../../styles/customer.css";
 import BottomNav from "../../../components/BottomNav.jsx";
 import StoreStatusModal from "../../../components/customer/StoreStatusModal.jsx";
@@ -325,7 +325,7 @@ export default function CustomerShell({
               {page === "home" && (
                 isQrCounterFlow
                   ? <QrMiniHomePage {...pageProps} isRegisteredCustomer={isRegisteredCustomer} />
-                  : <HomePage render={pageProps.Home} {...pageProps} coupons={pageProps.homeCoupons || pageProps.coupons} smartPromotions={pageProps.homeSmartPromotions || pageProps.smartPromotions} openProduct={openOptionModalFromHome} openOptionModal={openOptionModalFromHome} />
+                  : <HomePage render={pageProps.Home} {...pageProps} hasCustomerAuthSession={hasCustomerAuthSession} currentPhone={currentPhone} coupons={pageProps.homeCoupons || pageProps.coupons} smartPromotions={pageProps.homeSmartPromotions || pageProps.smartPromotions} openProduct={openOptionModalFromHome} openOptionModal={openOptionModalFromHome} />
               )}
               {page === "qr-entry" && <QrOrderEntryPage branches={pageProps.branches} checkoutPreset={pageProps.checkoutPreset} setCheckoutPreset={pageProps.setCheckoutPreset} navigate={pageProps.navigate} isBranchOpenNow={pageProps.isBranchOpenNow} buildOutOfHoursNotice={pageProps.buildOutOfHoursNotice} setServiceNotice={pageProps.setServiceNotice} />}
               {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
@@ -333,7 +333,7 @@ export default function CustomerShell({
               {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
               {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} setCurrentOrder={setCurrentOrder} onReorder={reorderOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} isOrderRestoring={isSessionRestoring || isSessionBootstrapping || isMomoReturnRecovering} />}
               {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} setCurrentOrder={setCurrentOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} onOrderSheetVisibilityChange={setIsTrackingOrderSheetOpen} />}
-              {page === "loyalty" && <LoyaltyPage render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} demoOrders={profileOrders} checkoutCoupons={pageProps.checkoutCoupons || pageProps.coupons} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
+              {page === "loyalty" && <LoyaltyPage setCart={pageProps.setCart} setCheckoutPreset={pageProps.setCheckoutPreset} render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} demoOrders={profileOrders} checkoutCoupons={pageProps.checkoutCoupons || pageProps.coupons} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
               {page === "reviewRewards" && <ReviewRewardsPage navigate={pageProps.navigate} branches={pageProps.branches || branches} />}
               {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}
             </div>

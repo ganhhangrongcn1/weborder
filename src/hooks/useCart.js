@@ -172,7 +172,7 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
   }
 
   function repriceCartItem(item = {}) {
-    if (item.autoGiftByPromo) return item;
+    if (item.autoGiftByPromo || item.stampGift) return item;
     const product = resolvePurchasableProduct(item);
     const quantityValue = Math.max(1, Number(item.quantity || 1));
     const toppingTotal = getToppingTotal(item.toppings);

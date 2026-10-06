@@ -121,7 +121,7 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
               ) : null}
               <div className="min-w-0 flex-1">
                 <h3>{item.name}</h3>
-                <span className="checkout-spice-pill">{item.autoGiftByPromo ? "Quà tặng" : item.spice}</span>
+                <span className="checkout-spice-pill">{(item.autoGiftByPromo || item.stampGift) ? "Quà tặng" : item.spice}</span>
                 {toppingRows.length > 0 && (
                   <div className="checkout-topping-list">
                     {toppingRows.map((topping) => (
@@ -130,7 +130,7 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
                   </div>
                 )}
                 {item.note && <div className="checkout-note-pill">Ghi chú: {item.note}</div>}
-                {isEditableItem?.(item) ? (
+                {!item.stampGift && isEditableItem?.(item) ? (
                   <button
                     type="button"
                     className="checkout-edit-item"
@@ -140,8 +140,8 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
                   </button>
                 ) : null}
                 <div className="mt-2 flex items-center justify-between gap-2">
-                  {item.autoGiftByPromo ? (
-                    <div className="text-xs text-brown/60">Tự động thêm khi đủ mốc</div>
+                  {(item.autoGiftByPromo || item.stampGift) ? (
+                    <div className="text-xs text-brown/60">{item.stampGift ? "Quà đổi 10 tem" : "Tự động thêm khi đủ mốc"}</div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <button

@@ -2,11 +2,15 @@ import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
+import PosStampPanel from "./PosStampPanel";
 import CustomerLookupPanel from "./CustomerLookupPanel";
 import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
 
 export default function PosCustomerModal({
   visible,
+  products = [],
+  onChooseStampGift,
+  stampDisabled = false,
   customerName,
   setCustomerName,
   customerPhone,
@@ -53,6 +57,7 @@ export default function PosCustomerModal({
               setPointsInput={setPointsInput}
               onClear={onClear}
             />
+            <PosStampPanel phone={customerPhone} products={products} onChoose={onChooseStampGift} disabled={stampDisabled} />
           </ScrollView>
 
           <Pressable style={styles.doneButton} onPress={onClose}>

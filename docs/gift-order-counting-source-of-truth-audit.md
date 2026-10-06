@@ -1,5 +1,11 @@
 # Gift / Quà Tháng / Đơn Thứ 3 Audit
 
+> **Trạng thái ngày 05/10/2026: chương trình quà 3 đơn đối tác/tháng đã ngừng sử dụng.**
+> Nội dung bên dưới là bản kiểm tra lịch sử, không phải yêu cầu bật lại chương trình.
+> Luồng nhận quà ở Kitchen, dịch vụ `kitchenCustomerRewardService.js` và nội dung quà tháng trên hóa đơn đã được gỡ ở commit `c8056aa`.
+> Giữ dữ liệu quà cũ để đối soát. RPC `get_monthly_customer_gift_stats_by_phones` hiện vẫn được CRM dùng để lấy thống kê giao dịch; không xóa RPC chỉ vì tên có chữ `gift`.
+> Việc ngừng chương trình này không thay đổi tích điểm theo hạng, sử dụng điểm hoặc các ưu đãi khác. Chương trình tích tem mới được thiết kế riêng và chưa được triển khai trong lần dọn này.
+
 Mục tiêu:
 - Chốt đúng source of truth cho:
   - tổng đơn khách

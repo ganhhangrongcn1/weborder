@@ -1,3 +1,4 @@
+import StampCard from "./components/StampCard.jsx";
 import useLoyaltyViewModel from "./hooks/useLoyaltyViewModel.js";
 import SimpleRewardsView from "./components/SimpleRewardsView.jsx";
 import GuestLoyaltyView from "./components/GuestLoyaltyView.jsx";
@@ -35,7 +36,9 @@ export default function Loyalty(props) {
 
   if (vm.simpleRewardsMode) {
     return (
+      <>
       <SimpleRewardsView
+        stampCard={<StampCard phone={hasCustomerAuthSession ? currentPhone : ""} navigate={navigate} detailed setCart={props.setCart} setCheckoutPreset={props.setCheckoutPreset} />}
         navigate={navigate}
         isRegisteredCustomer={isRegisteredCustomer}
         currencyPerPoint={vm.currencyPerPoint}
@@ -43,20 +46,26 @@ export default function Loyalty(props) {
         demoLoyalty={demoLoyalty}
         userProfile={userProfile}
       />
+      </>
     );
   }
 
   if (!canUseMemberLoyalty) {
     return (
+      <>
       <GuestLoyaltyView
+        stampCard={<StampCard navigate={navigate} detailed />}
         navigate={navigate}
         loyaltyRule={vm.loyaltyRule}
       />
+      </>
     );
   }
 
   return (
+    <>
     <MemberLoyaltyView
+      stampCard={<StampCard phone={hasCustomerAuthSession ? currentPhone : ""} navigate={navigate} detailed setCart={props.setCart} setCheckoutPreset={props.setCheckoutPreset} />}
       navigate={navigate}
       loyaltyRule={vm.loyaltyRule}
       loyalty={vm.loyalty}
@@ -86,5 +95,6 @@ export default function Loyalty(props) {
       coupons={checkoutCoupons}
       orders={demoOrders}
     />
+    </>
   );
 }

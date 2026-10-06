@@ -1,3 +1,5 @@
+import { buildStampReceiptSection } from "./posStampReceipt";
+import { withPosStampSummary } from "./posStampService";
 import { AppState } from "react-native";
 
 import { supabase } from "../supabase/client";
@@ -587,6 +589,14 @@ async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {
   try {
     const hydratedJob = await hydratePartnerPrintJob(claimed);
     const printPayload = buildPrintPayload(hydratedJob);
+    for (const receipt of [printPayload, printPayload.secondaryReceipt].filter(Boolean)) {
+      if (receipt.sourceType === ITEM_LABEL_JOB_TYPE || NO_FOOTER_SOURCE_TYPES.has(receipt.sourceType)
+        || receipt.text.includes("PHIẾU LÀM MÓN") || receipt.text.includes("TÍCH TEM NHẬN QUÀ")) continue;
+      const receiptOrder = getObject(hydratedJob.payload?.order);
+      const stampOrder = await withPosStampSummary({}, receipt.customerPhone || receiptOrder.customerPhone || receiptOrder.customer_phone, { force: true });
+      const stampText = buildStampReceiptSection(stampOrder.stampSummary);
+      if (stampText) receipt.text += `\n${stampText}`;
+    }
     if (!printPayload.text) throw new Error("Nội dung bill đang trống.");
     if (typeof onStatus === "function") {
       onStatus({ running: true, tone: "printing", message: `Đang in ${claimed.order_code || "bill"}...` });

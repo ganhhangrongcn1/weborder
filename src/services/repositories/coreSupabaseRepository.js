@@ -1438,7 +1438,7 @@ async function writeOrdersByPhoneToTable(ordersByPhone = {}) {
 
 async function upsertOrderToTable(order = {}, options = {}) {
   const unavailable = () => {
-    if (options.requireRemote) {
+    if (options.requireRemote || order.stampGiftProductId) {
       const error = new Error("Chưa thể ghi đơn lên hệ thống. Giỏ hàng vẫn được giữ nguyên.");
       error.code = "ORDER_REMOTE_UNAVAILABLE";
       throw error;
@@ -1452,6 +1452,13 @@ async function upsertOrderToTable(order = {}, options = {}) {
   const mapped = toOrderRows(normalizedOrder);
   if (!mapped) return unavailable();
   const { orderRow } = mapped;
+  if (order.stampGiftProductId) {
+    const customerClient = await getCustomerActionSupabaseClientAsync();
+    if (!customerClient) return unavailable();
+    const { error } = await customerClient.rpc("checkout_stamp_order", { p_order: orderRow, p_items: mapped.itemRows });
+    if (error) throw error;
+    return order;
+  }
 
   await upsertOrderRowWithSchemaFallback(client, orderRow, options?.signal || null);
 

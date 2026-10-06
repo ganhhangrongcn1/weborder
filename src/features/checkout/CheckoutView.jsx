@@ -126,6 +126,7 @@ export default function Checkout({
     Boolean(checkoutPreset?.qrAutoPickupNow);
   const qrLockedPickupBranchId = String(checkoutPreset?.selectedBranch || "").trim();
 
+  const hasStampGift = cart.some((item) => item.stampGift);
   const [fulfillmentType, setFulfillmentType] = useState(checkoutPreset?.fulfillmentType || "delivery");
   const [selectedBranch, setSelectedBranch] = useState(checkoutPreset?.selectedBranch || "");
   const [isChangingBranch, setIsChangingBranch] = useState(false);
@@ -337,9 +338,12 @@ export default function Checkout({
   );
 
   const selectedBranchInfo = pickupBranches.find((branch) => branch.id === selectedBranch) || pickupBranches[0] || null;
-  const webMomoEnabled = selectedBranchInfo?.paymentSettings?.webMomoEnabled !== false;
-  const webBankQrEnabled = selectedBranchInfo?.paymentSettings?.webBankQrEnabled === true;
-  const webCounterPaymentEnabled = selectedBranchInfo?.paymentSettings?.webCounterPaymentEnabled !== false;
+  const webMomoEnabled = checkoutTotal > 0 && selectedBranchInfo?.paymentSettings?.webMomoEnabled !== false;
+  const webBankQrEnabled = checkoutTotal > 0 && selectedBranchInfo?.paymentSettings?.webBankQrEnabled === true;
+  const webCounterPaymentEnabled = checkoutTotal === 0 || selectedBranchInfo?.paymentSettings?.webCounterPaymentEnabled !== false;
+  useEffect(() => {
+    if (hasStampGift && fulfillmentType !== "pickup") setFulfillmentType("pickup");
+  }, [hasStampGift, fulfillmentType]);
 
   useEffect(() => {
     if (!(isQrCounterOrder || fulfillmentType === "pickup")) return;
@@ -666,7 +670,7 @@ export default function Checkout({
         <CheckoutFulfillmentSection
           fulfillmentType={fulfillmentType}
           setFulfillmentType={setFulfillmentType}
-          forcePickupOnly={isQrCounterOrder}
+          forcePickupOnly={isQrCounterOrder || hasStampGift}
           isQrCounterOrder={isQrCounterOrder}
           deliveryAvailable={deliveryAvailable}
           onUnavailableDelivery={() => setIsDeliveryAppOrderingOpen(true)}

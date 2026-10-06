@@ -484,6 +484,10 @@ export async function createOrderAsync(params) {
   } = params;
 
   if (!Array.isArray(cart) || !cart.length) return null;
+  const stampGifts = cart.filter((item) => item.stampGift);
+  if (stampGifts.length && (stampGifts.length !== 1 || fulfillmentType !== "pickup" || stampGifts[0].stampPhone !== getCustomerKey(deliveryInfo?.phone || userProfile.phone))) {
+    throw new Error("Quà đổi tem cần đúng số điện thoại và nhận tại quán.");
+  }
   const checkoutAttempt = getOrCreateCheckoutOrderAttempt({
     cart,
     totalAmount,
@@ -547,6 +551,7 @@ export async function createOrderAsync(params) {
     customerPhoneKey: getCustomerKey(deliveryInfo?.phone || userProfile.phone),
     rawCustomerPhone: deliveryInfo?.phone || userProfile.phone || "",
     items: cart,
+    ...(stampGifts.length ? { stampGiftProductId: stampGifts[0].id } : {}),
     subtotal: subtotalAmount,
     pointsBaseAmount: pointsAmount,
     shippingFee,

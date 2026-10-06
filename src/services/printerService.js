@@ -1,3 +1,5 @@
+import buildStampReceiptSvg from "./stampReceiptService.js";
+import { readStampSummary } from "./stampProgramService.js";
 const PRINTER_MODE = {
   webPrint: "webPrint",
   bridge: "bridge"
@@ -203,6 +205,7 @@ function normalizeReceiptOrder(order = {}, config = {}) {
     branchPhone: toText(order.branchPhone || order.branch_phone || metadata.branchPhone || raw.branch_phone),
     customerName: toText(order.customerName || order.customer_name || "Khách"),
     customerPhone: toText(order.customerPhone || order.customer_phone),
+    stampSummary: order.stampSummary,
     customerAddress: toText(order.customerAddress || order.address || metadata.address || rawMetadata.address),
     fulfillmentType: toText(order.fulfillmentType || order.fulfillment_type || metadata.fulfillmentType),
     paymentMethod: toText(order.paymentMethod || order.payment_method || metadata.paymentMethod),
@@ -378,6 +381,16 @@ function buildReceiptText(order = {}, options = {}) {
   if (usePartnerLoyaltyPrompt) {
     lines.push("@@RULE");
     lines.push("@@CENTER:Cảm ơn quý khách!");
+  }
+
+  if (!isPreparationTicket && receipt.stampSummary?.enabled) {
+    const stampLines = [];
+    stampLines.push("@@RULE", "@@CENTER:TÍCH TEM NHẬN QUÀ", `@@STAMPS:${receipt.stampSummary.available}`);
+    stampLines.push(`Tem khả dụng hiện tại: ${receipt.stampSummary.available}/10`);
+    if (receipt.stampSummary.held) stampLines.push(`${receipt.stampSummary.held} tem đang giữ cho đơn đổi quà`);
+    stampLines.push("Mỗi ngày tối đa 1 tem / số điện thoại.");
+    const qrIndex = lines.lastIndexOf("@@QR");
+    lines.splice(qrIndex < 0 ? lines.length : qrIndex + 2, 0, ...stampLines);
   }
 
   return lines.join("\n");
@@ -573,6 +586,7 @@ function buildReceiptHtml(order = {}, options = {}) {
         <div class="center"><strong>ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY</strong></div>
         <img class="qr" src="${qrImageUrl(config.loyaltyUrl)}" alt="QR tích điểm" />
         <div class="center">Quét QR để tích 10 - 15% giá trị đơn</div>
+      ${!isPreparationTicket && receipt.stampSummary?.enabled ? `<div class="line"></div><div class="center"><strong>TÍCH TEM NHẬN QUÀ</strong></div>${buildStampReceiptSvg(receipt.stampSummary.available)}<div>Tem khả dụng hiện tại: ${escapeHtml(receipt.stampSummary.available)}/10</div><div>Mỗi ngày tối đa 1 tem / số điện thoại.</div>` : ""}
         <div class="center"><strong>ganhhangrong.vn</strong></div>
         <div class="center">Hotline: ${SUPPORT_HOTLINE}</div>
         <div class="thanks">Cảm ơn quý khách!</div>
@@ -905,8 +919,8 @@ async function printViaBridge(order = {}, options = {}) {
   }
 }
 
-function printViaBrowser(order = {}, options = {}) {
-  const printWindow = window.open("", "_blank", "width=420,height=720");
+function printViaBrowser(order = {}, options = {}, preparedWindow) {
+  const printWindow = preparedWindow === undefined ? window.open("", "_blank", "width=420,height=720") : preparedWindow;
   if (!printWindow) {
     return {
       ok: false,
@@ -969,17 +983,25 @@ export async function testPrinterConnection(options = {}) {
 
 export async function printCustomerBill(order = {}, options = {}) {
   const androidBridge = getAndroidPrinterBridge();
+  const config = getPrinterConfig(options);
+  // Preserve the click gesture: opening after the optional request can be blocked by mobile browsers.
+  const printWindow = !androidBridge && config.mode !== PRINTER_MODE.bridge
+    ? window.open("", "_blank", "width=420,height=720") : undefined;
+  if (printWindow === null) return { ok: false, message: "Trình duyệt đang chặn popup in bill." };
+  const phone = order.customerPhone || order.customer_phone;
+  if (phone && !order.stampSummary) {
+    try { order = { ...order, stampSummary: await readStampSummary(phone, { kitchen: true, force: true }) }; }
+    catch { /* Printing remains available when the optional stamp lookup fails. */ }
+  }
   if (androidBridge) {
     return printViaAndroidBridge(order, options);
   }
-
-  const config = getPrinterConfig(options);
 
   if (config.mode === PRINTER_MODE.bridge) {
     return printViaBridge(order, options);
   }
 
-  return printViaBrowser(order, options);
+  return printViaBrowser(order, options, printWindow);
 }
 
 export async function printItemLabelPayload(payload = {}, options = {}) {

@@ -1,0 +1,39 @@
+.stamp-card { margin:16px 0; padding:18px; background:#fff; border:1px solid #f2e5d5; border-radius:22px; font-family:system-ui,Arial,sans-serif; color:#392517; }
+.stamp-card--rewards { margin:16px; }
+.stamp-card header,.stamp-card__footer { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.stamp-card h2 { display:flex; align-items:center; gap:8px; font-size:17px; margin:0; font-weight:800; }
+.stamp-card h2 svg { color:#d87500; }
+.stamp-card__count { font-size:12px; color:#8b633d; white-space:nowrap; }
+.stamp-card__grid { display:grid; grid-template-columns:repeat(10,minmax(0,1fr)); gap:5px; margin:20px 0 14px; }
+.stamp-card__grid>span { aspect-ratio:1; min-width:0; display:grid; place-items:center; border:1.5px dashed #ded8d0; border-radius:50%; color:#bd790b; font-weight:700; }
+.stamp-card__grid>span:last-child { border-color:#dfa321; background:#fffbeb; }
+.stamp-card__grid>span.is-earned { border-style:solid; border-color:#f58a09; background:#fff0d8; color:#a84e00; }
+.stamp-card__footer { font-size:12px; color:#74685b; }
+.stamp-card__footer button { flex-shrink:0; display:flex; align-items:center; gap:6px; min-height:44px; padding:6px 0 6px 8px; border:0; background:transparent; color:#ad5000; font:inherit; font-weight:750; cursor:pointer; }
+.stamp-card__footer button span { font-size:23px; }
+.stamp-card p,.stamp-rewards-sheet p,.stamp-rewards-sheet summary { font-size:13px; line-height:1.6; color:#74685b; }
+.stamp-rewards-sheet__content { padding:0 20px 24px; }
+.stamp-rewards-sheet__summary { text-align:center; background:#fff4e2; border-radius:16px; padding:14px 16px; color:#995000; }
+.stamp-rewards-sheet__summary h3 { font-size:21px; margin:12px 0 6px; color:#392517; }
+.stamp-rewards-sheet__summary p { margin:0 0 12px; }
+.stamp-rewards-sheet h3 { margin-top:20px; }
+.stamp-card__gifts { display:grid; gap:10px; }
+.stamp-card__gifts button { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:12px; background:#fffaf2; border:1px solid #f3debe; border-radius:14px; color:#392517; font:inherit; cursor:pointer; }
+.stamp-card__gifts button:disabled { cursor:default; color:#74685b; background:#faf9f6; border-color:#eae5de; }
+.stamp-card__gifts img { width:64px; height:64px; object-fit:cover; border-radius:10px; }
+.stamp-card__gifts small { display:block; color:#a2590c; font-size:12px; margin-top:6px; }
+.stamp-rewards-sheet details { margin-top:22px; }
+.stamp-rewards-sheet summary { cursor:pointer; }
+.stamp-rewards-sheet__login,.stamp-rewards-sheet__content>button { padding:12px 16px; border:0; border-radius:12px; background:#fff0da; color:#a54b00; font-weight:700; }
+.stamp-card__timeline { list-style:none; padding:0 0 0 13px; border-left:2px solid #f4d6ac; margin-left:5px; }
+.stamp-card__timeline li { position:relative; padding:0 0 18px 7px; font-size:13px; }
+.stamp-card__timeline li::before { content:""; position:absolute; left:-19px; top:5px; width:9px; height:9px; background:#f58a09; border-radius:50%; }
+.stamp-card__timeline small { display:block; color:#867566; margin-top:4px; }
+.stamp-disclosure { border-top:1px solid #eee5da; padding-top:8px; }
+.stamp-disclosure summary { min-height:44px; padding:12px 0; font-weight:650; color:#68472d; }
+.stamp-rules { padding-left:19px; margin:4px 0 12px; font-size:13px; line-height:1.65; color:#74685b; }
+.stamp-rules li + li { margin-top:7px; }
+.loyalty-guest-overview { border:1px solid #f2e5d5; border-radius:16px; background:#fff; padding:0 16px; }
+.loyalty-guest-overview > summary { padding:16px 0; cursor:pointer; font-weight:700; color:#392517; }
+.loyalty-guest-overview > .loyalty-guest-journey { margin-top:12px; }
+@media(max-width:360px) { .stamp-card { padding:14px; } .stamp-card--rewards { margin:14px 12px; } .stamp-card__grid { gap:4px; } .stamp-card__footer { gap:4px; font-size:11px; } }

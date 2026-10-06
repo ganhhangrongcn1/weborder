@@ -163,6 +163,7 @@ export default function PosHomeScreen() {
     printStationStatus,
     offlineOrderCount,
     offlineSyncBusy,
+    addStampGift,
     addProduct,
     updateCartItem,
     changeQuantity,
@@ -1336,6 +1337,9 @@ export default function PosHomeScreen() {
         renderTrigger={false}
       />
       <PosCustomerModal
+        products={allProducts}
+        stampDisabled={busy || Boolean(paymentConfirmed)}
+        onChooseStampGift={async (product) => { if (await addStampGift(product)) setCustomerModalOpen(false); }}
         visible={customerModalOpen}
         customerName={customerName}
         setCustomerName={setCustomerName}

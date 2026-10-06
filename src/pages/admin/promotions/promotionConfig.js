@@ -1,4 +1,5 @@
 export const promoTabs = [
+  { id: "stamps", label: "Tích tem", description: "Chọn 3 món quà đổi 10 tem" },
   {
     id: "coupon",
     label: "Voucher",

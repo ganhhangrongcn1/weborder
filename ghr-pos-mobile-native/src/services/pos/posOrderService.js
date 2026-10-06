@@ -1,3 +1,4 @@
+import { invalidatePosStamps, readPosStamps } from "./posStampService";
 import { createPosOrderIdentity } from "../../shared/pos/posOrderIdentity";
 import { supabase } from "../supabase/client";
 import { ensurePosGuestProfile } from "./posCustomerService";
@@ -32,7 +33,7 @@ function normalizeCartForOrder(cart = []) {
         note: toText(item.note),
         toppings: Array.isArray(item.toppings) ? item.toppings : [],
         selectedOptions: Array.isArray(item.selectedOptions) ? item.selectedOptions : [],
-        metadata: item.metadata && typeof item.metadata === "object" ? item.metadata : {}
+        metadata: { ...(item.metadata && typeof item.metadata === "object" ? item.metadata : {}), ...(item.stampGift ? { stampGift: true, stampPhone: item.stampPhone } : {}) }
       };
     })
     .filter((item) => item.id && item.name);
@@ -215,6 +216,10 @@ export async function createPosTakeawayOrderMobile({
   const items = normalizeCartForOrder(cart);
   if (!items.length) return { ok: false, message: "Chưa có món trong bill." };
 
+  const stampGifts = items.filter((item) => item.metadata.stampGift);
+  if (stampGifts.length && (stampGifts.length !== 1 || stampGifts[0].metadata.stampPhone !== customerPhone || stampGifts[0].quantity !== 1)) {
+    return { ok: false, message: "Món đổi tem cần đúng khách và số lượng 1." };
+  }
   const pager = toText(pagerNumber);
   if (!pager) return { ok: false, message: "Vui lòng nhập thẻ rung." };
 
@@ -276,6 +281,7 @@ export async function createPosTakeawayOrderMobile({
   });
 
   const queueOfflineOrder = async (reason = "") => {
+    if (stampGifts.length) return { ok: false, message: "Đổi tem cần kết nối máy chủ. Giữ bill và kiểm tra kết nối trước khi giao quà." };
     if (!skipOfflineQueue) {
       await queuePosOfflineOrder(offlinePayload, reason);
     }
@@ -324,6 +330,7 @@ export async function createPosTakeawayOrderMobile({
     let profileWarning = "";
     let customerProfileReady = !displayCustomerPhone;
     const metadata = {
+      ...(stampGifts.length ? { stampGiftProductId: stampGifts[0].id } : {}),
       source: "pos_mobile",
       channel: "pos_mobile",
       orderSource: "pos_mobile",
@@ -403,9 +410,39 @@ export async function createPosTakeawayOrderMobile({
       }
     }
 
+    const itemRows = items.map((item, index) => {
+      const optionGroups = buildSelectedOptionGroups(item.selectedOptions);
+      return {
+        order_id: orderIdentity.orderCode,
+        product_id: item.id || null,
+        product_name: item.name,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        line_total: item.lineTotal,
+        spice: "",
+        note: item.note || "",
+        toppings: item.toppings,
+        option_groups: optionGroups,
+        kitchen_item_status: "pending",
+        metadata: {
+          source: "pos_mobile",
+          channel: "pos_mobile",
+          orderSource: "pos_mobile",
+          sourceType: "pos",
+          requestKey,
+          lineKey: buildOrderItemLineKey(item, index),
+          ...(item.metadata && typeof item.metadata === "object" ? item.metadata : {}),
+          selectedOptions: item.selectedOptions,
+          optionGroups
+        }
+      };
+    });
+
     let orderWriteResult = {};
     try {
-      orderWriteResult = await supabase.from("orders").upsert(orderRow, { onConflict: "id" });
+      orderWriteResult = stampGifts.length
+        ? await supabase.rpc("checkout_stamp_order", { p_order: orderRow, p_items: itemRows })
+        : await supabase.from("orders").upsert(orderRow, { onConflict: "id" });
     } catch (error) {
       if (isLikelyPosNetworkError(error)) {
         return queueOfflineOrder(error?.message || "Mất kết nối khi tạo đơn POS.");
@@ -435,37 +472,10 @@ export async function createPosTakeawayOrderMobile({
       }
     }
 
-    const itemRows = items.map((item, index) => {
-      const optionGroups = buildSelectedOptionGroups(item.selectedOptions);
-      return {
-        order_id: orderIdentity.orderCode,
-        product_id: item.id || null,
-        product_name: item.name,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        line_total: item.lineTotal,
-        spice: "",
-        note: item.note || "",
-        toppings: item.toppings,
-        option_groups: optionGroups,
-        kitchen_item_status: "pending",
-        metadata: {
-          source: "pos_mobile",
-          channel: "pos_mobile",
-          orderSource: "pos_mobile",
-          sourceType: "pos",
-          requestKey,
-          lineKey: buildOrderItemLineKey(item, index),
-          ...(item.metadata && typeof item.metadata === "object" ? item.metadata : {}),
-          selectedOptions: item.selectedOptions,
-          optionGroups
-        }
-      };
-    });
 
     let itemResult = {};
     try {
-      itemResult = await replaceOrderItems(orderIdentity.orderCode, itemRows);
+      itemResult = stampGifts.length ? { ok: true } : await replaceOrderItems(orderIdentity.orderCode, itemRows);
     } catch (error) {
       if (isLikelyPosNetworkError(error)) {
         return queueOfflineOrder(error?.message || "Mất kết nối khi lưu món POS.");
@@ -501,9 +511,15 @@ export async function createPosTakeawayOrderMobile({
       }
     }
 
+    invalidatePosStamps();
+    let stampSummary = null;
+    if (displayCustomerPhone) {
+      try { stampSummary = await readPosStamps(displayCustomerPhone); } catch { /* A saved sale must still print if the stamp lookup fails. */ }
+    }
     return {
       ok: true,
       order: {
+        stampSummary,
         id: orderIdentity.orderCode,
         orderCode: orderIdentity.orderCode,
         displayOrderCode: orderIdentity.displayOrderCode

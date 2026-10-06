@@ -1,6 +1,7 @@
-﻿import { buildCreateOrderPayload, validateCheckoutContact } from "../../services/checkoutOrderService.js";
+import { buildCreateOrderPayload, validateCheckoutContact } from "../../services/checkoutOrderService.js";
 
 import { getCheckoutPointsErrorMessage, getCheckoutVoucherErrorMessage } from "../../services/checkoutOrderService.js";
+import { invalidateStamps } from "../../services/stampProgramService.js";
 import { prewarmQrOrderPaymentSession } from "../../services/qrPaymentService.js";
 
 export default function useCheckoutActions({
@@ -31,7 +32,7 @@ export default function useCheckoutActions({
 }) {
   const updateQty = (cartId, delta) => setCart((items) => items.map((item) => {
     if (item.cartId !== cartId) return item;
-    if (item.autoGiftByPromo) return item;
+    if (item.autoGiftByPromo || item.stampGift) return item;
     const quantity = Math.max(1, item.quantity + delta);
     return {
       ...item,
@@ -198,6 +199,7 @@ export default function useCheckoutActions({
       return;
     }
 
+    invalidateStamps();
     prewarmQrOrderPaymentSession({ order });
     navigate("success", "orders");
   };

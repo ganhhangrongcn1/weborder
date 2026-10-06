@@ -1,4 +1,5 @@
 export default function HomeFulfillmentCard({
+  deliveryEnabled = true,
   homeFulfillment,
   onDelivery,
   onPickup,
@@ -23,7 +24,7 @@ export default function HomeFulfillmentCard({
           className={homeFulfillment === "delivery" ? "active" : ""}
           aria-pressed={homeFulfillment === "delivery"}
         >
-          <span>Giao hàng</span>
+          <span>{deliveryEnabled ? "Giao hàng" : "Đặt qua ứng dụng"}</span>
         </button>
       </div>
       <div className="home2026-fulfillment-note">

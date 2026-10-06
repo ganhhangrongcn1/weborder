@@ -1,9 +1,9 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
 import Icon from "../../components/Icon.jsx";
 import HomeHero from "../../pages/customer/home/HomeHero.jsx";
 import HomeFlashSale from "../../pages/customer/home/HomeFlashSale.jsx";
-import HomeFeaturedProducts from "../../pages/customer/home/HomeFeaturedProducts.jsx";
+import StampCard from "../loyalty/components/StampCard.jsx";
 import HomeVoucherCarousel from "../../pages/customer/home/HomeVoucherCarousel.jsx";
 import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
@@ -25,7 +25,7 @@ import DeliveryAppOrderingModal from "../../components/customer/DeliveryAppOrder
 import { createHomeActionHandlers } from "./homeActions.js";
 import { createHomeFulfillmentActions } from "./homeFulfillmentActions.js";
 import useHomeEffects from "./useHomeEffects.js";
-import useHomePopularProducts from "./useHomePopularProducts.js";
+
 
 const FALLBACK_HOME_BLOCK_ORDER = [
   "hero",
@@ -116,6 +116,7 @@ export default function Home({
   demoUser,
   demoLoyalty,
   currentPhone,
+  hasCustomerAuthSession = false,
   isRegisteredCustomer,
   setServiceNotice,
   getStoreBlockNotice,
@@ -142,11 +143,7 @@ export default function Home({
   const [reviewRewardPopupOpen, setReviewRewardPopupOpen] = useState(false);
   const [deliveryAppOrderingOpen, setDeliveryAppOrderingOpen] = useState(false);
   const [homeClockTick, setHomeClockTick] = useState(() => Date.now());
-  const popularProductIds = useHomePopularProducts({
-    enabled: products.length > 0,
-    days: 30,
-    limit: 12
-  });
+  const popularProductIds = [];
   const cashbackRef = useRef(null);
   const promoVouchersRef = useRef(null);
   const deliveryAppsRef = useRef(null);
@@ -175,7 +172,7 @@ export default function Home({
     showDeliveryApps,
     showFulfillment,
     showFlashSale,
-    showFeaturedProducts,
+
     popupDelaySeconds,
     showHomePopup,
     popupSessionKey,
@@ -183,7 +180,7 @@ export default function Home({
     popupCooldownHours,
     deliveryAppsList,
     deliveryAppBranches,
-    featuredProducts,
+
     pickupBranches,
     deliveryBranches,
     selectedDeliveryBranchInfo
@@ -264,7 +261,12 @@ export default function Home({
     navigate
   });
 
-  const homeBlockOrder = useMemo(() => resolveHomeBlockOrder(homeContent), [homeContent]);
+  const homeBlockOrder = useMemo(() => {
+    const remainingBlocks = resolveHomeBlockOrder(homeContent)
+      .filter((key) => key !== "hero" && key !== "featuredProducts");
+    // Keep the stamp card directly below the banner, before ordering options.
+    return ["hero", "featuredProducts", ...remainingBlocks];
+  }, [homeContent]);
   const pickupBranchInfo = useMemo(
     () => pickupBranches.find((branch) => branch.id === pickupBranch) || pickupBranches[0] || null,
     [pickupBranches, pickupBranch]
@@ -303,7 +305,7 @@ export default function Home({
         showCashback={false}
         cashbackRef={cashbackRef}
         cashbackBlock={cashbackBlock}
-        showDeliveryApps={showDeliveryApps}
+        showDeliveryApps={showDeliveryApps && deliveryBranches.length > 0}
         deliveryAppsRef={deliveryAppsRef}
         deliveryAppsBlock={deliveryAppsBlock}
         deliveryAppsList={deliveryAppsList}
@@ -326,6 +328,7 @@ export default function Home({
     fulfillment: () => showFulfillment ? (
       <section ref={fulfillmentRef} className="home2026-section">
         <HomeFulfillmentCard
+          deliveryEnabled={deliveryBranches.length > 0}
           homeFulfillment={homeFulfillment}
           onDelivery={openMenuWithDelivery}
           onPickup={openPickupPlanner}
@@ -352,15 +355,7 @@ export default function Home({
         formatCountdown={formatCountdown}
       /></section>
     ) : null,
-    featuredProducts: () => showFeaturedProducts ? (
-      <section ref={featuredProductsRef}><HomeFeaturedProducts
-        featuredTitle={t.featuredTitle}
-        viewMore={t.viewMore}
-        featuredProducts={featuredProducts}
-        openOptionModal={openOptionModal}
-        onViewAll={() => navigate("menu", "menu")}
-      /></section>
-    ) : null
+    featuredProducts: () => <section ref={featuredProductsRef}><StampCard phone={hasCustomerAuthSession ? currentPhone : ""} navigate={navigate} /></section>
   };
 
   return (

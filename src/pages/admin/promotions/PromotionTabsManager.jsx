@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import StampProgramSettings from "./StampProgramSettings.jsx";
 import CouponManager, { normalizeCoupon } from "./CouponManager.jsx";
 import { AdminButton, AdminPanel } from "../ui/AdminCommon.jsx";
 import StrikePriceTab from "./StrikePriceTab.jsx";
@@ -16,7 +17,7 @@ function toArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-const SALES_TAB_ORDER = ["strike_price", "flash_sale", "gift_threshold", "free_shipping"];
+const SALES_TAB_ORDER = ["stamps", "strike_price", "flash_sale", "gift_threshold", "free_shipping"];
 
 function isDateBeforeToday(dateText) {
   if (!dateText) return false;
@@ -415,13 +416,15 @@ export default function PromotionTabsManager({
             >
               <span>
                 {tab.label}
-                <b>{tabCounts[tab.id] || 0}</b>
+                {tab.id !== "stamps" && <b>{tabCounts[tab.id] || 0}</b>}
               </span>
               <small>{tab.description}</small>
             </button>
           ))}
         </div>
       ) : null}
+
+      {activeTab === "stamps" && <StampProgramSettings products={products} />}
 
       {activeTab === "coupon" && (
         <CouponManager
@@ -507,7 +510,7 @@ export default function PromotionTabsManager({
         />
       ) : null}
 
-      <div className={`admin-promo-save-dock ${hasUnsavedChanges ? "is-dirty" : "is-clean"}`}>
+      {activeTab !== "stamps" && <div className={`admin-promo-save-dock ${hasUnsavedChanges ? "is-dirty" : "is-clean"}`}>
         <div>
           <strong>
             {hasUnsavedChanges
@@ -538,7 +541,7 @@ export default function PromotionTabsManager({
             saveLabel={mode === "vouchers" ? "Lưu voucher" : "Lưu thay đổi"}
           />
         </div>
-      </div>
+      </div>}
     </AdminPanel>
   );
 }
