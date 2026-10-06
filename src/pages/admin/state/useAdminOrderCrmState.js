@@ -6,6 +6,7 @@ import {
 import { getAdminDashboardSummaryForBranchesRpc } from "../../../services/adminDashboardService.js";
 import { getAdminDashboardRevenueSeriesForBranchesRpc } from "../../../services/adminDashboardRevenueService.js";
 import { getAdminBusinessAnalyticsForBranchesRpc } from "../../../services/adminBusinessAnalyticsService.js";
+import startForegroundRefresh from "../../../services/foregroundRefreshService.js";
 import { getSiteVisitTrafficStats } from "../../../services/siteVisitTrackingService.js";
 import {
   branchOptionMatchesOrder,
@@ -299,7 +300,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
     let disposed = false;
 
     const refreshDashboardSummary = async ({ force = false } = {}) => {
-      if (section !== "dashboard") return;
+      if (section !== "dashboard" || disposed) return false;
       updateDashboardDataStatus(setDashboardDataStatus, "summary", "loading");
       try {
         const dateRange = buildVietnamDateRange(dashboardDateFrom, dashboardDateTo);
@@ -314,6 +315,7 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
         updateDashboardDataStatus(setDashboardDataStatus, "summary", "ready");
         recordAdminRequest("read admin dashboard summary rpc", "rpc:get_admin_dashboard_summary");
         setAdminRequestAudit(getAdminRequestAuditSnapshot());
+        return true;
       } catch (error) {
         if (disposed) return;
         console.error("[admin][dashboard-summary] failed to load rpc", error);
@@ -324,21 +326,17 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
           "error",
           "Không thể tải KPI từ Supabase."
         );
+        return false;
       }
     };
 
-    refreshDashboardSummary();
-
-    const refreshCurrentDashboard = () => {
-      refreshDashboardSummary({ force: true });
-    };
-    const timer = window.setInterval(refreshCurrentDashboard, 60000);
-    window.addEventListener("focus", refreshCurrentDashboard);
+    const stopRefresh = section === "dashboard"
+      ? startForegroundRefresh(refreshDashboardSummary)
+      : () => {};
 
     return () => {
       disposed = true;
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refreshCurrentDashboard);
+      stopRefresh();
     };
   }, [section, dashboardDateFrom, dashboardDateTo, dashboardBranchFilters, branches]);
 
