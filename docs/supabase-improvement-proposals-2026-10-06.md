@@ -1,6 +1,6 @@
 # Đề xuất cải thiện vận hành — 06/10/2026
 
-Các mục dưới đây là đề xuất, chưa triển khai. Ưu tiên bảo toàn checkout, thanh toán, Kitchen/POS và tích điểm; làm từng bước có kiểm chứng và hoàn tác.
+Các mục dưới đây là lộ trình cải thiện. Đợt 8 đã bổ sung chẩn đoán kết nối cục bộ và chuẩn bị script kiểm tra quyền SELECT trên staging; chưa triển khai production hoặc hoàn tất kiểm thử quyền/hoàn tiền thật. Xem `supabase-optimization-phase8-2026-10-06.md`. Ưu tiên bảo toàn checkout, thanh toán, Kitchen/POS và tích điểm; làm từng bước có kiểm chứng và hoàn tác.
 
 | Ưu tiên | Cải thiện | Lợi ích | Phương án và điều kiện an toàn |
 |---|---|---|---|

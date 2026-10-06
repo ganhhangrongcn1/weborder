@@ -1,5 +1,6 @@
 import { getSupabaseEnvConfig } from "./runtimeFlags.js";
 import { createClient } from "@supabase/supabase-js";
+import createSupabaseDiagnosticFetch from "./supabaseDiagnosticFetch.js";
 
 const CLIENT_SCOPES = {
   runtime: {
@@ -120,7 +121,8 @@ function createSupabaseClientForScope(scope = "runtime") {
 
   try {
     const client = createClient(url, anonKey, {
-      auth: buildScopeAuthConfig(scope)
+      auth: buildScopeAuthConfig(scope),
+      global: { fetch: createSupabaseDiagnosticFetch({ baseUrl: url, scope }) }
     });
     configureRealtimeAccessToken(client, anonKey);
     return setScopedClient(scope, client);

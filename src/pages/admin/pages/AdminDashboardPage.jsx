@@ -1,4 +1,5 @@
 import AdminDashboardSection from "../dashboard/AdminDashboardSection.jsx";
+import AdminConnectionDiagnostics from "../dashboard/AdminConnectionDiagnostics.jsx";
 
 export default function AdminDashboardPage({
   dashboardSearch,
@@ -40,6 +41,7 @@ export default function AdminDashboardPage({
   branches
 }) {
   return (
+    <>
     <AdminDashboardSection
       dashboardSearch={dashboardSearch}
       setDashboardSearch={setDashboardSearch}
@@ -79,5 +81,7 @@ export default function AdminDashboardPage({
       setDashboardBranchFilters={setDashboardBranchFilters}
       branches={branches}
     />
+    <AdminConnectionDiagnostics />
+    </>
   );
 }

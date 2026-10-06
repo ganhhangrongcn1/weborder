@@ -3,6 +3,7 @@ import {
   initSupabaseRuntimeClient
 } from "./supabase/supabaseRuntimeClient.js";
 import createKeyedReadCache from "./keyedReadCache.js";
+import { recordSupabaseSdkError } from "./supabase/supabaseDiagnostics.js";
 
 const POPULAR_PRODUCTS_RPC = "get_customer_popular_products";
 const POPULAR_PRODUCTS_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -50,6 +51,7 @@ export async function getCustomerPopularProductIds({
       });
 
       if (error) {
+        recordSupabaseSdkError(POPULAR_PRODUCTS_RPC, error);
         return {
           value: [],
           ttlMs: isMissingRpcError(error)

@@ -122,7 +122,8 @@ async function actionHarness({ changed = false, error = null } = {}) {
   let writes = 0;
   const { default: useCheckoutActions } = await loadModule("../src/features/checkout/useCheckoutActions.js", {
     "../../services/checkoutOrderService.js": { buildCreateOrderPayload, validateCheckoutContact, getCheckoutPointsErrorMessage, getCheckoutVoucherErrorMessage },
-    "../../services/qrPaymentService.js": { prewarmQrOrderPaymentSession() {} }
+    "../../services/qrPaymentService.js": { prewarmQrOrderPaymentSession() {} },
+    "../../services/stampProgramService.js": { invalidateStamps() {} }
   });
   const actions = useCheckoutActions({
     deliveryInfo: { name: "Khách kiểm tra", phone: "0707686521" }, fulfillmentType: "pickup",
