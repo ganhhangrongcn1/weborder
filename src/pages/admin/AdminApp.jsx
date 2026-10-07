@@ -25,6 +25,7 @@ import { readInventoryActionableCount } from "../../services/inventoryCountServi
 import { readInventoryCostAnalysisPermission } from "../../services/inventoryCostAnalysisService.js";
 import { readInventoryStockAttentionCount } from "../../services/inventoryStockReportService.js";
 import { readInventoryLotAttentionCount } from "../../services/inventoryLotReportService.js";
+import startForegroundRefresh from "../../services/foregroundRefreshService.js";
 import {
   filterAdminNavigationByAccess,
   getAdminModuleAccessPolicy,
@@ -319,18 +320,16 @@ export default function AdminApp({
         }
       } catch {
         // Giữ số gần nhất nếu phiên Admin hoặc mạng tạm thời gián đoạn.
+        return false;
       }
     };
 
-    refreshInventoryPendingCount();
-    const intervalId = window.setInterval(refreshInventoryPendingCount, 60000);
-    window.addEventListener("focus", refreshInventoryPendingCount);
+    const stopRefresh = startForegroundRefresh(refreshInventoryPendingCount);
     window.addEventListener(INVENTORY_NAVIGATION_COUNTS_CHANGED_EVENT, refreshInventoryPendingCount);
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
-      window.removeEventListener("focus", refreshInventoryPendingCount);
+      stopRefresh();
       window.removeEventListener(INVENTORY_NAVIGATION_COUNTS_CHANGED_EVENT, refreshInventoryPendingCount);
     };
   }, [inventoryAccessPolicy.allowed, inventorySelectedWarehouseId]);
