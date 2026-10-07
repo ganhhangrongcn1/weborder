@@ -944,10 +944,24 @@ async function writeProfilesMapToTable(usersMap = {}) {
 
 async function writeProfileRowToTable(user = {}) {
   if (!isSupabaseReady()) return user;
-  const client = await getSupabaseClientAsync();
+  const customerClient = await getCustomerSupabaseClientAsync();
+  const { data: customerSession, error: customerSessionError } = customerClient
+    ? await customerClient.auth.getSession()
+    : { data: null, error: null };
+  if (customerSessionError) throw customerSessionError;
+  const client = customerSession?.session?.access_token
+    ? customerClient
+    : await getSupabaseClientAsync();
   if (!client) return user;
   const row = toCustomerRow(user);
   if (!row) return user;
+  const { data: authData, error: authError } = await client.auth.getUser();
+  if (authError) throw authError;
+  if (!authData?.user?.id) {
+    const error = new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để đồng bộ hồ sơ.");
+    error.code = "42501";
+    throw error;
+  }
   const { error } = await client.rpc("sync_own_customer_profile", {
     p_phone: row.phone,
     p_name: row.name || null,

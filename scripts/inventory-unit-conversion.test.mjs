@@ -40,6 +40,7 @@ test("service luôn lưu đơn vị tính dưới dạng đơn vị gốc", () =
 test("service lưu bốn mức tồn theo đơn vị gốc", () => {
   const payload = normalizeInventoryMasterDataInput("items", {
     name: "Bánh Tráng Đỏ",
+    displayUnitId: "unit-cai",
     baseUnitId: "unit-cai",
     purchaseUnitId: "unit-bich",
     purchaseToBaseRatio: 200,
@@ -50,6 +51,9 @@ test("service lưu bốn mức tồn theo đơn vị gốc", () => {
     maximumStock: 32
   });
 
+  assert.equal(payload.base_unit_id, "unit-cai");
+  assert.equal(payload.purchase_unit_id, "unit-bich");
+  assert.equal(payload.purchase_to_base_ratio, 200);
   assert.equal(payload.reorder_point, 1200);
   assert.equal(payload.metadata.order_quantity, 4800);
   assert.equal(payload.minimum_stock, 1600);

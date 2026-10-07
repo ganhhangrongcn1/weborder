@@ -256,8 +256,11 @@ export async function syncCustomerProfileToSupabase({ phone, name = "", email: _
   if (!isSupabaseRuntimeWriteEnabled()) return { ok: false, message: "Supabase runtime write đang tắt." };
 
   try {
-    const { data: authData } = await client.auth.getUser();
+    const { data: authData, error: authSessionError } = await client.auth.getUser();
     const authUser = authData?.user || null;
+    if (authSessionError || !authUser?.id) {
+      return { ok: false, message: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để đồng bộ hồ sơ." };
+    }
     const safeName = String(name || "").trim();
     const safeAuthUserId = String(authUserId || authUser?.id || "").trim();
     const safeAvatarUrl = String(avatarUrl || "").trim();
