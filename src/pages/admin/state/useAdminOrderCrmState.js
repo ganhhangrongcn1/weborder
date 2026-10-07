@@ -31,6 +31,7 @@ import {
 const SNAPSHOT_CACHE_TTL_MS = 60000;
 const ordersSnapshotCache = new Map();
 const ordersSnapshotInFlight = new Map();
+let ordersSnapshotGeneration = 0;
 const DASHBOARD_DATA_KEYS = ["summary", "analytics", "revenue", "orders", "traffic"];
 
 function createDashboardDataStatus() {
@@ -107,6 +108,7 @@ async function loadOrdersSnapshot(
     return ordersSnapshotInFlight.get(cacheKey);
   }
 
+  const requestGeneration = ordersSnapshotGeneration;
   const request = loadOrdersSnapshotUncached(orderStorage, dateRange, {
     includePartnerOrders,
     requireRemote,
@@ -114,6 +116,7 @@ async function loadOrdersSnapshot(
     limit
   })
     .then((value) => {
+      if (requestGeneration !== ordersSnapshotGeneration) return value;
       ordersSnapshotCache.set(cacheKey, {
         cachedAt: Date.now(),
         value
@@ -133,7 +136,9 @@ async function loadOrdersSnapshot(
       return value;
     })
     .finally(() => {
-      ordersSnapshotInFlight.delete(cacheKey);
+      if (ordersSnapshotInFlight.get(cacheKey) === request) {
+        ordersSnapshotInFlight.delete(cacheKey);
+      }
     });
 
   ordersSnapshotInFlight.set(cacheKey, request);
@@ -191,6 +196,7 @@ function buildOrdersSnapshotCacheKey(
 }
 
 function clearOrdersSnapshotCache() {
+  ordersSnapshotGeneration += 1;
   ordersSnapshotCache.clear();
   ordersSnapshotInFlight.clear();
 }
