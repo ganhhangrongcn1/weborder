@@ -17,12 +17,14 @@ const fallbackDownloads = [
   {
     id: "ghr-pos-printer",
     appName: DEFAULT_APP_NAME,
-    version: "GHR VER 3",
-    updatedAt: "2026-05-23",
+    version: "0.4.13",
+    versionName: "0.4.13",
+    versionCode: 44,
+    updatedAt: "2026-10-06",
     platform: DEFAULT_PLATFORM,
     printerSupport: DEFAULT_PRINTER_SUPPORT,
-    fileName: "GHR VER 3.apk",
-    url: "https://qjaklysckgzdfjthzkzu.supabase.co/storage/v1/object/public/app-downloads/GHR%20VER%203.apk",
+    fileName: "GHR-POS-0.4.13.apk",
+    url: "https://qjaklysckgzdfjthzkzu.supabase.co/storage/v1/object/public/app-downloads/pos-printer/releases/44-0-4-13/GHR-POS-0.4.13.apk",
     notes: [
       "Dùng cho máy POS Android tại chi nhánh.",
       "Nhận lệnh in bill khách qua Supabase print_jobs.",
