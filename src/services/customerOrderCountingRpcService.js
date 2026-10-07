@@ -18,17 +18,15 @@ function toNumber(value = 0, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function isMissingRpcError(error) {
+function isMissingRpcError(error, name) {
   const code = toText(error?.code);
   const message = toText(error?.message).toLowerCase();
-
-  if (RPC_MISSING_CODES.has(code)) return true;
-
-  return [
-    "could not find the function",
-    "function public.",
-    "does not exist"
-  ].some((needle) => message.includes(needle));
+  const target = toText(name).toLowerCase();
+  if (!target) return false;
+  const namesTarget = message.includes(`function public.${target}(`)
+    || message.includes(`function public.${target} `)
+    || message.endsWith(`function public.${target}`);
+  return namesTarget && RPC_MISSING_CODES.has(code);
 }
 
 function isRpcTemporarilyUnavailable(name = "") {
@@ -47,7 +45,7 @@ function isRpcTemporarilyUnavailable(name = "") {
 }
 
 function markRpcTemporarilyUnavailable(name = "", error = null) {
-  if (!isMissingRpcError(error)) return;
+  if (!isMissingRpcError(error, name)) return;
 
   const key = toText(name);
   if (!key) return;
