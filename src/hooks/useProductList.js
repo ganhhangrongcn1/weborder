@@ -8,6 +8,7 @@ import {
   INITIAL_CATALOG_CONFIG_KEYS
 } from "../services/repositories/catalogConfigRepository.js";
 import { subscribeCatalogRealtime } from "../services/repositories/catalogSupabaseRepository.js";
+import subscribePromotionSession from "../services/promotionSessionService.js";
 import { adminConfigRepository } from "../services/repositories/adminConfigRepository.js";
 import { getDataSource } from "../services/repositories/dataSource.js";
 import {
@@ -334,7 +335,6 @@ export default function useProductList({
         { key: CATALOG_CONFIG_KEYS.promos, fallback: promoSeed },
         { key: CATALOG_CONFIG_KEYS.homeContent, fallback: defaultHomeContent },
         { key: CATALOG_CONFIG_KEYS.banners, fallback: defaultHomeBanners },
-        { key: CATALOG_CONFIG_KEYS.smartPromotions, fallback: defaultSmartPromotions },
         { key: CATALOG_CONFIG_KEYS.branches, fallback: defaultBranches },
         { key: CATALOG_CONFIG_KEYS.hours, fallback: defaultStoreHours },
         { key: CATALOG_CONFIG_KEYS.categories, fallback: categories }
@@ -349,7 +349,6 @@ export default function useProductList({
         const remotePromos = remoteValues[CATALOG_CONFIG_KEYS.promos];
         const remoteHomeContent = remoteValues[CATALOG_CONFIG_KEYS.homeContent];
         const remoteBanners = remoteValues[CATALOG_CONFIG_KEYS.banners];
-        const remoteSmartPromotions = remoteValues[CATALOG_CONFIG_KEYS.smartPromotions];
         const remoteBranches = remoteValues[CATALOG_CONFIG_KEYS.branches];
         const remoteHours = remoteValues[CATALOG_CONFIG_KEYS.hours];
         const remoteCategories = remoteValues[CATALOG_CONFIG_KEYS.categories];
@@ -360,7 +359,6 @@ export default function useProductList({
           setHomeContent(normalizeHomeContent(remoteHomeContent, defaultHomeContent));
         }
         if (Array.isArray(remoteBanners)) setHomeBanners(remoteBanners);
-        if (Array.isArray(remoteSmartPromotions)) setSmartPromotions(remoteSmartPromotions.map(normalizeSmartPromotion));
         if (Array.isArray(remoteBranches)) setBranches(remoteBranches);
         if (remoteHours && typeof remoteHours === "object") {
           setHours(normalizeHours(remoteHours, defaultStoreHours));
@@ -388,6 +386,13 @@ export default function useProductList({
     isStrictSupabaseMode,
     shouldLoadInitialCatalog
   ]);
+
+  useEffect(() => {
+    if (!shouldLoadInitialCatalog) return undefined;
+    return subscribePromotionSession((next) => {
+      setSmartPromotions(next.map(normalizeSmartPromotion));
+    });
+  }, [shouldLoadInitialCatalog, normalizeSmartPromotion]);
 
   useEffect(() => {
     if (!supabaseConfigSyncEnabled && !shouldForceSupabaseCatalogRead) return undefined;
