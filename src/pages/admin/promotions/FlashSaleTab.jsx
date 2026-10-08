@@ -14,6 +14,7 @@ import {
 } from "./promotionTabUtils.js";
 import PromotionFormSection from "./PromotionFormSection.jsx";
 import PromotionSalesChannelField from "./PromotionSalesChannelField.jsx";
+import PromotionBranchField from "./PromotionBranchField.jsx";
 import { PromotionSetupWarnings } from "./PromotionSetupFeedback.jsx";
 
 const STATUS_FILTERS = [
@@ -52,7 +53,7 @@ function buildFlashWarnings(promo, nowTick) {
   const status = getFlashStatus(promo, new Date(nowTick));
   if (Number(promo?.reward?.value || 0) <= 0) warnings.push("Giá trị flash sale đang bằng 0.");
   if (scope === "category" && !toIdList(promo?.condition?.categoryIds).length) warnings.push("Đang chọn theo danh mục nhưng chưa tick danh mục nào.");
-  if (scope !== "category" && !toIdList(promo?.condition?.productIds).length) warnings.push("Đang chọn theo món nhưng chưa tick món nào.");
+  if (scope === "product" && !toIdList(promo?.condition?.productIds).length) warnings.push("Đang chọn theo món nhưng chưa tick món nào.");
   if (promo?.startAt && promo?.endAt && String(promo.startAt) > String(promo.endAt)) warnings.push("Ngày kết thúc đang trước ngày bắt đầu.");
   if (status.code === "sold_out") warnings.push("Flash sale đã hết suất.");
   if (status.code === "expired") warnings.push("Flash sale đã hết hạn.");
@@ -60,6 +61,7 @@ function buildFlashWarnings(promo, nowTick) {
 }
 
 export default function FlashSaleTab({
+  branches = [],
   flashSalePromos,
   selectedFlashPromo,
   setSelectedFlashPromoId,
@@ -212,7 +214,7 @@ export default function FlashSaleTab({
               <PromotionFormSection
                 step="1"
                 title="Món chạy flash sale"
-                note="Chọn danh mục hoặc từng món để tránh giảm nhầm toàn menu."
+                note="Chọn toàn menu, danh mục hoặc từng món áp dụng. Topping và phần thêm tính riêng."
               >
                 {(() => {
                   const selectedScope = selectedFlashPromo.condition.applyScope || "product";
@@ -301,9 +303,17 @@ export default function FlashSaleTab({
                   </label>
                 </div>
                 {selectedFlashPromo.reward.type === "fixed_price" ? (
-                  <p className="mt-2 rounded-xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
-                    Kênh được bật sẽ bán đúng giá này cho món/danh mục được chọn khi chương trình đang chạy.
-                  </p>
+                  <div className="mt-2 rounded-xl bg-orange-50 px-3 py-2 text-xs font-semibold text-orange-700">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedFlashPromo.condition.exactFixedPrice === true}
+                        onChange={(event) => updatePromotion(selectedFlashPromo.id, { condition: { ...selectedFlashPromo.condition, exactFixedPrice: event.target.checked } })}
+                      />
+                      Đồng giá cả món có giá gốc thấp hơn (chỉ POS)
+                    </label>
+                    <p className="mt-2">Không bật mục này thì món có giá gốc thấp hơn vẫn giữ giá cũ. Topping và phần thêm không đồng giá.</p>
+                  </div>
                 ) : null}
               </PromotionFormSection>
 
@@ -331,12 +341,17 @@ export default function FlashSaleTab({
                   </label>
                   <div className="admin-promo-form-span-2 text-[12px] font-semibold text-slate-500">
                     Kênh áp dụng
-                    <PromotionSalesChannelField
+                    {selectedFlashPromo.condition?.branchIds?.length ? <p className="mt-1 text-sm font-semibold text-slate-700">POS tại chi nhánh đã chọn</p> : <PromotionSalesChannelField
                       value={selectedFlashPromo.salesChannels}
                       type="flash_sale"
                       onChange={(nextChannels) => updatePromotion(selectedFlashPromo.id, { salesChannels: nextChannels })}
-                    />
+                    />}
                   </div>
+                  <PromotionBranchField
+                    branches={branches}
+                    value={selectedFlashPromo.condition.branchIds}
+                    onChange={(branchIds) => updatePromotion(selectedFlashPromo.id, { condition: { ...selectedFlashPromo.condition, branchIds } })}
+                  />
                   <div className="admin-promo-active-row admin-promo-form-span-2">
                     <div>
                       <strong>Bật Flash sale</strong>

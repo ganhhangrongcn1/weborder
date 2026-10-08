@@ -13,6 +13,7 @@ export function calculateBaseShippingFee(distanceKm, deliveryFee) {
 
 export function normalizeSmartPromotion(promotion = {}) {
   const normalizedType = promotion.type || "coupon_hint";
+  const posBranchScoped = normalizedType === "flash_sale" && Array.isArray(promotion.condition?.branchIds) && promotion.condition.branchIds.length > 0;
   return {
     id: promotion.id || `promo-${Date.now()}`,
     name: promotion.name || "Chương trình mới",
@@ -38,7 +39,7 @@ export function normalizeSmartPromotion(promotion = {}) {
     startAt: promotion.startAt || "",
     endAt: promotion.endAt || "",
     priority: Number(promotion.priority || 99),
-    salesChannels: normalizedType === "free_shipping"
+    salesChannels: posBranchScoped ? ["pos"] : normalizedType === "free_shipping"
       ? ["web"]
       : normalizeSalesChannels(promotion.salesChannels, ALL_PROMOTION_SALES_CHANNELS)
   };

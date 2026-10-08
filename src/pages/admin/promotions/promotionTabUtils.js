@@ -29,6 +29,7 @@ export const ROUND_MODE_OPTIONS = [
 export const MIN_DISCOUNT_TO_SHOW_OPTIONS = [5, 10, 15];
 
 export const FLASH_APPLY_SCOPE_OPTIONS = [
+  { value: "all", label: "Toàn menu" },
   { value: "category", label: "Theo danh mục" },
   { value: "product", label: "Theo món cụ thể" }
 ];
@@ -169,7 +170,7 @@ export function normalizeFlashPromo(promo, fallback) {
     condition: {
       ...fallback.condition,
       ...(promo?.condition || {}),
-      applyScope: promo?.condition?.applyScope === "category" ? "category" : "product",
+      applyScope: ["all", "category", "product"].includes(promo?.condition?.applyScope) ? promo.condition.applyScope : "product",
       useTimeWindow: promo?.condition?.useTimeWindow !== false,
       startTime: promo?.condition?.startTime || fallback.condition.startTime,
       endTime: promo?.condition?.endTime || fallback.condition.endTime,

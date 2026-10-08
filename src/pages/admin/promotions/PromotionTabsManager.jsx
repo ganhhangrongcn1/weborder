@@ -471,6 +471,7 @@ export default function PromotionTabsManager({
       {activeTab === "flash_sale" && (
         flashSalePromos.length ? (
           <FlashSaleTab
+            branches={branches}
             flashSalePromos={flashSalePromos}
             selectedFlashPromo={selectedFlashPromo}
             setSelectedFlashPromoId={setSelectedFlashPromoId}
