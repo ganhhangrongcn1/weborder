@@ -13,6 +13,7 @@ import { buildBranchLookupMap, normalizeBranchKey } from "../branchIdentityServi
 import { isCheckinLikeEntryType } from "../loyaltyLedgerUtils.js";
 import { buildOrderItemStableId } from "../orderItemIdentityService.js";
 import { sanitizeOrderSpice } from "../../utils/orderSpice.js";
+import readOrderItemPages from "../supabase/readOrderItemPages.js";
 
 let ordersWriteQueue = Promise.resolve();
 let branchLookupCache = { value: null, cachedAt: 0 };
@@ -1081,12 +1082,11 @@ async function readOrdersByPhoneFromTable(options = {}) {
   const orderIds = Array.isArray(orders) ? orders.map((order) => order?.id).filter(Boolean) : [];
   let items = [];
   if (includeItems && orderIds.length) {
-    const { data: itemRows, error: itemError } = await client
-      .from("order_items")
-      .select(CUSTOMER_ORDER_ITEM_COLUMNS)
-      .in("order_id", orderIds);
-    if (itemError) throw itemError;
-    items = Array.isArray(itemRows) ? itemRows : [];
+    items = await readOrderItemPages(client, {
+      columns: CUSTOMER_ORDER_ITEM_COLUMNS,
+      orderIds,
+      signal: options?.signal
+    });
   }
 
   const itemMap = new Map();
@@ -1191,16 +1191,11 @@ async function readOrdersForPhoneFromTable(phone, options = {}) {
   const orderIds = orders.map((order) => order?.id).filter(Boolean);
   let items = [];
   if (includeItems && orderIds.length) {
-    let itemsQuery = client
-      .from("order_items")
-      .select(CUSTOMER_ORDER_ITEM_COLUMNS)
-      .in("order_id", orderIds);
-    if (options?.signal) {
-      itemsQuery = itemsQuery.abortSignal(options.signal);
-    }
-    const { data: itemRows, error: itemError } = await itemsQuery;
-    if (itemError) throw itemError;
-    items = Array.isArray(itemRows) ? itemRows : [];
+    items = await readOrderItemPages(client, {
+      columns: CUSTOMER_ORDER_ITEM_COLUMNS,
+      orderIds,
+      signal: options?.signal
+    });
   }
 
   const itemMap = new Map();

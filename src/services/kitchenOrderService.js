@@ -11,6 +11,7 @@ import { completeWebsiteOrderWithLoyaltyAsync } from "./loyaltyService.js";
 import { recordKitchenRequest } from "./kitchenRequestAuditService.js";
 import { buildPartnerLoyaltyAmountSnapshot } from "./partnerOrderAmountService.js";
 import { buildOrderItemStableId } from "./orderItemIdentityService.js";
+import readOrderItemPages from "./supabase/readOrderItemPages.js";
 import {
   buildKitchenChecklistOptions,
   loadKitchenOptionGroupSettings
@@ -1350,13 +1351,11 @@ async function getClient() {
 async function readOrderItems(client, orderIds = []) {
   if (!orderIds.length) return new Map();
 
-  const { data, error } = await client
-    .from("order_items")
-    .select(WEBSITE_ITEM_COLUMNS)
-    .in("order_id", orderIds);
-  recordKitchenRequest("read website items", "order_items");
-
-  if (error) throw error;
+  const data = await readOrderItemPages(client, {
+    columns: WEBSITE_ITEM_COLUMNS,
+    orderIds,
+    onRequest: () => recordKitchenRequest("read website items", "order_items")
+  });
 
   return sortKitchenItemRows(data).reduce((map, row) => {
     const list = map.get(row.order_id) || [];
@@ -1396,13 +1395,13 @@ async function repairMissingWebsiteOrderItems(client, orderRows = [], itemsByOrd
 async function readPartnerOrderItems(client, orderIds = []) {
   if (!orderIds.length) return new Map();
 
-  const { data, error } = await client
-    .from("partner_order_items")
-    .select(PARTNER_ITEM_COLUMNS)
-    .in("partner_order_id", orderIds);
-  recordKitchenRequest("read partner items", "partner_order_items");
-
-  if (error) throw error;
+  const data = await readOrderItemPages(client, {
+    table: "partner_order_items",
+    orderIdColumn: "partner_order_id",
+    columns: PARTNER_ITEM_COLUMNS,
+    orderIds,
+    onRequest: () => recordKitchenRequest("read partner items", "partner_order_items")
+  });
 
   return sortKitchenItemRows(data).reduce((map, row) => {
     const list = map.get(row.partner_order_id) || [];
