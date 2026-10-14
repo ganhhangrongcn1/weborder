@@ -38,7 +38,7 @@ jobs:
           echo "ANDROID_SDK_ROOT=$task_sdk" >> "$GITHUB_ENV"
           python3 - <<'PY'
           import os, subprocess
-          subprocess.run([os.environ["TASK_SDKMANAGER"], "--sdk_root=" + os.environ["ANDROID_HOME"], "--licenses"], input="y\\n" * 100, text=True, check=True, stdout=subprocess.DEVNULL)
+          subprocess.run([os.environ["TASK_SDKMANAGER"], "--sdk_root=" + os.environ["ANDROID_HOME"], "--licenses"], input="y\n" * 100, text=True, check=True, stdout=subprocess.DEVNULL)
           PY
           "$TASK_SDKMANAGER" --sdk_root="$task_sdk" "platforms;android-35" "build-tools;35.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
       - name: Install dependencies and check USB selection
