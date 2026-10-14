@@ -149,6 +149,13 @@
 }
 
 .admin-shell .admin-appearance-row-main {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 12px;

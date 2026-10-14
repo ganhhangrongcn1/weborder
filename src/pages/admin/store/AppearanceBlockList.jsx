@@ -5,9 +5,6 @@ export default function AppearanceBlockList({
   setSearch,
   filteredBlocks,
   getBlockData,
-  draggingBlockId,
-  setDraggingBlockId,
-  reorderBlocks,
   selectedBlockId,
   setSelectedBlockId,
   setBlockActive
@@ -17,7 +14,7 @@ export default function AppearanceBlockList({
       <div className="admin-appearance-nav-head">
         <div>
           <strong>Danh sách giao diện</strong>
-          <small>Bật/tắt và sắp xếp thứ tự block trên Home.</small>
+          <small>Chọn nội dung cần chỉnh. Thứ tự Home hiện được cố định.</small>
         </div>
         <AdminBadge tone="brand">{filteredBlocks.length}</AdminBadge>
       </div>
@@ -34,41 +31,28 @@ export default function AppearanceBlockList({
       <div className="admin-appearance-list" role="list">
         {filteredBlocks.map((block) => {
           const blockData = getBlockData(block.id);
-          const isActive = blockData?.active !== false;
+          const canToggle = block.canToggle !== false;
+          const isActive = !canToggle || blockData?.active !== false;
           const selected = selectedBlockId === block.id;
 
           return (
-            <button
-              key={block.id}
-              type="button"
-              draggable
-              onDragStart={() => setDraggingBlockId(block.id)}
-              onDragEnd={() => setDraggingBlockId("")}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                reorderBlocks(draggingBlockId, block.id);
-                setDraggingBlockId("");
-              }}
-              onClick={() => setSelectedBlockId(block.id)}
-              className={`admin-appearance-fixed-item ${selected ? "selected" : ""} ${draggingBlockId === block.id ? "opacity-70" : ""}`}
-              role="listitem"
-            >
-              <span className="admin-appearance-row-main">
+            <div key={block.id} className={`admin-appearance-fixed-item ${selected ? "selected" : ""}`} role="listitem">
+              <button type="button" className="admin-appearance-row-main" aria-pressed={selected} onClick={() => setSelectedBlockId(block.id)}>
                 <span className="admin-appearance-row-icon">{selected ? "✓" : "•"}</span>
                 <span>
                   <strong>{block.title}</strong>
                   <small>{block.placement}</small>
                 </span>
-              </span>
+              </button>
 
               <span className="admin-appearance-row-actions">
                 <AdminBadge tone={isActive ? "success" : "neutral"}>
-                  {isActive ? "Đang hiển thị" : "Đã ẩn"}
+                  {!canToggle ? "Luôn hiển thị" : isActive ? "Đang bật" : "Đang tắt"}
                 </AdminBadge>
-                <label className="admin-switch" onClick={(event) => event.stopPropagation()}>
+                {canToggle && <label className="admin-switch">
                   <input
                     type="checkbox"
+                    aria-label={`Bật ${block.title}`}
                     checked={isActive}
                     onChange={(event) => {
                       event.stopPropagation();
@@ -76,9 +60,9 @@ export default function AppearanceBlockList({
                     }}
                   />
                   <span />
-                </label>
+                </label>}
               </span>
-            </button>
+            </div>
           );
         })}
       </div>

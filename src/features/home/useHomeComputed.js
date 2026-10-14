@@ -1,11 +1,7 @@
 ﻿import { useMemo } from "react";
-import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { getActiveFlashSalePromotions } from "../../services/flashSaleService.js";
 import { buildHomeVoucherCards } from "../../services/homeVoucherService.js";
-import { DEFAULT_SHIPPING_CONFIG } from "../../services/shippingService.js";
-import { formatMoney } from "../../utils/format.js";
-import { buildHomeCategories } from "../../utils/pureHelpers.js";
 import { calculateSalePrice, isTopBannerItem, toIdList } from "./homeHelpers.js";
 import { buildDeliveryAppBranches } from "../../services/deliveryAppService.js";
 
@@ -16,35 +12,6 @@ function hashPopupCampaign(value) {
     hash = Math.imul(31, hash) + input.charCodeAt(index) | 0;
   }
   return Math.abs(hash).toString(36);
-}
-
-function getProductDiscountAmount(product = {}) {
-  const originalPrice = Number(product?.originalPrice || 0);
-  const price = Number(product?.price || 0);
-  return originalPrice > price ? originalPrice - price : 0;
-}
-
-function sortFeaturedProducts(products = [], popularProductIds = []) {
-  const popularRank = new Map(
-    popularProductIds.map((productId, index) => [String(productId), index])
-  );
-
-  return [...products].sort((first, second) => {
-    const firstRank = popularRank.get(String(first?.id || ""));
-    const secondRank = popularRank.get(String(second?.id || ""));
-    const firstIsPopular = firstRank !== undefined;
-    const secondIsPopular = secondRank !== undefined;
-
-    if (firstIsPopular && secondIsPopular && firstRank !== secondRank) {
-      return firstRank - secondRank;
-    }
-    if (firstIsPopular !== secondIsPopular) return firstIsPopular ? -1 : 1;
-
-    const firstDiscount = getProductDiscountAmount(first);
-    const secondDiscount = getProductDiscountAmount(second);
-    if (firstDiscount !== secondDiscount) return secondDiscount - firstDiscount;
-    return 0;
-  });
 }
 
 function findMatchingFlashPromo(product = {}, flashPromos = []) {
@@ -85,10 +52,6 @@ export default function useHomeComputed({
   currentTime,
   homeContent,
   homeText,
-  categories,
-  homeCategory,
-  popularProductIds = [],
-  showAllHomeProducts,
   branches,
   selectedDeliveryBranch
 }) {
@@ -98,11 +61,6 @@ export default function useHomeComputed({
   const activeFlashPromos = useMemo(() => {
     return getActiveFlashSalePromotions(smartPromotions, currentTime);
   }, [smartPromotions, currentTime]);
-
-  const homePricedProducts = useMemo(
-    () => visibleProducts.map((product) => applyFlashSaleToProduct(product, activeFlashPromos)),
-    [visibleProducts, activeFlashPromos]
-  );
 
   const flashProducts = useMemo(() => {
     if (!activeFlashPromos.length) return [];
@@ -117,11 +75,6 @@ export default function useHomeComputed({
   }, [activeFlashPromos, visibleProducts]);
 
   const mainFlashProduct = flashProducts[0] || null;
-  const homeShippingConfig = DEFAULT_SHIPPING_CONFIG;
-  const homeFreeShipThreshold = Number(homeShippingConfig.freeShipThreshold || freeshipMinSubtotal);
-  const homeFreeShipTitle = `Hỗ trợ ship ${Math.round(homeFreeShipThreshold / 1000)}K`;
-  const homeFreeShipText = `Hỗ trợ phí ship từ đơn ${formatMoney(homeFreeShipThreshold)}.`;
-
   const bannersFromAdmin = safeHomeContent
     .filter((block) => isTopBannerItem(block) && block?.active !== false && String(block?.image || "").trim())
     .map((block, index) => ({
@@ -156,7 +109,6 @@ export default function useHomeComputed({
           }
         ];
 
-  const cashbackBlock = safeHomeContent.find((block) => block?.id === "cashback");
   const siteBrandBlock = safeHomeContent.find((block) => block?.id === "siteBrand");
   const reviewRewardsBlock = safeHomeContent.find((block) => block?.id === "reviewRewards");
   const deliveryAppsBlock = safeHomeContent.find((block) => block?.id === "deliveryApps");
@@ -164,9 +116,6 @@ export default function useHomeComputed({
   const promoVouchersBlock = safeHomeContent.find((block) => block?.id === "promoVouchers" || block?.id === "promo_vouchers");
   const fulfillmentBlock = safeHomeContent.find((block) => block?.id === "fulfillment");
   const flashSaleBlock = safeHomeContent.find((block) => block?.id === "flashSale" || block?.id === "flash_sale");
-  const categoryBlock = safeHomeContent.find((block) => block?.id === "categorySection");
-  const featuredBlock = safeHomeContent.find((block) => block?.id === "featuredProducts");
-  const showCashback = cashbackBlock?.active !== false;
   const showReviewRewards = reviewRewardsBlock?.active !== false;
   const showDeliveryApps = deliveryAppsBlock?.active !== false;
   const voucherCards = buildHomeVoucherCards({
@@ -181,8 +130,6 @@ export default function useHomeComputed({
   const showPromoVouchers = promoVouchersBlock?.active !== false && voucherCards.length > 0;
   const showFulfillment = fulfillmentBlock?.active !== false;
   const showFlashSale = flashSaleBlock?.active !== false && flashProducts.length > 0;
-  const showCategorySection = categoryBlock?.active !== false;
-  const showFeaturedProducts = featuredBlock?.active !== false;
   const popupDelaySeconds = Math.max(0, Number(popupCampaignBlock?.delaySeconds ?? 3));
   const popupCooldownHours = Math.max(0, Number(popupCampaignBlock?.cooldownHours ?? 6));
   const showHomePopup = popupCampaignBlock?.active !== false && String(popupCampaignBlock?.image || "").trim().length > 0;
@@ -209,47 +156,23 @@ export default function useHomeComputed({
     branches.length ? branches : defaultPickupBranches
   );
 
-  const visibleCategoryNames = categories.filter((category) => {
-    if (category === homeText.all) return true;
-    return homePricedProducts.some((product) => product.category === category);
-  });
-  const homeCategories = buildHomeCategories(visibleCategoryNames, homeText);
-  const activeHomeCategory = homeCategories.some((category) => category.value === homeCategory)
-    ? homeCategory
-    : homeCategories[0]?.value || categories[0] || homeText.all;
-  const filteredHomeProducts = activeHomeCategory === homeCategories[0]?.value
-    ? homePricedProducts
-    : homePricedProducts.filter((product) => product.category === activeHomeCategory);
-  const featuredProducts = sortFeaturedProducts(
-    filteredHomeProducts.length ? filteredHomeProducts : homePricedProducts,
-    popularProductIds
-  ).slice(0, showAllHomeProducts ? 8 : 4);
-
   return {
     visibleProducts,
     flashProducts,
     mainFlashProduct,
-    homeShippingConfig,
-    homeFreeShipThreshold,
-    homeFreeShipTitle,
-    homeFreeShipText,
     banners,
     heroBlockEnabled,
-    cashbackBlock,
     siteBrandBlock,
     reviewRewardsBlock,
     deliveryAppsBlock,
     popupCampaignBlock,
     promoVouchersBlock,
     voucherCards,
-    showCashback,
     showReviewRewards,
     showPromoVouchers,
     showDeliveryApps,
     showFulfillment,
     showFlashSale,
-    showCategorySection,
-    showFeaturedProducts,
     popupDelaySeconds,
     showHomePopup,
     popupSessionKey,
@@ -257,9 +180,6 @@ export default function useHomeComputed({
     popupCooldownHours,
     deliveryAppsList,
     deliveryAppBranches,
-    homeCategories,
-    activeHomeCategory,
-    featuredProducts,
     pickupBranches,
     deliveryBranches,
     selectedDeliveryBranchInfo

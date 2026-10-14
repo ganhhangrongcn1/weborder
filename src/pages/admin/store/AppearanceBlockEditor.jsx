@@ -58,7 +58,7 @@ export default function AppearanceBlockEditor({
         <AdminCard variant="elevated" className="admin-appearance-editor">
           <EditorHead
             title="Banner đầu trang"
-            description="Quản lý các banner con trong block hero."
+            description="Chỉnh ảnh, link bấm và thứ tự các ảnh banner."
             uiDirty={uiDirty}
             onSaveAppearance={onSaveAppearance}
             action={
@@ -116,14 +116,14 @@ export default function AppearanceBlockEditor({
                             })
                           }
                         >
-                          <option value="block">Block</option>
-                          <option value="url">URL</option>
+                          <option value="block">Mở trang / nội dung</option>
+                          <option value="url">Mở đường dẫn</option>
                         </AdminSelect>
                       </label>
 
                       {selectedActionType === "block" ? (
                         <label className="wide">
-                          Chọn block/section đích
+                          Trang đích
                           <AdminSelect value={selectedHeroBlock.actionTarget || "home"} onChange={(event) => updateHomeContent(selectedHeroBlock.id, { actionTarget: event.target.value })}>
                             {APP_SECTIONS.map((item) => (
                               <option key={item.value} value={item.value}>
@@ -194,10 +194,10 @@ export default function AppearanceBlockEditor({
           uiDirty={uiDirty}
           onSaveAppearance={onSaveAppearance}
           action={
-            <label className="admin-switch admin-switch-lg">
-              <input type="checkbox" checked={selectedNonHeroBlock?.active !== false} onChange={(event) => setBlockActive(selectedBlockId, event.target.checked)} />
+            selectedBlockMeta.canToggle !== false ? <label className="admin-switch admin-switch-lg">
+              <input type="checkbox" aria-label={`Bật ${selectedBlockMeta.title}`} checked={selectedNonHeroBlock?.active !== false} onChange={(event) => setBlockActive(selectedBlockId, event.target.checked)} />
               <span />
-            </label>
+            </label> : null
           }
         />
 
@@ -208,21 +208,6 @@ export default function AppearanceBlockEditor({
               selectedNonHeroBlock={selectedNonHeroBlock}
               updateHomeContent={updateHomeContent}
             />
-          ) : selectedBlockId === "cashback" ? (
-            <div className="admin-appearance-fields">
-              <label className="wide">
-                Tiêu đề
-                <AdminInput value={selectedNonHeroBlock?.title || ""} onChange={(event) => updateHomeContent("cashback", { title: event.target.value })} />
-              </label>
-              <label className="wide">
-                Mô tả
-                <AdminInput value={selectedNonHeroBlock?.subtitle || ""} onChange={(event) => updateHomeContent("cashback", { subtitle: event.target.value })} />
-              </label>
-              <label>
-                Ký hiệu icon
-                <AdminInput value={selectedNonHeroBlock?.iconText || "%"} onChange={(event) => updateHomeContent("cashback", { iconText: event.target.value })} />
-              </label>
-            </div>
           ) : selectedBlockId === "siteBrand" ? (
             <SiteBrandEditor
               selectedNonHeroBlock={selectedNonHeroBlock}
@@ -252,7 +237,7 @@ export default function AppearanceBlockEditor({
               updateHomeContent={updateHomeContent}
             />
           ) : (
-            <p className="admin-help-text">Block này dùng dữ liệu động từ hệ thống. Bạn chỉ cần bật/tắt và sắp xếp thứ tự hiển thị.</p>
+            <p className="admin-help-text">Nội dung lấy từ dữ liệu bán hàng. Tại đây chỉ bật/tắt khối; món, ưu đãi và điều kiện hiển thị được quản lý ở mục nghiệp vụ tương ứng.</p>
           )}
         </div>
       </AdminCard>
@@ -295,14 +280,6 @@ function ReviewRewardsBannerEditor({
   return (
     <div className="admin-appearance-fields">
       <label className="wide">
-        Tiêu đề banner
-        <AdminInput
-          value={selectedNonHeroBlock?.title || ""}
-          onChange={(event) => updateHomeContent("reviewRewards", { title: event.target.value })}
-          placeholder="Nhận 5.000đ từ đơn 5 sao"
-        />
-      </label>
-      <label className="wide">
         Nội dung giới thiệu
         <AdminInput
           value={selectedNonHeroBlock?.subtitle || ""}
@@ -343,25 +320,11 @@ function DeliveryAppsEditor({
   updateHomeContent,
   updateDeliveryBranchApp
 }) {
-  useEffect(() => {
-    if (selectedNonHeroBlock?.subtitle) {
-      updateHomeContent("deliveryApps", { subtitle: "" });
-    }
-  }, [selectedNonHeroBlock?.subtitle, updateHomeContent]);
-
   return (
     <div className="admin-appearance-fields">
       <label className="wide">
         Tiêu đề
         <AdminInput value={selectedNonHeroBlock?.title || ""} onChange={(event) => updateHomeContent("deliveryApps", { title: event.target.value })} />
-      </label>
-      <label className="wide">
-        Mô tả
-        <AdminInput
-          value={selectedNonHeroBlock?.subtitle || ""}
-          onChange={(event) => updateHomeContent("deliveryApps", { subtitle: event.target.value })}
-          placeholder="Chọn chi nhánh gần bạn rồi đặt qua app quen thuộc."
-        />
       </label>
       <div className="wide admin-delivery-app-branches">
         <label className="wide">
@@ -433,10 +396,6 @@ function PopupCampaignEditor({
         Tiêu đề popup
         <AdminInput value={selectedNonHeroBlock?.title || ""} onChange={(event) => updateHomeContent("popupCampaign", { title: event.target.value })} placeholder="Ví dụ: Ưu đãi hôm nay" />
       </label>
-      <label className="wide">
-        Mô tả ngắn
-        <AdminInput value={selectedNonHeroBlock?.subtitle || ""} onChange={(event) => updateHomeContent("popupCampaign", { subtitle: event.target.value })} placeholder="Ví dụ: Chạm để xem menu mới" />
-      </label>
       <label>
         Độ trễ hiển thị (giây)
         <AdminInput
@@ -471,8 +430,8 @@ function PopupCampaignEditor({
             })
           }
         >
-          <option value="block">Block</option>
-          <option value="url">URL</option>
+          <option value="block">Mở trang / nội dung</option>
+          <option value="url">Mở đường dẫn</option>
         </AdminSelect>
       </label>
       {selectedPopupActionType === "block" ? (

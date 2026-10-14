@@ -5,10 +5,9 @@ import HomeHero from "../../pages/customer/home/HomeHero.jsx";
 import HomeFlashSale from "../../pages/customer/home/HomeFlashSale.jsx";
 import StampCard from "../loyalty/components/StampCard.jsx";
 import HomeVoucherCarousel from "../../pages/customer/home/HomeVoucherCarousel.jsx";
-import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
-import { homeText, optionModalText } from "../../data/uiText.js";
 import { closeOnlyOnBackdrop } from "../../utils/uiEvents.js";
+import { homeText, optionModalText } from "../../data/uiText.js";
 import { normalizePickupClock, normalizePickupDate } from "../../utils/dateTimeDefaults.js";
 import {
   formatCountdown,
@@ -27,87 +26,15 @@ import { createHomeFulfillmentActions } from "./homeFulfillmentActions.js";
 import useHomeEffects from "./useHomeEffects.js";
 
 
-const FALLBACK_HOME_BLOCK_ORDER = [
-  "hero",
-  "fulfillment",
-  "promoVouchers",
-  "reviewRewards",
-  "flashSale",
-  "featuredProducts",
-  "deliveryApps"
-];
-
-const HOME_ORDERING_BLOCKS = [
-  "fulfillment",
-  "promoVouchers",
-  "reviewRewards",
-  "flashSale",
-  "featuredProducts"
-];
-
-const SUPPORTED_HOME_BLOCK_KEYS = new Set([
-  ...FALLBACK_HOME_BLOCK_ORDER,
-  "popupCampaign"
-]);
-
-function normalizeHomeBlockKey(block) {
-  const id = String(block?.id || block || "");
-  const zone = String(block?.bannerZone || "").toLowerCase();
-  const placement = String(block?.placement || "").toLowerCase();
-
-  if (zone === "home-hero" || id === "hero" || placement.includes("banner lớn đầu trang")) return "hero";
-  if (id === "flashSale" || id === "flash_sale") return "flashSale";
-  if (id === "promoVouchers" || id === "promo_vouchers") return "promoVouchers";
-  return id;
-}
-
-function getHomeContentOrder(homeContent) {
-  if (homeContent && !Array.isArray(homeContent) && Array.isArray(homeContent.order)) {
-    return homeContent.order.map(normalizeHomeBlockKey);
-  }
-
-  const contentItems = Array.isArray(homeContent)
-    ? homeContent
-    : Array.isArray(homeContent?.items)
-      ? homeContent.items
-      : [];
-
-  return contentItems.map(normalizeHomeBlockKey);
-}
-
-function resolveHomeBlockOrder(homeContent) {
-  const configuredOrder = getHomeContentOrder(homeContent)
-    .filter((key) => SUPPORTED_HOME_BLOCK_KEYS.has(key) && key !== "popupCampaign");
-
-  const uniqueConfiguredOrder = Array.from(new Set(configuredOrder));
-  const supportingOrder = uniqueConfiguredOrder.filter(
-    (key) => key !== "hero" && key !== "deliveryApps" && !HOME_ORDERING_BLOCKS.includes(key)
-  );
-
-  return [
-    "hero",
-    ...HOME_ORDERING_BLOCKS,
-    ...supportingOrder,
-    ...FALLBACK_HOME_BLOCK_ORDER.filter(
-      (key) =>
-        key !== "hero" &&
-        key !== "deliveryApps" &&
-        !HOME_ORDERING_BLOCKS.includes(key) &&
-        !supportingOrder.includes(key)
-    ),
-    "deliveryApps"
-  ];
-}
+import { HOME_BLOCK_RENDER_ORDER } from "../../constants/homeLayout.js";
 
 export default function Home({
   navigate,
   openProduct,
   openOptionModal,
   products,
-  promos,
   coupons = [],
   smartPromotions = [],
-  categories,
   homeContent,
   branches = [],
   checkoutPreset,
@@ -143,8 +70,6 @@ export default function Home({
   const [reviewRewardPopupOpen, setReviewRewardPopupOpen] = useState(false);
   const [deliveryAppOrderingOpen, setDeliveryAppOrderingOpen] = useState(false);
   const [homeClockTick, setHomeClockTick] = useState(() => Date.now());
-  const popularProductIds = [];
-  const cashbackRef = useRef(null);
   const promoVouchersRef = useRef(null);
   const deliveryAppsRef = useRef(null);
   const fulfillmentRef = useRef(null);
@@ -160,13 +85,11 @@ export default function Home({
     flashProducts,
     mainFlashProduct,
     banners,
-    cashbackBlock,
     siteBrandBlock,
     reviewRewardsBlock,
     deliveryAppsBlock,
     popupCampaignBlock,
     voucherCards,
-    showCashback,
     showReviewRewards,
     showPromoVouchers,
     showDeliveryApps,
@@ -194,10 +117,6 @@ export default function Home({
     currentTime: new Date(homeClockTick),
     homeContent,
     homeText: t,
-    categories,
-    homeCategory: "",
-    popularProductIds,
-    showAllHomeProducts: false,
     branches,
     selectedDeliveryBranch
   });
@@ -221,7 +140,6 @@ export default function Home({
   const { handleAction } = createHomeActionHandlers({
     navigate,
     refs: {
-      cashbackRef,
       promoVouchersRef,
       deliveryAppsRef,
       fulfillmentRef,
@@ -261,12 +179,6 @@ export default function Home({
     navigate
   });
 
-  const homeBlockOrder = useMemo(() => {
-    const remainingBlocks = resolveHomeBlockOrder(homeContent)
-      .filter((key) => key !== "hero" && key !== "featuredProducts");
-    // Keep the stamp card directly below the banner, before ordering options.
-    return ["hero", "featuredProducts", ...remainingBlocks];
-  }, [homeContent]);
   const pickupBranchInfo = useMemo(
     () => pickupBranches.find((branch) => branch.id === pickupBranch) || pickupBranches[0] || null,
     [pickupBranches, pickupBranch]
@@ -302,9 +214,6 @@ export default function Home({
     ),
     deliveryApps: () => (
       <HomeInfoCards
-        showCashback={false}
-        cashbackRef={cashbackRef}
-        cashbackBlock={cashbackBlock}
         showDeliveryApps={showDeliveryApps && deliveryBranches.length > 0}
         deliveryAppsRef={deliveryAppsRef}
         deliveryAppsBlock={deliveryAppsBlock}
@@ -360,7 +269,7 @@ export default function Home({
 
   return (
     <section className="home2026-shell">
-      {homeBlockOrder.map((blockKey) => (
+      {HOME_BLOCK_RENDER_ORDER.map((blockKey) => (
         <React.Fragment key={blockKey}>
           {homeBlockRenderers[blockKey]?.()}
         </React.Fragment>

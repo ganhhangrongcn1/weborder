@@ -4,7 +4,6 @@ export function createHomeActionHandlers({
 }) {
   const getRefByTarget = (target) => {
     const map = {
-      cashback: refs.cashbackRef,
       promoVouchers: refs.promoVouchersRef,
       deliveryApps: refs.deliveryAppsRef,
       fulfillment: refs.fulfillmentRef,
