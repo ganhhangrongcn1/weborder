@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { HOME_BLOCK_RENDER_ORDER } from "../../../constants/homeLayout.js";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { processUploadImage } from "../../../utils/imageUpload.js";
 import { uploadImageToMenuBucket } from "../../../services/supabase/storageService.js";
 import { AdminBadge, AdminButton, AdminCard } from "../ui/index.js";
@@ -119,7 +120,6 @@ export default function AppearanceSettings({
   const [saveMessage, setSaveMessage] = useState("");
   const [search, setSearch] = useState("");
   const [selectedBlockId, setSelectedBlockId] = useState("hero");
-  const [draggingBlockId, setDraggingBlockId] = useState("");
   const [draggingHeroId, setDraggingHeroId] = useState("");
   const [selectedHeroId, setSelectedHeroId] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -142,12 +142,6 @@ export default function AppearanceSettings({
   const topBannerItems = useMemo(() => homeContent.filter(isTopBannerItem), [homeContent]);
 
   useEffect(() => {
-    const missing = HOME_BLOCK_DEFAULTS.filter((blockDefault) => !homeContent.some((item) => item.id === blockDefault.id));
-    if (!missing.length) return;
-    setHomeContent([...homeContent, ...missing]);
-  }, [homeContent, setHomeContent]);
-
-  useEffect(() => {
     if (!selectedHeroId || !topBannerItems.some((item) => item.id === selectedHeroId)) {
       setSelectedHeroId(topBannerItems[0]?.id || "");
     }
@@ -158,24 +152,12 @@ export default function AppearanceSettings({
 
   const blockMetaById = useMemo(() => Object.fromEntries(HOME_BLOCKS.map((item) => [item.id, item])), []);
 
-  const blockOrder = useMemo(() => {
-    const order = {};
-    HOME_BLOCKS.forEach((item, index) => {
-      const idx =
-        item.id === "hero"
-          ? homeContent.findIndex((contentItem) => isTopBannerItem(contentItem))
-          : homeContent.findIndex((contentItem) => contentItem.id === item.id);
-      order[item.id] = idx >= 0 ? idx : index;
-    });
-    return order;
-  }, [homeContent]);
-
   const filteredBlocks = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const source = [...HOME_BLOCKS].sort((a, b) => blockOrder[a.id] - blockOrder[b.id]);
-    if (!q) return source;
-    return source.filter((item) => `${item.title} ${item.placement} ${item.id}`.toLowerCase().includes(q));
-  }, [search, blockOrder]);
+    const query = search.trim().toLowerCase();
+    const order = ["siteBrand", ...HOME_BLOCK_RENDER_ORDER, "popupCampaign"];
+    return HOME_BLOCKS.filter((item) => !query || `${item.title} ${item.placement}`.toLowerCase().includes(query))
+      .sort((first, second) => order.indexOf(first.id) - order.indexOf(second.id));
+  }, [search]);
 
   const getBlockData = (blockId) => {
     if (blockId === "hero") return { id: "hero", active: topBannerItems.some((item) => item.active !== false) };
@@ -197,42 +179,13 @@ export default function AppearanceSettings({
   };
 
   const setBlockActive = (blockId, checked) => {
+    if (HOME_BLOCKS.find((block) => block.id === blockId)?.canToggle === false) return;
     onDirtyChange?.(true);
     if (blockId === "hero") {
       setHomeContent((current) => current.map((item) => (isTopBannerItem(item) ? { ...item, active: checked } : item)));
       return;
     }
     updateHomeContent(blockId, { active: checked });
-  };
-
-  const reorderBlocks = (draggedId, targetId) => {
-    if (!draggedId || !targetId || draggedId === targetId) return;
-    const ordered = [...HOME_BLOCKS].sort((a, b) => blockOrder[a.id] - blockOrder[b.id]);
-    const currentIndex = ordered.findIndex((item) => item.id === draggedId);
-    const targetIndex = ordered.findIndex((item) => item.id === targetId);
-    if (currentIndex < 0 || targetIndex < 0) return;
-    const next = [...ordered];
-    const [moved] = next.splice(currentIndex, 1);
-    next.splice(targetIndex, 0, moved);
-    const nextIndexByBlock = Object.fromEntries(next.map((item, index) => [item.id, index]));
-
-    onDirtyChange?.(true);
-    setHomeContent((current) => {
-      const keepOrderWithinGroup = [...current];
-      keepOrderWithinGroup.sort((a, b) => {
-        const blockA = isTopBannerItem(a) ? "hero" : a.id;
-        const blockB = isTopBannerItem(b) ? "hero" : b.id;
-        const ia = nextIndexByBlock[blockA] ?? Number.MAX_SAFE_INTEGER;
-        const ib = nextIndexByBlock[blockB] ?? Number.MAX_SAFE_INTEGER;
-        if (ia !== ib) return ia - ib;
-        if (blockA === "hero" && blockB === "hero") {
-          const heroIds = topBannerItems.map((hero) => hero.id);
-          return heroIds.indexOf(a.id) - heroIds.indexOf(b.id);
-        }
-        return 0;
-      });
-      return keepOrderWithinGroup;
-    });
   };
 
   const reorderTopBanners = (nextTopBanners) => {
@@ -462,7 +415,7 @@ export default function AppearanceSettings({
 
   const appearanceStats = useMemo(() => {
     const allBlocks = HOME_BLOCKS.map((block) => getBlockData(block.id));
-    const visible = allBlocks.filter((block) => block?.active !== false).length;
+    const visible = allBlocks.filter((block, index) => HOME_BLOCKS[index].canToggle === false || block?.active !== false).length;
 
     return {
       total: allBlocks.length,
@@ -500,7 +453,7 @@ export default function AppearanceSettings({
       <div className="admin-appearance-page-head">
         <div>
           <h1>Quản lý giao diện</h1>
-          <p>Quản lý các giao diện hiển thị trên website và ứng dụng.</p>
+          <p>Chỉnh nội dung còn được Home sử dụng. Thứ tự các khối được cố định theo giao diện hiện tại.</p>
         </div>
         <AdminButton
           variant={uiDirty ? "primary" : "secondary"}
@@ -520,12 +473,12 @@ export default function AppearanceSettings({
           <AdminBadge tone="brand">Block</AdminBadge>
         </AdminCard>
         <AdminCard variant="compact" className="admin-appearance-stat">
-          <span>Đang hiển thị</span>
+          <span>Đang bật</span>
           <strong>{appearanceStats.visible}</strong>
           <AdminBadge tone="success">Bật</AdminBadge>
         </AdminCard>
         <AdminCard variant="compact" className="admin-appearance-stat">
-          <span>Đã ẩn</span>
+          <span>Đang tắt</span>
           <strong>{appearanceStats.hidden}</strong>
           <AdminBadge tone="neutral">Tắt</AdminBadge>
         </AdminCard>
@@ -536,15 +489,13 @@ export default function AppearanceSettings({
         </AdminCard>
       </div>
 
+      <p className="admin-help-text">Thẻ tích đơn luôn nằm dưới banner; quản lý chương trình tại Ưu đãi bán hàng → Tích đơn. Danh sách dưới đây chỉ gồm các mục Home còn sử dụng.</p>
       <div className="admin-panel admin-appearance-layout">
         <AppearanceBlockList
           search={search}
           setSearch={setSearch}
           filteredBlocks={filteredBlocks}
           getBlockData={getBlockData}
-          draggingBlockId={draggingBlockId}
-          setDraggingBlockId={setDraggingBlockId}
-          reorderBlocks={reorderBlocks}
           selectedBlockId={selectedBlockId}
           setSelectedBlockId={setSelectedBlockId}
           setBlockActive={setBlockActive}

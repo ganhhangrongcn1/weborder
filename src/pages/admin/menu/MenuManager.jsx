@@ -3,7 +3,7 @@ import MenuGroupEditorModal from "./MenuGroupEditorModal.jsx";
 import MenuCategoryEditorModal from "./MenuCategoryEditorModal.jsx";
 import MenuOverviewPanel from "./components/MenuOverviewPanel.jsx";
 import MenuGroupsPanel from "./components/MenuGroupsPanel.jsx";
-import KitchenOptionSettingsPanel from "./components/KitchenOptionSettingsPanel.jsx";
+import { Link } from "react-router-dom";
 import useMenuManagerState from "./hooks/useMenuManagerState.js";
 import useMenuManagerActions from "./hooks/useMenuManagerActions.js";
 import {
@@ -172,7 +172,6 @@ export default function MenuManager({
         tabs={[
           { value: "overview", label: "Tổng quan menu" },
           { value: "groups", label: "Tùy chọn nhóm" },
-          { value: "kitchen", label: "Thiết lập Kitchen" },
           { value: "bulk", label: "Thêm Cho Đủ Vị (Topping rời)" }
         ]}
       />
@@ -220,9 +219,7 @@ export default function MenuManager({
         />
       )}
 
-      {state.menuTab === "kitchen" && (
-        <KitchenOptionSettingsPanel optionGroupPresets={optionGroupPresets} />
-      )}
+      <p className="admin-help-text">Quy tắc xác nhận topping và món combo: <Link to="/admin/settings/kitchen">Checklist chế biến</Link>.</p>
 
       {state.menuTab === "bulk" && (
         <AdminCard className="admin-panel admin-menu-section admin-menu-bulk-section">

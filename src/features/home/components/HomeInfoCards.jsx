@@ -27,9 +27,6 @@ function DeliveryAppLogo({ app }) {
 }
 
 export default function HomeInfoCards({
-  showCashback,
-  cashbackRef,
-  cashbackBlock,
   showDeliveryApps,
   deliveryAppsRef,
   deliveryAppsBlock,
@@ -82,19 +79,10 @@ export default function HomeInfoCards({
     window.open(normalizedUrl, "_blank", "noopener,noreferrer");
   };
 
-  if (!showCashback && !showDeliveryApps) return null;
+  if (!showDeliveryApps) return null;
 
   return (
     <section className="home2026-section grid gap-3">
-      {showCashback && (
-        <article ref={cashbackRef} className="cashback-card">
-          <span className="cashback-icon">{cashbackBlock?.iconText || "%"}</span>
-          <div>
-            <h2>{cashbackBlock?.title || "Hoàn tiền"}</h2>
-            <p>{cashbackBlock?.subtitle || "Ưu đãi hoàn tiền khi đặt món."}</p>
-          </div>
-        </article>
-      )}
       {showDeliveryApps && (
         <article ref={deliveryAppsRef} className="delivery-app-card">
           <h2>{deliveryAppsBlock?.title || "Mua trên app giao hàng"}</h2>

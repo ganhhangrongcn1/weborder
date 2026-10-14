@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { goongAutocomplete, goongPlaceDetail, hasGoongApiKey } from "../../../services/goongService.js";
 import { buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/posPaymentService.js";
-import { DEFAULT_SHIPPING_CONFIG } from "../../../services/shippingService.js";
 import { syncBranchesToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
 import { createStableBranchUuid } from "../../../services/branchIdentityService.js";
 import { createQrPngDataUrl, createQrSvg } from "../../../services/qrCodeService.js";
 import { orderingFeatureFlags } from "../../../constants/featureFlags.js";
 import { AdminButton, AdminCard, AdminInput } from "../ui/index.js";
-import GrabAutomationSettings from "./GrabAutomationSettings.jsx";
 
 const BANK_OPTIONS = [
   { bin: "970422", name: "MB Bank" },
@@ -36,10 +34,7 @@ const QR_ORDER_PUBLIC_ORIGIN = "https://ganhhangrong.vn";
 
 export default function BranchSettings({
   branches,
-  setBranches,
-  shippingConfig,
-  setShippingConfig,
-  onSaveShippingConfig
+  setBranches
 }) {
   const [addressSuggestions, setAddressSuggestions] = useState({
     branchId: "",
@@ -47,14 +42,12 @@ export default function BranchSettings({
     items: []
   });
   const [draftBranches, setDraftBranches] = useState(() => (Array.isArray(branches) ? branches : []));
-  const [draftShippingConfig, setDraftShippingConfig] = useState(() => ({ ...(shippingConfig || {}) }));
   const [branchSaveMessage, setBranchSaveMessage] = useState("");
-  const [shippingSaveMessage, setShippingSaveMessage] = useState("");
   const [branchSaving, setBranchSaving] = useState(false);
-  const [shippingSaving, setShippingSaving] = useState(false);
   const [previewBranchId, setPreviewBranchId] = useState("");
   const [qrModalBranchId, setQrModalBranchId] = useState("");
   const [expandedBranchId, setExpandedBranchId] = useState("");
+  const [branchTabs, setBranchTabs] = useState({});
   const [expandedPosBranchId, setExpandedPosBranchId] = useState("");
   const [deleteBranchId, setDeleteBranchId] = useState("");
   const [qrRefreshVersionByBranchId, setQrRefreshVersionByBranchId] = useState({});
@@ -175,18 +168,9 @@ export default function BranchSettings({
     setDraftBranches(Array.isArray(branches) ? branches : []);
   }, [branches]);
 
-  useEffect(() => {
-    setDraftShippingConfig({ ...(shippingConfig || {}) });
-  }, [shippingConfig]);
-
   const branchesDirty = useMemo(
     () => JSON.stringify(draftBranches || []) !== JSON.stringify(branches || []),
     [draftBranches, branches]
-  );
-
-  const shippingDirty = useMemo(
-    () => JSON.stringify(draftShippingConfig || {}) !== JSON.stringify(shippingConfig || {}),
-    [draftShippingConfig, shippingConfig]
   );
 
   const qrModalBranch = useMemo(
@@ -344,27 +328,14 @@ export default function BranchSettings({
     setBranchSaving(true);
     setBranchSaveMessage("");
     try {
+      const result = await syncBranchesToSupabase(draftBranches);
+      if (!result?.ok) throw new Error("Branch configuration was not saved");
       setBranches(draftBranches);
-      await syncBranchesToSupabase(draftBranches);
-      setBranchSaveMessage("Đã lưu chi nhánh lên Supabase.");
+      setBranchSaveMessage("Đã lưu cấu hình chi nhánh.");
     } catch {
-      setBranchSaveMessage("Lưu chi nhánh thất bại. Kiểm tra RLS policy write cho catalog.");
+      setBranchSaveMessage("Chưa lưu được cấu hình chi nhánh. Vui lòng thử lại.");
     } finally {
       setBranchSaving(false);
-    }
-  };
-
-  const handleSaveShipping = async () => {
-    if (!shippingDirty || shippingSaving) return;
-    setShippingSaving(true);
-    setShippingSaveMessage("");
-    try {
-      await onSaveShippingConfig(draftShippingConfig);
-      setShippingSaveMessage("Đã lưu cấu hình phí ship lên Supabase.");
-    } catch {
-      setShippingSaveMessage("Lưu phí ship thất bại. Kiểm tra RLS policy write cho app_configs.");
-    } finally {
-      setShippingSaving(false);
     }
   };
 
@@ -418,7 +389,7 @@ export default function BranchSettings({
               disabled={!branchesDirty || branchSaving}
               onClick={handleSaveBranches}
             >
-              {branchSaving ? "Đang lưu..." : "Lưu thay đổi"}
+              {branchSaving ? "Đang lưu..." : "Lưu cấu hình chi nhánh"}
             </AdminButton>
             <AdminButton onClick={handleAddBranch}>
               Thêm chi nhánh
@@ -448,6 +419,7 @@ export default function BranchSettings({
             const qrRefreshVersion = qrRefreshVersionByBranchId[qrRefreshKey] || 0;
             const branchId = String(branch?.id || "");
             const branchPanelId = `branch-settings-${branchId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+            const branchTab = branchTabs[branchId] || "info";
             const isExpanded = expandedBranchId === branchId;
             const enabledPaymentLabels = [
               webMomoEnabled ? "MoMo" : "",
@@ -496,7 +468,18 @@ export default function BranchSettings({
 
                 {isExpanded ? (
                 <div id={branchPanelId} className="admin-branch-layout">
+                  <nav className="admin-ui-tabs" aria-label={`Cấu hình ${branch.name || "chi nhánh"}`}>
+                    {[{ value: "info", label: "Thông tin" }, { value: "sales", label: "Bán hàng & QR" }, { value: "payment", label: "Thanh toán" }].map((tab) => (
+                      <button type="button" key={tab.value} aria-pressed={branchTab === tab.value}
+                        className={branchTab === tab.value ? "active" : ""}
+                        onClick={() => setBranchTabs((current) => ({ ...current, [branchId]: tab.value }))}>
+                        {tab.label}
+                      </button>
+                    ))}
+                  </nav>
+                  <p className="admin-help-text">Đang chỉnh {branch.name || "chi nhánh"}. Chuyển thẻ giữ nguyên thay đổi; bấm Lưu cấu hình chi nhánh để ghi nhận.</p>
                   <div className="admin-branch-main">
+                    {branchTab === "info" && (<>
                     <div className="admin-branch-section-heading">
                       <div>
                         <strong>Thông tin chi nhánh</strong>
@@ -626,6 +609,8 @@ export default function BranchSettings({
                       </div>
                     </div>
 
+                    </>)}
+                    {branchTab === "sales" && (<>
                     <div className="admin-branch-section-heading is-compact">
                       <div>
                         <strong>Kênh phục vụ</strong>
@@ -657,8 +642,8 @@ export default function BranchSettings({
 
                     <div className="admin-branch-section-heading">
                       <div>
-                        <strong>Bán hàng trên website</strong>
-                        <small>Các hình thức thanh toán khách được phép chọn trên website.</small>
+                        <strong>QR đặt món tại quầy</strong>
+                        <small>Mã QR đưa khách vào menu của đúng chi nhánh.</small>
                       </div>
                     </div>
                     <div className="admin-branch-website-grid">
@@ -705,6 +690,9 @@ export default function BranchSettings({
                       </div>
                     </div> : null}
 
+                    </div>
+                    </>)}
+                    {branchTab === "payment" && (<>
                     <div className="admin-branch-subcard admin-branch-payment-card">
                       <div>
                         <strong className="block text-sm font-bold text-brown">Thanh toán trên website</strong>
@@ -751,7 +739,7 @@ export default function BranchSettings({
                         Website phải luôn có ít nhất một hình thức thanh toán. Các công tắc này không ảnh hưởng POS.
                       </p>
                     </div>
-                    </div>
+
 
                     <div className={`admin-branch-subcard admin-branch-pos-card${expandedPosBranchId === branchId ? " is-expanded" : ""}`}>
                       <button
@@ -921,6 +909,9 @@ export default function BranchSettings({
                       ) : null}
                     </div>
 
+                    </>)}
+                    {branchTab === "info" && <details>
+                      <summary>Thao tác nâng cao</summary>
                     <div className="admin-branch-danger-zone">
                       <div>
                         <strong>Xóa chi nhánh</strong>
@@ -934,6 +925,7 @@ export default function BranchSettings({
                         Xóa chi nhánh
                       </AdminButton>
                     </div>
+                    </details>}
                   </div>
                 </div>
                 ) : null}
@@ -943,69 +935,7 @@ export default function BranchSettings({
         </div>
       </AdminCard>
 
-      <GrabAutomationSettings />
 
-      <AdminCard className="admin-panel admin-store-panel">
-        <div className="admin-panel-head">
-          <h2>Cấu hình phí ship nền tại chi nhánh</h2>
-          <AdminButton
-            variant={shippingDirty ? "primary" : "secondary"}
-            className={!shippingDirty || shippingSaving ? "opacity-70 cursor-not-allowed" : ""}
-            disabled={!shippingDirty || shippingSaving}
-            onClick={handleSaveShipping}
-          >
-            {shippingSaving ? "Đang lưu..." : "Lưu thay đổi"}
-          </AdminButton>
-        </div>
-        {shippingSaveMessage ? <p className="admin-store-message">{shippingSaveMessage}</p> : null}
-        <div className="admin-mini-grid admin-ship-compact-grid">
-          <div className="admin-mini-card admin-ship-compact-item">
-            <label>Phí 3km đầu</label>
-            <AdminInput
-              className="admin-input"
-              type="number"
-              value={draftShippingConfig.baseFeeFirst3Km}
-              onChange={(event) => setDraftShippingConfig((current) => ({ ...current, baseFeeFirst3Km: Number(event.target.value) }))}
-            />
-          </div>
-          <div className="admin-mini-card admin-ship-compact-item">
-            <label>Giá mỗi km tiếp theo</label>
-            <AdminInput
-              className="admin-input"
-              type="number"
-              value={draftShippingConfig.feePerNextKm}
-              onChange={(event) => setDraftShippingConfig((current) => ({ ...current, feePerNextKm: Number(event.target.value) }))}
-            />
-          </div>
-          <div className="admin-mini-card admin-ship-compact-item">
-            <label>Ưu đãi freeship</label>
-            <div className="admin-ship-info-note">
-              Cấu hình tại Khuyến mãi → Freeship.
-            </div>
-          </div>
-          <div className="admin-mini-card admin-ship-compact-item">
-            <label>Bán kính giao hàng tối đa (km)</label>
-            <AdminInput
-              className="admin-input"
-              type="number"
-              value={draftShippingConfig.maxRadiusKm}
-              onChange={(event) => setDraftShippingConfig((current) => ({ ...current, maxRadiusKm: Number(event.target.value) }))}
-            />
-          </div>
-          <div className="admin-mini-card admin-ship-compact-item admin-ship-note-item">
-            <label>Ghi chú hiển thị cho khách</label>
-            <textarea
-              className="admin-input"
-              rows="4"
-              value={draftShippingConfig.customerNote || ""}
-              onChange={(event) => setDraftShippingConfig((current) => ({ ...current, customerNote: event.target.value }))}
-            />
-          </div>
-        </div>
-        <AdminButton variant="secondary" className="admin-secondary" onClick={() => setDraftShippingConfig({ ...DEFAULT_SHIPPING_CONFIG })}>
-          Khôi phục phí ship mặc định
-        </AdminButton>
-      </AdminCard>
 
       {deleteBranch ? (
         <div className="admin-qr-modal-backdrop" role="presentation" onClick={() => setDeleteBranchId("")}>
@@ -1021,7 +951,7 @@ export default function BranchSettings({
             <h3 id="delete-branch-title">Xóa chi nhánh này?</h3>
             <p id="delete-branch-description">
               Bạn sắp xóa <strong>{String(deleteBranch?.name || "chi nhánh")}</strong> khỏi danh sách cấu hình.
-              Thay đổi chỉ được cập nhật lên hệ thống sau khi bấm Lưu thay đổi.
+              Thay đổi chỉ được cập nhật lên hệ thống sau khi bấm Lưu cấu hình chi nhánh.
             </p>
             <div className="admin-branch-delete-modal__actions">
               <AdminButton variant="secondary" onClick={() => setDeleteBranchId("")}>

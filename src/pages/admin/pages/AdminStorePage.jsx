@@ -2,6 +2,7 @@ import AdminBackofficeSections from "../AdminBackofficeSections.jsx";
 
 export default function AdminStorePage({
   activeSubSection,
+  optionGroupPresets = [],
   branches,
   setBranches,
   hours,
@@ -19,6 +20,7 @@ export default function AdminStorePage({
     <AdminBackofficeSections
       section="store"
       activeSubSection={activeSubSection}
+      optionGroupPresets={optionGroupPresets}
       activeCampaignTab="coupon"
       setActiveCampaignTab={() => {}}
       promos={[]}

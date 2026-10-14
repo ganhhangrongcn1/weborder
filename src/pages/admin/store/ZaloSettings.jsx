@@ -43,7 +43,7 @@ export default function ZaloSettings({ zaloConfig, setZaloConfig, onSave }) {
   return (
     <AdminPanel
       className="admin-store-panel"
-      title="Cấu hình Zalo nhận đơn"
+      title="Zalo nhận đơn"
       action={(
         <AdminButton
           variant={hasChanges ? "primary" : "secondary"}
@@ -51,7 +51,7 @@ export default function ZaloSettings({ zaloConfig, setZaloConfig, onSave }) {
           disabled={!hasChanges}
           onClick={handleSave}
         >
-          Lưu thay đổi
+          Lưu Zalo nhận đơn
         </AdminButton>
       )}
     >

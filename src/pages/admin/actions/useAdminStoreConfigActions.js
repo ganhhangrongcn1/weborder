@@ -1,4 +1,4 @@
-import { saveShippingConfig, saveShippingConfigAsync, saveShippingConfigStrictAsync } from "../../../services/shippingService.js";
+import { saveShippingConfig, saveShippingConfigStrictAsync } from "../../../services/shippingService.js";
 import { saveZaloConfig, saveZaloConfigAsync } from "../../../services/zaloService.js";
 import { saveOptionGroupPresets, saveOptionGroupPresetsAsync } from "../../../services/optionGroupService.js";
 
@@ -30,17 +30,12 @@ export default function useAdminStoreConfigActions({
   };
 
   const handleSaveShipping = async (nextConfig = shippingConfig) => {
-    const next = saveShippingConfig(nextConfig);
-    setShippingConfig(next);
-    if (supabaseConfigSyncEnabled) {
-      try {
-        await saveShippingConfigStrictAsync(next);
-      } catch (error) {
-        await saveShippingConfigAsync(next).catch(() => {});
-        throw error;
-      }
-    }
-    return next;
+    const next = supabaseConfigSyncEnabled
+      ? await saveShippingConfigStrictAsync(nextConfig)
+      : nextConfig;
+    const saved = saveShippingConfig(next);
+    setShippingConfig(saved);
+    return saved;
   };
 
   return {

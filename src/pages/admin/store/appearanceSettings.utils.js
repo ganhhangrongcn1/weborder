@@ -9,7 +9,7 @@ export const DELIVERY_APP_OPTIONS = [
 ];
 
 export const HOME_BLOCKS = [
-  { id: "siteBrand", title: "Thương hiệu / Logo", placement: "Trang chủ / Logo và lời chào" },
+  { id: "siteBrand", title: "Thương hiệu / Logo", placement: "Đầu trang / Logo và tên thương hiệu", canToggle: false },
   { id: "hero", title: "Banner đầu trang", placement: "Trang chủ / Banner lớn đầu trang" },
   { id: "promoVouchers", title: "Khuyến mãi cho bạn", placement: "Trang chủ / Mã giảm giá và freeship" },
   { id: "reviewRewards", title: "Banner thưởng đánh giá", placement: "Trang chủ / Chương trình đánh giá 5 sao" },
@@ -17,8 +17,6 @@ export const HOME_BLOCKS = [
   { id: "popupCampaign", title: "Popup trang chủ", placement: "Trang chủ / Popup sau khi tải trang" },
   { id: "fulfillment", title: "Khối giao hàng / tự đến lấy", placement: "Trang chủ / Chọn hình thức nhận hàng" },
   { id: "flashSale", title: "Khối Flash Sale", placement: "Trang chủ / Flash Sale" },
-  { id: "categorySection", title: "Khối danh mục", placement: "Trang chủ / Danh mục" },
-  { id: "featuredProducts", title: "Khối sản phẩm nổi bật", placement: "Trang chủ / Sản phẩm nổi bật" }
 ];
 
 export const HOME_BLOCK_DEFAULTS = [
@@ -47,8 +45,6 @@ export const HOME_BLOCK_DEFAULTS = [
   },
   { id: "fulfillment", placement: "Trang chủ / Chọn hình thức nhận hàng", title: "Hình thức nhận hàng", active: true },
   { id: "flashSale", placement: "Trang chủ / Flash Sale", title: "Flash Sale", active: true },
-  { id: "categorySection", placement: "Trang chủ / Danh mục", title: "Danh mục món", active: true },
-  { id: "featuredProducts", placement: "Trang chủ / Sản phẩm nổi bật", title: "Sản phẩm nổi bật", active: true }
 ];
 
 export const APP_SECTIONS = [
@@ -67,8 +63,7 @@ export const HOME_SECTION_TARGETS = [
   { value: "deliveryApps", label: "Block mua trên app" },
   { value: "fulfillment", label: "Block giao hàng / tự đến lấy" },
   { value: "flashSale", label: "Block Flash Sale" },
-  { value: "categorySection", label: "Block danh mục" },
-  { value: "featuredProducts", label: "Block sản phẩm nổi bật" },
+  { value: "featuredProducts", label: "Thẻ tích đơn" },
   ...APP_SECTIONS.filter((item) => item.value !== "home")
 ];
 

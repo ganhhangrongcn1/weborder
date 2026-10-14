@@ -1,3 +1,6 @@
+import KitchenOptionSettingsPanel from "./menu/components/KitchenOptionSettingsPanel.jsx";
+import ShippingSettings from "./store/ShippingSettings.jsx";
+import GrabAutomationSettings from "./store/GrabAutomationSettings.jsx";
 import ZaloSettings from "./store/ZaloSettings.jsx";
 import AppearanceSettings from "./store/AppearanceSettings.jsx";
 import BranchSettings from "./store/BranchSettings.jsx";
@@ -10,6 +13,7 @@ export default function AdminBackofficeSections({
   section,
   uiDirty,
   activeSubSection,
+  optionGroupPresets = [],
   activeCampaignTab,
   setActiveCampaignTab,
   promos,
@@ -102,11 +106,14 @@ export default function AdminBackofficeSections({
               setHours={setHours}
               deliveryZones={deliveryZones}
               setDeliveryZones={setDeliveryZones}
-              shippingConfig={shippingConfig}
-              setShippingConfig={setShippingConfig}
-              onSaveShippingConfig={onSaveShipping}
             />
           )}
+
+          {activeSubSection === "kitchen" && <KitchenOptionSettingsPanel optionGroupPresets={optionGroupPresets} />}
+          {activeSubSection === "shipping" && (
+            <ShippingSettings shippingConfig={shippingConfig} onSave={onSaveShipping} />
+          )}
+          {activeSubSection === "grab" && <GrabAutomationSettings />}
 
           {activeSubSection === "zalo" && (
             <ZaloSettings zaloConfig={zaloConfig} setZaloConfig={setZaloConfig} onSave={onSaveZalo} />
@@ -120,7 +127,7 @@ export default function AdminBackofficeSections({
             <AppDownloadSettings />
           )}
 
-          {!["branches", "zalo", "accounts", "downloads"].includes(activeSubSection) && (
+          {!["branches", "shipping", "grab", "kitchen", "zalo", "accounts", "downloads"].includes(activeSubSection) && (
             <AdminPlaceholder text="Đang phát triển" />
           )}
         </div>
