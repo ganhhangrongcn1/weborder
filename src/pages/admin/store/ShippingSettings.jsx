@@ -20,7 +20,7 @@ export default function ShippingSettings({ shippingConfig, onSave }) {
     } finally { setShippingSaving(false); }
   };
   return (
-<AdminCard className="admin-panel admin-store-panel">
+<AdminCard className="admin-panel admin-store-panel admin-shipping-settings">
         <div className="admin-panel-head">
           <div><h2>Phí giao hàng chung</h2><p className="admin-help-text">Áp dụng toàn hệ thống. Bật/tắt giao hàng từng quán tại Quản lý chi nhánh.</p></div>
           <AdminButton
