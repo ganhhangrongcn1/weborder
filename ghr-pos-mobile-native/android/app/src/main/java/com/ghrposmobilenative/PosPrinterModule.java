@@ -13,6 +13,8 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.hardware.usb.UsbConstants;
+import com.facebook.react.common.LifecycleState;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Handler;
@@ -65,6 +67,7 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     private final PendingIntent permissionIntent;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private Promise pendingUsbPromise;
+    private final java.util.Set<String> autoPermissionAttempts = new java.util.HashSet<>();
     private MediaPlayer alertPlayer;
     private MediaPlayer websiteOrderPlayer;
     private MediaPlayer qrPaymentPlayer;
@@ -75,6 +78,15 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(intent.getAction())) {
+                UsbDevice detached = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                if (detached != null) autoPermissionAttempts.remove(detached.getDeviceName());
+                return;
+            }
+            if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) {
+                restoreSelectedUsbPermission();
+                return;
+            }
             if (!ACTION_USB_PERMISSION.equals(intent.getAction())) return;
             UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
             boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
@@ -95,17 +107,19 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
         this.reactContext = reactContext;
         this.prefs = reactContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         this.usbManager = (UsbManager) reactContext.getSystemService(Context.USB_SERVICE);
-        int pendingIntentFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        int pendingIntentFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
                 : PendingIntent.FLAG_UPDATE_CURRENT;
         this.permissionIntent = PendingIntent.getBroadcast(
                 reactContext,
                 0,
-                new Intent(ACTION_USB_PERMISSION),
+                new Intent(ACTION_USB_PERMISSION).setPackage(reactContext.getPackageName()),
                 pendingIntentFlags
         );
 
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             reactContext.registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
@@ -121,12 +135,14 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void getPrinterConfig(Promise promise) {
+        restoreSelectedUsbPermission();
         promise.resolve(buildPrinterConfig());
     }
 
     @ReactMethod
     public void checkPrinterConnection(Promise promise) {
         if (!PRINTER_MODE_LAN.equals(getPrinterMode())) {
+            restoreSelectedUsbPermission();
             UsbDevice selected = getSelectedDevice();
             promise.resolve(selected != null && usbManager != null && usbManager.hasPermission(selected));
             return;
@@ -187,6 +203,10 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void requestUsbPermission(double vendorId, double productId, Promise promise) {
+        if (pendingUsbPromise != null) {
+            promise.reject("USB_PERMISSION_PENDING", "Đang chờ cấp quyền máy in USB.");
+            return;
+        }
         UsbDevice device = findUsbDevice((int) vendorId, (int) productId);
         if (device == null) {
             promise.reject("USB_NOT_FOUND", "Không tìm thấy máy in USB.");
@@ -480,6 +500,11 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
 
     @Override
     public void invalidate() {
+        try { reactContext.unregisterReceiver(usbReceiver); } catch (IllegalArgumentException ignored) { }
+        if (pendingUsbPromise != null) {
+            pendingUsbPromise.reject("USB_MODULE_CLOSED", "Kết nối máy in đã đóng.");
+            pendingUsbPromise = null;
+        }
         stopNewOrderAlert();
         releaseQrPaymentPlayer();
         super.invalidate();
@@ -516,7 +541,8 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
         map.putInt("productId", device.getProductId());
         map.putString("deviceName", safeText(device.getDeviceName()));
         map.putString("label", buildUsbLabel(device));
-        map.putBoolean("selected", deviceKey.equals(selectedKey));
+        UsbDevice selected = getSelectedDevice();
+        map.putBoolean("selected", selected != null && selected.getDeviceName().equals(device.getDeviceName()));
         map.putBoolean("hasPermission", usbManager != null && usbManager.hasPermission(device));
         return map;
     }
@@ -526,17 +552,21 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
         if (usbManager == null) return items;
         HashMap<String, UsbDevice> devices = usbManager.getDeviceList();
         if (devices == null || devices.isEmpty()) return items;
-        items.addAll(devices.values());
+        for (UsbDevice device : devices.values()) {
+            if (hasPrinterOutput(device)) items.add(device);
+        }
         return items;
     }
 
     private UsbDevice findUsbDevice(int vendorId, int productId) {
+        UsbDevice match = null;
         for (UsbDevice device : getUsbDevices()) {
             if (device.getVendorId() == vendorId && device.getProductId() == productId) {
-                return device;
+                if (match != null) return null;
+                match = device;
             }
         }
-        return null;
+        return match;
     }
 
     private void saveSelectedDevice(UsbDevice device) {
@@ -548,10 +578,42 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
         if (devices.isEmpty()) return null;
 
         String saved = prefs.getString(KEY_USB_DEVICE, "");
-        for (UsbDevice device : devices) {
-            if (buildDeviceKey(device).equals(saved)) return device;
+        List<String> keys = new ArrayList<>();
+        for (UsbDevice device : devices) keys.add(buildDeviceKey(device));
+        int index = UsbPrinterSelectionPolicy.selectedIndex(saved, keys);
+        return index < 0 ? null : devices.get(index);
+    }
+
+    private boolean isPrinterOutput(UsbInterface usbInterface, UsbEndpoint endpoint) {
+        int deviceClass = usbInterface.getInterfaceClass();
+        return (deviceClass == UsbConstants.USB_CLASS_PRINTER || deviceClass == UsbConstants.USB_CLASS_VENDOR_SPEC)
+                && endpoint.getType() == UsbConstants.USB_ENDPOINT_XFER_BULK
+                && endpoint.getDirection() == UsbConstants.USB_DIR_OUT;
+    }
+
+    private boolean hasPrinterOutput(UsbDevice device) {
+        for (int i = 0; i < device.getInterfaceCount(); i++) {
+            UsbInterface usbInterface = device.getInterface(i);
+            for (int j = 0; j < usbInterface.getEndpointCount(); j++) {
+                if (isPrinterOutput(usbInterface, usbInterface.getEndpoint(j))) return true;
+            }
         }
-        return devices.get(0);
+        return false;
+    }
+
+    private void restoreSelectedUsbPermission() {
+        if (!PRINTER_MODE_USB.equals(getPrinterMode())) return;
+        mainHandler.post(() -> {
+            if (reactContext.getLifecycleState() != LifecycleState.RESUMED || pendingUsbPromise != null) return;
+            UsbDevice device = getSelectedDevice();
+            if (device == null || usbManager == null || usbManager.hasPermission(device)) return;
+            if (!autoPermissionAttempts.add(device.getDeviceName())) return;
+            try {
+                usbManager.requestPermission(device, permissionIntent);
+            } catch (RuntimeException ignored) {
+                // Leave the explicit permission action available; never crash or loop prompts.
+            }
+        });
     }
 
     private String buildDeviceKey(UsbDevice device) {
@@ -657,7 +719,7 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
             UsbInterface candidate = device.getInterface(i);
             for (int j = 0; j < candidate.getEndpointCount(); j++) {
                 UsbEndpoint endpoint = candidate.getEndpoint(j);
-                if (endpoint.getDirection() == android.hardware.usb.UsbConstants.USB_DIR_OUT) {
+                if (isPrinterOutput(candidate, endpoint)) {
                     usbInterface = candidate;
                     outEndpoint = endpoint;
                     break;
@@ -714,7 +776,7 @@ public class PosPrinterModule extends ReactContextBaseJavaModule {
             UsbInterface candidate = device.getInterface(i);
             for (int j = 0; j < candidate.getEndpointCount(); j++) {
                 UsbEndpoint endpoint = candidate.getEndpoint(j);
-                if (endpoint.getDirection() == android.hardware.usb.UsbConstants.USB_DIR_OUT) {
+                if (isPrinterOutput(candidate, endpoint)) {
                     usbInterface = candidate;
                     outEndpoint = endpoint;
                     break;
