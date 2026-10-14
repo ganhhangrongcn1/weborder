@@ -10,7 +10,10 @@ import "../../../styles/admin/grab-marketing.css";
 const CHANNELS = {
   keyword_ads: { label: "Quảng cáo từ khóa", shortLabel: "Từ khóa", tone: "amber", icon: "search" },
   promo: { label: "Khuyến mãi tự tạo", shortLabel: "KM tự tạo", tone: "green", icon: "tag" },
-  spotlight: { label: "Xế tối / Siêu Deal", shortLabel: "Xế tối / Siêu Deal", tone: "blue", icon: "sale" }
+  late_afternoon: { label: "Xế tối 0Đ", shortLabel: "Xế tối", tone: "blue", icon: "clock" },
+  super_deal: { label: "Siêu Deal chớp nhoáng", shortLabel: "Siêu Deal", tone: "green", icon: "sparkle" },
+  spotlight_other: { label: "Tiêu Điểm khác", shortLabel: "Tiêu Điểm khác", tone: "blue", icon: "sale" },
+  spotlight: { label: "Xế tối / Siêu Deal (dữ liệu cũ)", shortLabel: "Tiêu Điểm cũ", tone: "blue", icon: "sale" }
 };
 
 const money = (value) => formatMoney(Math.round(Number(value || 0)));
@@ -103,7 +106,7 @@ export default function AdminGrabMarketingPage({ branches = [], selectedBranchFi
     .sort((a, b) => a.costPerOrder - b.costPerOrder);
   const best = activeChannels[0] || null;
   const keyword = activeChannels.find((item) => item.channel === "keyword_ads") || null;
-  const spotlight = activeChannels.find((item) => item.channel === "spotlight") || null;
+  const spotlight = activeChannels.find((item) => ["late_afternoon", "super_deal", "spotlight_other", "spotlight"].includes(item.channel)) || null;
   const branchDecisions = buildBranchDecisions(report?.campaigns || []);
   const maxCostPerOrder = Math.max(...activeChannels.map((item) => item.costPerOrder || 0), 1);
   const lastSync = report?.lastSyncedAt ? new Date(report.lastSyncedAt).toLocaleString("vi-VN") : "Chưa có";
@@ -150,7 +153,7 @@ export default function AdminGrabMarketingPage({ branches = [], selectedBranchFi
       </section>
 
       <section className="grab-marketing-section-heading">
-        <div><small>BƯỚC 1</small><h2>Xếp hạng ba hình thức</h2><p>Nhìn vào chi phí/đơn trước. Con số càng thấp càng tốt.</p></div>
+        <div><small>BƯỚC 1</small><h2>Xếp hạng từng hình thức</h2><p>Xế tối và Siêu Deal được tách riêng. Nhìn vào chi phí/đơn trước; con số càng thấp càng tốt.</p></div>
         <div className="grab-marketing-legend"><span><i className="is-good" /> Nên ưu tiên</span><span><i className="is-watch" /> Cần theo dõi</span></div>
       </section>
 
@@ -188,7 +191,7 @@ export default function AdminGrabMarketingPage({ branches = [], selectedBranchFi
       <section className="grab-marketing-insight-grid">
         <article><Icon name="warning" size={22} /><div><strong>Không cộng các cột đơn</strong><p>Một đơn có thể được Grab quy cho nhiều kênh. Đây không phải số đơn tài chính thực tế.</p></div></article>
         <article><Icon name="wallet" size={22} /><div><strong>Hiệu quả chưa đồng nghĩa có lãi</strong><p>Cần đối chiếu thêm giá vốn, hoa hồng và tiền giảm giá trong thẻ Tài chính Grab.</p></div></article>
-        <article><Icon name="eye" size={22} /><div><strong>{spotlightSavings > 0 ? `Xế tối/Siêu Deal rẻ hơn từ khóa ${spotlightSavings}%` : "Theo dõi từng kênh riêng"}</strong><p>Thử giảm ngân sách từ khóa theo từng bước nhỏ, không tắt toàn bộ ngay một lúc.</p></div></article>
+        <article><Icon name="eye" size={22} /><div><strong>{spotlightSavings > 0 ? `${CHANNELS[spotlight?.channel]?.shortLabel || "Tiêu Điểm"} rẻ hơn từ khóa ${spotlightSavings}%` : "Theo dõi từng kênh riêng"}</strong><p>Thử giảm ngân sách từ khóa theo từng bước nhỏ, không tắt toàn bộ ngay một lúc.</p></div></article>
       </section>
 
       <details className="grab-marketing-raw-details">

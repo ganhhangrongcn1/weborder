@@ -4,6 +4,7 @@ import MenuCategoryEditorModal from "./MenuCategoryEditorModal.jsx";
 import MenuOverviewPanel from "./components/MenuOverviewPanel.jsx";
 import MenuGroupsPanel from "./components/MenuGroupsPanel.jsx";
 import KitchenOptionSettingsPanel from "./components/KitchenOptionSettingsPanel.jsx";
+import MenuPerformancePanel from "./components/MenuPerformancePanel.jsx";
 import useMenuManagerState from "./hooks/useMenuManagerState.js";
 import useMenuManagerActions from "./hooks/useMenuManagerActions.js";
 import {
@@ -171,6 +172,7 @@ export default function MenuManager({
         onChange={state.setMenuTab}
         tabs={[
           { value: "overview", label: "Tổng quan menu" },
+          { value: "performance", label: "Hiệu quả món bán" },
           { value: "groups", label: "Tùy chọn nhóm" },
           { value: "kitchen", label: "Thiết lập Kitchen" },
           { value: "bulk", label: "Thêm Cho Đủ Vị (Topping rời)" }
@@ -219,6 +221,8 @@ export default function MenuManager({
           addPresetOption={actions.addPresetOption}
         />
       )}
+
+      {state.menuTab === "performance" && <MenuPerformancePanel />}
 
       {state.menuTab === "kitchen" && (
         <KitchenOptionSettingsPanel optionGroupPresets={optionGroupPresets} />

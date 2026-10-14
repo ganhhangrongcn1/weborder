@@ -1,6 +1,6 @@
 jest.mock("../src/services/supabase/client", () => ({ supabase: null }));
 
-import { isPosProductAvailableForBranch } from "../src/services/pos/posProductService";
+import { isPosProductAvailableForBranch, resolvePosProductPrice } from "../src/services/pos/posProductService";
 
 describe("POS product availability by branch", () => {
   const product = {
@@ -26,5 +26,11 @@ describe("POS product availability by branch", () => {
     expect(isPosProductAvailableForBranch({
       availability: { branchIds: ["branch-304"], channels: ["web", "pos"] }
     }, "branch-lhp")).toBe(false);
+  });
+
+  it("uses the dedicated POS price and safely falls back to the website price", () => {
+    expect(resolvePosProductPrice({ price: 49000, metadata: { posPrice: 39000 } })).toBe(39000);
+    expect(resolvePosProductPrice({ price: 49000, metadata: {} })).toBe(49000);
+    expect(resolvePosProductPrice({ price: 49000, metadata: { pos_price: 41000 } })).toBe(41000);
   });
 });

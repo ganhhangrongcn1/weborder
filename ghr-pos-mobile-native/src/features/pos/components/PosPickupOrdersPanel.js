@@ -31,6 +31,7 @@ function formatTime(value = "") {
 }
 
 function getKitchenLabel(order = {}) {
+  if (order.metadata?.deviceMode === "phone" && order.paymentStatus !== "paid") return "Chưa gửi bếp";
   const status = String(order.kitchenStatus || order.status || "").trim().toLowerCase();
   if (["done", "completed", "complete"].includes(status)) return "Bếp đã xong";
   if (["doing", "preparing", "in_progress"].includes(status)) return "Bếp đang làm";
@@ -114,7 +115,7 @@ function getCrossShiftInfo(order = {}, activeShiftId = "", shiftOpenedAt = "") {
   return null;
 }
 
-function WebsiteOrderCard({ order, activeShiftId, shiftOpenedAt, loading, onPayCash, onPayQr }) {
+function WebsiteOrderCard({ order, activeShiftId, shiftOpenedAt, loading, onPayCash, onPayQr, phoneMode = false }) {
   const paid = order.paymentStatus === "paid";
   const isDelivery = order.fulfillmentType === "delivery";
   const amount = getOrderAmount(order);
@@ -139,10 +140,10 @@ function WebsiteOrderCard({ order, activeShiftId, shiftOpenedAt, loading, onPayC
             ) : null}
           </View>
           <Text style={styles.customerLine} numberOfLines={1}>
-            {order.customerName || "Khách đặt web"} · {order.customerPhone || "Không có SĐT"}
+            {order.customerName || (phoneMode ? "Khách tại quán" : "Khách đặt web")} · {order.customerPhone || "Không có SĐT"}
           </Text>
           <Text style={styles.fulfillmentLine} numberOfLines={2}>
-            {isDelivery
+            {phoneMode ? `Thẻ rung ${order.pagerNumber || order.metadata?.pagerNumber || "--"}` : isDelivery
               ? `Giao tới: ${order.deliveryAddress || "Chưa có địa chỉ"}`
               : `Hẹn lấy: ${order.pickupTimeText || "Khách ghé lấy khi tới"}`}
           </Text>
@@ -204,6 +205,9 @@ function WebsiteOrderCard({ order, activeShiftId, shiftOpenedAt, loading, onPayC
 const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
   pickupOrders = [],
   deliveryOrders = [],
+  phoneMode = false,
+  focusedOrderId = "",
+  onClearFocus,
   activeShiftId = "",
   shiftOpenedAt = "",
   loading = false,
@@ -225,7 +229,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
   );
   const totalUnpaidCount = pickupUnpaidCount + deliveryUnpaidCount;
 
-  const sourceOrders = segment === "delivery" ? deliveryOrders : pickupOrders;
+  const sourceOrders = !phoneMode && segment === "delivery" ? deliveryOrders : pickupOrders;
   const activeActionCount = useMemo(
     () => (Array.isArray(sourceOrders) ? sourceOrders : []).filter((order) => !getScheduleInfo(order).scheduled).length,
     [sourceOrders]
@@ -238,6 +242,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
   const filteredOrders = useMemo(
     () => (Array.isArray(sourceOrders) ? sourceOrders : [])
       .filter((order) => {
+        if (phoneMode) return focusedOrderId ? order.id === focusedOrderId : filter === "all" || order.paymentStatus !== "paid";
         const scheduled = getScheduleInfo(order).scheduled;
         if (filter === "scheduled") return scheduled;
         if (filter === "action") return !scheduled;
@@ -248,7 +253,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
         if (priorityDiff) return priorityDiff;
         return new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime();
       }),
-    [filter, sourceOrders]
+    [filter, sourceOrders, phoneMode, focusedOrderId]
   );
 
   return (
@@ -259,10 +264,10 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
     >
       <View style={styles.header}>
         <View style={styles.titleWrap}>
-          <Text style={styles.eyebrow}>Hàng đợi xử lý</Text>
-          <Text style={styles.title}>Đơn website</Text>
+          {!phoneMode && <Text style={styles.eyebrow}>Hàng đợi xử lý</Text>}
+          <Text style={styles.title}>{phoneMode ? focusedOrderId ? "Thanh toán" : "Đơn cần thu" : "Đơn website"}</Text>
           <Text style={styles.subtitle}>
-            Đơn cần thu tiền và đơn bếp đã xong luôn được đưa lên trước.
+            {phoneMode ? "Chọn tiền mặt hoặc QR để hoàn tất đơn." : "Đơn cần thu tiền và đơn bếp đã xong luôn được đưa lên trước."}
           </Text>
         </View>
         <View style={styles.countPill}>
@@ -271,7 +276,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
         </View>
       </View>
 
-      <View style={styles.segmentRow}>
+      {!phoneMode && <View style={styles.segmentRow}>
         {SEGMENTS.map((item) => {
           const active = item.id === segment;
           const count = item.id === "delivery" ? deliveryOrders.length : pickupOrders.length;
@@ -292,7 +297,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
             </Pressable>
           );
         })}
-      </View>
+      </View>}
 
       <View style={styles.toolbar}>
         <ScrollView
@@ -300,7 +305,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterRow}
         >
-          {FILTERS.map((item) => {
+          {(phoneMode ? focusedOrderId ? [] : [{id: "action", label: "Chờ thanh toán"}, {id: "all", label: "Tất cả"}] : FILTERS).map((item) => {
             const active = item.id === filter;
             return (
               <Pressable
@@ -320,6 +325,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
           })}
         </ScrollView>
 
+        {phoneMode && focusedOrderId && <Pressable style={styles.refreshButton} onPress={onClearFocus}><Text style={styles.refreshText}>Tất cả đơn</Text></Pressable>}
         <Pressable style={styles.refreshButton} onPress={onRefresh} disabled={loading}>
           <Text style={styles.refreshText}>{loading ? "Đang tải" : "Tải lại"}</Text>
         </Pressable>
@@ -333,6 +339,7 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
               <WebsiteOrderCard
                 key={order.id}
                 order={order}
+                phoneMode={phoneMode}
                 activeShiftId={activeShiftId}
                 shiftOpenedAt={shiftOpenedAt}
               loading={loading}
@@ -343,10 +350,10 @@ const PosPickupOrdersPanel = memo(function PosPickupOrdersPanel({
         ) : (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>
-              {segment === "delivery" ? "Không có đơn giao hàng phù hợp." : "Không có đơn hẹn lấy phù hợp."}
+              {phoneMode ? "Chưa có đơn cần thu." : segment === "delivery" ? "Không có đơn giao hàng phù hợp." : "Không có đơn hẹn lấy phù hợp."}
             </Text>
             <Text style={styles.emptyCopy}>
-              {segment === "delivery"
+              {phoneMode ? "Tạo đơn từ Bán hàng để thu tiền tại đây." : segment === "delivery"
                 ? "Đơn website giao hàng đúng chi nhánh sẽ hiện tại đây để nhân viên theo dõi và thu tiền."
                 : "Đơn website tự lấy đúng chi nhánh sẽ hiện tại đây để nhân viên theo dõi và thu tiền."}
             </Text>

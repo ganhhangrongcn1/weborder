@@ -216,6 +216,7 @@ assert.match(webOrderNotificationFunctionSource, /event:\s*"web_order_created"/)
 assert.match(webOrderNotificationSharedSource, /web_order_notifications/);
 assert.match(webOrderNotificationSharedSource, /paymentConfirmed/);
 assert.match(sepayWebhookSource, /isWebsitePaymentSession/);
+assert.match(sepayWebhookSource, /\["web", "online", "website", "qr_order"\]\.includes\(paidSessionSource\)/);
 assert.match(sepayWebhookSource, /paymentConfirmed:\s*true/);
 
 console.log("Order Success payment smoke test passed (cash + SePay/MoMo for QR counter and website pickup).");

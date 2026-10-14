@@ -8,7 +8,11 @@ import {
   getInventoryDocumentDateTimeBounds,
   getInventoryDocumentPagination
 } from "./inventoryDocumentFilters.js";
-import { calculateInventoryLedgerSummary } from "./inventoryLedgerCalculations.js";
+import {
+  calculateInventoryLedgerSummary,
+  getInventoryLedgerDocumentNo,
+  isInventoryProductionDocument
+} from "./inventoryLedgerCalculations.js";
 
 const MOVEMENT_SELECT = [
   "id", "movement_sequence", "warehouse_id", "item_id", "document_id",
@@ -40,14 +44,26 @@ function normalizeReadError(error = {}) {
 
 function normalizeMovement(row = {}, documentsById = new Map()) {
   const document = documentsById.get(row.document_id) || {};
+  const metadata = document.metadata && typeof document.metadata === "object" ? document.metadata : {};
+  const productionOrderId = toText(metadata.production_order_id);
+  const documentType = toText(document.document_type);
+  const isProductionDocument = isInventoryProductionDocument(documentType);
+  const productionOrderNo = getInventoryLedgerDocumentNo({
+    documentNo: document.document_no,
+    documentType,
+    productionOrderNo: metadata.production_order_no
+  });
   return {
     id: toText(row.id),
     sequence: Number(row.movement_sequence || 0),
     warehouseId: toText(row.warehouse_id),
     itemId: toText(row.item_id),
     documentId: toText(row.document_id),
-    documentNo: toText(document.document_no),
-    documentType: toText(document.document_type),
+    documentNo: isProductionDocument ? productionOrderNo : toText(document.document_no),
+    stockDocumentNo: toText(document.document_no),
+    documentType,
+    productionOrderId,
+    productionOrderNo: isProductionDocument ? productionOrderNo : "",
     direction: toText(row.direction),
     stage: toText(row.movement_stage),
     quantity: Number(row.quantity || 0),
@@ -115,7 +131,7 @@ export async function readInventoryLedger({
   if (documentIds.length) {
     const documentResult = await client
       .from("inventory_documents")
-      .select("id,document_no,document_type,status")
+      .select("id,document_no,document_type,status,metadata")
       .in("id", documentIds);
     recordAdminRequest("read inventory ledger documents", "inventory_documents");
     if (documentResult.error) return { ok: false, ...normalizeReadError(documentResult.error), rows: [] };

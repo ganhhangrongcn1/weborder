@@ -8,6 +8,10 @@ import {
   getInventoryDocumentDateTimeBounds,
   getInventoryDocumentPagination
 } from "./inventoryDocumentFilters.js";
+import {
+  formatInventoryStockShortageMessage,
+  parseInventoryStockShortageMessage
+} from "./inventoryDocumentErrorMessages.js";
 import { isInventoryRuntimeWriteEnabled } from "./supabase/runtimeFlags.js";
 
 const DOCUMENT_TYPES = {
@@ -547,7 +551,43 @@ export async function completeSimpleInventoryDocument(documentId = "") {
     p_idempotency_key: `inventory-complete-${toText(documentId)}`
   });
   recordAdminRequest("complete inventory document", "inventory_complete_simple_document");
-  if (error) throw new Error(toText(error.message) || "Không hoàn tất được phiếu.");
+  if (error) {
+    const rawMessage = toText(error.message) || "Không hoàn tất được phiếu.";
+    const shortage = parseInventoryStockShortageMessage(rawMessage);
+    if (!shortage) throw new Error(rawMessage);
+
+    const lineResult = await client
+      .from("inventory_document_lines")
+      .select("item_id,unit_id,conversion_to_base")
+      .eq("document_id", toText(documentId))
+      .eq("item_id", shortage.itemId)
+      .maybeSingle();
+    recordAdminRequest("read inventory shortage document line", "inventory_document_lines");
+    if (lineResult.error || !lineResult.data) {
+      throw new Error(formatInventoryStockShortageMessage(rawMessage));
+    }
+
+    const [itemResult, unitResult] = await Promise.all([
+      client
+        .from("inventory_items")
+        .select("id,name")
+        .eq("id", shortage.itemId)
+        .maybeSingle(),
+      client
+        .from("inventory_units")
+        .select("id,name,symbol")
+        .eq("id", lineResult.data.unit_id)
+        .maybeSingle()
+    ]);
+    recordAdminRequest("read inventory shortage item", "inventory_items");
+    recordAdminRequest("read inventory shortage unit", "inventory_units");
+    throw new Error(formatInventoryStockShortageMessage(rawMessage, {
+      itemName: itemResult.data?.name,
+      unitName: unitResult.data?.name,
+      unitSymbol: unitResult.data?.symbol,
+      conversionToBase: lineResult.data.conversion_to_base
+    }));
+  }
   return data;
 }
 

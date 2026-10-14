@@ -12,7 +12,7 @@ function directAuthError(message, status = 0, code = "") {
   return error;
 }
 
-async function addBrowserCookies(jar, cookies) {
+export async function addBrowserCookies(jar, cookies) {
   for (const cookie of cookies) {
     const domain = String(cookie.domain || "").replace(/^\./, "");
     if (!domain || !cookie.name) continue;
@@ -20,7 +20,7 @@ async function addBrowserCookies(jar, cookies) {
     const attributes = [
       `${cookie.name}=${cookie.value}`,
       `Path=${cookie.path || "/"}`,
-      `Domain=${cookie.domain || domain}`,
+      String(cookie.domain || "").startsWith(".") ? `Domain=${domain}` : "",
       cookie.secure ? "Secure" : "",
       cookie.httpOnly ? "HttpOnly" : "",
       Number(cookie.expires) > 0 ? `Expires=${new Date(cookie.expires * 1000).toUTCString()}` : ""
@@ -129,7 +129,7 @@ async function captureHydraFingerprint(browser, username, timeoutMs = 60_000) {
   }
 }
 
-async function cookiesForBrowser(jar) {
+export async function cookiesForBrowser(jar) {
   const cookieSets = await Promise.all([
     jar.getCookies("https://api.grab.com/"),
     jar.getCookies("https://merchant.grab.com/"),
@@ -142,7 +142,7 @@ async function cookiesForBrowser(jar) {
     unique.set(key, {
       name: cookie.key,
       value: cookie.value,
-      domain,
+      domain: cookie.hostOnly ? domain : `.${domain.replace(/^\./, "")}`,
       path: cookie.path || "/",
       expires: cookie.expires instanceof Date ? Math.floor(cookie.expires.getTime() / 1000) : -1,
       httpOnly: Boolean(cookie.httpOnly),

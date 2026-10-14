@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 
@@ -11,6 +11,11 @@ export default function PosPagerModal({
   visible,
   value = "",
   busyPagers = [],
+  enabled = true,
+  canConfigure = false,
+  branchName = "",
+  settingsDisabled = false,
+  onChangeEnabled,
   onClose,
   onSelect
 }) {
@@ -37,15 +42,23 @@ export default function PosPagerModal({
           <View style={styles.header}>
             <View style={styles.flexOne}>
               <Text style={styles.eyebrow}>POS</Text>
-              <Text style={styles.title}>Chọn thẻ rung</Text>
-              <Text style={styles.subtitle}>Thẻ đang có đơn sẽ bị khóa để tránh trùng bill.</Text>
+              <Text style={styles.title}>{enabled ? "Chọn thẻ rung" : "Thẻ rung đã tắt"}</Text>
+              <Text style={styles.subtitle}>{enabled ? "Thẻ đang có đơn sẽ bị khóa để tránh trùng bill." : "Nhận món theo mã bill, không cần chọn thẻ."}</Text>
             </View>
             <Pressable style={styles.closeButton} onPress={onClose}>
               <Text style={styles.closeText}>Đóng</Text>
             </Pressable>
           </View>
 
-          <View style={styles.grid}>
+          {canConfigure && <View style={styles.settingRow}>
+            <View style={styles.flexOne}>
+              <Text style={styles.closeText}>Sử dụng thẻ rung</Text>
+              <Text style={styles.subtitle}>{branchName} · Cấu hình chung của chi nhánh</Text>
+              {settingsDisabled && <Text style={styles.subtitle}>Chờ tải cấu hình hoặc hoàn tất thanh toán để thay đổi.</Text>}
+            </View>
+            <Switch accessibilityLabel="Sử dụng thẻ rung cho chi nhánh" value={enabled} disabled={settingsDisabled} onValueChange={onChangeEnabled} />
+          </View>}
+          {enabled && <View style={styles.grid}>
             {buildPagerOptions().map((pager) => {
               const isActive = activePager === pager;
               const isBusy = busySet.has(pager);
@@ -81,13 +94,14 @@ export default function PosPagerModal({
                 </Pressable>
               );
             })}
-          </View>
+          </View>}
         </View>
       </View>
   );
 }
 
 const styles = StyleSheet.create({
+  settingRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   layer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",

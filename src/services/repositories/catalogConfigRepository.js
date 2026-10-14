@@ -42,6 +42,11 @@ export const LAZY_CATALOG_CONFIG_KEYS = [
 ];
 
 const lazyCatalogKeySet = new Set(LAZY_CATALOG_CONFIG_KEYS);
+
+function canWriteCatalogKeys(keys = []) {
+  return keys.every((key) => shouldWriteConfigKeyToSupabase(key));
+}
+
 export const catalogConfigRepository = {
   get(key, fallback) {
     const allowLocalFallback = shouldAllowLocalFallbackForDomain("menuCatalog");
@@ -103,6 +108,14 @@ export async function syncMenuCatalogToSupabase({
   if (!strategy.shouldReadThroughSupabase) {
     return { ok: false, reason: "supabase_read_disabled" };
   }
+  if (!canWriteCatalogKeys([
+    CATALOG_CONFIG_KEYS.products,
+    CATALOG_CONFIG_KEYS.categories,
+    CATALOG_CONFIG_KEYS.toppings,
+    "ghr_option_group_presets"
+  ])) {
+    return { ok: false, reason: "supabase_write_disabled" };
+  }
 
   await writeCatalogToStandardTable(CATALOG_CONFIG_KEYS.products, Array.isArray(products) ? products : []);
   await writeCatalogToStandardTable(CATALOG_CONFIG_KEYS.categories, Array.isArray(categories) ? categories : []);
@@ -119,6 +132,9 @@ export async function syncProductsToSupabase(products = []) {
   const strategy = getRuntimeStrategy();
   if (!strategy.shouldReadThroughSupabase) {
     return { ok: false, reason: "supabase_read_disabled" };
+  }
+  if (!canWriteCatalogKeys([CATALOG_CONFIG_KEYS.products])) {
+    return { ok: false, reason: "supabase_write_disabled" };
   }
 
   await writeCatalogToStandardTable(
@@ -138,6 +154,14 @@ export async function syncPromotionCatalogToSupabase({
   if (!strategy.shouldReadThroughSupabase) {
     return { ok: false, reason: "supabase_read_disabled" };
   }
+  if (!canWriteCatalogKeys([
+    CATALOG_CONFIG_KEYS.promos,
+    CATALOG_CONFIG_KEYS.campaigns,
+    CATALOG_CONFIG_KEYS.coupons,
+    CATALOG_CONFIG_KEYS.smartPromotions
+  ])) {
+    return { ok: false, reason: "supabase_write_disabled" };
+  }
 
   await writeCatalogToStandardTable(CATALOG_CONFIG_KEYS.promos, Array.isArray(promos) ? promos : []);
   await writeCatalogToStandardTable(CATALOG_CONFIG_KEYS.campaigns, Array.isArray(campaigns) ? campaigns : []);
@@ -155,6 +179,12 @@ export async function syncAppearanceCatalogToSupabase({
   if (!strategy.shouldReadThroughSupabase) {
     return { ok: false, reason: "supabase_read_disabled" };
   }
+  if (!canWriteCatalogKeys([
+    CATALOG_CONFIG_KEYS.homeContent,
+    CATALOG_CONFIG_KEYS.banners
+  ])) {
+    return { ok: false, reason: "supabase_write_disabled" };
+  }
 
   await writeCatalogToStandardTable(CATALOG_CONFIG_KEYS.homeContent, Array.isArray(homeContent) ? homeContent : []);
   await writeCatalogToStandardTable(CATALOG_CONFIG_KEYS.banners, Array.isArray(banners) ? banners : []);
@@ -166,6 +196,9 @@ export async function syncBranchesToSupabase(branches = []) {
   const strategy = getRuntimeStrategy();
   if (!strategy.shouldReadThroughSupabase) {
     return { ok: false, reason: "supabase_read_disabled" };
+  }
+  if (!canWriteCatalogKeys([CATALOG_CONFIG_KEYS.branches])) {
+    return { ok: false, reason: "supabase_write_disabled" };
   }
   await writeCatalogToStandardTable(CATALOG_CONFIG_KEYS.branches, Array.isArray(branches) ? branches : []);
   return { ok: true };

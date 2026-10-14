@@ -15,7 +15,11 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
-import { loginGrabDirect } from "./grab-direct-auth.mjs";
+import { loginGrabDirect, cookiesForBrowser } from "./grab-direct-auth.mjs";
+import restoreCookieJar from "./grab-session.mjs";
+import startStoreCommandLane from "./partner-store-command-lane.mjs";
+import setGrabStoreState from "./grab-store-control.mjs";
+import grabCsrfHeaders from "./grab-csrf-headers.mjs";
 import {
   LOGIN_RETRY_DELAYS_MS,
   classifyGrabLoginFailure,
@@ -75,9 +79,11 @@ const PASSWORD_SELECTOR = [
 
 let lockHandle = null;
 let stopping = false;
+let storeCommandLane = null;
 let nextLoginAllowedAt = 0;
 let loginQueue = Promise.resolve();
 const accountQueues = new Map();
+const syncLeases = new Map();
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const safeKey = (value) => String(value || "source").replace(/[^a-zA-Z0-9_-]+/g, "_");
@@ -86,8 +92,6 @@ const cookieHeader = (cookies) => cookies
   .filter((cookie) => !cookie.expires || cookie.expires < 0 || cookie.expires * 1000 > Date.now())
   .map((cookie) => `${cookie.name}=${cookie.value}`)
   .join("; ");
-const CLOSED_STORE_REASONS = new Set([3, 4, 5, 7, 8]);
-const PAUSED_STORE_REASONS = new Map([[1, "TEMPPAUSED"], [2, "OPSPAUSED"], [6, "OPSPAUSED"]]);
 
 function vietnamDateOnly(offsetDays = 0) {
   const date = new Date(Date.now() + 7 * 60 * 60 * 1000);
@@ -362,6 +366,52 @@ async function replayMarketingRequest(page, template, body) {
   }, { url: template.url, headers: template.headers, requestBody: body });
 }
 
+function collectCampaignCatalogItems(value, result = [], depth = 0) {
+  if (depth > 6 || value === null || value === undefined) return result;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectCampaignCatalogItems(item, result, depth + 1));
+    return result;
+  }
+  if (typeof value !== "object") return result;
+  const campaignName = String(value?.info?.name || "").trim();
+  const campaignIds = [value.gmsCampaignID, value.unifiedCampaignID, value.gmsOneClickCampaignID]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  if (campaignName && campaignIds.length) result.push({ campaignName, campaignIds });
+  Object.values(value).forEach((item) => collectCampaignCatalogItems(item, result, depth + 1));
+  return result;
+}
+
+function spotlightProgram(campaignName = "") {
+  const normalized = String(campaignName).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/xe\s*toi/.test(normalized)) return { key: "late_afternoon", name: "Xế tối 0Đ" };
+  if (/sieu\s*deal|super\s*deal|chop\s*nhoang|flash\s*deal/.test(normalized)) {
+    return { key: "super_deal", name: "Siêu Deal chớp nhoáng" };
+  }
+  return { key: "spotlight_other", name: "Tiêu Điểm khác" };
+}
+
+async function collectSpotlightCampaignCatalog(page, advertiserId) {
+  let capturedPayload = null;
+  const onResponse = (response) => {
+    const url = response.url();
+    if (!url.includes("/unifieddemandgen/v1/campaigns") || response.status() < 200 || response.status() >= 300) return;
+    response.json().then((payload) => { capturedPayload = payload; }).catch(() => null);
+  };
+  page.on("response", onResponse);
+  try {
+    await openMarketingPage(page, `https://merchant.grab.com/marketing/advertisers/${encodeURIComponent(advertiserId)}/spotlight-manager`);
+    const deadline = Date.now() + 15_000;
+    while (!capturedPayload && Date.now() < deadline) await sleep(300);
+  } finally {
+    page.off("response", onResponse);
+  }
+  return {
+    items: collectCampaignCatalogItems(capturedPayload || {}),
+    payload: capturedPayload || {}
+  };
+}
+
 async function collectMarketingRows(page, source, { interactive = false } = {}) {
   const advertiserId = await discoverAdvertiserId(page, source);
   const endDate = vietnamDateOnly(-1);
@@ -437,9 +487,20 @@ async function collectMarketingRows(page, source, { interactive = false } = {}) 
   );
   const capturedPromoBody = JSON.parse(promoTemplate.body || "{}");
   responseShapes.promos.captured = marketingPayloadShape(promoTemplate.payload);
+  const campaignCatalogResult = await collectSpotlightCampaignCatalog(page, advertiserId).catch(() => ({ items: [], payload: {} }));
+  const campaignCatalog = campaignCatalogResult.items;
+  const campaignCatalogById = new Map();
+  campaignCatalog.forEach((campaign) => {
+    campaign.campaignIds.forEach((campaignId) => campaignCatalogById.set(campaignId, campaign.campaignName));
+  });
   const promoGroups = [
-    { channel: "promo", name: "Khuyến mãi tự tạo", types: ["ALA_CARTE_PROMO"] },
-    { channel: "spotlight", name: "Xế tối / Siêu Deal", types: ["GMS_ONE_CLICK", "SPECIAL_CAMPAIGN", "ALICE_CAMPAIGN"] }
+    { channel: "promo", name: "Khuyến mãi tự tạo", types: ["ALA_CARTE_PROMO", "ALA_CARTE_CAMPAIGN"], dimensions: [] },
+    {
+      channel: "spotlight",
+      name: "Chương trình Tiêu Điểm",
+      types: ["GMS_ONE_CLICK", "SPECIAL_CAMPAIGN", "SPOTLIGHT_PLAN", "ALICE_CAMPAIGN"],
+      dimensions: [2]
+    }
   ];
   for (const group of promoGroups) {
     const baseRequest = capturedPromoBody.request && typeof capturedPromoBody.request === "object"
@@ -449,6 +510,7 @@ async function collectMarketingRows(page, source, { interactive = false } = {}) 
       ...baseRequest,
       startTime: promoStartTime,
       endTime: promoEndTime,
+      dimensions: group.dimensions,
       dimensionFilters: [{ dimension: 3, operator: 0, values: group.types }],
       metrics: [6, 2, 1, 8, 9],
       sort: 1,
@@ -467,7 +529,7 @@ async function collectMarketingRows(page, source, { interactive = false } = {}) 
     if (!promoResponse.ok) throw new Error(`Grab Marketing API trả về HTTP ${promoResponse.status}.`);
     responseShapes.promos[group.channel] = marketingPayloadShape(promoResponse.payload);
     const promoItems = grabReportItems(promoResponse.payload);
-    const totals = promoItems.reduce((result, item) => {
+    const addPromoMetrics = (result, item) => {
       const metrics = item?.Metrics || item?.metrics || [];
       const metricKeys = {
         1: "SSM_AssistedOrders",
@@ -480,24 +542,73 @@ async function collectMarketingRows(page, source, { interactive = false } = {}) 
         result[metric] = (result[metric] || 0) + marketingValue(metrics, metric, responseKey);
       }
       return result;
-    }, {});
-    rows.push({
-      advertiser_id: advertiserId,
-      report_date: endDate,
-      channel: group.channel,
-      campaign_key: `${group.channel}-month-summary`,
-      campaign_name: group.name,
-      campaign_type: group.types.join(","),
-      currency: "VND",
-      spend_amount: totals[6] || 0,
-      sales_amount: totals[2] || 0,
-      orders_count: totals[1] || 0,
-      impressions_count: 0,
-      clicks_count: 0,
-      grab_funded_amount: 0,
-      merchant_funded_amount: totals[6] || 0,
-      marketing_fee_amount: 0,
-      raw_data: { source_path: "unifieddemandgen/v1/self-serve-promo/reporting", request, report: promoItems }
+    };
+    const pushPromoRow = ({ channel, campaignKey, campaignName, totals, reportItems, campaignNames = [] }) => {
+      rows.push({
+        advertiser_id: advertiserId,
+        report_date: endDate,
+        channel,
+        campaign_key: `${campaignKey}-month-summary`,
+        campaign_name: campaignName,
+        campaign_type: group.types.join(","),
+        currency: "VND",
+        spend_amount: totals[6] || 0,
+        sales_amount: totals[2] || 0,
+        orders_count: totals[1] || 0,
+        impressions_count: 0,
+        clicks_count: 0,
+        grab_funded_amount: 0,
+        merchant_funded_amount: totals[6] || 0,
+        marketing_fee_amount: 0,
+        raw_data: {
+          source_path: "unifieddemandgen/v1/self-serve-promo/reporting",
+          request,
+          report: reportItems,
+          campaign_names: [...new Set(campaignNames)]
+        }
+      });
+    };
+    if (group.channel !== "spotlight") {
+      pushPromoRow({
+        channel: group.channel,
+        campaignKey: group.channel,
+        campaignName: group.name,
+        totals: promoItems.reduce(addPromoMetrics, {}),
+        reportItems: promoItems
+      });
+      continue;
+    }
+
+    const spotlightPrograms = new Map();
+    promoItems.forEach((item) => {
+      const dimensions = item?.Dimensions || item?.dimensions || {};
+      const campaignId = String(dimensions.SSM_CampaignID || dimensions.ssmCampaignID || "").trim();
+      const campaignName = campaignCatalogById.get(campaignId) || campaignId;
+      const program = spotlightProgram(campaignName);
+      const current = spotlightPrograms.get(program.key) || { ...program, totals: {}, items: [], campaignNames: [] };
+      addPromoMetrics(current.totals, item);
+      current.items.push(item);
+      if (campaignName) current.campaignNames.push(campaignName);
+      spotlightPrograms.set(program.key, current);
+    });
+    if (!spotlightPrograms.size) {
+      spotlightPrograms.set("spotlight_other", {
+        key: "spotlight_other",
+        name: "Tiêu Điểm khác",
+        totals: {},
+        items: [],
+        campaignNames: []
+      });
+    }
+    spotlightPrograms.forEach((program) => {
+      pushPromoRow({
+        channel: "spotlight",
+        campaignKey: program.key,
+        campaignName: program.name,
+        totals: program.totals,
+        reportItems: program.items,
+        campaignNames: program.campaignNames
+      });
     });
   }
   const hasActivity = rows.some((row) => (
@@ -721,19 +832,21 @@ async function restoreStoredSession(page, source) {
   }
 }
 
-async function currentBrowserSession(page) {
+async function currentBrowserSession(page, cookieJar = null) {
   return {
-    cookies: await page.cookies(),
-    storage: await page.evaluate(() => Object.fromEntries(Object.entries(localStorage))).catch(() => ({}))
+    cookies: cookieJar ? await cookiesForBrowser(cookieJar)
+      : await page.cookies("https://merchant.grab.com/", "https://api.grab.com/", "https://weblogin.grab.com/"),
+    ...(cookieJar ? { cookieJar: await cookieJar.serialize() } : {}),
+    storage: page ? await page.evaluate(() => Object.fromEntries(Object.entries(localStorage))).catch(() => ({})) : {}
   };
 }
 
-async function saveRefreshedSession(page, source, replyCommandId = "") {
-  const session = await currentBrowserSession(page);
+async function saveRefreshedSession(page, source, replyCommandId = "", cookieJar = null) {
+  const session = await currentBrowserSession(page, cookieJar);
   await api("automation_session", {
     source_id: source.id,
     worker_id: WORKER_ID,
-    lease_token: source.lease_token,
+    lease_token: source.lease_token || syncLeases.get(source.id),
     reply_command_id: replyCommandId,
     session
   });
@@ -742,7 +855,8 @@ async function saveRefreshedSession(page, source, replyCommandId = "") {
 
 function isGrabSessionExpired(error) {
   const message = error instanceof Error ? error.message : String(error || "");
-  return error?.code === "GRAB_SESSION_EXPIRED" || /hết hạn|401|403/i.test(message);
+  if (["GRAB_REQUEST_FORBIDDEN", "GRAB_STORE_FORBIDDEN"].includes(error?.code)) return false;
+  return error?.code === "GRAB_SESSION_EXPIRED" || /hết hạn|401/i.test(message);
 }
 
 async function loginViaBrowser(page, source, credentials, { visible = false } = {}) {
@@ -799,10 +913,9 @@ async function login(page, source, { visible = false, authBundle = null } = {}) 
       try {
         const directSession = await loginGrabDirect(page.browser(), credentials);
         await page.browserContext().setCookie(...directSession.cookies);
-        await openFeedbackPage(page, { force: true });
-        if (await isLoginRequired(page)) {
-          throw new Error("Phiên đăng nhập API chưa mở được Grab Portal.");
-        }
+        // Keep direct requests on the freshly issued session. Navigating the
+        // portal here can rotate browser cookies while leaving this jar stale.
+        // Browser fallbacks navigate themselves; API calls verify their session.
         await log("Đăng nhập Grab trực tiếp thành công:", source.display_name);
         return directSession.jar;
       } catch (error) {
@@ -970,24 +1083,27 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
     let overview;
     let pageCount;
     let directApi = false;
-    let directCookieJar = null;
+    const directCookieJarSession = authBundle?.credentials?.session;
+    let directCookieJar = await restoreCookieJar(directCookieJarSession, page);
 
     if (source.merchant_id) {
       try {
-        ({ reviews, overview, pageCount } = await collectFeedbackDirect(page, source));
+        ({ reviews, overview, pageCount } = await collectFeedbackDirect(page, source, directCookieJar));
         directApi = true;
         await log("Dùng cookie gọi trực tiếp Grab API:", source.display_name);
       } catch (error) {
+        if (error?.code === "GRAB_REQUEST_FORBIDDEN") throw error;
         if (isGrabSessionExpired(error)) {
           await log("Phiên Grab API đã hết hạn, đăng nhập lại và thử API một lần:", source.display_name);
           directCookieJar = await login(page, source, { visible: !headless, authBundle });
           loggedInNow = true;
-          await saveRefreshedSession(page, source);
+          await saveRefreshedSession(page, source, "", directCookieJar);
           try {
             ({ reviews, overview, pageCount } = await collectFeedbackDirect(page, source, directCookieJar));
             directApi = true;
             await log("Gọi lại Grab API trực tiếp thành công:", source.display_name);
           } catch (retryError) {
+            if (retryError?.code === "GRAB_REQUEST_FORBIDDEN") throw retryError;
             await log(
               "API trực tiếp vẫn chưa dùng được, chuyển sang phương án trình duyệt cuối cùng:",
               `${source.display_name} - ${retryError instanceof Error ? retryError.message : String(retryError)}`
@@ -1007,23 +1123,25 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       if (await isLoginRequired(page)) {
         directCookieJar = await login(page, source, { visible: !headless, authBundle });
         loggedInNow = true;
-        await saveRefreshedSession(page, source);
+        await saveRefreshedSession(page, source, "", directCookieJar);
       } else {
         await log("Dùng lại phiên Grab còn hiệu lực:", source.display_name);
       }
       try {
         ({ reviews, overview, pageCount } = await collectFeedback(page));
+        directCookieJar = await restoreCookieJar(null, page);
       } catch (error) {
         if (isGrabSessionExpired(error) || await isLoginRequired(page)) {
           directCookieJar = await login(page, source, { visible: !headless, authBundle });
           loggedInNow = true;
-          await saveRefreshedSession(page, source);
+          await saveRefreshedSession(page, source, "", directCookieJar);
           if (source.merchant_id) {
             ({ reviews, overview, pageCount } = await collectFeedbackDirect(page, source, directCookieJar));
             directApi = true;
             await log("Gọi lại Grab API trực tiếp thành công:", source.display_name);
           } else {
             ({ reviews, overview, pageCount } = await collectFeedback(page));
+            directCookieJar = await restoreCookieJar(null, page);
           }
         } else {
           throw error;
@@ -1046,25 +1164,12 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       await log("Chưa đồng bộ được tài chính Grab, vẫn lưu đánh giá:", `${source.display_name} - ${financeError}`);
     }
 
-    let marketingRows = [];
-    let marketingAdvertiserId = "";
-    let marketingError = "";
-    try {
-      const marketing = await collectMarketingRows(page, source);
-      marketingRows = marketing.rows;
-      marketingAdvertiserId = marketing.advertiserId;
-    } catch (error) {
-      marketingAdvertiserId = String(error?.advertiserId || "");
-      marketingError = String(error?.message || error).slice(0, 500);
-      await log("Chưa đồng bộ được Marketing Grab, vẫn tiếp tục lưu dữ liệu khác:", `${source.display_name} - ${marketingError}`);
-    }
-
     let busyResult = { applied: false, reason: "disabled" };
     if (source.busy_enabled === true) {
       try {
         const permission = await api("automation_busy_permission", { source_id: source.id });
         busyResult = permission.busy_enabled === true
-          ? await setStoreBusy(page, source)
+          ? await setStoreBusy(page, source, directCookieJar)
           : { applied: false, reason: "disabled_at_execution" };
         await log(
           busyResult.applied ? "Đã kéo Busy 15 phút:" : "Đã bỏ qua Busy an toàn:",
@@ -1080,7 +1185,7 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       }
     }
 
-    const session = loggedInNow ? await currentBrowserSession(page) : {};
+    const session = loggedInNow || directCookieJar ? await currentBrowserSession(page, directCookieJar) : {};
     const result = await api("automation_reviews", {
       source_id: source.id,
       worker_id: WORKER_ID,
@@ -1092,9 +1197,6 @@ async function syncSource(source, chromePath, headless = HEADLESS, allowVisibleR
       finance_transactions: financeTransactions,
       finance_detail_stats: financeDetailStats,
       finance_error: financeError,
-      marketing_rows: marketingRows,
-      marketing_advertiser_id: marketingAdvertiserId,
-      marketing_error: marketingError,
       session,
       busy_result: busyResult
     });
@@ -1154,6 +1256,7 @@ async function runCycle(chromePath) {
     limit: BATCH_SIZE
   });
   const sources = Array.isArray(batch.sources) ? batch.sources : [];
+  for (const source of sources) syncLeases.set(source.id, source.lease_token);
   if (!sources.length) {
     await log("Không có gian hàng đang bật đồng bộ.");
     return intervalMs(batch.settings?.sync_interval_minutes);
@@ -1162,13 +1265,17 @@ async function runCycle(chromePath) {
     CONCURRENCY === 1 ? "Chạy lần lượt:" : "Chạy theo nhóm:",
     `${sources.length} gian hàng, dữ liệu ${REVIEW_WINDOW_DAYS} ngày gần nhất`
   );
-  for (let index = 0; index < sources.length && !stopping; index += CONCURRENCY) {
-    await Promise.all(
-      sources
-        .slice(index, index + CONCURRENCY)
-        .map((source) => withAccountLock(source, () => runSource(source, chromePath)))
-    );
-    if (CONCURRENCY === 1 && index < sources.length - 1) await sleep(5_000);
+  try {
+    for (let index = 0; index < sources.length && !stopping; index += CONCURRENCY) {
+      await Promise.all(
+        sources
+          .slice(index, index + CONCURRENCY)
+          .map((source) => withAccountLock(source, () => runSource(source, chromePath)))
+      );
+      if (CONCURRENCY === 1 && index < sources.length - 1) await sleep(5_000);
+    }
+  } finally {
+    for (const source of sources) syncLeases.delete(source.id);
   }
   return intervalMs(batch.settings?.sync_interval_minutes);
 }
@@ -1195,6 +1302,9 @@ async function collectFeedbackDirect(page, source, cookieJar = null) {
         origin: "https://merchant.grab.com",
         referer: "https://merchant.grab.com/",
         requestsource: "troyPortal",
+        "x-client-id": "GrabMerchant-Portal",
+        "x-grabkit-clientid": "grabmerchant-portal",
+        ...grabCsrfHeaders(cookie, options.method || "GET"),
         ...(options.body ? { "content-type": "application/json" } : {})
       },
       signal: globalThis.AbortSignal.timeout(30_000)
@@ -1205,8 +1315,10 @@ async function collectFeedbackDirect(page, source, cookieJar = null) {
       }
     }
     if (response.status === 401 || response.status === 403) {
-      const error = new Error(`Phiên Grab hết hạn (HTTP ${response.status}).`);
-      error.code = "GRAB_SESSION_EXPIRED";
+      const error = new Error(response.status === 401
+        ? "Phiên Grab hết hạn (HTTP 401)."
+        : `Grab từ chối ${options.method || "GET"} /feedback${path} (HTTP 403).`);
+      error.code = response.status === 401 ? "GRAB_SESSION_EXPIRED" : "GRAB_REQUEST_FORBIDDEN";
       throw error;
     }
     const body = await response.json().catch(() => null);
@@ -1259,112 +1371,63 @@ async function collectFeedbackDirect(page, source, cookieJar = null) {
   };
 }
 
-async function setStoreState(page, source, action) {
-  if (!["busy", "normal"].includes(action)) throw new Error("Lệnh trạng thái Grab không hợp lệ.");
-  const merchantId = String(source.merchant_id || "").trim();
-  if (!merchantId) return { applied: false, reason: "missing_merchant_id" };
-  const cookies = await page.cookies("https://merchant.grab.com/", "https://api.grab.com/");
-  const cookie = cookieHeader(cookies);
-  if (!cookie) throw new Error("Chưa có cookie Grab Portal để đổi trạng thái cửa hàng.");
-
-  const request = async (requestPath, options = {}) => {
-    const response = await fetch(`https://merchant.grab.com/${requestPath.replace(/^\/+/, "")}`, {
-      ...options,
-      headers: {
-        accept: "application/json, text/plain, */*",
-        cookie,
-        origin: "https://merchant.grab.com",
-        referer: "https://merchant.grab.com/",
-        requestsource: "troyPortal",
-        merchantid: merchantId,
-        ...(options.body ? { "content-type": "application/json" } : {})
-      },
-      signal: globalThis.AbortSignal.timeout(30_000)
-    });
-    const body = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(body?.message || `Grab Portal trả HTTP ${response.status}.`);
-    return body;
-  };
-
-  const payload = await request("food/merchant/v3/open-status");
-  const candidates = [payload?.data, payload?.result, payload];
-  const status = candidates.find((value) => value && typeof value === "object" && ("isOpen" in value || "closeReason" in value));
-  if (!status) return { applied: false, reason: "unknown_status" };
-  const closeReason = Number(status.closeReason || 0);
-  if (status.isOpen !== true && CLOSED_STORE_REASONS.has(closeReason)) {
-    return { applied: false, reason: "closed", closeReason };
-  }
-  const fromState = status.isOpen === true
-    ? (status.isMexInBusyMode ? "BUSY" : "NORMAL")
-    : PAUSED_STORE_REASONS.get(closeReason);
-  if (!fromState) return { applied: false, reason: "unknown_state", closeReason };
-
-  if (action === "normal" && fromState === "NORMAL") {
-    return { applied: false, reason: "already_normal", fromState };
-  }
-
-  await request("food/merchant/v1/merchant/status", {
-    method: "PUT",
-    body: JSON.stringify({
-      fromState,
-      toState: action === "busy" ? "BUSY" : "NORMAL",
-      busyModeRequest: action === "busy"
-        ? { busyModeFoodPrepareTime: 15, busyModeStartTime: null }
-        : {},
-      tempPauseRequest: {}
-    })
-  });
-  return { applied: true, action, ...(action === "busy" ? { minutes: 15 } : {}), fromState };
+async function setStoreState(page, source, action, cookieJar = null) {
+  return setGrabStoreState(page, source, action, { cookieJar });
 }
 
-async function setStoreBusy(page, source) {
+async function setStoreBusy(page, source, cookieJar = null) {
   if (source.busy_enabled !== true) return { applied: false, reason: "disabled" };
-  return setStoreState(page, source, "busy");
+  return setStoreState(page, source, "busy", cookieJar);
 }
 
 async function runStoreControl(source, chromePath) {
+  const startedAt = Date.now();
   const action = String(source.store_control_action || "").toLowerCase();
-  const profilePath = path.join(PROFILE_ROOT, safeKey(source.account_key || source.id));
-  await mkdir(profilePath, { recursive: true });
-  const browser = await puppeteer.launch({
-    executablePath: chromePath,
-    userDataDir: profilePath,
-    headless: HEADLESS,
-    ignoreDefaultArgs: ["--enable-automation"],
-    defaultViewport: { width: 1366, height: 900 },
-    args: ["--no-first-run", "--no-default-browser-check", "--disable-blink-features=AutomationControlled"]
-  });
+  let browser;
+  let page = null;
+  let cookieJar = null;
+  let loggedInNow = false;
   let result = {};
   let succeeded = false;
   let errorMessage = "";
   try {
-    const pages = await browser.pages();
-    const page = pages[0] || await browser.newPage();
-    page.setDefaultTimeout(30_000);
-    const authBundle = await restoreStoredSession(page, source);
+    const authBundle = await api("automation_credentials", { source_id: source.id });
+    cookieJar = await restoreCookieJar(authBundle.credentials?.session);
     try {
-      result = await setStoreState(page, source, action);
+      result = await setStoreState(null, source, action, cookieJar);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const sessionMissing = /chưa có cookie grab portal/i.test(message);
-      if (!sessionMissing && !isGrabSessionExpired(error)) throw error;
+      if (error?.code === "GRAB_STORE_FORBIDDEN" || (!sessionMissing && !isGrabSessionExpired(error))) throw error;
       await log("Phiên Grab của công tắc cửa hàng đã hết hạn, đang đăng nhập lại:", source.display_name);
-      await login(page, source, { visible: !HEADLESS, authBundle });
-      await saveRefreshedSession(page, source);
-      result = await setStoreState(page, source, action);
+      const profilePath = path.join(PROFILE_ROOT, safeKey(source.account_key || source.id));
+      await mkdir(profilePath, { recursive: true });
+      browser = await puppeteer.launch({
+        executablePath: chromePath,
+        userDataDir: profilePath,
+        headless: HEADLESS,
+        ignoreDefaultArgs: ["--enable-automation"],
+        defaultViewport: { width: 1366, height: 900 },
+        args: ["--no-first-run", "--no-default-browser-check", "--disable-blink-features=AutomationControlled"]
+      });
+      page = (await browser.pages())[0] || await browser.newPage();
+      page.setDefaultTimeout(30_000);
+      cookieJar = await login(page, source, { visible: !HEADLESS, authBundle });
+      loggedInNow = true;
+      result = await setStoreState(page, source, action, cookieJar);
     }
+    result = { ...result, elapsed_ms: Date.now() - startedAt, login_required: loggedInNow };
     succeeded = result.applied === true || result.reason === "already_normal";
     if (!succeeded) errorMessage = `Grab từ chối đổi trạng thái: ${result.reason || "unknown"}.`;
     await log(
       succeeded ? "Đã xử lý công tắc cửa hàng:" : "Không đổi trạng thái cửa hàng:",
-      `${source.display_name} - ${action} - ${result.reason || result.fromState || "ok"}`
+      `${source.display_name} - ${action} - ${result.reason || result.fromState || "ok"} - ${result.elapsed_ms} ms - ${loggedInNow ? "đăng nhập lại" : "dùng lại phiên API"}`
     );
   } catch (error) {
     errorMessage = error instanceof Error ? error.message : String(error);
     result = { applied: false, action, reason: "error", error: errorMessage.slice(0, 500) };
     await log("Lệnh công tắc cửa hàng lỗi:", `${source.display_name} - ${errorMessage}`);
   } finally {
-    await browser.close().catch(() => null);
     await api("automation_store_command_result", {
       source_id: source.id,
       store_control_requested_at: source.store_control_requested_at,
@@ -1372,14 +1435,15 @@ async function runStoreControl(source, chromePath) {
       result,
       error: errorMessage
     }).catch((error) => log("Chưa ghi được kết quả công tắc:", error instanceof Error ? error.message : String(error)));
+    // Publish Grab's verified result first. Persist rotated API cookies before
+    // releasing the account lock; storage failure does not undo Grab's result.
+    if (result.reason !== "error" && (cookieJar || page)) {
+      await saveRefreshedSession(page, source, "", cookieJar).catch((error) =>
+        log("Chưa lưu được phiên sau lệnh cửa hàng:", `${source.display_name} - ${error.message}`)
+      );
+    }
+    await browser?.close().catch(() => null);
   }
-}
-
-async function pollStoreControls(chromePath) {
-  const batch = await api("automation_store_commands", { worker_id: WORKER_ID, limit: CONCURRENCY });
-  const sources = Array.isArray(batch.sources) ? batch.sources : [];
-  if (!sources.length) return;
-  await Promise.all(sources.map((source) => withAccountLock(source, () => runStoreControl(source, chromePath))));
 }
 
 async function runReviewReplyCommand(command, chromePath) {
@@ -1629,15 +1693,16 @@ async function main() {
   await acquireLock();
   const chromePath = await findChrome();
   await log("Worker đánh giá đã khởi động:", `${WORKER_ID} - ${HEADLESS ? "ẩn" : "hiện Chrome"}`);
-
-  if (MARKETING_AUTH_ACCOUNT) {
-    const claimed = await api("automation_marketing_source", {
-      worker_id: WORKER_ID,
-      account_key: MARKETING_AUTH_ACCOUNT
+  if (!RUN_ONCE && !MARKETING_AUTH_ACCOUNT) {
+    storeCommandLane = startStoreCommandLane({
+      claim: async (limit) => {
+        const batch = await api("automation_store_commands", { worker_id: WORKER_ID, limit });
+        return Array.isArray(batch.sources) ? batch.sources : [];
+      },
+      run: (source) => withAccountLock(source, () => runStoreControl(source, chromePath)),
+      onError: (error) => log("Chưa xử lý được lệnh công tắc cửa hàng:", error instanceof Error ? error.message : String(error))
     });
-    if (!claimed.source) throw new Error("Không nhận được tài khoản cần xác thực Marketing.");
-    await runMarketingAuthentication(claimed.source, chromePath);
-    return;
+    await log("Công tắc cửa hàng nhận lệnh riêng mỗi 5 giây, không chờ cả đợt đồng bộ.");
   }
 
   const initialSchedule = await readRemoteSchedule(intervalMs(FALLBACK_INTERVAL_MINUTES));
@@ -1670,9 +1735,6 @@ async function main() {
   while (!RUN_ONCE && !stopping) {
     await sleep(10_000);
     if (stopping) break;
-    await pollStoreControls(chromePath).catch((error) =>
-      log("Chưa đọc được lệnh công tắc cửa hàng:", error instanceof Error ? error.message : String(error))
-    );
     await pollReviewReplyCommands(chromePath).catch((error) =>
       log("Chưa đọc được hàng đợi trả lời đánh giá:", error instanceof Error ? error.message : String(error))
     );
@@ -1704,6 +1766,7 @@ async function main() {
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
     stopping = true;
+    void storeCommandLane?.stop();
   });
 }
 
@@ -1712,4 +1775,7 @@ main()
     await log("Worker dừng do lỗi:", error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   })
-  .finally(releaseLock);
+  .finally(async () => {
+    await storeCommandLane?.stop();
+    await releaseLock();
+  });

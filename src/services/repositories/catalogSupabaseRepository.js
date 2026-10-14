@@ -7,6 +7,7 @@ import {
   resolveWebsiteProductPrice
 } from "../productChannelPricingService.js";
 import { isSupabaseRealtimeReady } from "../supabase/supabaseRuntimeClient.js";
+import { isSupabaseRuntimeWriteEnabled } from "../supabase/runtimeFlags.js";
 
 const CATALOG_TABLE_BY_KEY = {
   ghr_products: "products",
@@ -850,6 +851,7 @@ async function writeStructuredBranches(value) {
 }
 
 export async function writeCatalogToStandardTable(key, value) {
+  if (!isSupabaseRuntimeWriteEnabled()) return value;
   if (!isSupabaseRuntimeReady()) return value;
   const tableName = CATALOG_TABLE_BY_KEY[key];
   if (!tableName) return value;
@@ -911,6 +913,7 @@ export async function writeOptionGroupsSnapshotToTables({
   optionGroupPresets = [],
   products = []
 } = {}) {
+  if (!isSupabaseRuntimeWriteEnabled()) return { ok: false, reason: "supabase_write_disabled" };
   if (!isSupabaseRuntimeReady()) return { ok: false, reason: "supabase_runtime_not_ready" };
   const client = getRuntimeSupabaseClient();
   if (!client) return { ok: false, reason: "missing_supabase_client" };

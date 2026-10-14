@@ -90,6 +90,11 @@ function normalizeSmartPromotion(row = {}) {
     active: normalizeBoolean(data.active ?? row.active, true),
     displayPlaces,
     condition: {
+      ...condition,
+      branchIds: Array.isArray(condition.branchIds)
+        ? condition.branchIds.map((id) => toText(id).toLowerCase())
+        : condition.branchIds == null ? [] : ["invalid-branch-scope"],
+      exactFixedPrice: normalizeBoolean(condition.exactFixedPrice, false),
       minSubtotal: toNumber(condition.minSubtotal ?? condition.min_subtotal, 0),
       customerType: toText(condition.customerType || condition.customer_type || "all").toLowerCase(),
       productIds: toText(condition.productIds || condition.product_ids),

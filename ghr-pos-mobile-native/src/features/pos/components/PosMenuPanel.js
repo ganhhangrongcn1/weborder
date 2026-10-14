@@ -1,8 +1,10 @@
-import React, { memo } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { memo, useCallback } from "react";
+import { Image, Pressable, FlatList, StyleSheet, Text, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
+
+import PosCategoryTabs from "./PosCategoryTabs";
 
 const ALL_CATEGORY = "Tất cả";
 
@@ -11,6 +13,8 @@ const PosMenuPanel = memo(function PosMenuPanel({
   categories = [],
   activeCategory = ALL_CATEGORY,
   columns = 3,
+  compact = false,
+  pagerEnabled = true,
   normalizedPager = "",
   pagerBusy = false,
   busyPagers = [],
@@ -22,6 +26,36 @@ const PosMenuPanel = memo(function PosMenuPanel({
   const safeColumns = Math.max(2, Math.min(3, Number(columns || 2)));
   const cardWidth = safeColumns === 3 ? "31.8%" : "48.7%";
   const pagerSelected = Boolean(normalizedPager);
+
+  const renderProduct = useCallback(({ item }) => (
+    <Pressable
+      key={item.id}
+      style={[styles.productCard, { width: cardWidth }]}
+      onPress={() => onAddProduct(item)}
+    >
+      <View style={styles.imageSlot}>
+        {item.image ? (
+          <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
+        ) : (
+          <Text style={styles.imageText}>GHR</Text>
+        )}
+      </View>
+
+      <View style={styles.productBody}>
+        <View style={styles.productCopy}>
+          <Text style={styles.productName} numberOfLines={2}>
+            {item.name}
+          </Text>
+          <Text style={styles.productMeta} numberOfLines={1}>
+            {Array.isArray(item.optionGroups) && item.optionGroups.length
+              ? `${item.category} · Có tùy chọn`
+              : item.category}
+          </Text>
+        </View>
+        <Text style={styles.productPrice}>{formatMoney(item.price)}</Text>
+      </View>
+    </Pressable>
+  ), [cardWidth, onAddProduct]);
 
   return (
     <View style={styles.panel}>
@@ -36,67 +70,33 @@ const PosMenuPanel = memo(function PosMenuPanel({
         >
           <Text style={styles.pagerInlineLabel}>THẺ RUNG</Text>
           <Text style={[styles.pagerInlineValue, pagerBusy && styles.pagerValueBusy]}>
-            {pagerSelected ? normalizedPager : "Chọn thẻ"}
+            {!pagerEnabled ? "Đã tắt" : pagerSelected ? normalizedPager : "Chọn thẻ"}
           </Text>
         </Pressable>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryScroller}
-        contentContainerStyle={styles.categoryList}
-      >
-        {listCategories.map((category) => {
-          const active = category === activeCategory;
-          return (
-            <Pressable
-              key={category}
-              style={[styles.categoryChip, active && styles.categoryChipActive]}
-              onPress={() => onSelectCategory?.(category)}
-            >
-              <Text style={[styles.categoryText, active && styles.categoryTextActive]} numberOfLines={1}>
-                {category}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      <PosCategoryTabs
+        singleRow={compact}
+        categories={listCategories}
+        activeCategory={activeCategory}
+        onSelectCategory={onSelectCategory}
+      />
 
-      <ScrollView style={styles.productFrame} showsVerticalScrollIndicator={false}>
-        <View style={styles.productGrid}>
-          {products.map((item) => (
-            <Pressable
-              key={item.id}
-              style={[styles.productCard, { width: cardWidth }]}
-              onPress={() => onAddProduct(item)}
-            >
-              <View style={styles.imageSlot}>
-                {item.image ? (
-                  <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
-                ) : (
-                  <Text style={styles.imageText}>GHR</Text>
-                )}
-              </View>
-
-              <View style={styles.productBody}>
-                <View style={styles.productCopy}>
-                  <Text style={styles.productName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.productMeta} numberOfLines={1}>
-                    {Array.isArray(item.optionGroups) && item.optionGroups.length
-                      ? `${item.category} · Có tùy chọn`
-                      : item.category}
-                  </Text>
-                </View>
-                <Text style={styles.productPrice}>{formatMoney(item.price)}</Text>
-              </View>
-            </Pressable>
-          ))}
-
-          {!products.length ? <Text style={styles.empty}>Chưa có món để bán.</Text> : null}
-        </View>
-      </ScrollView>
+      <FlatList
+        key={safeColumns}
+        data={products}
+        numColumns={safeColumns}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderProduct}
+        style={styles.productFrame}
+        contentContainerStyle={styles.productList}
+        columnWrapperStyle={styles.productRow}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={9}
+        windowSize={5}
+        removeClippedSubviews={false}
+        ListEmptyComponent={<Text style={styles.empty}>Chưa có món để bán.</Text>}
+      />
     </View>
   );
 });
@@ -130,41 +130,6 @@ const styles = StyleSheet.create({
   },
   pagerInlineLabel: { color: POS_COLORS.muted, fontSize: 9, fontWeight: "900" },
   pagerInlineValue: { marginTop: 1, color: POS_COLORS.heading, fontSize: 14, fontWeight: "900" },
-  categoryScroller: {
-    flexGrow: 0,
-    maxHeight: 58,
-    borderWidth: 1,
-    borderColor: POS_COLORS.softBorder,
-    borderRadius: POS_RADIUS.md,
-    backgroundColor: POS_COLORS.subtleSurface
-  },
-  categoryList: {
-    gap: 8,
-    padding: 7
-  },
-  categoryChip: {
-    minHeight: 42,
-    maxWidth: 190,
-    borderWidth: 1,
-    borderColor: POS_COLORS.inputBorder,
-    backgroundColor: POS_COLORS.surface,
-    borderRadius: POS_RADIUS.md,
-    paddingHorizontal: 14,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  categoryChipActive: {
-    borderColor: POS_COLORS.primary,
-    backgroundColor: POS_COLORS.primarySoft
-  },
-  categoryText: {
-    color: POS_COLORS.slate,
-    fontSize: 13,
-    fontWeight: "900"
-  },
-  categoryTextActive: {
-    color: POS_COLORS.primaryDark
-  },
   pagerCard: {
     gap: 3,
     minHeight: 54,
@@ -227,6 +192,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0
   },
+  productList: { paddingBottom: 8 },
+  productRow: { gap: 10, marginBottom: 10 },
   productGrid: {
     flexDirection: "row",
     flexWrap: "wrap",

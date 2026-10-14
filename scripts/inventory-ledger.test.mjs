@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import {
   calculateInventoryLedgerSummary,
   getInventoryDocumentPath,
+  getInventoryLedgerDocumentNo,
+  getInventoryMovementLabel,
+  isInventoryProductionDocument,
   sumInventoryMovementQuantities
 } from "../src/services/inventoryLedgerCalculations.js";
 
@@ -30,6 +33,22 @@ assert.deepEqual(calculateInventoryLedgerSummary({
 });
 
 assert.equal(getInventoryDocumentPath("transfer"), "/admin/inventory/transfers");
+assert.equal(isInventoryProductionDocument("production_consumption"), true);
+assert.equal(getInventoryLedgerDocumentNo({
+  documentNo: "SX-OUT-LSX-000015",
+  documentType: "production_consumption",
+  productionOrderNo: "LSX-000015"
+}), "LSX-000015");
+assert.equal(getInventoryLedgerDocumentNo({
+  documentNo: "SX-IN-LSX-000015",
+  documentType: "production_output"
+}), "LSX-000015");
+assert.equal(getInventoryMovementLabel({ stage: "order_consumption", documentType: "production_consumption" }), "Sản xuất");
+assert.equal(getInventoryMovementLabel({ stage: "order_consumption", documentType: "sales_order" }), "Bán hàng");
+assert.equal(
+  getInventoryDocumentPath("production_output", { productionOrderId: "order id/15" }),
+  "/admin/inventory/production-orders?order=order%20id%2F15"
+);
 assert.equal(getInventoryDocumentPath("unknown"), "/admin/inventory/ledger");
 
 console.log("inventory-ledger.test.mjs: passed");

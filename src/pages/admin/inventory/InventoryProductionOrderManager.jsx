@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { getInventoryProductionScopeMeta } from "../../../services/inventoryProductionService.js";
@@ -34,6 +35,7 @@ export default function InventoryProductionOrderManager({
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [modal, setModal] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [confirmation, setConfirmation] = useState(null);
   const [reason, setReason] = useState("");
   const busy = mutationStatus === "saving";
@@ -59,6 +61,19 @@ export default function InventoryProductionOrderManager({
       ? "Lệnh sơ chế"
       : "Lệnh sản xuất";
   const createLabel = hasPreprocessing && !hasCentral ? "Tạo lệnh sơ chế" : "Tạo lệnh";
+  const linkedOrderId = searchParams.get("order") || "";
+  useEffect(() => {
+    if (!linkedOrderId || modal) return;
+    const linkedOrder = rows.find((order) => order.id === linkedOrderId || order.orderNo === linkedOrderId);
+    if (linkedOrder) setModal({ mode: "view", order: linkedOrder });
+  }, [linkedOrderId, modal, rows]);
+  const closeModal = () => {
+    setModal(null);
+    if (!linkedOrderId) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("order");
+    setSearchParams(nextParams, { replace: true });
+  };
   const handleCreate = () => {
     if (!activeBoms.length) {
       onOpenBoms?.();
@@ -149,7 +164,7 @@ export default function InventoryProductionOrderManager({
         </table>
       </div>
 
-      {modal ? <InventoryProductionOrderModal mode={modal.mode} order={modal.order} boms={boms} warehouses={warehouses} units={units} warehouseSelectionLocked={warehouseSelectionLocked} isSaving={busy} onClose={() => setModal(null)} onSave={onSave} onComplete={onComplete} /> : null}
+      {modal ? <InventoryProductionOrderModal mode={modal.mode} order={modal.order} boms={boms} warehouses={warehouses} units={units} warehouseSelectionLocked={warehouseSelectionLocked} isSaving={busy} onClose={closeModal} onSave={onSave} onComplete={onComplete} /> : null}
 
       {confirmation ? (
         <div className="inventory-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setConfirmation(null)}>

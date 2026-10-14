@@ -1,4 +1,5 @@
 import { createPosCartItem } from "./posCart";
+import { isPromotionAllowedForBranch } from "./posPromotionScope";
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -35,7 +36,9 @@ function isPromotionAllowedForPos(promotion = {}) {
       ? promotion.sales_channels
       : null;
   if (!source) return true;
-  return normalizeSalesChannels(source).includes("pos");
+  const channels = normalizeSalesChannels(source);
+  if (channels.includes("pos")) return true;
+  return toText(promotion?.type).toLowerCase() === "flash_sale" && channels.includes("qr");
 }
 
 function isDateActive(startAt = "", endAt = "", now = new Date()) {
@@ -106,11 +109,12 @@ function hasFlashSaleSlots(promotion = {}) {
   return totalSlots <= 0 || soldCount < totalSlots;
 }
 
-function isPricePromotionActive(promotion = {}, now = new Date()) {
+function isPricePromotionActive(promotion = {}, now = new Date(), branchUuid = "") {
   const promotionType = toText(promotion?.type).toLowerCase();
   if (!["flash_sale", "strike_price"].includes(promotionType)) return false;
   if (promotion?.active === false) return false;
   if (!isPromotionAllowedForPos(promotion)) return false;
+  if (!isPromotionAllowedForBranch(promotion, branchUuid)) return false;
   if (!hasDisplayPlace(promotion, "pos")) return false;
   if (!isDateActive(promotion.startAt, promotion.endAt, now)) return false;
   if (!isWeekdayActive(promotion, now)) return false;
@@ -161,16 +165,16 @@ function calculatePromotionPrice(originalPrice = 0, promotion = {}) {
   return Math.max(roundedPrice, minFinalPrice);
 }
 
-export function getActivePosFlashSalePromotions(smartPromotions = [], now = new Date()) {
+export function getActivePosFlashSalePromotions(smartPromotions = [], now = new Date(), branchUuid = "") {
   return [...(Array.isArray(smartPromotions) ? smartPromotions : [])]
     .filter((promotion) => promotion?.type === "flash_sale")
-    .filter((promotion) => isPricePromotionActive(promotion, now))
+    .filter((promotion) => isPricePromotionActive(promotion, now, branchUuid))
     .sort((first, second) => Number(first?.priority || 99) - Number(second?.priority || 99));
 }
 
-export function getActivePosPricePromotions(smartPromotions = [], now = new Date()) {
+export function getActivePosPricePromotions(smartPromotions = [], now = new Date(), branchUuid = "") {
   return [...(Array.isArray(smartPromotions) ? smartPromotions : [])]
-    .filter((promotion) => isPricePromotionActive(promotion, now))
+    .filter((promotion) => isPricePromotionActive(promotion, now, branchUuid))
     .sort((first, second) => Number(first?.priority || 99) - Number(second?.priority || 99));
 }
 
@@ -180,12 +184,13 @@ function applyMatchedPricePromotion(product = {}, activePromotions = []) {
 
   const originalPrice = Math.max(0, toNumber(product.price, 0));
   const salePrice = calculatePromotionPrice(originalPrice, matched);
-  if (salePrice <= 0 || salePrice >= originalPrice) return product;
+  const exactFixedPrice = isFixedPricePromotion(matched) && matched?.condition?.exactFixedPrice === true;
+  if (salePrice <= 0 || (!exactFixedPrice && salePrice >= originalPrice)) return product;
   const percentDiscount = originalPrice > 0
     ? ((originalPrice - salePrice) / originalPrice) * 100
     : 0;
   const minDiscountToShow = Math.max(0, toNumber(matched?.condition?.minDiscountToShow, 0));
-  if (percentDiscount < minDiscountToShow) return product;
+  if (!exactFixedPrice && percentDiscount < minDiscountToShow) return product;
 
   const promotionTitle = matched.title || matched.name || (
     matched.type === "strike_price" ? "Giảm giá món" : "Flashsale"
@@ -213,26 +218,27 @@ function applyMatchedPricePromotion(product = {}, activePromotions = []) {
   };
 }
 
-export function applyPosPricePromotionToProduct(product = {}, smartPromotions = [], now = new Date()) {
-  return applyMatchedPricePromotion(product, getActivePosPricePromotions(smartPromotions, now));
+export function applyPosPricePromotionToProduct(product = {}, smartPromotions = [], now = new Date(), branchUuid = "") {
+  return applyMatchedPricePromotion(product, getActivePosPricePromotions(smartPromotions, now, branchUuid));
 }
 
-export function applyPosFlashSaleToProduct(product = {}, smartPromotions = [], now = new Date()) {
-  return applyMatchedPricePromotion(product, getActivePosFlashSalePromotions(smartPromotions, now));
+export function applyPosFlashSaleToProduct(product = {}, smartPromotions = [], now = new Date(), branchUuid = "") {
+  return applyMatchedPricePromotion(product, getActivePosFlashSalePromotions(smartPromotions, now, branchUuid));
 }
 
-export function selectCheckoutSmartPromotions(smartPromotions = []) {
+export function selectCheckoutSmartPromotions(smartPromotions = [], branchUuid = "") {
   return [...(Array.isArray(smartPromotions) ? smartPromotions : [])]
     .filter((promotion) => promotion?.active !== false)
     .filter((promotion) => isPromotionAllowedForPos(promotion))
+    .filter((promotion) => isPromotionAllowedForBranch(promotion, branchUuid))
     .filter((promotion) => hasDisplayPlace(promotion, "checkout"))
     .sort((first, second) => Number(first?.priority || 99) - Number(second?.priority || 99));
 }
 
-export function buildPosPromotionHints({ smartPromotions = [], products = [], subtotal = 0 } = {}) {
+export function buildPosPromotionHints({ smartPromotions = [], products = [], subtotal = 0, branchUuid = "" } = {}) {
   const now = new Date();
 
-  return selectCheckoutSmartPromotions(smartPromotions)
+  return selectCheckoutSmartPromotions(smartPromotions, branchUuid)
     .filter((promotion) => promotion?.type === "gift_threshold" || promotion?.reward?.type === "gift")
     .filter((promotion) => isDateActive(promotion.startAt, promotion.endAt, now))
     .map((promotion) => {

@@ -14,6 +14,8 @@ export const POS_PAYMENT_SESSION_STATUSES = Object.freeze({
 });
 
 const ACTIVE_SESSION_STORAGE_KEY = "ghr_pos_active_payment_sessions";
+const AUTH_REFRESH_LEEWAY_SECONDS = 90;
+const TRANSIENT_RETRY_DELAY_MS = 450;
 
 function toText(value = "") {
   return String(value ?? "").normalize("NFC").trim();
@@ -31,6 +33,77 @@ function getObject(value) {
 
 function normalizeStatus(value = "") {
   return toText(value).toLowerCase() || POS_PAYMENT_SESSION_STATUSES.PENDING_PAYMENT;
+}
+
+function waitForRetry(delayMs = TRANSIENT_RETRY_DELAY_MS) {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, delayMs));
+}
+
+function getErrorStatus(error = null) {
+  return Number(
+    error?.context?.status
+      || error?.status
+      || error?.statusCode
+      || 0
+  );
+}
+
+function isAuthFailure(error = null, data = null) {
+  const status = getErrorStatus(error);
+  const message = toText(data?.message || error?.message).toLowerCase();
+  if (status === 403) return false;
+  return status === 401
+    || /jwt|token|unauthori|đăng nhập/.test(message);
+}
+
+function isTransientConnectionFailure(error = null, data = null) {
+  const status = getErrorStatus(error);
+  const message = toText(data?.message || error?.message).toLowerCase();
+  return status === 0
+    || status === 408
+    || status === 429
+    || status >= 500
+    || /network|fetch|timeout|timed out|kết nối|ket noi|offline|socket/.test(message);
+}
+
+function isSessionNearExpiry(session = null) {
+  const expiresAtSeconds = Number(session?.expires_at || 0);
+  if (!expiresAtSeconds) return false;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  return expiresAtSeconds - nowSeconds <= AUTH_REFRESH_LEEWAY_SECONDS;
+}
+
+export async function refreshPosPaymentAuthSession({ forceRefresh = false } = {}) {
+  if (!supabase) {
+    return { ok: false, session: null, message: "Supabase chưa sẵn sàng." };
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getSession();
+  const currentSession = authData?.session || null;
+  if (authError || !currentSession?.access_token) {
+    return {
+      ok: false,
+      session: null,
+      message: "Phiên đăng nhập POS không còn hợp lệ. Vui lòng đăng nhập lại."
+    };
+  }
+
+  if (!forceRefresh && !isSessionNearExpiry(currentSession)) {
+    return { ok: true, session: currentSession, refreshed: false, message: "" };
+  }
+
+  const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+  const refreshedSession = refreshData?.session || null;
+  if (refreshError || !refreshedSession?.access_token) {
+    return {
+      ok: false,
+      session: null,
+      message: "Không tự làm mới được phiên POS. Vui lòng kiểm tra mạng hoặc đăng nhập lại."
+    };
+  }
+
+  await supabase.realtime.setAuth(refreshedSession.access_token);
+  return { ok: true, session: refreshedSession, refreshed: true, message: "" };
 }
 
 function normalizeSessionRow(row = {}) {
@@ -109,27 +182,48 @@ export async function forgetPosPaymentSession(branchUuid = "") {
 }
 
 async function invokeSessionAction(body = {}) {
-  if (!supabase) {
-    return { ok: false, message: "Supabase chưa sẵn sàng." };
-  }
+  const initialAuth = await refreshPosPaymentAuthSession();
+  if (!initialAuth.ok) return { ok: false, message: initialAuth.message };
 
-  const { data: authData, error: authError } = await supabase.auth.getSession();
-  const accessToken = toText(authData?.session?.access_token);
-  if (authError || !accessToken) {
-    return { ok: false, message: "Phiên đăng nhập POS đã hết hạn. Vui lòng đăng nhập lại." };
-  }
-
-  const { data, error } = await supabase.functions.invoke("pos-payment-session-api", {
-    body,
-    headers: {
-      Authorization: `Bearer ${accessToken}`
+  const invokeWithSession = async (session) => {
+    const result = await supabase.functions.invoke("pos-payment-session-api", {
+      body,
+      headers: { Authorization: `Bearer ${toText(session?.access_token)}` }
+    });
+    if (result.error && !result.data && result.error.context?.clone) {
+      try {
+        return { ...result, data: await result.error.context.clone().json() };
+      } catch {
+        // A gateway or network error may not contain a JSON response.
+      }
     }
-  });
+    return result;
+  };
+
+  let { data, error } = await invokeWithSession(initialAuth.session);
+
+  if (error && isAuthFailure(error, data)) {
+    const refreshedAuth = await refreshPosPaymentAuthSession({ forceRefresh: true });
+    if (!refreshedAuth.ok) return { ok: false, message: refreshedAuth.message };
+    ({ data, error } = await invokeWithSession(refreshedAuth.session));
+  } else if (error && isTransientConnectionFailure(error, data)) {
+    await waitForRetry();
+    const retryAuth = await refreshPosPaymentAuthSession();
+    if (retryAuth.ok) {
+      ({ data, error } = await invokeWithSession(retryAuth.session));
+    }
+  }
 
   if (error) {
+    const requiresLogin = isAuthFailure(error, data);
+    const forbidden = getErrorStatus(error) === 403;
     return {
       ok: false,
-      message: toText(data?.message || error.message) || "Không gọi được dịch vụ thanh toán."
+      message: requiresLogin
+        ? "Phiên đăng nhập POS đã hết hạn. Vui lòng đăng nhập lại."
+        : toText(data?.message) || (forbidden
+          ? "Tài khoản không có quyền thực hiện thao tác thanh toán này."
+          : toText(error.message) || "Không gọi được dịch vụ thanh toán. Kiểm tra mạng rồi thử lại.")
     };
   }
 
@@ -257,6 +351,14 @@ export function confirmPosPaymentSessionManually(sessionId = "") {
 export function markPosPaymentSessionConverted(sessionId = "", orderId = "") {
   return invokeSessionAction({
     action: "convert",
+    session_id: toText(sessionId),
+    order_id: toText(orderId)
+  });
+}
+
+export function attachPosPaymentSessionOrder(sessionId = "", orderId = "") {
+  return invokeSessionAction({
+    action: "attach_order",
     session_id: toText(sessionId),
     order_id: toText(orderId)
   });

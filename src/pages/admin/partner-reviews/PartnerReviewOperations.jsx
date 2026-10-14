@@ -76,6 +76,10 @@ export default function PartnerReviewOperations({
                       <AdminBadge tone={badgeTone(source.auth_status)}>{source.credentials_configured ? "Đã lưu đăng nhập" : "Thiếu đăng nhập"}</AdminBadge>
                       <AdminBadge tone={source.sync_enabled ? "success" : "neutral"}>{source.sync_enabled ? "Đang bật" : "Đã tắt"}</AdminBadge>
                       <AdminBadge tone={badgeTone(source.sync_status)}>{syncStatusLabel(source.sync_status)}</AdminBadge>
+                      {source.store_control_status === "pending" ? <AdminBadge tone="info">Đang chờ worker đổi trạng thái</AdminBadge> : null}
+                      {source.store_control_status === "running" ? <AdminBadge tone="info">Đang đổi trạng thái trên Grab</AdminBadge> : null}
+                      {source.store_control_status === "error" ? <small role="status">{source.store_control_error || "Đổi trạng thái thất bại."}</small> : null}
+                      {source.store_control_status === "success" ? <small>Lệnh gần nhất đã được Grab xác nhận lúc {formatReviewDate(source.store_control_finished_at)}</small> : null}
                     </div>
                   </div>
                 </div>
@@ -83,7 +87,7 @@ export default function PartnerReviewOperations({
                   {source.platform === "grabfood" ? (
                     <div className={`admin-review-store-control is-${source.store_control_status || "idle"}`}>
                       <button type="button" className={`is-busy ${isStoreControlSelected(source, "busy") ? "is-selected" : ""}`} disabled={Boolean(storeControlSaving) || ["pending", "running"].includes(source.store_control_status)} onClick={() => onStoreControl(source, "busy")}>
-                        {storeControlSaving === `${source.id}:busy` ? "Đang gửi..." : "Bận 15 phút"}
+                        {storeControlSaving === `${source.id}:busy` ? "Đang gửi..." : "Bận · chuẩn bị 15 phút"}
                       </button>
                       <button type="button" className={`is-normal ${isStoreControlSelected(source, "normal") ? "is-selected" : ""}`} disabled={Boolean(storeControlSaving) || ["pending", "running"].includes(source.store_control_status)} onClick={() => onStoreControl(source, "normal")}>
                         {storeControlSaving === `${source.id}:normal` ? "Đang gửi..." : "Mở bình thường"}

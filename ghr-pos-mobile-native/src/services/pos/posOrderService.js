@@ -1,5 +1,7 @@
+import { normalizeWebsiteOrder } from "./posPickupOrderService";
 import { invalidatePosStamps, readPosStamps } from "./posStampService";
 import { createPosOrderIdentity } from "../../shared/pos/posOrderIdentity";
+import { buildPosPreparationBillText } from "./posPrinterService";
 import { supabase } from "../supabase/client";
 import { ensurePosGuestProfile } from "./posCustomerService";
 import { applyPosOrderLoyaltyMobile } from "./posLoyaltyService";
@@ -133,6 +135,7 @@ function buildOfflineOrderPayload({
   cart = [],
   totals = {},
   pagerNumber = "",
+  pagerEnabled = true,
   customerName = "",
   customerPhone = "",
   branch = null,
@@ -160,6 +163,7 @@ function buildOfflineOrderPayload({
     cart,
     totals,
     pagerNumber,
+    pagerEnabled,
     customerName,
     customerPhone,
     branch,
@@ -189,6 +193,7 @@ export async function createPosTakeawayOrderMobile({
   cart = [],
   totals = {},
   pagerNumber = "",
+  pagerEnabled = true,
   customerName = "",
   customerPhone = "",
   branch = null,
@@ -211,7 +216,8 @@ export async function createPosTakeawayOrderMobile({
   posShiftId = "",
   paymentMeta = null,
   orderIdentity: providedOrderIdentity = null,
-  skipOfflineQueue = false
+  skipOfflineQueue = false,
+  phoneOrder = false
 } = {}) {
   const items = normalizeCartForOrder(cart);
   if (!items.length) return { ok: false, message: "Chưa có món trong bill." };
@@ -220,8 +226,9 @@ export async function createPosTakeawayOrderMobile({
   if (stampGifts.length && (stampGifts.length !== 1 || stampGifts[0].metadata.stampPhone !== customerPhone || stampGifts[0].quantity !== 1)) {
     return { ok: false, message: "Món đổi tem cần đúng khách và số lượng 1." };
   }
-  const pager = toText(pagerNumber);
-  if (!pager) return { ok: false, message: "Vui lòng nhập thẻ rung." };
+  const usePager = phoneOrder || pagerEnabled !== false;
+  const pager = usePager ? toText(pagerNumber) : "";
+  if (usePager && !pager) return { ok: false, message: "Vui lòng nhập thẻ rung." };
 
   const orderIdentity = providedOrderIdentity?.orderCode
     ? providedOrderIdentity
@@ -232,8 +239,11 @@ export async function createPosTakeawayOrderMobile({
   const voucherDiscountAmount = Math.max(0, toNumber(promoDiscount || totals.voucherDiscount, 0));
   const pointsSpent = Math.max(0, Math.floor(toNumber(pointsDiscount, 0)));
   const pointDiscountAmount = Math.max(0, toNumber(pointsDiscountAmount || totals.pointsDiscount, 0));
-  const normalizedOrderStatus = "pending_zalo";
-  const displayCustomerName = toText(customerName) || `Khách thẻ ${pager}`;
+  const isPaymentConfirmed = toText(paymentStatus).toLowerCase() === "paid";
+  const normalizedOrderStatus = isPaymentConfirmed ? "pending_zalo" : "pending_payment";
+  // Database chỉ nhận pending/done. Đơn chưa thanh toán vẫn bị chặn khỏi bếp theo status=pending_payment.
+  const normalizedKitchenStatus = "pending";
+  const displayCustomerName = toText(customerName) || (pager ? `Khách thẻ ${pager}` : "Khách tại quầy");
   const displayCustomerPhone = toText(customerPhone);
   const branchInfo = normalizeBranchForOrder(branch || {});
   const shiftId = toText(posShiftId || shift?.id);
@@ -256,6 +266,7 @@ export async function createPosTakeawayOrderMobile({
     cart,
     totals,
     pagerNumber: pager,
+    pagerEnabled: usePager,
     customerName,
     customerPhone: displayCustomerPhone,
     branch,
@@ -281,6 +292,7 @@ export async function createPosTakeawayOrderMobile({
   });
 
   const queueOfflineOrder = async (reason = "") => {
+    if (phoneOrder) return { ok: false, message: "Chưa tạo được đơn chờ thanh toán. Giỏ vẫn giữ nguyên; kiểm tra mạng rồi thử lại." };
     if (stampGifts.length) return { ok: false, message: "Đổi tem cần kết nối máy chủ. Giữ bill và kiểm tra kết nối trước khi giao quà." };
     if (!skipOfflineQueue) {
       await queuePosOfflineOrder(offlinePayload, reason);
@@ -330,6 +342,7 @@ export async function createPosTakeawayOrderMobile({
     let profileWarning = "";
     let customerProfileReady = !displayCustomerPhone;
     const metadata = {
+      ...(phoneOrder ? { deviceMode: "phone", phoneDraftKey: JSON.stringify({ cart, customerPhone, customerName, orderNote, pager, totalAmount }) } : {}),
       ...(stampGifts.length ? { stampGiftProductId: stampGifts[0].id } : {}),
       source: "pos_mobile",
       channel: "pos_mobile",
@@ -341,15 +354,19 @@ export async function createPosTakeawayOrderMobile({
       displayOrderCode: orderIdentity.displayOrderCode,
       pagerNumber: pager,
       pager_number: pager,
-      pagerStatus: "assigned",
+      pagerEnabled: usePager,
+      pagerStatus: pager ? "assigned" : "not_used",
+      status: normalizedOrderStatus,
+      orderStatus: normalizedOrderStatus,
+      kitchenStatus: normalizedKitchenStatus,
       paymentStatus,
       paymentMethod,
-      paymentAmount: Math.max(0, toNumber(paymentAmount || totalAmount)),
+      paymentAmount: phoneOrder ? 0 : Math.max(0, toNumber(paymentAmount || totalAmount)),
       originalPaymentAmount,
       cashRoundingDiscount,
       cashRoundingUnit: Math.max(0, toNumber(safePaymentMeta.cashRoundingUnit, 0)),
       paymentReference: toText(paymentReference),
-      paidAt: toText(paidAt) || createdAt,
+      paidAt: phoneOrder ? "" : toText(paidAt) || createdAt,
       cashierName: toText(cashierName),
       orderNote: toText(orderNote),
       promoSource: toText(promoSource),
@@ -377,6 +394,7 @@ export async function createPosTakeawayOrderMobile({
       fulfillment_type: "pickup",
       payment_method: paymentMethod,
       status: normalizedOrderStatus,
+      kitchen_status: normalizedKitchenStatus,
       subtotal,
       shipping_fee: 0,
       original_shipping_fee: 0,
@@ -440,7 +458,11 @@ export async function createPosTakeawayOrderMobile({
 
     let orderWriteResult = {};
     try {
-      orderWriteResult = stampGifts.length
+      orderWriteResult = phoneOrder
+        ? await supabase.rpc("create_pos_phone_order", { p_order: orderRow, p_items: itemRows,
+            p_print_text: buildPosPreparationBillText({ order: orderIdentity, cart, totals, pagerNumber: pager,
+              customerName, customerPhone, branchName: branchInfo.branchName, cashierName, orderNote }) })
+        : stampGifts.length
         ? await supabase.rpc("checkout_stamp_order", { p_order: orderRow, p_items: itemRows })
         : await supabase.from("orders").upsert(orderRow, { onConflict: "id" });
     } catch (error) {
@@ -475,7 +497,7 @@ export async function createPosTakeawayOrderMobile({
 
     let itemResult = {};
     try {
-      itemResult = stampGifts.length ? { ok: true } : await replaceOrderItems(orderIdentity.orderCode, itemRows);
+      itemResult = phoneOrder || stampGifts.length ? { ok: true } : await replaceOrderItems(orderIdentity.orderCode, itemRows);
     } catch (error) {
       if (isLikelyPosNetworkError(error)) {
         return queueOfflineOrder(error?.message || "Mất kết nối khi lưu món POS.");
@@ -490,7 +512,9 @@ export async function createPosTakeawayOrderMobile({
     }
 
     let loyaltyWarning = "";
-    if (displayCustomerPhone && !customerProfileReady) {
+    if (!isPaymentConfirmed) {
+      // QR chưa thanh toán không được trừ điểm/dùng voucher. Webhook sẽ chốt sau khi ngân hàng xác nhận tiền.
+    } else if (displayCustomerPhone && !customerProfileReady) {
       loyaltyWarning = " Đơn đã tạo nhưng chưa đồng bộ loyalty vì chưa xác nhận được hồ sơ khách trên Supabase.";
     } else {
       try {
@@ -513,12 +537,15 @@ export async function createPosTakeawayOrderMobile({
 
     invalidatePosStamps();
     let stampSummary = null;
-    if (displayCustomerPhone) {
+    // Unpaid QR must reach attach without waiting for display-only stamps.
+    // Receipt paths hydrate a missing summary; gift redemption above is unchanged.
+    if (displayCustomerPhone && isPaymentConfirmed) {
       try { stampSummary = await readPosStamps(displayCustomerPhone); } catch { /* A saved sale must still print if the stamp lookup fails. */ }
     }
     return {
       ok: true,
       order: {
+        ...(phoneOrder ? normalizeWebsiteOrder(orderWriteResult.data || orderRow) : {}),
         stampSummary,
         id: orderIdentity.orderCode,
         orderCode: orderIdentity.orderCode,

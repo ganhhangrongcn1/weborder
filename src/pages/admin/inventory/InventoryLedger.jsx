@@ -2,17 +2,11 @@ import { NavLink } from "react-router-dom";
 import Icon from "../../../components/Icon.jsx";
 import InventorySearchableSelect from "./InventorySearchableSelect.jsx";
 import { getInventoryDocumentDateRange } from "../../../services/inventoryDocumentFilters.js";
-import { getInventoryDocumentPath } from "../../../services/inventoryLedgerCalculations.js";
+import {
+  getInventoryDocumentPath,
+  getInventoryMovementLabel
+} from "../../../services/inventoryLedgerCalculations.js";
 import { getInventoryItemDisplayUnitConfig } from "../../../services/inventoryUnitConversion.js";
-
-const STAGE_LABELS = {
-  completion: "Hoàn tất phiếu",
-  dispatch: "Giao hàng",
-  receipt: "Nhận hàng",
-  adjustment: "Điều chỉnh",
-  reversal: "Hoàn tác",
-  order_consumption: "Bán hàng"
-};
 
 function formatQuantity(value, maximumFractionDigits = 3) {
   return new Intl.NumberFormat("vi-VN", { maximumFractionDigits }).format(Number(value || 0));
@@ -167,9 +161,17 @@ export default function InventoryLedger({
                   <td><strong>{warehouse?.name || "Kho không còn hoạt động"}</strong><small>{warehouse?.code || row.warehouseId}</small></td>
                   <td><strong>{item?.name || "NVL không còn hoạt động"}</strong><small>{item?.code || row.itemId} · {unitName}</small></td>
                   <td>
-                    {row.documentNo ? <NavLink className="inventory-ledger-document" to={getInventoryDocumentPath(row.documentType)}>{row.documentNo}</NavLink> : <span>—</span>}
+                    {row.documentNo ? (
+                      <NavLink
+                        className="inventory-ledger-document"
+                        to={getInventoryDocumentPath(row.documentType, { productionOrderId: row.productionOrderId })}
+                        title={row.stockDocumentNo && row.stockDocumentNo !== row.documentNo ? `Bút toán kho: ${row.stockDocumentNo}` : undefined}
+                      >
+                        {row.documentNo}
+                      </NavLink>
+                    ) : <span>—</span>}
                   </td>
-                  <td><span className={`inventory-ledger-direction is-${row.direction}`}>{STAGE_LABELS[row.stage] || row.stage || "Biến động kho"}</span></td>
+                  <td><span className={`inventory-ledger-direction is-${row.direction}`}>{getInventoryMovementLabel(row)}</span></td>
                   <td className="is-number is-in">{row.direction === "in" ? formatQuantity(row.quantity) : "—"}</td>
                   <td className="is-number is-out">{row.direction === "out" ? formatQuantity(row.quantity) : "—"}</td>
                   <td className="is-number">

@@ -1,3 +1,4 @@
+import { mergePosHistoryOrders, getUnlinkedHistoryPayments } from "../../../services/pos/posHistoryDisplayService";
 import React, { memo, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -103,6 +104,7 @@ function getOrderStatusGroup(order = {}) {
   if (["done", "completed", "complete"].includes(status) || ["done", "completed", "complete"].includes(kitchenStatus)) {
     return "completed";
   }
+  if (status === "pending_payment") return "pending_payment";
   return "processing";
 }
 
@@ -111,6 +113,7 @@ function getOrderStatusText(order = {}) {
   const group = getOrderStatusGroup(order);
   if (group === "cancelled") return "Đã hủy";
   if (group === "completed") return "Hoàn tất";
+  if (group === "pending_payment") return "Chờ thanh toán";
   return "Đang xử lý";
 }
 
@@ -135,7 +138,7 @@ function matchesRange(record = {}, rangeFilter = "shift", activeShiftId = "") {
   return true;
 }
 
-function OrderCard({ order, loading, onOpen }) {
+function OrderCard({ order, loading, onOpen, onPayCash, onPayQr }) {
   const schedule = getOrderSchedule(order);
   return (
     <Pressable
@@ -172,13 +175,18 @@ function OrderCard({ order, loading, onOpen }) {
           </View>
         </View>
       </View>
+      {order.metadata?.deviceMode === "phone" && (onPayCash || onPayQr) && getOrderStatusGroup(order) === "pending_payment" && <View style={styles.inlineActions}>
+        {[{ label: "Tiền mặt", action: onPayCash }, { label: "QR", action: onPayQr }].filter(item => item.action).map(item =>
+          <Pressable key={item.label} accessibilityRole="button" style={styles.cancelPill} disabled={loading}
+            onPress={event => { event.stopPropagation?.(); item.action(order); }}><Text style={styles.tapHint}>{item.label}</Text></Pressable>)}
+      </View>}
     </Pressable>
   );
 }
 
 function SessionCard({ session, loading, onOpen, onCancel }) {
   const websiteSession = isWebsitePaymentSession(session);
-  const canOpen = !websiteSession;
+  const canOpen = !websiteSession && typeof onOpen === "function";
   const canCancel = canCancelPaymentSession(session);
 
   return (
@@ -237,10 +245,14 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
   loading = false,
   error = "",
   activeShiftId = "",
+  compact = false,
+  phoneMode = false,
   onRefresh,
   onOpenPaymentSession,
   onCancelPaymentSession,
   onCancelOrder,
+  onPayCash,
+  onPayQr,
   onReprintOrder,
   onOpenOrderDetail
 }) {
@@ -250,34 +262,37 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
   const [detailOrder, setDetailOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
+  const uniqueOrders = useMemo(() => mergePosHistoryOrders(recentOrders), [recentOrders]);
+  const uniquePayments = useMemo(() => getUnlinkedHistoryPayments(paymentSessions, uniqueOrders), [paymentSessions, uniqueOrders]);
+
   const filteredPaymentSessions = useMemo(
-    () => (Array.isArray(paymentSessions) ? paymentSessions : []).filter((session) => {
+    () => uniquePayments.filter((session) => {
       if (!matchesRange(session, rangeFilter, activeShiftId)) return false;
       return statusFilter === "all" || statusFilter === getSessionStatusGroup(session.status);
     }),
-    [activeShiftId, paymentSessions, rangeFilter, statusFilter]
+    [activeShiftId, uniquePayments, rangeFilter, statusFilter]
   );
 
   const filteredOrders = useMemo(
-    () => (Array.isArray(recentOrders) ? recentOrders : []).filter((order) => {
+    () => uniqueOrders.filter((order) => {
       if (!matchesRange(order, rangeFilter, activeShiftId)) return false;
       return statusFilter === "all" || statusFilter === getOrderStatusGroup(order);
     }),
-    [activeShiftId, rangeFilter, recentOrders, statusFilter]
+    [activeShiftId, rangeFilter, uniqueOrders, statusFilter]
   );
 
   const pendingPaymentCount = useMemo(
-    () => (Array.isArray(paymentSessions) ? paymentSessions : []).filter((session) => (
+    () => uniquePayments.filter((session) => (
       matchesRange(session, rangeFilter, activeShiftId) &&
       getSessionStatusGroup(session.status) === "pending_payment"
-    )).length,
-    [activeShiftId, paymentSessions, rangeFilter]
+    )).length + (phoneMode ? uniqueOrders.filter(order => matchesRange(order, rangeFilter, activeShiftId) && getOrderStatusGroup(order) === "pending_payment").length : 0),
+    [activeShiftId, uniquePayments, uniqueOrders, phoneMode, rangeFilter]
   );
   const processingCount = useMemo(
-    () => (Array.isArray(recentOrders) ? recentOrders : []).filter((order) => (
+    () => uniqueOrders.filter((order) => (
       matchesRange(order, rangeFilter, activeShiftId) && getOrderStatusGroup(order) === "processing"
     )).length,
-    [activeShiftId, rangeFilter, recentOrders]
+    [activeShiftId, rangeFilter, uniqueOrders]
   );
   const historyRecords = useMemo(
     () => [
@@ -292,7 +307,7 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
     setDetailVisible(true);
     setDetailLoading(true);
     const detail = await onOpenOrderDetail(order);
-    setDetailOrder(detail);
+    setDetailOrder(detail && phoneMode && order.metadata?.deviceMode !== "phone" ? { ...detail, canCancel: false } : detail);
     setDetailLoading(false);
   };
 
@@ -309,12 +324,12 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
         contentContainerStyle={styles.panel}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.toolbar}>
+        <View style={[styles.toolbar, compact && styles.compactToolbar]}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterRow}
-            style={styles.filterScroll}
+            style={[styles.filterScroll, compact && styles.compactFilterScroll]}
           >
             {STATUS_FILTERS.map((filter) => {
               const active = statusFilter === filter.id;
@@ -365,6 +380,8 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
                   order={record.order}
                   loading={loading}
                   onOpen={handleOpenDetail}
+                  onPayCash={phoneMode ? onPayCash : undefined}
+                  onPayQr={phoneMode ? onPayQr : undefined}
                 />
               )
             ))
@@ -385,6 +402,8 @@ const PosHistoryPanel = memo(function PosHistoryPanel({
         onClose={handleCloseDetail}
         onReprint={onReprintOrder}
         onCancel={onCancelOrder}
+        onPayCash={phoneMode ? onPayCash : undefined}
+        onPayQr={phoneMode ? onPayQr : undefined}
       />
     </>
   );
@@ -420,6 +439,14 @@ const styles = StyleSheet.create({
   filterScroll: {
     flex: 1,
     minWidth: 0
+  },
+  compactToolbar: {
+    flexDirection: "column",
+    alignItems: "stretch"
+  },
+  compactFilterScroll: {
+    flex: 0,
+    width: "100%"
   },
   toolbarActions: {
     flexDirection: "row",

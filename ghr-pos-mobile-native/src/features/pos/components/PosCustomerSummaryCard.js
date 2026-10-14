@@ -60,12 +60,12 @@ export default function PosCustomerSummaryCard({
               {customerPhone} · {isRegistered ? `${availablePoints.toLocaleString("vi-VN")} điểm` : "Khách mới"}
             </Text>
           </View>
-          <Pressable style={styles.openButton} onPress={onOpen}>
+          {onOpen ? <Pressable style={styles.openButton} onPress={onOpen}>
             <View style={styles.actionRow}>
               <PosIcon name="customer" size={14} color={POS_COLORS.primaryDark} />
               <Text style={styles.openText}>Quyền lợi</Text>
             </View>
-          </Pressable>
+          </Pressable> : null}
           <Pressable style={styles.clearButton} onPress={onClear}>
             <PosIcon name="clear" size={14} color={POS_COLORS.danger} />
           </Pressable>
@@ -81,12 +81,12 @@ export default function PosCustomerSummaryCard({
           style={[styles.fieldInput, styles.phoneInput]}
         />
 
-        <Pressable style={styles.openButton} onPress={onOpen}>
+        {onOpen ? <Pressable style={styles.openButton} onPress={onOpen}>
           <View style={styles.actionRow}>
             <PosIcon name="customer" size={14} color="#6366f1" />
             <Text style={styles.openText}>Tra cứu</Text>
           </View>
-        </Pressable>
+        </Pressable> : null}
 
         <Pressable style={[styles.clearButton, !hasInput && styles.clearButtonDisabled]} onPress={onClear} disabled={!hasInput}>
           <PosIcon name="clear" size={14} color={POS_COLORS.danger} />

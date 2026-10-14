@@ -1,5 +1,11 @@
+import { mergePosHistoryOrders } from "../../../services/pos/posHistoryDisplayService";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
+import createPosReadCoalescer from "../../../utils/posReadCoalescer";
+import usePosPagerSettings from "./usePosPagerSettings";
+import usePosOfflineAutoSync from "./usePosOfflineAutoSync";
+import usePosPointInputLimit from "./usePosPointInputLimit";
+import { syncPosOfflineOrders } from "../../../services/pos/posOfflineSyncService";
 
 import {
   restorePosSession,
@@ -13,6 +19,7 @@ import {
   normalizeCustomerPhone
 } from "../../../services/pos/posCustomerService";
 import { createPosTakeawayOrderMobile } from "../../../services/pos/posOrderService";
+import { readPhoneCustomerBillStatus } from "../../../services/pos/posPhoneOrderService";
 import {
   buildPosCustomerBillText,
   buildPosPreparationBillText,
@@ -42,6 +49,7 @@ import {
 } from "../../../services/pos/posPickupOrderService";
 import { buildPosPaymentReference, buildPosQrImageUrl } from "../../../services/pos/posPaymentService";
 import {
+  attachPosPaymentSessionOrder,
   cancelPosPaymentSession,
   confirmPosPaymentSessionManually,
   createPosPaymentSession,
@@ -53,6 +61,7 @@ import {
   markPosPaymentSessionConverted,
   readRememberedPosPaymentSession,
   readPosPaymentSession,
+  refreshPosPaymentAuthSession,
   rememberPosPaymentSession,
   subscribePosPaymentSessions
 } from "../../../services/pos/posPaymentSessionService";
@@ -60,10 +69,7 @@ import { fetchPosCatalogConfig } from "../../../services/pos/posCatalogConfigSer
 import { startPosPrintStation } from "../../../services/pos/posPrintStationService";
 import {
   checkPosSupabaseConnection,
-  getPosOfflineOrderCount,
-  markPosOfflineOrderRetry,
-  readPosOfflineOrderQueue,
-  removePosOfflineOrder
+  getPosOfflineOrderCount
 } from "../../../services/pos/posOfflineOrderQueueService";
 import { fetchPosProducts, isPosProductAvailableForBranch } from "../../../services/pos/posProductService";
 import {
@@ -104,15 +110,28 @@ function mergeRealtimePaymentSession(currentSessions = [], nextSession = {}) {
   ));
 }
 
-export default function usePosComposer() {
+export default function usePosComposer({ historyVisible = false, deviceMode = "cashier" } = {}) {
+  const phoneOrderRequestRef = useRef(null);
+  const phoneQrOpenInFlightRef = useRef(false);
   const announcedQrPaymentIdsRef = useRef(new Set());
   const runtimeRefreshInFlightRef = useRef(false);
+  const historyVisibleRef = useRef(historyVisible);
+  historyVisibleRef.current = historyVisible;
+  const coalesceShiftSummaryRef = useRef(null);
+  if (!coalesceShiftSummaryRef.current) coalesceShiftSummaryRef.current = createPosReadCoalescer();
+  const shiftSummaryRequestIdRef = useRef(0);
   const createCashOrderInFlightRef = useRef(false);
+  const connectionRecoveryInFlightRef = useRef(false);
+  const benefitChangeInFlightRef = useRef(false);
+  const offlineSyncInFlightRef = useRef(false);
+  const offlineSyncBranchRef = useRef("");
+  const customerLookupPhoneRef = useRef("");
   const knownWebsiteOrderIdsRef = useRef(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
+  offlineSyncBranchRef.current = deviceMode === "cashier" && session?.user?.id ? profile?.branchUuid || "" : "";
   const [shift, setShift] = useState(null);
   const [openingCash, setOpeningCash] = useState("");
   const [authMessage, setAuthMessage] = useState("");
@@ -197,8 +216,8 @@ export default function usePosComposer() {
   const effectiveCategory = catalog.categories.includes(activeCategory) ? activeCategory : defaultCategory;
 
   const pricedProducts = useMemo(
-    () => catalog.products.map((product) => applyPosPricePromotionToProduct(product, rawSmartPromotions, new Date(promotionNowTick))),
-    [catalog.products, promotionNowTick, rawSmartPromotions]
+    () => catalog.products.map((product) => applyPosPricePromotionToProduct(product, rawSmartPromotions, new Date(promotionNowTick), profile?.branchUuid)),
+    [catalog.products, profile?.branchUuid, promotionNowTick, rawSmartPromotions]
   );
 
   const visibleProducts = useMemo(
@@ -218,6 +237,11 @@ export default function usePosComposer() {
     }),
     [baseTotals.subtotal, customerLookup.result, pointsInput, profile?.branchUuid, rawCoupons, selectedVoucherId]
   );
+  usePosPointInputLimit({
+    usablePoints: loyaltyBenefit.usablePoints,
+    pointSpendStep: loyaltyBenefit.pointSpendStep,
+    setPointsInput
+  });
   const totals = useMemo(() => ({
     ...baseTotals,
     voucherDiscount: loyaltyBenefit.voucherDiscount,
@@ -225,7 +249,26 @@ export default function usePosComposer() {
     total: Math.max(0, baseTotals.subtotal - loyaltyBenefit.voucherDiscount - loyaltyBenefit.pointsDiscount)
   }), [baseTotals, loyaltyBenefit.pointsDiscount, loyaltyBenefit.voucherDiscount]);
 
-  const normalizedPager = useMemo(() => normalizePagerNumber(pagerNumber), [pagerNumber]);
+  const buildTotalsWithBenefit = (benefit = loyaltyBenefit) => ({
+    ...baseTotals,
+    voucherDiscount: Number(benefit?.voucherDiscount || 0),
+    pointsDiscount: Number(benefit?.pointsDiscount || 0),
+    total: Math.max(
+      0,
+      Number(baseTotals.subtotal || 0)
+        - Number(benefit?.voucherDiscount || 0)
+        - Number(benefit?.pointsDiscount || 0)
+    )
+  });
+
+  const { pagerEnabled: branchPagerEnabled, pagerSettingsReady: branchPagerSettingsReady, pagerSettingsSaving, changePagerEnabled } = usePosPagerSettings({
+    branchUuid: profile?.branchUuid, phoneMode: deviceMode !== "cashier",
+    locked: busy || qrLoading || Boolean(qrSession) || Boolean(paymentConfirmed),
+    onMessage: setShiftMessage, onClearPager: () => setPagerNumber("")
+  });
+  const pagerEnabled = qrSession ? qrSession.checkoutSnapshot?.pagerEnabled !== false : branchPagerEnabled;
+  const pagerSettingsReady = Boolean(qrSession) || branchPagerSettingsReady;
+  const normalizedPager = useMemo(() => pagerEnabled ? normalizePagerNumber(pagerNumber) : "", [pagerNumber, pagerEnabled]);
   const pagerBusy = Boolean(normalizedPager && busyPagers.includes(normalizedPager));
   const branch = profile?.branch || {
     branchUuid: profile?.branchUuid,
@@ -234,10 +277,11 @@ export default function usePosComposer() {
   const promotionHints = useMemo(
     () => buildPosPromotionHints({
       smartPromotions: rawSmartPromotions,
+      branchUuid: profile?.branchUuid,
       products: pricedProducts,
       subtotal: baseTotals.subtotal
     }),
-    [baseTotals.subtotal, pricedProducts, rawSmartPromotions]
+    [baseTotals.subtotal, pricedProducts, profile?.branchUuid, rawSmartPromotions]
   );
 
   useEffect(() => {
@@ -250,9 +294,9 @@ export default function usePosComposer() {
       const id = String(order?.id || "").trim();
       return id && !knownIds.has(id);
     })) {
-      playLocalWebsiteOrderAlert().catch(() => {});
+      if (deviceMode !== "phone") playLocalWebsiteOrderAlert().catch(() => {});
     }
-  }, [deliveryOrders, pickupOrders]);
+  }, [deliveryOrders, pickupOrders, deviceMode]);
 
   useEffect(() => {
     const timer = globalThis.setInterval(() => setPromotionNowTick(Date.now()), 60000);
@@ -267,7 +311,7 @@ export default function usePosComposer() {
   });
 
   const getWebsiteOrderSourceType = (order = {}) => (
-    order?.fulfillmentType === "delivery" ? "website_delivery" : "website_pickup"
+    order.metadata?.deviceMode === "phone" ? "pos_mobile" : order?.fulfillmentType === "delivery" ? "website_delivery" : "website_pickup"
   );
 
   const getWebsiteOrderAmount = (order = {}) => (
@@ -298,20 +342,7 @@ export default function usePosComposer() {
     }) || null;
   };
 
-  const mergeRecentHistoryOrders = (posOrders = [], pickupHistoryOrders = [], limit = 16) => {
-    const merged = [
-      ...(Array.isArray(posOrders) ? posOrders : []),
-      ...(Array.isArray(pickupHistoryOrders) ? pickupHistoryOrders : [])
-    ];
-
-    return merged
-      .sort((first, second) => {
-        const firstTime = new Date(first?.createdAt || 0).getTime();
-        const secondTime = new Date(second?.createdAt || 0).getTime();
-        return secondTime - firstTime;
-      })
-      .slice(0, Math.max(1, Math.floor(Number(limit || 16))));
-  };
+  const mergeRecentHistoryOrders = mergePosHistoryOrders;
 
   const printCounterOrderBills = async (billData = {}) => {
     billData = { ...billData, order: await withPosStampSummary(billData.order, billData.customerPhone) };
@@ -343,6 +374,9 @@ export default function usePosComposer() {
   const printPickupCustomerBill = async ({ order = {}, paymentConfirmed = null } = {}) => {
     if (!order?.id) {
       return { ok: false, message: " Thiếu mã đơn để in bill." };
+    }
+    if (order.metadata?.deviceMode === "phone") {
+      return readPhoneCustomerBillStatus(order, profile?.branchUuid);
     }
 
     const result = await readPosOrderForPrint(order.id);
@@ -379,6 +413,26 @@ export default function usePosComposer() {
         ok: false,
         message: ` Chưa in được bill: ${error?.message || "lỗi máy in."}`
       };
+    }
+  };
+
+  const resetCompletedSale = async () => {
+    setCart([]);
+    setPaymentConfirmed(null);
+    setOrderNote("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerLookup({ loading: false, result: null, error: "" });
+    customerLookupPhoneRef.current = "";
+    setSelectedVoucherId("");
+    setPointsInput("");
+    setPagerNumber("");
+    setQrSession(null);
+    setQrPreviewIdentity(null);
+    setQrModalOpen(false);
+    setQrError("");
+    if (profile?.branchUuid) {
+      await forgetPosPaymentSession(profile.branchUuid);
     }
   };
 
@@ -422,7 +476,7 @@ export default function usePosComposer() {
               return [];
             })
           : Promise.resolve(null),
-        includeRecentOrders
+        includeRecentOrders && historyVisibleRef.current
           ? getPosWebsiteHistoryOrders({ branchUuid, limit: 20 }).catch((error) => {
               setHistoryError(error?.message || "Khong tai duoc lich su don hen lay.");
               return [];
@@ -459,17 +513,36 @@ export default function usePosComposer() {
     }
   };
 
-  const refreshShiftSummary = async (targetShift = shift) => {
+  useEffect(() => {
+    if (!historyVisible || !profile?.branchUuid) return undefined;
+    let cancelled = false;
+    let timer;
+    const loadHistory = () => {
+      if (cancelled) return;
+      if (runtimeRefreshInFlightRef.current) {
+        timer = globalThis.setTimeout(loadHistory, 250);
+        return;
+      }
+      void refreshPosRuntime(profile.branchUuid, { includeRecentOrders: true });
+    };
+    loadHistory();
+    return () => { cancelled = true; globalThis.clearTimeout(timer); };
+  }, [historyVisible, profile?.branchUuid]);
+
+  const refreshShiftSummary = async (targetShift = shift, { fresh = true } = {}) => {
+    const requestId = ++shiftSummaryRequestIdRef.current;
     if (!targetShift?.id) {
       setShiftSummary(null);
       setShiftSummaryError("");
       return null;
     }
 
-    const result = await fetchPosShiftSummary({
+    const key = [session?.user?.id, profile?.branchUuid, targetShift.id, targetShift.openingCash].join(":");
+    const result = await coalesceShiftSummaryRef.current(key, () => fetchPosShiftSummary({
       shiftId: targetShift.id,
       openingCash: targetShift.openingCash
-    });
+    }), { fresh });
+    if (requestId !== shiftSummaryRequestIdRef.current) return result.ok ? result.summary : null;
 
     if (result.ok) {
       setShiftSummary(result.summary);
@@ -480,6 +553,87 @@ export default function usePosComposer() {
     setShiftSummary(result.summary || null);
     setShiftSummaryError(result.message || "Không tải được tổng quan ca POS.");
     return result.summary || null;
+  };
+
+  const syncShiftBeforeClose = async () => {
+    const branchUuid = String(profile?.branchUuid || "").trim();
+    if (!branchUuid) {
+      return {
+        ok: false,
+        shift: null,
+        summary: null,
+        activeSessions: [],
+        message: "Không xác định được chi nhánh POS. Vui lòng đăng nhập lại."
+      };
+    }
+
+    const latestShiftResult = await fetchActivePosShift({ branchUuid });
+    if (!latestShiftResult.ok) {
+      return {
+        ok: false,
+        shift: null,
+        summary: null,
+        activeSessions: [],
+        message: `${latestShiftResult.message || "Không đồng bộ được ca POS."} Kiểm tra mạng rồi thử lại.`
+      };
+    }
+
+    const latestShift = latestShiftResult.shift;
+    if (!latestShift?.id) {
+      setShift(null);
+      setShiftSummary(null);
+      setPendingPaymentSessions([]);
+      return {
+        ok: false,
+        shift: null,
+        summary: null,
+        activeSessions: [],
+        message: "Ca này không còn mở trên máy chủ. App đã làm mới dữ liệu; kiểm tra mục ca đã kết hoặc mở ca mới."
+      };
+    }
+
+    let latestSessions = [];
+    try {
+      latestSessions = await listPosPaymentSessions(branchUuid);
+    } catch (error) {
+      return {
+        ok: false,
+        shift: latestShift,
+        summary: null,
+        activeSessions: [],
+        message: `${error?.message || "Không tải được phiên QR."} Kiểm tra mạng rồi thử lại.`
+      };
+    }
+
+    const activeSessions = await cleanupExpiredPaymentSessions(branchUuid, latestSessions);
+    const activeQrSession = activeSessions.find((item) => item?.id === qrSession?.id) || null;
+    setShift(latestShift);
+    setPendingPaymentSessions(activeSessions);
+    if (qrSession?.id && !activeQrSession) {
+      setQrSession(null);
+      setQrPreviewIdentity(null);
+      setQrModalOpen(false);
+      await forgetPosPaymentSession(branchUuid);
+    }
+
+    const summary = await refreshShiftSummary(latestShift, { fresh: true });
+    if (!summary) {
+      return {
+        ok: false,
+        shift: latestShift,
+        summary: null,
+        activeSessions,
+        message: "Không tải được tổng quan ca mới nhất. Kiểm tra mạng rồi thử lại."
+      };
+    }
+
+    return {
+      ok: true,
+      shift: latestShift,
+      summary,
+      activeSessions,
+      message: ""
+    };
   };
 
   const refreshOfflineOrderCount = async () => {
@@ -505,69 +659,117 @@ export default function usePosComposer() {
     return result;
   };
 
-  const syncOfflineOrdersNow = async ({ silent = false } = {}) => {
-    if (offlineSyncBusy) return { ok: false, synced: 0, remaining: offlineOrderCount };
-
-    const connection = await checkPosSupabaseConnection();
-    setConnectionStatus({
-      checking: false,
-      online: Boolean(connection.online),
-      warning: Boolean(connection.warning),
-      message: connection.message || (connection.online ? "Kết nối Supabase ổn." : "Đang offline."),
-      lastCheckedAt: new Date().toISOString()
-    });
-
-    if (!connection.online) {
-      const count = await refreshOfflineOrderCount();
-      if (!silent) {
-        setShiftMessage(count
-          ? `Đang offline. Còn ${count} đơn lưu tạm trên máy.`
-          : "Đang offline, chưa có đơn lưu tạm.");
+  const recoverPosConnection = async ({ silent = true } = {}) => {
+    if (connectionRecoveryInFlightRef.current) return false;
+    connectionRecoveryInFlightRef.current = true;
+    try {
+      const authResult = await refreshPosPaymentAuthSession();
+      if (!authResult.ok) {
+        setConnectionStatus({
+          checking: false,
+          online: false,
+          warning: true,
+          message: authResult.message,
+          lastCheckedAt: new Date().toISOString()
+        });
+        if (!silent) setShiftMessage(authResult.message);
+        return false;
       }
-      return { ok: false, synced: 0, remaining: count };
-    }
 
-    const queue = await readPosOfflineOrderQueue();
-    if (!queue.length) {
-      setOfflineOrderCount(0);
-      if (!silent) setShiftMessage("Không có đơn offline cần đồng bộ.");
-      return { ok: true, synced: 0, remaining: 0 };
-    }
+      const connection = await checkConnectionNow();
+      if (!connection.online) return false;
 
-    setOfflineSyncBusy(true);
-    let synced = 0;
-    for (const entry of queue) {
-      const result = await createPosTakeawayOrderMobile({
-        ...(entry.orderPayload || {}),
-        skipOfflineQueue: true
+      const branchUuid = String(profile?.branchUuid || "").trim();
+      if (branchUuid) {
+        const latestShiftResult = await fetchActivePosShift({ branchUuid });
+        if (latestShiftResult.ok) {
+          setShift(latestShiftResult.shift);
+          await refreshShiftSummary(latestShiftResult.shift);
+        }
+        await refreshPosRuntime(branchUuid, { includeRecentOrders: true, silent: true });
+      }
+      if (!silent && authResult.refreshed) {
+        setShiftMessage("Đã tự làm mới kết nối POS.");
+      }
+      return true;
+    } catch (error) {
+      const message = error?.message || "Chưa thể tự kết nối lại POS.";
+      setConnectionStatus({
+        checking: false,
+        online: false,
+        warning: true,
+        message,
+        lastCheckedAt: new Date().toISOString()
+      });
+      if (!silent) setShiftMessage(message);
+      return false;
+    } finally {
+      connectionRecoveryInFlightRef.current = false;
+    }
+  };
+
+  const syncOfflineOrdersNow = async ({ silent = false, onlyWhenQueued = false } = {}) => {
+    const branchUuid = offlineSyncBranchRef.current;
+    if (!branchUuid || offlineSyncInFlightRef.current) {
+      return { ok: false, synced: 0, remaining: offlineOrderCount };
+    }
+    offlineSyncInFlightRef.current = true;
+    try {
+      const queuedCount = await refreshOfflineOrderCount();
+      if (onlyWhenQueued && !queuedCount) return { ok: true, synced: 0, remaining: 0 };
+      setOfflineSyncBusy(true);
+      const connection = await checkPosSupabaseConnection();
+      setConnectionStatus({
+        checking: false,
+        online: Boolean(connection.online),
+        warning: Boolean(connection.warning),
+        message: connection.message || (connection.online ? "Kết nối Supabase ổn." : "Đang offline."),
+        lastCheckedAt: new Date().toISOString()
       });
 
-      if (result.ok && !result.offline) {
-        await removePosOfflineOrder(entry.id);
-        synced += 1;
-      } else {
-        await markPosOfflineOrderRetry(entry.id, result.message || "Chưa đồng bộ được đơn offline.");
-        break;
+      if (!connection.online) {
+        const count = await refreshOfflineOrderCount();
+        if (!silent) {
+          setShiftMessage(count
+            ? `Đang offline. Còn ${count} đơn lưu tạm trên máy.`
+            : "Đang offline, chưa có đơn lưu tạm.");
+        }
+        return { ok: false, synced: 0, remaining: count };
       }
-    }
-    setOfflineSyncBusy(false);
 
-    const remaining = await refreshOfflineOrderCount();
-    if (!silent || synced > 0) {
-      setShiftMessage(remaining
-        ? `Đã đồng bộ ${synced} đơn. Còn ${remaining} đơn lưu tạm.`
-        : synced
-          ? `Đã đồng bộ ${synced} đơn offline lên Supabase.`
-          : "Chưa đồng bộ được đơn offline, app sẽ thử lại khi có mạng.");
-    }
+      if (!queuedCount) {
+        setOfflineOrderCount(0);
+        if (!silent) setShiftMessage("Không có đơn offline cần đồng bộ.");
+        return { ok: true, synced: 0, remaining: 0 };
+      }
 
-    if (synced > 0 && profile?.branchUuid) {
-      await refreshPosRuntime(profile.branchUuid);
-      await refreshShiftSummary(shift);
-    }
+      const { synced } = await syncPosOfflineOrders(branchUuid, () => offlineSyncBranchRef.current === branchUuid);
 
-    return { ok: remaining === 0, synced, remaining };
+      const remaining = await refreshOfflineOrderCount();
+      if (!silent || synced > 0) {
+        setShiftMessage(remaining
+          ? `Đã đồng bộ ${synced} đơn. Còn ${remaining} đơn lưu tạm.`
+          : synced
+            ? `Đã đồng bộ ${synced} đơn offline lên Supabase.`
+            : "Chưa đồng bộ được đơn offline, app sẽ thử lại khi có mạng.");
+      }
+
+      if (synced > 0 && profile?.branchUuid) {
+        await refreshPosRuntime(profile.branchUuid);
+        await refreshShiftSummary(shift);
+      }
+
+      return { ok: remaining === 0, synced, remaining };
+    } catch (error) {
+      if (!silent) setShiftMessage(error?.message || "Chưa đồng bộ được đơn lưu tạm. App sẽ tự thử lại.");
+      return { ok: false, synced: 0, remaining: offlineOrderCount };
+    } finally {
+      offlineSyncInFlightRef.current = false;
+      setOfflineSyncBusy(false);
+    }
   };
+
+  usePosOfflineAutoSync({ enabled: Boolean(session?.user?.id && profile?.branchUuid), sync: syncOfflineOrdersNow });
 
   const applyPaymentSessionState = (session) => {
     if (!session?.id) return;
@@ -576,7 +778,7 @@ export default function usePosComposer() {
     if (Array.isArray(session.cartSnapshot) && session.cartSnapshot.length) {
       setCart(session.cartSnapshot);
     }
-    if (session.pagerNumber) setPagerNumber(session.pagerNumber);
+    setPagerNumber(session.pagerNumber || "");
     if (session.customerName) setCustomerName(session.customerName);
     if (session.customerPhone) setCustomerPhone(session.customerPhone);
     if (session.checkoutSnapshot?.selectedVoucherKey) {
@@ -605,6 +807,12 @@ export default function usePosComposer() {
 
   const finalizePaidQrSession = async (session) => {
     if (!session?.id || !session?.isPaymentSession) return false;
+    if (session.source === "qr_order" && session.orderId) {
+      await resetCompletedSale();
+      await refreshPosRuntime(profile?.branchUuid, { silent: true });
+      setShiftMessage("Đã nhận thanh toán QR. Máy chủ đã tự chốt đơn và gửi xuống bếp.");
+      return true;
+    }
     const paymentMethod = session.provider === "momo" ? "momo" : "bank_qr";
 
     if (!announcedQrPaymentIdsRef.current.has(session.id)) {
@@ -641,7 +849,8 @@ export default function usePosComposer() {
     const result = await createPosTakeawayOrderMobile({
       cart: Array.isArray(session.cartSnapshot) && session.cartSnapshot.length ? session.cartSnapshot : cart,
       totals: sessionTotals,
-      pagerNumber: session.pagerNumber || normalizedPager,
+      pagerNumber: session.pagerNumber || "",
+      pagerEnabled: checkout.pagerEnabled !== false,
       customerName: session.customerName || customerName || customerLookup.result?.customerName || "",
       customerPhone: normalizeCustomerPhone(session.customerPhone || customerPhone),
       branch: {
@@ -692,7 +901,8 @@ export default function usePosComposer() {
         totals: sessionTotals,
         customerName: session.customerName || customerName || customerLookup.result?.customerName || "",
         customerPhone: normalizeCustomerPhone(session.customerPhone || customerPhone),
-        pagerNumber: session.pagerNumber || normalizedPager,
+        pagerNumber: session.pagerNumber || "",
+      pagerEnabled: checkout.pagerEnabled !== false,
         branchName: profile.branchName,
         cashierName: session.cashierName || profile.name || profile.email,
         orderNote,
@@ -709,18 +919,7 @@ export default function usePosComposer() {
       result.order?.id || result.order?.orderCode
     );
 
-    setCart([]);
-    setPaymentConfirmed(null);
-    setOrderNote("");
-    setCustomerName("");
-    setCustomerPhone("");
-    setSelectedVoucherId("");
-    setPointsInput("");
-    setPagerNumber("");
-    await forgetPosPaymentSession(profile.branchUuid);
-    setQrSession(null);
-    setQrPreviewIdentity(null);
-    setQrModalOpen(false);
+    await resetCompletedSale();
     if (!result.offline) {
       await refreshPosRuntime(profile.branchUuid);
       await refreshShiftSummary(shift);
@@ -823,6 +1022,7 @@ export default function usePosComposer() {
   useEffect(() => {
     return subscribePosAuthState(({ event, session: nextSession }) => {
       if (event === "SIGNED_OUT") {
+        shiftSummaryRequestIdRef.current += 1;
         runtimeRefreshInFlightRef.current = false;
         setSession(null);
         setProfile(null);
@@ -873,13 +1073,25 @@ export default function usePosComposer() {
   }, []);
 
   useEffect(() => {
+    if (!profile?.branchUuid || !session?.user?.id) return undefined;
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        void recoverPosConnection({ silent: true });
+      }
+    });
+
+    return () => subscription.remove();
+  }, [profile?.branchUuid, session?.user?.id]);
+
+  useEffect(() => {
     const branchUuid = String(profile?.branchUuid || "").trim();
     const userId = String(session?.user?.id || "").trim();
-    if (!branchUuid || !userId) {
+    if (deviceMode !== "cashier" || !branchUuid || !userId) {
       setPrintStationStatus({
         running: false,
         tone: "idle",
-        message: "Đăng nhập POS để khởi động trạm in."
+        message: deviceMode === "phone" ? "Điện thoại gửi lệnh về trạm in tại quán." : "Đăng nhập POS để khởi động trạm in."
       });
       return undefined;
     }
@@ -927,7 +1139,7 @@ export default function usePosComposer() {
       stopStation();
       void stopLocalPrintStationService();
     };
-  }, [profile?.branchName, profile?.branchUuid, session?.user?.id]);
+  }, [profile?.branchName, profile?.branchUuid, session?.user?.id, deviceMode]);
 
   useEffect(() => {
     const branchUuid = String(profile?.branchUuid || "").trim();
@@ -968,6 +1180,12 @@ export default function usePosComposer() {
   useEffect(() => {
     const phoneDigits = String(customerPhone || "").replace(/\D+/g, "");
     const phoneKey = normalizeCustomerPhone(phoneDigits);
+    if (customerLookupPhoneRef.current !== phoneKey) {
+      customerLookupPhoneRef.current = phoneKey;
+      setSelectedVoucherId("");
+      setPointsInput("");
+      setPaymentConfirmed(null);
+    }
     if (!phoneDigits) {
       setCustomerLookup({
         loading: false,
@@ -987,8 +1205,8 @@ export default function usePosComposer() {
     }
 
     let alive = true;
+    setCustomerLookup({ loading: true, result: null, error: "" });
     const timer = globalThis.setTimeout(() => {
-      setCustomerLookup((current) => ({ ...current, loading: true, error: "" }));
       lookupPosCustomerByPhone(phoneKey)
         .then((result) => {
           if (!alive) return;
@@ -1080,6 +1298,15 @@ export default function usePosComposer() {
         return;
       }
       if (isPosPaymentSessionTerminal(session)) {
+        const terminalStatus = String(session?.status || "").trim().toLowerCase();
+        if (terminalStatus === "converted" && session?.orderId) {
+          await resetCompletedSale();
+          if (profile?.branchUuid) {
+            await refreshPosRuntime(profile.branchUuid, { silent: true });
+          }
+          setShiftMessage("Đã thanh toán QR và tạo đơn thành công. Bill mới đã sẵn sàng.");
+          return;
+        }
         setQrSession(null);
         setQrPreviewIdentity(null);
         setQrModalOpen(false);
@@ -1195,7 +1422,7 @@ export default function usePosComposer() {
     const timer = globalThis.setInterval(() => {
       if (AppState.currentState !== "active") return;
       refreshPosRuntime(profile.branchUuid, { includeRecentOrders: true, silent: true });
-      refreshShiftSummary(shift);
+      refreshShiftSummary(shift, { fresh: false });
     }, POS_RUNTIME_REFRESH_MS);
 
     return () => {
@@ -1226,7 +1453,23 @@ export default function usePosComposer() {
 
   const getPromotionPricedProduct = (product = {}) => {
     const matched = pricedProducts.find((item) => item.id === product.id);
-    return matched || applyPosPricePromotionToProduct(product, rawSmartPromotions, new Date(promotionNowTick));
+    return matched || applyPosPricePromotionToProduct(product, rawSmartPromotions, new Date(promotionNowTick), profile?.branchUuid);
+  };
+
+  const changePosBenefit = async (setter, value) => {
+    if (benefitChangeInFlightRef.current || qrLoading || busy || paymentConfirmed) return;
+    benefitChangeInFlightRef.current = true;
+    try {
+      if (qrSession?.id) {
+        const cancelled = await cancelPendingQrForBillChange("POS mobile đổi ưu đãi trước khi thanh toán");
+        if (!cancelled) return;
+      }
+      setter(value);
+    } catch (error) {
+      setShiftMessage(error?.message || "Chưa cập nhật được ưu đãi. Vui lòng thử lại.");
+    } finally {
+      benefitChangeInFlightRef.current = false;
+    }
   };
 
   const buildPromotedCartConfig = (product = {}, config = {}) => {
@@ -1258,7 +1501,7 @@ export default function usePosComposer() {
     if (!product?.id) return;
     if (qrSession?.id) {
       const cancelled = await cancelPendingQrForBillChange("POS mobile thêm món làm thay đổi bill trước khi thanh toán");
-      if (!cancelled) return;
+      if (!cancelled) return false;
     }
 
     const promotedProduct = getPromotionPricedProduct(product);
@@ -1296,6 +1539,7 @@ export default function usePosComposer() {
     });
     setPaymentConfirmed(null);
     setShiftMessage("");
+    return true;
   };
 
   const changeQuantity = async (cartId, delta) => {
@@ -1318,10 +1562,10 @@ export default function usePosComposer() {
   };
 
   const updateCartItem = async (cartId, product, config = {}) => {
-    if (!cartId || cart.some((item) => item.cartId === cartId && item.stampGift)) return;
+    if (!cartId || cart.some((item) => item.cartId === cartId && item.stampGift)) return false;
     if (qrSession?.id) {
       const cancelled = await cancelPendingQrForBillChange("POS mobile sửa món làm thay đổi bill trước khi thanh toán");
-      if (!cancelled) return;
+      if (!cancelled) return false;
     }
 
     const promotedProduct = getPromotionPricedProduct(product || {});
@@ -1336,6 +1580,7 @@ export default function usePosComposer() {
     );
     setPaymentConfirmed(null);
     setShiftMessage("");
+    return true;
   };
 
   const clearCart = async () => {
@@ -1360,11 +1605,21 @@ export default function usePosComposer() {
   const validateLiveLoyaltySelection = async () => {
     const normalizedPhone = normalizeCustomerPhone(customerPhone);
     const selectedVoucher = loyaltyBenefit.selectedVoucher;
-    const usesPoints = Number(loyaltyBenefit.pointsSpent || 0) > 0;
+    const requestedPoints = Math.max(
+      0,
+      Math.floor(Number(String(pointsInput || "").replace(/\D+/g, "")) || 0)
+    );
+    const usesPoints = requestedPoints > 0;
     const usesLoyaltyVoucher = Boolean(selectedVoucher) && String(selectedVoucher?.source || "").toLowerCase() === "loyalty";
 
-    if ((!usesPoints && !usesLoyaltyVoucher) || (!normalizedPhone && !usesLoyaltyVoucher)) {
-      return { ok: true, customer: customerLookup.result };
+    if (!usesPoints && !usesLoyaltyVoucher) {
+      return { ok: true, customer: customerLookup.result, benefit: loyaltyBenefit };
+    }
+    if (!normalizedPhone) {
+      return { ok: false, message: "Vui lòng nhập số điện thoại để sử dụng điểm hoặc voucher loyalty." };
+    }
+    if (customerLookup.loading) {
+      return { ok: false, message: "Điểm khách hàng đang được tải. Vui lòng chờ trong giây lát." };
     }
 
     try {
@@ -1378,12 +1633,33 @@ export default function usePosComposer() {
 
       setCustomerLookup({ loading: false, result: latestCustomer, error: "" });
 
+      const liveBenefit = buildPosLoyaltyBenefit({
+        subtotal: baseTotals.subtotal,
+        customer: latestCustomer,
+        coupons: rawCoupons,
+        branchId: profile?.branchUuid || "",
+        selectedVoucherId,
+        pointsInput
+      });
+
       const latestPoints = Math.max(0, Math.floor(Number(latestCustomer?.loyalty?.totalPoints || 0)));
-      if (usesPoints && Number(loyaltyBenefit.pointsSpent || 0) > latestPoints) {
+      const displayedPoints = Number(loyaltyBenefit.pointsSpent || 0);
+      const livePoints = Number(liveBenefit.pointsSpent || 0);
+      if (usesPoints && requestedPoints !== livePoints) setPointsInput(livePoints > 0 ? String(livePoints) : "");
+      if (usesPoints && displayedPoints > latestPoints) {
         return {
           ok: false,
           customer: latestCustomer,
           message: `Điểm loyalty vừa thay đổi. Khách hiện còn ${latestPoints.toLocaleString("vi-VN")} điểm.`
+        };
+      }
+
+      if (usesPoints && livePoints !== displayedPoints) {
+        return {
+          ok: false,
+          customer: latestCustomer,
+          benefit: liveBenefit,
+          message: `Số điểm hợp lệ hiện tại là ${Number(liveBenefit.pointsSpent || 0).toLocaleString("vi-VN")} điểm. Vui lòng kiểm tra và xác nhận lại.`
         };
       }
 
@@ -1405,7 +1681,7 @@ export default function usePosComposer() {
         }
       }
 
-      return { ok: true, customer: latestCustomer };
+      return { ok: true, customer: latestCustomer, benefit: liveBenefit };
     } catch (error) {
       return {
         ok: false,
@@ -1481,6 +1757,7 @@ export default function usePosComposer() {
   };
 
   const openShiftNow = async (payload = {}) => {
+    if (deviceMode !== "cashier") { setShiftMessage("Thu ngân mở ca trên máy POS tại quán."); return false; }
     const {
       openingCashCounted = openingCash,
       openingCashBreakdown = null
@@ -1521,12 +1798,12 @@ export default function usePosComposer() {
   };
 
   const confirmCash = (cashReceived = "") => {
-    if (!totals.total) {
+    if (!cart.length) {
       setShiftMessage("Chưa có món trong bill.");
       return false;
     }
 
-    if (!normalizedPager) {
+    if (!pagerSettingsReady || pagerSettingsSaving || (pagerEnabled && !normalizedPager)) {
       setShiftMessage("Vui lòng nhập thẻ rung trước khi thanh toán.");
       return false;
     }
@@ -1550,7 +1827,7 @@ export default function usePosComposer() {
       orderIdentity.orderCode
     ].join(":");
 
-    setPaymentConfirmed({
+    const confirmation = {
       method: "cash",
       amount: cashSummary.paymentAmount,
       originalAmount: cashSummary.originalAmount,
@@ -1561,7 +1838,12 @@ export default function usePosComposer() {
       reference: `CASH-${orderIdentity.orderCode}`,
       orderIdentity,
       requestKey
-    });
+    };
+    setPaymentConfirmed(confirmation);
+    if (cashSummary.paymentAmount === 0) {
+      setShiftMessage("Đã xác nhận đơn 0đ tại quầy, không thu tiền.");
+      return confirmation;
+    }
     setShiftMessage("Đã xác nhận thanh toán tiền mặt. Đang mở két tiền...");
     void openLocalCashDrawer()
       .then(() => {
@@ -1570,9 +1852,10 @@ export default function usePosComposer() {
       .catch((error) => {
         setShiftMessage(`Đã xác nhận thanh toán tiền mặt. Chưa mở được két: ${error?.message || "kiểm tra máy in/két tiền."}`);
       });
-    return true;
+    return confirmation;
   };
   const openQrPayment = async (provider = "sepay") => {
+    if (deviceMode !== "cashier") { setShiftMessage("Tạo đơn rồi chọn Tiền mặt hoặc QR để thanh toán."); return false; }
     const paymentProvider = provider === "momo" ? "momo" : "sepay";
     if (!profile || !shift?.id) {
       setShiftMessage("Cần đăng nhập và mở ca trước khi tạo QR.");
@@ -1582,7 +1865,7 @@ export default function usePosComposer() {
       setShiftMessage("Bill hiện chưa có số tiền để tạo QR thanh toán.");
       return false;
     }
-    if (!normalizedPager) {
+    if (!pagerSettingsReady || pagerSettingsSaving || (pagerEnabled && !normalizedPager)) {
       setShiftMessage("Vui lòng nhập thẻ rung trước khi tạo QR thanh toán.");
       return false;
     }
@@ -1613,11 +1896,32 @@ export default function usePosComposer() {
       return;
     }
 
+    const liveBenefit = loyaltyValidation.benefit || loyaltyBenefit;
+    const liveTotals = buildTotalsWithBenefit(liveBenefit);
     const orderIdentity = createPosOrderIdentity(new Date());
     setQrPreviewIdentity(orderIdentity);
     const paymentReference = buildPosPaymentReference(orderIdentity, branch);
+    const requestKey = `pos:${paymentProvider}:${profile.branchUuid}:${orderIdentity.orderCode}`;
+    const checkout = {
+      pagerEnabled,
+      orderIdentity,
+      posShiftId: shift.id,
+      shift,
+      totals: liveTotals,
+      promoDiscount: liveBenefit.voucherDiscount,
+      promoCode: String(liveBenefit.selectedVoucher?.code || "").trim().toUpperCase(),
+      promoSource: String(liveBenefit.selectedVoucher?.source || ""),
+      promoVoucherId: String(liveBenefit.selectedVoucher?.id || "").trim(),
+      selectedVoucherKey: liveBenefit.selectedVoucherKey,
+      pointsDiscount: liveBenefit.pointsSpent,
+      pointsDiscountAmount: liveBenefit.pointsDiscount,
+      pointRedeemRule: liveBenefit.loyaltyRule,
+      customerLookup: loyaltyValidation.customer || customerLookup.result,
+      customerName: customerName || customerLookup.result?.customerName || "",
+      customerPhone: normalizeCustomerPhone(customerPhone)
+    };
     const result = await createPosPaymentSession({
-      requestKey: `pos:${paymentProvider}:${profile.branchUuid}:${orderIdentity.orderCode}`,
+      requestKey,
       paymentReference,
       provider: paymentProvider,
       branchUuid: profile.branchUuid,
@@ -1627,41 +1931,81 @@ export default function usePosComposer() {
       customerName,
       customerPhone: normalizeCustomerPhone(customerPhone),
       pagerNumber: normalizedPager,
-      amountExpected: totals.total,
+      pagerEnabled,
+      amountExpected: liveTotals.total,
       cart,
       orderIdentity,
-      checkout: {
-        orderIdentity,
-        posShiftId: shift.id,
-        shift,
-        totals,
-        promoDiscount: loyaltyBenefit.voucherDiscount,
-        promoCode: String(loyaltyBenefit.selectedVoucher?.code || "").trim().toUpperCase(),
-        promoSource: String(loyaltyBenefit.selectedVoucher?.source || ""),
-        promoVoucherId: String(loyaltyBenefit.selectedVoucher?.id || "").trim(),
-        selectedVoucherKey: loyaltyBenefit.selectedVoucherKey,
-        pointsDiscount: loyaltyBenefit.pointsSpent,
-        pointsDiscountAmount: loyaltyBenefit.pointsDiscount,
-        pointRedeemRule: loyaltyBenefit.loyaltyRule,
-        customerLookup: loyaltyValidation.customer || customerLookup.result,
-        customerName: customerName || customerLookup.result?.customerName || "",
-        customerPhone: normalizeCustomerPhone(customerPhone)
-      }
+      checkout
     }).catch((error) => ({
       ok: false,
       message: error?.message || "Không kết nối được máy chủ để tạo QR. Vui lòng thử lại."
     }));
 
-    setQrLoading(false);
     if (!result.ok) {
+      setQrLoading(false);
       setQrError(result.message || "Không tạo được phiên thanh toán QR.");
       setShiftMessage(result.message || "Không tạo được phiên thanh toán QR.");
       setQrModalOpen(true);
       return;
     }
 
-    setQrSession(result.session);
-    await rememberPosPaymentSession(profile.branchUuid, result.session?.id);
+    const pendingOrderResult = await createPosTakeawayOrderMobile({
+      cart,
+      totals: liveTotals,
+      pagerNumber: normalizedPager,
+      pagerEnabled,
+      customerName: customerName || customerLookup.result?.customerName || "",
+      customerPhone: normalizeCustomerPhone(customerPhone),
+      branch: {
+        branchUuid: profile.branchUuid,
+        branchName: profile.branchName
+      },
+      orderNote,
+      shift,
+      cashierName: profile.name || profile.email,
+      customerLookup: loyaltyValidation.customer || customerLookup.result,
+      promoDiscount: liveBenefit.voucherDiscount,
+      promoCode: checkout.promoCode,
+      promoSource: checkout.promoSource,
+      promoVoucherId: checkout.promoVoucherId,
+      pointsDiscount: liveBenefit.pointsSpent,
+      pointsDiscountAmount: liveBenefit.pointsDiscount,
+      pointRedeemRule: liveBenefit.loyaltyRule,
+      paymentMethod: paymentProvider === "momo" ? "momo" : "bank_qr",
+      paymentStatus: "pending_payment",
+      paymentAmount: liveTotals.total,
+      paymentReference,
+      posShiftId: shift.id,
+      paymentMeta: {
+        paymentSessionId: result.session.id,
+        requestKey
+      },
+      orderIdentity
+    });
+    if (!pendingOrderResult.ok || pendingOrderResult.offline) {
+      await cancelPosPaymentSession(result.session.id, "Không tạo được đơn chờ thanh toán QR");
+      const message = pendingOrderResult.message || "Không tạo được đơn chờ thanh toán QR.";
+      setQrLoading(false);
+      setQrError(message);
+      setShiftMessage(message);
+      setQrModalOpen(true);
+      return;
+    }
+
+    const attached = await attachPosPaymentSessionOrder(result.session.id, pendingOrderResult.order?.id || orderIdentity.orderCode);
+    if (!attached.ok || !attached.session?.id) {
+      await cancelPosPaymentSession(result.session.id, "Không gắn được đơn chờ thanh toán vào QR");
+      const message = attached.message || "Không gắn được đơn chờ thanh toán vào QR.";
+      setQrLoading(false);
+      setQrError(message);
+      setShiftMessage(message);
+      setQrModalOpen(true);
+      return;
+    }
+
+    setQrSession(attached.session);
+    await rememberPosPaymentSession(profile.branchUuid, attached.session.id);
+    setQrLoading(false);
     setQrModalOpen(true);
     setShiftMessage("Đã tạo QR, đang chờ khách chuyển khoản.");
   };
@@ -1774,6 +2118,10 @@ export default function usePosComposer() {
   };
 
   const refreshCurrentPosRuntime = async () => {
+    if (deviceMode === "phone" && profile?.branchUuid) {
+      const activeShift = await fetchActivePosShift({ branchUuid: profile.branchUuid, registerKey: "main" });
+      if (activeShift.ok) setShift(activeShift.shift || null);
+    }
     await checkConnectionNow();
     await syncOfflineOrdersNow({ silent: true });
     const catalogConfigResult = await fetchPosCatalogConfig();
@@ -1946,8 +2294,8 @@ export default function usePosComposer() {
 
     let drawerMessage = "";
     try {
-      await openLocalCashDrawer();
-      drawerMessage = " Đã gửi lệnh mở két tiền.";
+      if (deviceMode === "cashier") await openLocalCashDrawer();
+      drawerMessage = deviceMode === "cashier" ? " Đã gửi lệnh mở két tiền." : "";
     } catch (error) {
       drawerMessage = ` Chưa mở được két: ${error?.message || "kiểm tra máy in/két tiền."}`;
     }
@@ -1962,6 +2310,10 @@ export default function usePosComposer() {
 
   const openPickupOrderQrPayment = async (order = {}) => {
     if (!order?.id) return false;
+    const phoneOrder = order.metadata?.deviceMode === "phone";
+    if (phoneOrder && phoneQrOpenInFlightRef.current) return false;
+    if (phoneOrder) phoneQrOpenInFlightRef.current = true;
+    try {
     if (!profile?.branchUuid || !shift?.id) {
       setPickupOrdersError("Cần đăng nhập và mở ca trước khi tạo QR.");
       return false;
@@ -1972,6 +2324,29 @@ export default function usePosComposer() {
     setPickupQrError("");
     setPickupQrOrder(order);
 
+    if (order.metadata?.deviceMode === "phone") {
+      setPickupQrSession(null);
+      const remembered = findPendingWebsiteQrSession(order);
+      if (remembered?.id) {
+        try {
+          const current = await readPosPaymentSession(remembered.id);
+          if (current && (isPosPaymentSessionPaid(current) || (!isPosPaymentSessionExpired(current) && !isPosPaymentSessionTerminal(current)))) {
+            setPickupQrSession(current);
+            setPickupQrLoading(false);
+            setShiftMessage("Đã mở lại QR của đơn chờ thanh toán.");
+            return true;
+          }
+          if (current && isPosPaymentSessionExpired(current)) {
+            const expired = await cancelPosPaymentSession(current.id, "Đóng QR điện thoại hết hạn trước khi tạo mã mới");
+            if (!expired.ok) throw new Error(expired.message || "Chưa đóng được QR hết hạn.");
+          }
+        } catch (error) {
+          setPickupQrLoading(false);
+          setPickupQrError(error?.message || "Chưa kiểm tra được QR cũ. Vui lòng thử lại.");
+          return false;
+        }
+      }
+    }
     const orderIdentity = buildPickupOrderIdentity(order);
     const paymentReference = `${orderIdentity.displayOrderCode || orderIdentity.orderCode || "GHR"}-QR-${Date.now().toString().slice(-6)}`.toUpperCase();
     const result = await createPosPaymentSession({
@@ -2008,10 +2383,17 @@ export default function usePosComposer() {
     setPickupQrSession(result.session);
     setPickupQrOrder(order);
     setPickupQrModalOpen(true);
-    setShiftMessage(result.reused
-      ? "Đã mở lại QR đang chờ thanh toán cho đơn hẹn lấy."
-      : "Đã tạo QR cho đơn hẹn lấy, đang chờ khách chuyển khoản.");
+    setShiftMessage(order.metadata?.deviceMode === "phone"
+      ? (result.reused ? "Đã mở lại QR của đơn chờ thanh toán." : "Đang chờ khách chuyển khoản. Chưa gửi bếp.")
+      : result.reused ? "Đã mở lại QR đang chờ thanh toán cho đơn hẹn lấy." : "Đã tạo QR cho đơn hẹn lấy, đang chờ khách chuyển khoản.");
     return true;
+    } catch (error) {
+      setPickupQrLoading(false);
+      setPickupQrError(error?.message || "Chưa mở được mã QR. Vui lòng thử lại.");
+      return false;
+    } finally {
+      if (phoneOrder) phoneQrOpenInFlightRef.current = false;
+    }
   };
 
   const finalizePickupQrPayment = async (session = {}) => {
@@ -2084,7 +2466,7 @@ export default function usePosComposer() {
 
   const confirmPickupQrPaidManually = async () => {
     if (!pickupQrSession?.id) return;
-    if (isPosPaymentSessionPaid(pickupQrSession)) {
+    if (isPosPaymentSessionPaid(pickupQrSession) && pickupQrOrder?.metadata?.deviceMode !== "phone") {
       await finalizePickupQrPayment(pickupQrSession);
       return;
     }
@@ -2217,6 +2599,7 @@ export default function usePosComposer() {
   };
 
   const closeShiftNow = async (payload = {}) => {
+    if (deviceMode !== "cashier") return false;
     const {
       closingCashCounted = closingCash,
       closingCashBreakdown = null,
@@ -2224,12 +2607,8 @@ export default function usePosComposer() {
       printReceipt = true
     } = payload || {};
 
-    if (!shift?.id) {
-      setShiftMessage("Chưa có ca POS đang mở.");
-      return false;
-    }
-    if (cart.length || qrSession?.id) {
-      setShiftMessage("Vui lòng tạo/xóa bill hiện tại và xử lý QR đang chờ trước khi kết ca.");
+    if (cart.length) {
+      setShiftMessage("Còn bill đang mở. Hoàn tất hoặc xóa bill này trước khi kết ca.");
       return false;
     }
 
@@ -2240,23 +2619,34 @@ export default function usePosComposer() {
 
     setBusy(true);
     setShiftMessage("");
-    const activePendingSessions = await cleanupExpiredPaymentSessions(profile?.branchUuid, pendingPaymentSessions);
-    setPendingPaymentSessions(activePendingSessions);
-    if (activePendingSessions.length) {
+    const latestState = await syncShiftBeforeClose();
+    if (!latestState.ok) {
       setBusy(false);
-      setShiftMessage("Còn phiên QR đang chờ thanh toán. Vui lòng hủy hoặc hoàn tất trước khi kết ca.");
-      await refreshShiftSummary(shift);
+      setShiftMessage(latestState.message);
       return false;
     }
-    const latestSummary = await refreshShiftSummary(shift);
+
+    const activePendingSessions = latestState.activeSessions;
+    if (activePendingSessions.length) {
+      setBusy(false);
+      const hasPendingPayment = activePendingSessions.some((item) => (
+        String(item?.status || "").trim().toLowerCase() === "pending_payment"
+      ));
+      setShiftMessage(
+        hasPendingPayment
+          ? "Còn QR chờ thanh toán. Nếu khách không chuyển khoản, bấm Hủy QR; nếu đã chuyển, chờ ngân hàng báo tiền vào rồi thử lại."
+          : "Có QR đang được máy chủ chốt. Chờ ít giây để hoàn tất rồi bấm kết ca lại."
+      );
+      return false;
+    }
+    const latestSummary = latestState.summary;
     if (Number(latestSummary?.pendingQrCount || 0) > 0) {
       setBusy(false);
-      setShiftMessage("Còn phiên QR đang chờ thanh toán trong ca. Vui lòng xử lý hết trước khi kết ca.");
-      await refreshPosRuntime(profile?.branchUuid);
+      setShiftMessage("Còn QR chờ thanh toán trong ca. Kiểm tra QR và bấm Hủy QR nếu khách đã đổi ý.");
       return false;
     }
     const result = await closePosShift({
-      shift,
+      shift: latestState.shift,
       summary: latestSummary || shiftSummary,
       closingCashCounted,
       closingCashBreakdown,
@@ -2265,10 +2655,15 @@ export default function usePosComposer() {
     });
     setBusy(false);
     setShiftMessage(result.message || "");
-    if (!result.ok) return false;
+    if (!result.ok) {
+      if (latestState.shift?.id) {
+        await refreshShiftSummary(latestState.shift);
+      }
+      return false;
+    }
 
     const closedShift = result.shift || {
-      ...shift,
+      ...latestState.shift,
       status: "closed",
       closedAt: new Date().toISOString(),
       closingCashCounted,
@@ -2408,43 +2803,55 @@ export default function usePosComposer() {
     applyPaymentSessionState(result.session);
   };
 
-  const createCashOrder = async () => {
+  const createCashOrder = async (paymentOverride = null) => {
+    if (deviceMode !== "cashier") return false;
     if (createCashOrderInFlightRef.current) {
       setShiftMessage("Đang tạo đơn. Vui lòng chờ trong giây lát.");
-      return;
+      return false;
     }
 
     createCashOrderInFlightRef.current = true;
     setBusy(true);
 
     try {
-    if (!paymentConfirmed || !profile || !shift?.id) {
+    const confirmedPayment = paymentOverride?.method ? paymentOverride : paymentConfirmed;
+    if (!confirmedPayment || !profile || !shift?.id) {
       setShiftMessage("Cần đăng nhập và mở ca trước khi tạo đơn.");
-      return;
+      return false;
     }
 
     if (pagerBusy) {
       setShiftMessage(`Thẻ rung ${normalizedPager} đang có đơn chưa hoàn tất.`);
-      return;
+      return false;
     }
 
     const loyaltyValidation = await validateLiveLoyaltySelection();
     if (!loyaltyValidation.ok) {
       setShiftMessage(loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại.");
-      return;
+      return false;
     }
 
-    const orderIdentity = paymentConfirmed.orderIdentity || createPosOrderIdentity(new Date());
-    const requestKey = paymentConfirmed.requestKey || [
+    const liveBenefit = loyaltyValidation.benefit || loyaltyBenefit;
+    const liveTotals = buildTotalsWithBenefit(liveBenefit);
+    const liveCashSummary = getCashPaymentSummary(liveTotals.total);
+    if (confirmedPayment.method === "cash" && Number(confirmedPayment.amount || 0) !== liveCashSummary.paymentAmount) {
+      setPaymentConfirmed(null);
+      setShiftMessage("Tổng tiền vừa thay đổi sau khi tải lại điểm. Vui lòng xác nhận tiền mặt lại.");
+      return false;
+    }
+
+    const orderIdentity = confirmedPayment.orderIdentity || createPosOrderIdentity(new Date());
+    const requestKey = confirmedPayment.requestKey || [
       "pos-cash",
       profile.branchUuid || "branch",
       orderIdentity.orderCode
     ].join(":");
-    const paymentReference = paymentConfirmed.reference || `CASH-${orderIdentity.orderCode}`;
+    const paymentReference = confirmedPayment.reference || `CASH-${orderIdentity.orderCode}`;
     const result = await createPosTakeawayOrderMobile({
       cart,
-      totals,
+      totals: liveTotals,
       pagerNumber: normalizedPager,
+      pagerEnabled,
       customerName: customerName || customerLookup.result?.customerName || "",
       customerPhone: normalizeCustomerPhone(customerPhone),
       branch: {
@@ -2455,31 +2862,31 @@ export default function usePosComposer() {
       shift,
       cashierName: profile.name || profile.email,
       customerLookup: loyaltyValidation.customer || customerLookup.result,
-      promoDiscount: loyaltyBenefit.voucherDiscount,
-      promoCode: String(loyaltyBenefit.selectedVoucher?.code || "").trim().toUpperCase(),
-      promoSource: String(loyaltyBenefit.selectedVoucher?.source || ""),
-      promoVoucherId: String(loyaltyBenefit.selectedVoucher?.id || "").trim(),
-      pointsDiscount: loyaltyBenefit.pointsSpent,
-      pointsDiscountAmount: loyaltyBenefit.pointsDiscount,
-      pointRedeemRule: loyaltyBenefit.loyaltyRule,
-      paymentMethod: paymentConfirmed.method,
+      promoDiscount: liveBenefit.voucherDiscount,
+      promoCode: String(liveBenefit.selectedVoucher?.code || "").trim().toUpperCase(),
+      promoSource: String(liveBenefit.selectedVoucher?.source || ""),
+      promoVoucherId: String(liveBenefit.selectedVoucher?.id || "").trim(),
+      pointsDiscount: liveBenefit.pointsSpent,
+      pointsDiscountAmount: liveBenefit.pointsDiscount,
+      pointRedeemRule: liveBenefit.loyaltyRule,
+      paymentMethod: confirmedPayment.method,
       paymentStatus: "paid",
-      paymentAmount: paymentConfirmed.amount,
+      paymentAmount: confirmedPayment.amount,
       paymentReference,
-      paidAt: paymentConfirmed.paidAt || new Date().toISOString(),
+      paidAt: confirmedPayment.paidAt || new Date().toISOString(),
       posShiftId: shift.id,
       paymentMeta: {
-        ...(paymentConfirmed.paymentSessionId ? { provider: "sepay", paymentSessionId: paymentConfirmed.paymentSessionId } : {}),
-        originalAmount: paymentConfirmed.originalAmount || paymentConfirmed.amount,
-        cashRoundingDiscount: paymentConfirmed.cashRoundingDiscount || 0,
-        cashRoundingUnit: paymentConfirmed.cashRoundingUnit || 0,
+        ...(confirmedPayment.paymentSessionId ? { provider: "sepay", paymentSessionId: confirmedPayment.paymentSessionId } : {}),
+        originalAmount: confirmedPayment.originalAmount || confirmedPayment.amount,
+        cashRoundingDiscount: confirmedPayment.cashRoundingDiscount || 0,
+        cashRoundingUnit: confirmedPayment.cashRoundingUnit || 0,
         requestKey
       },
       orderIdentity
     });
     setShiftMessage(result.message || "");
     if (!result.ok) {
-      return;
+      return false;
     }
     if (result.offline) {
       await refreshOfflineOrderCount();
@@ -2490,14 +2897,15 @@ export default function usePosComposer() {
       const billData = {
         order: result.order,
         cart,
-        totals,
+        totals: liveTotals,
         customerName: customerName || customerLookup.result?.customerName || "",
         customerPhone: normalizeCustomerPhone(customerPhone),
         pagerNumber: normalizedPager,
+      pagerEnabled,
         branchName: profile.branchName,
         cashierName: profile.name || profile.email,
         orderNote,
-        paymentConfirmed
+        paymentConfirmed: confirmedPayment
       };
       await printCounterOrderBills(billData);
       printMessage = " Đã in bill làm món và bill khách tại máy POS.";
@@ -2505,33 +2913,63 @@ export default function usePosComposer() {
       printMessage = ` Đã tạo đơn nhưng chưa in được bill: ${printError?.message || "Lỗi máy in."}`;
     }
 
-    setCart([]);
-    setPaymentConfirmed(null);
-    setOrderNote("");
-    setCustomerName("");
-    setCustomerPhone("");
-    setSelectedVoucherId("");
-    setPointsInput("");
-    setPagerNumber("");
-    if (paymentConfirmed.paymentSessionId) {
+    if (confirmedPayment.paymentSessionId) {
       await markPosPaymentSessionConverted(
-        paymentConfirmed.paymentSessionId,
+        confirmedPayment.paymentSessionId,
         result.order?.id || result.order?.orderCode
       );
     }
-    await forgetPosPaymentSession(profile.branchUuid);
-    setQrSession(null);
-    setQrPreviewIdentity(null);
-    setQrModalOpen(false);
+    await resetCompletedSale();
     if (!result.offline) {
       await refreshPosRuntime(profile.branchUuid);
       await refreshShiftSummary(shift);
     }
     setShiftMessage(`${result.message || ""}${printMessage}`.trim());
+    return true;
     } finally {
       createCashOrderInFlightRef.current = false;
       setBusy(false);
     }
+  };
+
+  const sendPhoneOrder = async () => {
+    if (deviceMode !== "phone" || createCashOrderInFlightRef.current) return false;
+    if (!profile || !shift?.id || !cart.length || !normalizedPager || pagerBusy) {
+      setShiftMessage("Cần ca đang mở, món và thẻ rung sẵn sàng để tạo đơn."); return false;
+    }
+    const loyaltyValidation = await validateLiveLoyaltySelection();
+    if (!loyaltyValidation.ok) { setShiftMessage(loyaltyValidation.message); return false; }
+    if (createCashOrderInFlightRef.current) return false;
+    const liveBenefit = loyaltyValidation.benefit || loyaltyBenefit;
+    const liveTotals = buildTotalsWithBenefit(liveBenefit);
+    const key = JSON.stringify({ cart, customerPhone, customerName, orderNote, normalizedPager, totals: liveTotals, voucher: liveBenefit.selectedVoucher?.id, points: liveBenefit.pointsSpent, branch: profile.branchUuid, shift: shift.id });
+    if (phoneOrderRequestRef.current?.key !== key) phoneOrderRequestRef.current = { key, identity: createPosOrderIdentity(new Date()) };
+    createCashOrderInFlightRef.current = true;
+    setBusy(true);
+    try {
+      const result = await createPosTakeawayOrderMobile({ cart, totals: liveTotals, pagerNumber: normalizedPager,
+        customerName: customerName || customerLookup.result?.customerName || "", customerPhone: normalizeCustomerPhone(customerPhone),
+        branch: { branchUuid: profile.branchUuid, branchName: profile.branchName }, orderNote, shift,
+        cashierName: profile.name || profile.email, paymentMethod: "cash", paymentStatus: "unpaid",
+        customerLookup: loyaltyValidation.customer || customerLookup.result,
+        promoDiscount: liveBenefit.voucherDiscount, promoCode: liveBenefit.selectedVoucher?.code || "",
+        promoSource: liveBenefit.selectedVoucher?.source || "", promoVoucherId: liveBenefit.selectedVoucher?.id || "",
+        pointsDiscount: liveBenefit.pointsSpent, pointsDiscountAmount: liveBenefit.pointsDiscount,
+        pointRedeemRule: liveBenefit.loyaltyRule,
+        phoneOrder: true, skipOfflineQueue: true, orderIdentity: phoneOrderRequestRef.current.identity });
+      setShiftMessage(result.message || "");
+      if (!result.ok) return false;
+      await resetCompletedSale();
+      phoneOrderRequestRef.current = null;
+      if (result.order?.id) {
+        setPickupOrders(current => [result.order, ...current.filter(order => order.id !== result.order.id)]);
+        setRecentOrders(current => mergePosHistoryOrders([result.order], current));
+      }
+      refreshPosRuntime(profile.branchUuid, { silent: true }).catch(() => {});
+      setShiftMessage(`Đã tạo ${result.order?.displayOrderCode || "đơn"} chờ thanh toán. Bếp nhận sau khi thanh toán.`);
+      return result.order || false;
+    } catch (error) { setShiftMessage(error?.message || "Chưa gửi được đơn. Giữ giỏ và thử lại."); return false; }
+    finally { createCashOrderInFlightRef.current = false; setBusy(false); }
   };
 
   const addStampGift = async (product) => {
@@ -2544,6 +2982,8 @@ export default function usePosComposer() {
   };
 
   return {
+    profile,
+    sendPhoneOrder,
     addStampGift,
     email,
     setEmail,
@@ -2570,6 +3010,10 @@ export default function usePosComposer() {
     setClosingNote,
     openingCash,
     setOpeningCash,
+    pagerEnabled,
+    pagerSettingsReady,
+    pagerSettingsSaving,
+    changePagerEnabled,
     pagerNumber,
     setPagerNumber,
     normalizedPager,
@@ -2582,9 +3026,9 @@ export default function usePosComposer() {
     loyaltyBenefit,
     promotionHints,
     selectedVoucherId,
-    setSelectedVoucherId,
+    setSelectedVoucherId: (value) => changePosBenefit(setSelectedVoucherId, value),
     pointsInput,
-    setPointsInput,
+    setPointsInput: (value) => changePosBenefit(setPointsInput, value),
     orderNote,
     setOrderNote,
     products: visibleProducts,
@@ -2643,6 +3087,7 @@ export default function usePosComposer() {
     refreshCurrentPosRuntime,
     refreshRecentClosedShifts,
     checkConnectionNow,
+    recoverPosConnection,
     syncOfflineOrdersNow,
     confirmQrPaidManually,
     printQrReceiptNow,

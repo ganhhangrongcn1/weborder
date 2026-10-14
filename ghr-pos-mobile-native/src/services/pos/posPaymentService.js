@@ -87,6 +87,14 @@ export function buildPosPaymentReference(orderIdentity = {}, branch = {}) {
   return toText(orderIdentity.displayOrderCode || orderIdentity.orderCode || "");
 }
 
+export function isPosQrSessionReadyForDisplay(session = null) {
+  return Boolean(
+    toText(session?.id)
+      && toText(session?.paymentReference || session?.payment_reference)
+      && toText(session?.status).toLowerCase() === "pending_payment"
+  );
+}
+
 export function buildPosQrImageUrl({ branch = {}, amount = 0, orderIdentity = {} } = {}) {
   const config = getPosQrPaymentConfig(branch);
   if (!config.ready) return "";

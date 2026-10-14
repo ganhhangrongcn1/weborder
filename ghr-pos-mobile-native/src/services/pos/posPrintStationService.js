@@ -437,13 +437,14 @@ async function markFailed(job, message) {
   if (error) throw error;
 }
 
-function buildPrintPayload(job = {}) {
+export function buildPrintPayload(job = {}) {
   const payload = getObject(job.payload);
   const sourceType = normalizeSourceToken(job.source_type || payload.type || payload.sourceType);
   const isItemLabel = toText(job.job_type) === ITEM_LABEL_JOB_TYPE || sourceType === ITEM_LABEL_JOB_TYPE;
   const order = getObject(payload.order);
   const payloadText = toText(payload.text);
-  const secondaryText = toText(payload.secondaryText);
+  const secondaryText = toText(payload.secondaryText) || (payload.secondaryOrder
+    ? buildReceiptTextFromOrder(getObject(payload.secondaryOrder), "pos_phone_payment") : "");
   const paymentStatus = normalizeSourceToken(order.paymentStatus || order.payment_status);
   const paidAt = toText(order.paidAt || order.paid_at);
   const legacyUnpaidReceipt =
@@ -540,6 +541,10 @@ function buildReceiptTextFromOrder(order = {}, sourceType = "") {
       method: paymentMethod === "momo" ? "momo" : paymentMethod.includes("qr") ? "bank_qr" : "cash",
       reference: toText(order.paymentReference || order.payment_reference),
       paidAt,
+      ...(sourceType === "pos_phone_payment" ? {
+        amount: toNumber(order.paymentAmount), originalAmount: toNumber(order.originalPaymentAmount),
+        cashRoundingDiscount: toNumber(order.cashRoundingDiscount), received: toNumber(order.cashReceived), change: toNumber(order.cashChange)
+      } : {}),
       paid: true
     } : null
   });

@@ -45,6 +45,7 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
   const [settings, setSettings] = useState({ sync_interval_minutes: 60 });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [workerStarting, setWorkerStarting] = useState(false);
+  const [watchUntil, setWatchUntil] = useState(0);
   const [message, setMessage] = useState("");
   const [storeControlSaving, setStoreControlSaving] = useState("");
   const [replySavingId, setReplySavingId] = useState("");
@@ -93,6 +94,30 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
     };
     loadInitialData();
   }, []);
+
+  const hasPendingStoreControl = sources.some((source) => ["pending", "running"].includes(source.store_control_status));
+  const hasPendingWork = hasPendingStoreControl || sources.some((source) => source.sync_status === "running");
+  useEffect(() => {
+    if (!hasPendingWork && watchUntil <= Date.now()) return undefined;
+    let cancelled = false;
+    let timer;
+    const refreshDelay = hasPendingStoreControl ? 2000 : 5000;
+    const refreshStatus = async () => {
+      try {
+        const result = await listPartnerReviewSources();
+        if (!cancelled && result.ok) {
+          setSources(result.sources);
+          if (result.settings) setSettings(result.settings);
+        }
+      } catch {
+        // Retry while this page is watching a submitted operation.
+      } finally {
+        if (!cancelled && (hasPendingWork || watchUntil > Date.now())) timer = window.setTimeout(refreshStatus, refreshDelay);
+      }
+    };
+    timer = window.setTimeout(refreshStatus, refreshDelay);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [hasPendingWork, hasPendingStoreControl, watchUntil]);
 
   const refreshAll = async () => {
     setMessage("");
@@ -176,6 +201,7 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
       const result = await requestPartnerReviewWorkerStart();
       setMessage(result.message || (result.ok ? "Đã ghi nhận yêu cầu đồng bộ ngay." : "Không gửi được yêu cầu đồng bộ ngay."));
       if (result.ok && result.settings) setSettings(result.settings);
+      if (result.ok) setWatchUntil(Date.now() + 120000);
     } finally {
       setWorkerStarting(false);
     }
@@ -190,7 +216,6 @@ export default function AdminPartnerReviewsPage({ branches = [] }) {
       setMessage(result.message || (result.ok ? "Đã gửi lệnh tới worker." : "Không gửi được lệnh tới worker."));
       if (result.ok && result.source) {
         setSources((current) => current.map((item) => item.id === source.id ? result.source : item));
-        window.setTimeout(() => loadSources(), 12000);
       }
     } finally {
       setStoreControlSaving("");

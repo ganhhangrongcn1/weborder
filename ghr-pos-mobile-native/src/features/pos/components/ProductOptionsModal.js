@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Pressable,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -37,6 +40,7 @@ export default function ProductOptionsModal({
   const [note, setNote] = useState("");
   const [selectedOptions, setSelectedOptions] = useState({});
   const [submitError, setSubmitError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const groups = Array.isArray(product?.optionGroups) ? product.optionGroups : [];
@@ -71,25 +75,31 @@ export default function ProductOptionsModal({
     setSubmitError("");
   };
 
-  const handleSubmit = () => {
-    if (!product) return;
+  const handleSubmit = async () => {
+    if (!product || saving) return;
     if (!canSubmit) {
       setSubmitError("Vui lòng chọn đủ tùy chọn bắt buộc trước khi lưu món.");
       return;
     }
 
-    onSubmit(product, {
-      quantity,
-      note,
-      selectedOptions: selectedList
-    });
+    setSaving(true);
+    setSubmitError("");
+    try {
+      const saved = await onSubmit(product, { quantity, note, selectedOptions: selectedList });
+      if (saved === false) setSubmitError("Chưa lưu được món. Ghi chú vẫn được giữ; kiểm tra thanh toán QR rồi thử lại.");
+    } catch (error) {
+      setSubmitError(error?.message || "Chưa lưu được món. Ghi chú vẫn được giữ, vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!product) return null;
 
   return (
-      <View style={styles.layer}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+      <Modal transparent visible onRequestClose={() => { if (!saving) onClose(); }} animationType="fade">
+      <KeyboardAvoidingView style={styles.layer} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={styles.backdrop} disabled={saving} onPress={onClose} />
         <View style={[styles.sheet, { width: dialogWidth }, width >= 680 && styles.sheetDesktop]}>
           <View style={styles.header}>
             <View style={styles.flexOne}>
@@ -99,12 +109,12 @@ export default function ProductOptionsModal({
               </Text>
               <Text style={styles.basePrice}>Giá gốc {formatMoney(product?.price || 0)}</Text>
             </View>
-            <Pressable style={styles.closeButton} onPress={onClose}>
+            <Pressable style={styles.closeButton} disabled={saving} onPress={onClose}>
               <Text style={styles.closeText}>Đóng</Text>
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+          <ScrollView keyboardShouldPersistTaps="always" keyboardDismissMode="none" contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
             {groups.map((group) => (
               <View key={group.id} style={styles.group}>
                 <View style={styles.groupHead}>
@@ -154,6 +164,7 @@ export default function ProductOptionsModal({
               <TextInput
                 value={note}
                 onChangeText={setNote}
+                editable={!saving}
                 placeholder="Ví dụ: ít sốt, không rau răm..."
                 placeholderTextColor="#94a3b8"
                 style={[styles.input, styles.noteInput]}
@@ -198,21 +209,22 @@ export default function ProductOptionsModal({
 
           <Pressable
             style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
-            disabled={!canSubmit}
+            disabled={!canSubmit || saving}
             onPress={handleSubmit}
           >
             <Text style={[styles.submitText, !canSubmit && styles.submitTextDisabled]}>
-              {submitLabel || `Thêm vào bill · ${formatMoney(total)}`}
+              {saving ? "Đang lưu món..." : submitLabel || `Thêm vào bill · ${formatMoney(total)}`}
             </Text>
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
+      </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   layer: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 18,

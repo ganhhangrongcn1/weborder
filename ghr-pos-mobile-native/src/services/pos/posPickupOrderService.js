@@ -185,7 +185,7 @@ function getWebsiteOrderLabel(order = {}) {
   return order.fulfillmentType === "delivery" ? "đơn giao hàng" : "đơn hẹn lấy";
 }
 
-function normalizeWebsiteOrder(row = {}) {
+export function normalizeWebsiteOrder(row = {}) {
   const metadata = getObject(row.metadata);
   const fulfillmentType = getFulfillmentType(row);
   const paid = isPaid(row);
@@ -210,7 +210,7 @@ function normalizeWebsiteOrder(row = {}) {
     orderCode: toText(row.order_code || row.id),
     displayOrderCode: toText(metadata.displayOrderCode || row.order_code || row.id),
     fulfillmentType,
-    fulfillmentLabel: fulfillmentType === "delivery" ? "Giao hàng" : "Hẹn lấy",
+    fulfillmentLabel: metadata.deviceMode === "phone" ? "Điện thoại order" : fulfillmentType === "delivery" ? "Giao hàng" : "Hẹn lấy",
     customerName: toText(row.customer_name || metadata.customerName || metadata.customer_name) || "Khách đặt web",
     customerPhone: toText(row.customer_phone || metadata.customerPhone || metadata.customer_phone),
     subtotal,
@@ -285,7 +285,7 @@ async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = tr
 
   return data
     .filter((row) => matchesBranch(row, safeBranchUuid))
-    .filter((row) => !isPosSource(row))
+    .filter((row) => !isPosSource(row) || row.metadata?.deviceMode === "phone")
     .filter((row) => ["pickup", "delivery"].includes(getFulfillmentType(row)))
     .filter((row) => (includePaid ? true : !isPaid(row)));
 }
@@ -306,7 +306,7 @@ export function subscribePosWebsiteOrderChanges(branchUuid = "", onChange) {
       { event: "*", schema: "public", table: "orders" },
       (payload) => {
         const row = payload?.new || payload?.old || {};
-        if (!matchesBranch(row, safeBranchUuid) || isPosSource(row)) return;
+        if (!matchesBranch(row, safeBranchUuid) || (isPosSource(row) && row.metadata?.deviceMode !== "phone")) return;
         onChange(payload);
       }
     )
@@ -448,6 +448,15 @@ export async function markWebsiteOrderPaidCash({
   if (!orderId) return { ok: false, message: "Thiếu mã đơn website." };
   if (!shiftId) return { ok: false, message: "Cần mở ca POS trước khi thu tiền." };
 
+  if (order?.metadata?.deviceMode === "phone") {
+    const { data, error } = await supabase.rpc("collect_pos_phone_cash", {
+      p_order_id: orderId, p_shift_id: shiftId, p_amount: paymentAmount,
+      p_received: cashReceived, p_reference: paymentReference
+    });
+    return error || !data ? { ok: false, message: error?.message || "Chưa xác nhận được thu tiền." }
+      : { ok: true, order: normalizeWebsiteOrder(data), message: "Đã xác nhận thu tiền và gửi bill về trạm in tại quán." };
+  }
+
   const patch = buildWebsitePaymentPatch({
     order,
     shiftId,
@@ -496,6 +505,14 @@ export async function markWebsiteOrderPaidQr({
   if (!supabase) return { ok: false, message: "Supabase chưa sẵn sàng." };
   if (!orderId) return { ok: false, message: "Thiếu mã đơn website." };
   if (!shiftId) return { ok: false, message: "Cần mở ca POS trước khi thu tiền." };
+
+  if (order?.metadata?.deviceMode === "phone") {
+    const { data, error } = await supabase.from("orders").select(WEBSITE_ORDER_SELECT).eq("id", orderId).maybeSingle();
+    if (error || !data || !isPaid(data) || data.payment_method !== "bank_qr" || data.metadata?.paymentReference !== paymentReference) {
+      return { ok: false, message: "Máy chủ chưa xác nhận QR của đơn này hoặc đơn đã thu bằng hình thức khác. Vui lòng tải lại." };
+    }
+    return { ok: true, order: normalizeWebsiteOrder(data), message: "Máy chủ đã xác nhận QR của đơn điện thoại." };
+  }
 
   const patch = buildWebsitePaymentPatch({
     order,

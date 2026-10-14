@@ -45,11 +45,8 @@ export const intervalLabel = (minutes) => {
 
 export const isStoreControlSelected = (source, action) => {
   if (source.store_control_action !== action) return false;
-  if (["pending", "running"].includes(source.store_control_status)) return true;
   if (source.store_control_status !== "success") return false;
-  if (action === "normal") return true;
-  const finishedAt = Date.parse(source.store_control_finished_at || "");
-  return Number.isFinite(finishedAt) && Date.now() < finishedAt + 15 * 60_000;
+  return true;
 };
 
 export const ratingTone = (rating) => {
