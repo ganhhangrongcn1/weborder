@@ -8,13 +8,14 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    if: github.repository == 'ganhhangrongcn1/weborder' && github.sha == vars.POS_RELEASE_APPROVED_SHA
+    if: github.repository == 'ganhhangrongcn1/weborder' && github.ref == 'refs/heads/main' && vars.POS_RELEASE_APPROVED_SHA != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+          ref: ${{ vars.POS_RELEASE_APPROVED_SHA }}
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
         with:
           distribution: temurin
@@ -24,7 +25,22 @@ jobs:
           node-version: '20'
       - name: Install Android packages
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
+          set -euo pipefail
+          task_sdk="$RUNNER_TEMP/ghr-android-sdk"
+          mkdir -p "$task_sdk/cmdline-tools"
+          curl -fsSL --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip -o "$RUNNER_TEMP/android-cli.zip"
+          echo "5fdcc763663eefb86a5b8879697aa6088b041e70  $RUNNER_TEMP/android-cli.zip" | sha1sum -c -
+          unzip -q "$RUNNER_TEMP/android-cli.zip" -d "$task_sdk/cmdline-tools/unpack"
+          mv "$task_sdk/cmdline-tools/unpack/cmdline-tools" "$task_sdk/cmdline-tools/19.0"
+          export ANDROID_HOME="$task_sdk"
+          export TASK_SDKMANAGER="$task_sdk/cmdline-tools/19.0/bin/sdkmanager"
+          echo "ANDROID_HOME=$task_sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$task_sdk" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import os, subprocess
+          subprocess.run([os.environ["TASK_SDKMANAGER"], "--sdk_root=" + os.environ["ANDROID_HOME"], "--licenses"], input="y\n" * 100, text=True, check=True, stdout=subprocess.DEVNULL)
+          PY
+          "$TASK_SDKMANAGER" --sdk_root="$task_sdk" "platforms;android-35" "build-tools;35.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
       - name: Install dependencies and check USB selection
         run: |
           npm ci --prefix ghr-pos-mobile-native --no-audit --no-fund
