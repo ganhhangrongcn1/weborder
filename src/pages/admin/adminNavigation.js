@@ -97,9 +97,9 @@ export const navGroups = [
     title: "Thiết lập hệ thống",
     icon: "gear",
     items: [
-      { id: "store-accounts", label: "Tài khoản chi nhánh", section: "store", sub: "accounts" },
-      { id: "store-zalo", label: "Cấu hình Zalo", section: "store", sub: "zalo" },
-      { id: "store-downloads", label: "File APK POS", section: "store", sub: "downloads" }
+      { id: "store-accounts", label: "Tài khoản & phân quyền", section: "store", sub: "accounts" },
+      { id: "store-zalo", label: "Zalo nhận đơn", section: "store", sub: "zalo" },
+      { id: "store-downloads", label: "Ứng dụng POS", section: "store", sub: "downloads" }
     ]
   }
 ];
@@ -140,8 +140,8 @@ export const dashboardQuickActions = [
   { id: "menu-main", label: "Menu" },
   { id: "customer-main", label: "Khách hàng / CRM" },
   { id: "store-branches", label: "Chi nhánh" },
-  { id: "store-accounts", label: "Tài khoản chi nhánh" },
-  { id: "store-downloads", label: "File APK POS" },
+  { id: "store-accounts", label: "Tài khoản & phân quyền" },
+  { id: "store-downloads", label: "Ứng dụng POS" },
   { id: "sales-promotions-main", label: "Ưu đãi bán hàng" }
 ];
 
@@ -161,6 +161,11 @@ export function getAdminPageTitle(section, activeAdminNav = "") {
   if (section === "supervision") return "Quản lý giám sát";
   if (section === "promo" && activeAdminNav === "voucher-main") return "Kho voucher";
   if (section === "promo" && activeAdminNav === "sales-promotions-main") return "Ưu đãi bán hàng";
+  if (section === "promo" && activeAdminNav === "store-ui") return "Giao diện website";
+  if (section === "store") {
+    const item = navGroups.flatMap((group) => group.items || []).find((entry) => entry.id === activeAdminNav);
+    if (item) return item.label;
+  }
   if (section === "promo") return "Quản lý khuyến mãi";
   return "Cài đặt cửa hàng";
 }

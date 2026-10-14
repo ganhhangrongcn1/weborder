@@ -346,9 +346,9 @@ export default function BranchSettings({
     try {
       setBranches(draftBranches);
       await syncBranchesToSupabase(draftBranches);
-      setBranchSaveMessage("Đã lưu chi nhánh lên Supabase.");
+      setBranchSaveMessage("Đã lưu cấu hình chi nhánh.");
     } catch {
-      setBranchSaveMessage("Lưu chi nhánh thất bại. Kiểm tra RLS policy write cho catalog.");
+      setBranchSaveMessage("Chưa lưu được cấu hình chi nhánh. Vui lòng thử lại.");
     } finally {
       setBranchSaving(false);
     }
@@ -360,9 +360,9 @@ export default function BranchSettings({
     setShippingSaveMessage("");
     try {
       await onSaveShippingConfig(draftShippingConfig);
-      setShippingSaveMessage("Đã lưu cấu hình phí ship lên Supabase.");
+      setShippingSaveMessage("Đã lưu phí giao hàng chung.");
     } catch {
-      setShippingSaveMessage("Lưu phí ship thất bại. Kiểm tra RLS policy write cho app_configs.");
+      setShippingSaveMessage("Chưa lưu được phí giao hàng. Vui lòng thử lại.");
     } finally {
       setShippingSaving(false);
     }
@@ -418,7 +418,7 @@ export default function BranchSettings({
               disabled={!branchesDirty || branchSaving}
               onClick={handleSaveBranches}
             >
-              {branchSaving ? "Đang lưu..." : "Lưu thay đổi"}
+              {branchSaving ? "Đang lưu..." : "Lưu cấu hình chi nhánh"}
             </AdminButton>
             <AdminButton onClick={handleAddBranch}>
               Thêm chi nhánh
@@ -947,14 +947,14 @@ export default function BranchSettings({
 
       <AdminCard className="admin-panel admin-store-panel">
         <div className="admin-panel-head">
-          <h2>Cấu hình phí ship nền tại chi nhánh</h2>
+          <h2>Phí giao hàng chung</h2>
           <AdminButton
             variant={shippingDirty ? "primary" : "secondary"}
             className={!shippingDirty || shippingSaving ? "opacity-70 cursor-not-allowed" : ""}
             disabled={!shippingDirty || shippingSaving}
             onClick={handleSaveShipping}
           >
-            {shippingSaving ? "Đang lưu..." : "Lưu thay đổi"}
+            {shippingSaving ? "Đang lưu..." : "Lưu phí giao hàng"}
           </AdminButton>
         </div>
         {shippingSaveMessage ? <p className="admin-store-message">{shippingSaveMessage}</p> : null}
@@ -1021,7 +1021,7 @@ export default function BranchSettings({
             <h3 id="delete-branch-title">Xóa chi nhánh này?</h3>
             <p id="delete-branch-description">
               Bạn sắp xóa <strong>{String(deleteBranch?.name || "chi nhánh")}</strong> khỏi danh sách cấu hình.
-              Thay đổi chỉ được cập nhật lên hệ thống sau khi bấm Lưu thay đổi.
+              Thay đổi chỉ được cập nhật lên hệ thống sau khi bấm Lưu cấu hình chi nhánh.
             </p>
             <div className="admin-branch-delete-modal__actions">
               <AdminButton variant="secondary" onClick={() => setDeleteBranchId("")}>

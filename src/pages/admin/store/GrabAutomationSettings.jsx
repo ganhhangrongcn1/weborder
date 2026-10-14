@@ -29,7 +29,7 @@ export default function GrabAutomationSettings() {
           disabled={!dirty || disabled}
           onClick={save}
         >
-          {saving ? "Đang lưu..." : "Lưu cài đặt"}
+          {saving ? "Đang lưu..." : "Lưu tự động Grab"}
         </AdminButton>
       </div>
 
