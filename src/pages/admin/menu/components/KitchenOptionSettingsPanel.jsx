@@ -211,8 +211,8 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
   const groupedFilteredGroups = useMemo(() => {
     const result = new Map();
     filteredGroups.forEach((group) => {
-      const groupLabel = group.groupName || "Lựa chọn chưa có nhóm";
-      const key = `${group.source || "other"}::${group.groupId || groupLabel.toLowerCase()}`;
+      const groupLabel = (group.source === "xanhngon" ? group.kitchenLabel : group.groupName) || "Lựa chọn chưa có nhóm";
+      const key = `${group.source || "other"}::${group.source === "xanhngon" ? groupLabel.toLowerCase() : group.groupId || groupLabel.toLowerCase()}`;
       const current = result.get(key) || {
         key,
         label: groupLabel,
@@ -234,6 +234,10 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
 
   function isSameOptionGroup(first = {}, second = {}) {
     if (first.source !== second.source) return false;
+    if (first.source === "xanhngon") {
+      return String(first.kitchenLabel || first.groupName || "").toLowerCase()
+        === String(second.kitchenLabel || second.groupName || "").toLowerCase();
+    }
     if (first.groupId && second.groupId) return first.groupId === second.groupId;
     return String(first.groupName || "").toLowerCase() === String(second.groupName || "").toLowerCase();
   }
@@ -242,7 +246,7 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
     const sample = optionGroup.options[0] || {};
     setGroups((current) => current.map((group) => (
       isSameOptionGroup(group, sample)
-        ? { ...group, enabled: checked, groupEnabled: checked }
+        ? { ...group, enabled: checked, groupEnabled: group.source === "xanhngon" ? false : checked }
         : group
     )));
   }
@@ -350,7 +354,9 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
                 <label className="admin-kitchen-option-group__toggle">
                   <input
                     type="checkbox"
-                    checked={optionGroup.options.some((option) => option.groupEnabled)}
+                    checked={optionGroup.source === "xanhngon"
+                      ? optionGroup.options.every((option) => option.enabled)
+                      : optionGroup.options.some((option) => option.groupEnabled)}
                     onChange={(event) => toggleOptionGroup(optionGroup, event.target.checked)}
                   />
                   <span>
