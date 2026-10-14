@@ -1,3 +1,12 @@
+export function recruitmentZaloMessage(row) {
+  const a = row.application;
+  const time = new Date(row.submitted_at).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  return ["🟡 HỒ SƠ ỨNG TUYỂN MỚI — GÁNH HÀNG RONG", `Mã hồ sơ: ${row.id}`, `Nộp lúc: ${time}`,
+    `Họ tên: ${a.fullName}`, `Điện thoại: ${a.phone}`, `Cửa hàng: ${a.branch}`,
+    `Ca làm: ${(a.shifts || []).join(", ") || "—"}`, `Hình thức: ${(a.workTypes || []).join(", ") || "—"}`,
+    "Xem toàn bộ hồ sơ: https://ganhhangrong.vn/admin/recruitment"].join("\n");
+}
+
 export async function drainRecruitmentNotifications({ client, env, fetchImpl = fetch }) {
   const url = env("RECRUITMENT_N8N_WEBHOOK_URL");
   const token = env("RECRUITMENT_N8N_WEBHOOK_SECRET");
@@ -18,7 +27,9 @@ export async function drainRecruitmentNotifications({ client, env, fetchImpl = f
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           event: "recruitment_application_received", application_id: row.id,
-          submitted_at: row.submitted_at, application: row.application
+          delivery_lease: row.notification_lease,
+          submitted_at: row.submitted_at, application: row.application, form_snapshot: row.form_snapshot,
+          zaloMessage: recruitmentZaloMessage(row)
         }),
         signal: globalThis.AbortSignal.timeout(10000)
       });
@@ -28,7 +39,7 @@ export async function drainRecruitmentNotifications({ client, env, fetchImpl = f
       if (!response.ok) failure = `WEBHOOK_HTTP_${response.status}`;
     } catch { failure = "WEBHOOK_NETWORK_OR_TIMEOUT"; }
     const patch = {
-      notification_status: delivered ? "sent" : "failed",
+      notification_status: delivered ? "sent" : "uncertain",
       notification_last_error: delivered ? null : failure,
       notified_at: delivered ? new Date().toISOString() : null,
       notification_next_attempt_at: new Date(Date.now() + Math.min(3600, 60 * 2 ** row.notification_attempts) * 1000).toISOString(),

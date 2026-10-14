@@ -1,101 +1,89 @@
-# Trang tuyển dụng /tuyendung
+# Tuyển dụng Website và Admin
 
-## Phạm vi và trạng thái
+## Phạm vi
 
-- Nhánh được tạo từ main `71f3b022b85a997cba81339e99b3dd86de33f413`.
-- Route public riêng, không Google Form, không login. Dùng logo `siteBrand` hiện có, font system-ui/Inter/Arial, màu vàng/đen; không vẽ lại logo.
-- Giữ 13 câu hỏi bắt buộc và bốn cửa hàng. Chuẩn hóa dấu câu, `Partime` thành `Part-time`; `Mục khác` có ô nhập. Người không đi học/chưa đi làm được hướng dẫn ghi rõ thay vì bỏ mục bắt buộc.
-- Giới tính chỉ là câu trả lời, không có điểm số, lọc hay quyết định tuyển dụng tự động.
-- Hồ sơ + trạng thái thông báo được lưu cùng một transaction. Không dùng localStorage làm nơi lưu hồ sơ. Nội dung trong trang được giữ khi lỗi; reload sẽ xóa bản nháp trên trình duyệt.
-- Không thay đổi workflow Google Sheets hiện hữu, người nhận `7445001328904030710`, loại nhóm `0` hay credential Zalo.
-- Chưa áp dụng SQL, deploy function, bật nhận hồ sơ hoặc gửi Zalo ở production.
+- Public `/tuyendung`: form riêng, không Google Form, không đăng nhập. Dùng logo siteBrand đang có, màu vàng/đen, chữ Việt có dấu, Inter/system-ui/Arial.
+- Admin `/admin/recruitment`, danh mục Tuyển dụng trong Nhân sự & giám sát: tab Hồ sơ, Tổng hợp, Câu hỏi & cài đặt.
+- Bộ lọc tuyển dụng riêng theo chi nhánh và ngày nộp (múi giờ Việt Nam), phân trang 25 hồ sơ. Danh sách và tổng hợp dùng cùng bộ lọc; thống kê tính toàn bộ bộ lọc, không chỉ trang đang xem.
+- Xem từng hồ sơ và trạng thái thông báo; biểu đồ số lượt chọn cho câu radio/checkbox. Câu nhiều lựa chọn có thể nhiều lượt/hồ sơ. Không có đánh giá hay quyết định tuyển dụng tự động.
+- Sửa lời giới thiệu/thông báo, mở đóng nhận hồ sơ; sửa nhãn/lựa chọn/thứ tự/bắt buộc, thêm câu mới, ẩn câu cũ. Họ tên/điện thoại/chi nhánh luôn bắt buộc; mã chi nhánh và loại câu hỏi gốc giữ ổn định.
+- Lưu snapshot câu hỏi và phiên bản trên từng hồ sơ. Sửa form không thay câu trả lời/câu hỏi của hồ sơ cũ. Lưu cấu hình dùng revision CAS; bản nháp không bị mất khi save lỗi.
+- UI → hook → service → repository → Edge Function → Supabase. Không thêm dependency sản phẩm; QA renderer/PostgreSQL WASM ở ngoài repo.
 
-## Backend đã xác minh (chỉ đọc)
+## Trạng thái triển khai
 
-Supabase project `qjaklysckgzdfjthzkzu` khớp cấu hình repo, PostgreSQL 17, đang ACTIVE_HEALTHY.
-Có Edge Functions dùng service role; chưa có bảng/function tuyển dụng. Chọn thêm một bảng và một Edge Function vào backend hiện hữu, không tạo backend/site thay thế.
-Không có công cụ quản lý n8n trong phiên cloud này. URL workflow quản trị không phải URL webhook nhận hồ sơ; không được dùng URL đó làm endpoint.
+Main đã xác minh `71f3b022b85a997cba81339e99b3dd86de33f413`, PR draft #6. Backend thực tế là project Supabase `qjaklysckgzdfjthzkzu`, PostgreSQL 17, chưa có recruitment backend trước PR.
+Chưa áp dụng SQL/deploy function, chưa bật intake, chưa merge/deploy production và chưa gửi tin Zalo thật.
+Preview chưa có API sẽ hiển thị bộ câu hỏi mặc định để review nhưng khóa nút gửi; Admin không giả lập dữ liệu hồ sơ/thống kê khi API lỗi.
 
-## Sau khi chủ quán duyệt bản review
+## Workflow n8n đã chuẩn bị
 
-1. Áp dụng **một** bản SQL: migration `supabase/migrations/20261014105926_recruitment_applications.sql` hoặc bản tương đương `docs/supabase-sql/recruitment-applications.sql` (không cần cả hai). Kiểm tra quyền table/RPC và RLS trước bật ghi.
-2. Deploy `recruitment-api` với `--no-verify-jwt` riêng function này. Không thay verify_jwt function khác. Frontend gửi publishable key qua `apikey`, không dùng khóa này làm JWT; không gọi auth.
-3. Secrets phía server: `RECRUITMENT_HASH_SECRET` (ngẫu nhiên dài, giữ ổn định để dedup), `RECRUITMENT_DISPATCH_SECRET` (ngẫu nhiên riêng), `RECRUITMENT_ALLOWED_ORIGINS` (danh sách origin chính xác, dấu phẩy). `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` chỉ server.
-4. Mặc định `RECRUITMENT_INTAKE_ENABLED` và `RECRUITMENT_NOTIFICATIONS_ENABLED` đều tắt. Giữ tắt trong preview production; nếu cần kiểm thử end-to-end dùng project/staging riêng và dữ liệu giả.
-5. Giữ runtime policy frontend hiện có (`VITE_DATA_SOURCE=supabase`, `VITE_ENABLE_SUPABASE_RUNTIME_WRITES=true`). Không cần mở quyền đọc/ghi bảng cho anon hoặc authenticated.
+Đã đăng nhập cloud browser và tạo bản sao riêng **Tuyển dụng Website — Webhook (Bản nháp)**:
+https://n8nhosting-13007771.phoai.vn/workflow/bpQbMYRmcrmKEB1w
+Trạng thái đã quan sát: **Saved, Inactive**. Không có Google Sheets Trigger hoặc Code đọc lại Sheet trong workflow này.
+Luồng: Webhook POST → HTTP gate Supabase → IF allowed → node Zalo → Respond to Webhook. Nhánh không allowed trả ack chỉ khi database đã xác nhận hồ sơ được gửi.
+Đã kiểm tra node Zalo dùng đúng credential **Zalo Cá Nhân**, người nhận `7445001328904030710`, loại nhóm `0`, message `{{$json.message}}`. Không thay credential/người nhận.
+Workflow Google Sheet gốc `jrb965LstWDC0QlN` được giữ nguyên, không sửa Code xử lý production/test đã bàn giao.
 
-## Hợp đồng nối n8n → Zalo (chưa nối)
+URL production đã quan sát trong node Webhook (chưa hoạt động khi workflow Inactive):
+https://n8nhosting-13007771.phoai.vn/webhook/ghr-recruitment-5f4ff68e-39e2-45bc-a80b-f53a4bd401b8
+Không dùng URL workflow quản trị làm webhook. Không dùng webhook đơn đặt hàng cho tuyển dụng.
 
-Ít thay đổi nhất với quyền hiện tại là **server → webhook mới trong n8n → node Zalo hiện hữu**.
-Không ghi hồ sơ vào Sheet cũ trong bản này; không cho webhook quét Sheet hay đọc lại hồ sơ cũ.
-Thêm nhánh Webhook POST có xác thực Bearer bằng secret; giữ nguyên Google Sheets Trigger/Code production/test đang hoạt động.
+## Giao nhận và chống trùng
 
-Payload gửi **một** hồ sơ mỗi request:
+Server lưu hồ sơ cùng pending queue trong một transaction rồi mới xác nhận với ứng viên.
+UUID chống nhấn gửi lại; fingerprint có salt + phiên bản form chống hồ sơ giống nhau trong 24h. Admission lock chống race; tối đa 3 hồ sơ khác/số điện thoại/24h và 10/IP/giờ. Không lưu IP thô.
+Server giữ master `RECRUITMENT_INTAKE_ENABLED`; config.accepting chỉ có tác dụng sau khi master được bật. Validation phía server theo config hiện tại; database khóa config và kiểm tra revision/snapshot trong transaction để không nhận nhầm câu hỏi khi Admin vừa sửa.
+
+Sau lưu thành công, EdgeRuntime.waitUntil khởi chạy dispatcher nền (không chặn receipt). Endpoint retry riêng dùng cho khôi phục nếu môi trường không chạy background hoặc worker crash.
+Dispatcher claim tối đa 10 hồ sơ/đợt, lease 2 phút. Payload JSON mỗi request:
 
 ```json
 {
   "event": "recruitment_application_received",
-  "application_id": "UUID bền vững",
-  "submitted_at": "ISO 8601 từ database",
-  "application": {
-    "fullName": "...", "birthDate": "YYYY-MM-DD", "phone": "...", "address": "...",
-    "gender": "...", "branch": "...", "education": "...", "educationOther": "...",
-    "school": "...", "shifts": ["..."], "workTypes": ["..."],
-    "impression": "...", "previousJob": "...", "selfDescription": "..."
-  }
+  "application_id": "UUID hồ sơ",
+  "delivery_lease": "UUID lease",
+  "submitted_at": "ISO từ database",
+  "application": { "fullName": "...", "phone": "...", "branch": "..." },
+  "form_snapshot": { "questions": [] },
+  "zaloMessage": "Thông báo tóm tắt và link Admin"
 }
 ```
 
-n8n cần kiểm tra secret, event/schema; dedup **bền vững** theo `application_id` trước xử lý.
-Node Code mới map riêng payload webhook thành `message`, dùng `submitted_at` format `Asia/Ho_Chi_Minh` (không `new Date()` thay thời điểm nộp), giữ `pairedItem`.
-Node Zalo giữ đúng credential và người nhận hiện tại. Không sửa Code của nhánh Sheet để dùng chung hai loại payload.
-Respond to Webhook chỉ trả `{ "ok": true, "application_id": "đúng UUID" }` sau khi xử lý hoàn tất hoặc đã xác minh UUID từng hoàn tất; không trả 200 thành công ngay khi bắt đầu workflow.
+Bearer `RECRUITMENT_N8N_WEBHOOK_SECRET` theo request. Node HTTP n8n chuyển header đó đến Edge action `claim_delivery` với applicationId/lease. Node Webhook không tự tin vào dữ liệu/ID người nhận từ caller.
+Gate kiểm tra secret và RPC service-only `authorize_recruitment_delivery`: CAS đúng ID, lease còn hạn, status sending, `delivery_started_at IS NULL`; ghi mốc cấp quyền gửi bền vững trước khi trả `allowed:true` cùng message được dựng từ hồ sơ trong DB. Replay cùng ID/lease không được gửi Zalo lần nữa. Caller không thể sửa nội dung message bằng payload.
+Node Zalo dùng message của gate, không payload tự khai của caller. Nhánh true Respond `{ok:true,application_id}` sau node Zalo thành công; nhánh false chỉ ok true nếu DB đã có sent.
 
-**Giới hạn giao nhận:** HTTP timeout có thể xảy ra sau khi Zalo đã gửi. Queue có delivery at least once, không tuyên bố exactly once. n8n phải lưu trạng thái nhận/gửi bền vững theo ID, chặn execution song song cùng ID và xử lý trạng thái “không rõ đã gửi” bằng đối soát, không tự gửi lại mù. Chưa xác minh khả năng này nên chưa bật gửi thật.
+Không tuyên bố exactly-once. Nếu timeout/mất ack: chuyển **uncertain**, không tự gửi lại. Nếu worker crash sau gate/đã gửi nhưng trước khi lưu ack: `delivery_started_at` ngăn reclaim. Worker crash trước gate được reclaim sau lease; lease cũ bị từ chối. Tối đa 5 claim trước khi cần đối soát.
+Admin thấy pending/sending/sent/failed/uncertain, số lần và mã lỗi không chứa PII/secret. Hồ sơ không bị xóa hoặc sửa do lỗi thông báo. Retry sau gate cần đối soát Zalo/n8n trước; không reset batch mù.
 
-Khi nhánh webhook và chống trùng đã kiểm thử cô lập: đặt `RECRUITMENT_N8N_WEBHOOK_URL`/`RECRUITMENT_N8N_WEBHOOK_SECRET` ở Edge secrets và bật `RECRUITMENT_NOTIFICATIONS_ENABLED=true`.
-Thiết lập scheduler phía server/n8n gọi function mỗi phút bằng secret riêng:
-`POST /functions/v1/recruitment-api`, Bearer `RECRUITMENT_DISPATCH_SECRET`, JSON `{ "action": "retry_notifications" }`.
-Không đặt secret hay lịch dispatch trong frontend. Không tự kích hoạt lịch trong PR này.
-Cuối cùng bật intake và merge/deploy route sau khi anh duyệt. Test tin Zalo thật là bước riêng cần anh duyệt.
+## Quyền và bí mật
 
-## Quan sát và xử lý lỗi
+Bảng recruitment_applications và recruitment_form_settings bật RLS, thu hồi SELECT/INSERT/UPDATE/DELETE của anon/authenticated. RPC chỉ service_role. Public endpoint chỉ trả cấu hình form và receipt, không trả hồ sơ ứng viên.
+Các action Admin yêu cầu JWT được xác minh bằng auth.getUser, profile active có role admin và không gắn branch_uuid (Admin tổng). Không tin user_metadata hay role do frontend gửi. Giữ nguyên phân quyền các module khác.
+Không có secret n8n/Zalo/Google trong frontend hoặc repo; node n8n giữ tham chiếu credential hiện hữu. Public clients dùng publishable key trong apikey, không bearer.
 
-Queue claim tối đa 10 hồ sơ, lease 2 phút, tối đa 5 lần; retry backoff 2/4/8/16/32 phút. Hai worker không claim cùng lease.
-Trạng thái `pending/sending/sent/failed`, attempts, `notification_last_error`, thời điểm retry nằm trên hồ sơ. Không log PII, secret, nội dung response webhook.
-`sent` chỉ có khi webhook trả ack đúng ID. Lỗi Zalo không đổi kết quả tiếp nhận hồ sơ.
-Sau 5 lần hoặc crash lần thứ 5: đối soát thủ công ID trước khi retry. Không reset batch mù.
+## Các bước sau khi chủ quán duyệt
 
-SQL chỉ đọc để kiểm tra hàng đợi, không cần đọc nội dung hồ sơ:
+1. Áp dụng hai migration theo thứ tự `20261014105926_recruitment_applications.sql` rồi `20261014121225_recruitment_form_admin.sql`. Bản SQL tương đương có trong docs/supabase-sql; không chạy cả hai bản sao cùng lúc.
+2. Deploy riêng `recruitment-api --no-verify-jwt`; không thay function khác.
+3. Đặt secrets server: RECRUITMENT_HASH_SECRET (ngẫu nhiên, ổn định), RECRUITMENT_DISPATCH_SECRET (ngẫu nhiên riêng), RECRUITMENT_N8N_WEBHOOK_SECRET (ngẫu nhiên riêng), RECRUITMENT_N8N_WEBHOOK_URL (URL đã xác minh), RECRUITMENT_ALLOWED_ORIGINS (origin chính xác, gồm preview khi cần). SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY chỉ server.
+4. Kiểm thử staging/synthetic với node Zalo được thay bằng stub để không gửi người nhận thật. Kiểm tra gate/replay/timeout/ack, rồi đối soát output và error behavior của CUSTOM.ZaloUser trước enable. Bản này chưa chứng minh output thực tế của node custom hoặc production end-to-end.
+5. Sau duyệt, activate workflow n8n và bật RECRUITMENT_NOTIFICATIONS_ENABLED=true. Có thể tạo scheduler dự phòng phía server/n8n gọi mỗi phút `POST /functions/v1/recruitment-api` Bearer RECRUITMENT_DISPATCH_SECRET, body `{ "action": "retry_notifications" }`. Chưa tạo/activate lịch trong bản nháp này.
+6. Bật RECRUITMENT_INTAKE_ENABLED=true và merge/deploy sau khi duyệt. VITE_DATA_SOURCE=supabase và VITE_ENABLE_SUPABASE_RUNTIME_WRITES=true theo chính sách hiện có. Không mở quyền public vào table.
+7. Gửi Zalo thật là bước riêng cần chủ quán duyệt. Thống kê mặc định chỉ hồ sơ website mới; không nhập 28 hồ sơ Google Form cũ hoặc gửi lại chúng.
 
-```sql
-select id, submitted_at, notification_status, notification_attempts,
-       notification_last_error, notification_next_attempt_at, notification_lease_until
-from public.recruitment_applications
-where notification_status <> 'sent' order by submitted_at;
-```
+## Kiểm chứng
 
-Chống trùng: UUID cho một lần gửi + fingerprint của nội dung đã chuẩn hóa trong 24 giờ. Cùng UUID khác nội dung trả 409. Admission lock ngăn race; tối đa 3 hồ sơ khác nhau/số điện thoại/24h và 10/IP/giờ. IP hash có salt, không lưu IP thô; header IP phụ thuộc độ tin cậy gateway Supabase, không xem CORS/honeypot là xác thực. Không có CAPTCHA; nếu gặp bot phân tán cần thêm biện pháp chống bot ở gateway trong phạm vi riêng.
-Không có public read, không auto đánh giá. Cần chốt thời hạn giữ hồ sơ và quy trình xóa theo vận hành trước mở rộng.
-
-## Kiểm chứng cô lập
-
-`node --test scripts/recruitment-api.test.mjs` kiểm tra schema, save/error, giới hạn body/CORS, dispatch private, ack webhook.
-DB test dùng PostgreSQL WASM PGlite **ngoài repo**, không thêm dependency sản phẩm:
+- npm run build + UTF-8; ESLint phạm vi chạm; smoke:success thanh toán.
+- node --test scripts/recruitment-api.test.mjs scripts/recruitment-admin.test.mjs: validation, no false success, body bound/CORS, quyền Admin, filter/pagination/timezone, revision conflict, delivery gate.
+- Database PostgreSQL cô lập (PGlite ngoài repo): schema rerun/RLS/grants, idempotency đồng thời, rate limit, summary/filter, snapshot bất biến, config revision, lease/replay/gate không tự gửi lại sau kết quả chưa rõ.
+- React renderer cô lập: public form, lỗi giữ nội dung, double click, retry UUID, receipt; Admin filter/detail/summary và save lỗi giữ bản chỉnh sửa.
+- smoke:flows lỗi Admin sidebar layout missing đã tái hiện trên main chưa sửa; không sửa module Admin cũ ngoài phạm vi.
+- Chưa browser QA/mobile screenshot trang React do thiếu control-browser skill; ảnh n8n chỉ xác minh cấu hình workflow Saved/Inactive.
 
 ```sh
-npm install --prefix /tmp/ghr-recruitment-qa @electric-sql/pglite --no-audit --no-fund
+npm install --prefix /tmp/ghr-recruitment-qa @electric-sql/pglite react-test-renderer@18.2.0 --no-audit --no-fund
 RECRUITMENT_PGLITE_MODULE=/tmp/ghr-recruitment-qa/node_modules/@electric-sql/pglite/dist/index.js node --test scripts/recruitment-database.test.mjs
-```
-
-Môi trường cloud không có browser-control skill nên chưa chạy kiểm thử browser/screenshot/mobile thực tế. Build và test cô lập không chứng minh production Edge/n8n/Zalo đang nối. Không dùng ứng viên thật để test.
-
-Kiểm thử React thực tế bằng renderer QA ngoài repo (không thay dependency sản phẩm):
-
-```sh
-npm install --prefix /tmp/ghr-recruitment-qa react-test-renderer@18.2.0 --no-audit --no-fund
 RECRUITMENT_RENDERER_MODULE=/tmp/ghr-recruitment-qa/node_modules/react-test-renderer/index.js node scripts/run-recruitment-ui-tests.mjs
 ```
-
-Hook/page đã kiểm tra validation, click gửi hai lần khi pending, nội dung còn sau lỗi, retry giữ UUID, sửa nội dung tạo UUID mới, màn hình receipt sau save, logo và đủ trường bắt buộc. Renderer không đo bố cục/mobile thực tế.
-`smoke:flows` hiện lỗi `Admin sidebar layout missing`, đã tái hiện trên checkout main không sửa; không sửa Admin ngoài phạm vi. `smoke:success` thanh toán pass.

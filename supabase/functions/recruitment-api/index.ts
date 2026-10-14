@@ -1,5 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2.105.3";
 import { createRecruitmentHandler } from "./handler.js";
+import { drainRecruitmentNotifications } from "./notifications.js";
+
+declare const EdgeRuntime: { waitUntil(task: Promise<unknown>): void };
 
 const env = (name: string) => Deno.env.get(name) || "";
 const getClient = () => {
@@ -10,4 +13,9 @@ const getClient = () => {
 };
 
 // Deploy with --no-verify-jwt: applicants do not need a user account.
-Deno.serve(createRecruitmentHandler({ env, getClient }));
+Deno.serve(createRecruitmentHandler({ env, getClient, onSaved: () => {
+  if (typeof EdgeRuntime !== "undefined") {
+    EdgeRuntime.waitUntil(drainRecruitmentNotifications({ client: getClient(), env })
+      .catch(() => console.error("[recruitment-api] dispatch pending; inspect recruitment queue")));
+  }
+} }));
