@@ -47,6 +47,7 @@ export default function BranchSettings({
   const [previewBranchId, setPreviewBranchId] = useState("");
   const [qrModalBranchId, setQrModalBranchId] = useState("");
   const [expandedBranchId, setExpandedBranchId] = useState("");
+  const [branchTabs, setBranchTabs] = useState({});
   const [expandedPosBranchId, setExpandedPosBranchId] = useState("");
   const [deleteBranchId, setDeleteBranchId] = useState("");
   const [qrRefreshVersionByBranchId, setQrRefreshVersionByBranchId] = useState({});
@@ -327,8 +328,9 @@ export default function BranchSettings({
     setBranchSaving(true);
     setBranchSaveMessage("");
     try {
+      const result = await syncBranchesToSupabase(draftBranches);
+      if (!result?.ok) throw new Error("Branch configuration was not saved");
       setBranches(draftBranches);
-      await syncBranchesToSupabase(draftBranches);
       setBranchSaveMessage("Đã lưu cấu hình chi nhánh.");
     } catch {
       setBranchSaveMessage("Chưa lưu được cấu hình chi nhánh. Vui lòng thử lại.");
@@ -417,6 +419,7 @@ export default function BranchSettings({
             const qrRefreshVersion = qrRefreshVersionByBranchId[qrRefreshKey] || 0;
             const branchId = String(branch?.id || "");
             const branchPanelId = `branch-settings-${branchId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+            const branchTab = branchTabs[branchId] || "info";
             const isExpanded = expandedBranchId === branchId;
             const enabledPaymentLabels = [
               webMomoEnabled ? "MoMo" : "",
@@ -465,7 +468,18 @@ export default function BranchSettings({
 
                 {isExpanded ? (
                 <div id={branchPanelId} className="admin-branch-layout">
+                  <nav className="admin-ui-tabs" aria-label={`Cấu hình ${branch.name || "chi nhánh"}`}>
+                    {[{ value: "info", label: "Thông tin" }, { value: "sales", label: "Bán hàng & QR" }, { value: "payment", label: "Thanh toán" }].map((tab) => (
+                      <button type="button" key={tab.value} aria-pressed={branchTab === tab.value}
+                        className={branchTab === tab.value ? "active" : ""}
+                        onClick={() => setBranchTabs((current) => ({ ...current, [branchId]: tab.value }))}>
+                        {tab.label}
+                      </button>
+                    ))}
+                  </nav>
+                  <p className="admin-help-text">Đang chỉnh {branch.name || "chi nhánh"}. Chuyển thẻ giữ nguyên thay đổi; bấm Lưu cấu hình chi nhánh để ghi nhận.</p>
                   <div className="admin-branch-main">
+                    {branchTab === "info" && (<>
                     <div className="admin-branch-section-heading">
                       <div>
                         <strong>Thông tin chi nhánh</strong>
@@ -595,6 +609,8 @@ export default function BranchSettings({
                       </div>
                     </div>
 
+                    </>)}
+                    {branchTab === "sales" && (<>
                     <div className="admin-branch-section-heading is-compact">
                       <div>
                         <strong>Kênh phục vụ</strong>
@@ -626,8 +642,8 @@ export default function BranchSettings({
 
                     <div className="admin-branch-section-heading">
                       <div>
-                        <strong>Bán hàng trên website</strong>
-                        <small>Các hình thức thanh toán khách được phép chọn trên website.</small>
+                        <strong>QR đặt món tại quầy</strong>
+                        <small>Mã QR đưa khách vào menu của đúng chi nhánh.</small>
                       </div>
                     </div>
                     <div className="admin-branch-website-grid">
@@ -674,6 +690,9 @@ export default function BranchSettings({
                       </div>
                     </div> : null}
 
+                    </div>
+                    </>)}
+                    {branchTab === "payment" && (<>
                     <div className="admin-branch-subcard admin-branch-payment-card">
                       <div>
                         <strong className="block text-sm font-bold text-brown">Thanh toán trên website</strong>
@@ -720,7 +739,7 @@ export default function BranchSettings({
                         Website phải luôn có ít nhất một hình thức thanh toán. Các công tắc này không ảnh hưởng POS.
                       </p>
                     </div>
-                    </div>
+
 
                     <div className={`admin-branch-subcard admin-branch-pos-card${expandedPosBranchId === branchId ? " is-expanded" : ""}`}>
                       <button
@@ -890,6 +909,9 @@ export default function BranchSettings({
                       ) : null}
                     </div>
 
+                    </>)}
+                    {branchTab === "info" && <details>
+                      <summary>Thao tác nâng cao</summary>
                     <div className="admin-branch-danger-zone">
                       <div>
                         <strong>Xóa chi nhánh</strong>
@@ -903,6 +925,7 @@ export default function BranchSettings({
                         Xóa chi nhánh
                       </AdminButton>
                     </div>
+                    </details>}
                   </div>
                 </div>
                 ) : null}

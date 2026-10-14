@@ -1,3 +1,4 @@
+import KitchenOptionSettingsPanel from "./menu/components/KitchenOptionSettingsPanel.jsx";
 import ShippingSettings from "./store/ShippingSettings.jsx";
 import GrabAutomationSettings from "./store/GrabAutomationSettings.jsx";
 import ZaloSettings from "./store/ZaloSettings.jsx";
@@ -12,6 +13,7 @@ export default function AdminBackofficeSections({
   section,
   uiDirty,
   activeSubSection,
+  optionGroupPresets = [],
   activeCampaignTab,
   setActiveCampaignTab,
   promos,
@@ -107,6 +109,7 @@ export default function AdminBackofficeSections({
             />
           )}
 
+          {activeSubSection === "kitchen" && <KitchenOptionSettingsPanel optionGroupPresets={optionGroupPresets} />}
           {activeSubSection === "shipping" && (
             <ShippingSettings shippingConfig={shippingConfig} onSave={onSaveShipping} />
           )}
@@ -124,7 +127,7 @@ export default function AdminBackofficeSections({
             <AppDownloadSettings />
           )}
 
-          {!["branches", "shipping", "grab", "zalo", "accounts", "downloads"].includes(activeSubSection) && (
+          {!["branches", "shipping", "grab", "kitchen", "zalo", "accounts", "downloads"].includes(activeSubSection) && (
             <AdminPlaceholder text="Đang phát triển" />
           )}
         </div>

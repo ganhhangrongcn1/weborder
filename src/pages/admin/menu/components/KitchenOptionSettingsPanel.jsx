@@ -283,10 +283,10 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
         groups
       });
       setGroups((current) => mergeGroups(saved.groups, current));
-      setMessage("Đã lưu thiết lập Kitchen lên Supabase.");
+      setMessage("Đã lưu checklist chế biến.");
     } catch (error) {
       console.error("[KitchenOptionSettingsPanel] save failed", error);
-      setMessage("Lưu thất bại. Hãy kiểm tra quyền ghi app_configs của tài khoản Admin.");
+      setMessage("Chưa lưu được checklist. Vui lòng thử lại hoặc liên hệ quản trị viên.");
     } finally {
       setSaving(false);
     }
@@ -296,10 +296,10 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
     <AdminCard className="admin-panel admin-menu-section admin-kitchen-settings">
       <div className="admin-panel-head admin-kitchen-settings__head">
         <div>
-          <h2>Thiết lập Kitchen</h2>
+          <h2>Checklist chế biến</h2>
           <p className="admin-help-text">
-            Chọn trực tiếp những tùy chọn cần tạo ô tick riêng tại Kitchen.
-            Hệ thống nhận diện theo tên tùy chọn và nguồn bán, không bắt buộc phải có tên nhóm.
+            Bật để bếp tick xác nhận topping, món hoặc nước trong combo.
+            Tắt để tùy chọn chỉ hiển thị, không yêu cầu tick; ví dụ độ cay, cách trộn và loại sốt.
           </p>
         </div>
         <div className="admin-kitchen-settings__actions">
@@ -314,7 +314,7 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
 
       <div className="admin-kitchen-settings__summary">
         <strong>{enabledCount} tùy chọn đang tạo ô tick</strong>
-        <span>Website/POS lấy từ menu; GrabFood/ShopeeFood lấy từ các đơn đã đồng bộ.</span>
+        <span>Website/POS lấy từ menu; GrabFood, ShopeeFood và Xanh Ngon lấy từ đơn đã đồng bộ.</span>
       </div>
 
       <div className="admin-kitchen-settings__filters">
@@ -391,7 +391,7 @@ export default function KitchenOptionSettingsPanel({ optionGroupPresets = [] }) 
                 </label>
                 <div>
                   <strong>{group.optionName || group.groupName || "Tùy chọn chưa có tên"}</strong>
-                  <small>{SOURCE_LABELS[group.source] || group.source}</small>
+                  <small>{SOURCE_LABELS[group.source] || group.source} · {group.enabled ? "Cần tick xác nhận" : "Chỉ hiển thị, không cần tick"}</small>
                 </div>
               </div>
 
