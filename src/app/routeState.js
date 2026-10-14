@@ -211,11 +211,10 @@ export function adminPathToState(pathname = "/admin") {
     };
   }
   if (path === "/admin/settings/shipping") {
-    return {
-      section: "store",
-      activeAdminNav: "store-branches",
-      activeSubSection: "branches"
-    };
+    return { section: "store", activeAdminNav: "store-shipping", activeSubSection: "shipping" };
+  }
+  if (path === "/admin/settings/grab") {
+    return { section: "store", activeAdminNav: "store-grab", activeSubSection: "grab" };
   }
   if (path === "/admin/ui") {
     return {
@@ -267,6 +266,8 @@ export function adminNavToPath(item) {
   if (item.id === "supervision-main") return "/admin/supervision";
   if (item.id === "menu-main") return "/admin/menu";
   if (item.id === "store-branches") return "/admin/settings";
+  if (item.id === "store-shipping") return "/admin/settings/shipping";
+  if (item.id === "store-grab") return "/admin/settings/grab";
   if (item.id === "store-accounts") return "/admin/settings/accounts";
   if (item.id === "store-zalo") return "/admin/settings/zalo";
   if (item.id === "store-downloads") return "/admin/settings/downloads";

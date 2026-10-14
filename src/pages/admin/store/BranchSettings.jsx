@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { goongAutocomplete, goongPlaceDetail, hasGoongApiKey } from "../../../services/goongService.js";
 import { buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/posPaymentService.js";
-import { DEFAULT_SHIPPING_CONFIG } from "../../../services/shippingService.js";
 import { syncBranchesToSupabase } from "../../../services/repositories/catalogConfigRepository.js";
 import { createStableBranchUuid } from "../../../services/branchIdentityService.js";
 import { createQrPngDataUrl, createQrSvg } from "../../../services/qrCodeService.js";
 import { orderingFeatureFlags } from "../../../constants/featureFlags.js";
 import { AdminButton, AdminCard, AdminInput } from "../ui/index.js";
-import GrabAutomationSettings from "./GrabAutomationSettings.jsx";
 
 const BANK_OPTIONS = [
   { bin: "970422", name: "MB Bank" },
@@ -36,10 +34,7 @@ const QR_ORDER_PUBLIC_ORIGIN = "https://ganhhangrong.vn";
 
 export default function BranchSettings({
   branches,
-  setBranches,
-  shippingConfig,
-  setShippingConfig,
-  onSaveShippingConfig
+  setBranches
 }) {
   const [addressSuggestions, setAddressSuggestions] = useState({
     branchId: "",
@@ -47,11 +42,8 @@ export default function BranchSettings({
     items: []
   });
   const [draftBranches, setDraftBranches] = useState(() => (Array.isArray(branches) ? branches : []));
-  const [draftShippingConfig, setDraftShippingConfig] = useState(() => ({ ...(shippingConfig || {}) }));
   const [branchSaveMessage, setBranchSaveMessage] = useState("");
-  const [shippingSaveMessage, setShippingSaveMessage] = useState("");
   const [branchSaving, setBranchSaving] = useState(false);
-  const [shippingSaving, setShippingSaving] = useState(false);
   const [previewBranchId, setPreviewBranchId] = useState("");
   const [qrModalBranchId, setQrModalBranchId] = useState("");
   const [expandedBranchId, setExpandedBranchId] = useState("");
@@ -175,18 +167,9 @@ export default function BranchSettings({
     setDraftBranches(Array.isArray(branches) ? branches : []);
   }, [branches]);
 
-  useEffect(() => {
-    setDraftShippingConfig({ ...(shippingConfig || {}) });
-  }, [shippingConfig]);
-
   const branchesDirty = useMemo(
     () => JSON.stringify(draftBranches || []) !== JSON.stringify(branches || []),
     [draftBranches, branches]
-  );
-
-  const shippingDirty = useMemo(
-    () => JSON.stringify(draftShippingConfig || {}) !== JSON.stringify(shippingConfig || {}),
-    [draftShippingConfig, shippingConfig]
   );
 
   const qrModalBranch = useMemo(
@@ -351,20 +334,6 @@ export default function BranchSettings({
       setBranchSaveMessage("Chưa lưu được cấu hình chi nhánh. Vui lòng thử lại.");
     } finally {
       setBranchSaving(false);
-    }
-  };
-
-  const handleSaveShipping = async () => {
-    if (!shippingDirty || shippingSaving) return;
-    setShippingSaving(true);
-    setShippingSaveMessage("");
-    try {
-      await onSaveShippingConfig(draftShippingConfig);
-      setShippingSaveMessage("Đã lưu phí giao hàng chung.");
-    } catch {
-      setShippingSaveMessage("Chưa lưu được phí giao hàng. Vui lòng thử lại.");
-    } finally {
-      setShippingSaving(false);
     }
   };
 
@@ -943,69 +912,7 @@ export default function BranchSettings({
         </div>
       </AdminCard>
 
-      <GrabAutomationSettings />
 
-      <AdminCard className="admin-panel admin-store-panel">
-        <div className="admin-panel-head">
-          <h2>Phí giao hàng chung</h2>
-          <AdminButton
-            variant={shippingDirty ? "primary" : "secondary"}
-            className={!shippingDirty || shippingSaving ? "opacity-70 cursor-not-allowed" : ""}
-            disabled={!shippingDirty || shippingSaving}
-            onClick={handleSaveShipping}
-          >
-            {shippingSaving ? "Đang lưu..." : "Lưu phí giao hàng"}
-          </AdminButton>
-        </div>
-        {shippingSaveMessage ? <p className="admin-store-message">{shippingSaveMessage}</p> : null}
-        <div className="admin-mini-grid admin-ship-compact-grid">
-          <div className="admin-mini-card admin-ship-compact-item">
-            <label>Phí 3km đầu</label>
-            <AdminInput
-              className="admin-input"
-              type="number"
-              value={draftShippingConfig.baseFeeFirst3Km}
-              onChange={(event) => setDraftShippingConfig((current) => ({ ...current, baseFeeFirst3Km: Number(event.target.value) }))}
-            />
-          </div>
-          <div className="admin-mini-card admin-ship-compact-item">
-            <label>Giá mỗi km tiếp theo</label>
-            <AdminInput
-              className="admin-input"
-              type="number"
-              value={draftShippingConfig.feePerNextKm}
-              onChange={(event) => setDraftShippingConfig((current) => ({ ...current, feePerNextKm: Number(event.target.value) }))}
-            />
-          </div>
-          <div className="admin-mini-card admin-ship-compact-item">
-            <label>Ưu đãi freeship</label>
-            <div className="admin-ship-info-note">
-              Cấu hình tại Khuyến mãi → Freeship.
-            </div>
-          </div>
-          <div className="admin-mini-card admin-ship-compact-item">
-            <label>Bán kính giao hàng tối đa (km)</label>
-            <AdminInput
-              className="admin-input"
-              type="number"
-              value={draftShippingConfig.maxRadiusKm}
-              onChange={(event) => setDraftShippingConfig((current) => ({ ...current, maxRadiusKm: Number(event.target.value) }))}
-            />
-          </div>
-          <div className="admin-mini-card admin-ship-compact-item admin-ship-note-item">
-            <label>Ghi chú hiển thị cho khách</label>
-            <textarea
-              className="admin-input"
-              rows="4"
-              value={draftShippingConfig.customerNote || ""}
-              onChange={(event) => setDraftShippingConfig((current) => ({ ...current, customerNote: event.target.value }))}
-            />
-          </div>
-        </div>
-        <AdminButton variant="secondary" className="admin-secondary" onClick={() => setDraftShippingConfig({ ...DEFAULT_SHIPPING_CONFIG })}>
-          Khôi phục phí ship mặc định
-        </AdminButton>
-      </AdminCard>
 
       {deleteBranch ? (
         <div className="admin-qr-modal-backdrop" role="presentation" onClick={() => setDeleteBranchId("")}>

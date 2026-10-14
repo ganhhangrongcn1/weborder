@@ -56,6 +56,8 @@ export const navGroups = [
     items: [
       { id: "menu-main", label: "Menu", section: "menu" },
       { id: "store-branches", label: "Quản lý chi nhánh", section: "store", sub: "branches" },
+      { id: "store-shipping", label: "Giao hàng", section: "store", sub: "shipping" },
+      { id: "store-grab", label: "Tự động Grab", section: "store", sub: "grab" },
       { id: "store-ui", label: "Quản lý giao diện", section: "promo", sub: "ui" }
     ]
   },
@@ -121,6 +123,8 @@ export const navIconMap = {
   "cakes-main": "gift",
   "menu-main": "menu",
   "store-branches": "home",
+  "store-shipping": "bike",
+  "store-grab": "clock",
   "store-accounts": "user",
   "store-zalo": "phone",
   "store-downloads": "download",
