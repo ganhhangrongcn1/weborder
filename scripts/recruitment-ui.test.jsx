@@ -117,7 +117,8 @@ test("actual Admin: branch/date filters, list/detail, summary, save error keeps 
     await act(async () => { clickText("Xem"); });
     assert.equal(view.root.findAllByType("dt").length, 13);
     await act(async () => { clickText("Tổng hợp"); });
-    assert.equal(view.root.findByType("meter").props.value, 1);
+    assert.ok(JSON.stringify(view.toJSON()).includes("Hồ sơ theo chi nhánh"));
+    assert.ok(JSON.stringify(view.toJSON()).includes("100%"));
     await act(async () => { clickText("Câu hỏi & cài đặt"); });
     await act(async () => { view.root.findAllByType("input").find((i) => i.props.value === "Họ và tên").props.onChange({ target: { value: "Tên đã sửa kiểm thử" } }); });
     await act(async () => { view.root.findByType("form").props.onSubmit(event); });
