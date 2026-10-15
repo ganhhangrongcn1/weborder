@@ -9,6 +9,7 @@ const DownloadPage = lazy(() => import("../pages/DownloadPage.jsx"));
 const BanhKemBanhTrangPage = lazy(() => import("../pages/BanhKemBanhTrangPage.jsx"));
 const QrCodeToolPage = lazy(() => import("../pages/QrCodeToolPage.jsx"));
 const SupervisionRoute = lazy(() => import("../features/supervision/SupervisionRoute.jsx"));
+const RecruitmentPage = lazy(() => import("../features/recruitment/RecruitmentPage.jsx"));
 
 function RouteLoadingFallback() {
   return (
@@ -56,6 +57,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
 
       <Route path="/kitchen" element={<KitchenPage />} />
       <Route path="/download" element={<DownloadPage />} />
+      <Route path="/tuyendung" element={<RecruitmentPage homeContent={adminAppProps?.homeContent || []} />} />
       <Route path="/pos" element={<Navigate to="/download" replace />} />
       <Route path="/qrcode" element={<QrCodeToolPage />} />
       <Route path="/banhkembanhtrang" element={<BanhKemBanhTrangPage branches={adminAppProps?.branches || []} />} />
@@ -72,6 +74,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/admin/partner-reviews" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/review-rewards" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/shifts" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/recruitment" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/employees" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/supervision" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/customers" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />

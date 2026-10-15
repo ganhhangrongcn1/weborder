@@ -7,6 +7,14 @@ export const DATA_FLOW_MODE = {
 };
 
 export const DOMAIN_DATA_POLICY = {
+  recruitment: {
+    mode: DATA_FLOW_MODE.supabaseOnly,
+    readStrategy: "supabase-only",
+    writeStrategy: "remote-only",
+    allowRuntimeWrites: true,
+    allowFallbackLocal: false,
+    strictRemoteWrite: true
+  },
   menuCatalog: {
     mode: DATA_FLOW_MODE.supabaseOnly,
     readStrategy: "supabase-only",

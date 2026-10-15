@@ -146,6 +146,7 @@ export function adminPathToState(pathname = "/admin") {
       customerAdminTab: "overview"
     };
   }
+  if (path === "/admin/recruitment") return { section: "recruitment", activeAdminNav: "recruitment-main" };
   if (path === "/admin/employees") {
     return { section: "employees", activeAdminNav: "employees-main" };
   }
@@ -265,6 +266,7 @@ export function adminNavToPath(item) {
   if (item.id === "loyalty-main") return "/admin/loyalty";
   if (item.id === "voucher-main") return "/admin/vouchers";
   if (item.id === "campaign-main") return "/admin/campaigns";
+  if (item.id === "recruitment-main") return "/admin/recruitment";
   if (item.id === "employees-main") return "/admin/employees";
   if (item.id === "supervision-main") return "/admin/supervision";
   if (item.id === "menu-main") return "/admin/menu";

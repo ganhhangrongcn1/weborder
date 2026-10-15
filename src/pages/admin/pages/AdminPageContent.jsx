@@ -14,6 +14,7 @@ import AdminGrabFinancePage from "./AdminGrabFinancePage.jsx";
 import { lazy, Suspense } from "react";
 import AdminGrabMarketingPage from "./AdminGrabMarketingPage.jsx";
 
+const AdminRecruitmentPage = lazy(() => import("../recruitment/AdminRecruitmentPage.jsx"));
 const InventoryWorkspace = lazy(() => import("../inventory/InventoryWorkspace.jsx"));
 
 function InventoryLoadingState() {
@@ -36,6 +37,13 @@ export default function AdminPageContent({ section, ...props }) {
 
   if (section === "shifts") {
     return <AdminShiftOverviewPage {...props} />;
+  }
+
+  if (section === "recruitment") {
+    if (props.adminProfile?.role !== "admin" || props.adminProfile?.branch_uuid || props.adminProfile?.branchUuid) {
+      return <p role="status">Tài khoản chưa có quyền quản trị tuyển dụng.</p>;
+    }
+    return <Suspense fallback={<p role="status">Đang mở Tuyển dụng…</p>}><AdminRecruitmentPage /></Suspense>;
   }
 
   if (section === "employees") {

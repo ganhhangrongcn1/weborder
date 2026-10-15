@@ -92,6 +92,7 @@ export const navGroups = [
     icon: "user",
     items: [
       { id: "employees-main", label: "Quản lý nhân sự", section: "employees" },
+      { id: "recruitment-main", label: "Tuyển dụng", section: "recruitment" },
       { id: "supervision-main", label: "Quản lý giám sát", section: "supervision" }
     ]
   },
@@ -133,6 +134,7 @@ export const navIconMap = {
   "store-ui": "star",
   "promo-campaign": "gift",
   "employees-main": "user",
+  "recruitment-main": "user",
   "supervision-main": "star",
   ...Object.fromEntries(INVENTORY_ROUTE_ITEMS.map((item) => [item.id, item.icon]))
 };
@@ -163,6 +165,7 @@ export function getAdminPageTitle(section, activeAdminNav = "") {
   if (section === "cakes") return "Bánh sinh nhật bánh tráng";
   if (section === "menu") return "Quản lý menu";
   if (section === "inventory") return "Quản lý kho";
+  if (section === "recruitment") return "Tuyển dụng";
   if (section === "employees") return "Quản lý nhân sự";
   if (section === "supervision") return "Quản lý giám sát";
   if (section === "promo" && activeAdminNav === "voucher-main") return "Kho voucher";
