@@ -14,21 +14,21 @@
 ## Trạng thái triển khai
 
 Main đã xác minh `71f3b022b85a997cba81339e99b3dd86de33f413`, PR draft #6. Backend thực tế là project Supabase `qjaklysckgzdfjthzkzu`, PostgreSQL 17, chưa có recruitment backend trước PR.
-Ngày 15/10/2026: đã áp dụng ba migration recruitment và deploy recruitment-api v1 ACTIVE. Intake đã bật; thông báo Zalo vẫn tắt. Chưa merge frontend vào main; chưa gửi Zalo thật.
-Đã gọi API thực tế: get_form 200/13 câu; validation 400; Admin không đăng nhập 403; gate thiếu secret 401; origin lạ 403. Hồ sơ giả lưu 200, gửi lại trả cùng ID và duplicate=true; kiểm tra DB pending/0 lần gửi rồi dọn đúng hồ sơ thử.
-Phiên đăng nhập n8n cloud đã hết hạn, hiện dừng ở Sign in; cần đăng nhập lại để kiểm tra/activate workflow.
+Ngày 15/10/2026: đã áp dụng ba migration recruitment và deploy recruitment-api v1 ACTIVE. Intake và notifications đã bật sau khi chủ quán xác nhận nhận được tin thử lúc 10:26 giờ Việt Nam. Frontend vẫn ở PR draft #6, chưa merge main.
+API live đã kiểm tra: get_form 200/13 câu; validation 400; Admin không đăng nhập 403; gate thiếu secret 401; origin lạ 403. Synthetic save/retry trả cùng ID, duplicate=true; hồ sơ thử lưu ban đầu đã dọn.
+Webhook production được chủ quán Active. Probe có secret với mã không tồn tại trả ok=false/đúng ID, không gửi Zalo. Một hồ sơ giả riêng đã đi qua gate → Zalo → ack ok=true/đúng ID; chủ quán xác nhận nhận tin. DB đánh dấu sent/1 lần; replay gate allowed=false, sent=true. Hồ sơ giả kiểm thử thông báo vẫn giữ trạng thái sent để đối soát. Không nhập hoặc gửi lại dữ liệu Google Form cũ. Không có hồ sơ pending trước khi bật notifications.
 Preview chưa có API sẽ hiển thị bộ câu hỏi mặc định để review nhưng khóa nút gửi; Admin không giả lập dữ liệu hồ sơ/thống kê khi API lỗi.
 
 ## Workflow n8n đã chuẩn bị
 
 Đã đăng nhập cloud browser và tạo bản sao riêng **Tuyển dụng Website — Webhook (Bản nháp)**:
 https://n8nhosting-13007771.phoai.vn/workflow/bpQbMYRmcrmKEB1w
-Trạng thái đã quan sát: **Saved, Inactive**. Không có Google Sheets Trigger hoặc Code đọc lại Sheet trong workflow này.
+Trạng thái cuối: **Saved, Active** (chủ quán bật ngày 15/10/2026). Không có Google Sheets Trigger hoặc Code đọc lại Sheet trong workflow này.
 Luồng: Webhook POST → HTTP gate Supabase → IF allowed → node Zalo → Respond to Webhook. Nhánh không allowed trả ack chỉ khi database đã xác nhận hồ sơ được gửi.
 Đã kiểm tra node Zalo dùng đúng credential **Zalo Cá Nhân**, người nhận `7445001328904030710`, loại nhóm `0`, message `{{$json.message}}`. Không thay credential/người nhận.
 Workflow Google Sheet gốc `jrb965LstWDC0QlN` được giữ nguyên, không sửa Code xử lý production/test đã bàn giao.
 
-URL production đã quan sát trong node Webhook (chưa hoạt động khi workflow Inactive):
+URL production đã quan sát trong node Webhook (đã Active và kiểm chứng một tin thử):
 https://n8nhosting-13007771.phoai.vn/webhook/ghr-recruitment-5f4ff68e-39e2-45bc-a80b-f53a4bd401b8
 Không dùng URL workflow quản trị làm webhook. Không dùng webhook đơn đặt hàng cho tuyển dụng.
 
