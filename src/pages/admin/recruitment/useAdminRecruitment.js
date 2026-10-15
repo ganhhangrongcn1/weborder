@@ -11,6 +11,8 @@ export default function useAdminRecruitment() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsRefresh, setSettingsRefresh] = useState(0);
   const [settingsError, setSettingsError] = useState("");
   const [notice, setNotice] = useState("");
   const [refresh, setRefresh] = useState(0);
@@ -18,11 +20,16 @@ export default function useAdminRecruitment() {
   const saveLock = useRef(false);
   useEffect(() => {
     let active = true;
+    setSettingsLoading(true); setSettingsError("");
     adminRecruitmentRequest("admin_form").then((result) => {
-      if (active) { setSettings(result); setDraft(result.config); }
-    }).catch((failure) => { if (active) setSettingsError(failure.message); });
+      if (active) {
+        setSettings(result);
+        setDraft((previous) => JSON.stringify(previous) === JSON.stringify(settings?.config || DEFAULT_RECRUITMENT_CONFIG) ? result.config : previous);
+      }
+    }).catch((failure) => { if (active) setSettingsError(failure.message); })
+      .finally(() => { if (active) setSettingsLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [settingsRefresh]);
   useEffect(() => {
     let active = true;
     detailSequence.current++;
@@ -33,6 +40,7 @@ export default function useAdminRecruitment() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; detailSequence.current++; };
   }, [filters, refresh]);
+  function editDraft(next) { setDraft(next); setSettingsError(""); setNotice(""); }
   function filter(key, value) { setFilters((previous) => ({ ...previous, [key]: value, ...(key === "page" ? {} : { page: 0 }) })); }
   async function openDetail(id) {
     const sequence = ++detailSequence.current;
@@ -52,6 +60,6 @@ export default function useAdminRecruitment() {
     } catch (failure) { setSettingsError(failure.message); }
     finally { saveLock.current = false; setSaving(false); }
   }
-  return { filters, filter, dashboard, loading, error, settingsError, notice, settings, draft, setDraft,
-    saving, save, detail, openDetail, closeDetail, reload: () => setRefresh((value) => value + 1) };
+  return { filters, filter, dashboard, loading, error, settingsError, notice, settings, draft, setDraft: editDraft,
+    saving, save, detail, openDetail, closeDetail, settingsLoading, reloadSettings: () => setSettingsRefresh((value) => value + 1), reload: () => setRefresh((value) => value + 1) };
 }

@@ -6,6 +6,8 @@ import { create, act } from "recruitment-test-renderer";
 import { MemoryRouter } from "react-router-dom";
 import useRecruitmentForm from "../src/features/recruitment/useRecruitmentForm.js";
 import RecruitmentPage from "../src/features/recruitment/RecruitmentPage.jsx";
+import RecruitmentFormEditor from "../src/pages/admin/recruitment/RecruitmentFormEditor.jsx";
+import RecruitmentQuestion from "../src/features/recruitment/RecruitmentQuestion.jsx";
 import AdminRecruitmentPage from "../src/pages/admin/recruitment/AdminRecruitmentPage.jsx";
 import { DEFAULT_RECRUITMENT_CONFIG } from "../supabase/functions/_shared/recruitmentForm.js";
 import { application } from "./recruitment-fixture.mjs";
@@ -129,4 +131,57 @@ test("actual Admin: branch/date filters, list/detail, summary, save error keeps 
     delete globalThis.__GHR_SUPABASE_ADMIN_AUTH_CLIENT__;
     if (view) await act(async () => { view.unmount(); });
   }
+});
+
+
+test("form builder: live preview, separate form, options, hide, move, add, validation and restore", async () => {
+  let currentDraft;
+  let saved = 0;
+  const baseline = structuredClone(DEFAULT_RECRUITMENT_CONFIG);
+  function Harness() {
+    const [draft, setDraft] = React.useState(baseline);
+    currentDraft = draft;
+    return <RecruitmentFormEditor draft={draft} setDraft={setDraft} ready baseline={baseline} save={() => { saved++; }} />;
+  }
+  let view;
+  await act(async () => { view = create(<Harness />); });
+  const list = () => view.root.findByProps({ "aria-label": "Danh sách câu hỏi" });
+  const text = (node) => node.findAllByType("button").map((b) => b.children.filter((v) => typeof v === "string").join(""));
+  const click = async (label) => act(async () => {
+    view.root.findAllByType("button").find((b) => b.children.filter((v) => typeof v === "string").join("") === label).props.onClick();
+  });
+  try {
+    // Required preview controls are siblings of the save form and cannot block native submit.
+    assert.equal(view.root.findByType("form").findAllByType(RecruitmentQuestion).length, 0);
+    await act(async () => { list().findAllByType("button")[4].props.onClick(); });
+    await act(async () => { view.root.findByProps({ id: "recruitment-editor-question" }).props.onChange({ target: { value: "Giới tính (kiểm thử)" } }); });
+    assert.equal(view.root.findAllByType(RecruitmentQuestion).find((q) => q.props.question.id === "gender").props.question.label, "Giới tính (kiểm thử)");
+    await act(async () => { view.root.findByProps({ "aria-label": "Đáp án 1" }).props.onChange({ target: { value: "Nam kiểm thử" } }); });
+    assert.ok(view.root.findAllByType("input").some((i) => i.props.type === "radio" && i.props.value === "Nam kiểm thử"));
+    await click("↑ Đưa lên");
+    assert.equal(currentDraft.questions[3].id, "gender");
+    await act(async () => { view.root.findByProps({ className: "recruitment-editor-switches" }).findAllByType("input")[0].props.onChange({ target: { checked: false } }); });
+    assert.equal(view.root.findAllByType(RecruitmentQuestion).some((q) => q.props.question.id === "gender"), false);
+    await click("+ Thêm câu hỏi");
+    assert.equal(currentDraft.questions.length, 14);
+    assert.equal(view.root.findByProps({ id: "recruitment-editor-question" }).props.value, "Câu hỏi mới");
+    await act(async () => { view.root.findByProps({ id: "recruitment-editor-type" }).props.onChange({ target: { value: "radio" } }); });
+    await click("+ Thêm đáp án");
+    await act(async () => { view.root.findByProps({ "aria-label": "Đáp án 2" }).props.onChange({ target: { value: "Lựa chọn 1" } }); });
+    await act(async () => { view.root.findByType("form").props.onSubmit(event); });
+    assert.equal(saved, 0);
+    assert.ok(view.root.findByProps({ role: "alert" }));
+    await act(async () => { view.root.findByProps({ "aria-label": "Đáp án 2" }).props.onChange({ target: { value: "Đáp án khác" } }); });
+    await act(async () => { view.root.findByType("form").props.onSubmit(event); });
+    assert.equal(saved, 1);
+    await click("Nội dung & tiếp nhận");
+    await act(async () => { view.root.findByProps({ id: "recruitment-editor-success" }).props.onChange({ target: { value: "Thông báo xem thử" } }); });
+    await click("Sau khi gửi");
+    assert.ok(JSON.stringify(view.toJSON()).includes("Thông báo xem thử"));
+    await click("Khôi phục");
+    assert.equal(currentDraft.questions.length, 14); // no destructive reset until explicit confirmation
+    await click("Bỏ thay đổi");
+    assert.deepEqual(currentDraft, baseline);
+    assert.ok(text(view.root).includes("Lưu thay đổi"));
+  } finally { await act(async () => { view.unmount(); }); }
 });

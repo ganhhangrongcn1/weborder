@@ -12,11 +12,13 @@ export async function recruitmentRequest(body, token = "") {
       signal: globalThis.AbortSignal.timeout(20000)
     });
   } catch {
-    throw new Error("Chưa xác nhận được hồ sơ đã lưu. Bạn bấm gửi lại giúp Gánh nha; nội dung vẫn được giữ ở đây.");
+    throw new Error(body.action === "submit"
+      ? "Chưa xác nhận được hồ sơ đã lưu. Bạn bấm gửi lại giúp Gánh nha; nội dung vẫn được giữ ở đây."
+      : "Chưa kết nối được hệ thống tuyển dụng. Vui lòng thử lại.");
   }
   const result = await response.json().catch(() => null);
   if (!response.ok || !result?.ok) {
-    const error = new Error(result?.message || "Chưa gửi được hồ sơ. Bạn thử lại sau nha.");
+    const error = new Error(response.status === 404 ? "Hệ thống tuyển dụng chưa được bật. Hiện chưa thể lưu cài đặt hoặc nhận hồ sơ." : result?.message || "Chưa xử lý được yêu cầu tuyển dụng. Bạn thử lại sau nha.");
     error.fields = result?.fields;
     throw error;
   }

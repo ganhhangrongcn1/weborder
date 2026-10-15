@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import useRecruitmentForm from "./useRecruitmentForm.js";
-import { ChoiceField, TextField } from "./RecruitmentFields.jsx";
+import RecruitmentQuestion from "./RecruitmentQuestion.jsx";
 import "./recruitment.css";
 
 export default function RecruitmentPage({ homeContent = [] }) {
@@ -46,16 +46,7 @@ export default function RecruitmentPage({ homeContent = [] }) {
             <form onSubmit={state.submit} noValidate>
               <div className="recruitment-form-heading"><h2>Đơn ứng tuyển</h2><p>Các mục có dấu <span>*</span> là bắt buộc.</p></div>
               <fieldset disabled={state.submitting} className="recruitment-form-body">
-                {state.settings.config.questions.filter((q) => q.active).map((q) => (
-                  <div key={q.id}>
-                    {["radio", "checkbox"].includes(q.type)
-                      ? <ChoiceField {...field} name={q.id} label={q.label} options={q.options} required={q.required} multiple={q.type === "checkbox"} />
-                      : <TextField {...field} name={q.id} label={q.label} required={q.required} multiline={q.type === "textarea"}
-                          type={q.type === "textarea" ? undefined : q.type} maxLength={q.type === "textarea" ? 2000 : q.id === "address" ? 300 : 200}
-                          hint={q.id === "school" ? "Nếu không đi học, bạn ghi “Không đang đi học” nha." : q.id === "previousJob" ? "Nếu chưa từng đi làm, bạn ghi rõ giúp Gánh nha." : undefined} />}
-                    {q.id === "education" && state.form.education === "Mục khác" && <TextField {...field} name="educationOther" label="Trình độ học vấn khác" maxLength={150} />}
-                  </div>
-                ))}
+                {state.settings.config.questions.filter((q) => q.active).map((q) => <RecruitmentQuestion key={q.id} question={q} {...field} />)}
                 <div className="recruitment-trap" aria-hidden="true">
                   <label htmlFor="recruitment-website">Website</label>
                   <input id="recruitment-website" name="website" tabIndex={-1} autoComplete="off" value={state.form.website} onChange={(event) => state.update("website", event.target.value)} />

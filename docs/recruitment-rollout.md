@@ -6,6 +6,7 @@
 - Admin `/admin/recruitment`, danh mục Tuyển dụng trong Nhân sự & giám sát: tab Hồ sơ, Tổng hợp, Câu hỏi & cài đặt.
 - Bộ lọc tuyển dụng riêng theo chi nhánh và ngày nộp (múi giờ Việt Nam), phân trang 25 hồ sơ. Danh sách và tổng hợp dùng cùng bộ lọc; thống kê tính toàn bộ bộ lọc, không chỉ trang đang xem.
 - Xem từng hồ sơ và trạng thái thông báo; biểu đồ số lượt chọn cho câu radio/checkbox. Câu nhiều lựa chọn có thể nhiều lượt/hồ sơ. Không có đánh giá hay quyết định tuyển dụng tự động.
+- Trình chỉnh sửa chọn từng câu, đáp án theo từng ô, sắp xếp lên/xuống, khôi phục có xác nhận; bản xem trước tương tác nằm cạnh editor và dùng chung RecruitmentQuestion với form public. Preview có màn hình form/thành công/đóng nhận; không gửi hồ sơ. Preview inputs nằm ngoài form lưu để không chặn lưu bằng validation của câu hỏi ứng viên.
 - Sửa lời giới thiệu/thông báo, mở đóng nhận hồ sơ; sửa nhãn/lựa chọn/thứ tự/bắt buộc, thêm câu mới, ẩn câu cũ. Họ tên/điện thoại/chi nhánh luôn bắt buộc; mã chi nhánh và loại câu hỏi gốc giữ ổn định.
 - Lưu snapshot câu hỏi và phiên bản trên từng hồ sơ. Sửa form không thay câu trả lời/câu hỏi của hồ sơ cũ. Lưu cấu hình dùng revision CAS; bản nháp không bị mất khi save lỗi.
 - UI → hook → service → repository → Edge Function → Supabase. Không thêm dependency sản phẩm; QA renderer/PostgreSQL WASM ở ngoài repo.

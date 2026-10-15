@@ -24,7 +24,7 @@ export function ChoiceField({ name, label, form, errors, update, toggle, multipl
       {multiple && <p className="recruitment-hint">Bạn có thể chọn nhiều mục.</p>}
       <div className={`recruitment-choice-list ${name === "branch" ? "recruitment-branches" : ""}`}>
         {options.map((value, index) => (
-          <label key={value} className="recruitment-choice">
+          <label key={index} className="recruitment-choice">
             <input type={multiple ? "checkbox" : "radio"} name={name} value={value}
               id={index === 0 ? id : `${id}-${index}`} aria-invalid={Boolean(errors[name])}
               checked={multiple ? (form[name] || []).includes(value) : form[name] === value}

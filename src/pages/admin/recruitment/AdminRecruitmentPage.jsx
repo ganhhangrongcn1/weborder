@@ -22,7 +22,7 @@ export default function AdminRecruitmentPage() {
         ))}
         <a href="/tuyendung" target="_blank" rel="noopener noreferrer">Mở form ứng tuyển ↗</a>
       </nav>
-      {tab === "settings" ? <AdminCard><RecruitmentFormEditor draft={state.draft} setDraft={state.setDraft} saving={state.saving} save={state.save} error={state.settingsError} notice={state.notice} ready={Boolean(state.settings)} /></AdminCard> : <>
+      {tab === "settings" ? <AdminCard><RecruitmentFormEditor draft={state.draft} setDraft={state.setDraft} saving={state.saving} save={state.save} error={state.settingsError} notice={state.notice} ready={Boolean(state.settings)} baseline={state.settings?.config} loading={state.settingsLoading} reload={state.reloadSettings} /></AdminCard> : <>
         <AdminCard>
           <div className="admin-recruitment-filters">
             <label>Chi nhánh<AdminSelect value={state.filters.branch} onChange={(event) => state.filter("branch", event.target.value)}><option value="">Tất cả chi nhánh</option>{branches.map((branch) => <option key={branch}>{branch}</option>)}</AdminSelect></label>
