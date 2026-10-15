@@ -78,3 +78,24 @@
 @media(max-width: 1300px) { .recruitment-builder-layout { grid-template-columns: minmax(0,1fr) minmax(290px,.85fr); } .recruitment-builder-question-layout { grid-template-columns: minmax(0,1fr); } .recruitment-question-list { max-height: 180px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .recruitment-question-add { grid-column: 1/-1; } }
 @media(max-width: 950px) { .recruitment-builder-layout { grid-template-columns: minmax(0,1fr); } .recruitment-preview { position: static; } .recruitment-builder-save { position: static; } .recruitment-builder-title { flex-wrap: wrap; } }
 @media(max-width: 480px) { .recruitment-question-list { grid-template-columns: minmax(0,1fr); } .recruitment-builder-actions > span { width: 100%; } }
+
+/* Allow long Vietnamese copy and custom answers to wrap instead of widening panels. */
+.recruitment-builder *, .recruitment-builder *::before, .recruitment-builder *::after { box-sizing: border-box; }
+.recruitment-builder-title > div { min-width: 0; flex: 1; }
+.recruitment-builder-status { max-width: 100%; white-space: normal; }
+.recruitment-builder :is(h1,h2,h3,p,small,strong,legend,label,button) { overflow-wrap: anywhere; white-space: normal; }
+.recruitment-builder :is(fieldset,section,header,footer,nav), .recruitment-content-editor > label { min-width: 0; max-width: 100%; }
+.recruitment-builder-tabs > button, .recruitment-preview-tabs > button { min-width: 0; }
+.recruitment-question-list > button > span:last-child { flex: 1; min-width: 0; }
+.recruitment-editor-switches label > span, .recruitment-accepting-toggle > span { flex: 1; min-width: 0; }
+.recruitment-builder-controls :is(input:not([type=checkbox]),select,textarea) { min-width: 0; max-width: 100%; }
+.recruitment-content-editor textarea { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+.recruitment-editor-option input { flex: 1 1 0%; }
+.recruitment-preview .recruitment-preview-page { min-width: 0; width: 100%; }
+.recruitment-preview :is(.recruitment-card,.recruitment-intro,.recruitment-choices,.recruitment-field) { min-width: 0; max-width: 100%; }
+.recruitment-preview .recruitment-choices legend { width: auto; max-width: 100%; }
+.recruitment-preview .recruitment-choice { min-width: 0; max-width: 100%; }
+.recruitment-preview .recruitment-choice > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.recruitment-preview .recruitment-field :is(input,textarea) { min-width: 0; max-width: 100%; }
+.recruitment-preview .recruitment-field textarea { white-space: pre-wrap; overflow-wrap: anywhere; }
+.recruitment-builder-actions > span { min-width: 0; max-width: 100%; }

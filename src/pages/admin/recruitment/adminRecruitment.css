@@ -18,3 +18,14 @@
 .admin-recruitment-muted { font-size: 13px; color: #64748b; }
 @media(max-width:900px) { .admin-recruitment-filters { grid-template-columns: 1fr 1fr; } .admin-recruitment-branch-counts { grid-template-columns: 1fr 1fr; } }
 @media(max-width:480px) { .admin-recruitment-filters { grid-template-columns: minmax(0,1fr); } }
+
+/* Keep recruitment content inside its own cards, independent of other Admin pages. */
+.admin-recruitment, .admin-recruitment > *, .admin-recruitment .admin-ui-card { min-width: 0; max-width: 100%; }
+.admin-recruitment > .admin-ui-card { padding: clamp(14px, 2vw, 24px); }
+.admin-recruitment :where(h1,h2,h3,p,small,legend,dt,dd,label,button,a) { overflow-wrap: anywhere; white-space: normal; }
+.admin-recruitment-filters { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+.admin-recruitment-filters :is(input,select) { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.admin-recruitment-branch-counts button, .admin-recruitment-chart-row > span { min-width: 0; }
+.admin-recruitment td { overflow-wrap: anywhere; max-width: 320px; }
+@media(max-width:900px) { .admin-recruitment-filters { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:480px) { .admin-recruitment-filters { grid-template-columns: minmax(0,1fr); } }
