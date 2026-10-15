@@ -1,0 +1,81 @@
+name: POS Android release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pos-android-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'ganhhangrongcn1/weborder' && github.sha == vars.POS_RELEASE_APPROVED_SHA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+      - name: Install Android packages
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
+      - name: Install dependencies and check USB selection
+        run: |
+          npm ci --prefix ghr-pos-mobile-native --no-audit --no-fund
+          bash scripts/usb-printer-selection.test.sh
+      - name: Build signed release with existing key
+        env:
+          POS_KEYSTORE_BASE64: ${{ secrets.POS_KEYSTORE_BASE64 }}
+          POS_SIGNING_PROPERTIES_BASE64: ${{ secrets.POS_SIGNING_PROPERTIES_BASE64 }}
+          POS_RELEASE_CERT_SHA256: ${{ vars.POS_RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          task_sign_dir=$(mktemp -d "$RUNNER_TEMP/pos-signing-XXXXXX")
+          trap 'rm -rf "$task_sign_dir"' EXIT
+          export GHR_POS_RELEASE_SIGNING_PROPERTIES="$task_sign_dir/signing.properties"
+          export TASK_SIGN_DIR="$task_sign_dir"
+          python3 - <<'PY'
+          import os, base64
+          from pathlib import Path
+          key = os.environ.get("POS_KEYSTORE_BASE64", "")
+          props = os.environ.get("POS_SIGNING_PROPERTIES_BASE64", "")
+          cert = os.environ.get("POS_RELEASE_CERT_SHA256", "")
+          if not key or not props or not cert:
+              raise SystemExit("Missing signing secrets or expected certificate fingerprint")
+          directory = Path(os.environ["TASK_SIGN_DIR"])
+          (directory / "release.keystore").write_bytes(base64.b64decode(key, validate=True))
+          data = base64.b64decode(props, validate=True)
+          # Java Properties uses the last storeFile entry. Preserve all password escapes.
+          data += ("\nstoreFile=" + str(directory / "release.keystore") + "\n").encode("ascii")
+          (directory / "signing.properties").write_bytes(data)
+          PY
+          cd ghr-pos-mobile-native/android
+          bash gradlew --no-daemon :app:assembleRelease
+          task_apk=app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$task_apk" > "$RUNNER_TEMP/pos-cert.txt"
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          output = Path(os.environ["RUNNER_TEMP"] + "/pos-cert.txt").read_text()
+          certs = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]+)", output)
+          expected = re.sub(r"[^0-9a-f]", "", os.environ["POS_RELEASE_CERT_SHA256"].lower())
+          if len(certs) != 1 or certs[0].lower() != expected:
+              raise SystemExit("APK signing certificate differs from installed release")
+          PY
+          mkdir -p "$GITHUB_WORKSPACE/release-artifacts"
+          cp "$task_apk" "$GITHUB_WORKSPACE/release-artifacts/GHR-POS-0.4.25.apk"
+          cd "$GITHUB_WORKSPACE/release-artifacts"
+          sha256sum GHR-POS-0.4.25.apk > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: GHR-POS-0.4.25-release
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 14
