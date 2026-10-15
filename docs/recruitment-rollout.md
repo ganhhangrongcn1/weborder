@@ -14,7 +14,9 @@
 ## Trạng thái triển khai
 
 Main đã xác minh `71f3b022b85a997cba81339e99b3dd86de33f413`, PR draft #6. Backend thực tế là project Supabase `qjaklysckgzdfjthzkzu`, PostgreSQL 17, chưa có recruitment backend trước PR.
-Chưa áp dụng SQL/deploy function, chưa bật intake, chưa merge/deploy production và chưa gửi tin Zalo thật.
+Ngày 15/10/2026: đã áp dụng ba migration recruitment và deploy recruitment-api v1 ACTIVE. Intake đã bật; thông báo Zalo vẫn tắt. Chưa merge frontend vào main; chưa gửi Zalo thật.
+Đã gọi API thực tế: get_form 200/13 câu; validation 400; Admin không đăng nhập 403; gate thiếu secret 401; origin lạ 403. Hồ sơ giả lưu 200, gửi lại trả cùng ID và duplicate=true; kiểm tra DB pending/0 lần gửi rồi dọn đúng hồ sơ thử.
+Phiên đăng nhập n8n cloud đã hết hạn, hiện dừng ở Sign in; cần đăng nhập lại để kiểm tra/activate workflow.
 Preview chưa có API sẽ hiển thị bộ câu hỏi mặc định để review nhưng khóa nút gửi; Admin không giả lập dữ liệu hồ sơ/thống kê khi API lỗi.
 
 ## Workflow n8n đã chuẩn bị
@@ -68,7 +70,7 @@ Không có secret n8n/Zalo/Google trong frontend hoặc repo; node n8n giữ tha
 
 1. Áp dụng hai migration theo thứ tự `20261014105926_recruitment_applications.sql` rồi `20261014121225_recruitment_form_admin.sql`. Bản SQL tương đương có trong docs/supabase-sql; không chạy cả hai bản sao cùng lúc.
 2. Deploy riêng `recruitment-api --no-verify-jwt`; không thay function khác.
-3. Đặt secrets server: RECRUITMENT_HASH_SECRET (ngẫu nhiên, ổn định), RECRUITMENT_DISPATCH_SECRET (ngẫu nhiên riêng), RECRUITMENT_N8N_WEBHOOK_SECRET (ngẫu nhiên riêng), RECRUITMENT_N8N_WEBHOOK_URL (URL đã xác minh), RECRUITMENT_ALLOWED_ORIGINS (origin chính xác, gồm preview khi cần). SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY chỉ server.
+3. Cấu hình server mặc định lưu ở recruitment_private.runtime_config (RLS, chỉ service_role đọc qua RPC SECURITY INVOKER); secret được tạo ngẫu nhiên trong database và không xuất ra log/frontend. Deno.env được ưu tiên nếu cấu hình qua secrets dashboard. Các khóa: RECRUITMENT_HASH_SECRET (ngẫu nhiên, ổn định), RECRUITMENT_DISPATCH_SECRET (ngẫu nhiên riêng), RECRUITMENT_N8N_WEBHOOK_SECRET (ngẫu nhiên riêng), RECRUITMENT_N8N_WEBHOOK_URL (URL đã xác minh), RECRUITMENT_ALLOWED_ORIGINS (origin chính xác, gồm preview khi cần). SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY chỉ server.
 4. Kiểm thử staging/synthetic với node Zalo được thay bằng stub để không gửi người nhận thật. Kiểm tra gate/replay/timeout/ack, rồi đối soát output và error behavior của CUSTOM.ZaloUser trước enable. Bản này chưa chứng minh output thực tế của node custom hoặc production end-to-end.
 5. Sau duyệt, activate workflow n8n và bật RECRUITMENT_NOTIFICATIONS_ENABLED=true. Có thể tạo scheduler dự phòng phía server/n8n gọi mỗi phút `POST /functions/v1/recruitment-api` Bearer RECRUITMENT_DISPATCH_SECRET, body `{ "action": "retry_notifications" }`. Chưa tạo/activate lịch trong bản nháp này.
 6. Bật RECRUITMENT_INTAKE_ENABLED=true và merge/deploy sau khi duyệt. VITE_DATA_SOURCE=supabase và VITE_ENABLE_SUPABASE_RUNTIME_WRITES=true theo chính sách hiện có. Không mở quyền public vào table.

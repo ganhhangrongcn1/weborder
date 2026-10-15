@@ -25,7 +25,7 @@ export default function RecruitmentPage({ homeContent = [] }) {
       <div className="recruitment-layout">
         <section className="recruitment-intro" aria-labelledby="recruitment-title">
           <span className="recruitment-eyebrow">TUYỂN DỤNG · GÁNH HÀNG RONG</span>
-          <h1 id="recruitment-title">Về chung<br />một Gánh nha!</h1>
+          <h1 id="recruitment-title">Gánh đang tìm<br />đồng đội mới!</h1>
           <p>Gánh không tìm một người hoàn hảo. Gánh muốn biết thêm về bạn, lịch làm việc và cửa hàng bạn muốn đồng hành.</p>
           <div className="recruitment-intro-note">
             <strong>Mình làm quen từ đây</strong>
