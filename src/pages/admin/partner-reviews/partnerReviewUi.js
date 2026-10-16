@@ -44,12 +44,23 @@ export const intervalLabel = (minutes) => {
 };
 
 export const isStoreControlSelected = (source, action) => {
+  const observed = source.store_status;
+  if (observed) {
+    const age = Date.now() - Date.parse(observed.checked_at || '');
+    if (!Number.isFinite(age) || age < 0 || age > 10 * 60_000) return false;
+    return observed.state === (action === 'busy' ? 'BUSY' : 'NORMAL');
+  }
   if (source.store_control_action !== action) return false;
-  if (["pending", "running"].includes(source.store_control_status)) return true;
   if (source.store_control_status !== "success") return false;
-  if (action === "normal") return true;
-  const finishedAt = Date.parse(source.store_control_finished_at || "");
-  return Number.isFinite(finishedAt) && Date.now() < finishedAt + 15 * 60_000;
+  return true;
+};
+
+export const storeStatusLabel = (source) => {
+  const value = source.store_status;
+  if (!value) return 'Chưa đọc trạng thái hiện tại từ Grab';
+  const labels = {BUSY:'Đang Bận · chuẩn bị 15 phút',NORMAL:'Đang mở bình thường',CLOSED:'Đang đóng cửa',PAUSED:'Đang tạm nghỉ',UNKNOWN:'Chưa xác định'};
+  const stale = Date.now() - Date.parse(value.checked_at || '') > 10 * 60_000;
+  return `${labels[value.state] || labels.UNKNOWN}${stale ? ' · Cần cập nhật lại' : ''}`;
 };
 
 export const ratingTone = (rating) => {
