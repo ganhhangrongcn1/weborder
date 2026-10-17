@@ -6,6 +6,7 @@ import { addDaysToVietnamDateInput, toVietnamDateInputValue } from "../../../uti
 import { formatMoney } from "../../../utils/format.js";
 import { AdminInput, AdminSelect } from "../ui/index.js";
 import "../../../styles/admin/grab-finance.css";
+import GrabConversionFunnel from '../partner-reviews/GrabConversionFunnel.jsx';
 
 const money = (value) => formatMoney(Math.round(Number(value || 0)));
 const deductionMoney = (value) => money(Number(value || 0) > 0 ? -Number(value) : Number(value || 0));
@@ -106,6 +107,8 @@ export default function AdminGrabFinancePage({
         <label><span>Từ ngày</span><AdminInput type="date" value={fromDate} max={toDate || today} onChange={(event) => { setFromDate(event.target.value); setPreset("custom"); }} /></label>
         <label><span>Đến ngày</span><AdminInput type="date" value={toDate} min={fromDate} max={today} onChange={(event) => { setToDate(event.target.value); setPreset("custom"); }} /></label>
       </section>
+
+      <GrabConversionFunnel branchUuid={selectedBranchOption?.value || ''} sourceId={selectedSourceId} />
 
       {status === "error" ? <div className="grab-finance-message is-error">{error}</div> : null}
       {status === "loading" ? <div className="grab-finance-message">Đang tải số liệu Grab đã đồng bộ...</div> : null}
