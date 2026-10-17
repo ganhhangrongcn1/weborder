@@ -108,8 +108,6 @@ export default function AdminGrabFinancePage({
         <label><span>Đến ngày</span><AdminInput type="date" value={toDate} min={fromDate} max={today} onChange={(event) => { setToDate(event.target.value); setPreset("custom"); }} /></label>
       </section>
 
-      <GrabConversionFunnel branchUuid={selectedBranchOption?.value || ''} sourceId={selectedSourceId} />
-
       {status === "error" ? <div className="grab-finance-message is-error">{error}</div> : null}
       {status === "loading" ? <div className="grab-finance-message">Đang tải số liệu Grab đã đồng bộ...</div> : null}
 
@@ -150,6 +148,8 @@ export default function AdminGrabFinancePage({
           </div>
         </>
       ) : null}
+
+      <GrabConversionFunnel branchUuid={selectedBranchOption?.value || ''} sourceId={selectedSourceId} />
     </div>
   );
 }
