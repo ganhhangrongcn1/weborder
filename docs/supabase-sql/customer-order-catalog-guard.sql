@@ -1,3 +1,8 @@
+-- Production applied: migration 20261017090714, project qjaklysckgzdfjthzkzu.
+-- Frontend: b8d285a1f593c4ab6b60ef27b2cd1d367698f1f6, deployment dpl_FWcncpQwTtip3q8GPzE68i1pRXca.
+-- Previous production deployment for rollback: dpl_4EnNLDUmnUPfwEHc89aKWGAvckwB.
+-- Verified: 13 browser cases locally; public menu/orders/checkout HTTP 200, no JS errors;
+-- installed trigger tested under anon on a temporary table, rolled back without real orders.
 -- Only new customer web/QR orders are checked. Existing order updates, POS,
 -- partner integrations, loyalty and payment transitions keep their current flow.
 -- SECURITY INVOKER retains the existing public catalog SELECT/RLS contract.
