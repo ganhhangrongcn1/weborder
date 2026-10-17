@@ -345,7 +345,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
   const mergeRecentHistoryOrders = mergePosHistoryOrders;
 
   const printCounterOrderBills = async (billData = {}) => {
-    billData = { ...billData, order: await withPosStampSummary(billData.order, billData.customerPhone) };
+    billData = { ...billData, order: await withPosStampSummary(billData.order, billData.customerPhone, { force: true }) };
     const failures = [];
     try {
       await printLocalReceipt({
@@ -387,7 +387,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       };
     }
 
-    const printableOrder = await withPosStampSummary(result.printableOrder);
+    const printableOrder = await withPosStampSummary(result.printableOrder, "", { force: true });
     const receiptText = buildPosCustomerBillText({
       order: printableOrder,
       cart: printableOrder.cart,
@@ -2543,7 +2543,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
         return;
       }
 
-      const printableOrder = await withPosStampSummary(result.printableOrder);
+      const printableOrder = await withPosStampSummary(result.printableOrder, "", { force: true });
       const receiptText = buildPosCustomerBillText({
         order: printableOrder,
         cart: printableOrder.cart,

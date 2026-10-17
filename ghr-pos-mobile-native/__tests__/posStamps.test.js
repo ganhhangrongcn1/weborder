@@ -41,3 +41,32 @@ test("print lookup bypasses stale cache after server confirmation, concurrent re
   await Promise.all(Array.from({length: 5}, () => withPosStampSummary({}, "0901234567", {force: true})));
   expect(supabase.rpc).toHaveBeenCalledTimes(2);
 });
+
+test("paid receipt refreshes an embedded pre-payment summary", async () => {
+  const result = await withPosStampSummary({ stampSummary: { enabled: true, available: 9 } }, "0901234567", { force: true });
+  expect(result.stampSummary.available).toBe(10);
+  expect(supabase.rpc).toHaveBeenCalledTimes(1);
+  const text = buildPosCustomerBillText({ order: result, customerPhone: "0901234567", cart: [], totals: { total: 51000 }, paymentConfirmed: { method: "cash", paid: true } });
+  expect(text).toContain("@@STAMPS:10");
+  expect(text).not.toContain("@@STAMPS:9");
+});
+
+test("failed receipt refresh omits the old count instead of printing stale stamps", async () => {
+  supabase.rpc.mockImplementation(() => ({ abortSignal: () => Promise.resolve({ error: new Error("offline") }) }));
+  const result = await withPosStampSummary({ id: "paid", stampSummary: { enabled: true, available: 9 } }, "0901234567", { force: true });
+  expect(result).toEqual({ id: "paid", stampSummary: null });
+});
+
+test("paid receipt cannot join a pre-payment request or let it overwrite the new cache", async () => {
+  let resolveOld;
+  supabase.rpc.mockImplementationOnce(() => ({ abortSignal: () => new Promise(resolve => { resolveOld = resolve; }) }));
+  const oldRead = readPosStamps("0901234567");
+  await Promise.resolve();
+  const receipts = await Promise.all(Array.from({ length: 5 }, () => withPosStampSummary({}, "0901234567", { force: true })));
+  expect(receipts.every(order => order.stampSummary.available === 10)).toBe(true);
+  expect(supabase.rpc).toHaveBeenCalledTimes(2);
+  resolveOld({ data: { enabled: true, available: 9 } });
+  await oldRead;
+  expect((await readPosStamps("0901234567")).available).toBe(10);
+  expect(supabase.rpc).toHaveBeenCalledTimes(2);
+});
