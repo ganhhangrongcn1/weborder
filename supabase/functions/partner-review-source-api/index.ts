@@ -115,6 +115,8 @@ function publicSource(row: Row) {
     sync_status: text(row.sync_status || "idle"),
     sync_enabled: row.sync_enabled !== false,
     busy_enabled: row.busy_enabled === true,
+    store_status: object(row.metadata).grab_store_status || null,
+    auto_busy_disabled_reason: text(object(row.metadata).auto_busy_disabled_reason),
     store_control_action: text(row.store_control_action),
     store_control_status: text(row.store_control_status || "idle"),
     store_control_requested_at: row.store_control_requested_at || null,

@@ -1,0 +1,4 @@
+
+# Private cron authenticates with x-automation-secret inside the handler.
+[functions.grab-vietsing-pilot]
+verify_jwt = false
