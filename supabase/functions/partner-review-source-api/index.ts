@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import getFunnelReport from './funnelReport.ts';
 
 type Row = Record<string, unknown>;
 
@@ -115,6 +116,8 @@ function publicSource(row: Row) {
     sync_status: text(row.sync_status || "idle"),
     sync_enabled: row.sync_enabled !== false,
     busy_enabled: row.busy_enabled === true,
+    store_status: object(row.metadata).grab_store_status || null,
+    auto_busy_disabled_reason: text(object(row.metadata).auto_busy_disabled_reason),
     store_control_action: text(row.store_control_action),
     store_control_status: text(row.store_control_status || "idle"),
     store_control_requested_at: row.store_control_requested_at || null,
@@ -1403,6 +1406,18 @@ async function saveAutomationReviews(
         updated_at: new Date().toISOString()
       }))
       .filter((row) => row.advertiser_id);
+    const spotlightReportDates = [...new Set(marketingDailyRows
+      .filter((row) => row.channel === "spotlight")
+      .map((row) => row.report_date))];
+    for (const reportDate of spotlightReportDates) {
+      const { error: cleanupError } = await client
+        .from("partner_grab_marketing_daily")
+        .delete()
+        .eq("source_id", sourceId)
+        .eq("report_date", reportDate)
+        .eq("channel", "spotlight");
+      if (cleanupError) throw cleanupError;
+    }
     for (let index = 0; index < marketingDailyRows.length; index += 500) {
       const { error: marketingError } = await client
         .from("partner_grab_marketing_daily")
@@ -1556,14 +1571,19 @@ async function getMarketingReport(client: ReturnType<typeof createClient>, admin
   const channels = new Map<string, Row>(); const accounts = new Map<string, Row>(); const campaigns = new Map<string, Row>();
   rows.forEach((row) => {
     add(total, row);
-    const channel = text(row.channel); const channelRow = channels.get(channel) || { channel, ...empty() }; add(channelRow, row); channels.set(channel, channelRow);
+    const storedChannel = text(row.channel);
+    const channel = storedChannel === "spotlight"
+      ? text(row.campaign_key).replace(/-month-summary$/, "") || "spotlight_other"
+      : storedChannel;
+    const channelRow = channels.get(channel) || { channel, ...empty() }; add(channelRow, row); channels.set(channel, channelRow);
     const sourceId = text(row.source_id); const account = accounts.get(sourceId) || { sourceId, displayName: sourceNames.get(sourceId) || text(row.branch_code), branchCode: text(row.branch_code), ...empty() }; add(account, row); accounts.set(sourceId, account);
     const key = `${sourceId}|${channel}|${text(row.campaign_key)}`; const campaign = campaigns.get(key) || { sourceId, displayName: sourceNames.get(sourceId) || text(row.branch_code), channel, campaignName: text(row.campaign_name) || "Chương trình Grab", campaignType: text(row.campaign_type), ...empty() }; add(campaign, row); campaigns.set(key, campaign);
   });
   const lastSyncedAt = rows.map((row) => text(row.last_synced_at)).sort().at(-1) || null;
   return reply({ ok: true, data: { fromDate, toDate, lastSyncedAt, ...decorate(total),
     channels: [...channels.values()].map(decorate), accounts: [...accounts.values()].map(decorate),
-    campaigns: [...campaigns.values()].map(decorate).sort((a, b) => Number(b.spendAmount) - Number(a.spendAmount)) } });
+    campaigns: [...campaigns.values()].map(decorate).sort((a, b) => Number(b.spendAmount) - Number(a.spendAmount))
+  } });
 }
 
 async function getFinanceReport(client: ReturnType<typeof createClient>, admin: Row, body: Row) {
@@ -1790,6 +1810,7 @@ Deno.serve(async (request) => {
   if (!admin) return reply({ ok: false, message: "Chỉ admin mới được quản lý nguồn đánh giá." }, 403);
   if (action === "list") return listSources(client, admin);
   if (action === "finance_report") return getFinanceReport(client, admin, body);
+  if (action === "funnel_report") return getFunnelReport(client, admin, body, reply);
   if (action === "marketing_report") return getMarketingReport(client, admin, body);
   if (action === "list_reviews") return listReviews(client, admin, body);
   if (action === "reply_review") return requestReviewReply(client, admin, body);
