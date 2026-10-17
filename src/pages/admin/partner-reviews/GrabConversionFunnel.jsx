@@ -1,3 +1,4 @@
+import buildGrabFunnelStages from '../../../utils/grabFunnelChart.js';
 import useGrabConversionFunnel from '../../../hooks/useGrabConversionFunnel.js';
 import { AdminInput, AdminButton } from '../ui/index.js';
 import '../../../styles/admin/grab-funnel.css';
@@ -12,6 +13,7 @@ export default function GrabConversionFunnel({ branchUuid = '', sourceId = 'all'
   const summary = report?.summary;
   const hasData = Boolean(report?.coveredDays);
   const steps = [['reach', 'Xem trang quán'], ['visits', 'Xem thực đơn'], ['baskets', 'Tới giỏ hàng'], ['checkouts', 'Checkout']];
+  const chartStages = buildGrabFunnelStages(summary);
   return (
     <section className="grab-funnel" aria-label="Phễu chuyển đổi Grab">
       <header className="grab-funnel-header">
@@ -30,9 +32,10 @@ export default function GrabConversionFunnel({ branchUuid = '', sourceId = 'all'
         {report.syncOk === false || report.stale ? <p role="status" className="grab-funnel-warning">Dữ liệu chưa được cập nhật gần đây. Bên dưới là số liệu đã lưu thành công gần nhất.</p> : null}
         {report.coveredStoreDays < report.expectedStoreDays ? <p className="grab-funnel-warning">Đã có {report.coveredStoreDays}/{report.expectedStoreDays} lượt báo cáo ngày của {report.sourceCount} gian hàng. Phần còn thiếu chưa được tính vào tổng.</p> : null}
         {!hasData ? <p>Chưa có dữ liệu phễu trong khoảng ngày này. Hãy chọn khoảng ngày khác hoặc làm mới sau lượt đồng bộ.</p> : <>
-          <div className="grab-funnel-body"><figure className="grab-funnel-journey"><figcaption><h3>Hành trình chuyển đổi</h3><p>{report.sourceCount} gian hàng · {report.coveredDays} ngày có dữ liệu</p></figcaption><ol className="grab-funnel-infographic">{steps.map(([key, label], index) => <li key={key} className={`grab-funnel-band grab-funnel-band--${index + 1}`}>
-            <span>{label}</span><strong>{number(summary[key])}<small> lượt</small></strong>
-          </li>)}</ol><p className="grab-funnel-scale-note">Độ rộng minh họa trình tự các bước; tỷ lệ thực tế ở bên cạnh.</p>
+          <div className="grab-funnel-body"><figure className="grab-funnel-journey"><figcaption><h3>Hành trình chuyển đổi</h3><p>{report.sourceCount} gian hàng · {report.coveredDays} ngày có dữ liệu</p></figcaption><ol className="grab-funnel-infographic">{chartStages.map(({ key, label, value, widthPercent, sharePercent }, index) => <li key={key} className={`grab-funnel-band grab-funnel-band--${index + 1}`}>
+            <div className="grab-funnel-band-label"><span>{label}</span><strong>{number(value)}<small> lượt · {rate(sharePercent)}</small></strong></div>
+            <div className="grab-funnel-band-plot" aria-hidden="true"><i style={{ width: `${widthPercent}%` }} /></div>
+          </li>)}</ol><p className="grab-funnel-scale-note">Độ rộng và diện tích mỗi tầng tỷ lệ với số lượt thực tế, dùng chung thang đo tuyến tính. Phần trăm trên tầng so với lượt xem quán (100%).</p>
           </figure><aside className="grab-funnel-rates" aria-label="Tỷ lệ chuyển đổi"><h3>Tỷ lệ chuyển đổi</h3>
             <article><span>Trang quán → thực đơn</span><strong>{rate(summary.listingToMenuRate)}</strong></article>
             <article><span>Thực đơn → checkout</span><strong>{rate(summary.menuToCheckoutRate)}</strong></article>

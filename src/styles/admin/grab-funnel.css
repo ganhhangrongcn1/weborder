@@ -13,15 +13,18 @@
 .grab-funnel-body{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(240px,1fr);gap:30px}
 .grab-funnel-journey{margin:0;min-width:0}
 .grab-funnel-journey figcaption p{font-size:12px}
-.grab-funnel-infographic{display:grid;justify-items:center;gap:5px;max-width:640px;margin:22px auto 0;padding:0;list-style:none}
-.grab-funnel-band{box-sizing:border-box;display:grid;align-content:center;justify-items:center;gap:5px;min-height:78px;padding:12px 28px;clip-path:polygon(0 0,100% 0,calc(100% - 8%) 100%,8% 100%);text-align:center}
-.grab-funnel-band>span{font-size:12px;font-weight:600}
-.grab-funnel-band strong{font-size:26px;line-height:1.15;font-variant-numeric:tabular-nums}
-.grab-funnel-band small{font-size:11px;font-weight:400}
-.grab-funnel-band--1{width:100%;background:#e0efe5;color:#2c6545}
-.grab-funnel-band--2{width:83%;background:#b5d8c2;color:#235337}
-.grab-funnel-band--3{width:67%;background:#75ac8b;color:#173f28}
-.grab-funnel-band--4{width:53%;background:#2c7350;color:#fff}
+.grab-funnel-infographic{display:grid;gap:20px;max-width:640px;margin:22px auto 0;padding:0;list-style:none}
+.grab-funnel-band{min-width:0}
+.grab-funnel-band-label{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:9px}
+.grab-funnel-band-label>span{font-size:12px;font-weight:600;color:#506158}
+.grab-funnel-band-label strong{font-size:22px;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap}
+.grab-funnel-band-label small{font-size:11px;font-weight:400;color:#62766a}
+.grab-funnel-band-plot{display:flex;justify-content:center;height:28px;background:#f4f7f5}
+.grab-funnel-band-plot i{display:block;flex:none;height:100%;background:var(--funnel-stage-color)}
+.grab-funnel-band--1{--funnel-stage-color:#8bb99b}
+.grab-funnel-band--2{--funnel-stage-color:#5f9f78}
+.grab-funnel-band--3{--funnel-stage-color:#3d855c}
+.grab-funnel-band--4{--funnel-stage-color:#245f3f}
 .grab-funnel .grab-funnel-scale-note{margin:12px 0 0;text-align:center;font-size:11px;color:#7c8780}
 .grab-funnel-rates{display:grid;align-content:start;gap:0;padding:18px 20px;background:#f4f8f5;border-radius:12px}
 .grab-funnel-rates h3{margin-bottom:4px;color:#40614e}
@@ -40,4 +43,4 @@
 .grab-funnel th:first-child,.grab-funnel td:first-child{text-align:left}
 .grab-funnel th{position:sticky;top:0;background:#f7f9f8;color:#5c6e62}
 @media(max-width:900px){.grab-funnel-body{grid-template-columns:minmax(0,1fr)}.grab-funnel-rates article{padding:14px 0}}
-@media(max-width:600px){.grab-funnel{padding:18px;gap:18px}.grab-funnel-header{align-items:flex-start;flex-direction:column;gap:14px}.grab-funnel h2{font-size:21px}.grab-funnel-actions{width:100%;justify-content:space-between}.grab-funnel-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}.grab-funnel-filters label{min-width:0}.grab-funnel-filters input{width:100%;min-width:0}.grab-funnel-filters small{grid-column:1/-1;padding-bottom:0;margin-left:0}.grab-funnel-step-heading strong{font-size:21px}.grab-funnel-step-number{width:26px;height:26px}.grab-funnel-steps article{gap:10px}.grab-funnel-rates strong{font-size:24px}}
+@media(max-width:600px){.grab-funnel{padding:18px;gap:18px}.grab-funnel-header{align-items:flex-start;flex-direction:column;gap:14px}.grab-funnel h2{font-size:21px}.grab-funnel-actions{width:100%;justify-content:space-between}.grab-funnel-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}.grab-funnel-filters label{min-width:0}.grab-funnel-filters input{width:100%;min-width:0}.grab-funnel-filters small{grid-column:1/-1;padding-bottom:0;margin-left:0}.grab-funnel-band-label strong{font-size:18px}.grab-funnel-band-label small{display:block;margin-top:4px;text-align:right}.grab-funnel-band-label{align-items:center}.grab-funnel-rates strong{font-size:24px}}
