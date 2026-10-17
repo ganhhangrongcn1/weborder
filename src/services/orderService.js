@@ -5,6 +5,8 @@ import { composeMemberLoyaltySnapshot } from "./memberLoyaltySnapshotService.js"
 import { applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
 import { validateCheckoutVoucherBeforeOrder } from "./checkoutOrderService.js";
 import { notifyWebOrderWebhook } from "./orderNotificationService.js";
+import { getCustomerOrderCatalogAsync } from "./customerOrderCatalogService.js";
+import { getUnavailableOrderItems, buildUnavailableItemsNotice } from "./reorderService.js";
 import {
   createCustomerOrderActionProof,
   saveCustomerOrderActionToken
@@ -484,6 +486,18 @@ export async function createOrderAsync(params) {
   } = params;
 
   if (!Array.isArray(cart) || !cart.length) return null;
+  const hasPurchasedItems = cart.some((item) => !item.autoGiftByPromo && !item.stampGift);
+  const products = hasPurchasedItems ? await getCustomerOrderCatalogAsync() : null;
+  const unavailableItems = products ? getUnavailableOrderItems(cart, products, {
+    branch: branchInfo,
+    channel: String(orderSource).includes("qr") ? "qr" : "web"
+  }) : [];
+  if (unavailableItems.length) {
+    const error = new Error(buildUnavailableItemsNotice(unavailableItems).message);
+    error.code = "ORDER_ITEMS_UNAVAILABLE";
+    error.unavailableItems = unavailableItems;
+    throw error;
+  }
   const stampGifts = cart.filter((item) => item.stampGift);
   if (stampGifts.length && (stampGifts.length !== 1 || fulfillmentType !== "pickup" || stampGifts[0].stampPhone !== getCustomerKey(deliveryInfo?.phone || userProfile.phone))) {
     throw new Error("Quà đổi tem cần đúng số điện thoại và nhận tại quán.");
@@ -674,82 +688,4 @@ export async function createOrderAsync(params) {
   return savedOrder;
 }
 
-export function reorder(order, catalogProducts = []) {
-  const now = Date.now();
-  const normalizeId = (value = "") =>
-    String(value || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-      .trim();
-  const normalizeName = (value = "") =>
-    String(value || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim();
-
-  const safeProducts = Array.isArray(catalogProducts) ? catalogProducts : [];
-  const byId = new Map(
-    safeProducts
-      .filter((product) => product?.id)
-      .map((product) => [normalizeId(product.id), product])
-  );
-  const byName = new Map(
-    safeProducts
-      .filter((product) => String(product?.name || "").trim())
-      .map((product) => [normalizeName(product.name), product])
-  );
-  const allNamedProducts = safeProducts.filter((product) => normalizeName(product?.name || ""));
-
-  return (order?.items || []).filter((item) => !item?.autoGiftByPromo).map((item, index) => {
-    const quantity = item.quantity || 1;
-    const unitTotal = item.unitTotal || Math.round((item.lineTotal || item.price || 0) / quantity);
-    const normalizedItemName = normalizeName(item.name);
-    const matchedById =
-      byId.get(normalizeId(item.id)) ||
-      byId.get(normalizeId(item.productId)) ||
-      byId.get(normalizeId(item.product_id));
-    const matchedByName = byName.get(normalizedItemName);
-    const matchedByLooseName = matchedById || matchedByName
-      ? null
-      : allNamedProducts.find((product) => {
-        const productName = normalizeName(product?.name || "");
-        if (!productName || !normalizedItemName) return false;
-        return productName.includes(normalizedItemName) || normalizedItemName.includes(productName);
-      }) || null;
-    const matchedProduct = matchedById || matchedByName || matchedByLooseName || null;
-    const resolvedImage =
-      matchedProduct?.image ||
-      item.image ||
-      item.thumbnail ||
-      item.productImage ||
-      "";
-    const resolvedName = matchedProduct?.name || item.name;
-    const safeProduct = matchedProduct
-      ? { ...matchedProduct }
-      : {
-          id: item.id || item.productId || item.product_id,
-          productId: item.productId || item.product_id || item.id,
-          name: resolvedName,
-          image: resolvedImage,
-          category: item.category || "",
-          price: Number(item.price ?? unitTotal ?? 0),
-          originalPrice: Number(item.originalPrice || item.price || 0)
-        };
-
-    return {
-      ...safeProduct,
-      cartId: `${item.id || "order"}-reorder-${now}-${index}`,
-      id: matchedProduct?.id || item.id || item.productId || item.product_id,
-      name: resolvedName,
-      quantity,
-      spice: item.spice || "",
-      toppings: item.toppings || [],
-      note: item.note || "",
-      image: resolvedImage,
-      unitTotal,
-      lineTotal: unitTotal * quantity
-    };
-  });
-}
+export { buildReorderItems as reorder } from "./reorderService.js";

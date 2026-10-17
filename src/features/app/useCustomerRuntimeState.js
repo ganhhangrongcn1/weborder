@@ -36,6 +36,7 @@ import { hasMenuCategory, isAllMenuCategory, resolveDefaultMenuCategory } from "
 import { buildReorderCheckoutPreset } from "../checkout/checkoutDomain.js";
 import { clearCheckoutVoucherIntent } from "../../services/checkoutVoucherIntentService.js";
 import { orderingFeatureFlags } from "../../constants/featureFlags.js";
+import { getCustomerOrderCatalogAsync } from "../../services/customerOrderCatalogService.js";
 
 const userStorage = createUserStorage({
   getCustomerKey,
@@ -248,6 +249,36 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     reorder,
     navigate,
     onPrepareReorder: prepareReorderCheckout,
+    onReorderNotice: (notice) => setServiceNotice({
+      ...notice,
+      onAction: notice.actionLabel ? () => {
+        setServiceNotice(null);
+        navigate("menu", "menu");
+      } : undefined
+    }),
+    getReorderCatalog: async (order) => {
+      const { preset } = buildReorderCheckoutPreset({
+        order,
+        branches: productState.branches,
+        pathname: typeof window !== "undefined" ? window.location.pathname : ""
+      });
+      const branchValue = getCheckoutBranchValue(preset);
+      const products = await getCustomerOrderCatalogAsync(productState.storeProducts);
+      productState.setStoreProducts(products);
+      const available = filterProductsForAvailability(products, {
+        branch: resolveBranchFromCandidates([branchValue], productState.branches),
+        branchValue,
+        channel: getMenuChannel(preset)
+      });
+      // Preserve current promotion pricing only when its underlying menu price still matches.
+      return available.map((product) => {
+        const priced = productState.customerProducts.find((item) => item.id === product.id);
+        const base = productState.storeProducts.find((item) => item.id === product.id);
+        return priced && base && Number(base.price) === Number(product.price)
+          ? { ...priced, ...product, price: priced.price, originalPrice: priced.originalPrice }
+          : product;
+      });
+    },
     catalogProducts: availableCustomerProducts,
     smartPromotions: customerSmartPromotionsForChannel
   });

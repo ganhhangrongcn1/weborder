@@ -177,7 +177,7 @@ async function trySelect(client, tableName, columns, orderBy = "updated_at") {
   return data;
 }
 
-async function readCatalogFromStandardTableInternal(key, fallback) {
+async function readCatalogFromStandardTableInternal(key, fallback, options = {}) {
   if (!isSupabaseRuntimeReady()) return fallback;
   const tableName = CATALOG_TABLE_BY_KEY[key];
   if (!tableName) return fallback;
@@ -195,7 +195,8 @@ async function readCatalogFromStandardTableInternal(key, fallback) {
       .order("sort_order", { ascending: true })
       .order("updated_at", { ascending: true });
     if (error) throw error;
-    if (!Array.isArray(data) || !data.length) return fallback;
+    if (!Array.isArray(data)) return fallback;
+    if (!data.length) return options.strict ? [] : fallback;
     return data.map((row) => ({
       id: row?.id,
       name: row?.name || "",
@@ -276,12 +277,13 @@ export async function readCatalogFromStandardTable(key, fallback, options = {}) 
     if (catalogInFlight.has(key)) return catalogInFlight.get(key);
   }
 
-  const request = readCatalogFromStandardTableInternal(key, fallback)
+  const request = readCatalogFromStandardTableInternal(key, fallback, options)
     .then((value) => {
       setCatalogCache(key, value);
       return value;
     })
     .catch((error) => {
+      if (options.strict) throw error;
       if (isDev) {
         console.warn(`[catalogSupabaseRepository] fetch failed for key "${key}".`, {
           message: error?.message || String(error || "")

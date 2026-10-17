@@ -2,15 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { orderRepository } from "../services/repositories/orderRepository.js";
 import { getActiveFlashSalePromotions } from "../services/flashSaleService.js";
 import { sanitizeOrderSpice } from "../utils/orderSpice.js";
-
-function normalizeLookupText(value = "") {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
+import { buildUnavailableItemsNotice, findOrderCatalogProduct } from "../services/reorderService.js";
 
 function toIdList(value) {
   return String(value || "")
@@ -56,9 +48,11 @@ function getToppingTotal(toppings = []) {
   );
 }
 
-export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate, onPrepareReorder, catalogProducts = [], smartPromotions = [] }) {
+export default function useCart({ makeCartItem, initialCart, selectedProduct, selectedSpice, selectedToppings, quantity, editingCartId, setEditingCartId, setToastVisible, toastTimer, deliveryFee, freeshipMinSubtotal, discount, reorder, navigate, onPrepareReorder, getReorderCatalog, onReorderNotice, catalogProducts = [], smartPromotions = [] }) {
   const [cart, setCartState] = useState(() => orderRepository.getCartDraft(initialCart));
   const cartRef = useRef(cart);
+  const cartEditVersionRef = useRef(0);
+  const reorderPendingRef = useRef(false);
 
   function getToppingsSignature(toppings = []) {
     return [...(toppings || [])]
@@ -98,6 +92,7 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
     setCartState((current) => {
       const next = typeof value === "function" ? value(current) : value;
       if (next === current) return current;
+      cartEditVersionRef.current += 1;
       cartRef.current = next;
       orderRepository.saveCartDraft(next);
       return next;
@@ -108,15 +103,6 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
   const ship = subtotal >= freeshipMinSubtotal ? 0 : deliveryFee;
   const total = Math.max(subtotal - discount + ship, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  function findCatalogProduct(product = {}) {
-    const safeProducts = Array.isArray(catalogProducts) ? catalogProducts : [];
-    const rawId = String(product?.id || product?.productId || product?.product_id || "").trim();
-    const normalizedName = normalizeLookupText(product?.name || product?.productName || product?.product_name || "");
-    return safeProducts.find((item) => String(item?.id || "").trim() === rawId) ||
-      safeProducts.find((item) => normalizeLookupText(item?.name || "") === normalizedName) ||
-      null;
-  }
 
   function applyCurrentFlashSale(product = {}) {
     const activeFlashPromos = getActiveFlashSalePromotions(smartPromotions);
@@ -150,8 +136,8 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
     };
   }
 
-  function resolvePurchasableProduct(product = {}) {
-    const catalogProduct = findCatalogProduct(product);
+  function resolvePurchasableProduct(product = {}, products = catalogProducts) {
+    const catalogProduct = findOrderCatalogProduct(product, products);
     const baseProduct = catalogProduct
       ? {
           ...product,
@@ -171,9 +157,9 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
     return applyCurrentFlashSale(baseProduct);
   }
 
-  function repriceCartItem(item = {}) {
+  function repriceCartItem(item = {}, products = catalogProducts) {
     if (item.autoGiftByPromo || item.stampGift) return item;
-    const product = resolvePurchasableProduct(item);
+    const product = resolvePurchasableProduct(item, products);
     const quantityValue = Math.max(1, Number(item.quantity || 1));
     const toppingTotal = getToppingTotal(item.toppings);
     const unitPrice = Number(product.price || 0);
@@ -197,8 +183,8 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
     };
   }
 
-  function repriceCartItems(items = []) {
-    return (Array.isArray(items) ? items : []).map((item) => repriceCartItem(item));
+  function repriceCartItems(items = [], products = catalogProducts) {
+    return (Array.isArray(items) ? items : []).map((item) => repriceCartItem(item, products));
   }
 
   function hasCartChanged(current = [], next = []) {
@@ -262,12 +248,29 @@ export default function useCart({ makeCartItem, initialCart, selectedProduct, se
     toastTimer.current = setTimeout(() => setToastVisible(false), 1800);
   }
 
-  function reorderOrder(order) {
-    const items = repriceCartItems(reorder(order, catalogProducts));
-    if (!items.length) return;
-    onPrepareReorder?.(order);
-    setCart(items);
-    navigate("checkout", "orders");
+  async function reorderOrder(order) {
+    if (reorderPendingRef.current) return;
+    reorderPendingRef.current = true;
+    const originalCartVersion = cartEditVersionRef.current;
+    try {
+      const products = getReorderCatalog ? await getReorderCatalog(order) : catalogProducts;
+      const items = repriceCartItems(reorder(order, products), products);
+      if (!items.length) {
+        onReorderNotice?.({ badge: "Đặt lại đơn", title: "Vui lòng chọn món khác", message: "Đơn cũ không có món có thể đặt lại.", actionLabel: "Xem menu" });
+        return;
+      }
+      // Do not replace a cart the customer edited while the catalog was loading.
+      if (cartEditVersionRef.current !== originalCartVersion) return;
+      onPrepareReorder?.(order);
+      setCart(items);
+      navigate("checkout", "orders");
+    } catch (error) {
+      onReorderNotice?.(error.code === "ORDER_ITEMS_UNAVAILABLE"
+        ? buildUnavailableItemsNotice(error.unavailableItems)
+        : { badge: "Đặt lại đơn", title: "Chưa thể kiểm tra menu", message: "Giỏ hàng vẫn được giữ nguyên. Anh/chị vui lòng thử lại sau." });
+    } finally {
+      reorderPendingRef.current = false;
+    }
   }
 
   return {

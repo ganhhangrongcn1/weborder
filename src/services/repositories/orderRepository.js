@@ -633,6 +633,7 @@ export const orderRepository = {
           orderId: nextOrder.id
         });
       } catch (error) {
+        if (error?.code === "P4002" || error?.code === "ORDER_ITEMS_UNAVAILABLE") throw error;
         // A rejected benefit is definitive; do not treat an older order as a successful retry.
         if (nextOrder.stampGiftProductId && /^(P|22|23|42)/.test(String(error?.code || ""))) throw error;
         if (!isPosOrder && (error?.code === "P4001" || String(error?.message || "").includes("LOYALTY_COMBINED_BENEFIT_LIMIT"))) {

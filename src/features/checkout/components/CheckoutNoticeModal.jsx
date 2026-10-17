@@ -11,13 +11,12 @@ export default function CheckoutNoticeModal({ notice, onClose }) {
       className="promo-sheet"
       showHeader={false}
       footer={(
-        <button
-          type="button"
-          className="cta w-full"
-          onClick={onClose}
-        >
-          Đã hiểu
-        </button>
+        <div className="flex gap-3">
+          {notice.onAction && <button type="button" onClick={onClose} className="flex-1 rounded-2xl border px-4 py-3 font-bold">Đóng</button>}
+          <button type="button" className="cta w-full" onClick={() => { onClose(); notice.onAction?.(); }}>
+            {notice.actionLabel || "Đã hiểu"}
+          </button>
+        </div>
       )}
     >
       <div className="space-y-4 pb-2">

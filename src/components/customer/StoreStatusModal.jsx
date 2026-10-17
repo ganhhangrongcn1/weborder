@@ -60,11 +60,16 @@ export default function StoreStatusModal({ notice, onClose }) {
 
   return (
     <CustomerBottomSheet
-      ariaLabel="Th\u00f4ng b\u00e1o tr\u1ea1ng th\u00e1i \u0111\u01a1n h\u00e0ng"
+      ariaLabel={notice.title || "Thông báo"}
       onClose={onClose}
       className={`promo-sheet ${shouldAttractAttention ? "order-status-alert-sheet" : ""}`.trim()}
       showHeader={false}
-      footer={<button onClick={onClose} className="cta w-full">{tone.actionText}</button>}
+      footer={(
+        <div className="flex gap-3">
+          {notice.onAction && <button type="button" onClick={onClose} className="flex-1 rounded-2xl border px-4 py-3 font-bold">Đóng</button>}
+          <button type="button" onClick={notice.onAction || onClose} className="cta w-full">{notice.actionLabel || tone.actionText}</button>
+        </div>
+      )}
     >
       <div className={`mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full ${tone.soft} ${shouldAttractAttention ? "order-status-alert-icon" : ""}`}>
         <span className={`grid h-10 w-10 place-items-center rounded-full bg-white ${tone.text}`}>

@@ -3,6 +3,7 @@ import { buildCreateOrderPayload, validateCheckoutContact } from "../../services
 import { getCheckoutPointsErrorMessage, getCheckoutVoucherErrorMessage } from "../../services/checkoutOrderService.js";
 import { invalidateStamps } from "../../services/stampProgramService.js";
 import { prewarmQrOrderPaymentSession } from "../../services/qrPaymentService.js";
+import { buildUnavailableItemsNotice } from "../../services/reorderService.js";
 
 export default function useCheckoutActions({
   setCart,
@@ -139,6 +140,16 @@ export default function useCheckoutActions({
         details: error?.details || "",
         hint: error?.hint || ""
       });
+      if (error?.code === "ORDER_ITEMS_UNAVAILABLE" || error?.code === "P4002") {
+        let items = error.unavailableItems || [];
+        if (!items.length && error.details) {
+          try { items = JSON.parse(error.details); } catch { /* Use a generic notice if details are unavailable. */ }
+        }
+        const notice = buildUnavailableItemsNotice(Array.isArray(items) ? items : []);
+        if (onNotice) onNotice({ ...notice, onAction: () => navigate("menu", "menu"), icon: "warning" });
+        else alert(notice.message);
+        return;
+      }
       const pointsMessage = getCheckoutPointsErrorMessage(error);
       if (pointsMessage) {
         try {
