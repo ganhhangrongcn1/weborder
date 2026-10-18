@@ -114,6 +114,7 @@ export function adminPathToState(pathname = "/admin") {
       activeAdminNav: "orders-main"
     };
   }
+  if (path === "/admin/ganh-reply") return { section: "ganh-reply", activeAdminNav: "ganh-reply-main" };
   if (path === "/admin/partner-reviews") {
     return {
       section: "partner-reviews",
@@ -257,6 +258,7 @@ export function adminNavToPath(item) {
   if (item.id === "grab-finance-main") return "/admin/grab-finance";
   if (item.id === "grab-marketing-main") return "/admin/grab-marketing";
   if (item.id === "orders-main") return "/admin/orders";
+  if (item.id === "ganh-reply-main") return "/admin/ganh-reply";
   if (item.id === "partner-reviews-main") return "/admin/partner-reviews";
   if (item.id === "review-rewards-main") return "/admin/review-rewards";
   if (item.id === "shifts-main") return "/admin/shifts";

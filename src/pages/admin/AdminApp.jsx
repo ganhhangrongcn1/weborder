@@ -1,3 +1,4 @@
+import useGanhReplyModuleAccess from "../../features/ganh-reply/useGanhReplyModuleAccess.js";
 import "../../styles/admin/admin.css";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -210,10 +211,12 @@ export default function AdminApp({
     isSupabaseAdminMode,
     branches
   }), [adminProfile, isSupabaseAdminMode, branches]);
+  const ganhReplyAccess = useGanhReplyModuleAccess(adminProfile);
   const adminModuleAccessPolicy = useMemo(() => getAdminModuleAccessPolicy({
     adminProfile,
-    isSupabaseAdminMode
-  }), [adminProfile, isSupabaseAdminMode]);
+    isSupabaseAdminMode,
+    ganhReplyAccess
+  }), [adminProfile, isSupabaseAdminMode, ganhReplyAccess]);
   const visibleNavGroups = useMemo(() => filterAdminNavigationByAccess(
     filterInventoryCostNavigation(navGroups, canViewInventoryCostAnalysis),
     adminModuleAccessPolicy

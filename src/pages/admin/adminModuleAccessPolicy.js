@@ -26,7 +26,8 @@ function keepOnlyNavigation(groups = [], allowedItemIds = new Set()) {
 
 export function getAdminModuleAccessPolicy({
   adminProfile = null,
-  isSupabaseAdminMode = false
+  isSupabaseAdminMode = false,
+  ganhReplyAccess = false
 } = {}) {
   if (!isSupabaseAdminMode) {
     return { mode: "full", allowedItemIds: null };
@@ -43,16 +44,18 @@ export function getAdminModuleAccessPolicy({
   if (branchUuid && ["admin", "staff", "kitchen"].includes(role)) {
     return {
       mode: "branch-operations",
-      allowedItemIds: new Set(["shifts-main", "inventory-dashboard", ...BRANCH_INVENTORY_ITEM_IDS])
+      allowedItemIds: new Set(["shifts-main", "inventory-dashboard", ...BRANCH_INVENTORY_ITEM_IDS, ...(ganhReplyAccess && ["admin", "staff"].includes(role) ? ["ganh-reply-main"] : [])])
     };
   }
 
   if (role === "staff" && !branchUuid && accountScope === "central_inventory") {
     return {
       mode: "central-inventory",
-      allowedItemIds: new Set(["inventory-dashboard", ...INVENTORY_ITEM_IDS])
+      allowedItemIds: new Set(["inventory-dashboard", ...INVENTORY_ITEM_IDS, ...(ganhReplyAccess ? ["ganh-reply-main"] : [])])
     };
   }
+
+  if (role === "staff" && ganhReplyAccess) return { mode: "ganh-reply", allowedItemIds: new Set(["ganh-reply-main"]) };
 
   return { mode: "blocked", allowedItemIds: new Set() };
 }

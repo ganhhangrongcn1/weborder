@@ -1,3 +1,4 @@
+import GanhReplyBoundary from "../ganh-reply/GanhReplyBoundary.jsx";
 import AdminDashboardPage from "./AdminDashboardPage.jsx";
 import AdminOrdersPage from "./AdminOrdersPage.jsx";
 import AdminCustomersPage from "./AdminCustomersPage.jsx";
@@ -15,6 +16,8 @@ import { lazy, Suspense } from "react";
 import AdminGrabMarketingPage from "./AdminGrabMarketingPage.jsx";
 
 const AdminRecruitmentPage = lazy(() => import("../recruitment/AdminRecruitmentPage.jsx"));
+const GanhReplyWorkspace = lazy(() => import("../ganh-reply/GanhReplyWorkspace.jsx"));
+
 const InventoryWorkspace = lazy(() => import("../inventory/InventoryWorkspace.jsx"));
 
 function InventoryLoadingState() {
@@ -22,6 +25,8 @@ function InventoryLoadingState() {
 }
 
 export default function AdminPageContent({ section, ...props }) {
+  if (section === "ganh-reply") return <GanhReplyBoundary><Suspense fallback={<div role="status">Đang mở Gánh Reply…</div>}><GanhReplyWorkspace /></Suspense></GanhReplyBoundary>;
+
   if (section === "dashboard") {
     return <AdminDashboardPage {...props} />;
   }
