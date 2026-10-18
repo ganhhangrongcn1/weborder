@@ -13,13 +13,13 @@ export async function readStampSummary(phone = "", { force = false, admin = fals
   if (key && (userId === "guest" || !/^0[35789]\d{8}$/.test(key))) throw new Error("Đăng nhập và dùng số điện thoại hợp lệ để xem tem.");
   return cache.get(`${admin}:${kitchen}:${userId}:${key}:summary`, () => stampRpc("get_stamp_summary", { p_phone: key }, { admin, kitchen }), force);
 }
-export async function readStampHistory(phone, before = null) {
-  const client = await getStampClient();
+export async function readStampHistory(phone, before = null, { admin = false } = {}) {
+  const client = await getStampClient(admin);
   const { data } = client ? await client.auth.getSession() : { data: null };
   if (!data?.session?.user?.id) return [];
   const key = getCustomerKey(phone);
-  return cache.get(`${data.session.user.id}:${key}:history:${before || 0}`,
-    () => stampRpc("get_stamp_history", { p_phone: key, p_before: before }));
+  return cache.get(`${admin}:${data.session.user.id}:${key}:history:${before || 0}`,
+    () => stampRpc("get_stamp_history", { p_phone: key, p_before: before }, { admin }));
 }
 export async function saveStampProgram(enabled, ids) {
   const result = await stampRpc("save_stamp_program", { p_enabled: enabled, p_gift_ids: ids }, { admin: true, write: true });

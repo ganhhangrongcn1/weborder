@@ -298,6 +298,13 @@ No n8n workflow JSON is stored in the repo. The project contains n8n contracts i
 
 ## Deployment Rules
 
+### User Workflow Preference
+
+- The user primarily works on Cloud. Use the latest remote source and deployed version as the starting point; compare remote changes before publishing from an older workspace.
+- When work is performed locally, sync the completed changes to the cloud repository. For website fixes the user has authorized to release, deploy to the existing production project and verify its deployment status before reporting completion.
+- Do not leave an authorized release only in a local workspace. If cloud sync or deployment is blocked, clearly report what remains unpublished and why.
+- Preserve newer Cloud changes by applying only the task's reviewed changes; never replace the remote project with an older local snapshot.
+
 ### Build Process
 
 - Main build command:

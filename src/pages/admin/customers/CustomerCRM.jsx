@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
+import CustomerStampPanel from "./CustomerStampPanel.jsx";
 import {
   buildCustomerOrderPointStatusMap,
   getCustomerOrderPointStatuses,
@@ -2252,6 +2253,8 @@ export default function CustomerCRM({
                   <article><small>Lần mua cuối</small><strong>{formatDateTime(selectedCustomer.lastOrderAt)}</strong></article>
                   <article><small>Nhịp quay lại</small><strong>{getCustomerReturnLabel(selectedCustomer)}</strong></article>
                 </div>
+
+                <CustomerStampPanel key={selectedCustomerPhoneKey} phone={selectedCustomerPhoneKey} />
 
                 <section className="crm-detail-card crm-loyalty-card">
                   <div className="crm-card-title">
