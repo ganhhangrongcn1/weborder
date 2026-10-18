@@ -77,15 +77,26 @@ function buildStrikePromotion(salesChannels = ["pos"]) {
 }
 
 describe("POS promotion sales channels", () => {
-  it("does not apply flash sale when POS channel is off", () => {
+  it("does not apply flash sale when only Web is enabled", () => {
+    const result = applyPosFlashSaleToProduct(
+      product,
+      [buildFlashPromotion(["web"])],
+      new Date("2026-07-02T10:00:00")
+    );
+
+    expect(result.price).toBe(35000);
+    expect(result.flashPromoId).toBeUndefined();
+  });
+
+  it("keeps legacy Web + QR flash sales active on POS after QR retirement", () => {
     const result = applyPosFlashSaleToProduct(
       product,
       [buildFlashPromotion(["web", "qr"])],
       new Date("2026-07-02T10:00:00")
     );
 
-    expect(result.price).toBe(35000);
-    expect(result.flashPromoId).toBeUndefined();
+    expect(result.price).toBe(25000);
+    expect(result.flashPromoId).toBe("flash-1");
   });
 
   it("applies flash sale when POS channel is on", () => {
@@ -180,5 +191,27 @@ describe("POS promotion sales channels", () => {
 
     expect(benefit.checkoutVouchers).toHaveLength(1);
     expect(benefit.checkoutVouchers[0].code).toBe("POS10");
+  });
+
+  it("limits point redemption using the configured CRM percentage", () => {
+    const benefit = buildPosLoyaltyBenefit({
+      subtotal: 200000,
+      pointsInput: "100000",
+      customer: {
+        loyalty: { totalPoints: 100000 },
+        loyaltyRule: {
+          redeemPointUnit: 1,
+          redeemValue: 1,
+          maxRedemptionPercent: 30
+        }
+      }
+    });
+
+    expect(benefit.maxRedemptionPercent).toBe(30);
+    expect(benefit.pointDiscountLimit).toBe(60000);
+    expect(benefit.maxPointDiscount).toBe(60000);
+    expect(benefit.pointsSpent).toBe(60000);
+    expect(benefit.pointsDiscount).toBe(60000);
+    expect(benefit.pointSuggestions.every((suggestion) => suggestion.points <= 60000)).toBe(true);
   });
 });

@@ -12,7 +12,9 @@ export async function readPosStamps(phone, { force = false } = {}) {
   const { data } = await supabase.auth.getSession();
   if (!data?.session?.user?.id) throw new Error("Đăng nhập POS để xem tem.");
   const key = `${data.session.user.id}:${normalized}`;
-  if (pending.has(key)) { posStampRequestStats.shared += 1; return pending.get(key); }
+  const running = pending.get(key);
+  // A receipt after payment must not join a lookup started before payment.
+  if (running && (!force || running.force)) { posStampRequestStats.shared += 1; return running.promise; }
   const saved = cache.get(key);
   if (!force && saved && Date.now() - saved.at < 60000) { posStampRequestStats.hits += 1; return saved.value; }
   posStampRequestStats.requests += 1;
@@ -21,16 +23,20 @@ export async function readPosStamps(phone, { force = false } = {}) {
   const timeout = setTimeout(() => controller.abort(), 4000);
   const request = supabase.rpc("get_stamp_summary", { p_phone: normalized }).abortSignal(controller.signal).then(({ data: result, error }) => {
     if (error) throw error;
-    if (version === generation) cache.set(key, { value: result, at: Date.now() });
+    if (version === generation && pending.get(key)?.promise === request) cache.set(key, { value: result, at: Date.now() });
     return result;
-  }).finally(() => { clearTimeout(timeout); if (pending.get(key) === request) pending.delete(key); });
-  pending.set(key, request);
+  }).finally(() => { clearTimeout(timeout); if (pending.get(key)?.promise === request) pending.delete(key); });
+  pending.set(key, { promise: request, force });
   return request;
 }
 export async function withPosStampSummary(order = {}, phone = "", options = {}) {
-  if (order.stampSummary) return order;
+  if (order.stampSummary && !options.force) return order;
   try { return { ...order, stampSummary: await readPosStamps(phone || order.customerPhone || order.customer_phone, options) }; }
-  catch { return order; }
+  catch {
+    // Keep printing a saved sale, but never print a known stale stamp count.
+    if (options.force && order.stampSummary) return { ...order, stampSummary: null };
+    return order;
+  }
 }
 export function makePosStampGift(product, phone) {
   return { ...product, cartId: `stamp-${product.id}`, quantity: 1, price: 0, unitTotal: 0, lineTotal: 0,

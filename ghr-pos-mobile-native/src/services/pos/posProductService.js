@@ -59,6 +59,11 @@ function normalizeCategoryMap(rows = []) {
   return map;
 }
 
+export function resolvePosProductPrice(row = {}) {
+  const metadata = getObject(row.metadata);
+  return toNumber(row.pos_price ?? metadata.posPrice ?? metadata.pos_price ?? row.price ?? row.unit_price ?? metadata.price, 0);
+}
+
 function normalizeAvailability(value = {}) {
   const source = getObject(value);
   const branchChannelsSource = getObject(source.branchChannels || source.byBranch);
@@ -120,7 +125,8 @@ function normalizeProduct(row = {}, index = 0, categoryMap = new Map(), optionGr
     ...metadata,
     id,
     name,
-    price: toNumber(row.price ?? row.unit_price ?? metadata.price, 0),
+    price: resolvePosProductPrice(row),
+    webPrice: toNumber(metadata.webPrice ?? metadata.web_price ?? row.price ?? metadata.price, 0),
     category: categoryMap.get(categoryId) || categoryId || toText(row.badge) || "Khác",
     image: toText(row.image || row.image_url || metadata.image || metadata.imageUrl || metadata.image_url),
     short: toText(row.description || metadata.short || metadata.description),

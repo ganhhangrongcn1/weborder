@@ -259,7 +259,13 @@ async function requireStaff(
     return { error: "staff_access_required", profile };
   }
 
-  return { error: "", profile };
+  return {
+    error: "",
+    profile: {
+      ...profile,
+      manualQrBranch: toText(authData.user?.app_metadata?.pos_manual_qr_branch)
+    }
+  };
 }
 
 function getAccessErrorMessage(reason: string) {
@@ -319,6 +325,7 @@ async function createSession(
   const checkoutSnapshot = getObject(body.checkout_snapshot);
   const orderId = toText(body.order_id);
   const isPosSource = source === "pos";
+  const pagerDisabled = isPosSource && checkoutSnapshot.pagerEnabled === false;
 
   if (!paymentReference) {
     return response({ ok: false, message: "Thiếu mã thanh toán hoặc khóa yêu cầu." }, 400);
@@ -351,7 +358,15 @@ async function createSession(
       return response({ ok: false, message: "Ca POS không còn mở hoặc không thuộc chi nhánh này." }, 409);
     }
   }
-  if (isPosSource && (!requestKey || !pagerNumber || !amountExpected || !cartSnapshot.length)) {
+  if (pagerDisabled) {
+    const { data: pagerConfig, error: pagerConfigError } = await serviceClient
+      .from("app_configs").select("value").eq("id", `ghr_pos_pager_${branchUuid}`).maybeSingle();
+    if (pagerConfigError) return response({ ok: false, message: "Chưa đọc được cấu hình thẻ rung của chi nhánh." }, 503);
+    if (getObject(pagerConfig?.value).enabled !== false || pagerNumber) {
+      return response({ ok: false, message: "Cấu hình thẻ rung đã thay đổi. Vui lòng tải lại POS." }, 409);
+    }
+  }
+  if (isPosSource && (!requestKey || (!pagerDisabled && !pagerNumber) || !amountExpected || !cartSnapshot.length)) {
     return response({ ok: false, message: "Bill chưa đủ món, thẻ rung hoặc số tiền." }, 400);
   }
   if (!isPosSource && (!amountExpected || !orderId)) {
@@ -407,7 +422,7 @@ async function createSession(
     return response({ ok: false, message: "Mã thanh toán đã được dùng cho bill khác." }, 409);
   }
 
-  const { data: pagerSession } = isPosSource
+  const { data: pagerSession } = isPosSource && pagerNumber
     ? await serviceClient
         .from("pos_payment_sessions")
         .select("id,payment_reference,status,pager_number")
@@ -444,7 +459,7 @@ async function createSession(
       cashier_name: toText(profile.name || profile.email || body.cashier_name),
       customer_name: toText(body.customer_name),
       customer_phone: normalizePhone(body.customer_phone) || null,
-      pager_number: pagerNumber,
+      pager_number: pagerNumber || null,
       currency: "VND",
       amount_expected: amountExpected,
       amount_paid: 0,
@@ -497,6 +512,95 @@ async function updateSession(
   }
   if (!canAccessBranch(profile, toText(current.data.branch_uuid))) {
     return response({ ok: false, message: "Tài khoản không có quyền tại chi nhánh này." }, 403);
+  }
+
+  // QR đã gắn đơn phải được chốt bằng đúng luồng máy chủ của SePay. Không chỉ
+  // đổi trạng thái phiên sang paid, vì khi đó đơn/bếp/in bill sẽ bị bỏ sót.
+  let phoneOrderSession = false;
+  if (action === "confirm_paid" && current.data.source === "web" && toText(current.data.order_id)) {
+    const linked = await serviceClient.from("orders").select("metadata,branch_uuid,total_amount")
+      .eq("id", toText(current.data.order_id)).maybeSingle();
+    if (linked.error || !linked.data) return response({ ok: false, message: "Không đọc được đơn để xác nhận QR. Đơn giữ nguyên." }, 502);
+    phoneOrderSession = getObject(linked.data.metadata).deviceMode === "phone";
+    if (phoneOrderSession && (toText(linked.data.branch_uuid) !== toText(current.data.branch_uuid)
+      || toMoney(linked.data.total_amount) !== toMoney(current.data.amount_expected))) {
+      return response({ ok: false, message: "QR không khớp chi nhánh hoặc số tiền của đơn." }, 409);
+    }
+  }
+  if (action === "confirm_paid" && (toText(current.data.source).toLowerCase() === "qr_order" || phoneOrderSession)) {
+    const supabaseUrl = toText(Deno.env.get("SUPABASE_URL"));
+    const webhookSecret = toText(Deno.env.get("SEPAY_WEBHOOK_SECRET"));
+    const sessionReference = toText(current.data.payment_reference);
+    const amountExpected = toMoney(current.data.amount_expected);
+
+    if (!supabaseUrl || !webhookSecret || !sessionReference || !amountExpected) {
+      return response({
+        ok: false,
+        message: "Không thể xác nhận tay QR này. Kiểm tra cấu hình thanh toán hoặc liên hệ quản trị."
+      }, 500);
+    }
+
+    const confirmedAt = new Date().toISOString();
+    const manualPayload = {
+      id: `manual-confirm-${toText(current.data.id)}-${Date.now()}`,
+      gateway: "manual_pos_confirmation",
+      transactionDate: confirmedAt,
+      accountNumber: "",
+      transferType: "in",
+      transferAmount: amountExpected,
+      content: sessionReference,
+      referenceCode: `MANUAL-${toText(current.data.id)}`,
+      description: `POS xác nhận tay bởi ${toText(profile.name || profile.email || profile.id)}`,
+      manualConfirmation: true,
+      manualConfirmedBy: toText(profile.name || profile.email || profile.id),
+      manualConfirmedAt: confirmedAt
+    };
+
+    try {
+      const webhookUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/sepay-pos-webhook?secret=${encodeURIComponent(webhookSecret)}`;
+      const webhookResponse = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        body: JSON.stringify(manualPayload)
+      });
+      const webhookResult = getObject(await webhookResponse.json().catch(() => ({})));
+
+      if (!webhookResponse.ok || webhookResult.success !== true || webhookResult.matched !== true) {
+        console.error("[pos-payment-session-api] manual QR completion failed", {
+          sessionId: toText(current.data.id),
+          status: webhookResponse.status,
+          result: webhookResult
+        });
+        return response({
+          ok: false,
+          message: "Đã không thể chốt đơn từ xác nhận tay. Đơn vẫn giữ nguyên để kiểm tra lại."
+        }, 502);
+      }
+
+      const completed = await readSession(serviceClient, sessionId);
+      if (completed.error || !completed.data || toText(completed.data.status).toLowerCase() !== "converted") {
+        return response({
+          ok: false,
+          message: "Đã nhận xác nhận tay nhưng chưa chốt xong đơn. Vui lòng thử lại."
+        }, 502);
+      }
+
+      return response({
+        ok: true,
+        session: completed.data,
+        manually_confirmed: true,
+        message: "Đã xác nhận tay, chốt đơn và gửi bếp/in bill."
+      });
+    } catch (error) {
+      console.error("[pos-payment-session-api] manual QR completion request failed", {
+        sessionId: toText(current.data.id),
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return response({
+        ok: false,
+        message: "Không kết nối được luồng chốt đơn. Đơn vẫn giữ nguyên để kiểm tra lại."
+      }, 502);
+    }
   }
 
   const now = new Date().toISOString();
@@ -562,6 +666,70 @@ async function updateSession(
     }, 409);
   }
 
+  if (action === "cancel" && toText(current.data.source).toLowerCase() === "qr_order") {
+    await cancelUnpaidQrOrder(serviceClient, current.data, now, "cancelled", "POS mobile hủy QR");
+  }
+
+  return response({ ok: true, session: data });
+}
+
+async function attachPendingOrderToSession(
+  serviceClient: ReturnType<typeof createClient>,
+  profile: JsonRecord,
+  body: JsonRecord
+) {
+  const sessionId = toText(body.session_id);
+  const orderId = toText(body.order_id);
+  if (!isUuid(sessionId) || !orderId) {
+    return response({ ok: false, message: "Thiếu phiên QR hoặc đơn chờ thanh toán." }, 400);
+  }
+
+  const current = await readSession(serviceClient, sessionId);
+  if (current.error || !current.data) {
+    return response({ ok: false, message: "Không tìm thấy phiên thanh toán." }, 404);
+  }
+  if (!canAccessBranch(profile, toText(current.data.branch_uuid))) {
+    return response({ ok: false, message: "Tài khoản không có quyền tại chi nhánh này." }, 403);
+  }
+  if (toText(current.data.source).toLowerCase() !== "pos" || toText(current.data.status).toLowerCase() !== "pending_payment") {
+    return response({ ok: false, message: "Phiên QR không còn ở trạng thái chờ gắn đơn." }, 409);
+  }
+
+  const { data: order, error: orderError } = await serviceClient
+    .from("orders")
+    .select("id,branch_uuid,status,metadata")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (orderError || !order || toText(order.branch_uuid) !== toText(current.data.branch_uuid)) {
+    return response({ ok: false, message: "Không tìm thấy đơn chờ thanh toán hợp lệ." }, 409);
+  }
+
+  const metadata = getObject(order.metadata);
+  const requestKeyMatches = toText(metadata.requestKey) === toText(current.data.request_key);
+  const isPendingPosOrder =
+    toText(metadata.source).toLowerCase() === "pos_mobile" &&
+    toText(metadata.paymentStatus).toLowerCase() === "pending_payment" &&
+    toText(order.status).toLowerCase() === "pending_payment";
+  if (!requestKeyMatches || !isPendingPosOrder) {
+    return response({ ok: false, message: "Đơn chờ thanh toán không khớp với phiên QR." }, 409);
+  }
+
+  const { data, error } = await serviceClient
+    .from("pos_payment_sessions")
+    .update({
+      source: "qr_order",
+      order_id: orderId,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", sessionId)
+    .eq("source", "pos")
+    .eq("status", "pending_payment")
+    .select(SESSION_COLUMNS)
+    .maybeSingle();
+  if (error || !data) {
+    return response({ ok: false, message: error?.message || "Không gắn được đơn vào phiên QR." }, 409);
+  }
+
   return response({ ok: true, session: data });
 }
 
@@ -586,50 +754,63 @@ async function getSession(
   return response({ ok: true, session: current.data });
 }
 
-async function cancelExpiredQrOrderSessions(
+async function cancelUnpaidQrOrder(
   serviceClient: ReturnType<typeof createClient>,
-  expiredSessions: JsonRecord[],
-  now: string
+  session: JsonRecord,
+  now: string,
+  paymentStatus: "cancelled" | "expired",
+  reason: string
 ) {
-  for (const session of expiredSessions) {
-    const orderId = toText(session.order_id);
-    if (!orderId) continue;
+  const orderId = toText(session.order_id);
+  if (!orderId) return;
 
-    const { data: order } = await serviceClient
-      .from("orders")
-      .select("id,status,kitchen_status,payment_method,metadata")
-      .eq("id", orderId)
-      .maybeSingle();
+  const { data: order } = await serviceClient
+    .from("orders")
+    .select("id,status,kitchen_status,payment_method,metadata")
+    .eq("id", orderId)
+    .maybeSingle();
 
-    if (!order) continue;
+  if (!order) return;
 
-    const metadata = getObject(order.metadata);
-    if (isPaidMetadata(metadata)) continue;
+  const metadata = getObject(order.metadata);
+  if (isPaidMetadata(metadata)) return;
 
-    const nextMetadata = {
-      ...metadata,
+  const nextMetadata = {
+    ...metadata,
+    status: "cancelled",
+    orderStatus: "cancelled",
+    // Bảng orders chỉ nhận kitchen_status pending/done. Đơn hủy dùng done để không vào luồng làm bếp.
+    kitchenStatus: "done",
+    paymentMethod: "bank_qr",
+    paymentStatus,
+    paymentExpiredAt: paymentStatus === "expired" ? now : metadata.paymentExpiredAt,
+    cancelReason: reason,
+    cancelledBy: paymentStatus === "expired" ? "qr_payment_timeout" : "pos_mobile",
+    qrPaymentSessionId: toText(session.id) || metadata.qrPaymentSessionId,
+    paymentReference: toText(session.payment_reference) || metadata.paymentReference || metadata.payment_reference
+  };
+
+  const { data, error } = await serviceClient
+    .from("orders")
+    .update({
       status: "cancelled",
-      orderStatus: "cancelled",
-      kitchenStatus: "cancelled",
-      paymentMethod: "bank_qr",
-      paymentStatus: "expired",
-      paymentExpiredAt: now,
-      cancelReason: "payment_timeout",
-      cancelledBy: "qr_payment_timeout",
-      qrPaymentSessionId: toText(session.id) || metadata.qrPaymentSessionId,
-      paymentReference: toText(session.payment_reference) || metadata.paymentReference || metadata.payment_reference
-    };
+      kitchen_status: "done",
+      payment_method: "bank_qr",
+      metadata: nextMetadata,
+      updated_at: now
+    })
+    .eq("id", orderId)
+    .eq("status", "pending_payment")
+    .select("id")
+    .maybeSingle();
 
-    await serviceClient
-      .from("orders")
-      .update({
-        status: "cancelled",
-        kitchen_status: "cancelled",
-        payment_method: "bank_qr",
-        metadata: nextMetadata,
-        updated_at: now
-      })
-      .eq("id", orderId);
+  if (error || !data) {
+    console.error("[pos-payment-session-api] linked unpaid QR order was not cancelled", {
+      orderId,
+      sessionId: toText(session.id),
+      paymentStatus,
+      error: error?.message || "order is no longer pending_payment"
+    });
   }
 }
 
@@ -671,7 +852,11 @@ async function listSessions(
       message: toText(expireError.message)
     });
   } else if (Array.isArray(expiredQrOrderSessions) && expiredQrOrderSessions.length) {
-    await cancelExpiredQrOrderSessions(serviceClient, expiredQrOrderSessions, now);
+    await Promise.all(
+      expiredQrOrderSessions.map((session) =>
+        cancelUnpaidQrOrder(serviceClient, session, now, "expired", "payment_timeout")
+      )
+    );
   }
 
   const { data, error } = await serviceClient
@@ -747,14 +932,20 @@ Deno.serve(async (request) => {
   if (action === "list") {
     return listSessions(serviceClient, access.profile, payload);
   }
+  if (action === "attach_order") {
+    return attachPendingOrderToSession(serviceClient, access.profile, payload);
+  }
   if (["cancel", "confirm_paid", "convert"].includes(action)) {
     if (
       action === "confirm_paid" &&
-      !["admin", "staff"].includes(toText(access.profile.role).toLowerCase())
+      !["admin", "staff"].includes(toText(access.profile.role).toLowerCase()) &&
+      !(toText(access.profile.role).toLowerCase() === "kitchen" &&
+        isUuid(toText(access.profile.branch_uuid)) &&
+        access.profile.manualQrBranch === toText(access.profile.branch_uuid))
     ) {
       return response({
         ok: false,
-        message: "Chỉ admin được xác nhận thanh toán QR bằng tay."
+        message: "Tài khoản chưa được cấp quyền xác nhận thanh toán QR bằng tay."
       }, 403);
     }
     return updateSession(serviceClient, access.profile, payload, action);

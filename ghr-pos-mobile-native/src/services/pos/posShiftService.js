@@ -453,13 +453,21 @@ export async function closePosShift({
     .eq("id", shiftId)
     .eq("status", "open")
     .select(POS_SHIFT_SELECT)
-    .single();
+    .maybeSingle();
 
   if (error) {
     return {
       ok: false,
       shift: null,
       message: error.message || "Không kết được ca POS."
+    };
+  }
+
+  if (!data) {
+    return {
+      ok: false,
+      shift: null,
+      message: "Ca đã thay đổi trên máy chủ. App đã đồng bộ lại; kiểm tra lại trạng thái ca rồi bấm kết ca một lần nữa."
     };
   }
 

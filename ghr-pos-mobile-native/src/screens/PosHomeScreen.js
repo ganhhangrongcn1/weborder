@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import { countPhoneOrderAttention } from "../services/pos/posHistoryDisplayService";
+import React, { useEffect, useMemo, useState } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import CashPaymentModal from "../features/pos/components/CashPaymentModal";
@@ -13,6 +14,8 @@ import PosHistoryPanel from "../features/pos/components/PosHistoryPanel";
 import PrinterDisconnectedModal from "../features/pos/components/PrinterDisconnectedModal";
 import PosIcon from "../features/pos/components/PosIcon";
 import PosMenuPanel from "../features/pos/components/PosMenuPanel";
+import PosPhoneSaleWorkspace from "../features/pos/components/PosPhoneSaleWorkspace";
+import PosPhoneNavigation, { PosPhoneMore } from "../features/pos/components/PosPhoneNavigation";
 import PosPagerModal from "../features/pos/components/PosPagerModal";
 import PosPickupOrdersPanel from "../features/pos/components/PosPickupOrdersPanel";
 import PosShiftCloseModal from "../features/pos/components/PosShiftCloseModal";
@@ -22,6 +25,7 @@ import ProductOptionsModal from "../features/pos/components/ProductOptionsModal"
 import QrPaymentModal from "../features/pos/components/QrPaymentModal";
 import usePosComposer from "../features/pos/hooks/usePosComposer";
 import usePosAppUpdate from "../hooks/usePosAppUpdate";
+import usePosDeviceMode from "../hooks/usePosDeviceMode";
 import {
   getLocalPrinterConfig,
   checkLocalPrinterConnection,
@@ -34,7 +38,7 @@ import {
   setLocalPrinterMode
 } from "../services/pos/posPrinterService";
 import { formatCashBreakdownSummary } from "../services/pos/posCashBreakdownService";
-import { getCashPaymentSummary } from "../shared/pos/posPayment";
+import { getCashPaymentSummary, normalizeCashReceived } from "../shared/pos/posPayment";
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../styles/posTheme";
 import { formatMoney } from "../utils/format";
 
@@ -74,6 +78,7 @@ export default function PosHomeScreen() {
   const [cashReceived, setCashReceived] = useState("");
   const [pickupCashReceived, setPickupCashReceived] = useState("");
   const [selectedPickupOrder, setSelectedPickupOrder] = useState(null);
+  const [phoneCheckoutOrderId, setPhoneCheckoutOrderId] = useState("");
   const [printerConfig, setPrinterConfig] = useState(null);
   const [lanHost, setLanHost] = useState("");
   const [lanPort, setLanPort] = useState("9100");
@@ -85,7 +90,13 @@ export default function PosHomeScreen() {
   const [printerConnectionOnline, setPrinterConnectionOnline] = useState(null);
   const printerAlertDismissedRef = React.useRef(false);
   const appUpdate = usePosAppUpdate();
-  const { width } = useWindowDimensions();
+  const device = usePosDeviceMode();
+  const isPhoneMode = device.mode === "phone";
+  const { width, height } = useWindowDimensions();
+  const isPhonePortrait = isPhoneMode || (width < 600 && height > width);
+  useEffect(() => {
+    if (!isPhonePortrait && activeTab === "more") setActiveTab("settings");
+  }, [isPhonePortrait, activeTab]);
   const isWide = width >= 820;
   const orderColumnWidth = isWide ? Math.min(480, Math.max(420, Math.round(width * 0.36))) : "100%";
   const estimatedMenuWidth = isWide && typeof orderColumnWidth === "number" ? width - orderColumnWidth - 42 : width;
@@ -99,6 +110,7 @@ export default function PosHomeScreen() {
     shiftMessage,
     menuMessage,
     busy,
+    profile,
     isSignedIn,
     branchName,
     cashierName,
@@ -112,6 +124,10 @@ export default function PosHomeScreen() {
     closedShiftsError,
     openingCash,
     setOpeningCash,
+    pagerEnabled,
+    pagerSettingsReady,
+    pagerSettingsSaving,
+    changePagerEnabled,
     pagerNumber,
     setPagerNumber,
     normalizedPager,
@@ -188,6 +204,7 @@ export default function PosHomeScreen() {
     confirmQrPaidManually,
     printQrReceiptNow,
     createCashOrder,
+    sendPhoneOrder,
     signIn,
     signOut,
     openShiftNow,
@@ -196,7 +213,7 @@ export default function PosHomeScreen() {
     reprintClosedShift,
     dismissLastClosedShift,
     hasOpenShift
-  } = usePosComposer();
+  } = usePosComposer({ historyVisible: activeTab === "history", deviceMode: device.mode });
   const hasBenefitSignal = Boolean(
     (Array.isArray(promotionHints) && promotionHints.length) ||
       (loyaltyBenefit?.checkoutVouchers || []).length ||
@@ -242,7 +259,11 @@ export default function PosHomeScreen() {
   };
 
   const handleProductPress = (product) => {
-    if (!normalizedPager || pagerBusy) {
+    if (isPhonePortrait && !isPhoneMode) {
+      continueAddProduct(product);
+      return;
+    }
+    if (pagerEnabled && (!normalizedPager || pagerBusy)) {
       setPendingPagerProduct(product);
       setPagerPickerOpen(true);
       return;
@@ -250,15 +271,16 @@ export default function PosHomeScreen() {
     continueAddProduct(product);
   };
 
-  const handleSubmitOptions = (product, config) => {
+  const handleSubmitOptions = async (product, config) => {
     if (editingCartItem?.cartId) {
-      updateCartItem(editingCartItem.cartId, product, config);
+      if (!await updateCartItem(editingCartItem.cartId, product, config)) return false;
       setEditingCartItem(null);
       setOptionProduct(null);
-      return;
+      return true;
     }
-    addProduct(product, config);
+    if (!await addProduct(product, config)) return false;
     setOptionProduct(null);
+    return true;
   };
 
   const handleEditCartItem = (item) => {
@@ -283,14 +305,36 @@ export default function PosHomeScreen() {
     continueAddProduct(nextProduct);
   };
 
-  const handleOpenCashModal = () => {
+  const handleOpenCashModal = async () => {
+    if (!isPhoneMode && cart.length && totals.total === 0) {
+      const confirmation = confirmCash("0");
+      if (confirmation) await createCashOrder(confirmation);
+      return;
+    }
     setCashReceived(String(getCashPaymentSummary(totals.total).paymentAmount || ""));
     setCashPaymentOpen(true);
   };
 
-  const handleConfirmCashPayment = () => {
-    confirmCash(cashReceived);
+  const handleConfirmCashPayment = async () => {
+    if (isPhoneMode) {
+      const expected = getCashPaymentSummary(totals.total).paymentAmount;
+      if (normalizeCashReceived(cashReceived) < expected) return;
+      const received = normalizeCashReceived(cashReceived);
+      const order = await sendPhoneOrder();
+      if (!order?.id) return;
+      setPhoneCheckoutOrderId(order.id);
+      setActiveTab("pickup");
+      setCashPaymentOpen(false);
+      const completed = await confirmPickupOrderCashPayment(order, received);
+      if (!completed) handleOpenPickupCashModal(order);
+      return;
+    }
+    const confirmation = confirmCash(cashReceived);
+    if (!confirmation) return;
+    const completed = await createCashOrder(confirmation);
+    if (!completed) return;
     setCashPaymentOpen(false);
+    setCashReceived("");
   };
 
   const handleOpenPickupCashModal = (order) => {
@@ -366,11 +410,11 @@ export default function PosHomeScreen() {
       }
     };
 
-    loadPrinterState();
+    if (!isPhoneMode) loadPrinterState();
     return () => {
       active = false;
     };
-  }, []);
+  }, [isPhoneMode]);
 
   const printerConnected = printerConnectionOnline === null
     ? (printerConfig?.mode === "lan"
@@ -379,6 +423,7 @@ export default function PosHomeScreen() {
     : printerConnectionOnline;
 
   useEffect(() => {
+    if (isPhoneMode) { setPrinterDisconnectedOpen(false); return undefined; }
     if (!isSignedIn || !hasOpenShift || !printerConfig) return undefined;
     if (printerConnected) {
       printerAlertDismissedRef.current = false;
@@ -387,17 +432,17 @@ export default function PosHomeScreen() {
     }
     if (!printerAlertDismissedRef.current) setPrinterDisconnectedOpen(true);
     return undefined;
-  }, [hasOpenShift, isSignedIn, printerConfig, printerConnected]);
+  }, [hasOpenShift, isSignedIn, printerConfig, printerConnected, isPhoneMode]);
 
   useEffect(() => {
-    if (!isSignedIn || !hasOpenShift) return undefined;
+    if (isPhoneMode || !isSignedIn || !hasOpenShift) return undefined;
     const timer = globalThis.setInterval(() => {
       Promise.all([refreshPrinterState(), checkLocalPrinterConnection()])
         .then(([, connected]) => setPrinterConnectionOnline(Boolean(connected)))
         .catch(() => setPrinterConnectionOnline(false));
     }, 15000);
     return () => globalThis.clearInterval(timer);
-  }, [hasOpenShift, isSignedIn]);
+  }, [hasOpenShift, isSignedIn, isPhoneMode]);
 
   useEffect(() => {
     if (hasOpenShift) {
@@ -506,6 +551,8 @@ export default function PosHomeScreen() {
     }
   };
 
+  if (!device.ready) return <View style={styles.centerPage}><Text>{device.error || "Đang tải chế độ thiết bị..."}</Text></View>;
+
   if (!isSignedIn) {
     return (
       <View style={styles.centerPage}>
@@ -562,6 +609,13 @@ export default function PosHomeScreen() {
   }
 
   if (!hasOpenShift) {
+    if (isPhoneMode) return <View style={styles.centerPage}>
+      <Text style={styles.shiftTitle}>{branchName}</Text>
+      <Text>Thu ngân cần mở ca trên máy POS tại quán trước khi nhận đơn.</Text>
+      <Pressable style={styles.submitButton} onPress={refreshCurrentPosRuntime}><Text style={styles.submitText}>Kiểm tra ca</Text></Pressable>
+      <Pressable style={styles.smallGhostButton} onPress={() => device.changeMode('cashier')}><Text>Chuyển sang Thu ngân</Text></Pressable>
+      <Pressable style={styles.smallGhostButton} onPress={signOut}><Text>Đổi tài khoản</Text></Pressable>
+    </View>;
     if (lastClosedShift) {
       return (
         <PosShiftClosedCard
@@ -678,6 +732,42 @@ export default function PosHomeScreen() {
     );
   }
 
+  const renderPhoneSaleWorkspace = () => (
+    <PosPhoneSaleWorkspace
+      orderMode={isPhoneMode} busy={busy || customerLookup.loading}
+        onOpenBenefit={() => setBenefitModalOpen(true)} loyaltyBenefit={loyaltyBenefit}
+      onSendOrder={async paymentMethod => {
+        if (paymentMethod === "cash") { await handleOpenCashModal(); return; }
+        const order = await sendPhoneOrder();
+        if (!order?.id) return;
+        setPhoneCheckoutOrderId(order.id);
+        setActiveTab("pickup");
+        await openPickupOrderQrPayment(order);
+      }}
+      cart={cart} totals={totals} pager={normalizedPager} pagerBusy={pagerBusy}
+      onChoosePager={() => { setPendingPagerProduct(null); setPagerPickerOpen(true); }}
+      menu={<PosMenuPanel compact products={products} categories={categories} activeCategory={activeCategory}
+        columns={2} pagerEnabled={pagerEnabled} normalizedPager={normalizedPager} pagerBusy={pagerBusy} busyPagers={busyPagers}
+        onOpenPagerPicker={() => { setPendingPagerProduct(null); setPagerPickerOpen(true); }}
+        onSelectCategory={setActiveCategory} onAddProduct={handleProductPress} />}
+      customer={<View>
+        <PosCustomerSummaryCard customerName={customerName} customerPhone={customerPhone}
+          setCustomerName={setCustomerName} setCustomerPhone={setCustomerPhone} lookup={customerLookup}
+          onOpen={() => setCustomerModalOpen(true)}
+          onClear={() => { setCustomerName(""); setCustomerPhone(""); setSelectedVoucherId(""); setPointsInput(""); }} />
+
+        {!!menuMessage && <Text style={styles.noticeBox}>{menuMessage}</Text>}
+        {!!shiftMessage && <Text style={styles.noticeText}>{shiftMessage}</Text>}
+      </View>}
+      cartPanel={<PosCartPanel cart={cart} totals={totals} onChangeQuantity={changeQuantity}
+        onEditItem={handleEditCartItem} onClear={clearCart} fillAvailable={!cart.length} />}
+      payment={<PaymentBar compact totals={totals} paymentConfirmed={paymentConfirmed}
+        disabled={busy || customerLookup.loading || !pagerSettingsReady || pagerSettingsSaving} qrLoading={qrLoading} hasBenefitSignal={hasBenefitSignal}
+        onOpenBenefit={() => setBenefitModalOpen(true)} onConfirmCash={handleOpenCashModal}
+        onOpenQrPayment={() => openQrPayment("sepay")} onCreateOrder={createCashOrder} />}
+    />
+  );
+
   const renderSaleWorkspace = () => (
     <View style={[styles.workspace, !isWide && styles.workspaceStack]}>
       <View style={styles.menuColumn}>
@@ -686,6 +776,7 @@ export default function PosHomeScreen() {
           categories={categories}
           activeCategory={activeCategory}
           columns={productColumns}
+          pagerEnabled={pagerEnabled}
           normalizedPager={normalizedPager}
           pagerBusy={pagerBusy}
           busyPagers={busyPagers}
@@ -734,7 +825,7 @@ export default function PosHomeScreen() {
           <PaymentBar
             totals={totals}
             paymentConfirmed={paymentConfirmed}
-            disabled={busy}
+            disabled={busy || customerLookup.loading || !pagerSettingsReady || pagerSettingsSaving}
             qrLoading={qrLoading}
             hasBenefitSignal={hasBenefitSignal}
             onOpenBenefit={() => setBenefitModalOpen(true)}
@@ -767,8 +858,8 @@ export default function PosHomeScreen() {
         {!!shiftSummaryError && <Text style={styles.errorBox}>{shiftSummaryError}</Text>}
 
         <View style={styles.summaryCard}>
-          <View style={styles.shiftHeroRow}>
-            <View style={styles.shiftHeroMain}>
+          <View style={[styles.shiftHeroRow, isPhonePortrait && { flexDirection: "column" }]}>
+            <View style={[styles.shiftHeroMain, isPhonePortrait && { flex: 0 }]}>
               <Text style={styles.sectionCaption}>Ca đang mở</Text>
               <Text style={styles.shiftHeroTitle} numberOfLines={1}>{branchName}</Text>
               <Text style={styles.shiftHeroMeta}>Thu ngân: {cashierName}</Text>
@@ -783,7 +874,7 @@ export default function PosHomeScreen() {
             >
               <Text style={styles.closedShiftHistoryButtonText}>Xem ca đã kết</Text>
             </Pressable>
-            <View style={styles.shiftHeroBadge}>
+            <View style={[styles.shiftHeroBadge, isPhonePortrait && { width: "100%" }]}>
               <Text style={styles.shiftHeroBadgeValue}>{formatMoney(shift?.openingCash || 0)}</Text>
               <Text style={styles.shiftHeroBadgeLabel}>Tiền đầu ca</Text>
             </View>
@@ -1200,7 +1291,7 @@ export default function PosHomeScreen() {
   return (
     <View style={styles.screen}>
       <View style={styles.shell}>
-        {appUpdate.available ? (
+        {!isPhoneMode && appUpdate.available ? (
           <Pressable style={styles.updateBanner} onPress={() => setActiveTab("settings")}>
             <View style={styles.flexOne}>
               <Text style={styles.updateBannerTitle}>Có bản cập nhật POS {appUpdate.release?.versionName}</Text>
@@ -1209,14 +1300,14 @@ export default function PosHomeScreen() {
             <Text style={styles.updateBannerAction}>Xem</Text>
           </Pressable>
         ) : null}
-        {printerConfig && !printerConnected ? (
+        {!isPhoneMode && printerConfig && !printerConnected ? (
           <View style={styles.printerDisconnectedBanner}>
             <View style={styles.printerDisconnectedMark}>
               <Text style={styles.printerDisconnectedMarkText}>!</Text>
             </View>
             <View style={styles.flexOne}>
               <Text style={styles.printerDisconnectedTitle}>Máy in đang mất kết nối</Text>
-              <Text style={styles.printerDisconnectedText}>Đơn vẫn được lưu bình thường. Kết nối lại để tiếp tục in bill.</Text>
+              {!isPhonePortrait && <Text style={styles.printerDisconnectedText}>Đơn vẫn được lưu bình thường. Kết nối lại để tiếp tục in bill.</Text>}
             </View>
             <Pressable
               style={styles.printerReconnectButton}
@@ -1232,11 +1323,33 @@ export default function PosHomeScreen() {
           </View>
         ) : null}
         <View style={styles.workspaceFrame}>
-          {activeTab === "sale" && renderSaleWorkspace()}
+          {activeTab === "sale" && (isPhonePortrait ? renderPhoneSaleWorkspace() : renderSaleWorkspace())}
+          {isPhonePortrait && ["history", "pickup"].includes(activeTab) && (
+            <View style={{ flexDirection: "row", gap: 8, paddingBottom: 8 }}>
+              {[{ key: "history", label: "Lịch sử" }, { key: "pickup", label: "Đơn cần thu" }].map((tab) => (
+                <Pressable key={tab.key} onPress={() => { if (tab.key === "pickup") setPhoneCheckoutOrderId(""); setActiveTab(tab.key); }}
+                  style={{ flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 12,
+                    backgroundColor: activeTab === tab.key ? POS_COLORS.primarySoft : POS_COLORS.surface }}>
+                  <Text style={{ color: POS_COLORS.heading, fontWeight: "800" }}>{tab.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {isPhonePortrait && activeTab === "more" && <PosPhoneMore onSelect={setActiveTab} onSignOut={signOut}
+            deviceMode={device.mode} modeDisabled={busy || cart.length > 0 || !!qrSession || !!pickupQrSession}
+            modeError={device.error} onChangeMode={async value => { if (await device.changeMode(value)) setActiveTab('sale'); }} />}
+          {isPhonePortrait && ["shift", "settings"].includes(activeTab) && (
+            <Pressable style={{ minHeight: 44, justifyContent: "center" }} onPress={() => setActiveTab("more")}>
+              <Text style={{ color: POS_COLORS.primaryDark, fontWeight: "800" }}>‹ Khác</Text>
+            </Pressable>
+          )}
           {activeTab === "pickup" && (
             <PosPickupOrdersPanel
-              pickupOrders={pickupOrders}
-              deliveryOrders={deliveryOrders}
+              pickupOrders={isPhoneMode ? pickupOrders.filter(order => order.metadata?.deviceMode === "phone") : pickupOrders}
+              deliveryOrders={isPhoneMode ? [] : deliveryOrders}
+              phoneMode={isPhoneMode}
+              focusedOrderId={phoneCheckoutOrderId}
+              onClearFocus={() => setPhoneCheckoutOrderId("")}
               activeShiftId={shift?.id || ""}
               shiftOpenedAt={shift?.openedAt || ""}
               loading={pickupOrdersLoading}
@@ -1249,23 +1362,28 @@ export default function PosHomeScreen() {
           {activeTab === "history" && (
             <PosHistoryPanel
               recentOrders={recentOrders}
-              paymentSessions={pendingPaymentSessions}
+              compact={isPhonePortrait}
+              phoneMode={isPhoneMode}
+              onPayCash={isPhoneMode ? handleOpenPickupCashModal : undefined}
+              onPayQr={isPhoneMode ? openPickupOrderQrPayment : undefined}
+              paymentSessions={isPhoneMode ? pendingPaymentSessions.filter(payment => payment.source === "web" && payment.checkoutSnapshot?.sourceType === "pos_mobile") : pendingPaymentSessions}
               loading={historyLoading}
               error={historyError}
               activeShiftId={shift?.id || ""}
               onRefresh={refreshCurrentPosRuntime}
-              onOpenPaymentSession={openPaymentSessionFromHistory}
+              onOpenPaymentSession={isPhoneMode ? undefined : openPaymentSessionFromHistory}
               onCancelPaymentSession={cancelPaymentSessionFromHistory}
-              onCancelOrder={cancelRecentOrder}
-              onReprintOrder={reprintRecentOrder}
+              onCancelOrder={order => !isPhoneMode || order.metadata?.deviceMode === "phone" ? cancelRecentOrder(order) : false}
+              onReprintOrder={isPhoneMode ? undefined : reprintRecentOrder}
               onOpenOrderDetail={openRecentOrderDetail}
             />
           )}
-          {activeTab === "shift" && renderShiftWorkspaceV2()}
-          {activeTab === "settings" && renderSettingsWorkspaceV2()}
+          {!isPhoneMode && activeTab === "shift" && (isPhonePortrait ? <ScrollView>{renderShiftWorkspaceV2()}</ScrollView> : renderShiftWorkspaceV2())}
+          {!isPhoneMode && activeTab === "settings" && renderSettingsWorkspaceV2()}
         </View>
 
-        <View style={styles.bottomNav}>
+        {isPhonePortrait ? <PosPhoneNavigation activeTab={activeTab} onSelect={setActiveTab}
+          orderCount={isPhoneMode ? countPhoneOrderAttention(recentOrders, pickupOrders) : websiteAttentionCount + historyAttentionCount} /> : <View style={styles.bottomNav}>
           <View style={styles.navMark}>
             <PosIcon name="brand" size={18} color={POS_COLORS.surface} />
           </View>
@@ -1313,7 +1431,7 @@ export default function PosHomeScreen() {
               <Text style={styles.changeShiftText}>Đổi ca</Text>
             </View>
           </Pressable>
-        </View>
+        </View>}
       </View>
 
       <ProductOptionsModal
@@ -1363,6 +1481,19 @@ export default function PosHomeScreen() {
         visible={pagerPickerOpen}
         value={normalizedPager}
         busyPagers={busyPagers}
+        enabled={pagerEnabled}
+        canConfigure={!isPhoneMode && ["admin", "staff", "kitchen"].includes(profile?.role)}
+        branchName={branchName}
+        settingsDisabled={!pagerSettingsReady || pagerSettingsSaving || busy || qrLoading || Boolean(qrSession) || Boolean(paymentConfirmed)}
+        onChangeEnabled={async (nextEnabled) => {
+          const saved = await changePagerEnabled(nextEnabled);
+          if (saved && !nextEnabled) {
+            const nextProduct = pendingPagerProduct;
+            setPendingPagerProduct(null);
+            setPagerPickerOpen(false);
+            continueAddProduct(nextProduct);
+          }
+        }}
         onClose={() => {
           setPagerPickerOpen(false);
           setPendingPagerProduct(null);
@@ -1399,7 +1530,7 @@ export default function PosHomeScreen() {
         cashReceived={pickupCashReceived}
         setCashReceived={setPickupCashReceived}
         processing={pickupOrdersLoading}
-        eyebrow={selectedPickupOrder?.fulfillmentType === "delivery" ? "Đơn giao hàng" : "Đơn hẹn lấy"}
+        eyebrow={selectedPickupOrder?.metadata?.deviceMode === "phone" ? "Chờ thanh toán" : selectedPickupOrder?.fulfillmentType === "delivery" ? "Đơn giao hàng" : "Đơn hẹn lấy"}
         title={`Thu tiền ${selectedPickupOrder?.displayOrderCode || selectedPickupOrder?.orderCode || ""}`.trim()}
         subtitle={[
           selectedPickupOrder?.customerName || "",
@@ -1428,9 +1559,10 @@ export default function PosHomeScreen() {
         onCancel={() => cancelQrPayment(qrSession)}
         onConfirmPaid={confirmQrPaidManually}
         onPrint={printQrReceiptNow}
+        onRetry={() => openQrPayment(qrSession?.provider || "sepay")}
       />
       <PrinterDisconnectedModal
-        visible={printerDisconnectedOpen}
+        visible={!isPhoneMode && printerDisconnectedOpen}
         devices={usbDevices}
         busy={printerBusy}
         message={printerMessage}
@@ -1443,6 +1575,7 @@ export default function PosHomeScreen() {
       />
       <QrPaymentModal
         visible={pickupQrModalOpen}
+        allowPrint={!isPhoneMode}
         branch={branch}
         amount={pickupQrSession?.amountExpected || pickupQrOrder?.collectAmount || pickupQrOrder?.totalAmount || 0}
         draftSession={pickupQrSession}
@@ -1459,6 +1592,9 @@ export default function PosHomeScreen() {
         onCancel={() => cancelPickupOrderQrPayment(pickupQrSession)}
         onConfirmPaid={confirmPickupQrPaidManually}
         onPrint={printPickupQrReceiptNow}
+        onRetry={() => {
+          if (pickupQrOrder?.id) void openPickupOrderQrPayment(pickupQrOrder);
+        }}
       />
     </View>
   );

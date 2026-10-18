@@ -94,14 +94,34 @@ function isRemoteOrderPagerClosed(row = {}) {
 
 export async function getBusyPosPagerNumbers({ branchUuid = "" } = {}) {
   if (!supabase) return [];
-
-  const { data, error } = await supabase
-    .from("orders")
-    .select("id,status,kitchen_status,branch_uuid,pickup_branch_uuid,delivery_branch_uuid,metadata,created_at")
-    .order("created_at", { ascending: false })
-    .limit(200);
-
-  if (error || !Array.isArray(data)) return [];
+  const branch = toText(branchUuid);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(branch)) {
+    throw new Error("Không xác định được chi nhánh để kiểm tra thẻ rung.");
+  }
+  const branchColumns = ["branch_uuid", "pickup_branch_uuid", "delivery_branch_uuid",
+    "metadata->>branchUuid", "metadata->>branch_uuid", "metadata->>pickupBranchUuid",
+    "metadata->>pickup_branch_uuid", "metadata->>deliveryBranchUuid", "metadata->>delivery_branch_uuid"];
+  const data = [];
+  const closedStatuses = "(done,completed,complete,cancelled,canceled,cancel)";
+  const scope = `and(or(${branchColumns.map((column) => `${column}.eq.${branch}`).join(",")}),`
+    + "or(metadata->>pagerNumber.not.is.null,metadata->>pager_number.not.is.null),"
+    + `or(status.is.null,status.not.in.${closedStatuses}),`
+    + `or(kitchen_status.is.null,kitchen_status.not.in.${closedStatuses}))`;
+  // Scope before pagination, retaining legacy branch identities in metadata.
+  // Read every page so an old open bill cannot disappear behind newer sales.
+  for (let offset = 0; ; offset += 200) {
+    const result = await supabase.from("orders")
+      .select("id,status,kitchen_status,branch_uuid,pickup_branch_uuid,delivery_branch_uuid,metadata,created_at")
+      .or(scope)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + 199);
+    if (result.error || !Array.isArray(result.data)) {
+      throw new Error(result.error?.message || "Không đọc được trạng thái thẻ rung.");
+    }
+    data.push(...result.data);
+    if (result.data.length < 200) break;
+  }
 
   return Array.from(
     new Set(
@@ -180,7 +200,7 @@ export async function cancelPosOrder(order = {}, { cashierName = "", reason = ""
   const metadata = getObject(order.metadata);
   const payload = {
     status: "cancelled",
-    kitchen_status: "cancelled",
+    kitchen_status: order.metadata?.deviceMode === "phone" ? "done" : "cancelled",
     metadata: {
       ...metadata,
       status: "cancelled",

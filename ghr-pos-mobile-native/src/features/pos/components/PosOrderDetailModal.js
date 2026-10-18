@@ -26,6 +26,7 @@ function getOrderStatusLabel(order = {}) {
   if (["done", "completed", "complete"].includes(status) || ["done", "completed", "complete"].includes(kitchenStatus)) {
     return "Hoàn tất";
   }
+  if (order.metadata?.deviceMode === "phone" && status === "pending_payment") return "Chờ thanh toán";
   return "Đang xử lý";
 }
 
@@ -54,7 +55,9 @@ export default function PosOrderDetailModal({
   actionBusy = false,
   onClose,
   onReprint,
-  onCancel
+  onCancel,
+  onPayCash,
+  onPayQr
 }) {
   const { width } = useWindowDimensions();
   const dialogWidth = getPosDialogWidth(width, 680);
@@ -114,7 +117,7 @@ export default function PosOrderDetailModal({
                   <View style={styles.infoCard}>
                     <Text style={styles.infoLabel}>Thanh toán</Text>
                     <Text style={styles.infoValue}>{order.paymentReference || "--"}</Text>
-                    <Text style={styles.infoMeta}>{order.paymentStatus || "paid"}</Text>
+                    <Text style={styles.infoMeta}>{order.metadata?.deviceMode === "phone" ? (order.paymentStatus === "paid" ? "Đã thanh toán" : "Chưa thanh toán") : order.paymentStatus || "paid"}</Text>
                   </View>
                   <View style={styles.infoCard}>
                     <Text style={styles.infoLabel}>Thu ngân</Text>
@@ -172,13 +175,14 @@ export default function PosOrderDetailModal({
               </ScrollView>
 
               <View style={styles.actions}>
-                <Pressable
+                {order.metadata?.deviceMode === "phone" && order.status === "pending_payment" && [{label:"Tiền mặt", action:onPayCash},{label:"Mở QR",action:onPayQr}].filter(item => item.action).map(item => <Pressable key={item.label} style={[styles.actionButton,styles.ghostAction]} disabled={actionBusy} onPress={() => { onClose?.(); item.action(order); }}><Text style={styles.ghostActionText}>{item.label}</Text></Pressable>)}
+                {typeof onReprint === "function" && <Pressable
                   style={[styles.actionButton, styles.ghostAction]}
                   onPress={() => onReprint?.(order)}
                   disabled={actionBusy}
                 >
                   <Text style={[styles.ghostActionText, actionBusy && styles.disabledText]}>In lại bill</Text>
-                </Pressable>
+                </Pressable>}
                 {order.canCancel ? (
                   <Pressable
                     style={[styles.actionButton, styles.dangerAction]}

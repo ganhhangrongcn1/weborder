@@ -3,6 +3,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../supabase/client";
 
 const OFFLINE_ORDER_QUEUE_KEY = "ghr_pos_mobile_offline_order_queue_v1";
+let queueMutation = Promise.resolve();
+
+function updateQueue(transform) {
+  const operation = queueMutation.then(async () => {
+    // Do not overwrite persisted orders if reading storage fails.
+    const raw = await AsyncStorage.getItem(OFFLINE_ORDER_QUEUE_KEY);
+    const queue = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(queue)) throw new Error("Không đọc được danh sách đơn lưu tạm.");
+    const next = transform(queue);
+    await writePosOfflineOrderQueue(next);
+  });
+  queueMutation = operation.catch(() => {});
+  return operation;
+}
 
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
@@ -62,7 +76,6 @@ export async function getPosOfflineOrderCount() {
 export async function queuePosOfflineOrder(payload = {}, reason = "") {
   const orderPayload = getObject(payload);
   const queueKey = getQueueKey(orderPayload);
-  const queue = await readPosOfflineOrderQueue();
   const nextEntry = {
     id: queueKey,
     queuedAt: new Date().toISOString(),
@@ -70,26 +83,23 @@ export async function queuePosOfflineOrder(payload = {}, reason = "") {
     retryCount: 0,
     orderPayload
   };
-  const nextQueue = [
+  await updateQueue((queue) => [
     ...queue.filter((entry) => entry?.id !== queueKey),
     nextEntry
-  ];
-  await writePosOfflineOrderQueue(nextQueue);
+  ]);
   return nextEntry;
 }
 
 export async function removePosOfflineOrder(queueId = "") {
   const safeQueueId = toText(queueId);
   if (!safeQueueId) return;
-  const queue = await readPosOfflineOrderQueue();
-  await writePosOfflineOrderQueue(queue.filter((entry) => entry?.id !== safeQueueId));
+  await updateQueue((queue) => queue.filter((entry) => entry?.id !== safeQueueId));
 }
 
 export async function markPosOfflineOrderRetry(queueId = "", error = null) {
   const safeQueueId = toText(queueId);
   if (!safeQueueId) return;
-  const queue = await readPosOfflineOrderQueue();
-  const nextQueue = queue.map((entry) => {
+  await updateQueue((queue) => queue.map((entry) => {
     if (entry?.id !== safeQueueId) return entry;
     return {
       ...entry,
@@ -97,8 +107,7 @@ export async function markPosOfflineOrderRetry(queueId = "", error = null) {
       lastError: toText(error?.message || error),
       lastTriedAt: new Date().toISOString()
     };
-  });
-  await writePosOfflineOrderQueue(nextQueue);
+  }));
 }
 
 export async function checkPosSupabaseConnection() {
@@ -109,11 +118,14 @@ export async function checkPosSupabaseConnection() {
     };
   }
 
+  const controller = new globalThis.AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
   try {
     const { error } = await supabase
       .from("products")
       .select("id")
-      .limit(1);
+      .limit(1)
+      .abortSignal(controller.signal);
 
     if (!error) {
       return {
@@ -122,7 +134,7 @@ export async function checkPosSupabaseConnection() {
       };
     }
 
-    if (isLikelyPosNetworkError(error)) {
+    if (controller.signal.aborted || isLikelyPosNetworkError(error)) {
       return {
         online: false,
         message: "Đang offline. Đơn mới sẽ lưu tạm trên máy."
@@ -141,5 +153,7 @@ export async function checkPosSupabaseConnection() {
         ? "Đang offline. Đơn mới sẽ lưu tạm trên máy."
         : error?.message || "Không kiểm tra được kết nối Supabase."
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }

@@ -17,6 +17,7 @@ export default function PaymentBar({
   totals = {},
   paymentConfirmed,
   disabled = false,
+  compact = false,
   qrLoading = false,
   hasBenefitSignal = false,
   onOpenBenefit,
@@ -32,7 +33,7 @@ export default function PaymentBar({
   return (
     <View style={styles.wrap}>
       <View style={styles.infoCard}>
-        <View style={styles.paymentHead}>
+        <View style={[styles.paymentHead, compact && { flexDirection: "column", alignItems: "flex-start" }]}>
           <Text style={styles.paymentTitle}>Thanh toán</Text>
           <Text style={styles.paymentStep}>{paymentConfirmed ? "Bước 2/2 · Xác nhận đơn" : "Bước 1/2 · Chọn hình thức"}</Text>
         </View>
@@ -56,9 +57,9 @@ export default function PaymentBar({
         </View>
       </View>
 
-      <View style={styles.actions}>
+      <View style={[styles.actions, compact && { flexWrap: "wrap" }]}>
         <Pressable
-          style={[styles.benefitButton, hasBenefitSignal && styles.benefitButtonReady]}
+          style={[styles.benefitButton, hasBenefitSignal && styles.benefitButtonReady, compact && { width: "100%", flexDirection: "row", gap: 8 }]}
           onPress={onOpenBenefit}
         >
           <PosIcon
@@ -67,10 +68,11 @@ export default function PaymentBar({
             color={hasBenefitSignal ? POS_COLORS.primaryDark : "#6366f1"}
           />
           {hasBenefitSignal ? <View style={styles.benefitDot} /> : null}
+          {compact ? <Text style={styles.secondaryText}>Ưu đãi & điểm</Text> : null}
         </Pressable>
 
         <Pressable
-          style={[styles.secondary, disabled && styles.disabledButton]}
+          style={[styles.secondary, disabled && styles.disabledButton, compact && { flexBasis: "45%" }]}
           onPress={onConfirmCash}
           disabled={disabled}
         >
@@ -80,7 +82,7 @@ export default function PaymentBar({
           </View>
         </Pressable>
         <Pressable
-          style={[styles.secondary, qrLoading && styles.qrLoadingButton, disabled && styles.disabledButton]}
+          style={[styles.secondary, qrLoading && styles.qrLoadingButton, disabled && styles.disabledButton, compact && { flexBasis: "45%" }]}
           onPress={onOpenQrPayment}
           disabled={disabled || qrLoading || total <= 0}
         >
@@ -96,7 +98,7 @@ export default function PaymentBar({
           </View>
         </Pressable>
         <Pressable
-          style={[styles.primary, !readyToCreate && styles.primaryDisabled]}
+          style={[styles.primary, !readyToCreate && styles.primaryDisabled, compact && { flexBasis: "100%" }]}
           onPress={onCreateOrder}
           disabled={!readyToCreate}
         >

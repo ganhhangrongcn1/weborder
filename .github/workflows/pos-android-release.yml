@@ -8,7 +8,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    if: github.repository == 'ganhhangrongcn1/weborder' && github.ref == 'refs/heads/main' && vars.POS_RELEASE_APPROVED_SHA != ''
+    if: github.repository == 'ganhhangrongcn1/weborder' && github.sha == vars.POS_RELEASE_APPROVED_SHA
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -45,6 +45,7 @@ jobs:
         run: |
           npm ci --prefix ghr-pos-mobile-native --no-audit --no-fund
           bash scripts/usb-printer-selection.test.sh
+          npm --prefix ghr-pos-mobile-native test -- --runInBand __tests__/posStamps.test.js __tests__/posStampReceipt.test.js __tests__/posPendingQrStampRead.test.js
       - name: Build signed release with existing key
         env:
           POS_KEYSTORE_BASE64: ${{ secrets.POS_KEYSTORE_BASE64 }}
@@ -85,13 +86,22 @@ jobs:
           if len(certs) != 1 or certs[0].lower() != expected:
               raise SystemExit("APK signing certificate differs from installed release")
           PY
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$task_apk" > "$RUNNER_TEMP/pos-badging.txt"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          first = Path(os.environ["RUNNER_TEMP"] + "/pos-badging.txt").read_text().splitlines()[0]
+          if "name='vn.ghr.posmobile'" not in first or "versionCode='57'" not in first or "versionName='0.4.26'" not in first:
+              raise SystemExit("Unexpected APK package or version")
+          print("Verified POS 0.4.26 / code 57")
+          PY
           mkdir -p "$GITHUB_WORKSPACE/release-artifacts"
-          cp "$task_apk" "$GITHUB_WORKSPACE/release-artifacts/GHR-POS-0.4.25.apk"
+          cp "$task_apk" "$GITHUB_WORKSPACE/release-artifacts/GHR-POS-0.4.26.apk"
           cd "$GITHUB_WORKSPACE/release-artifacts"
-          sha256sum GHR-POS-0.4.25.apk > SHA256SUMS
+          sha256sum GHR-POS-0.4.26.apk > SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: GHR-POS-0.4.25-release
+          name: GHR-POS-0.4.26-release
           path: release-artifacts/
           if-no-files-found: error
           retention-days: 14

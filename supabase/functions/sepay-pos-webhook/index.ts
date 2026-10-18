@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { notifyPaidWebsiteOrder } from "../_shared/webOrderPaidNotification.ts";
+import { settlePaidPosOrderLoyalty } from "../_shared/posPaidOrderLoyalty.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -706,6 +707,7 @@ async function ensureCustomerBillPrintJob(
   const now = new Date().toISOString();
   const metadata = getObject(order.metadata);
   const printOrder = buildPrintOrder(order, items);
+  const isPhoneOrder = metadata.deviceMode === "phone";
 
   const sourceType = "qr_order_bundle";
   const exists = await hasExistingPrintJob(supabase, orderId, orderCode, sourceType);
@@ -713,9 +715,8 @@ async function ensureCustomerBillPrintJob(
     return { created: false, reason: "already_exists" };
   }
 
-  const { error } = await supabase
-    .from("print_jobs")
-    .insert({
+  const job = {
+      ...(isPhoneOrder ? { id: toText(metadata.phoneCustomerBillJobId) } : {}),
       branch_uuid: toText(order.branch_uuid),
       printer_key: "cashier-80mm",
       job_type: "customer_bill",
@@ -736,7 +737,11 @@ async function ensureCustomerBillPrintJob(
       requested_at: now,
       created_at: now,
       updated_at: now
-    });
+    };
+  const query = supabase.from("print_jobs");
+  const { error } = isPhoneOrder
+    ? await query.upsert(job, { onConflict: "id", ignoreDuplicates: true })
+    : await query.insert(job);
 
   return {
     created: !error,
@@ -774,6 +779,11 @@ async function markOrderPaidFromPaymentSession(
   }
 
   const metadata = getObject(order.metadata);
+  if (metadata.deviceMode === "phone") {
+    if (["cancelled", "canceled", "expired"].includes(toText(order.status).toLowerCase())) return { ok: false, updated: false, reason: "phone_order_cancelled" };
+    if (toText(order.branch_uuid) !== toText(session.branch_uuid) || toNumber(order.total_amount) !== options.transferAmount) return { ok: false, updated: false, reason: "phone_order_payment_mismatch" };
+    if (toText(metadata.paymentStatus).toLowerCase() === "paid" && (toText(order.payment_method) !== "bank_qr" || toText(metadata.paymentReference) !== toText(session.payment_reference))) return { ok: false, updated: false, reason: "phone_order_already_collected" };
+  }
   const alreadyPaid = toText(metadata.paymentStatus || metadata.payment_status).toLowerCase() === "paid";
   const branchUuid = toText(session.branch_uuid || order.pickup_branch_uuid || order.branch_uuid);
   const activeShift = await findActivePosShift(supabase, branchUuid);
@@ -1097,7 +1107,16 @@ Deno.serve(async (request) => {
 
     const paidSession = getObject(paymentResult.session);
     const paidSessionSource = toText(paidSession.source).toLowerCase();
-    const shouldSyncQrOrder = paidSessionSource === "qr_order";
+    let phoneOrderSession = false;
+    if (paidSessionSource === "web" && toText(paidSession.order_id)) {
+      const linked = await supabase.from("orders").select("metadata")
+        .eq("id", toText(paidSession.order_id)).maybeSingle();
+      if (linked.error || !linked.data) {
+        return new Response(JSON.stringify({success: false, matched: true, reason: "linked_order_read_failed"}), {status: 500, headers: jsonHeaders});
+      }
+      phoneOrderSession = getObject(linked.data.metadata).deviceMode === "phone";
+    }
+    const shouldSyncQrOrder = paidSessionSource === "qr_order" || phoneOrderSession;
     const orderPaymentResult = shouldSyncQrOrder
       ? await markOrderPaidFromPaymentSession(
           supabase,
@@ -1111,11 +1130,27 @@ Deno.serve(async (request) => {
         )
       : { ok: true, updated: false, reason: "", printJob: {} };
 
+    if (phoneOrderSession && !orderPaymentResult.ok) {
+      return new Response(JSON.stringify({ success: false, matched: true, reason: orderPaymentResult.reason }), { status: 500, headers: jsonHeaders });
+    }
     if (shouldSyncQrOrder && !orderPaymentResult.ok) {
       console.error("[sepay-pos-webhook] update order from payment session failed", orderPaymentResult.reason);
     }
+    if (shouldSyncQrOrder && orderPaymentResult.ok) {
+      const orderId = toText(paidSession.order_id);
+      if (orderId) {
+        const { data: paidOrder } = await supabase.from("orders").select("id,customer_phone,promo_code,metadata").eq("id", orderId).maybeSingle();
+        if (paidOrder) {
+          try {
+            await settlePaidPosOrderLoyalty(supabase, paidOrder);
+          } catch (error) {
+            console.error("[sepay-pos-webhook] POS loyalty settlement failed", error);
+          }
+        }
+      }
+    }
 
-    const isWebsitePaymentSession = ["web", "online", "website"].includes(paidSessionSource);
+    const isWebsitePaymentSession = ["web", "online", "website", "qr_order"].includes(paidSessionSource);
     const paidWebsiteOrderId = toText(paidSession.order_id);
     if (isWebsitePaymentSession && paidWebsiteOrderId) {
       try {

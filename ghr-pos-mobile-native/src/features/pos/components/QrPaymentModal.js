@@ -2,7 +2,11 @@ import React from "react";
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 
-import { buildPosPaymentReference, buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/pos/posPaymentService";
+import {
+  buildPosQrImageUrl,
+  getPosQrPaymentConfig,
+  isPosQrSessionReadyForDisplay
+} from "../../../services/pos/posPaymentService";
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
 import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
@@ -23,18 +27,26 @@ export default function QrPaymentModal({
   onClose,
   onCancel,
   onConfirmPaid,
-  onPrint
+  onPrint,
+  allowPrint = true,
+  onRetry
 }) {
   const { width, height } = useWindowDimensions();
   const identity = draftSession || previewIdentity || {};
   const sessionStatus = String(draftSession?.status || "").trim().toLowerCase();
   const sessionPaid = ["paid", "converting", "converted"].includes(sessionStatus);
   const isMomo = String(draftSession?.provider || "").trim().toLowerCase() === "momo";
+  const hasCreatedSession = isPosQrSessionReadyForDisplay(draftSession)
+    || sessionPaid;
   const canRetryFinalize = sessionPaid && Boolean(errorMessage);
-  const qrUrl = buildPosQrImageUrl({ branch, amount, orderIdentity: identity });
+  const qrUrl = hasCreatedSession
+    ? buildPosQrImageUrl({ branch, amount, orderIdentity: identity })
+    : "";
   const momoQrValue = String(draftSession?.momoQrValue || "").trim();
   const config = getPosQrPaymentConfig(branch);
-  const transferContent = draftSession?.paymentReference || buildPosPaymentReference(identity, branch);
+  const transferContent = hasCreatedSession
+    ? draftSession.paymentReference
+    : "";
   const dialogWidth = getPosDialogWidth(width, isMomo ? 440 : 500);
   const qrSize = Math.min(
     dialogWidth - 64,
@@ -59,7 +71,7 @@ export default function QrPaymentModal({
             <Text style={styles.title}>{isMomo ? "Quét mã thanh toán MoMo" : "Quét mã thanh toán"}</Text>
           </View>
           <View style={styles.headerActions}>
-            {config.ready && draftSession && !loading ? (
+            {allowPrint && config.ready && draftSession && !loading ? (
               <Pressable style={styles.ghostButton} onPress={onPrint} disabled={printBusy}>
                 <Text style={styles.ghostText}>{printBusy ? "Đang in..." : "In QR"}</Text>
               </Pressable>
@@ -73,11 +85,17 @@ export default function QrPaymentModal({
         {config.ready ? (
           <View style={styles.body}>
             <View style={styles.qrBox}>
-              {loading && !draftSession && isMomo ? (
+              {!hasCreatedSession && loading ? (
                 <View style={[styles.qrLoadingBox, { width: qrSize, height: qrSize }]}>
                   <ActivityIndicator size="large" color={POS_COLORS.primaryDark} />
-                  <Text style={styles.qrLoadingTitle}>Đang tạo mã QR</Text>
-                  <Text style={styles.qrLoadingText}>Vui lòng chờ trong giây lát...</Text>
+                  <Text style={styles.qrLoadingTitle}>Đang tạo phiên thanh toán</Text>
+                  <Text style={styles.qrLoadingText}>QR sẽ xuất hiện sau khi bill được lưu an toàn.</Text>
+                </View>
+              ) : !hasCreatedSession ? (
+                <View style={[styles.qrLoadingBox, styles.qrUnavailableBox, { width: qrSize, height: qrSize }]}>
+                  <Text style={styles.qrUnavailableMark}>!</Text>
+                  <Text style={styles.qrLoadingTitle}>Chưa tạo được QR</Text>
+                  <Text style={styles.qrLoadingText}>Khách chưa thể quét. Kiểm tra kết nối rồi thử lại.</Text>
                 </View>
               ) : isMomo && momoQrValue ? (
                 <QRCode value={momoQrValue} size={qrSize} backgroundColor="#ffffff" color="#111827" />
@@ -87,20 +105,24 @@ export default function QrPaymentModal({
                 <Text style={styles.qrFallback}>Chưa tạo được QR</Text>
               )}
             </View>
-            <Text style={styles.validityNote}>Mã QR có hiệu lực trong 10 phút.</Text>
+            {hasCreatedSession ? <Text style={styles.validityNote}>Mã QR có hiệu lực trong 10 phút.</Text> : null}
 
             <View style={styles.summaryBox}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Số tiền</Text>
                 <Text style={styles.summaryValue}>{formatMoney(amount)}</Text>
               </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Nội dung</Text>
-                <Text style={styles.summaryValue} numberOfLines={2}>
-                  {transferContent}
-                </Text>
-              </View>
+              {hasCreatedSession ? (
+                <>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Nội dung</Text>
+                    <Text style={styles.summaryValue} numberOfLines={2}>
+                      {transferContent}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
             </View>
 
             {draftSession ? (
@@ -119,6 +141,12 @@ export default function QrPaymentModal({
 
             {loading ? <Text style={styles.notice}>Đang tạo phiên thanh toán...</Text> : null}
             {!!errorMessage && <Text style={styles.errorBox}>{errorMessage}</Text>}
+
+            {!hasCreatedSession && !loading && typeof onRetry === "function" ? (
+              <Pressable style={styles.primaryButton} onPress={onRetry}>
+                <Text style={styles.primaryText}>Thử kết nối lại</Text>
+              </Pressable>
+            ) : null}
 
             {draftSession ? (
               <View style={styles.actions}>
@@ -277,6 +305,22 @@ const styles = StyleSheet.create({
     color: POS_COLORS.muted,
     fontSize: 12,
     fontWeight: "700"
+  },
+  qrUnavailableBox: {
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    backgroundColor: "#fff7f7"
+  },
+  qrUnavailableMark: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#dc2626",
+    color: "#ffffff",
+    fontSize: 24,
+    fontWeight: "900",
+    textAlign: "center",
+    lineHeight: 38
   },
   validityNote: {
     color: POS_COLORS.muted,

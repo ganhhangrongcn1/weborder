@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { notifyPaidWebsiteOrder } from "../_shared/webOrderPaidNotification.ts";
+import { settlePaidPosOrderLoyalty } from "../_shared/posPaidOrderLoyalty.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -425,6 +426,11 @@ Deno.serve(async (request) => {
   }
 
   await ensurePrintJob(supabase, order);
+  try {
+    await settlePaidPosOrderLoyalty(supabase, order);
+  } catch (error) {
+    console.error("[momo-payment-webhook] POS loyalty settlement failed", error);
+  }
   try {
     await notifyPaidWebsiteOrder(supabase, order);
   } catch (error) {

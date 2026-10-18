@@ -1,0 +1,133 @@
+# Main hợp nhất web và POS 0.4.26
+
+- Main trước khi ghép: f2f431cacf4bf20cdafa079720399d2da38bfab3.
+- Nền web Cloud mới nhất: 6b53ba2 (hậu duệ main, chứa bản đặt lại món b8d285a đang chạy).
+- POS Cloud đã phát hành: c691e5403da63e31b4935fc6fe79474d5401f38d, 0.4.26/code 57.
+- Không dùng checkout local cũ. Web src/public/package/route khớp nền web Cloud; toàn bộ ghr-pos-mobile-native khớp bản POS Cloud đã build.
+- Các backend thanh toán POS và helper loyalty được mang kèm từ cùng nguồn Cloud, vì main chưa có các hợp đồng điện thoại/pager của phiên bản này. Main không có thay đổi mới hơn trên các đường dẫn backend đó. Không deploy Edge Functions hay chạy migration trong lượt ghép này.
+- Giữ các phần recruitment, admin settings và sửa nhận điểm đơn đối tác đã có trên main.
+- Giữ sửa đặt lại món và biểu đồ Grab của bản web hiện hành.
+- Workflow giữ kiểm tra đúng SHA được duyệt và phiên bản 0.4.26. Sau khi push main sẽ đặt SHA duyệt build theo main mới.
+
+## Kiểm tra
+
+- npm run build / UTF-8: qua, 5.293 modules.
+- Đặt lại món: 8 tình huống qua.
+- Biểu đồ Grab: 4 tình huống qua.
+- Backend POS: pager 4, phân quyền QR 26, dịch vụ 8, hoàn tất QR điện thoại 10 tình huống qua; không ghi dữ liệu thật.
+- 9 bộ Jest POS trực tiếp: 64/64 tình huống qua (tem, bill, QR, phục hồi thanh toán, offline, khuyến mãi, pager, loyalty, món còn bán).
+- Bộ Jest UI rộng đã dừng vì khởi động renderer quá lâu; không ghi nhận là đã qua toàn bộ suite.
+- Hai dòng trống EOF đã có từ bản Cloud trong test/migration được giữ nguyên để bảo toàn nguồn; diff check bỏ qua riêng blank-at-eof, không có lỗi whitespace khác.
+
+## Danh sách file POS/backend đưa lên main
+
+- `.github/workflows/pos-android-release.yml`
+- `docs/pos-stamp-cloud-port-2026-10-18.md`
+- `docs/supabase-sql/20261017_stamp_earn_on_payment.sql`
+- `docs/supabase-sql/20261017_stamp_earn_on_payment_checks.sql`
+- `ghr-pos-mobile-native/__tests__/posBranchPromotion.test.js`
+- `ghr-pos-mobile-native/__tests__/posCategoryLayout.test.js`
+- `ghr-pos-mobile-native/__tests__/posCustomerLookupPerformance.test.js`
+- `ghr-pos-mobile-native/__tests__/posDeviceMode.test.js`
+- `ghr-pos-mobile-native/__tests__/posHistoryDisplay.test.js`
+- `ghr-pos-mobile-native/__tests__/posItemNoteEditor.test.js`
+- `ghr-pos-mobile-native/__tests__/posLoyaltyCombinedCap.test.js`
+- `ghr-pos-mobile-native/__tests__/posMenuVirtualization.test.js`
+- `ghr-pos-mobile-native/__tests__/posOfflineAutoSync.test.js`
+- `ghr-pos-mobile-native/__tests__/posOfflineSync.test.js`
+- `ghr-pos-mobile-native/__tests__/posOperationalPerformance.test.js`
+- `ghr-pos-mobile-native/__tests__/posOrderWithoutPager.test.js`
+- `ghr-pos-mobile-native/__tests__/posPagerSettings.test.js`
+- `ghr-pos-mobile-native/__tests__/posPagerSettingsHook.test.js`
+- `ghr-pos-mobile-native/__tests__/posPaymentRecovery.test.js`
+- `ghr-pos-mobile-native/__tests__/posPendingQrStampRead.test.js`
+- `ghr-pos-mobile-native/__tests__/posPhoneCheckout.test.js`
+- `ghr-pos-mobile-native/__tests__/posPhoneHistory.test.js`
+- `ghr-pos-mobile-native/__tests__/posPhoneOrderDetail.test.js`
+- `ghr-pos-mobile-native/__tests__/posPhonePrintBundle.test.js`
+- `ghr-pos-mobile-native/__tests__/posPhoneWorkspace.test.js`
+- `ghr-pos-mobile-native/__tests__/posPointInputLimit.test.js`
+- `ghr-pos-mobile-native/__tests__/posProductAvailability.test.js`
+- `ghr-pos-mobile-native/__tests__/posPromotionChannels.test.js`
+- `ghr-pos-mobile-native/__tests__/posStamps.test.js`
+- `ghr-pos-mobile-native/android/app/build.gradle`
+- `ghr-pos-mobile-native/android/app/src/main/java/com/ghrposmobilenative/PosPrinterModule.java`
+- `ghr-pos-mobile-native/android/app/src/main/java/com/ghrposmobilenative/UsbPrinterSelectionPolicy.java`
+- `ghr-pos-mobile-native/index.js`
+- `ghr-pos-mobile-native/metro.config.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PaymentBar.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosCategoryTabs.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosCustomerSummaryCard.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosHistoryPanel.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosMenuPanel.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosOrderDetailModal.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosPagerModal.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosPhoneNavigation.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosPhoneSaleWorkspace.js`
+- `ghr-pos-mobile-native/src/features/pos/components/PosPickupOrdersPanel.js`
+- `ghr-pos-mobile-native/src/features/pos/components/ProductOptionsModal.js`
+- `ghr-pos-mobile-native/src/features/pos/components/QrPaymentModal.js`
+- `ghr-pos-mobile-native/src/features/pos/hooks/usePosComposer.js`
+- `ghr-pos-mobile-native/src/features/pos/hooks/usePosOfflineAutoSync.js`
+- `ghr-pos-mobile-native/src/features/pos/hooks/usePosPagerSettings.js`
+- `ghr-pos-mobile-native/src/features/pos/hooks/usePosPointInputLimit.js`
+- `ghr-pos-mobile-native/src/hooks/usePosDeviceMode.js`
+- `ghr-pos-mobile-native/src/screens/PosHomeScreen.js`
+- `ghr-pos-mobile-native/src/services/pos/posCatalogConfigService.js`
+- `ghr-pos-mobile-native/src/services/pos/posCustomerService.js`
+- `ghr-pos-mobile-native/src/services/pos/posDeviceModeService.js`
+- `ghr-pos-mobile-native/src/services/pos/posHistoryDisplayService.js`
+- `ghr-pos-mobile-native/src/services/pos/posOfflineOrderQueueService.js`
+- `ghr-pos-mobile-native/src/services/pos/posOfflineSyncService.js`
+- `ghr-pos-mobile-native/src/services/pos/posOrderQueryService.js`
+- `ghr-pos-mobile-native/src/services/pos/posOrderService.js`
+- `ghr-pos-mobile-native/src/services/pos/posPagerSettingsService.js`
+- `ghr-pos-mobile-native/src/services/pos/posPaymentService.js`
+- `ghr-pos-mobile-native/src/services/pos/posPaymentSessionService.js`
+- `ghr-pos-mobile-native/src/services/pos/posPhoneOrderService.js`
+- `ghr-pos-mobile-native/src/services/pos/posPickupOrderService.js`
+- `ghr-pos-mobile-native/src/services/pos/posPrintStationService.js`
+- `ghr-pos-mobile-native/src/services/pos/posProductService.js`
+- `ghr-pos-mobile-native/src/services/pos/posShiftService.js`
+- `ghr-pos-mobile-native/src/services/pos/posStampService.js`
+- `ghr-pos-mobile-native/src/shared/pos/posCategoryLayout.js`
+- `ghr-pos-mobile-native/src/shared/pos/posLoyalty.js`
+- `ghr-pos-mobile-native/src/shared/pos/posPromotionScope.js`
+- `ghr-pos-mobile-native/src/shared/pos/posPromotions.js`
+- `ghr-pos-mobile-native/src/utils/posReadCoalescer.js`
+- `scripts/pos-branch-pager-api.test.mjs`
+- `scripts/pos-manual-qr-permission.test.mjs`
+- `scripts/pos-performance-services.test.mjs`
+- `scripts/pos-phone-qr-finalization.test.mjs`
+- `scripts/usb-printer-selection.test.sh`
+- `supabase/functions/_shared/posPaidOrderLoyalty.ts`
+- `supabase/functions/momo-payment-webhook/index.ts`
+- `supabase/functions/pos-payment-session-api/index.ts`
+- `supabase/functions/sepay-pos-webhook/index.ts`
+- `supabase/migrations/20261013021413_pos_pager_lifecycle.sql`
+- `supabase/migrations/20261017093657_stamp_earn_on_payment.sql`
+- `docs/main-web-pos-0.4.26-2026-10-18.md`
+
+## Các file web cập nhật đã có trên nhánh web Cloud, giữ khi đưa lên main
+
+- `docs/supabase-sql/customer-order-catalog-guard.sql`
+- `scripts/grab-funnel-chart.test.mjs`
+- `scripts/reorder-browser.test.mjs`
+- `scripts/reorder-catalog.test.mjs`
+- `src/components/customer/StoreStatusModal.jsx`
+- `src/features/app/useCustomerRuntimeState.js`
+- `src/features/checkout/components/CheckoutNoticeModal.jsx`
+- `src/features/checkout/useCheckoutActions.js`
+- `src/hooks/useCart.js`
+- `src/hooks/useGrabConversionFunnel.js`
+- `src/pages/admin/pages/AdminGrabFinancePage.jsx`
+- `src/pages/admin/partner-reviews/GrabConversionFunnel.jsx`
+- `src/services/customerOrderCatalogService.js`
+- `src/services/grabConversionFunnelService.js`
+- `src/services/orderService.js`
+- `src/services/reorderService.js`
+- `src/services/repositories/catalogSupabaseRepository.js`
+- `src/services/repositories/orderRepository.js`
+- `src/styles/admin/grab-funnel.css`
+- `src/utils/grabFunnelChart.js`
+- `supabase/migrations/20261017090714_customer_order_catalog_guard.sql`

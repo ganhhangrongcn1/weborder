@@ -6,6 +6,12 @@ const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
  *
  * @type {import('metro-config').MetroConfig}
  */
-const config = {};
+const escapedRoot = __dirname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const config = {
+  maxWorkers: 4,
+  resolver: {
+    blockList: [new RegExp(`^${escapedRoot}[/\\\\](android|ios|releases)([/\\\\].*)?$`)],
+  },
+};
 
 module.exports = mergeConfig(getDefaultConfig(__dirname), config);

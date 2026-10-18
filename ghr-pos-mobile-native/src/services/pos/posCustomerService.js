@@ -4,7 +4,8 @@ const DEFAULT_LOYALTY_RULE = {
   currencyPerPoint: 100,
   pointPerUnit: 1,
   redeemPointUnit: 1,
-  redeemValue: 1
+  redeemValue: 1,
+  maxRedemptionPercent: 50
 };
 
 function toText(value = "") {
@@ -126,7 +127,14 @@ function normalizeLoyaltyConfig(data = null) {
     currencyPerPoint: Math.max(1, toNumber(config.currencyPerPoint ?? config.currency_per_point, DEFAULT_LOYALTY_RULE.currencyPerPoint)),
     pointPerUnit: Math.max(1, toNumber(config.pointPerUnit ?? config.point_per_unit, DEFAULT_LOYALTY_RULE.pointPerUnit)),
     redeemPointUnit: Math.max(1, toNumber(config.redeemPointUnit ?? config.redeem_point_unit, DEFAULT_LOYALTY_RULE.redeemPointUnit)),
-    redeemValue: Math.max(1, toNumber(config.redeemValue ?? config.redeem_value, DEFAULT_LOYALTY_RULE.redeemValue))
+    redeemValue: Math.max(1, toNumber(config.redeemValue ?? config.redeem_value, DEFAULT_LOYALTY_RULE.redeemValue)),
+    maxRedemptionPercent: Math.min(
+      100,
+      Math.max(1, toNumber(
+        config.maxRedemptionPercent ?? config.max_redemption_percent,
+        DEFAULT_LOYALTY_RULE.maxRedemptionPercent
+      ))
+    )
   };
 }
 
@@ -323,16 +331,17 @@ async function readPartnerOrders(phoneVariants = []) {
   if (!supabase || !phoneVariants.length) return [];
 
   const columns = "id,order_code,display_order_code,customer_phone,customer_phone_key,total_amount,points_base_amount,point_status,order_status,nexpos_status,customer_name,order_time,created_at";
-  const rows = [];
-
-  for (const column of ["customer_phone_key", "customer_phone"]) {
-    const { data, error } = await supabase
+  const results = await Promise.all(["customer_phone_key", "customer_phone"].map((column) => (
+    supabase
       .from("partner_orders")
       .select(columns)
       .in(column, phoneVariants)
       .order("order_time", { ascending: false })
-      .limit(120);
+      .limit(120)
+  )));
 
+  const rows = [];
+  for (const { data, error } of results) {
     if (!error && Array.isArray(data)) rows.push(...data);
   }
 
@@ -496,15 +505,23 @@ export async function lookupPosCustomerByPhone(rawPhone = "") {
   }
 
   const phoneVariants = buildPhoneVariants(phone);
-  const [profile, loyalty, loyaltyRule, orderSummary, webOrders, partnerOrders, ledgerRows] = await Promise.all([
+  const [profile, loyalty, loyaltyRule, orderSummary] = await Promise.all([
     readProfile(phoneVariants, phone),
     readLoyalty(phone),
     readLoyaltyRule(),
-    readOrderSummaryRpc(phone),
-    readWebOrders(phoneVariants),
-    readPartnerOrders(phoneVariants),
-    readLoyaltyLedger(phoneVariants)
+    readOrderSummaryRpc(phone)
   ]);
+
+  // History is only needed for the legacy summary fallback or a missing name.
+  // Keep balance/vouchers fresh above; history is never their source of truth.
+  const needsHistory = !orderSummary || !getRealCustomerName(profile);
+  const [webOrders, partnerOrders, ledgerRows] = needsHistory
+    ? await Promise.all([
+      readWebOrders(phoneVariants),
+      readPartnerOrders(phoneVariants),
+      !orderSummary ? readLoyaltyLedger(phoneVariants) : Promise.resolve([])
+    ])
+    : [[], [], []];
 
   const stats = orderSummary || buildStats({ webOrders, partnerOrders, ledgerRows, loyaltyRule });
   const latestOrderName = getLatestOrderName(webOrders, partnerOrders);
