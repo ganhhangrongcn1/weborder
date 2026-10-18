@@ -45,7 +45,6 @@ export const navGroups = [
     title: "Đánh giá & phản hồi",
     icon: "star",
     items: [
-      { id: "ganh-reply-main", label: "Gánh Reply", section: "ganh-reply" },
       { id: "partner-reviews-main", label: "Đánh giá đối tác", section: "partner-reviews" },
       { id: "review-rewards-main", label: "Thưởng điểm đánh giá", section: "review-rewards" }
     ]
@@ -110,7 +109,6 @@ export const navGroups = [
 ];
 
 export const navIconMap = {
-  "ganh-reply-main": "star",
   "dashboard-main": "home",
   "grab-finance-main": "wallet",
   "grab-marketing-main": "sale",
@@ -160,7 +158,6 @@ export function getAdminPageTitle(section, activeAdminNav = "") {
   if (section === "grab-finance") return "Tài chính Grab";
   if (section === "grab-marketing") return "Hiệu quả Marketing Grab";
   if (section === "orders") return "Quản lý đơn hàng";
-  if (section === "ganh-reply") return "Gánh Reply";
   if (section === "partner-reviews") return "Quản lý đánh giá đối tác";
   if (section === "review-rewards") return "Thưởng điểm đánh giá";
   if (section === "shifts") return "Tổng quan ca";
