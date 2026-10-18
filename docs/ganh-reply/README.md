@@ -62,16 +62,19 @@ Quy trình tham khảo cho môi trường riêng. Với lần phát hành này, 
 
 Không đặt OPENAI_API_KEY hay service role key vào biến `VITE_*`. Không dùng ChatGPT session, cookie hoặc token tài khoản ChatGPT cá nhân.
 
-## Hướng dẫn nhân viên
+## Hướng dẫn nhân viên — giao diện rút gọn
 
-- Chọn nền tảng và chi nhánh; nhập bình luận và sự thật đã xác minh. Bỏ địa chỉ, số điện thoại, email và tên cá nhân không cần thiết. Server tự ẩn email/SĐT thông dụng, không thay thế việc kiểm tra thủ công.
-- Có thể tải ảnh PNG/JPEG/WebP tối đa 1 MB. Ảnh gửi model ở chế độ low detail, không lưu vào database/Storage. Người dùng phải đọc và xác nhận văn bản OCR trước khi phân tích. Ảnh nhỏ/chữ mờ có thể cần nhập lại thủ công.
-- Đọc insight, kỳ vọng, rủi ro, trách nhiệm, thông tin cần xác minh rồi chọn A/B/C. Thiếu dữ kiện không được tự kết luận có lỗi hoặc không có lỗi.
-- Sửa trực tiếp câu cuối, chọn/nhập lý do. “AI viết lại” lưu bản chỉnh và lý do trước khi tạo đề xuất mới; chỉ tác giả được yêu cầu viết lại.
-- Staff bấm “Lưu & gửi duyệt”. Manager/Admin có thể duyệt phiên bản hiện tại. Tình huống nhạy cảm không bật nút sao chép khi chưa duyệt. Bản thường có thể sao chép sau khi đã lưu theo quyền Staff. Nội dung vừa chỉnh phải lưu/duyệt lại trước khi sao chép.
-- Người có quyền Brain có thể đánh dấu câu đã duyệt thành ví dụ chuẩn. Chỉ ví dụ đó được đưa vào retrieval chuẩn; feedback sửa có vai trò riêng, không tự biến thành ví dụ tốt.
-- Lịch sử lọc theo nội dung, nền tảng, chi nhánh, loại phản hồi, chủ đề và trạng thái. Manager/Admin mở lại để duyệt.
-- Dashboard tính dữ liệu thực trong 30 ngày, theo phạm vi quyền. Chủ đề phàn nàn chỉ lấy `feedback_type=complaint`. Lặp lại theo chi nhánh chỉ hiện chủ đề có hơn một phản hồi. Tỷ lệ duyệt nguyên bản = phản hồi đã duyệt mà câu cuối khớp một phương án AI / tổng phản hồi đã phân tích trong kỳ; khác với tổng tỷ lệ đã duyệt sau chỉnh sửa.
+1. Dán bình luận của khách, bấm **Tạo gợi ý trả lời**.
+2. Đọc câu được khuyến nghị, sửa trực tiếp nếu muốn.
+3. Admin/Manager bấm **Duyệt & sao chép**. Với phản hồi thông thường, Staff dùng **Lưu & sao chép**. Sau đó dán câu trả lời lên nền tảng của khách.
+
+- Thông tin cửa hàng đã xác minh, nền tảng, chi nhánh và ảnh nằm trong **Thêm thông tin cửa hàng hoặc ảnh**. Nếu thiếu dữ kiện, hệ thống giữ trách nhiệm chưa rõ và không tự đoán. Ảnh vẫn cần kiểm tra và xác nhận văn bản trước khi phân tích.
+- **Đổi cách trả lời** mở đủ ba phương án A/B/C. **Xem phân tích và thông tin cần xác minh** mở insight/rủi ro/trách nhiệm chi tiết. Phần chính chỉ hiện insight ngắn và câu đang chọn.
+- **Viết lại** có hướng dẫn mặc định, không cần nhập prompt hoặc lý do. Có thể góp ý riêng trong phần mở rộng; bản chỉnh và lý do vẫn được lưu trước khi AI viết lại.
+- Phản hồi nhạy cảm của Staff chỉ có **Gửi quản lý duyệt**, không sao chép trước duyệt. Bản đã gửi và chưa chỉnh lại hiển thị **Đang chờ quản lý duyệt**. Khi được duyệt, mở lại từ lịch sử để sao chép.
+- Nút kết hợp lưu/duyệt rồi yêu cầu backend trả bản được phép sao chép. Chỉ sao chép đúng version được duyệt. Sao chép lại bản không thay đổi không tạo thêm revision. Nếu trình duyệt từ chối clipboard, bản đã lưu vẫn giữ nguyên và có thể bấm sao chép lại.
+- **Lưu bản nháp và góp ý cho Gánh** giữ lựa chọn lưu để xử lý sau, đánh dấu ví dụ tốt (theo quyền Brain) và xem các phiên bản cũ.
+- **Bình luận mới** bắt đầu tình huống khác. Các mục **Lịch sử**, **Kiến thức Gánh**, **Thống kê** vẫn có sẵn. Không tự đăng bình luận lên mạng xã hội.
 
 ## Gánh Brain và giới hạn AI
 
@@ -150,3 +153,7 @@ Nhật ký chỉ đọc xác nhận các request 403 có role service_role và c
 - Menu mới chỉ được bổ sung cho staff/Manager sau xác minh quyền backend; không mở thêm quyền kho, đơn hàng hoặc CRM. Có boundary riêng để lỗi render Gánh Reply không thay thế toàn bộ trang Admin.
 - Security advisor ghi INFO `rls_enabled_no_policy` cho bảng module vì thiết kế server-only. Đây là chủ đích: browser bị thu hồi grants và không có policy đọc dữ liệu. Tham khảo [RLS Enabled No Policy](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
 - 26 test module và 15 test inventory access qua; Supabase config smoke qua. Không tuyên bố checkout, thanh toán và toàn bộ nghiệp vụ đã được kiểm thử giao dịch thật.
+
+## Cập nhật trải nghiệm theo phản hồi chủ dự án
+
+Chủ dự án đã xác nhận luồng tạo ba phương án AI thật hoạt động, đồng thời yêu cầu giao diện đơn giản hơn. Bản rút gọn chỉ thay đổi frontend/hook và kiểm thử browser; không đổi database, backend, prompt, quota hoặc phân quyền. Kiểm thử browser có các nhánh: Admin duyệt+sao chép, sao chép lặp không thêm revision, viết lại không cần nhập prompt, đủ ba phương án mở rộng, lịch sử, desktop/mobile, Staff thường, Staff nhạy cảm, Admin nhạy cảm và phản hồi duyệt sai version bị chặn sao chép. Fixture không kết nối Supabase/OpenAI và không tạo dữ liệu trên production. Clipboard được giả lập có kiểm soát vì quyền clipboard của host headless khác trình duyệt người dùng; có kiểm tra cả từ chối clipboard rồi thử lại mà không tạo thêm revision.

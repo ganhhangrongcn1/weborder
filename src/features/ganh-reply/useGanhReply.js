@@ -59,13 +59,14 @@ export default function useGanhReply() {
       version: current.feedback.version, text, selected_option: selected, reason, approve, example });
     apply(data); setMessage(approve ? 'Đã duyệt và lưu phiên bản cuối.' : 'Đã lưu phiên bản, chờ Manager/Admin duyệt.');
   });
-  const rewrite = () => run(async () => {
-    if (!reason.trim()) throw new Error('Chọn hoặc nhập lý do cần viết lại.');
+  const rewrite = (instructions) => run(async () => {
+    const rewriteReason = typeof instructions === 'string' ? instructions : reason;
+    if (!rewriteReason.trim()) throw new Error('Chọn hoặc nhập lý do cần viết lại.');
     // Preserve the editor revision and reason before generating again.
     const saved = await ganhReplyRequest('save', { feedback_id: current.feedback.id, suggestion_id: current.suggestion.id,
-      version: current.feedback.version, text, selected_option: selected, reason, approve: false });
+      version: current.feedback.version, text, selected_option: selected, reason: rewriteReason, approve: false });
     setCurrent(saved);
-    const data = await ganhReplyRequest('rewrite', { feedback_id: saved.feedback.id, previous_text: text, reason });
+    const data = await ganhReplyRequest('rewrite', { feedback_id: saved.feedback.id, previous_text: text, reason: rewriteReason });
     apply(data);
   });
   const open = (id) => run(async () => { apply(await ganhReplyRequest('detail', { feedback_id: id })); setTab('compose'); });
@@ -74,6 +75,28 @@ export default function useGanhReply() {
     const data = await ganhReplyRequest('copy', { feedback_id: current.feedback.id });
     await navigator.clipboard.writeText(data.text); setMessage('Đã sao chép câu trả lời đã lưu.');
   });
+  const saveAndCopy = (example = false) => run(async () => {
+    const feedback = current.feedback;
+    const unchanged = text === feedback.final_text && Boolean(feedback.final_text);
+    const reviewed = feedback.status === 'approved' && feedback.approved_version === feedback.version;
+    let saved = current;
+    if (!unchanged || (feedback.requires_review && !reviewed) || example) {
+      saved = await ganhReplyRequest('save', {
+        feedback_id: feedback.id, suggestion_id: current.suggestion.id, version: feedback.version,
+        text, selected_option: selected, reason, approve: access.approve === true, example
+      });
+      apply(saved);
+    }
+    if (saved.feedback.requires_review &&
+        (saved.feedback.status !== 'approved' || saved.feedback.approved_version !== saved.feedback.version)) {
+      setMessage('Đã gửi quản lý duyệt. Sau khi được duyệt, anh/chị mở lại để sao chép.');
+      return;
+    }
+    const data = await ganhReplyRequest('copy', { feedback_id: saved.feedback.id });
+    try { await navigator.clipboard.writeText(data.text); }
+    catch { throw new Error('Câu trả lời đã lưu. Trình duyệt chưa cho sao chép; hãy bấm sao chép lại.'); }
+    setMessage('Đã lưu và sao chép. Anh/chị có thể dán trả lời khách ngay.');
+  });
   const newDraft = () => { setCurrent(null); setText(''); setReason(''); setForm({ comment: '', facts: '', platform: 'tiktok', branch_uuid: access?.branch || '' }); setImageConfirmed(true); };
   const saveBrain = (doc) => run(async () => { await ganhReplyRequest('save_brain', doc); setBrain(await ganhReplyRequest('list_brain')); setMessage('Đã lưu Gánh Brain.'); return true; });
   const deleteBrain = (doc) => run(async () => { await ganhReplyRequest('delete_brain', doc); setBrain(await ganhReplyRequest('list_brain')); });
@@ -81,5 +104,5 @@ export default function useGanhReply() {
   const grantAccess = (grant) => run(async () => { await ganhReplyRequest('grant_access', grant); setMessage('Đã cập nhật quyền module.'); });
   return { tab, changeTab, access, branches, busy, message, form, setForm, imageConfirmed, setImageConfirmed,
     current, selected, text, setText, reason, setReason, history, filters, setFilters, brain, stats,
-    bootstrap, analyze, extract, choose, save, rewrite, open, copy, newDraft, loadHistory, loadStats, saveBrain, deleteBrain, deleteExample, grantAccess };
+    bootstrap, analyze, extract, choose, save, rewrite, open, copy, saveAndCopy, newDraft, loadHistory, loadStats, saveBrain, deleteBrain, deleteExample, grantAccess };
 }

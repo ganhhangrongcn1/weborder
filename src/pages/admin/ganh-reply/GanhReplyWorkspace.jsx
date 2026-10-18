@@ -39,32 +39,112 @@ function BrainEditor({ state }) {
 }
 function Compose({ state: s }) {
   const result = s.current?.suggestion?.result;
-  const a = result?.analysis;
-  const [example, setExample] = useState(false);
+  const analysis = result?.analysis;
   const owner = s.current?.feedback;
-  const canCopy = owner && s.text === owner.final_text && owner.final_text && (!owner.requires_review || (owner.status === 'approved' && owner.approved_version === owner.version));
-  return <div className="gr-grid"><div><AdminCard><div className="gr-card-title"><h2>Tình huống khách hàng</h2><AdminButton variant="secondary" disabled={s.busy} onClick={s.newDraft}>Tạo mới</AdminButton></div><p>Nhập đúng dữ kiện. Ẩn địa chỉ và thông tin cá nhân không cần thiết trước khi gửi.</p>
-    <form onSubmit={e => { e.preventDefault(); s.analyze(); }}><fieldset disabled={s.busy || !!s.current}>
-      <div className="gr-fields"><PlatformSelect value={s.form.platform} onChange={v => s.setForm({ ...s.form, platform: v })}/><BranchSelect branches={s.branches} locked={!!s.access.branch} value={s.form.branch_uuid} onChange={v => s.setForm({ ...s.form, branch_uuid: v })}/></div>
-      <label>Ảnh bình luận (không lưu ảnh)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => { const file = e.target.files?.[0]; if (file) s.extract(file); e.target.value = ''; }}/></label>
-      <label>Bình luận<textarea required rows={5} maxLength={6000} placeholder="Dán bình luận của khách tại đây…" value={s.form.comment} onChange={e => s.setForm({ ...s.form, comment: e.target.value })}/></label>
-      {!s.imageConfirmed && <label className="gr-check gr-notice"><input type="checkbox" checked={s.imageConfirmed} onChange={e => s.setImageConfirmed(e.target.checked)}/>Tôi đã kiểm tra và sửa đúng văn bản trong ảnh.</label>}
-      <label>Thông tin đã xác minh từ cửa hàng<textarea rows={5} maxLength={6000} placeholder="Điều gì đã được xác minh? Điều gì còn chưa rõ? Không nhập số điện thoại/địa chỉ khách." value={s.form.facts} onChange={e => s.setForm({ ...s.form, facts: e.target.value })}/></label>
-    </fieldset><AdminButton type="submit" disabled={s.busy || !!s.current || !s.imageConfirmed || !s.form.comment.trim()}>Phân tích & đề xuất</AdminButton></form>
-  </AdminCard>{a && <AdminCard><h2>Hiểu tình huống trước khi trả lời</h2><dl className="gr-insight">
-    {[['Loại phản hồi',({ complaint: 'Phàn nàn', praise: 'Khen', question: 'Hỏi', sarcasm: 'Mỉa mai', abuse: 'Ngôn ngữ tiêu cực', other: 'Khác' })[a.feedback_type]],['Chủ đề',a.category],['Cảm xúc',a.emotion],['Insight chính',a.insight],['Khách thực sự mong muốn',a.expectation],['Rủi ro công khai',a.public_risk],['Trách nhiệm cửa hàng',responsibilityLabel[a.responsibility]],['Chiến lược',a.strategy],['Mức nhạy cảm',a.sensitivity],['Kênh xử lý',a.channel === 'private' ? 'Chuyển trao đổi riêng' : 'Công khai']].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-    </dl><h3>Cần xác minh thêm</h3>{a.verify.length ? <ul>{a.verify.map((v,i) => <li key={i}>{v}</li>)}</ul> : <p>AI chưa nêu thông tin cần xác minh thêm. Nhân viên vẫn cần kiểm tra dữ kiện.</p>}</AdminCard>}</div>
-    <div>{!result ? <AdminCard><div className="gr-empty"><span aria-hidden="true">✦</span><h2>Mỗi câu trả lời đều giữ uy tín cho Gánh</h2><p>Bắt đầu với bình luận và dữ kiện thật. Gánh Reply sẽ giúp bạn hiểu insight, đánh giá rủi ro và chọn cách phản hồi phù hợp.</p></div></AdminCard> : <>
-      <AdminCard><div className="gr-card-title"><h2>Ba cách trả lời</h2><span className="gr-badge">{statusLabel[owner.status]}</span></div><p>{result.reason}</p><div className="gr-options">{Object.entries(optionLabel).map(([key,label]) => <button type="button" aria-pressed={s.selected === key} key={key} className={s.selected === key ? 'is-selected' : ''} disabled={s.busy} onClick={() => s.choose(key)}><strong>{key}. {label} {result.recommended === key ? '· Đề xuất' : ''}</strong><span>{result.options[key]}</span></button>)}</div></AdminCard>
-      <AdminCard><h2>Chỉnh câu trả lời cuối</h2>{owner.requires_review && <p className="gr-notice">Tình huống cần Manager/Admin duyệt đúng phiên bản trước khi sao chép.</p>}<label>Nội dung<textarea rows={6} maxLength={1800} disabled={s.busy} value={s.text} onChange={e => s.setText(e.target.value)}/></label>
-      <label>Lý do chỉnh sửa / yêu cầu viết lại<select disabled={s.busy} value={['','Chưa đúng insight','Chưa đúng sự thật','Giọng văn chưa tự nhiên','Quá dài','Nhận lỗi khi chưa đủ căn cứ','Cam kết vượt chính sách'].includes(s.reason) ? s.reason : 'custom'} onChange={e => s.setReason(e.target.value === 'custom' ? 'Lý do khác: ' : e.target.value)}><option value="">Chọn lý do…</option>{['Chưa đúng insight','Chưa đúng sự thật','Giọng văn chưa tự nhiên','Quá dài','Nhận lỗi khi chưa đủ căn cứ','Cam kết vượt chính sách'].map(v => <option key={v}>{v}</option>)}<option value="custom">Lý do khác</option></select></label>
-      <label>Ghi chú cải thiện<input maxLength={1000} disabled={s.busy} value={s.reason} onChange={e => s.setReason(e.target.value)}/></label>
-      {s.access.brain && <label className="gr-check"><input type="checkbox" checked={example} onChange={e => setExample(e.target.checked)}/>Đánh dấu phiên bản được duyệt làm ví dụ chuẩn</label>}
-      <div className="gr-actions"><AdminButton disabled={s.busy || !s.text.trim()} onClick={() => s.save(false)}>Lưu & gửi duyệt</AdminButton>{s.access.approve && <AdminButton disabled={s.busy || !s.text.trim()} onClick={() => s.save(true, example)}>Duyệt phiên bản này</AdminButton>}<AdminButton variant="secondary" disabled={s.busy || !s.reason.trim() || owner.created_by !== s.access.user_id} onClick={s.rewrite}>AI viết lại</AdminButton><AdminButton variant="secondary" disabled={s.busy || !canCopy} onClick={s.copy}>Sao chép</AdminButton></div>
-      <small>v{owner.version} · Chỉ lưu và sao chép, không tự đăng lên mạng xã hội.</small>
-      {!!s.current.revisions?.length && <details><summary>Các phiên bản đã lưu</summary>{s.current.revisions.map(r => <article key={r.id}><strong>v{r.version}</strong><p>{r.text}</p><small>{r.reason}</small></article>)}</details>}
-      </AdminCard></>}
-    </div></div>;
+  const [example, setExample] = useState(false);
+  const readyToCopy = owner && s.text === owner.final_text && owner.final_text &&
+    (!owner.requires_review || (owner.status === 'approved' && owner.approved_version === owner.version));
+  const needsManager = owner?.requires_review && !s.access.approve && !readyToCopy;
+  const waitingForManager = needsManager && owner.status === 'pending' && s.text === owner.final_text;
+  const primaryLabel = waitingForManager ? 'Đang chờ quản lý duyệt' : readyToCopy && !example ? 'Sao chép câu trả lời'
+    : needsManager ? 'Gửi quản lý duyệt'
+    : s.access.approve ? 'Duyệt & sao chép' : 'Lưu & sao chép';
+  const input = (
+    <form onSubmit={e => { e.preventDefault(); s.analyze(); }}>
+      <fieldset disabled={s.busy || !!s.current}>
+        <label className="gr-comment-label">Bình luận
+          <textarea required rows={4} maxLength={6000} placeholder="Dán bình luận của khách tại đây…"
+            value={s.form.comment} onChange={e => s.setForm({ ...s.form, comment: e.target.value })}/>
+        </label>
+        {!s.imageConfirmed && <label className="gr-check gr-notice">
+          <input type="checkbox" checked={s.imageConfirmed} onChange={e => s.setImageConfirmed(e.target.checked)}/>
+          Tôi đã kiểm tra và sửa đúng văn bản trong ảnh.
+        </label>}
+        <details className="gr-extra" open={!s.imageConfirmed ? true : undefined}>
+          <summary>Thêm thông tin cửa hàng hoặc ảnh</summary>
+          <div className="gr-fields">
+            <PlatformSelect value={s.form.platform} onChange={v => s.setForm({ ...s.form, platform: v })}/>
+            <BranchSelect branches={s.branches} locked={!!s.access.branch} value={s.form.branch_uuid}
+              onChange={v => s.setForm({ ...s.form, branch_uuid: v })}/>
+          </div>
+          <label>Thông tin cửa hàng đã xác minh (nếu có)
+            <textarea rows={3} maxLength={6000} placeholder="Ví dụ: Đã kiểm tra và xác nhận đơn thiếu topping. Nếu chưa rõ, cứ để trống."
+              value={s.form.facts} onChange={e => s.setForm({ ...s.form, facts: e.target.value })}/>
+          </label>
+          <label>Hoặc chọn ảnh bình luận
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => {
+              const file = e.target.files?.[0]; if (file) s.extract(file); e.target.value = '';
+            }}/>
+          </label>
+          <small>Ảnh PNG/JPEG/WebP tối đa 1 MB. Ẩn thông tin cá nhân không cần thiết trước khi gửi.</small>
+        </details>
+      </fieldset>
+      {!result && <div className="gr-create-action"><AdminButton type="submit"
+        disabled={s.busy || !s.imageConfirmed || !s.form.comment.trim()}>Tạo gợi ý trả lời</AdminButton>
+        <small>Chưa đủ thông tin thì Gánh sẽ đề xuất cách xác minh, không tự đoán.</small>
+      </div>}
+    </form>
+  );
+  return <div className="gr-simple-compose">
+    <AdminCard>
+      <div className="gr-card-title"><h2>{result ? 'Bình luận đang trả lời' : 'Dán bình luận của khách'}</h2>
+        {result && <AdminButton variant="secondary" disabled={s.busy} onClick={s.newDraft}>Bình luận mới</AdminButton>}
+      </div>
+      {result ? <details className="gr-original-comment"><summary>{s.form.comment}</summary>{input}</details> : input}
+    </AdminCard>
+    {result && <AdminCard className="gr-reply-card">
+      <div className="gr-card-title"><h2>Gợi ý trả lời</h2><span className="gr-badge">{statusLabel[owner.status]}</span></div>
+      <p className="gr-insight-brief"><strong>Gánh hiểu rằng:</strong> {analysis.insight}</p>
+      {owner.requires_review && <p className="gr-notice">{s.access.approve
+        ? 'Tình huống nhạy cảm. Anh/chị đọc kỹ và duyệt nội dung trước khi sao chép.'
+        : readyToCopy ? 'Quản lý đã duyệt phiên bản này.' : 'Tình huống này cần quản lý duyệt trước khi sao chép.'}</p>}
+      <label>Câu trả lời — có thể chỉnh trực tiếp
+        <textarea aria-label="Câu trả lời" rows={5} maxLength={1800} disabled={s.busy}
+          value={s.text} onChange={e => s.setText(e.target.value)}/>
+      </label>
+      <div className="gr-actions gr-primary-actions">
+        <AdminButton disabled={s.busy || !s.text.trim() || waitingForManager} onClick={async () => { await s.saveAndCopy(example); setExample(false); }}>{primaryLabel}</AdminButton>
+        <AdminButton variant="secondary" disabled={s.busy || owner.created_by !== s.access.user_id}
+          onClick={() => s.rewrite(s.reason.trim() || 'Viết lại tự nhiên và ngắn gọn hơn, giữ nguyên dữ kiện đã cung cấp.')}>
+          Viết lại
+        </AdminButton>
+      </div>
+      <details className="gr-extra gr-alternatives"><summary>Đổi cách trả lời</summary>
+        <p>{result.reason}</p>
+        <div className="gr-options">{Object.entries(optionLabel).map(([key,label]) =>
+          <button type="button" aria-pressed={s.selected === key} key={key}
+            className={s.selected === key ? 'is-selected' : ''} disabled={s.busy} onClick={() => s.choose(key)}>
+            <strong>{key}. {label} {result.recommended === key ? '· Gợi ý phù hợp nhất' : ''}</strong>
+            <span>{result.options[key]}</span>
+          </button>
+        )}</div>
+      </details>
+      <details className="gr-extra"><summary>Xem phân tích và thông tin cần xác minh</summary>
+        <dl className="gr-insight">{[
+          ['Loại phản hồi',({ complaint: 'Phàn nàn', praise: 'Khen', question: 'Hỏi', sarcasm: 'Mỉa mai', abuse: 'Ngôn ngữ tiêu cực', other: 'Khác' })[analysis.feedback_type]],
+          ['Chủ đề',analysis.category],['Cảm xúc',analysis.emotion],['Khách mong muốn',analysis.expectation],
+          ['Rủi ro công khai',analysis.public_risk],['Trách nhiệm cửa hàng',responsibilityLabel[analysis.responsibility]],
+          ['Cách xử lý',analysis.strategy],['Kênh xử lý',analysis.channel === 'private' ? 'Chuyển trao đổi riêng' : 'Công khai']
+        ].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+        <h3>Cần xác minh thêm</h3>{analysis.verify.length
+          ? <ul>{analysis.verify.map((value,i) => <li key={i}>{value}</li>)}</ul>
+          : <p>AI chưa nêu thêm thông tin cần xác minh. Nhân viên vẫn cần kiểm tra dữ kiện.</p>}
+      </details>
+      <details className="gr-extra"><summary>Lưu bản nháp và góp ý cho Gánh</summary>
+        <label>Điều cần cải thiện (không bắt buộc)
+          <input maxLength={1000} disabled={s.busy} placeholder="Ví dụ: Ngắn hơn, tự nhiên hơn…"
+            value={s.reason} onChange={e => s.setReason(e.target.value)}/>
+        </label>
+        {s.access.brain && <label className="gr-check"><input type="checkbox" checked={example}
+          onChange={e => setExample(e.target.checked)}/>Lưu câu được duyệt làm ví dụ tốt cho Gánh</label>}
+        <AdminButton variant="secondary" disabled={s.busy || !s.text.trim()} onClick={() => s.save(false)}>Lưu để xử lý sau</AdminButton>
+        {!!s.current.revisions?.length && <details><summary>Các phiên bản đã lưu</summary>
+          {s.current.revisions.map(r => <article key={r.id}><strong>v{r.version}</strong><p>{r.text}</p><small>{r.reason}</small></article>)}
+        </details>}
+      </details>
+      <small>Chỉ sao chép nội dung; Gánh Reply không tự đăng bình luận.</small>
+    </AdminCard>}
+  </div>;
 }
 function History({ state: s }) {
   return <AdminCard><h2>Lịch sử phản hồi</h2><form className="gr-filters" onSubmit={e => { e.preventDefault(); s.loadHistory(); }}>
@@ -86,10 +166,10 @@ function Stats({ state: s }) {
 export default function GanhReplyWorkspace() {
   const s = useGanhReply();
   if (!GANH_ENABLED) return <AdminCard><h2>Gánh Reply</h2><p>Module chưa được bật trên môi trường này.</p></AdminCard>;
-  return <section className="ganh-reply" aria-busy={s.busy}><header className="gr-hero"><div><span className="gr-eyebrow">GÁNH BRAIN / CUSTOMER INSIGHT</span><h1>Gánh Reply <span>✦</span></h1><p>Hiểu khách trước. Trả lời có duyên, giữ vững niềm tin.</p></div><span className="gr-badge">{s.access?.role || 'Đang kết nối'}</span></header>
+  return <section className="ganh-reply" aria-busy={s.busy}><header className="gr-hero"><div><h1>Gánh Reply <span>✦</span></h1><p>Dán bình luận, Gánh gợi ý cách trả lời.</p></div><span className="gr-badge">{s.access ? 'Trợ lý trả lời khách' : 'Đang kết nối'}</span></header>
     {s.message && <div className="gr-message" role="status">{s.message}</div>}{s.busy && <p role="status">Đang xử lý…</p>}
     {!s.access ? <AdminCard><p>Đăng nhập tài khoản được cấp quyền để sử dụng Gánh Reply.</p><AdminButton disabled={s.busy} onClick={s.bootstrap}>Kết nối lại</AdminButton></AdminCard> : <>
-      <nav className="gr-tabs" aria-label="Các mục Gánh Reply">{[['compose','Gánh Reply'],['history','Lịch sử'],...(s.access.brain ? [['brain','Gánh Brain']] : []),['stats','Dashboard']].map(([id,label]) => <button type="button" key={id} disabled={s.busy} aria-current={s.tab === id ? 'page' : undefined} className={s.tab === id ? 'is-active' : ''} onClick={() => s.changeTab(id)}>{label}</button>)}</nav>
+      <nav className="gr-tabs" aria-label="Các mục Gánh Reply">{[['compose','Trả lời khách'],['history','Lịch sử'],...(s.access.brain ? [['brain','Kiến thức Gánh']] : []),['stats','Thống kê']].map(([id,label]) => <button type="button" key={id} disabled={s.busy} aria-current={s.tab === id ? 'page' : undefined} className={s.tab === id ? 'is-active' : ''} onClick={() => s.changeTab(id)}>{label}</button>)}</nav>
       {s.tab === 'compose' && <Compose key={s.current?.feedback.id || 'new'} state={s}/>}{s.tab === 'history' && <History state={s}/>}{s.tab === 'brain' && <BrainEditor state={s}/>}{s.tab === 'stats' && <Stats state={s}/>}
     </>}
   </section>;
