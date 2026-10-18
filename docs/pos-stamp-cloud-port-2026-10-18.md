@@ -6,7 +6,7 @@
 - Đã fetch và đối chiếu các nhánh Cloud ngày 18/10/2026.
 - Nền POS: `origin/codex/pos-usb-cloud-release-20261014`, commit `41c7e4850a1c3d95496e368210855a3fb757508d`.
 - Nhánh làm việc riêng: `codex/pos-stamp-cloud-20261018`.
-- Giữ nguyên metadata Cloud: 0.4.25, versionCode 56. Đây chưa phải bản phát hành APK mới.
+- Nền Cloud là 0.4.25, versionCode 56. Sau khi người dùng cho phép phát hành, nâng riêng metadata lên 0.4.26, versionCode 57.
 - Các nhánh web có commit mới hơn vẫn chứa POS 0.4.13 và không có bản sửa USB của nhánh phát hành POS, nên không dùng chúng làm nền POS.
 
 ## Phạm vi ghép
@@ -38,4 +38,4 @@ Migration chỉ thay điều kiện nhận thanh toán trong `stamp_private.orde
 
 ## Trạng thái
 
-Chưa push, chưa merge nhánh phát hành Cloud, chưa thay website và chưa phát hành APK. APK local cũ bị trùng 0.4.25 vẫn không được sử dụng. Trước khi phát hành cần kiểm tra lại đầu nhánh Cloud, chọn versionCode mới chưa sử dụng và xác minh APK/bill trên thiết bị.
+Người dùng đã cho phép push nhánh ghép riêng và build POS 0.4.26 trên GitHub Actions. Không merge vào main hoặc thay website. Workflow lấy bản cài SDK đã sửa trên Cloud, chỉ chạy đúng SHA được duyệt và xuất artifact 0.4.26; kiểm tra tem/USB cùng chữ ký trước khi gửi APK. APK local cũ bị trùng 0.4.25 vẫn không được sử dụng. Bill giấy và thiết bị thật cần kiểm tra sau khi cài bản Cloud mới.
