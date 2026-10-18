@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import useStampProgram from "../../../hooks/useStampProgram.js";
+import "../../../styles/stamp-card.css";
 
 const EVENT_LABELS = {
   earn: "Tích tem",
@@ -26,6 +27,13 @@ export default function CustomerStampPanel({ phone }) {
       <div className="crm-card-title"><Icon name="gift" size={17} /><h3>Tem của khách hàng</h3></div>
       {loading ? <p role="status">Đang tải tem…</p> : error ? <p role="alert">{error}</p> : data ? <>
         <div className="crm-points-line"><span>Tem khả dụng</span><strong>{Number(data.available || 0).toLocaleString("vi-VN")} tem</strong></div>
+        <div className="stamp-card__grid" role="img" aria-label={`${Number(data.available || 0)} tem khả dụng, tối đa 10 ô có dấu tích`}>
+          {Array.from({ length: 10 }, (_, index) => (
+            <span key={index} className={index < Number(data.available || 0) ? "is-earned" : ""} aria-hidden="true">
+              {index < Number(data.available || 0) ? "✓" : ""}
+            </span>
+          ))}
+        </div>
         <div className="crm-points-grid">
           <span>Tổng tem hiện có: {Number(data.balance || 0).toLocaleString("vi-VN")}</span>
           <span>Đang giữ đổi quà: {Number(data.held || 0).toLocaleString("vi-VN")}</span>
