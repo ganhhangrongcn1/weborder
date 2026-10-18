@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getKitchenOrders,
   getNextKitchenOrderAction,
@@ -16,6 +16,7 @@ import {
   resetKitchenRequestAudit
 } from "../services/kitchenRequestAuditService.js";
 import { branchOptionMatchesOrder } from "../services/branchIdentityService.js";
+import createKitchenRefreshQueue from "../services/kitchenRefreshQueue.js";
 
 const REALTIME_RELOAD_DELAY_MS = 2000;
 const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
@@ -624,9 +625,15 @@ export default function useKitchenOrders(options = null) {
   const [requestAudit, setRequestAudit] = useState(() => getKitchenRequestAuditSnapshot());
   const [updatingOrderId, setUpdatingOrderId] = useState("");
   const [updatingItemKey, setUpdatingItemKey] = useState("");
-  const loadingOrdersRef = useRef(false);
+  const refreshQueueRef = useRef(null);
+  if (!refreshQueueRef.current) refreshQueueRef.current = createKitchenRefreshQueue();
+  const loadScope = useMemo(() => ({}), [dateFilter, enabled, options]);
+  const currentLoadScopeRef = useRef(loadScope);
+  currentLoadScopeRef.current = loadScope;
   const realtimeReloadTimerRef = useRef(null);
+  const pendingRealtimeSourceRef = useRef(null);
   const lastFullLoadCompletedAtRef = useRef(0);
+  const lastFullLoadStartedAtRef = useRef(0);
   const recentlyClosedOrderKeysRef = useRef(new Map());
   const currentOrdersRef = useRef([]);
 
@@ -678,7 +685,13 @@ export default function useKitchenOrders(options = null) {
     return stableOrders;
   }, []);
 
-  const loadOrders = useCallback(async ({ silent = false, force = false, sourceType = "" } = {}) => {
+  useEffect(() => () => {
+    currentLoadScopeRef.current = null;
+    refreshQueueRef.current.invalidate();
+  }, []);
+
+  const loadOrders = useCallback(async ({ silent = false, sourceType = "" } = {}) => {
+    if (currentLoadScopeRef.current !== loadScope) return;
     if (!enabled) {
       setOrders([]);
       setLoading(false);
@@ -686,52 +699,67 @@ export default function useKitchenOrders(options = null) {
       return;
     }
 
-    if (loadingOrdersRef.current && !force) return;
-    loadingOrdersRef.current = true;
+    return refreshQueueRef.current.request({ scope: loadScope, silent, sourceType }, async (
+      request,
+      isCurrentGeneration
+    ) => {
+      const isCurrent = () => isCurrentGeneration() && currentLoadScopeRef.current === loadScope;
+      if (!isCurrent()) return;
+      const startedAt = Date.now();
+      const { silent, sourceType } = request;
 
-    if (silent) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-
-    try {
-      const dateRange = getDateRange(dateFilter);
-      const partialSourceType = String(sourceType || "").trim();
-      const result = await getKitchenOrders({
-        ...(options || {}),
-        ...dateRange,
-        ...(partialSourceType ? { sources: [partialSourceType] } : {})
-      });
-      const hasReadError = Boolean(result.errors?.length);
-
-      setOrders((currentOrders) => {
-        const nextOrders = partialSourceType
-          ? mergeOrdersBySource(currentOrders, result.orders || [], partialSourceType)
-          : result.orders || [];
-        return stabilizeRecentlyClosedOrders(nextOrders, currentOrders);
-      });
-      setError(
-        hasReadError
-          ? "Mot nguon don chua doc duoc. Cac nguon con lai van dang hien thi."
-          : ""
-      );
-      setLastUpdatedAt(new Date().toISOString());
-      if (!partialSourceType) {
-        lastFullLoadCompletedAtRef.current = Date.now();
+      if (silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
-      setRequestAudit(getKitchenRequestAuditSnapshot());
-    } catch (err) {
-      setError(err?.message || "Khong tai duoc danh sach don bep.");
-    } finally {
-      loadingOrdersRef.current = false;
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [dateFilter, enabled, stabilizeRecentlyClosedOrders, options]);
+
+      try {
+        const dateRange = getDateRange(dateFilter);
+        const partialSourceType = String(sourceType || "").trim();
+        const result = await getKitchenOrders({
+          ...(options || {}),
+          ...dateRange,
+          ...(partialSourceType ? { sources: [partialSourceType] } : {})
+        });
+        if (!isCurrent()) return;
+        const hasReadError = Boolean(result.errors?.length);
+
+        setOrders((currentOrders) => {
+          if (!isCurrent()) return currentOrders;
+          const nextOrders = partialSourceType
+            ? mergeOrdersBySource(currentOrders, result.orders || [], partialSourceType)
+            : result.orders || [];
+          return stabilizeRecentlyClosedOrders(nextOrders, currentOrders);
+        });
+        setError(
+          hasReadError
+            ? "Một nguồn đơn chưa đọc được. Các nguồn còn lại vẫn đang hiển thị."
+            : ""
+        );
+        setLastUpdatedAt(new Date().toISOString());
+        if (!partialSourceType) {
+          lastFullLoadStartedAtRef.current = startedAt;
+          lastFullLoadCompletedAtRef.current = Date.now();
+        }
+        setRequestAudit(getKitchenRequestAuditSnapshot());
+      } catch (err) {
+        if (isCurrent()) setError(err?.message || "Không tải được danh sách đơn bếp.");
+      } finally {
+        if (isCurrent()) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    });
+  }, [dateFilter, enabled, loadScope, stabilizeRecentlyClosedOrders, options]);
 
   useEffect(() => {
+    currentLoadScopeRef.current = loadScope;
+    lastFullLoadCompletedAtRef.current = 0;
+    lastFullLoadStartedAtRef.current = 0;
     if (!enabled) {
+      refreshQueueRef.current.invalidate();
       setOrders([]);
       setLoading(false);
       return;
@@ -821,13 +849,18 @@ export default function useKitchenOrders(options = null) {
         if (!shouldReloadForKitchenRealtime(change, currentOrdersRef.current)) return;
 
         const sourceType = getRealtimeSourceType(change);
+        pendingRealtimeSourceRef.current = pendingRealtimeSourceRef.current === null
+          ? sourceType
+          : pendingRealtimeSourceRef.current === sourceType ? sourceType : "";
         if (realtimeReloadTimerRef.current) {
           window.clearTimeout(realtimeReloadTimerRef.current);
         }
         realtimeReloadTimerRef.current = window.setTimeout(() => {
           realtimeReloadTimerRef.current = null;
-          if (lastFullLoadCompletedAtRef.current >= realtimeEventReceivedAt) return;
-          loadOrders({ silent: true, sourceType });
+          const pendingSource = pendingRealtimeSourceRef.current;
+          pendingRealtimeSourceRef.current = null;
+          if (lastFullLoadStartedAtRef.current >= realtimeEventReceivedAt) return;
+          loadOrders({ silent: true, sourceType: pendingSource || "" });
         }, isRealtimeItemTable(change.table) ? ITEM_REALTIME_RELOAD_DELAY_MS : REALTIME_RELOAD_DELAY_MS);
       }, {
         branchUuid: options.branchUuid,
@@ -853,6 +886,7 @@ export default function useKitchenOrders(options = null) {
         window.clearTimeout(realtimeReloadTimerRef.current);
         realtimeReloadTimerRef.current = null;
       }
+      pendingRealtimeSourceRef.current = null;
       unsubscribe?.();
     };
   }, [dateFilter, enabled, loadOrders, realtimeReconnectKey]);
