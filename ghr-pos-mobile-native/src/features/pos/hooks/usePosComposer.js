@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import createPosReadCoalescer from "../../../utils/posReadCoalescer";
 import usePosPagerSettings from "./usePosPagerSettings";
+import usePosWebsiteOrderSync from "./usePosWebsiteOrderSync";
+import { readWebsitePaidReceiptStatus } from "../../../services/pos/posWebsiteReceiptService";
 import usePosOfflineAutoSync from "./usePosOfflineAutoSync";
 import usePosPointInputLimit from "./usePosPointInputLimit";
 import { syncPosOfflineOrders } from "../../../services/pos/posOfflineSyncService";
@@ -42,10 +44,8 @@ import {
 } from "../../../services/pos/posOrderQueryService";
 import {
   getPosWebsiteHistoryOrders,
-  getPosWebsiteOrders,
   markPickupOrderPaidCash,
-  markPickupOrderPaidQr,
-  subscribePosWebsiteOrderChanges
+  markPickupOrderPaidQr
 } from "../../../services/pos/posPickupOrderService";
 import { buildPosPaymentReference, buildPosQrImageUrl } from "../../../services/pos/posPaymentService";
 import {
@@ -173,6 +173,11 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
   const [historyError, setHistoryError] = useState("");
   const [pickupOrdersLoading, setPickupOrdersLoading] = useState(false);
   const [pickupOrdersError, setPickupOrdersError] = useState("");
+  const refreshWebsiteOrders = usePosWebsiteOrderSync({
+    branchUuid: profile?.branchUuid, userId: session?.user?.id,
+    setPickupOrders, setDeliveryOrders,
+    setLoading: setPickupOrdersLoading, setError: setPickupOrdersError
+  });
   const [qrSession, setQrSession] = useState(null);
   const [qrPreviewIdentity, setQrPreviewIdentity] = useState(null);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -378,6 +383,10 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     if (order.metadata?.deviceMode === "phone") {
       return readPhoneCustomerBillStatus(order, profile?.branchUuid);
     }
+    if (["bank_qr", "momo"].includes(order.paymentMethod || order.payment_method)) {
+      const queuedReceipt = await readWebsitePaidReceiptStatus(order.id, profile?.branchUuid);
+      if (queuedReceipt) return queuedReceipt;
+    }
 
     const result = await readPosOrderForPrint(order.id);
     if (!result.ok || !result.printableOrder) {
@@ -458,27 +467,18 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
 
   const refreshPosRuntime = async (branchUuid = "", { includeRecentOrders = true, silent = false } = {}) => {
     if (!branchUuid) return;
-    if (runtimeRefreshInFlightRef.current) return;
+    const websiteTask = includeRecentOrders ? refreshWebsiteOrders({ silent }) : Promise.resolve(null);
+    if (runtimeRefreshInFlightRef.current) return websiteTask;
     runtimeRefreshInFlightRef.current = true;
     if (includeRecentOrders && !silent) {
       setHistoryLoading(true);
       setHistoryError("");
-      setPickupOrdersLoading(true);
-      setPickupOrdersError("");
     }
     try {
-      const [nextBusyPagers, nextRecentOrders, nextWebsiteOrders, nextWebsiteHistoryOrders, nextPaymentSessions] = await Promise.all([
+      const [nextBusyPagers, nextRecentOrders, , nextWebsiteHistoryOrders, nextPaymentSessions] = await Promise.all([
         getBusyPosPagerNumbers({ branchUuid }),
         includeRecentOrders ? getPosRecentOrders({ branchUuid, shiftId: shift?.id || "", limit: 120 }) : Promise.resolve(null),
-        includeRecentOrders
-          ? getPosWebsiteOrders({ branchUuid, limit: 80 }).then((orders) => {
-              setPickupOrdersError("");
-              return orders;
-            }).catch((error) => {
-              setPickupOrdersError(error?.message || "Không tải được đơn hẹn lấy.");
-              return null;
-            })
-          : Promise.resolve(null),
+        websiteTask,
         includeRecentOrders && historyVisibleRef.current
           ? getPosWebsiteHistoryOrders({ branchUuid, limit: 20 }).catch((error) => {
               setHistoryError(error?.message || "Khong tai duoc lich su don hen lay.");
@@ -495,15 +495,6 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       if (includeRecentOrders && Array.isArray(nextRecentOrders)) {
         setRecentOrders(mergeRecentHistoryOrders(nextRecentOrders, nextWebsiteHistoryOrders, 160));
       }
-      if (includeRecentOrders && nextWebsiteOrders && typeof nextWebsiteOrders === "object") {
-        if (Array.isArray(nextWebsiteOrders)) {
-          setPickupOrders(nextWebsiteOrders);
-          setDeliveryOrders([]);
-        } else {
-          setPickupOrders(Array.isArray(nextWebsiteOrders.pickupOrders) ? nextWebsiteOrders.pickupOrders : []);
-          setDeliveryOrders(Array.isArray(nextWebsiteOrders.deliveryOrders) ? nextWebsiteOrders.deliveryOrders : []);
-        }
-      }
       setPendingPaymentSessions(activePaymentSessions);
     } catch (error) {
       setHistoryError(error?.message || "Không tải được lịch sử POS.");
@@ -511,7 +502,6 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       runtimeRefreshInFlightRef.current = false;
       if (!silent) {
         setHistoryLoading(false);
-        setPickupOrdersLoading(false);
       }
     }
   };
@@ -1144,23 +1134,6 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     };
   }, [profile?.branchName, profile?.branchUuid, session?.user?.id, deviceMode]);
 
-  useEffect(() => {
-    const branchUuid = String(profile?.branchUuid || "").trim();
-    if (!branchUuid) return undefined;
-
-    let refreshTimer = null;
-    const unsubscribe = subscribePosWebsiteOrderChanges(branchUuid, () => {
-      if (refreshTimer) globalThis.clearTimeout(refreshTimer);
-      refreshTimer = globalThis.setTimeout(() => {
-        void refreshPosRuntime(branchUuid, { includeRecentOrders: true, silent: true });
-      }, 250);
-    });
-
-    return () => {
-      if (refreshTimer) globalThis.clearTimeout(refreshTimer);
-      if (typeof unsubscribe === "function") unsubscribe();
-    };
-  }, [profile?.branchUuid]);
 
   useEffect(() => {
     const branchUuid = String(profile?.branchUuid || "").trim();

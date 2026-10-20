@@ -315,7 +315,9 @@ export function subscribePosWebsiteOrderChanges(branchUuid = "", onChange) {
         onChange(payload);
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") onChange({ eventType: "SYNC" });
+    });
 
   return () => {
     supabase.removeChannel(channel);

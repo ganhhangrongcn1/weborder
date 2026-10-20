@@ -14,3 +14,15 @@ test('one phone cash job prints preparation plus a paid customer bill, with cash
   expect(payload.secondaryReceipt.text).toContain('25.000');
   expect(payload.secondaryReceipt.text).not.toContain('CHƯA THANH TOÁN');
 });
+
+test('paid website receipt renders the server-confirmed stamp snapshot without another lookup', () => {
+  const payload=buildPrintPayload({source_type:'website_paid_receipt',job_type:'customer_bill',payload:{order:{
+    id:'web-paid',customerPhone:'0901234567',paymentMethod:'bank_qr',paymentStatus:'paid',paidAt:'2026-10-20T11:47:50Z',
+    subtotal:28000,totalAmount:28000,stampSummary:{enabled:true,available:7,held:0},
+    items:[{name:'Món thử',quantity:1,price:28000,lineTotal:28000}]
+  }}});
+  expect(payload.text).toContain('@@STAMPS:7');
+  expect(payload.text).toContain('ĐÃ THANH TOÁN QR');
+  expect(payload.text).not.toContain('CHƯA THANH TOÁN');
+  expect(payload.secondaryReceipt).toBeNull();
+});
