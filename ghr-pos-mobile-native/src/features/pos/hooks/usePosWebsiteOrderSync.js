@@ -18,12 +18,13 @@ export default function usePosWebsiteOrderSync({ branchUuid, userId, setPickupOr
     let pendingSilent = true;
     let cancelRead = null;
     const load = (options = {}) => {
-      if (!active) return Promise.resolve();
+      if (!active || AppState.currentState !== "active") return Promise.resolve();
       pending = true;
       pendingSilent = pendingSilent && options.silent !== false;
       if (running) return running;
       running = (async () => {
-        while (active && pending) {
+        // Keep queued work for foreground; returning to the app always refreshes.
+        while (active && pending && AppState.currentState === "active") {
           const silent = pendingSilent;
           pending = false;
           pendingSilent = true;
@@ -67,7 +68,7 @@ export default function usePosWebsiteOrderSync({ branchUuid, userId, setPickupOr
     // Throttle, do not keep postponing a refresh while orders are arriving.
     let eventTimer = null;
     const unsubscribe = subscribePosWebsiteOrderChanges(branchUuid, () => {
-      if (!active || eventTimer) return;
+      if (!active || AppState.currentState !== "active" || eventTimer) return;
       eventTimer = setTimeout(() => { eventTimer = null; void load(); }, 150);
     });
     const timer = globalThis.setInterval(() => {

@@ -72,6 +72,51 @@ test('returning to foreground reloads immediately without waiting for the five-s
   } finally { /* Listener cleanup is verified by afterEach unmount. */ }
 });
 
+test('background realtime bursts do not read orders and foreground catches up once', async () => {
+  let listener;
+  AppState.addEventListener.mockImplementation((name, callback) => { listener=callback; return {remove:jest.fn()}; });
+  await mount();
+  AppState.currentState='background'; act(() => listener('background'));
+  act(() => {
+    for (let i=0;i<20;i++) { event({eventType:'UPDATE'}); jest.advanceTimersByTime(200); }
+    event({eventType:'SYNC'}); jest.advanceTimersByTime(150);
+  });
+  await flush();
+  expect(getPosWebsiteOrders).toHaveBeenCalledTimes(1);
+  AppState.currentState='active'; act(() => listener('active')); await flush();
+  expect(getPosWebsiteOrders).toHaveBeenCalledTimes(2);
+  expect(props.setPickupOrders).toHaveBeenLastCalledWith([{id:'new'}]);
+});
+
+test('a realtime throttle scheduled in foreground does not start a read after going inactive', async () => {
+  await mount();
+  act(() => { event(); jest.advanceTimersByTime(100); });
+  AppState.currentState='inactive';
+  act(() => jest.advanceTimersByTime(50)); await flush();
+  expect(getPosWebsiteOrders).toHaveBeenCalledTimes(1);
+  AppState.currentState='active';
+  act(() => { event(); jest.advanceTimersByTime(150); }); await flush();
+  expect(getPosWebsiteOrders).toHaveBeenCalledTimes(2);
+});
+
+test('a queued follow-up waits for foreground when the running read times out in background', async () => {
+  let listener;
+  AppState.addEventListener.mockImplementation((name, callback) => { listener=callback; return {remove:jest.fn()}; });
+  getPosWebsiteOrders.mockImplementationOnce(() => new Promise(() => {}));
+  await mount();
+  act(() => { event(); jest.advanceTimersByTime(150); });
+  AppState.currentState='background'; act(() => listener('background'));
+  act(() => { event(); jest.advanceTimersByTime(11000); }); await flush();
+  expect(getPosWebsiteOrders).toHaveBeenCalledTimes(1);
+  expect(getPosWebsiteOrders.mock.calls[0][0].signal.aborted).toBe(true);
+  expect(props.setLoading).toHaveBeenLastCalledWith(false);
+  expect(props.setError).toHaveBeenLastCalledWith(expect.stringContaining('10 giây'));
+  AppState.currentState='active'; act(() => listener('active')); await flush();
+  expect(getPosWebsiteOrders).toHaveBeenCalledTimes(2);
+  expect(props.setPickupOrders).toHaveBeenLastCalledWith([{id:'new'}]);
+  expect(props.setError).toHaveBeenLastCalledWith('');
+});
+
 test('realtime rejoin catches up immediately and continuous events do not postpone refresh forever', async () => {
   await mount();
   act(() => { event({eventType:'SYNC'}); jest.advanceTimersByTime(150); }); await flush();
