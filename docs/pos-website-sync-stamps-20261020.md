@@ -21,7 +21,7 @@ Hàm stamp_private.order_before_write đang chạy trên production đã hỗ tr
 
 23 test trong 6 suite native đã qua, gồm đồng bộ độc lập, sự kiện đến khi đang đọc, giữ danh sách khi offline, đổi chi nhánh, tem, QR chưa trả tiền, mode thu ngân và bill dựng từ snapshot 7 tem. Kiểm tra website queue phân trang, cú pháp và encoding cũng qua.
 
-Regression SQL được chạy bằng PostgreSQL nhúng PGlite trong database riêng, dùng fixture giả. Đã kiểm tra snapshot sau thanh toán, một bill theo sau, giữ phiếu chuẩn bị, chặn bundle trùng, in lại có tem và số dư tem không đổi. Chưa chạy thành công toàn bộ migration trên production: lần dry-run đầu gặp unique index hiện hữu; sau khi bổ sung phân biệt loại phiếu, auto-review chặn DDL production vì rủi ro lock. Không lách chặn bằng CLI hoặc API khác.
+Regression SQL được chạy bằng PostgreSQL nhúng PGlite trong database riêng, dùng fixture giả, rồi chạy lại trên production trong giao dịch hoàn tác sau khi anh cho phép triển khai. Đã kiểm tra snapshot sau thanh toán, một bill theo sau, giữ phiếu chuẩn bị, chặn bundle trùng, in lại có tem và số dư tem không đổi. Không có đơn/lệnh in thử được commit hoặc gửi tới máy in. Quyền gọi trực tiếp hai hàm private bị thu hồi đối với anon/authenticated; hai trigger đang bật.
 
 Chạy lại SQL test mà không truy cập production:
 
@@ -31,11 +31,13 @@ node scripts/test-paid-website-receipts.mjs /tmp/pos-pg-test/node_modules/@elect
 npm --prefix ghr-pos-mobile-native test -- --runInBand __tests__/posWebsiteOrderSync.test.js __tests__/posPhonePrintBundle.test.js __tests__/posStamps.test.js __tests__/posStampReceipt.test.js __tests__/posPendingQrStampRead.test.js __tests__/posDeviceMode.test.js
 ```
 
-## Triển khai còn chờ
+## Trạng thái triển khai ngày 20/10/2026
 
-Cần anh chấp thuận thay đổi trigger và chỉ mục trên database thật sau khi xem bản sửa. Migration ở `supabase/migrations/20261020120041_paid_website_receipt_stamps.sql` và bản sao ở `docs/supabase-sql/20261020_paid_website_receipt_stamps.sql`. Tác động là thay chỉ mục chống trùng loại bill, thêm trigger lệnh in sau xác nhận trả tiền và snapshot; có thể khóa ngắn bảng print_jobs khi dựng lại index. Không xóa đơn, không backfill/reprint đơn cũ và không thay RLS.
+Anh đã cho phép triển khai database của #10. Migration `paid_website_receipt_stamps` đã áp dụng thành công lên production với version `20261020122126`; tên file migration được đồng bộ với version thực tế do công cụ Supabase tạo. Có giới hạn chờ lock 3 giây và thời gian chạy câu lệnh 30 giây.
 
-Sau khi được phép: áp dụng migration, xác minh trigger/ACL/index và kiểm tra rollback có kiểm soát; cập nhật POS_RELEASE_APPROVED_SHA đúng commit bản sửa, dispatch GitHub Actions, tải APK, xác minh chữ ký/hash và giao file. Chưa có APK 0.4.28, chưa bật thay đổi production. Không tự in lại GHR-3119.
+Kiểm thử transaction rollback trên production đã qua: tạo một bill khách sau thanh toán kèm snapshot 7 tem, không thêm bill khi cập nhật lại đơn đã paid, chặn bundle webhook trùng, in lại có tem và không thay số dư. Sau rollback còn 0 đơn/lệnh in thử. Hai trigger được bật; anon/authenticated không có quyền gọi trực tiếp hàm private. Đối chiếu lại GHR-3119 vẫn có 7 tem, held=0, source active. Không in lại đơn cũ.
+
+Build Cloud **0.4.28 đã thành công**, chạy từ commit `8f77adbc131b63424adfd168778d8295fb63d9cf`: https://github.com/ganhhangrongcn1/weborder/actions/runs/39421755320 . Commit tài liệu/đồng bộ tên migration sau đó không thay nội dung APK đã build. Chưa merge các thay đổi ứng dụng vào main, không deploy website/Kitchen trong tác vụ này.
 
 ## Tệp của tác vụ
 - `.github/workflows/pos-android-release.yml`
@@ -52,4 +54,12 @@ Sau khi được phép: áp dụng migration, xác minh trigger/ACL/index và ki
 - `ghr-pos-mobile-native/src/services/pos/posWebsiteReceiptService.js`
 - `scripts/fixtures/`
 - `scripts/test-paid-website-receipts.mjs`
-- `supabase/migrations/20261020120041_paid_website_receipt_stamps.sql`
+- `supabase/migrations/20261020122126_paid_website_receipt_stamps.sql`
+
+## APK đã giao
+
+- Artifact `GHR-POS-0.4.28-release`, ID `12264476573`; phiên bản 0.4.28, code 59.
+- Đã xác minh package/version và chữ ký release cũ trong workflow, checksum file tải về khớp.
+- SHA-256: `7129e98366e7c3dc28a307b40e4e40f9601a40d654b3cbcdc5af18d1f120d24c`.
+- File trong workspace: `/workspace/releases/GHR-POS-0.4.28/GHR-POS-0.4.28.apk`.
+- Cài cập nhật đè; vẫn cần kiểm tra bill thực tế của một đơn website mới sau thanh toán. Lỗi máy quán riêng không hiện đơn chưa được xác minh dứt điểm tại thiết bị.

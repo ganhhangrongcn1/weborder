@@ -10,7 +10,7 @@ const {PGlite}=await import(pathToFileURL(path.resolve(modulePath)).href);
 const db=new PGlite();
 try {
  await db.exec(await fs.readFile(new URL('./fixtures/paid-website-receipt.sql',import.meta.url),'utf8'));
- await db.exec(await fs.readFile(new URL('../supabase/migrations/20261020120041_paid_website_receipt_stamps.sql',import.meta.url),'utf8'));
+ await db.exec(await fs.readFile(new URL('../supabase/migrations/20261020122126_paid_website_receipt_stamps.sql',import.meta.url),'utf8'));
  await db.exec(await fs.readFile(new URL('../docs/supabase-sql/20261020_paid_website_receipt_stamps_test.sql',import.meta.url),'utf8'));
  const {rows}=await db.query("select count(*)::int as jobs from public.print_jobs where source_type='website_paid_receipt'");
  assert.equal(rows[0].jobs,1);
