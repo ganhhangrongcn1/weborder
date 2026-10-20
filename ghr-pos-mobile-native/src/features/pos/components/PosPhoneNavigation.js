@@ -17,13 +17,11 @@ export default function PosPhoneNavigation({ activeTab, onSelect, orderCount = 0
   );
 }
 
-export function PosPhoneMore({ onSelect, onSignOut, deviceMode = 'cashier', onChangeMode, modeDisabled = false, modeError = '' }) {
+export function PosPhoneMore({ onSelect, onSignOut }) {
   return (
     <ScrollView contentContainerStyle={styles.more}>
       <Text style={styles.heading}>Quản lý POS</Text>
-      <Text style={styles.rowText}>Chế độ thiết bị</Text>
-      <Text>Điện thoại thu tiền trước, bếp nhận đơn sau. Phiếu in qua máy POS tại quán.</Text>
-      {[{ key: 'cashier', label: 'Thu ngân · máy POS' }, { key: 'phone', label: 'Điện thoại · Order & thu tiền' }].map(item => (
+      {[{ key: "shift", label: "Tổng quan ca" }, { key: "settings", label: "Máy in & thiết lập" }].map((item) => (
         <Pressable key={item.key} disabled={modeDisabled} style={[styles.row, deviceMode === item.key && styles.active]}
           onPress={() => onChangeMode?.(item.key)}><Text style={styles.rowText}>{deviceMode === item.key ? '✓ ' : ''}{item.label}</Text></Pressable>
       ))}

@@ -471,9 +471,12 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
         getBusyPosPagerNumbers({ branchUuid }),
         includeRecentOrders ? getPosRecentOrders({ branchUuid, shiftId: shift?.id || "", limit: 120 }) : Promise.resolve(null),
         includeRecentOrders
-          ? getPosWebsiteOrders({ branchUuid, limit: 80 }).catch((error) => {
+          ? getPosWebsiteOrders({ branchUuid, limit: 80 }).then((orders) => {
+              setPickupOrdersError("");
+              return orders;
+            }).catch((error) => {
               setPickupOrdersError(error?.message || "Không tải được đơn hẹn lấy.");
-              return [];
+              return null;
             })
           : Promise.resolve(null),
         includeRecentOrders && historyVisibleRef.current

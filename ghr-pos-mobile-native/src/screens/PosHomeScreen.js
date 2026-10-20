@@ -609,13 +609,6 @@ export default function PosHomeScreen() {
   }
 
   if (!hasOpenShift) {
-    if (isPhoneMode) return <View style={styles.centerPage}>
-      <Text style={styles.shiftTitle}>{branchName}</Text>
-      <Text>Thu ngân cần mở ca trên máy POS tại quán trước khi nhận đơn.</Text>
-      <Pressable style={styles.submitButton} onPress={refreshCurrentPosRuntime}><Text style={styles.submitText}>Kiểm tra ca</Text></Pressable>
-      <Pressable style={styles.smallGhostButton} onPress={() => device.changeMode('cashier')}><Text>Chuyển sang Thu ngân</Text></Pressable>
-      <Pressable style={styles.smallGhostButton} onPress={signOut}><Text>Đổi tài khoản</Text></Pressable>
-    </View>;
     if (lastClosedShift) {
       return (
         <PosShiftClosedCard
@@ -1335,9 +1328,7 @@ export default function PosHomeScreen() {
               ))}
             </View>
           )}
-          {isPhonePortrait && activeTab === "more" && <PosPhoneMore onSelect={setActiveTab} onSignOut={signOut}
-            deviceMode={device.mode} modeDisabled={busy || cart.length > 0 || !!qrSession || !!pickupQrSession}
-            modeError={device.error} onChangeMode={async value => { if (await device.changeMode(value)) setActiveTab('sale'); }} />}
+          {isPhonePortrait && activeTab === "more" && <PosPhoneMore onSelect={setActiveTab} onSignOut={signOut} />}
           {isPhonePortrait && ["shift", "settings"].includes(activeTab) && (
             <Pressable style={{ minHeight: 44, justifyContent: "center" }} onPress={() => setActiveTab("more")}>
               <Text style={{ color: POS_COLORS.primaryDark, fontWeight: "800" }}>‹ Khác</Text>

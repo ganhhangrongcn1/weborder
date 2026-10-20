@@ -269,18 +269,23 @@ async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = tr
   const safeLimit = Math.max(10, Math.min(120, Math.floor(Number(limit || 60))));
   const startOfToday = getStartOfTodayIso();
   const startOfTomorrow = getStartOfTomorrowIso();
-  const query = supabase
-    .from("orders")
-    .select(WEBSITE_ORDER_SELECT)
-    .or(`branch_uuid.eq.${safeBranchUuid},pickup_branch_uuid.eq.${safeBranchUuid},delivery_branch_uuid.eq.${safeBranchUuid}`)
-    .gte("created_at", startOfToday)
-    .lt("created_at", startOfTomorrow)
-    .order("created_at", { ascending: false })
-    .limit(safeLimit);
-
-  const { data, error } = await query;
-  if (error || !Array.isArray(data)) {
-    throw new Error(error?.message || "Không tải được đơn website.");
+  // Paginate before filtering: counter sales can fill a page and hide older web orders.
+  const data = [];
+  for (let offset = 0; ; offset += safeLimit) {
+    const { data: page, error } = await supabase
+      .from("orders")
+      .select(WEBSITE_ORDER_SELECT)
+      .or(`branch_uuid.eq.${safeBranchUuid},pickup_branch_uuid.eq.${safeBranchUuid},delivery_branch_uuid.eq.${safeBranchUuid}`)
+      .gte("created_at", startOfToday)
+      .lt("created_at", startOfTomorrow)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + safeLimit - 1);
+    if (error || !Array.isArray(page)) {
+      throw new Error(error?.message || "Không tải được đơn website.");
+    }
+    data.push(...page);
+    if (page.length < safeLimit) break;
   }
 
   return data
