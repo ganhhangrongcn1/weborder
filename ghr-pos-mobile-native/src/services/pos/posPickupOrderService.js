@@ -262,7 +262,7 @@ function splitWebsiteOrders(rows = []) {
   return { pickupOrders, deliveryOrders };
 }
 
-async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = true } = {}) {
+async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = true, signal } = {}) {
   const safeBranchUuid = toText(branchUuid);
   if (!supabase || !safeBranchUuid) return [];
 
@@ -272,7 +272,7 @@ async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = tr
   // Paginate before filtering: counter sales can fill a page and hide older web orders.
   const data = [];
   for (let offset = 0; ; offset += safeLimit) {
-    const { data: page, error } = await supabase
+    let query = supabase
       .from("orders")
       .select(WEBSITE_ORDER_SELECT)
       .or(`branch_uuid.eq.${safeBranchUuid},pickup_branch_uuid.eq.${safeBranchUuid},delivery_branch_uuid.eq.${safeBranchUuid}`)
@@ -281,6 +281,8 @@ async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = tr
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
       .range(offset, offset + safeLimit - 1);
+    if (signal) query = query.abortSignal(signal);
+    const { data: page, error } = await query;
     if (error || !Array.isArray(page)) {
       throw new Error(error?.message || "Không tải được đơn website.");
     }
@@ -295,8 +297,8 @@ async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = tr
     .filter((row) => (includePaid ? true : !isPaid(row)));
 }
 
-export async function getPosWebsiteOrders({ branchUuid = "", limit = 80 } = {}) {
-  const rows = await readWebsiteOrders({ branchUuid, limit, includePaid: true });
+export async function getPosWebsiteOrders({ branchUuid = "", limit = 80, signal } = {}) {
+  const rows = await readWebsiteOrders({ branchUuid, limit, includePaid: true, signal });
   return splitWebsiteOrders(rows.filter(shouldShowInWebsiteQueue));
 }
 

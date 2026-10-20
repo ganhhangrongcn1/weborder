@@ -16,6 +16,7 @@ export default function usePosWebsiteOrderSync({ branchUuid, userId, setPickupOr
     let running = null;
     let pending = false;
     let pendingSilent = true;
+    let cancelRead = null;
     const load = (options = {}) => {
       if (!active) return Promise.resolve();
       pending = true;
@@ -27,8 +28,24 @@ export default function usePosWebsiteOrderSync({ branchUuid, userId, setPickupOr
           pending = false;
           pendingSilent = true;
           if (!silent) setLoading(true);
+          const controller = new globalThis.AbortController();
+          let timeout;
           try {
-            const orders = await getPosWebsiteOrders({ branchUuid, limit: 80 });
+            const deadline = new Promise((_, reject) => {
+              timeout = setTimeout(() => {
+                reject(new Error("Tải đơn quá 10 giây. POS sẽ tự thử lại khi có kết nối."));
+                controller.abort();
+              }, 10000);
+              cancelRead = () => {
+                clearTimeout(timeout);
+                controller.abort();
+                reject(new Error("Đã dừng tải đơn."));
+              };
+            });
+            const orders = await Promise.race([
+              getPosWebsiteOrders({ branchUuid, limit: 80, signal: controller.signal }),
+              deadline
+            ]);
             if (!active) return;
             setPickupOrders(orders.pickupOrders || []);
             setDeliveryOrders(orders.deliveryOrders || []);
@@ -36,6 +53,8 @@ export default function usePosWebsiteOrderSync({ branchUuid, userId, setPickupOr
           } catch (error) {
             if (active) setError(error?.message || "Không tải được đơn website.");
           } finally {
+            clearTimeout(timeout);
+            cancelRead = null;
             if (active) setLoading(false);
           }
         }
@@ -51,7 +70,7 @@ export default function usePosWebsiteOrderSync({ branchUuid, userId, setPickupOr
       if (!active || eventTimer) return;
       eventTimer = setTimeout(() => { eventTimer = null; void load(); }, 150);
     });
-    const timer = setInterval(() => {
+    const timer = globalThis.setInterval(() => {
       if (AppState.currentState === "active") void load();
     }, 5000);
     const appState = AppState.addEventListener("change", state => {
@@ -60,7 +79,8 @@ export default function usePosWebsiteOrderSync({ branchUuid, userId, setPickupOr
     return () => {
       active = false;
       pending = false;
-      clearInterval(timer);
+      cancelRead?.();
+      globalThis.clearInterval(timer);
       clearTimeout(eventTimer);
       appState.remove();
       unsubscribe();

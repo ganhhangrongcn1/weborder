@@ -11,11 +11,12 @@ function Harness(p) { refresh=usePosWebsiteOrderSync(p); return null; }
 beforeEach(() => {
   jest.useFakeTimers(); jest.clearAllMocks();
   AppState.currentState='active';
+  jest.spyOn(AppState,'addEventListener').mockImplementation(() => ({remove:jest.fn()}));
   subscribePosWebsiteOrderChanges.mockImplementation((branch, callback) => { event=callback; return jest.fn(); });
   getPosWebsiteOrders.mockResolvedValue({pickupOrders:[{id:'new'}],deliveryOrders:[]});
   props={branchUuid:'branch',userId:'staff',setPickupOrders:jest.fn(),setDeliveryOrders:jest.fn(),setLoading:jest.fn(),setError:jest.fn()};
 });
-afterEach(() => { if(tree) act(() => tree.unmount()); tree=null; jest.clearAllTimers(); jest.useRealTimers(); });
+afterEach(() => { if(tree) act(() => tree.unmount()); tree=null; jest.clearAllTimers(); jest.useRealTimers(); jest.restoreAllMocks(); });
 const mount=async () => { act(() => { tree=renderer.create(<Harness {...props}/>); }); await flush(); };
 test('website queue loads independently and polls every five seconds in foreground', async () => {
   await mount(); expect(props.setPickupOrders).toHaveBeenCalledWith([{id:'new'}]);
@@ -40,4 +41,71 @@ test('late results from a different branch cannot overwrite the current branch',
   await mount(); act(() => tree.update(<Harness {...props} branchUuid="branch-2"/>)); await flush();
   props.setPickupOrders.mockClear(); await act(async () => finish({pickupOrders:[{id:'wrong'}],deliveryOrders:[]})); await flush();
   expect(props.setPickupOrders).not.toHaveBeenCalled();
+});
+
+test('a request that never responds must time out visibly and allow queued updates to recover', async () => {
+  let finishOld;
+  getPosWebsiteOrders.mockImplementationOnce(() => new Promise(resolve => { finishOld=resolve; }));
+  await mount();
+  // The old device keeps waiting while another request with the same account can succeed.
+  act(() => jest.advanceTimersByTime(11000)); await flush();
+  expect(props.setLoading).toHaveBeenLastCalledWith(false);
+  expect(props.setError).toHaveBeenCalledWith(expect.stringContaining("10 giây"));
+  expect(getPosWebsiteOrders.mock.calls[0][0].signal.aborted).toBe(true);
+  expect(getPosWebsiteOrders.mock.calls.length).toBeGreaterThan(1);
+  expect(props.setPickupOrders).toHaveBeenLastCalledWith([{id:'new'}]);
+  props.setPickupOrders.mockClear();
+  await act(async () => finishOld({pickupOrders:[{id:'stale'}],deliveryOrders:[]})); await flush();
+  expect(props.setPickupOrders).not.toHaveBeenCalled();
+});
+
+test('returning to foreground reloads immediately without waiting for the five-second poll', async () => {
+  let listener;
+  AppState.addEventListener.mockImplementation((name, callback) => { listener=callback; return {remove:jest.fn()}; });
+  try {
+    await mount();
+    AppState.currentState='background'; act(() => listener('background'));
+    act(() => jest.advanceTimersByTime(30000)); await flush();
+    expect(getPosWebsiteOrders).toHaveBeenCalledTimes(1);
+    AppState.currentState='active'; act(() => listener('active')); await flush();
+    expect(getPosWebsiteOrders).toHaveBeenCalledTimes(2);
+  } finally { /* Listener cleanup is verified by afterEach unmount. */ }
+});
+
+test('realtime rejoin catches up immediately and continuous events do not postpone refresh forever', async () => {
+  await mount();
+  act(() => { event({eventType:'SYNC'}); jest.advanceTimersByTime(150); }); await flush();
+  expect(getPosWebsiteOrders).toHaveBeenCalledTimes(2);
+  act(() => { for(let i=0;i<12;i++) { event(); jest.advanceTimersByTime(50); } }); await flush();
+  expect(getPosWebsiteOrders.mock.calls.length).toBeGreaterThan(2);
+});
+
+test('logout aborts an outstanding read, clears the queue and leaves no timer/subscription behind', async () => {
+  let finishOld; getPosWebsiteOrders.mockImplementationOnce(() => new Promise(resolve => {finishOld=resolve;}));
+  await mount();
+  const signal=getPosWebsiteOrders.mock.calls[0][0].signal;
+  const unsubscribe=subscribePosWebsiteOrderChanges.mock.results[0].value;
+  act(() => tree.update(<Harness {...props} userId={null}/>)); await flush();
+  expect(signal.aborted).toBe(true); expect(unsubscribe).toHaveBeenCalledTimes(1);
+  expect(props.setPickupOrders).toHaveBeenLastCalledWith([]);
+  const calls=getPosWebsiteOrders.mock.calls.length;
+  act(() => jest.advanceTimersByTime(30000)); await flush();
+  expect(getPosWebsiteOrders).toHaveBeenCalledTimes(calls);
+  props.setPickupOrders.mockClear(); await act(async () => finishOld({pickupOrders:[{id:'old-user'}],deliveryOrders:[]})); await flush();
+  expect(props.setPickupOrders).not.toHaveBeenCalled();
+});
+
+test('two devices using one account remain independent when one device has a stalled request', async () => {
+  let otherTree;
+  getPosWebsiteOrders.mockImplementationOnce(() => new Promise(() => {}));
+  await mount();
+  const other={...props,setPickupOrders:jest.fn(),setDeliveryOrders:jest.fn(),setLoading:jest.fn(),setError:jest.fn()};
+  try {
+    act(() => {otherTree=renderer.create(<Harness {...other}/>);}); await flush();
+    expect(other.setPickupOrders).toHaveBeenLastCalledWith([{id:'new'}]);
+    expect(props.setPickupOrders).toHaveBeenLastCalledWith([]);
+    act(() => jest.advanceTimersByTime(11000)); await flush();
+    expect(props.setPickupOrders).toHaveBeenLastCalledWith([{id:'new'}]);
+    expect(other.setPickupOrders).toHaveBeenLastCalledWith([{id:'new'}]);
+  } finally {if(otherTree) act(() => otherTree.unmount());}
 });
