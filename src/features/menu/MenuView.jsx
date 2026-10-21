@@ -9,14 +9,7 @@ import MenuLoadingState from "./components/MenuLoadingState.jsx";
 import { buildMenuProductGroups, getMenuCategoryAnchorKey } from "./menuGrouping.js";
 import { buildPromotionOffersForChannel } from "../../services/qrOfferService.js";
 import { formatMoney } from "../../utils/format.js";
-
-function normalizeSearchText(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .toLowerCase();
-}
+import { normalizeSearchText } from "./menuSearch.js";
 
 function MenuPromoRail({ items = [], onOpen }) {
   if (!items.length) return null;
