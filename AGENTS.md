@@ -298,6 +298,15 @@ No n8n workflow JSON is stored in the repo. The project contains n8n contracts i
 
 ## Deployment Rules
 
+### Android POS Cloud Build — User Preference
+
+- Read [docs/pos-android-cloud-release.md](docs/pos-android-cloud-release.md) before building or releasing an Android POS APK.
+- The established build environment is GitHub Actions in `ganhhangrongcn1/weborder`, using existing signing secrets. Do not conclude Cloud cannot build because the current workspace lacks Android SDK, dependencies, or signing files.
+- The user explicitly requested that future agents remember this workflow and do not ask again where Android builds run or where the existing signing key is stored.
+- When the user requests an APK build, proceed with necessary branch sync, versioning, approving that reviewed commit through `POS_RELEASE_APPROVED_SHA`, workflow dispatch, monitoring, and artifact retrieval within available permissions. Preserve the existing signing key and certificate check.
+- If an actual permission error blocks a step, report the exact failed operation and request only the missing access/action. Never ask the user to resend signing secrets in chat or remove the commit approval check.
+- Compare current remote main with the latest successfully built release before starting: as of 2026-10-20, POS 0.4.27 is on PR #8's branch and is not yet merged into main. Do not regress to main's older POS 0.4.26.
+
 ### User Workflow Preference
 
 - The user primarily works on Cloud. Use the latest remote source and deployed version as the starting point; compare remote changes before publishing from an older workspace.
