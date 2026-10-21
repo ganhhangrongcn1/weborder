@@ -522,7 +522,8 @@ function buildReceiptTextFromOrder(order = {}, sourceType = "") {
     order: {
       id: toText(order.id),
       orderCode: toText(order.orderCode || order.order_code || order.id),
-      displayOrderCode: toText(order.displayOrderCode || order.display_order_code || order.orderCode || order.id)
+      displayOrderCode: toText(order.displayOrderCode || order.display_order_code || order.orderCode || order.id),
+      stampSummary: order.stampSummary
     },
     cart,
     totals: {

@@ -262,25 +262,32 @@ function splitWebsiteOrders(rows = []) {
   return { pickupOrders, deliveryOrders };
 }
 
-async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = true } = {}) {
+async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = true, signal } = {}) {
   const safeBranchUuid = toText(branchUuid);
   if (!supabase || !safeBranchUuid) return [];
 
   const safeLimit = Math.max(10, Math.min(120, Math.floor(Number(limit || 60))));
   const startOfToday = getStartOfTodayIso();
   const startOfTomorrow = getStartOfTomorrowIso();
-  const query = supabase
-    .from("orders")
-    .select(WEBSITE_ORDER_SELECT)
-    .or(`branch_uuid.eq.${safeBranchUuid},pickup_branch_uuid.eq.${safeBranchUuid},delivery_branch_uuid.eq.${safeBranchUuid}`)
-    .gte("created_at", startOfToday)
-    .lt("created_at", startOfTomorrow)
-    .order("created_at", { ascending: false })
-    .limit(safeLimit);
-
-  const { data, error } = await query;
-  if (error || !Array.isArray(data)) {
-    throw new Error(error?.message || "Không tải được đơn website.");
+  // Paginate before filtering: counter sales can fill a page and hide older web orders.
+  const data = [];
+  for (let offset = 0; ; offset += safeLimit) {
+    let query = supabase
+      .from("orders")
+      .select(WEBSITE_ORDER_SELECT)
+      .or(`branch_uuid.eq.${safeBranchUuid},pickup_branch_uuid.eq.${safeBranchUuid},delivery_branch_uuid.eq.${safeBranchUuid}`)
+      .gte("created_at", startOfToday)
+      .lt("created_at", startOfTomorrow)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + safeLimit - 1);
+    if (signal) query = query.abortSignal(signal);
+    const { data: page, error } = await query;
+    if (error || !Array.isArray(page)) {
+      throw new Error(error?.message || "Không tải được đơn website.");
+    }
+    data.push(...page);
+    if (page.length < safeLimit) break;
   }
 
   return data
@@ -290,8 +297,8 @@ async function readWebsiteOrders({ branchUuid = "", limit = 60, includePaid = tr
     .filter((row) => (includePaid ? true : !isPaid(row)));
 }
 
-export async function getPosWebsiteOrders({ branchUuid = "", limit = 80 } = {}) {
-  const rows = await readWebsiteOrders({ branchUuid, limit, includePaid: true });
+export async function getPosWebsiteOrders({ branchUuid = "", limit = 80, signal } = {}) {
+  const rows = await readWebsiteOrders({ branchUuid, limit, includePaid: true, signal });
   return splitWebsiteOrders(rows.filter(shouldShowInWebsiteQueue));
 }
 
@@ -310,7 +317,9 @@ export function subscribePosWebsiteOrderChanges(branchUuid = "", onChange) {
         onChange(payload);
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") onChange({ eventType: "SYNC" });
+    });
 
   return () => {
     supabase.removeChannel(channel);
