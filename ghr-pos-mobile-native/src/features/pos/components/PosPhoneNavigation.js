@@ -22,12 +22,6 @@ export function PosPhoneMore({ onSelect, onSignOut }) {
     <ScrollView contentContainerStyle={styles.more}>
       <Text style={styles.heading}>Quản lý POS</Text>
       {[{ key: "shift", label: "Tổng quan ca" }, { key: "settings", label: "Máy in & thiết lập" }].map((item) => (
-        <Pressable key={item.key} disabled={modeDisabled} style={[styles.row, deviceMode === item.key && styles.active]}
-          onPress={() => onChangeMode?.(item.key)}><Text style={styles.rowText}>{deviceMode === item.key ? '✓ ' : ''}{item.label}</Text></Pressable>
-      ))}
-      {!!modeError && <Text style={{ color: POS_COLORS.danger }}>{modeError}</Text>}
-      {modeDisabled && <Text>Hoàn tất hoặc xóa giỏ và đóng phiên thanh toán trước khi đổi chế độ.</Text>}
-      {(deviceMode === 'cashier' ? [{ key: "shift", label: "Tổng quan ca" }, { key: "settings", label: "Máy in & thiết lập" }] : []).map((item) => (
         <Pressable key={item.key} style={styles.row} onPress={() => onSelect(item.key)}><Text style={styles.rowText}>{item.label} ›</Text></Pressable>
       ))}
       <Pressable style={styles.row} onPress={onSignOut}><Text style={[styles.rowText, { color: POS_COLORS.danger }]}>Đổi ca / Đăng xuất</Text></Pressable>
