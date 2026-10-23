@@ -6,6 +6,8 @@ Danh sách này phân biệt phần đã viết nhưng chưa nối vào app, ph�
 
 ## 1. Phần đã làm một phần hoặc còn thiếu trong mã nguồn
 
+**Bổ sung ngày 23/10/2026 — App chấm công Zalo Mini App đang làm dang dở.** Mã nguồn riêng tại `attendance-miniapp/`: đã có giao diện, tài khoản mẫu, các luồng chấm công/điều chỉnh và cấu hình build Mini App. Chưa nối database; chưa xác nhận chạy trong Zalo trên điện thoại hoặc simulator; chưa gửi xin quyền, xét duyệt hay xuất bản. Chưa cài Studio/VS Code Extension theo yêu cầu dừng của anh. Xem [trạng thái bàn giao](checklist/reports/attendance-zalo-miniapp-conversion-2026-10-23.md). Khi tiếp tục cần kiểm tra runtime Zalo trước, kết nối database làm sau theo yêu cầu.
+
 | Mã | Hạng mục | Đã có và còn thiếu | Việc cần làm để đóng |
 | --- | --- | --- | --- |
 | DEV-01 | Theo dõi khắc phục sau giám sát | Có `CorrectiveActionsPanel`, hook, service và migration. Không tìm thấy caller của panel trong source; route `/giamsat` hiện mở màn kiểm tra, Admin giám sát có báo cáo/tài khoản/xu hướng nhưng chưa nối panel này. | Chốt điểm truy cập, nối màn vào Admin/giám sát; kiểm tra quyền theo chi nhánh, giao người phụ trách, hạn xử lý và chuyển trạng thái đến xác minh hoàn tất. |

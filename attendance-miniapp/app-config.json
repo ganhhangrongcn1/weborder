@@ -1,0 +1,15 @@
+{
+  "app": {
+    "title": "Gánh Hàng Rong · Chấm công",
+    "headerTitle": "Chấm công nhân viên",
+    "headerColor": "#ffffff",
+    "textColor": "black",
+    "statusBar": "normal",
+    "leftButton": "back",
+    "actionBarHidden": false
+  },
+  "debug": false,
+  "listCSS": [],
+  "listSyncJS": [],
+  "listAsyncJS": []
+}

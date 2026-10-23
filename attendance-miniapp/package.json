@@ -1,0 +1,26 @@
+{
+  "name": "ghr-attendance-miniapp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5180",
+    "build": "vite build && node scripts/build-miniapp.mjs",
+    "start": "zmp start",
+    "zmp:help": "zmp --help",
+    "preview": "vite preview --host 127.0.0.1 --port 5180",
+    "test": "node --test tests/*.test.mjs",
+    "bridge": "node server/zaloBridge.mjs"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "zmp-sdk": "2.53.3"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.21",
+    "zmp-cli": "4.0.5"
+  }
+}

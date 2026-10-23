@@ -4,6 +4,8 @@
 
 ## Hướng dẫn và hợp đồng
 
+- [App chấm công nhân viên — demo local và tài khoản trải nghiệm](attendance-miniapp-demo.md)
+
 - [Hợp đồng nghiệp vụ ứng dụng Checklist cửa hàng — Phase 0](checklist-app-phase-0-contract.md)
 - [Lộ trình triển khai ứng dụng Checklist](checklist-app-roadmap.md)
 - [Đặc tả Dashboard Checklist - Phase 4](checklist-phase-4-dashboard-spec.md)

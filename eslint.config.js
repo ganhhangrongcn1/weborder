@@ -4,7 +4,10 @@ export default [
   {
     ignores: [
       "dist/**",
-      "node_modules/**"
+      "node_modules/**",
+      "attendance-miniapp/dist/**",
+      "attendance-miniapp/.tools/**",
+      "attendance-miniapp/tmp/**"
     ]
   },
   {
@@ -57,7 +60,7 @@ export default [
     }
   },
   {
-    files: ["src/**/*.{js,jsx}", "scripts/**/*.{js,mjs,cjs}"],
+    files: ["src/**/*.{js,jsx}", "scripts/**/*.{js,mjs,cjs}", "attendance-miniapp/src/**/*.{js,jsx}"],
     languageOptions: {
       globals: {
         // Standard Web APIs used by the browser app and Node's fetch implementation.
@@ -73,11 +76,12 @@ export default [
     }
   },
   {
-    files: ["scripts/**/*.{js,mjs,cjs}"],
+    files: ["scripts/**/*.{js,mjs,cjs}", "attendance-miniapp/server/**/*.mjs", "attendance-miniapp/tests/**/*.mjs"],
     languageOptions: {
       globals: {
         process: "readonly",
         Buffer: "readonly",
+        AbortSignal: "readonly",
         console: "readonly"
       }
     }
