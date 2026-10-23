@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.tools/
+tmp/
+.zmp/
+zmp-token.json
+.env
+.env.*
+!.env.example

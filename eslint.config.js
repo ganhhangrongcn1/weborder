@@ -2,7 +2,10 @@ export default [
   {
     ignores: [
       "dist/**",
-      "node_modules/**"
+      "node_modules/**",
+      "attendance-miniapp/dist/**",
+      "attendance-miniapp/.tools/**",
+      "attendance-miniapp/tmp/**"
     ]
   },
   {
@@ -52,17 +55,24 @@ export default [
     }
   },
   {
-    files: ["scripts/**/*.{js,mjs,cjs}"],
+    files: ["scripts/**/*.{js,mjs,cjs}", "attendance-miniapp/server/**/*.mjs", "attendance-miniapp/tests/**/*.mjs"],
     languageOptions: {
       globals: {
         process: "readonly",
         Buffer: "readonly",
+        AbortSignal: "readonly",
         console: "readonly"
       }
     }
   },
   {
-    files: ["src/**/*.jsx"],
+    files: ["attendance-miniapp/src/**/*.{js,jsx}"],
+    languageOptions: {
+      globals: { AbortSignal: "readonly", Blob: "readonly", Headers: "readonly", Request: "readonly", Response: "readonly", TextEncoder: "readonly", btoa: "readonly", getComputedStyle: "readonly" }
+    }
+  },
+  {
+    files: ["src/**/*.jsx", "attendance-miniapp/src/**/*.jsx"],
     rules: {
       "no-unused-vars": "off"
     }
