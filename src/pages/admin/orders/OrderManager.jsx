@@ -230,16 +230,6 @@ function isBlockedPointStatus(order = {}) {
   return ["rejected", "expired", "cancelled", "canceled"].includes(status);
 }
 
-function getPointStatusText(order = {}, estimatedPoints = 0) {
-  if (!isReadOnlyPartnerOrder(order)) {
-    return estimatedPoints > 0 ? `Dự kiến +${estimatedPoints.toLocaleString("vi-VN")} điểm` : "Không có điểm";
-  }
-  if (hasClaimedPartnerPoints(order)) {
-    return estimatedPoints > 0 ? `Đã cộng +${estimatedPoints.toLocaleString("vi-VN")} điểm` : "Đã cộng điểm";
-  }
-  return estimatedPoints > 0 ? `Chưa cộng điểm (+${estimatedPoints.toLocaleString("vi-VN")} điểm dự kiến)` : "Chưa cộng điểm";
-}
-
 function OrderStatusBadge({ status }) {
   const StatusIcon = ["done"].includes(status)
     ? CheckCircle
@@ -478,51 +468,11 @@ function OrderStatusSelect({ order, status, updateOrderStatus }) {
   );
 }
 
-function OrderQuickActions({ order, status, updateOrderStatus }) {
-  const orderId = getOrderId(order);
-  const fulfillmentType = getFulfillmentType(order);
-  const isPartnerOrder = isReadOnlyPartnerOrder(order);
-  if (isPartnerOrder || ["awaiting_payment", "payment_expired"].includes(status)) return null;
-  const quickActions = fulfillmentType === "delivery"
-    ? [
-        { value: "new", label: "Mới" },
-        { value: "doing", label: "Làm" },
-        { value: "delivering", label: "Giao" },
-        { value: "done", label: "Xong" },
-        { value: "cancelled", label: "Hủy" }
-      ]
-    : [
-        { value: "new", label: "Mới" },
-        { value: "doing", label: "Làm" },
-        { value: "done", label: "Xong" },
-        { value: "cancelled", label: "Hủy" }
-      ];
-
-  return (
-    <div className="admin-order-quick-actions">
-      {quickActions.map((action) => (
-        <button
-          key={action.value}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            updateOrderStatus(orderId, action.value);
-          }}
-          className={status === action.value ? "active" : ""}
-        >
-          {action.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function OrderList({
   orders,
   activeOrderId,
   onSelectOrder,
-  updateOrderStatus,
-  registeredCustomersByPhone
+  updateOrderStatus
 }) {
   if (!orders.length) {
     return (
@@ -548,7 +498,6 @@ function OrderList({
         {orders.map((order) => {
           const orderId = getOrderId(order);
           const status = getDisplayStatus(order);
-          const fulfillmentType = getFulfillmentType(order);
           const waitingMinutes = getWaitingMinutes(order.createdAt);
           const isActiveOrder = isActiveOperationalStatus(status);
           const isOverdue = isActiveOrder && waitingMinutes > 15;
@@ -614,209 +563,6 @@ function OrderList({
         })}
       </div>
     </div>
-  );
-}
-
-function OrderDetailPanel({
-  order,
-  updateOrderStatus,
-  shipperText,
-  copied,
-  onCopyShipper,
-  onClose,
-  isOpen,
-  registeredCustomersByPhone
-}) {
-  if (!order) {
-    return (
-      <aside className="admin-order-detail-panel is-empty">
-        <strong>Chọn một đơn để xem chi tiết</strong>
-        <span>Thông tin đơn, món và thao tác sẽ hiển thị ở đây.</span>
-      </aside>
-    );
-  }
-
-  const items = order.items || [];
-  const orderId = getOrderId(order);
-  const status = getDisplayStatus(order);
-  const fulfillmentType = getFulfillmentType(order);
-  const subtotalValue = Number(order.subtotal ?? items.reduce((sum, item) => sum + Number(item.lineTotal || 0), 0));
-  const shippingFee = fulfillmentType === "pickup" ? 0 : Number(order.shippingFee ?? order.deliveryFee ?? 0);
-  const shippingSupport = fulfillmentType === "pickup" ? 0 : Number(order.shippingSupportDiscount || 0);
-  const promoDiscount = Number(order.promoDiscount || 0);
-  const pointsDiscount = Number(order.pointsDiscount || 0);
-  const totalValue = Number(order.totalAmount || order.total || 0);
-  const settlement = getSettlement(order);
-  const branchName = getOrderBranchName(order);
-  const sourceMeta = getOrderSourceMeta(order);
-  const sourceKey = resolveSalesChannelKey(order);
-  const isPartnerOrder = String(order?.sourceType || "").toLowerCase() === "partner";
-  const registeredCustomer = getRegisteredCustomer(order, registeredCustomersByPhone);
-  const orderCustomerName = order.orderCustomerName || order.customerName || "";
-  const addressText = fulfillmentType === "pickup"
-    ? [order.branchName || order.pickupBranchName, order.branchAddress || order.pickupBranchAddress].filter(Boolean).join(" - ")
-    : order.deliveryAddress;
-  const note = order.note || order.customerNote || order.orderNote || "";
-  const totalPromotion = Number(order.totalPromotion || order.discountAmount || promoDiscount || 0);
-  const coFundPromotion = Number(order.coFundPromotion || 0);
-  const appPromotion = Math.max(totalPromotion - coFundPromotion, 0);
-  const otherPartnerPromotion = Number(order.otherPromotion || Math.max(totalPromotion - coFundPromotion, 0));
-  const partnerGrossReceived = Number(order.grossReceived || 0);
-  const partnerNetReceived = Number(order.netReceivedAmount || order.realReceived || order.netReceived || 0);
-  const pointsBaseAmount = Number(
-    isPartnerOrder
-      ? order.loyaltyEligibleAmount || order.netReceivedAmount || 0
-      : order.pointsBaseAmount || Math.max(totalValue - shippingFee, 0)
-  );
-  const loyaltyRule = getLoyaltyRuleConfig();
-  const estimatedPoints = Math.max(0, calculateOrderPoints(pointsBaseAmount, loyaltyRule));
-  const pointStatusText = getUnifiedPointStatusText(order, estimatedPoints);
-  const shouldShowShipperSection = fulfillmentType === "delivery" && !isPartnerOrder && sourceKey === "website";
-
-  return (
-    <aside className={`admin-order-detail-panel ${isOpen ? "is-open" : ""}`}>
-      <div className="admin-order-detail-head">
-        <div>
-          <span>Chi tiết đơn hàng</span>
-          <h3>{getDisplayOrderCode(order)}</h3>
-          <small>{formatOrderTime(order.createdAt)}</small>
-        </div>
-        <button type="button" onClick={onClose}>×</button>
-      </div>
-
-      <div className="admin-order-detail-scroll">
-        <section className="admin-order-detail-card">
-          <div className="admin-order-detail-row">
-            <span>Trạng thái</span>
-            <OrderStatusBadge status={status} />
-          </div>
-          <div className="admin-order-detail-row">
-            <span>Hình thức</span>
-            <strong>{fulfillmentType === "pickup" ? "Tự đến lấy" : "Giao hàng"}</strong>
-          </div>
-          <div className="admin-order-detail-row">
-            <span>Nguồn đơn</span>
-            <strong>{sourceMeta.label}</strong>
-          </div>
-          {branchName ? (
-            <div className="admin-order-detail-row">
-              <span>Chi nhánh xử lý</span>
-              <strong>{branchName}</strong>
-            </div>
-          ) : null}
-          <div className="admin-order-detail-row">
-            <span>Thanh toán</span>
-            <strong>{String(order.paymentMethod || "COD").toUpperCase()} · {getPaymentStateLabel(order)}</strong>
-          </div>
-          <div className="admin-order-detail-row">
-            <span>Tích điểm</span>
-            <strong>{pointStatusText}</strong>
-          </div>
-        </section>
-
-        <section className="admin-order-detail-card">
-          <h4>Thông tin khách hàng</h4>
-          <div className="admin-order-customer-box">
-            <strong>{orderCustomerName || "Khách lẻ"}</strong>
-            <span>{order.customerPhone || order.phone || "--"}</span>
-            {addressText ? <small>{addressText}</small> : null}
-          </div>
-          {registeredCustomer ? (
-            <div className="admin-order-detail-row">
-              <span>Tài khoản</span>
-              <strong>{registeredCustomer.name || registeredCustomer.phone}</strong>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="admin-order-detail-card">
-          <h4>Danh sách món</h4>
-          <div className="admin-order-item-list">
-            {items.map((item, index) => {
-              const lineTotal = Number(item.lineTotal || (item.unitTotal || item.price || 0) * (item.quantity || 1));
-              const options = getOrderItemOptionLabels(item, { includeQuantity: true });
-              return (
-                <div key={`${item.id || item.name}-${index}`} className="admin-order-detail-item">
-                  <div>
-                    <strong>{item.name}</strong>
-                    {options.length ? <small>{options.join(" · ")}</small> : null}
-                  </div>
-                  <span>x{item.quantity || 1}</span>
-                  <em>{formatMoney(lineTotal)}</em>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="admin-order-detail-card">
-          <h4>Thanh toán</h4>
-          <div className="admin-order-total-lines">
-            <div><span>Tạm tính</span><strong>{formatMoney(subtotalValue)}</strong></div>
-            <div><span>Phí giao hàng</span><strong>{fulfillmentType === "pickup" ? "0đ (Tự đến lấy)" : formatMoney(shippingFee)}</strong></div>
-            {coFundPromotion > 0 ? <div className="discount"><span>Đồng tài trợ</span><strong>-{formatMoney(coFundPromotion)}</strong></div> : null}
-            {appPromotion > 0 ? <div className="discount"><span>Khuyến mãi app</span><strong>-{formatMoney(appPromotion)}</strong></div> : null}
-            {shippingSupport > 0 ? <div className="discount"><span>GHR hỗ trợ ship</span><strong>-{formatMoney(shippingSupport)}</strong></div> : null}
-            {promoDiscount > 0 ? <div className="discount"><span>Mã giảm giá {order.promoCode || ""}</span><strong>-{formatMoney(promoDiscount)}</strong></div> : null}
-            {pointsDiscount > 0 ? <div className="discount"><span>Dùng điểm thưởng</span><strong>-{formatMoney(pointsDiscount)}</strong></div> : null}
-            <div className="grand"><span>Tổng cộng</span><strong>{formatMoney(totalValue)}</strong></div>
-            <div><span>Giá trị tính điểm loyalty</span><strong>{formatMoney(pointsBaseAmount)}</strong></div>
-            {isPartnerOrder && order.loyaltyHoldReason ? (
-              <div><span>Trạng thái loyalty</span><strong>Chờ dữ liệu thực nhận</strong></div>
-            ) : null}
-            {!isPartnerOrder || hasClaimedPartnerPoints(order) ? (
-              <div>
-                <span>{isPartnerOrder ? "Điểm đã cộng" : "Điểm dự kiến"}</span>
-                <strong>+{estimatedPoints.toLocaleString("vi-VN")} điểm</strong>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        {shouldShowShipperSection ? (
-          <section className="admin-order-detail-card admin-order-settlement-card">
-            <h4>Đối soát shipper</h4>
-            <div className="admin-order-total-lines">
-              <div><span>Khách trả khi nhận</span><strong>{formatMoney(settlement.customerNeedPayWhenReceive || totalValue)}</strong></div>
-              <div><span>Khách trả phí ship</span><strong>{formatMoney(settlement.shippingFeeCustomer)}</strong></div>
-              <div><span>Quán hỗ trợ ship</span><strong>{formatMoney(settlement.shippingSupport)}</strong></div>
-              <div className="grand"><span>Shipper nộp lại quán</span><strong>{formatMoney(settlement.shipperPayBackStore)}</strong></div>
-            </div>
-          </section>
-        ) : null}
-
-        {(partnerGrossReceived > 0 || partnerNetReceived > 0) ? (
-          <section className="admin-order-detail-card admin-order-settlement-card">
-            <h4>Đối soát FoodApp</h4>
-            <div className="admin-order-total-lines">
-              {partnerGrossReceived > 0 ? <div><span>Doanh thu trước phí</span><strong>{formatMoney(partnerGrossReceived)}</strong></div> : null}
-              {partnerNetReceived > 0 ? <div className="grand"><span>Quán thực nhận</span><strong>{formatMoney(partnerNetReceived)}</strong></div> : null}
-            </div>
-          </section>
-        ) : null}
-
-        {note ? (
-          <section className="admin-order-detail-card">
-            <h4>Ghi chú</h4>
-            <p className="admin-order-note">{note}</p>
-          </section>
-        ) : null}
-
-        {shouldShowShipperSection ? (
-          <section className="admin-order-detail-card">
-            <h4>Thông tin gửi shipper</h4>
-            <button type="button" className="admin-order-copy-btn" onClick={() => onCopyShipper(orderId)}>
-              {copied ? "Đã copy" : "Copy info shipper"}
-            </button>
-            <textarea readOnly value={shipperText || ""} />
-          </section>
-        ) : null}
-      </div>
-
-      <div className="admin-order-detail-actions">
-        <OrderStatusSelect order={order} status={status} updateOrderStatus={updateOrderStatus} />
-      </div>
-    </aside>
   );
 }
 

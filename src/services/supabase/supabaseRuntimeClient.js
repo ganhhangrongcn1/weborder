@@ -30,9 +30,6 @@ function getExistingClient() {
   return getScopedExistingClient("runtime");
 }
 
-function setClient(client) {
-  return setScopedClient("runtime", client);
-}
 
 function getScopedExistingClient(scope = "runtime") {
   const config = resolveScope(scope);

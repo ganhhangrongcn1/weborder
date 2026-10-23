@@ -1,4 +1,3 @@
-/* global jest, test, expect, beforeEach */
 import React from "react";
 import renderer, { act } from "react-test-renderer";
 import usePosPagerSettings from "../src/features/pos/hooks/usePosPagerSettings";

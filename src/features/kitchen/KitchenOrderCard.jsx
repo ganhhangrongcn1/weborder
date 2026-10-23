@@ -1233,7 +1233,6 @@ export default function KitchenOrderCard({
             const unitChecked = getUnitProgressState(unitProgress, itemKey, unitIndex, sourceDone);
             const paidToppings = getPaidToppings(item);
             const checklistGroups = groupKitchenChecklistOptions(paidToppings);
-            const unitToppingsDone = areUnitToppingsDone(toppingProgress, itemKey, unitIndex, paidToppings);
             const itemDone = isKitchenUnitDone({
               unitProgress,
               toppingProgress,

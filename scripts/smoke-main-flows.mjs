@@ -36,7 +36,9 @@ function runAdminFlowSmoke() {
   const adminSidebar = read("src/pages/admin/AdminSidebar.jsx");
 
   assertIncludes(adminApp, "AdminSidebar", "Admin flow missing sidebar component");
-  assertIncludes(adminSidebar, 'className="admin-sidebar"', "Admin sidebar layout missing");
+  if (!/className=(?:"admin-sidebar(?:\s|")|\{`admin-sidebar(?:\$\{|\s|`))/.test(adminSidebar)) {
+    throw new Error("Admin sidebar layout missing");
+  }
   assertIncludes(adminApp, "activeAdminNav", "Admin flow missing active nav state");
   assertIncludes(adminApp, "openAdminNav", "Admin flow missing nav open handler");
   assertIncludes(adminApp, "navGroups", "Admin flow missing nav groups");
@@ -64,7 +66,8 @@ function runBranchIdentitySmoke() {
   assertIncludes(kitchenOrderService, "options.strictBranchUuidQuery", "Kitchen website order read must keep legacy fallback by default");
   assertIncludes(qrOrderEntryPage, "branch?.branch_uuid || branch?.branchUuid || branch?.uuid || branch?.id", "QR counter flow must prefer branch UUID");
   assertIncludes(printJobService, "branch?.branch_uuid || branch?.branchUuid || branch?.uuid || options.branchUuid || branch?.id", "POS QR print job must prefer branch UUID");
-  assertIncludes(adminOrderCrmState, "branchUuid: selectedBranchUuid", "Admin dashboard RPC calls must carry branch UUID");
+  assertIncludes(adminOrderCrmState, "getAdminDashboardSummaryForBranchesRpc(dateRange, dashboardBranchOptions", "Admin dashboard must forward selected branches to the batch service");
+  assertIncludes(adminDashboardService, "branchUuid: branch.value", "Dashboard batch service must forward each branch UUID");
   assertIncludes(adminDashboardService, "params.p_branch_uuid = branchUuid || null", "Dashboard RPC service must send branch UUID when available");
   assertIncludes(adminBusinessAnalyticsService, "params.p_branch_uuid = branchUuid || null", "Business analytics RPC service must send branch UUID when available");
   assertIncludes(adminCakesPage, "branch?.branch_uuid || branch?.branchUuid || branch?.uuid", "Cake admin source branch must prefer branch UUID");

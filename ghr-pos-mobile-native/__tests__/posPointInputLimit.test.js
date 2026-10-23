@@ -1,4 +1,3 @@
-/* global it, expect */
 import React, { useState } from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import usePosPointInputLimit from "../src/features/pos/hooks/usePosPointInputLimit";

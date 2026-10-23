@@ -1,4 +1,3 @@
-/* global jest, test, expect, beforeEach */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readPosDeviceMode, savePosDeviceMode } from '../src/services/pos/posDeviceModeService';
 jest.mock('@react-native-async-storage/async-storage', () => ({ getItem: jest.fn(), setItem: jest.fn() }));

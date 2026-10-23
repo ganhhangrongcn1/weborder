@@ -17,7 +17,6 @@ const PosMenuPanel = memo(function PosMenuPanel({
   pagerEnabled = true,
   normalizedPager = "",
   pagerBusy = false,
-  busyPagers = [],
   onOpenPagerPicker,
   onSelectCategory,
   onAddProduct

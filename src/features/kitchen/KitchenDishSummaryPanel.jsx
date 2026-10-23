@@ -166,7 +166,7 @@ function mergeVisibleNotes(notes = []) {
   return Array.from(map.values());
 }
 
-function DishGroupButton({ active, activeOrderKey, group, onClick }) {
+function DishGroupButton({ activeOrderKey, group, onClick }) {
   const hasSelectedOrder = Boolean(activeOrderKey);
   const hasActiveOrder = Boolean(activeOrderKey && group.orders.some((order) => order.key === activeOrderKey));
   const activeNotes = activeOrderKey

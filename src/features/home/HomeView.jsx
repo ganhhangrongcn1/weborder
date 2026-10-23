@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import React from "react";
-import Icon from "../../components/Icon.jsx";
 import HomeHero from "../../pages/customer/home/HomeHero.jsx";
 import HomeFlashSale from "../../pages/customer/home/HomeFlashSale.jsx";
 import StampCard from "../loyalty/components/StampCard.jsx";
 import HomeVoucherCarousel from "../../pages/customer/home/HomeVoucherCarousel.jsx";
-import { freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { homeText, optionModalText } from "../../data/uiText.js";
 import { closeOnlyOnBackdrop } from "../../utils/uiEvents.js";
@@ -101,10 +99,8 @@ function resolveHomeBlockOrder(homeContent) {
 
 export default function Home({
   navigate,
-  openProduct,
   openOptionModal,
   products,
-  promos,
   coupons = [],
   smartPromotions = [],
   categories,
@@ -119,7 +115,6 @@ export default function Home({
   hasCustomerAuthSession = false,
   isRegisteredCustomer,
   setServiceNotice,
-  getStoreBlockNotice,
   isBranchOpenNow,
   buildStoreOfflineNotice,
   buildDeliveryDisabledNotice,
@@ -136,9 +131,9 @@ export default function Home({
   const [pickupPlannerOpen, setPickupPlannerOpen] = useState(false);
   const [pickupBranch, setPickupBranch] = useState(checkoutPreset?.selectedBranch || "phu-hoa");
   const [selectedDeliveryBranch, setSelectedDeliveryBranch] = useState(checkoutPreset?.selectedDeliveryBranch || "");
-  const [pickupMode, setPickupMode] = useState(checkoutPreset?.pickupMode || "soon");
-  const [pickupDate, setPickupDate] = useState(() => normalizePickupDate(checkoutPreset?.pickupDate));
-  const [pickupClock, setPickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
+  const [pickupMode] = useState(checkoutPreset?.pickupMode || "soon");
+  const [pickupDate] = useState(() => normalizePickupDate(checkoutPreset?.pickupDate));
+  const [pickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
   const [homePopupOpen, setHomePopupOpen] = useState(false);
   const [reviewRewardPopupOpen, setReviewRewardPopupOpen] = useState(false);
   const [deliveryAppOrderingOpen, setDeliveryAppOrderingOpen] = useState(false);
@@ -166,7 +161,6 @@ export default function Home({
     deliveryAppsBlock,
     popupCampaignBlock,
     voucherCards,
-    showCashback,
     showReviewRewards,
     showPromoVouchers,
     showDeliveryApps,

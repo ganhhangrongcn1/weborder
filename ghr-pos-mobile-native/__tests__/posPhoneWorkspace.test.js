@@ -1,4 +1,3 @@
-/* global test, expect, jest */
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { BackHandler, Keyboard, Pressable, Text } from 'react-native';

@@ -38,7 +38,6 @@ export default function BranchSettings({
   branches,
   setBranches,
   shippingConfig,
-  setShippingConfig,
   onSaveShippingConfig
 }) {
   const [addressSuggestions, setAddressSuggestions] = useState({

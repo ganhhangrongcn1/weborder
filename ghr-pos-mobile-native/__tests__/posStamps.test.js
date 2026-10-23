@@ -1,4 +1,3 @@
-/* global jest, test, expect, beforeEach */
 jest.mock("../src/services/supabase/client", () => ({ supabase: { auth: { getSession: jest.fn() }, rpc: jest.fn() } }));
 jest.mock("../src/services/pos/posCustomerService", () => ({ normalizeCustomerPhone: (value) => String(value || "").replace(/^\+?84/, "0") }));
 import { supabase } from "../src/services/supabase/client";

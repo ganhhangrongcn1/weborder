@@ -376,7 +376,7 @@ export default function AppearanceSettings({
       try {
         const uploaded = await uploadImageToMenuBucket(result.file, { folder: "banners" });
         updateHomeContent(targetId, { image: uploaded.publicUrl });
-      } catch (_uploadError) {
+      } catch {
         updateHomeContent(targetId, { image: result.dataUrl });
       }
       setPendingUploadHeroId("");
@@ -414,7 +414,7 @@ export default function AppearanceSettings({
       try {
         const uploaded = await uploadImageToMenuBucket(result.file, { folder: "popups" });
         updateHomeContent("popupCampaign", { image: uploaded.publicUrl });
-      } catch (_uploadError) {
+      } catch {
         updateHomeContent("popupCampaign", { image: result.dataUrl });
       }
     } catch (error) {
@@ -439,7 +439,7 @@ export default function AppearanceSettings({
       try {
         const uploaded = await uploadImageToMenuBucket(result.file, { folder: "logos" });
         updateHomeContent("siteBrand", { logo: uploaded.publicUrl });
-      } catch (_uploadError) {
+      } catch {
         updateHomeContent("siteBrand", { logo: result.dataUrl });
       }
     } catch (error) {

@@ -138,7 +138,6 @@ function buildPointRoundSuggestions(loyaltyBenefit = {}) {
   const maxUnitsByLimit = Math.floor(pointDiscountLimit / redeemValue);
   const rawMaxUnits = Math.min(maxUnitsByBalance, maxUnitsByLimit);
   const usablePoints = roundPointsToSpendStep(rawMaxUnits * redeemPointUnit, pointSpendStep);
-  const maxUnits = Math.floor(usablePoints / redeemPointUnit);
   const maxDiscount = Math.min(pointDiscountLimit, Math.floor(usablePoints / redeemPointUnit) * redeemValue);
   const suggestions = [];
   const seen = new Set();

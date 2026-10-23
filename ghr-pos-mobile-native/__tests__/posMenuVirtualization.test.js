@@ -1,4 +1,3 @@
-/* global jest, test, expect */
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { FlatList, Text } from 'react-native';

@@ -696,14 +696,6 @@ function getDateScopeLabel(preset = "", dateFrom = "", dateTo = "") {
   return "Tất cả thời gian";
 }
 
-function isVisibleBranchOption(branch = "") {
-  const normalized = String(branch || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
-  return normalized && normalized !== "chuaxacdinh" && normalized !== "chinhanhtest" && normalized !== "test";
-}
 
 function CrmStatCard({ icon, title, value, subtitle, tone, scope }) {
   return (
@@ -721,59 +713,9 @@ function CrmStatCard({ icon, title, value, subtitle, tone, scope }) {
   );
 }
 
-function formatCompactDate(value = "") {
-  const [year, month, day] = String(value || "").slice(0, 10).split("-");
-  if (!year || !month || !day) return "--";
-  return `${day}/${month}`;
-}
 
-function formatSignedNumber(value = 0) {
-  const number = Number(value || 0);
-  if (number > 0) return `+${number.toLocaleString("vi-VN")}`;
-  return number.toLocaleString("vi-VN");
-}
 
-function formatSignedPercent(value = 0) {
-  const number = Number(value || 0);
-  if (number > 0) return `+${number}%`;
-  return `${number}%`;
-}
 
-function CrmMemberRegistrationCard({ comparison = null }) {
-  const todayCount = Number(comparison?.todayCount || 0);
-  const yesterdayCount = Number(comparison?.yesterdayCount || 0);
-  const delta = Number(comparison?.delta || 0);
-  const trend = comparison?.trend || "flat";
-  const todayWeight = Number(comparison?.todayWeight || 0);
-  return (
-    <section className="crm-ops-card crm-member-card">
-      <div className="crm-ops-head">
-        <div>
-          <h3>Đăng ký thành viên</h3>
-          <p>Đếm hồ sơ customer đã đăng ký theo ngày tạo trên profiles.</p>
-        </div>
-        <span>{formatCompactDate(comparison?.todayDate)}</span>
-      </div>
-      <div className="crm-member-kpi">
-        <strong>{todayCount.toLocaleString("vi-VN")}</strong>
-        <em className={`crm-member-change crm-member-change--${trend}`}>
-          {formatSignedNumber(delta)} khách · {formatSignedPercent(comparison?.changePercent)}
-        </em>
-      </div>
-      <div className="crm-member-table">
-        <span>Ngày</span>
-        <span>Số đăng ký</span>
-        <span>Trọng số</span>
-        <strong>Hôm nay</strong>
-        <b>{todayCount.toLocaleString("vi-VN")}</b>
-        <em>{todayWeight}%</em>
-        <strong>Hôm qua</strong>
-        <b>{yesterdayCount.toLocaleString("vi-VN")}</b>
-        <em>{Math.max(0, 100 - todayWeight)}%</em>
-      </div>
-    </section>
-  );
-}
 
 function CustomerIdentity({ customer, compact = false, insight = "" }) {
   return (
@@ -802,11 +744,8 @@ export default function CustomerCRM({
   cancelCustomerVoucher,
   coupons = [],
   customersDateFrom,
-  setCustomersDateFrom,
   customersDateTo,
-  setCustomersDateTo,
-  customersDatePreset,
-  setCustomersDatePreset
+  customersDatePreset
 }) {
   const [keyword, setKeyword] = useState("");
   const [customerFilter, setCustomerFilter] = useState("all");

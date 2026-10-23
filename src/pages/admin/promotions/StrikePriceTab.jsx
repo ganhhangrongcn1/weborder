@@ -106,9 +106,6 @@ export default function StrikePriceTab({
   const visibleSelectedStrikePromo = filteredStrikePromos.some((promo) => promo.id === selectedStrikePromo?.id)
     ? selectedStrikePromo
     : null;
-  const visibleStatusPromotion = visibleSelectedStrikePromo
-    ? statusPromotionById.get(String(visibleSelectedStrikePromo.id || "")) || visibleSelectedStrikePromo
-    : null;
   const strikeWarnings = visibleSelectedStrikePromo ? buildStrikeWarnings(visibleSelectedStrikePromo) : [];
 
   return strikePromos.length ? (

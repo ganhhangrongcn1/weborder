@@ -1,4 +1,3 @@
-/* global jest, beforeEach, test, expect */
 jest.mock('../src/services/supabase/client', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
 import { supabase } from '../src/services/supabase/client';
 import { lookupPosCustomerByPhone } from '../src/services/pos/posCustomerService';

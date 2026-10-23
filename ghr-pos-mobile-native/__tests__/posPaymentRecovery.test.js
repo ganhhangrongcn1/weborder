@@ -1,4 +1,3 @@
-/* global describe, test, expect, jest, beforeEach */
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
   getItem: jest.fn(),

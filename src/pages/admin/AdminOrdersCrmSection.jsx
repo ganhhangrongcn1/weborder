@@ -40,7 +40,6 @@ export default function AdminOrdersCrmSection({
   setCustomerAdminTab,
   ordersSnapshot,
   setOrdersSnapshot,
-  onOrderUpdated,
   crmSnapshot,
   setCrmSnapshot,
   crmLoadState,

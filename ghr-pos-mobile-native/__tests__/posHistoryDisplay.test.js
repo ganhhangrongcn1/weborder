@@ -1,4 +1,3 @@
-/* global test, expect */
 import { mergePosHistoryOrders, getUnlinkedHistoryPayments, countPhoneOrderAttention } from '../src/services/pos/posHistoryDisplayService';
 
 test('history deduplicates true ids, retains different orders with the same display code and hides linked QR rows', () => {

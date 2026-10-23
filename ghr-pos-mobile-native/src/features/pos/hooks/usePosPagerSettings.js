@@ -1,4 +1,3 @@
-/* global setInterval, clearInterval */
 import { useEffect, useRef, useState } from "react";
 import { readPosPagerEnabled, savePosPagerEnabled } from "../../../services/pos/posPagerSettingsService";
 

@@ -1075,39 +1075,7 @@ function getMissingPartnerRawDishEntries(row = {}, storedItems = []) {
   });
 }
 
-function mapPartnerRawDishToKitchenItem(dish = {}, order = {}, index = 0) {
-  const rawData = getObject(order.raw_data);
-  const orderId = toText(order.id || order.order_code || rawData.order_id || rawData.id);
-  const itemKey = buildPartnerRawDishItemKey(order, dish, index);
-  const itemId = toText(dish.item_id || dish.model_id || dish.code || itemKey || index);
-  const quantity = toNumber(dish.quantity, 1) || 1;
-  const status = normalizeKitchenStatus(order.kitchen_work_status, order.kitchen_status);
 
-  return {
-    id: `raw-dish-${orderId || "order"}-${itemId || index}`,
-    sourceItemId: "",
-    orderId,
-    productId: itemId,
-    name: toText(dish.name) || "Không tên món",
-    quantity,
-    note: toText(dish.note || dish.description),
-    options: flattenOptionLabels(dish.options),
-    kitchenItemStatus: status,
-    status,
-    displayStatus: getDisplayStatus(status),
-    raw: {
-      ...dish,
-      item_key: itemKey,
-      line_index: index,
-      __rawPartnerDishFallback: true
-    }
-  };
-}
-
-function mapPartnerRawDishesToKitchenItems(row = {}) {
-  return getPartnerRawDishEntries(row)
-    .map(({ dish, index }) => mapPartnerRawDishToKitchenItem(dish, row, index));
-}
 
 function resolvePartnerKitchenItems(row = {}, itemsByOrderId = new Map()) {
   const id = toText(row.id || row.order_code);

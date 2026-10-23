@@ -1,4 +1,3 @@
-/* global jest, test, expect */
 jest.mock("../src/services/supabase/client", () => ({ supabase: null }));
 jest.mock("../src/services/pos/posPrinterService", () => ({ buildPosPreparationBillText: jest.fn() }));
 jest.mock("../src/services/pos/posPickupOrderService", () => ({ normalizeWebsiteOrder: jest.fn() }));

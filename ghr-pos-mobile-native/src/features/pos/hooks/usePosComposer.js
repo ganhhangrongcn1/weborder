@@ -1008,7 +1008,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
         }
         applyPaymentSessionState(rememberedSession);
         setQrModalOpen(true);
-      } catch (error) {
+      } catch {
         await forgetPosPaymentSession(restored.profile.branchUuid);
       }
     };

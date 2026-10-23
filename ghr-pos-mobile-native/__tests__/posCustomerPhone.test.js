@@ -1,4 +1,3 @@
-/* global describe, test, expect, jest */
 
 jest.mock("../src/services/supabase/client", () => ({ supabase: null }));
 

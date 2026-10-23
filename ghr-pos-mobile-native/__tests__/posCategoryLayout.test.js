@@ -1,4 +1,3 @@
-/* global describe, it, expect, jest */
 import React from "react";
 import { ScrollView, Text, Pressable } from "react-native";
 import TestRenderer, { act } from "react-test-renderer";

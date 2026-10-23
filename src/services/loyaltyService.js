@@ -91,7 +91,6 @@ export function calculateOrderPoints(amount, loyaltyRule = getLoyaltyRuleConfig(
 export async function applyOrderLoyaltyAsync({
   phone,
   orderId,
-  createdAt = new Date().toISOString(),
   promoSource = "",
   promoVoucherId = "",
   promoCode = "",

@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Documentation
+
+Start at [docs/README.md](docs/README.md). Keep guides and reports in Markdown, grouped by domain; dated reports belong in each domain’s `reports/` folder. Preserve SQL and migration paths. Run `python3 scripts/check-doc-links.py` after moving documentation.
+
 ## Project Overview
 
 Ganh Hang Rong Webapp is a React/Vite application for F&B ordering and operations. The project contains customer ordering, menu, cart, checkout, loyalty, account, order tracking, admin backoffice, POS, kitchen display, cake ordering, QR ordering, PWA install, print jobs, and integration flows around Supabase, Goong, Zalo, SePay, NexPOS, and n8n.
@@ -185,8 +189,10 @@ Current source-of-truth contract from docs and services:
 
 Existing RPC/function names include:
 
-- `apply_loyalty_event`
-- `claim_partner_order_points`
+- `process_order_loyalty`
+- `complete_website_order_with_loyalty`
+- `process_loyalty_checkin`
+- `admin_adjust_loyalty_points`
 - `upsert_customer_stub_profile`
 - `get_customer_order_count_summary`
 - `get_monthly_customer_gift_stats_by_phones`
@@ -230,9 +236,9 @@ When adding RPC usage:
 
 No n8n workflow JSON is stored in the repo. The project contains n8n contracts in docs:
 
-- `docs/n8n-nexpos-partner-orders-mapping.md`
-- `docs/n8n-partner-customer-profile-hydration.md`
-- `docs/data-source-of-truth.md`
+- `docs/integrations/n8n-nexpos-partner-orders-mapping.md`
+- `docs/integrations/n8n-partner-customer-profile-hydration.md`
+- `docs/architecture/data-source-of-truth.md`
 
 ### Workflow Naming
 
@@ -391,6 +397,5 @@ npm run preview
 
 ### Low Priority
 
-- Remove unused route composition if `AppRouters.jsx` is no longer used.
 - Gradually migrate high-risk domain contracts to typed schemas or runtime validators if the project later adopts TypeScript.
 - Normalize docs language/encoding style so SQL docs consistently use UTF-8 or unicode escapes for Vietnamese text.

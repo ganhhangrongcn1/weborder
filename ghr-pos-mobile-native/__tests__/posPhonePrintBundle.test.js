@@ -1,4 +1,3 @@
-/* global jest, test, expect */
 jest.mock('../src/services/supabase/client', () => ({ supabase: null }));
 import { buildPrintPayload } from '../src/services/pos/posPrintStationService';
 test('one phone cash job prints preparation plus a paid customer bill, with cash rounding', () => {

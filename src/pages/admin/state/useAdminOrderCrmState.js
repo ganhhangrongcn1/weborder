@@ -276,8 +276,6 @@ export default function useAdminOrderCrmState(orderStorage, options = {}) {
   const [customerAdminTab, setCustomerAdminTab] = useState("crm");
   const [selectedCustomerPhone, setSelectedCustomerPhone] = useState("");
   const selectedBranchOption = getSelectedBranchOption(branches, selectedBranchFilter);
-  const selectedBranchUuid = selectedBranchOption?.value || "";
-  const selectedBranchName = selectedBranchOption?.label || "";
   const dashboardBranchOptions = buildBranchFilterOptions(branches).filter((branch) => (
     dashboardBranchFilters.includes(branch.value)
   ));

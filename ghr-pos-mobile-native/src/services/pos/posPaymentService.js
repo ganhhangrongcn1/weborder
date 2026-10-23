@@ -15,7 +15,6 @@ function getPaymentSettings(branch = {}) {
   const metadata = getObject(branch.data || branch.metadata);
   const paymentSettings = getObject(branch.paymentSettings || metadata.paymentSettings);
   const banking = getObject(paymentSettings.banking || metadata.banking);
-  const sepay = getObject(paymentSettings.sepay || metadata.sepay);
 
   return {
     provider: toText(

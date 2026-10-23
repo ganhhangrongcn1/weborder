@@ -280,7 +280,7 @@ export function groupKitchenItemsFromOrders(orders = [], activeOrderKey = "") {
     const items = Array.isArray(order.items) ? order.items : [];
     let displayItemNumber = 1;
 
-    items.forEach((item, itemIndex) => {
+    items.forEach((item) => {
       const quantity = Math.max(0, toNumber(item.quantity, 1) || 1);
       const doneQuantity = item.status === "done" ? quantity : 0;
       const pendingQuantity = Math.max(0, quantity - doneQuantity);

@@ -494,7 +494,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
     try {
       await copyText(zaloMessage);
       setMessage("");
-    } catch (_error) {
+    } catch {
       setMessage("");
     }
 

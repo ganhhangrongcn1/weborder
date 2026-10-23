@@ -50,7 +50,6 @@ export default function HomeBranchPlannerModal({
 
   if (!open) return null;
 
-  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId) || null;
   const shouldShowConfirm = false;
 
   return createPortal(

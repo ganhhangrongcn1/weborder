@@ -1,4 +1,3 @@
-/* global jest, beforeEach, test, expect */
 jest.mock('../src/services/supabase/client', () => ({ supabase: { from: jest.fn(), rpc: jest.fn() } }));
 jest.mock('../src/services/pos/posCustomerService', () => ({ ensurePosGuestProfile: jest.fn() }));
 jest.mock('../src/services/pos/posStampService', () => ({ invalidatePosStamps: jest.fn(), readPosStamps: jest.fn() }));

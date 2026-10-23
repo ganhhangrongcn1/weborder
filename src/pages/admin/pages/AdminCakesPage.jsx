@@ -255,7 +255,7 @@ export default function AdminCakesPage({ branches = [] }) {
           currentUrl: selectedProduct.image
         });
         updateProduct({ image: uploaded.publicUrl });
-      } catch (_uploadError) {
+      } catch {
         updateProduct({ image: processed.dataUrl });
       }
     } catch (error) {

@@ -1,4 +1,3 @@
-/* global test, expect */
 import { buildStampReceiptSection, placeStampsAfterLoyaltyQr } from "../src/services/pos/posStampReceipt";
 const section = buildStampReceiptSection({enabled: true, available: 3});
 const footer = "@@RULE\n@@BOLDCENTER:Tích điểm\n@@QR\n@@CENTER:Quét QR\n@@CENTER:Hotline";

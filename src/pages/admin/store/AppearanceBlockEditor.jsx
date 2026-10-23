@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AdminBadge, AdminButton, AdminCard, AdminInput, AdminIconButton, AdminSelect } from "../ui/index.js";
+import { AdminButton, AdminCard, AdminInput, AdminIconButton, AdminSelect } from "../ui/index.js";
 import { APP_SECTIONS, FALLBACK_IMAGE, HOME_SECTION_TARGETS } from "./appearanceSettings.utils.js";
 
 export default function AppearanceBlockEditor({

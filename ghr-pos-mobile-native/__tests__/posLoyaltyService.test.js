@@ -1,4 +1,3 @@
-/* global jest, describe, beforeEach, it, expect */
 
 jest.mock("../src/services/supabase/client", () => ({
   supabase: {

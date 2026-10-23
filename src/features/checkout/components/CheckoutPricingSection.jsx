@@ -15,7 +15,6 @@ export default function CheckoutPricingSection({
   coupons,
   smartPromotions,
   selectedPromo,
-  setSelectedPromo,
   setIsPromoModalOpen,
   availablePoints,
   usePoints,

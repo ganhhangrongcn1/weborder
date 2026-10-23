@@ -1,4 +1,3 @@
-/* global jest, beforeEach, afterEach, it, expect */
 import React from "react";
 import { AppState } from "react-native";
 import TestRenderer, { act } from "react-test-renderer";

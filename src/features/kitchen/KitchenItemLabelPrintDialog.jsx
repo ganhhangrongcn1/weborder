@@ -153,7 +153,7 @@ export default function KitchenItemLabelPrintDialog({
         </div>
 
         <div style={{ overflowY: "auto", padding: "12px 20px 18px" }}>
-          {units.map(({ item, itemIndex, itemNumber, key, quantity, unitIndex }) => {
+          {units.map(({ item, itemNumber, key, quantity, unitIndex }) => {
             const note = String(item.note || "").trim();
             const optionLabels = getOptionLabels(item);
             return (

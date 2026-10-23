@@ -1,4 +1,3 @@
-/* global jest, describe, beforeEach, it, expect */
 jest.mock("@react-native-async-storage/async-storage", () => ({ getItem: jest.fn(), setItem: jest.fn() }));
 jest.mock("../src/services/supabase/client", () => ({ supabase: { from: jest.fn() } }));
 jest.mock("../src/services/pos/posOrderService", () => ({ createPosTakeawayOrderMobile: jest.fn() }));

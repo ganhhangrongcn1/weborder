@@ -1,4 +1,3 @@
-/* global describe, it, expect */
 import { buildPosLoyaltyBenefit, buildVoucherSelectionKey } from "../src/shared/pos/posLoyalty";
 
 const employeeCoupon = {

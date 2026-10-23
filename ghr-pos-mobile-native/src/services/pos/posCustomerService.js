@@ -486,7 +486,7 @@ function buildCustomerStatus({ registeredCustomer = false, stats = {}, customerN
   };
 }
 
-function buildCustomerDisplayName(profile = null, stats = {}, latestOrderName = "") {
+function buildCustomerDisplayName(profile = null, latestOrderName = "") {
   const registeredCustomer = isRegisteredProfile(profile);
   const realName = getRealCustomerName(profile, latestOrderName);
   if (realName) return realName;
@@ -526,7 +526,7 @@ export async function lookupPosCustomerByPhone(rawPhone = "") {
   const stats = orderSummary || buildStats({ webOrders, partnerOrders, ledgerRows, loyaltyRule });
   const latestOrderName = getLatestOrderName(webOrders, partnerOrders);
   const registeredCustomer = isRegisteredProfile(profile);
-  const customerName = buildCustomerDisplayName(profile, stats, latestOrderName);
+  const customerName = buildCustomerDisplayName(profile, latestOrderName);
   const customerStatus = buildCustomerStatus({ registeredCustomer, stats, customerName });
   const availableVouchers = (loyalty.voucherHistory || [])
     .map(normalizeVoucher)

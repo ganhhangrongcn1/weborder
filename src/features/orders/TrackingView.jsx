@@ -71,12 +71,6 @@ function formatOrderDateTime(value) {
   return `${ORDER_DATE_FORMATTER.format(date)} · ${ORDER_TIME_FORMATTER.format(date)}`;
 }
 
-function markOrdersPointStatus(orders = [], loyaltyLookup = {}) {
-  return (orders || []).map((order) => ({
-    ...order,
-    pointStatus: resolveOrderPointStatus(order, loyaltyLookup)
-  }));
-}
 
 function markOrdersPointStatusFromRpc(orders = [], statusMap = new Map(), loyaltyLookup = {}) {
   return (orders || []).map((order) => {
@@ -124,14 +118,11 @@ export default function Tracking({
   hasCustomerAuthSession = false,
   requiresCustomerAuthSession = false,
   isOrdersLoading = false,
-  hasFetchedOrdersOnce = false,
-  isSessionRestoring = false,
   branches = [],
   demoLoyalty,
   setDemoLoyalty,
   onReorder,
   onOrderSheetVisibilityChange,
-  getStoreBlockNotice,
   setServiceNotice,
   checkoutPreset = {}
 }) {

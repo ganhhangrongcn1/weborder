@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { toppings as toppingSeed } from "../../data/products.js";
 import { formatMoney } from "../../utils/format.js";
 import { getDefaultOrderChoices, getRequiredExactAllOptions } from "../../utils/pureHelpers.js";
 import Icon from "../Icon.jsx";
@@ -14,7 +13,7 @@ function getOptionGroupTitle(groupName) {
   return normalizedName;
 }
 
-export default function OptionModal({ product, selectedSpice, setSelectedSpice, selectedToppings, setSelectedToppings, note, setNote, quantity, setQuantity, onClose, onAdd, submitLabel, toppings = toppingSeed, optionModalText, spiceLevels, normalizeOrderOption, OptionGroup }) {
+export default function OptionModal({ product, setSelectedSpice, selectedToppings, setSelectedToppings, note, setNote, quantity, setQuantity, onClose, onAdd, submitLabel, optionModalText, normalizeOrderOption, OptionGroup }) {
   const finalSubmitLabel = submitLabel || optionModalText.addToCart;
   const customOptionGroups = product.optionGroups?.length ? product.optionGroups : [];
   const usesCustomOptions = customOptionGroups.length > 0;
@@ -81,15 +80,6 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
     });
   }, [product, usesCustomOptions, customOptionGroups, normalizeOrderOption, setSelectedToppings]);
 
-  function changeToppingQuantity(topping, delta) {
-    setSelectedToppings((current) => {
-      const exists = current.find((item) => item.id === topping.id && !item.groupId);
-      const nextQuantity = Math.max(0, (exists?.quantity || 0) + delta);
-      if (!nextQuantity) return current.filter((item) => !(item.id === topping.id && !item.groupId));
-      if (exists) return current.map((item) => item.id === topping.id && !item.groupId ? { ...item, quantity: nextQuantity } : item);
-      return [...current, { ...topping, quantity: nextQuantity }];
-    });
-  }
 
   function toggleCustomOption(group, option) {
     if (mustSelectEveryOption(group)) return;

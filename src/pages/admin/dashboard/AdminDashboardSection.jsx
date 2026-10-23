@@ -189,50 +189,7 @@ function buildDonutSegments(channels = [], total = 0) {
   });
 }
 
-function buildSmoothRevenuePath(points = []) {
-  if (!points.length) return "";
-  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-  const segments = [`M ${points[0].x} ${points[0].y}`];
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const previous = points[index - 1] || points[index];
-    const current = points[index];
-    const next = points[index + 1];
-    const nextNext = points[index + 2] || next;
-    const cp1x = current.x + (next.x - previous.x) / 6;
-    const cp1y = current.y + (next.y - previous.y) / 6;
-    const cp2x = next.x - (nextNext.x - current.x) / 6;
-    const cp2y = next.y - (nextNext.y - current.y) / 6;
-    segments.push(`C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`);
-  }
-  return segments.join(" ");
-}
 
-function buildRevenueChart(series = []) {
-  const safeSeries = series.length ? series : [{ key: "empty", label: "--", value: 0 }];
-  const width = 680;
-  const height = 250;
-  const padding = { top: 24, right: 22, bottom: 38, left: 48 };
-  const maxValue = Math.max(...safeSeries.map((item) => item.value), 1);
-  const plotWidth = width - padding.left - padding.right;
-  const plotHeight = height - padding.top - padding.bottom;
-  const step = safeSeries.length > 1 ? plotWidth / (safeSeries.length - 1) : plotWidth;
-  const labelStep = Math.max(1, Math.ceil(safeSeries.length / 7));
-  const points = safeSeries.map((item, index) => ({
-    ...item,
-    x: padding.left + index * step,
-    y: padding.top + (1 - item.value / maxValue) * plotHeight,
-    showLabel: index % labelStep === 0 || index === safeSeries.length - 1
-  }));
-  const linePath = buildSmoothRevenuePath(points);
-  const areaPath = points.length
-    ? `M ${points[0].x} ${height - padding.bottom} L ${points[0].x} ${points[0].y} ${linePath.replace(/^M\s+[\d.-]+\s+[\d.-]+/, "")} L ${points[points.length - 1].x} ${height - padding.bottom} Z`
-    : "";
-  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
-    y: padding.top + ratio * plotHeight,
-    value: Math.round(maxValue * (1 - ratio))
-  }));
-  return { width, height, padding, points, linePath, areaPath, gridLines };
-}
 
 function formatUpdatedTime(value = "") {
   const date = new Date(value);
@@ -294,8 +251,6 @@ export default function AdminDashboardSection({
   ordersTotal,
   ordersNew,
   ordersDoing,
-  totalCustomers,
-  periodCustomers,
   dashboardChartPreset,
   setDashboardChartPreset,
   dashboardSummary,
@@ -306,8 +261,6 @@ export default function AdminDashboardSection({
   setSiteTrafficPreset,
   openAdminNav,
   dashboardDataStatus = {},
-  selectedBranchFilter = "all",
-  setSelectedBranchFilter,
   dashboardBranchFilters = [],
   setDashboardBranchFilters,
   branches = []

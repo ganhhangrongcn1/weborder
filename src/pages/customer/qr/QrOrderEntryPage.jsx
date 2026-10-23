@@ -16,7 +16,6 @@ function getBranchRuntimeId(branch = {}) {
 
 export default function QrOrderEntryPage({
   branches = [],
-  checkoutPreset,
   setCheckoutPreset,
   navigate,
   isBranchOpenNow,

@@ -12,7 +12,7 @@
         "fix:encoding": "node scripts/fix-encoding.mjs",
         "check:encoding": "node scripts/check-encoding.mjs",
         "preview": "vite preview",
-        "lint": "eslint .",
+        "lint": "eslint . --max-warnings=0",
         "smoke:supabase-config": "node scripts/smoke-supabase-config.mjs",
         "smoke:supabase-core": "node scripts/smoke-supabase-core.mjs",
         "smoke:supabase-catalog": "node scripts/smoke-supabase-catalog.mjs",
@@ -28,7 +28,8 @@
         "reviews:worker:install": "powershell -ExecutionPolicy Bypass -File scripts/install-partner-review-worker-task.ps1",
         "reviews:worker:uninstall": "powershell -ExecutionPolicy Bypass -File scripts/uninstall-partner-review-worker-task.ps1",
         "supabase": "supabase",
-        "supabase:login": "supabase login"
+        "supabase:login": "supabase login",
+        "test:lint": "node --test scripts/eslint-jsx.test.mjs"
     },
     "dependencies": {
         "@phosphor-icons/react": "^2.1.10",
@@ -50,6 +51,7 @@
     },
     "devDependencies": {
         "eslint": "^9.0.0",
+        "eslint-plugin-react": "7.37.5",
         "supabase": "2.109.1"
     }
 }

@@ -19,7 +19,6 @@ function formatCheckinDate(dateKey = "") {
 
 export default function CheckinCard({
   loyalty,
-  today,
   checkedInToday,
   comebackStreak,
   comebackActive,

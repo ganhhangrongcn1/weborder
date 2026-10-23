@@ -16,6 +16,9 @@ module.exports = {
     module: 'readonly',
     require: 'readonly'
   },
+  overrides: [
+    { files: ['__tests__/**/*.js'], env: { jest: true } },
+  ],
   rules: {
     'no-unused-vars': 'off'
   },

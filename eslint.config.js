@@ -1,3 +1,5 @@
+import react from "eslint-plugin-react";
+
 export default [
   {
     ignores: [
@@ -39,7 +41,10 @@ export default [
         clearInterval: "readonly"
       }
     },
+    plugins: { react },
     rules: {
+      "react/jsx-uses-vars": "error",
+      "react/jsx-uses-react": "error",
       "no-undef": "error",
       "no-unused-vars": [
         "warn",
@@ -49,6 +54,22 @@ export default [
         }
       ],
       "no-redeclare": "error"
+    }
+  },
+  {
+    files: ["src/**/*.{js,jsx}", "scripts/**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      globals: {
+        // Standard Web APIs used by the browser app and Node's fetch implementation.
+        AbortSignal: "readonly",
+        Blob: "readonly",
+        Headers: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+        TextEncoder: "readonly",
+        btoa: "readonly",
+        getComputedStyle: "readonly"
+      }
     }
   },
   {
@@ -62,9 +83,35 @@ export default [
     }
   },
   {
-    files: ["src/**/*.jsx"],
-    rules: {
-      "no-unused-vars": "off"
+    files: [
+      "ghr-pos-mobile-native/*.config.js",
+      "ghr-pos-mobile-native/.eslintrc.js",
+      "ghr-pos-mobile-native/.prettierrc.js"
+    ],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: { __dirname: "readonly" }
+    }
+  },
+  {
+    // Metro supports static require() for bundled assets in React Native.
+    files: ["ghr-pos-mobile-native/src/**/*.js"],
+    languageOptions: { globals: { require: "readonly" } }
+  },
+  {
+    files: ["ghr-pos-mobile-native/__tests__/**/*.js"],
+    languageOptions: {
+      globals: {
+        test: "readonly",
+        jest: "readonly",
+        describe: "readonly",
+        it: "readonly",
+        expect: "readonly",
+        beforeEach: "readonly",
+        afterEach: "readonly",
+        beforeAll: "readonly",
+        afterAll: "readonly"
+      }
     }
   }
 ];

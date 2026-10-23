@@ -575,7 +575,7 @@ function formatCakePickupDateTime(value) {
   }).format(date);
 }
 
-export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, orderCode, selectedAddOns = {}, addOnTotal = 0, finalTotal = 0 }) {
+export function buildCakeZaloMessage({ product, form, addressInfo, shippingFee, orderCode, selectedAddOns = {}, finalTotal = 0 }) {
   const fulfillmentLabel = form.fulfillmentType === "delivery" ? "Giao hàng" : "Khách tự đến lấy";
   const cakeTotal = Number(finalTotal || Number(product?.price || 0));
   const hasConfirmedShippingFee = form.fulfillmentType === "delivery" && shippingFee !== null && shippingFee !== undefined;

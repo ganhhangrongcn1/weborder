@@ -170,7 +170,7 @@ export default function AdminProductModal({ product, categories, branches = [], 
           currentUrl: String(draft?.image || "")
         });
         patch("image", uploaded.publicUrl);
-      } catch (_uploadError) {
+      } catch {
         patch("image", result.dataUrl);
       }
     } catch (error) {
