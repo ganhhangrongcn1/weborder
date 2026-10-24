@@ -1,16 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDemoPhoneLink, requireDemoPhoneLink } from "../src/services/demoPhoneService.js";
+import { prepareDemoPhoneLink, applyDemoPhoneLink } from "../src/services/demoPhoneService.js";
 import { isZalo, locate, scanQr, linkPhone } from "../src/services/deviceService.js";
 
-test("liên kết điện thoại mẫu bắt buộc đúng tài khoản, còn hạn và có sự đồng ý", () => {
-  const now = 1792740000000; const email = "attendance.test.20261023@example.invalid";
-  const link = createDemoPhoneLink(now);
-  assert.equal(requireDemoPhoneLink(email, link, now + 10).simulated, true);
-  for (const [account, value, time] of [[email, null, now], ["other@example.invalid", link, now],
-    [email, { ...link, phone: "0900000002" }, now], [email, link, now + 300000], [email, link, now - 1]]) {
-    assert.throws(() => requireDemoPhoneLink(account, value, time));
+test("khớp mới lưu; không khớp và từ chối không đổi trạng thái", () => {
+  const actor = { id: "test-id", username: "test" };
+  const state = { records: [], phones: {} };
+  for (const [scenario, consent, status] of [["mismatch", true, "mismatch"], ["declined", true, "declined"], ["match", false, "declined"]]) {
+    const result = prepareDemoPhoneLink(actor, scenario, consent);
+    assert.equal(result.status, status);
+    assert.equal(applyDemoPhoneLink(state, actor, result), state);
+    assert.equal(result.link, undefined);
   }
+  const result = prepareDemoPhoneLink(actor, "match", true, 1000);
+  const linked = applyDemoPhoneLink(state, actor, result);
+  assert.equal(linked.phones[actor.id].linkedAt, 1000);
+  assert.equal(linked.phones[actor.id].verified, false);
+  assert.deepEqual(state.phones, {});
+  assert.equal(applyDemoPhoneLink(linked, actor, result), linked);
+  assert.throws(() => prepareDemoPhoneLink({ id: "other", username: "staff" }, "match", true));
 });
 test("bản demo không vào nhánh API Zalo dù host đang là Zalo", async () => {
   const oldWindow=globalThis.window; const oldNavigator=Object.getOwnPropertyDescriptor(globalThis,"navigator");

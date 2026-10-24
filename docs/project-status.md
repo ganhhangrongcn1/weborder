@@ -4,7 +4,19 @@ Ngày rà soát: **22/10/2026**. Phạm vi: mã nguồn và tài liệu trong wo
 
 Danh sách này phân biệt phần đã viết nhưng chưa nối vào app, phần còn thiếu theo roadmap, công việc cần xác minh vận hành và tính năng đang tắt có chủ đích. Chưa kiểm tra lại database production, workflow n8n, bản web đang phục vụ hoặc máy POS tại quầy. Trạng thái production trong các báo cáo cũ chỉ là bằng chứng tại ngày báo cáo.
 
-## Cập nhật mới nhất — 24/10/2026: Chấm công Zalo Mini App vẫn đang làm dang dở
+## Cập nhật mới nhất — 24/10/2026: Testing 6, vẫn đang làm dang dở
+
+- Đã upload Testing Version6 thành công (CLI Deploy Done); chưa gửi xin quyền, xét duyệt hoặc Publish/Live. DEMO_ONLY=true, không gọi API Zalo thật.
+- UI chữ/nút đã đồng bộ; đã kiểm tra browser320/390px, Tài khoản768px. Build và18test đạt; không chứng minh native/điện thoại đã hoạt động.
+- Đăng nhập gọn, logo GHR; đăng ký có icon, bắt buộc số điện thoại, kiểm tra định dạng, mật khẩu8ký tự và xác nhận. Đăng ký CHỈ mô phỏng trong bộ nhớ, chưa tạo Auth/database hoặc tài khoản dùng đăng nhập. Tài khoản thử đã cấp trước vẫn dùng Supabase Auth.
+- Chia sẻ SĐT sau đăng nhập: bottom sheet mô phỏng có công tắc mặc định tắt, Từ chối/Cho phép. Khớp/không khớp ở phần thử riêng; không bắt buộc để chấm công; không ghi đè liên kết cũ.
+- Điều hướng trang/chi nhánh và Back nội bộ demo đã có. Maps/link HTTPS ngoài, gọi điện và liên hệ Zalo cấu hình riêng từng branch; hiện để trống theo yêu cầu chủ cửa hàng, chưa có màn quản trị cấu hình. Zalo mở liên hệ để người dùng tự chọn gọi; chưa gọi trực tiếp/native.
+- PDF/video tiếp tục dùng endpoint có xác thực. Native Back/deep-link launch, vị trí/QR/camera, rung, lưu gallery/file và quyền Zalo còn thiếu kiểm chứng thiết bị. Không tích hợp nhân sự/tính lương production.
+- Bộ11quyền/12ảnh cũ vẫn được giữ, ảnh trước các thay đổi chia sẻ/đăng ký chỉ là lịch sử, cần làm lại trước hồ sơ thật.
+- Không đồng bộ .env, token, mật khẩu, tmp, node_modules, dist. Cloud cần cấu hình môi trường riêng; không tự tạo tài khoản/đổi DB hoặc deploy khi tiếp tục đồng bộ.
+- [Testing6](checklist/reports/attendance-testing-v6-2026-10-24.md), [UI consistency](checklist/reports/attendance-ui-consistency-2026-10-24.md), [chia sẻ SĐT](checklist/reports/attendance-phone-link-demo-2026-10-24.md), [điều hướng](checklist/reports/attendance-navigation-2026-10-24.md).
+
+## Mốc đồng bộ trước — 24/10/2026
 
 - Đã đổi giao diện theo ảnh tham khảo, dùng logo/màu vàng Gánh Hàng Rong; có hiện/ẩn mật khẩu và mục Quyền riêng tư mở đọc được.
 - Luồng mới: đăng nhập tài khoản trước, liên kết số điện thoại trong Thông tin tài khoản sau; không tự liên kết khi đăng nhập. Ghi chú cũ về liên kết trước đăng nhập là lịch sử.
