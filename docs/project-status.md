@@ -4,7 +4,29 @@ Ngày rà soát: **22/10/2026**. Phạm vi: mã nguồn và tài liệu trong wo
 
 Danh sách này phân biệt phần đã viết nhưng chưa nối vào app, phần còn thiếu theo roadmap, công việc cần xác minh vận hành và tính năng đang tắt có chủ đích. Chưa kiểm tra lại database production, workflow n8n, bản web đang phục vụ hoặc máy POS tại quầy. Trạng thái production trong các báo cáo cũ chỉ là bằng chứng tại ngày báo cáo.
 
+## Cập nhật mới nhất — 24/10/2026: Chấm công Zalo Mini App vẫn đang làm dang dở
+
+- Đã đổi giao diện theo ảnh tham khảo, dùng logo/màu vàng Gánh Hàng Rong; có hiện/ẩn mật khẩu và mục Quyền riêng tư mở đọc được.
+- Luồng mới: đăng nhập tài khoản trước, liên kết số điện thoại trong Thông tin tài khoản sau; không tự liên kết khi đăng nhập. Ghi chú cũ về liên kết trước đăng nhập là lịch sử.
+- Supabase Auth và kho Testing riêng đã có; PDF/video qua Edge Function có xác thực. Không tích hợp nhân sự production hoặc tính lương.
+- Zalo đang ở Testing Version 4 với giao diện cũ. Giao diện mới chỉ build/kiểm tra local, chưa upload lại Zalo.
+- Chế độ demo chặn API Zalo thật; chưa xin quyền, gửi xét duyệt hoặc phát hành Live.
+- Đã lưu bảng giải trình 11 mục và 12 ảnh. Ảnh điện thoại trước đăng nhập đã cũ; cần chụp lại theo luồng mới. Camera chưa có hình xem trước; chưa chứng minh rung, lưu file/gallery, native PDF hay thực thi quyền trên điện thoại.
+- Kiểm tra local gần nhất: build subapp, 16 test, lint phạm vi sửa và UTF-8 đạt. Build không chứng minh chạy trên Zalo thật.
+- Khi tiếp tục Cloud: cài dependency theo lock, cấu hình hai biến VITE_SUPABASE_URL/VITE_SUPABASE_PUBLISHABLE_KEY trong môi trường riêng; không đưa mật khẩu, token hoặc .env vào Git. Tài khoản thử và QR tạm chỉ nằm trong tmp local, không đồng bộ.
+- [Giao diện mới và file sửa](checklist/reports/attendance-login-redesign-2026-10-23.md); [bảng giải trình](checklist/reports/attendance-permission-explanations-2026-10-23.md); [Testing 4](checklist/reports/attendance-four-demo-flows-2026-10-23.md).
+
 ## 1. Phần đã làm một phần hoặc còn thiếu trong mã nguồn
+
+**Testing 4 đã upload:** Bốn luồng demo đã có trong bản mới, PDF/video lấy qua Supabase, không còn cảnh báo định dạng bị Zalo bỏ qua. Không gọi API Zalo thật; chưa kiểm chứng native/điện thoại, chưa gửi xin quyền/xét duyệt/Live. Xem [kết quả và giới hạn kiểm thử](checklist/reports/attendance-four-demo-flows-2026-10-23.md).
+
+**Bốn luồng demo theo yêu cầu mới nhất:** Đã thêm liên kết số mẫu trước đăng nhập, PDF xem/phóng trang, MP4 phát và lưu xem lại, giữ sáng bằng Web API hoặc mô phỏng khi quét. Không gọi API Zalo thật. [Báo cáo và phần còn thiếu bằng chứng](checklist/reports/attendance-four-demo-flows-2026-10-23.md). Chưa coi demo là chấm công production hoặc bằng chứng xin quyền native.
+
+**Mốc Testing 3:** Bộ icon mới đã upload, chưa xét duyệt/Live. [Rà soát chức năng chấm công](checklist/reports/attendance-icons-readiness-2026-10-23.md) ghi rõ các phần còn thiếu trước sử dụng nhân sự thật: liên kết nhân viên/chi nhánh, GPS/QR thật, thời gian/quy tắc server, ca và duyệt quản lý, Storage bằng chứng; PDF/MP4 chưa hoạt động trên Zalo.
+
+**Mốc Testing 23/10/2026:** Đã upload app chấm công **Testing Version 1** theo CLI, chưa gửi duyệt/Live. Đăng nhập Supabase và dữ liệu thử đã có; chưa kiểm chứng điện thoại Zalo, PDF/MP4 chưa được Zalo upload do định dạng không hỗ trợ. Cần host HTTPS cho tài liệu và kiểm tra native trước khi coi app hoàn thiện. Xem [báo cáo Testing](checklist/reports/attendance-supabase-testing-2026-10-23.md); các đoạn “đang chờ xác thực/chưa upload” phía dưới là trạng thái lịch sử trước mốc này.
+
+**Cập nhật tiếp ngày 23/10/2026:** App chấm công vẫn dang dở, nhưng đã nối Supabase Auth và kho dữ liệu Testing riêng; đã kiểm tra đăng nhập/vào ca/ra ca/lưu lại qua browser. Người dùng cho phép upload bản Testing, chưa cho phép gửi xét duyệt/Live. Upload đang chờ xác thực Zalo; chưa chạy thực trên điện thoại. Ghi chú trước về “chưa nối database” là trạng thái lịch sử đã được thay bằng cập nhật này. Xem [báo cáo mới](checklist/reports/attendance-supabase-testing-2026-10-23.md).
 
 **Bổ sung ngày 23/10/2026 — App chấm công Zalo Mini App đang làm dang dở.** Mã nguồn riêng tại `attendance-miniapp/`: đã có giao diện, tài khoản mẫu, các luồng chấm công/điều chỉnh và cấu hình build Mini App. Chưa nối database; chưa xác nhận chạy trong Zalo trên điện thoại hoặc simulator; chưa gửi xin quyền, xét duyệt hay xuất bản. Chưa cài Studio/VS Code Extension theo yêu cầu dừng của anh. Xem [trạng thái bàn giao](checklist/reports/attendance-zalo-miniapp-conversion-2026-10-23.md). Khi tiếp tục cần kiểm tra runtime Zalo trước, kết nối database làm sau theo yêu cầu.
 

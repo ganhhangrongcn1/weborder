@@ -65,6 +65,7 @@ export default [
       globals: {
         // Standard Web APIs used by the browser app and Node's fetch implementation.
         AbortSignal: "readonly",
+        AbortController: "readonly",
         Blob: "readonly",
         Headers: "readonly",
         Request: "readonly",
