@@ -2,6 +2,10 @@
 
 Ngày kiểm tra: 23/10/2026. Mã nguồn nằm trong `attendance-miniapp/` tại repository này.
 
+**Bốn luồng demo mới nhất:** [Điện thoại trước đăng nhập, PDF/video và giữ sáng](reports/attendance-four-demo-flows-2026-10-23.md). Chế độ demo đã khóa nhánh API Zalo thật; PDF/video lấy qua Supabase bằng tài khoản thử. Các ghi chú PDF/video chưa chạy phía dưới là lịch sử bản 1–3, cần đọc giới hạn kiểm chứng trong báo cáo mới.
+
+**Cập nhật mới nhất:** [Supabase và chuẩn bị bản Testing](reports/attendance-supabase-testing-2026-10-23.md). Đăng nhập và dữ liệu thử đã chuyển sang Supabase; tài khoản demo local bên dưới không còn đăng nhập được trong bản mới. Người dùng đã cho phép upload Testing nhưng chưa xét duyệt/Live. Upload chưa thành công, đang chờ xác thực Zalo. Các đoạn “chưa nối database/không upload” phía dưới là ghi nhận lịch sử, không phải yêu cầu mới nhất.
+
 **Trạng thái: App chấm công Zalo Mini App đang làm dang dở.** Chưa nối database, chưa xác nhận chạy trong Zalo/simulator, chưa gửi xin quyền hoặc xuất bản. Đã dừng việc cài Studio/Extension theo yêu cầu ngày 23/10/2026. Đồng bộ mã nguồn sang Cloud để tiếp tục sau; không coi build local thành công là đã hoàn thiện ứng dụng.
 
 **Cập nhật giao diện:** [Báo cáo thiết kế cho Zalo Mini App](reports/attendance-miniapp-ui-2026-10-23.md). Nhãn demo và bảng quyền đã được bỏ khỏi các màn nhân viên theo yêu cầu mới. Các mô tả giao diện phía dưới phản ánh bản trải nghiệm ban đầu; phần dữ liệu vẫn chưa chuyển sang Supabase.

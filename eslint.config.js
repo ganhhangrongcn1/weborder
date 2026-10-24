@@ -68,7 +68,7 @@ export default [
   {
     files: ["attendance-miniapp/src/**/*.{js,jsx}"],
     languageOptions: {
-      globals: { AbortSignal: "readonly", Blob: "readonly", Headers: "readonly", Request: "readonly", Response: "readonly", TextEncoder: "readonly", btoa: "readonly", getComputedStyle: "readonly" }
+      globals: { AbortSignal: "readonly", AbortController: "readonly", Blob: "readonly", Headers: "readonly", Request: "readonly", Response: "readonly", TextEncoder: "readonly", btoa: "readonly", getComputedStyle: "readonly" }
     }
   },
   {

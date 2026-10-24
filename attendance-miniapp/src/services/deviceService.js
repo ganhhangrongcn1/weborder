@@ -1,8 +1,9 @@
 import { DEMO_BRANCH } from "../data/demo.js";
 import { readAttachment } from "./demoRepository.js";
 import { isMiniApp } from "./miniAppRuntime.js";
+import { DEMO_ONLY } from "../constants/runtimeMode.js";
 
-export const isZalo = isMiniApp;
+export const isZalo = () => !DEMO_ONLY && isMiniApp();
 const sdk = () => import("zmp-sdk");
 let wakeLock;
 

@@ -8,11 +8,13 @@
     "build": "vite build && node scripts/build-miniapp.mjs",
     "start": "zmp start",
     "zmp:help": "zmp --help",
+    "deploy:testing": "npm run build && node scripts/deploy-testing.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 5180",
     "test": "node --test tests/*.test.mjs",
     "bridge": "node server/zaloBridge.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.105.3",
     "qrcode": "1.5.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
