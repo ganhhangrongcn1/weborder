@@ -6,6 +6,8 @@ Danh sách này phân biệt phần đã viết nhưng chưa nối vào app, ph�
 
 ## Cập nhật mới nhất — 24/10/2026: Testing 6, vẫn đang làm dang dở
 
+Đã cập nhật [bảng11quyền và14ảnh giao diện Testing6](checklist/reports/attendance-permission-explanations-testing6-2026-10-24.md), chụp từ demo local cùng mã nguồn, chưa phải bằng chứng native Zalo. Bộ23/10 được giữ làm lịch sử. Chưa gửi xin quyền/xét duyệt.
+
 - Đã upload Testing Version6 thành công (CLI Deploy Done); chưa gửi xin quyền, xét duyệt hoặc Publish/Live. DEMO_ONLY=true, không gọi API Zalo thật.
 - UI chữ/nút đã đồng bộ; đã kiểm tra browser320/390px, Tài khoản768px. Build và18test đạt; không chứng minh native/điện thoại đã hoạt động.
 - Đăng nhập gọn, logo GHR; đăng ký có icon, bắt buộc số điện thoại, kiểm tra định dạng, mật khẩu8ký tự và xác nhận. Đăng ký CHỈ mô phỏng trong bộ nhớ, chưa tạo Auth/database hoặc tài khoản dùng đăng nhập. Tài khoản thử đã cấp trước vẫn dùng Supabase Auth.
