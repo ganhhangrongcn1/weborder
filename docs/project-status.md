@@ -1,6 +1,54 @@
 # Trạng thái app chấm công Zalo Mini App
 
-## Cập nhật Cloud ngày 24/10/2026 — đang làm dang dở (WIP)
+## Mốc mới nhất Cloud 24/10/2026 — Testing 6, vẫn WIP
+
+Nhận đúng delta 23 file của `4d2e008f3f025fb9af863dd8c8540d229b8b8936`, parent `6c3088f`, trên nền Cloud `b0b8750b801f59ddaabe277e8ae95ecd5755c522`. Không merge toàn nhánh/snapshot parent; giữ nội dung Cloud. Các mốc cũ bên dưới chỉ là lịch sử.
+
+- Theo bàn giao local và báo cáo CLI, app đã trên Zalo Testing 6 (Deploy Done); Cloud không upload/update Testing thêm. UI chữ/nút đã đồng bộ, logo GHR.
+- Đăng ký có icon và bắt buộc SĐT, chỉ mô phỏng trong bộ nhớ: chưa tạo Auth/DB hoặc tài khoản dùng đăng nhập. Đăng nhập tài khoản test đã cấp trước vẫn qua Supabase Auth.
+- Chia sẻ SĐT sau login là bottom sheet mô phỏng, công tắc mặc định tắt, Cho phép/Từ chối; khớp/không khớp thuộc phần thử riêng. Không bắt buộc chấm công, không ghi đè liên kết cũ.
+- Có link trang/branch và Back nội bộ. Contact config mỗi branch để trống, anh sẽ thiết lập sau. Maps/link ngoài HTTPS, gọi tel, mở liên hệ Zalo để người dùng chọn gọi; chưa native call/back/deeplink.
+- `DEMO_ONLY = true`; chưa nối API Zalo thật, chưa có bằng chứng native/permission/device. Không nhân sự/tính lương production; vẫn đang làm dang dở.
+- Bộ 11 quyền/12 ảnh cũ giữ làm lịch sử, chưa phải bằng chứng cho luồng mới. Không chuyển secrets/.env/tmp/dist/node_modules; chỉ có .env.example.
+- Cloud chỉ nhận source/docs, không nối DB/API, không tạo tài khoản, không deploy, xin quyền/xét duyệt/Live hoặc push main.
+- [Testing 6](checklist/reports/attendance-testing-v6-2026-10-24.md), [UI thống nhất](checklist/reports/attendance-ui-consistency-2026-10-24.md), [chia sẻ SĐT](checklist/reports/attendance-phone-link-demo-2026-10-24.md), [điều hướng](checklist/reports/attendance-navigation-2026-10-24.md).
+
+### Kiểm tra Cloud cho delta 4d2e008
+
+- Ref và parent đã xác minh; checkout đầu vào sạch. 22 file nhận nguyên bản khớp từng byte, chỉ docs/project-status.md bổ sung trên nền nội dung Cloud.
+- `npm test --prefix attendance-miniapp`: đạt 5 file test; `node --test --test-isolation=none --test-reporter=tap attendance-miniapp/tests/*.test.mjs`: 18/18 đạt, không gọi DB/API thật.
+- `npm run build --prefix attendance-miniapp`: đạt Vite 5.4.21; bundle hợp lệ 573155 byte. Cloud không có .env, nên không chứng minh luồng Auth/endpoint hoạt động; khác bundle Testing 6 local có cấu hình môi trường.
+- ESLint source/server/tests/vite.config.js app: đạt. Encoding checker source web chính: 664 file đạt; UTF-8 toàn bộ 23 file đồng bộ hợp lệ. `git diff --check`: đạt.
+- DEMO_ONLY vẫn true; chỉ .env.example tồn tại trong app. Không chuyển secrets/tmp/dist; không sửa lock/dependency hoặc cài thêm công cụ.
+- Chưa kiểm tra UI browser/simulator/thiết bị trên Cloud, native Back/deeplink/quyền chưa xác nhận. Không phát triển thêm, không nối DB/API/tạo tài khoản, không deploy/update Testing/xin quyền/xét duyệt/Live/push main.
+
+### 23 file đồng bộ đợt Testing 6
+
+- `attendance-miniapp/src/App.jsx`
+- `attendance-miniapp/src/components/Account.jsx`
+- `attendance-miniapp/src/components/BranchDetails.jsx`
+- `attendance-miniapp/src/components/BranchLinks.jsx`
+- `attendance-miniapp/src/components/Brand.jsx`
+- `attendance-miniapp/src/components/ContactActions.jsx`
+- `attendance-miniapp/src/components/Login.jsx`
+- `attendance-miniapp/src/components/PhoneLinkDialog.jsx`
+- `attendance-miniapp/src/components/Register.jsx`
+- `attendance-miniapp/src/constants/contactConfig.js`
+- `attendance-miniapp/src/hooks/useAppNavigation.js`
+- `attendance-miniapp/src/hooks/useAttendance.js`
+- `attendance-miniapp/src/services/demoPhoneService.js`
+- `attendance-miniapp/src/services/navigationService.js`
+- `attendance-miniapp/src/styles.css`
+- `attendance-miniapp/tests/demo-flows.test.mjs`
+- `attendance-miniapp/tests/navigation.test.mjs`
+- `docs/checklist/reports/attendance-navigation-2026-10-24.md`
+- `docs/checklist/reports/attendance-phone-link-demo-2026-10-24.md`
+- `docs/checklist/reports/attendance-testing-v5-2026-10-24.md`
+- `docs/checklist/reports/attendance-testing-v6-2026-10-24.md`
+- `docs/checklist/reports/attendance-ui-consistency-2026-10-24.md`
+- `docs/project-status.md`
+
+## Lịch sử đồng bộ Cloud 24/10/2026 — mốc 6c3088f (đã được thay thế)
 
 Nhận riêng thay đổi commit `6c3088fefa4c7b2a0588030c160f67bd7fe90d8e` (parent `592155f`) trên nền Cloud `abaebbcd`; không merge nhánh hoặc snapshot parent. Các mốc 23/10 bên dưới là lịch sử, không phải trạng thái hiện tại.
 

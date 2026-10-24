@@ -3,6 +3,7 @@ import { loginAttendance, logoutAttendance } from "../services/attendanceAuthSer
 import { loadAttendance, mutateAttendance } from "../services/attendanceRepository.js";
 import { recordAttendance, submitCorrection, reviewCorrection } from "../services/attendanceService.js";
 import * as device from "../services/deviceService.js";
+import { prepareDemoPhoneLink, applyDemoPhoneLink } from "../services/demoPhoneService.js";
 import { TRAINING_MATERIALS } from "../services/trainingMaterialService.js";
 
 export default function useAttendance() {
@@ -57,7 +58,13 @@ export default function useAttendance() {
   }, action === "in" ? "Đã ghi nhận vào ca." : "Đã ghi nhận ra ca.");
   const correction = (input) => run(() => update((data) => submitCorrection(data, actor, input)), "Đã lưu yêu cầu điều chỉnh công.");
   const review = (id, status, note) => run(() => update((data) => reviewCorrection(data, actor, id, status, note)), "Đã xử lý yêu cầu và lưu lịch sử duyệt.");
-  const phone = () => run(async () => { const result = await device.linkPhone(simulated); await update((data) => ({ ...data, phones: { ...data.phones, [actor.id]: result } })); }, "Đã lưu liên kết số điện thoại.");
+  const phone = (scenario, consent) => run(async () => {
+    const result = prepareDemoPhoneLink(actor, scenario, consent);
+    if (result.status !== "matched") return result;
+    if (state.phones[actor.id]) return { status: "matched", message: "Đối chiếu mẫu khớp. Tài khoản đã có liên kết, không ghi đè thông tin." };
+    await update((data) => applyDemoPhoneLink(data, actor, result));
+    return { status: "matched", message: "Đã đối chiếu và lưu liên kết số điện thoại mẫu. Bạn có thể tiếp tục chấm công." };
+  });
   const saveMaterial = (id) => run(async () => {
     if (!TRAINING_MATERIALS.some((item) => item.id === id)) throw new Error("Không tìm thấy tài liệu.");
     return update((data) => ({ ...data, savedMaterials: { ...data.savedMaterials, [id]: new Date().toISOString() } }));

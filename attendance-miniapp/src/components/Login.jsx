@@ -1,3 +1,4 @@
+import Register from "./Register.jsx";
 import { useState } from "react";
 import Brand from "./Brand.jsx";
 import PrivacyNotice from "./PrivacyNotice.jsx";
@@ -10,14 +11,15 @@ export default function Login({ app }) {
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
   const [privacy, setPrivacy] = useState(false);
+  const [register, setRegister] = useState(false);
   const [support, setSupport] = useState(false);
   return <main className="login-page reference-login">
-    <div className="login-brand"><Brand/></div>
-    <section className="login-panel" aria-labelledby="login-title">
-      <h1 id="login-title">Đăng nhập</h1><p className="login-intro">Chấm công nhân viên Gánh Hàng Rong</p>
+    <div className="login-brand"><Brand showSubtitle={false}/></div>
+    {register ? <Register onBack={() => setRegister(false)}/> : <section className="login-panel" aria-labelledby="login-title">
+      <h1 id="login-title">Đăng nhập</h1>
       <form onSubmit={(event) => { event.preventDefault(); app.login(username, password); }}>
         <label htmlFor="attendance-username">Tài khoản</label>
-        <div className="login-input"><Symbol kind="user"/><input id="attendance-username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Nhập tài khoản được cấp" required/></div>
+        <div className="login-input"><Symbol kind="user"/><input id="attendance-username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Nhập tài khoản" required/></div>
         <label htmlFor="attendance-password">Mật khẩu</label>
         <div className="login-input"><Symbol kind="lock"/><input id="attendance-password" autoComplete="current-password" type={visible ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Nhập mật khẩu" required/>
           <button type="button" className="password-toggle" aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"} aria-pressed={visible} onClick={() => setVisible(!visible)}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>{visible && <path d="m3 3 18 18"/>}</svg></button>
@@ -27,8 +29,8 @@ export default function Login({ app }) {
         {app.error && <p role="alert" className="notice error">{app.error}</p>}
         <button className="primary login-submit" disabled={app.busy}>{app.busy ? "Đang đăng nhập…" : "Đăng nhập"}</button>
       </form>
-    </section>
-    <p className="login-assistance">Chưa có tài khoản? <button onClick={() => setSupport(true)}>Liên hệ quản lý</button></p>
+    </section>}
+    {!register && <p className="login-assistance">Chưa có tài khoản? <button onClick={() => { app.clearNotices(); setRegister(true); }}>Đăng ký tài khoản</button></p>}
     <button className="privacy-link" onClick={() => setPrivacy(true)}><Symbol kind="shield"/>Quyền riêng tư</button>
     {privacy && <PrivacyNotice onClose={() => setPrivacy(false)}/>}
   </main>;
