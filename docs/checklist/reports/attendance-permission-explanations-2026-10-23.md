@@ -1,4 +1,6 @@
-# Bảng giải trình 11 quyền — Chấm công Gánh Hàng Rong
+# Bảng giải trình 11 quyền — bản lịch sử 23/10
+
+**Đã có [bảng và ảnh mới theo giao diện Testing6](attendance-permission-explanations-testing6-2026-10-24.md). Dùng bộ mới khi xem luồng hiện tại.**
 
 Cập nhật giao diện: liên kết số điện thoại đã chuyển sang Thông tin tài khoản sau đăng nhập. Ảnh 08 của bản trước chỉ còn là tư liệu lịch sử, cần chụp lại trước khi nộp hồ sơ. Xem [báo cáo giao diện mới](attendance-login-redesign-2026-10-23.md).
 

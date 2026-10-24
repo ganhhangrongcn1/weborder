@@ -1,5 +1,42 @@
 # Trạng thái app chấm công Zalo Mini App
 
+## Bổ sung hồ sơ Testing 6 — 24/10/2026, vẫn WIP/demo
+
+Đồng bộ riêng delta `52f482fc2f35ac6c573a1243bda514e74a3c01a3` (parent `4d2e008`) trên Cloud `73dc3b067d64249929f30df2ac4c6d19eca9bf57`: chỉ 17 đường dẫn docs/assets, không merge toàn nhánh hoặc snapshot parent. Giữ nguyên lịch sử Cloud; bộ 23/10 là tư liệu lịch sử, bảng/ảnh hiện tại dùng bộ dưới đây.
+
+- [Bảng 11 quyền và 14 ảnh Testing 6](checklist/reports/attendance-permission-explanations-testing6-2026-10-24.md): quyền SĐT theo luồng chia sẻ sau login, công tắc/Cho phép/Từ chối; thêm 3 ảnh kết quả từ chối/khớp/không khớp.
+- Ảnh chụp LOCAL cùng source Testing 6, không chụp bên trong Zalo điện thoại và không chứng minh native. Camera chưa có preview, rung chỉ là ảnh ngữ cảnh, gallery/download/native PDF còn thiếu bằng chứng.
+- Không tạo ca công hoặc gửi chỉnh công mới. Không sửa app, DB/API/tài khoản, không deploy, upload Testing, gửi quyền/xét duyệt/Live hoặc push main. Không cần chạy lại build/test code cho đợt chỉ docs/assets.
+
+### Kiểm tra Cloud bộ hồ sơ 52f482f
+
+- Fetch xác minh đúng SHA và parent; checkout đầu vào sạch. 16 file sao chép giống source từng byte, chỉ bổ sung tiến độ trong docs/project-status.md.
+- Đủ 14 file mang đuôi .png, Pillow verify/load đạt 14/14. **Sai khác định dạng nguồn: cả 14 file thực chất là JPEG/JFIF, không phải PNG.** Giữ nguyên blob theo yêu cầu đồng bộ, chưa đổi tên/chuyển định dạng. Cần thống nhất MIME/đuôi trước khi dùng hồ sơ thật.
+- Kích thước ảnh thực tế rộng 375 hoặc 390 pixel, cao 812–1656 pixel; không phải toàn bộ cùng viewport 390×844 như mô tả chung của báo cáo nguồn.
+- Ba file Markdown thuộc scope giải mã UTF-8 đạt; 71 tham chiếu Markdown tương đối (gồm ảnh) tồn tại. git diff --check đạt.
+- Không xem đây là xác nhận bằng chứng native: ảnh local; camera chưa preview, rung chỉ ngữ cảnh, gallery/download/native PDF còn thiếu bằng chứng.
+- Chỉ tài liệu/assets: không sửa app, không chạy lại test/build code, không tạo ca/yêu cầu điều chỉnh, không đổi DB/API/tài khoản, deploy/update Testing, gửi quyền/xét duyệt/Live hay push main. Vẫn WIP/demo.
+
+### 17 file đồng bộ hồ sơ
+
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/01-qr.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/02-vi-tri.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/03-mang.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/04-giu-sang.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/05-rung-ngu-canh.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/06-camera.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/07-chon-tep.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/08-chia-se-sdt.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/08b-tu-choi.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/08c-khop-ho-so.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/08d-khong-khop.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/09-luu-video.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/10-tai-tep.png`
+- `docs/checklist/reports/assets/attendance-permissions-testing6-2026-10-24/11-mo-tai-lieu.png`
+- `docs/checklist/reports/attendance-permission-explanations-2026-10-23.md`
+- `docs/checklist/reports/attendance-permission-explanations-testing6-2026-10-24.md`
+- `docs/project-status.md`
+
 ## Mốc mới nhất Cloud 24/10/2026 — Testing 6, vẫn WIP
 
 Nhận đúng delta 23 file của `4d2e008f3f025fb9af863dd8c8540d229b8b8936`, parent `6c3088f`, trên nền Cloud `b0b8750b801f59ddaabe277e8ae95ecd5755c522`. Không merge toàn nhánh/snapshot parent; giữ nội dung Cloud. Các mốc cũ bên dưới chỉ là lịch sử.
