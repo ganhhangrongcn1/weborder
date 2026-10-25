@@ -85,3 +85,12 @@
 - Kiểm kê trước bật: 229 đơn đối tác chưa nhận trong 24h gần nhất, gồm 219 có SĐT + điểm sẵn và 10 thiếu số, 0 thiếu đối soát. Đây là số liệu tại thời điểm kiểm kê, không phải bộ lọc chạy cộng bù. Chưa tự cộng nhóm lịch sử này.
 - POS: diff native giữa nguồn APK cuối và commit merge bằng rỗng; APK `GHR-POS-0.4.30.apk` còn đúng SHA-256 đã ghi. Không cần build lại cho các cập nhật SQL/UI sau đó. Máy quán phải cài 0.4.30 để in QR riêng bill; chưa xác nhận cài máy/giấy thật.
 - Hoàn tác vận hành nếu có lỗi: tắt `receipt_private.activation.enabled`; không xóa ledger/tem/token hoặc rollback rộng schema. Website có thể rollback deployment Vercel riêng nếu cần.
+
+## Ghi chú tiếp tục và bàn giao — 25/10/2026
+
+- Trang chính thức: https://ganhhangrong.vn/nhan-diem/ ; QR từng bill dùng `/nhan-diem/:token`. Link chung chỉ xem giao diện; nhận điểm cần token bill.
+- Đã đối chiếu trực tiếp hàm Supabase `loyalty_private.snapshot_order_loyalty_rule`: đơn POS/web tính trên `subtotal - promo_discount`, không gồm phí giao hàng, theo tỷ lệ hạng/rule được chốt trên đơn. Đơn đối tác dùng tiền thực nhận sau đối soát như trước.
+- Đơn web chọn thanh toán tại quầy chưa được tự cộng khi vừa đặt. Nhân viên thu tiền trên đúng đơn web trong POS; đường xác nhận thu tiền ghi `metadata.paymentStatus = paid`, từ đó xử lý tự tích khi đủ điều kiện. Không tạo thêm đơn POS cho cùng giao dịch.
+- Điểm cần theo dõi tiếp: cài APK chính thức 0.4.30 tại quán, kiểm tra bill thực thiếu SĐT → QR nhận trong 24h → đăng nhập đúng số xem điểm/tem; kiểm tra nhận lại và đơn web thu tiền tại quầy. Chưa có bằng chứng hoàn tất các thao tác trên thiết bị thật.
+- Nội dung in hiện tại có số dự kiến nhưng thiếu chữ “điểm” trong câu “Quét để nhận … của đơn này”; đây là việc còn lại, chưa sửa hoặc phát hành APK mới cho nội dung này.
+- PR #13 lưu báo cáo triển khai và đồng bộ tên migration theo version đã áp dụng; tách riêng với PR #12 đã phát hành. Việc đồng bộ ghi chú lên nhánh cloud không đồng nghĩa merge PR #13 hoặc triển khai bản mới.
