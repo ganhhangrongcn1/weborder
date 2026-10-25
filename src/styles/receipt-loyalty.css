@@ -34,3 +34,6 @@
 
 .receipt-rewards__voucher{position:relative;background:#fffdf8;padding:24px;border-radius:0 0 8px 8px}
 .receipt-rewards__tabs{margin-bottom:18px}
+.receipt-rewards__tear{position:relative;border-top:1px dashed #c5cbb9;margin:26px 0}
+.receipt-rewards__tear::before,.receipt-rewards__tear::after{content:"";position:absolute;top:-13px;width:24px;height:24px;border-radius:50%;background:#f8f0e3}
+.receipt-rewards__tear::before{left:-36px}.receipt-rewards__tear::after{right:-36px}

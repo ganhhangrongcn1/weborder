@@ -195,6 +195,35 @@ begin
 end;
 $$;
 
+-- Only the validated receipt claim can call this bridge. Existing stamp rules,
+-- phone/day identity, daily limits and source idempotency stay in set_source.
+create or replace function receipt_private.record_claim_stamp(p_source text,p_id text,p_phone text)
+returns void language plpgsql security definer set search_path = '' as $$
+declare r receipt_private.receipts%rowtype; cfg stamp_private.program%rowtype;
+  source_name text; source_at timestamptz; state_value text;
+begin
+  select * into r from receipt_private.receipts where source_type=p_source and source_id=p_id;
+  if not found then raise exception 'Không tìm thấy bill nhận tem.'; end if;
+  if not exists(select 1 from public.loyalty_ledger where source_type=p_source and source_order_id=p_id
+    and action in ('SETTLE_EARN','CLAIM_PARTNER_EARN') and action_version=1 and customer_phone=p_phone) then
+    raise exception 'Chưa có giao dịch điểm hợp lệ để nhận tem.';
+  end if;
+  select * into cfg from stamp_private.program where id;
+  source_at:=(r.details->>'createdAt')::timestamptz;
+  if not coalesce(cfg.enabled,false) or source_at<cfg.starts_at or coalesce((r.details->>'totalAmount')::numeric,0)<=0 then return; end if;
+  if p_source='ORDER' then
+    source_name:='orders';
+    select lower(status) into state_value from public.orders where id=p_id;
+  else
+    source_name:='partner_orders';
+    select lower(order_status) into state_value from public.partner_orders where id::text=p_id;
+    if state_value not in ('confirmed','preparing','ready','completed','done') then return; end if;
+  end if;
+  if state_value in ('cancelled','canceled','cancel','refunded','refund') then return; end if;
+  perform stamp_private.set_source(source_name,p_id,p_phone,(source_at at time zone 'Asia/Ho_Chi_Minh')::date,true);
+end;
+$$;
+
 create or replace function public.claim_receipt_loyalty(p_token text,p_phone text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare r receipt_private.receipts%rowtype; current_view jsonb; phone_key text;
@@ -210,6 +239,7 @@ begin
   if phone_key is null or phone_key !~ '^0[35789][0-9]{8}$' then raise exception 'Vui lòng nhập số điện thoại Việt Nam hợp lệ.'; end if;
   select * into r from receipt_private.receipts where token=p_token;
   perform receipt_private.settle(r.source_type,r.source_id,phone_key);
+  perform receipt_private.record_claim_stamp(r.source_type,r.source_id,phone_key);
   return public.get_receipt_loyalty(p_token);
 end;
 $$;

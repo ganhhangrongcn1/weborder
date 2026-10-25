@@ -64,8 +64,10 @@
 
 - Bỏ khối giới thiệu dài bên trái, giữ tên thương hiệu nhỏ; căn giữa khung voucher, thêm mép răng cưa và hai khuyết ở đường xé. Bỏ dòng hỗ trợ nhỏ dưới cùng theo ảnh anh đánh dấu.
 - Đọc lại hàm tem production: nguồn tem gắn số điện thoại và ngày mua, tối đa 1 tem/SĐT/ngày. Hàm đối tác có nhánh giữ nguyên tem khi khách đã có nguồn tem xác nhận nhận điểm cùng số.
-- Khoảng trống cần xử lý trước kích hoạt: claim QR không OTP với số mới chưa được bảo đảm tạo nguồn tem, vì trigger tem chỉ ghi khi actor là operator. Không coi kiểm tra điểm đã đạt là bằng chứng đã nối đủ tem. Cần bổ sung đường nhận tem tin cậy trong cùng giao dịch nhận QR, giữ nguyên hạn mức/ngày mua và chặn trùng; chưa tự sửa quy tắc tem trong lượt chỉnh UI này.
-- Production chưa thay đổi; các sửa UI này không sửa hàm tem hoặc APK. Cần kiểm tra riêng cả điểm + tem trước kích hoạt.
+- Đã nối khoảng trống QR không OTP với số mới: hàm private `record_claim_stamp` chỉ được gọi sau giao dịch điểm đúng nguồn đơn/SĐT. Dùng lại `stamp_private.set_source`, giữ hạn mức/ngày mua/identity, không mở quyền bảng hay RPC tem. Điểm và tem cùng transaction; lỗi tem rollback lượt nhận điểm mới.
+- Kiểm tra SQL rollback đã đạt 14 tình huống, gồm khách anon có JWT thực nhận tem của ngày mua, tem đối tác cùng số nhận điểm và gọi lại không thêm tem. Cấu hình tem bật để thử chỉ tồn tại trong transaction đã rollback.
+- Anh chốt: đã thanh toán có SĐT tự tích điểm + tem; in/in lại chỉ xem/kiểm tra. Khách thiếu số nhận QR trong 24h thì ghi cả hai vào số đã xác nhận; chưa cần đăng ký. Sau khi đăng nhập đúng số đọc cùng số dư/tem. Tem đối tác vẫn tuân trạng thái đủ điều kiện hiện hành.
+- Production chưa thay đổi; không sửa hàm tem gốc hoặc APK. UI bổ sung đường xé nét đứt và khuyết tròn ở cả hai tab. Build/encoding và kiểm tra UI/receipt đạt; chưa có kiểm chứng thiết bị thật.
 
 - PR: https://github.com/ganhhangrongcn1/weborder/pull/12. Nhánh phát hành chỉ gồm 18 file của tính năng.
 - Chưa merge main, chưa cài migration hay kích hoạt production. Truy vấn cuối xác nhận schema production chưa có `receipt_private` và không còn đơn thử.

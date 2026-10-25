@@ -2,6 +2,7 @@
 -- No test row, point, print job or program change may be committed.
 create temporary table receipt_test_results (scenario text, passed boolean);
 update receipt_private.activation set enabled=true where singleton;
+update stamp_private.program set enabled=true where id;
 do $$
 declare o public.orders%rowtype; po public.partner_orders%rowtype;
   test_order_id text:='RECEIPT-ROLLBACK-'||gen_random_uuid(); partner_id uuid:=gen_random_uuid();
@@ -30,9 +31,16 @@ begin
   insert into receipt_test_results values('paid_before_completion_available',true);
 
   execute 'set local role anon';
+  perform set_config('request.jwt.claims','{"role":"anon"}',true);
   update public.orders set expected_earn_points=999999 where id=test_order_id;
   view_value:=public.claim_receipt_loyalty(token_value,'0999999901');
   execute 'reset role';
+  perform set_config('request.jwt.claims','',true);
+  if not exists(select 1 from stamp_private.sources where source='orders' and order_id=test_order_id
+    and phone='0999999901' and active and business_day=(o.created_at at time zone 'Asia/Ho_Chi_Minh')::date) then
+    raise exception 'Late receipt phone did not receive the purchase-day stamp';
+  end if;
+  insert into receipt_test_results values('anonymous_late_phone_receives_purchase_day_stamp',true);
   if (view_value->>'points')::integer=999999 then raise exception 'Claim trusted client-writable points'; end if;
   insert into receipt_test_results values('anonymous_order_tampering_cannot_inflate_points',true);
   if view_value->>'status'<>'claimed' or view_value->>'maskedPhone'<>'•••••••901' then raise exception 'Claim failed: %',view_value; end if;
@@ -83,6 +91,13 @@ begin
   view_value:=public.claim_receipt_loyalty(token_value,'0999999901');
   if view_value->>'status'<>'claimed' then raise exception 'No-phone partner claim failed: %',view_value; end if;
   insert into receipt_test_results values('partner_no_phone_waiting_data_then_qr_claim',true);
+  if not exists(select 1 from stamp_private.sources where source='partner_orders' and order_id=partner_id::text
+    and phone='0999999901' and active) then raise exception 'Partner QR stamp missing'; end if;
+  select balance into before_balance from stamp_private.accounts where phone='0999999901';
+  perform receipt_private.record_claim_stamp('PARTNER_ORDER',partner_id::text,'0999999901');
+  select balance into after_balance from stamp_private.accounts where phone='0999999901';
+  if before_balance<>after_balance then raise exception 'Repeat stamp call awarded twice'; end if;
+  insert into receipt_test_results values('partner_qr_stamp_same_phone_and_repeat_idempotent',true);
   update receipt_private.receipts set expires_at=now()-interval '1 second' where token=token_value;
   -- Already claimed must remain claimed, not become claimable after expiry.
   if public.get_receipt_loyalty(token_value)->>'status'<>'claimed' then raise exception 'Claim state changed after expiry'; end if;

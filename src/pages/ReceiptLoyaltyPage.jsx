@@ -37,6 +37,7 @@ export default function ReceiptLoyaltyPage() {
           <div id="receipt-panel" role="tabpanel" aria-labelledby={tab === "claim" ? "receipt-claim-tab" : "receipt-summary-tab"}>
             {tab === "claim" ? <>
               <header className="receipt-rewards__heading"><span>HÓA ĐƠN CỦA BẠN</span><h2>{bill?.orderCode || "Nhận điểm từ bill"}</h2><p>{bill?.branchName || "Gánh Hàng Rong"}</p></header>
+              {!bill && <div className="receipt-rewards__tear" aria-hidden="true" />}
               {vm.loading ? <p role="status" className="receipt-rewards__notice">Đang kiểm tra bill…</p> : bill ? <>
                 <dl className="receipt-rewards__bill">
                   <div><dt>Kênh mua</dt><dd>{bill.source}</dd></div>
@@ -58,6 +59,7 @@ export default function ReceiptLoyaltyPage() {
               {!vm.loading && bill?.status !== "claimed" && <button type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={vm.refresh}>Kiểm tra lại bill</button>}
             </> : <>
               <header className="receipt-rewards__heading"><span>THÀNH VIÊN GÁNH HÀNG RONG</span><h2>Xem điểm bạn đang có</h2><p>Tra cứu số dư điểm. Lịch sử mua và đổi thưởng được bảo vệ trong tài khoản của bạn.</p></header>
+              <div className="receipt-rewards__tear" aria-hidden="true" />
               <form onSubmit={vm.lookup} className="receipt-rewards__form"><label htmlFor="summary-phone">Số điện thoại</label><input id="summary-phone" type="tel" autoComplete="tel" maxLength={16} value={vm.summaryPhone} onChange={(e) => vm.setSummaryPhone(e.target.value)} placeholder="Nhập số điện thoại của bạn" required /><button className="receipt-rewards__primary" disabled={vm.busy}>{vm.busy ? "Đang tra cứu…" : "Xem điểm"}</button></form>
               {vm.summary && <div className="receipt-rewards__points" role="status"><span>Tổng điểm hiện có</span><strong>{number(vm.summary.totalPoints)} <small>điểm</small></strong></div>}
             </>}
