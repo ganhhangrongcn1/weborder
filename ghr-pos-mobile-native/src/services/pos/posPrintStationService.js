@@ -466,7 +466,7 @@ export function buildPrintPayload(job = {}) {
 
   return {
     text,
-    qrUrl: isPartnerReceipt ? buildReceiptFooterQrUrl(customerPhone) : toText(payload.qrUrl),
+    qrUrl: isPartnerReceipt ? toText(payload.receiptLoyaltyUrl) || buildReceiptFooterQrUrl(customerPhone) : toText(payload.qrUrl),
     sourceType: isPartnerReceipt ? "partner" : sourceType,
     alertKey: buildAlertKey(job, payload),
     isQrPayment: isQrPaymentPrintPayload(payload, sourceType),

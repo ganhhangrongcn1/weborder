@@ -6,6 +6,8 @@ export default function useSiteVisitTracking() {
   const location = useLocation();
 
   useEffect(() => {
+    // Bill tokens are bearer capabilities. Never send them to visit analytics.
+    if (/^\/nhan-diem(?:\/|$)/.test(location.pathname)) return undefined;
     let disposed = false;
 
     recordSiteVisit({

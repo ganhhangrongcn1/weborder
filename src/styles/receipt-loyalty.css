@@ -1,0 +1,36 @@
+.receipt-rewards{min-height:100dvh;background:#f8f0e3;color:#422c22;font-family:system-ui,Arial,sans-serif;padding:56px 24px;background-image:radial-gradient(#b7976b18 1px,transparent 1px);background-size:19px 19px}
+.receipt-rewards *{box-sizing:border-box}
+.receipt-rewards__layout{max-width:1100px;margin:auto;display:grid;grid-template-columns:1fr 460px;gap:80px;align-items:start}
+.receipt-rewards__intro{padding-top:36px}
+.receipt-rewards__brand{display:inline-flex;flex-direction:column;font-size:23px;letter-spacing:.05em;font-weight:900;color:#8d4023;text-decoration:none}
+.receipt-rewards__brand span{font-size:11px;letter-spacing:.12em;font-weight:500;margin-top:6px}
+.receipt-rewards__eyebrow{display:block;font-size:11px;letter-spacing:.2em;margin-top:76px;color:#a85e2b;font-weight:750}
+.receipt-rewards h1{font-size:clamp(36px,4.4vw,58px);line-height:1.12;letter-spacing:-.055em;font-weight:850;margin:18px 0 22px;text-wrap:balance}
+.receipt-rewards__intro>p{font-size:16px;line-height:1.8;max-width:370px;color:#7c695c}
+.receipt-rewards__steps{display:flex;flex-wrap:wrap;gap:18px;font-size:11px;font-weight:650;margin:34px 0;color:#9b6c43}
+.receipt-rewards__home{display:inline-block;margin-top:30px;font-size:12px;color:#8d4023;text-decoration:underline;text-underline-offset:4px}
+.receipt-rewards__card{background:#fffdf8;padding:16px 24px 20px;border-radius:22px;box-shadow:0 18px 60px #74513312}
+.receipt-rewards__tabs{display:grid;grid-template-columns:1fr 1fr;background:#f0e8dc;border-radius:12px;padding:4px;gap:4px;margin-bottom:30px}
+.receipt-rewards__tabs button{border:0;background:transparent;color:#8c7969;padding:12px 8px;font-size:13px;font-weight:750;border-radius:9px;cursor:pointer}
+.receipt-rewards__tabs button[aria-selected=true]{background:#563c2c;color:#fff}
+.receipt-rewards__heading>span{font-size:10px;font-weight:750;color:#a78564;letter-spacing:.15em}
+.receipt-rewards h2{font-size:24px;font-weight:800;letter-spacing:-.03em;margin:8px 0;overflow-wrap:anywhere}
+.receipt-rewards__heading p{font-size:12px;color:#8a7768;line-height:1.6;margin:0 0 20px}
+.receipt-rewards__bill{padding:16px 0;border-top:1px dashed #ded1bc;border-bottom:1px dashed #ded1bc;margin:0}
+.receipt-rewards__bill div{display:flex;justify-content:space-between;gap:16px;font-size:12px;margin:8px 0}
+.receipt-rewards__bill dt{color:#8d7c6e;flex-shrink:0}.receipt-rewards__bill dd{text-align:right;margin:0;font-weight:650;overflow-wrap:anywhere}
+.receipt-rewards__points{background:#fbf3e2;border-radius:12px;padding:18px 20px;margin:20px 0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.receipt-rewards__points>span{font-size:12px;max-width:120px}.receipt-rewards__points strong{font-size:30px;color:#ae5726;font-variant-numeric:tabular-nums;letter-spacing:-.04em}.receipt-rewards__points small{font-size:12px;font-weight:500;letter-spacing:0}
+.receipt-rewards__form{display:grid;gap:12px}.receipt-rewards__form label{font-size:13px;font-weight:750}.receipt-rewards input{width:100%;min-height:50px;border:1px solid #ded5c9;border-radius:9px;background:#fff;padding:12px 14px;font:inherit;font-size:16px;color:#422c22}.receipt-rewards input:disabled{opacity:.65}
+.receipt-rewards__form p,.receipt-rewards__form>small{font-size:11px;line-height:1.65;color:#947d6d;margin:0}.receipt-rewards__form>small{text-align:center}
+.receipt-rewards__primary{width:100%;border:0;border-radius:10px;min-height:49px;padding:12px;background:#eaa625;color:#4f300b;font-size:14px;font-weight:800;cursor:pointer;transition:background .2s,transform .2s}.receipt-rewards__primary:hover{background:#f1b63d}.receipt-rewards__primary:active{transform:scale(.99)}.receipt-rewards button:disabled{cursor:wait;opacity:.6}
+.receipt-rewards__confirm{display:grid;gap:12px;text-align:center;background:#faf3e8;border-radius:12px;padding:18px}.receipt-rewards__confirm>span{font-size:12px}.receipt-rewards__confirm>strong{font-size:25px;letter-spacing:.04em}
+.receipt-rewards__success{padding:18px;border-radius:12px;background:#edf4e8;color:#425c33;font-size:14px}.receipt-rewards__success p{font-size:12px;line-height:1.7;margin:8px 0 0}
+.receipt-rewards__notice{background:#f7f1e7;border-radius:10px;padding:16px;font-size:13px;line-height:1.7}.receipt-rewards__error{color:#9c3329;background:#fff0ea;border-radius:10px;padding:13px;font-size:12px;line-height:1.6}
+.receipt-rewards__text-button{display:block;border:0;background:transparent;color:#8c5a2f;text-decoration:underline;text-underline-offset:3px;padding:12px 0;font-size:12px;cursor:pointer}
+.receipt-rewards__banner{display:flex;align-items:center;gap:11px;margin-top:28px;padding:17px 14px;background:linear-gradient(110deg,#f59f20,#f7ce21);border:1px solid #eba217;border-radius:16px;color:#fff;text-decoration:none;box-shadow:0 8px 22px #e8ae2926}
+.receipt-rewards__star{display:grid;place-items:center;flex:0 0 43px;height:43px;border-radius:12px;background:#fff9ec;color:#d47c00;font-size:27px}.receipt-rewards__banner small{display:block;font-size:10px;line-height:1.4}.receipt-rewards__banner strong{display:block;font-size:13px;line-height:1.4;font-weight:850}.receipt-rewards__banner em{display:block;font-style:normal;font-size:8px;margin-top:4px}.receipt-rewards__banner-cta{margin-left:auto;flex-shrink:0;padding:10px;background:#fffdf6;color:#ce7c07;font-size:10px;border-radius:10px}
+.receipt-rewards__account{display:block;text-align:center;font-size:12px;font-weight:650;color:#825333;margin-top:22px;text-decoration:underline;text-underline-offset:4px}.receipt-rewards__support{margin:16px 0 0;font-size:10px;color:#a18c79;text-align:center;line-height:1.8}.receipt-rewards__support a{color:#825333}
+.receipt-rewards :focus-visible{outline:3px solid #bd732f;outline-offset:3px}
+@media(max-width:800px){.receipt-rewards{padding:26px 16px 40px}.receipt-rewards__layout{max-width:480px;grid-template-columns:1fr;gap:28px}.receipt-rewards__intro{padding:0 10px}.receipt-rewards__brand{font-size:20px}.receipt-rewards__eyebrow{margin-top:30px}.receipt-rewards h1{font-size:38px;margin:12px 0}.receipt-rewards__intro>p{font-size:13px;max-width:none;margin:0}.receipt-rewards__steps,.receipt-rewards__home{display:none}.receipt-rewards__card{padding:14px 20px 20px}.receipt-rewards__tabs{margin-bottom:24px}}
+@media(prefers-reduced-motion:reduce){.receipt-rewards *{transition:none!important}}
