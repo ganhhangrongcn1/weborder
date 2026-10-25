@@ -114,6 +114,7 @@ export const CONFIG_KEY_DOMAIN_MAP = {
   ghr_coupons: "coupons",
   ghr_campaigns: "campaigns",
   ghr_shipping_config: "appConfigs",
+  ghr_receipt_template: "appConfigs",
   ghr_zalo_config: "appConfigs",
   ghr_hours: "appConfigs",
   ghr_home_content: "appConfigs",

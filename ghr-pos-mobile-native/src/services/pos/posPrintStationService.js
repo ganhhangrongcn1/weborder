@@ -224,6 +224,8 @@ function buildPartnerReceiptText(receiptText = "", order = {}) {
     "@@CENTER:ganhhangrong.vn",
     "@@CENTER:Hotline: 0933799061",
     "@@RULE",
+    ...(toText(order.branchName || order.branch_name) ? [`Chi nhánh: ${toText(order.branchName || order.branch_name)}`] : []),
+    `Nguồn: ${toText(order.platform || order.partnerSource || order.partner_source) || "Đối tác"}`,
     ...(toText(order.customerName || order.customer_name)
       ? [`Khách: ${toText(order.customerName || order.customer_name)}`]
       : []),

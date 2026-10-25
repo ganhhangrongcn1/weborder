@@ -21,6 +21,8 @@ const printerDeps = {
   './posCashBreakdownService': mock({ getCashBreakdownEntries: () => [] }),
   '../../utils/format': mock({ formatMoney: (value) => `${value}đ` })
 };
+printerDeps['./receiptTemplate'] = mock({ applyReceiptTemplate: (text) => text });
+printerDeps['./posReceiptTemplateService'] = mock({ loadPosReceiptTemplate: async () => ({ enabled: false }) });
 const printer = new vm.SourceTextModule(fs.readFileSync(new URL('../ghr-pos-mobile-native/src/services/pos/posPrinterService.js', import.meta.url), 'utf8'), { context });
 await printer.link((name) => printerDeps[name]); await printer.evaluate();
 const paidText = printer.namespace.buildPosCustomerBillText({

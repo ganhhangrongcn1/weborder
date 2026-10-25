@@ -103,6 +103,7 @@ export const navGroups = [
     items: [
       { id: "store-accounts", label: "Tài khoản & phân quyền", section: "store", sub: "accounts" },
       { id: "store-zalo", label: "Zalo nhận đơn", section: "store", sub: "zalo" },
+      { id: "store-receipt-template", label: "Mẫu in bill", section: "store", sub: "receipt-template", icon: "bag" },
       { id: "store-downloads", label: "Ứng dụng POS", section: "store", sub: "downloads" }
     ]
   }

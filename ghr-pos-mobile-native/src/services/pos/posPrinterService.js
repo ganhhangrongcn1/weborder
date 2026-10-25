@@ -3,6 +3,8 @@ import { NativeModules, Platform } from "react-native";
 
 import { getCashBreakdownEntries } from "./posCashBreakdownService";
 import { formatMoney } from "../../utils/format";
+import { applyReceiptTemplate } from "./receiptTemplate";
+import { loadPosReceiptTemplate } from "./posReceiptTemplateService";
 
 const printerModule = NativeModules.PosPrinter || null;
 const NO_FOOTER_SOURCE_TYPES = new Set([
@@ -196,7 +198,8 @@ export async function stopLocalPrintStationService() {
 export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = "", footerText = "", footerQrUrl = "", customerPhone = "" } = {}) {
   if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
   const safeSourceType = toText(sourceType).toLowerCase();
-  const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN");
+  const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN")
+    || safeSourceType === "qr_order_preparation" || toText(text).includes("CHƯA THANH TOÁN");
   const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType) && !isPreparationTicket;
   const receiptOrderId = toText(text.match(/^@@RECEIPTORDER:(.+)$/m)?.[1]);
   text = text.replace(/^@@RECEIPTORDER:.*\n?/gm, "");
@@ -211,12 +214,18 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
     finally { clearTimeout(timeout); }
   }
   const positioned = placeStampsAfterLoyaltyQr(text, toText(footerText) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_TEXT : ""));
+  const template = await loadPosReceiptTemplate();
+  const combined = [positioned.text, positioned.footerText].filter(Boolean).join("\n");
+  const specialSlip = safeSourceType.includes("payment_qr") || safeSourceType === "pos_payment_momo_qr"
+    || safeSourceType === "item_label" || safeSourceType === "pos_shift_close";
+  const templateText = specialSlip ? combined : applyReceiptTemplate(combined, template, { preparation: isPreparationTicket });
+  const templateApplied = template.enabled && templateText !== combined;
   return printerModule.printReceipt({
-    text: positioned.text,
-    qrUrl,
+    text: templateApplied ? templateText : positioned.text,
+    qrUrl: templateApplied ? (qrUrl || footerQrUrl || buildReceiptFooterQrUrl(customerPhone)) : qrUrl,
     sourceType: safeSourceType || sourceType,
-    footerText: positioned.footerText,
-    footerQrUrl: toText(footerQrUrl) || (shouldUseDefaultFooter ? buildReceiptFooterQrUrl(customerPhone) : "")
+    footerText: templateApplied ? "" : positioned.footerText,
+    footerQrUrl: templateApplied ? "" : toText(footerQrUrl) || (shouldUseDefaultFooter ? buildReceiptFooterQrUrl(customerPhone) : "")
   });
 }
 

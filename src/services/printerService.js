@@ -1,6 +1,9 @@
 import buildStampReceiptSvg from "./stampReceiptService.js";
 import { readStampSummary } from "./stampProgramService.js";
 import { prepareReceiptLoyaltyUrl } from "./receiptLoyaltyService.js";
+import { getReceiptTemplate, loadReceiptTemplate } from "./receiptTemplateService.js";
+import { applyReceiptTemplate } from "../../ghr-pos-mobile-native/src/services/pos/receiptTemplate.js";
+import buildTemplatePrintHtml from "./receiptTemplateHtml.js";
 const PRINTER_MODE = {
   webPrint: "webPrint",
   bridge: "bridge"
@@ -208,6 +211,8 @@ function normalizeReceiptOrder(order = {}, config = {}) {
     branchPhone: toText(order.branchPhone || order.branch_phone || metadata.branchPhone || raw.branch_phone),
     customerName: toText(order.customerName || order.customer_name || "Khách"),
     customerPhone: toText(order.customerPhone || order.customer_phone),
+    cashierName: toText(order.cashierName || order.cashier_name || metadata.cashierName),
+    pagerNumber: toText(order.pagerNumber || order.pager_number || metadata.pagerNumber),
     stampSummary: order.stampSummary,
     customerAddress: toText(order.customerAddress || order.address || metadata.address || rawMetadata.address),
     fulfillmentType: toText(order.fulfillmentType || order.fulfillment_type || metadata.fulfillmentType),
@@ -270,6 +275,8 @@ function getReceiptPaymentLabel(receipt = {}) {
 
 function pushOrderMeta(lines, receipt, width) {
   if (receipt.branchName) lines.push(`Chi nhánh: ${receipt.branchName}`);
+  if (receipt.cashierName) lines.push(`Thu ngân: ${receipt.cashierName}`);
+  if (receipt.pagerNumber) lines.push(`Thẻ rung: ${receipt.pagerNumber}`);
   lines.push(`Nguồn: ${receipt.platform || "Website"}`);
   lines.push(`Giờ: ${formatDateTime(receipt.createdAt)}`);
   lines.push("@@SPACE");
@@ -332,6 +339,12 @@ function pushPartnerLoyaltyPrompt(lines, expectedEarnPoints = 0) {
 function buildReceiptText(order = {}, options = {}) {
   const config = getPrinterConfig(options);
   const receipt = normalizeReceiptOrder(order, options);
+  const template = options.receiptTemplate || getReceiptTemplate();
+  if (template.enabled && !template.showCustomer) {
+    receipt.customerName = "";
+    receipt.customerPhone = "";
+    receipt.customerAddress = "";
+  }
   const width = config.receiptWidthMm === 58 ? 32 : 48;
   const showMoney = !isPartnerAppReceipt(receipt);
   const receiptPaid = isReceiptPaid(receipt);
@@ -396,7 +409,9 @@ function buildReceiptText(order = {}, options = {}) {
     lines.splice(qrIndex < 0 ? lines.length : qrIndex + 2, 0, ...stampLines);
   }
 
-  return lines.join("\n");
+  return applyReceiptTemplate(lines.join("\n"), options.receiptTemplate || getReceiptTemplate(), {
+    preparation: isPreparationTicket, includeLoyalty: includeLoyaltyFooter, expectedEarnPoints: receipt.expectedEarnPoints
+  });
 }
 
 function escapeHtml(value = "") {
@@ -416,6 +431,12 @@ function qrImageUrl(value = LOYALTY_QR_URL) {
 
 function buildReceiptHtml(order = {}, options = {}) {
   const config = getPrinterConfig(options);
+  const template = options.receiptTemplate || getReceiptTemplate();
+  if (template.enabled) {
+    return buildTemplatePrintHtml(buildReceiptText(order, options), {
+      qrImage: config.loyaltyQrImage || qrImageUrl(config.loyaltyUrl), width: config.receiptWidthMm
+    });
+  }
   const receipt = normalizeReceiptOrder(order, options);
   const showMoney = !isPartnerAppReceipt(receipt);
   const total = getReceiptTotal(receipt);
@@ -993,6 +1014,7 @@ export async function printCustomerBill(order = {}, options = {}) {
   const printWindow = !androidBridge && config.mode !== PRINTER_MODE.bridge
     ? window.open("", "_blank", "width=420,height=720") : undefined;
   if (printWindow === null) return { ok: false, message: "Trình duyệt đang chặn popup in bill." };
+  try { await loadReceiptTemplate(); } catch { /* Preserve printing with the last known template. */ }
   if (order.id && (isPartnerAppReceipt(normalizeReceiptOrder(order)) || isReceiptPaid(normalizeReceiptOrder(order)))) {
     try {
       const url = await prepareReceiptLoyaltyUrl(order);
