@@ -58,6 +58,13 @@
 
 ## Triển khai
 
+### Điều chỉnh theo phản hồi giao diện và kiểm tra tem
+
+- Bỏ khối giới thiệu dài bên trái, giữ tên thương hiệu nhỏ; căn giữa khung voucher, thêm mép răng cưa và hai khuyết ở đường xé. Bỏ dòng hỗ trợ nhỏ dưới cùng theo ảnh anh đánh dấu.
+- Đọc lại hàm tem production: nguồn tem gắn số điện thoại và ngày mua, tối đa 1 tem/SĐT/ngày. Hàm đối tác có nhánh giữ nguyên tem khi khách đã có nguồn tem xác nhận nhận điểm cùng số.
+- Khoảng trống cần xử lý trước kích hoạt: claim QR không OTP với số mới chưa được bảo đảm tạo nguồn tem, vì trigger tem chỉ ghi khi actor là operator. Không coi kiểm tra điểm đã đạt là bằng chứng đã nối đủ tem. Cần bổ sung đường nhận tem tin cậy trong cùng giao dịch nhận QR, giữ nguyên hạn mức/ngày mua và chặn trùng; chưa tự sửa quy tắc tem trong lượt chỉnh UI này.
+- Production chưa thay đổi; các sửa UI này không sửa hàm tem hoặc APK. Cần kiểm tra riêng cả điểm + tem trước kích hoạt.
+
 - PR: https://github.com/ganhhangrongcn1/weborder/pull/12. Nhánh phát hành chỉ gồm 18 file của tính năng.
 - Chưa merge main, chưa cài migration hay kích hoạt production. Truy vấn cuối xác nhận schema production chưa có `receipt_private` và không còn đơn thử.
 - API Vercel từ chối `target=preview`. Lượt tạo preview không có target bị auto-review chặn vì có nguy cơ triển khai production chưa được duyệt. Không thử bypass, không tự chuyển thành production. Cần anh duyệt rõ triển khai web production + Supabase trước bước này.

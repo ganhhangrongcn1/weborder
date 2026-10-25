@@ -26,20 +26,14 @@ export default function ReceiptLoyaltyPage() {
   return (
     <main className="receipt-rewards">
       <div className="receipt-rewards__layout">
-        <section className="receipt-rewards__intro">
-          <Link to="/home" className="receipt-rewards__brand">GÁNH HÀNG RONG<span>Thân quen từng lần ghé</span></Link>
-          <span className="receipt-rewards__eyebrow">MUA NGON · NHẬN ĐIỂM</span>
-          <h1>Giữ bill nhỏ.<br />Nhận niềm vui lớn.</h1>
-          <p>Điểm từ đơn vừa mua, dành cho lần ghé tiếp theo. Nhận ngay bằng số điện thoại của bạn, không cần OTP.</p>
-          <div className="receipt-rewards__steps"><span>01 Quét bill</span><span>02 Xác nhận số</span><span>03 Nhận điểm</span></div>
-          <Link className="receipt-rewards__home" to="/home">← Ghé website Gánh Hàng Rong</Link>
-        </section>
+        <Link to="/home" className="receipt-rewards__brand">GÁNH HÀNG RONG</Link>
 
         <section className="receipt-rewards__card" aria-label="Điểm thành viên">
           <div className="receipt-rewards__tabs" role="tablist" aria-label="Chức năng">
             <button id="receipt-claim-tab" type="button" role="tab" aria-selected={tab === "claim"} aria-controls="receipt-panel" onClick={() => { setTab("claim"); vm.clearError(); }}>Tích điểm đơn</button>
             <button id="receipt-summary-tab" type="button" role="tab" aria-selected={tab === "summary"} aria-controls="receipt-panel" onClick={() => { setTab("summary"); vm.clearError(); }}>Xem điểm</button>
           </div>
+          <div className="receipt-rewards__voucher">
           <div id="receipt-panel" role="tabpanel" aria-labelledby={tab === "claim" ? "receipt-claim-tab" : "receipt-summary-tab"}>
             {tab === "claim" ? <>
               <header className="receipt-rewards__heading"><span>HÓA ĐƠN CỦA BẠN</span><h2>{bill?.orderCode || "Nhận điểm từ bill"}</h2><p>{bill?.branchName || "Gánh Hàng Rong"}</p></header>
@@ -71,7 +65,7 @@ export default function ReceiptLoyaltyPage() {
           {(vm.error || (tab === "claim" && vm.loadError)) && <p className="receipt-rewards__error" role="alert">{vm.error || vm.loadError}</p>}
           <Link to="/review-rewards" className="receipt-rewards__banner"><span className="receipt-rewards__star" aria-hidden="true">★</span><span><small>THƯỞNG ĐIỂM ĐÁNH GIÁ</small><strong>Đánh giá ngay —<br />Nhận điểm liền tay</strong><em>Đơn đối tác · Google Maps</em></span><span className="receipt-rewards__banner-cta">Xem ngay ›</span></Link>
           <Link className="receipt-rewards__account" to="/profile">Đăng nhập để xem lịch sử và dùng điểm →</Link>
-          <p className="receipt-rewards__support">Cần hỗ trợ bill hoặc nhập nhầm số? <a href="tel:0933799061">0933 799 061</a></p>
+          </div>
         </section>
       </div>
     </main>
