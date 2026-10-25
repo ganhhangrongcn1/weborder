@@ -1,5 +1,6 @@
 import buildStampReceiptSvg from "./stampReceiptService.js";
 import { readStampSummary } from "./stampProgramService.js";
+import { prepareReceiptLoyaltyUrl } from "./receiptLoyaltyService.js";
 const PRINTER_MODE = {
   webPrint: "webPrint",
   bridge: "bridge"
@@ -194,6 +195,7 @@ function normalizeReceiptOrder(order = {}, config = {}) {
   );
 
   return {
+    id: toText(order.id),
     orderCode: toText(order.displayOrderCode || order.orderCode || order.order_code || order.id),
     platform: source,
     sourceType: toText(order.sourceType || order.source || metadata.source),
@@ -988,6 +990,14 @@ export async function printCustomerBill(order = {}, options = {}) {
   const printWindow = !androidBridge && config.mode !== PRINTER_MODE.bridge
     ? window.open("", "_blank", "width=420,height=720") : undefined;
   if (printWindow === null) return { ok: false, message: "Trình duyệt đang chặn popup in bill." };
+  if (order.id && (isPartnerAppReceipt(normalizeReceiptOrder(order)) || isReceiptPaid(normalizeReceiptOrder(order)))) {
+    try {
+      const url = await prepareReceiptLoyaltyUrl(order);
+      if (url) options = { ...options, loyaltyUrl: url };
+    } catch {
+      // Keep printing available. The legacy QR remains usable during rollout.
+    }
+  }
   const phone = order.customerPhone || order.customer_phone;
   if (phone && !order.stampSummary) {
     try { order = { ...order, stampSummary: await readStampSummary(phone, { kitchen: true, force: true }) }; }

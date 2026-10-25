@@ -5,13 +5,11 @@ import { CustomerButton, CustomerCard } from "../../components/customer/Customer
 import OrderStatusSheet from "../../pages/customer/tracking/OrderStatusSheet.jsx";
 import { formatMoney } from "../../utils/format.js";
 import {
-  claimPartnerOrderPoints,
   getCanonicalOrderBranchName,
   getPartnerOrdersByPhone,
   getOrderSourceBadge,
   mergeCustomerLookupOrders
 } from "../../services/partnerOrderService.js";
-import { calculateOrderPoints, getLoyaltyRuleConfig } from "../../services/loyaltyService.js";
 import { orderStorage } from "../../services/orderService.js";
 import { orderRepository } from "../../services/repositories/orderRepository.js";
 import {
@@ -94,27 +92,6 @@ function markOrdersPointStatusFromRpc(orders = [], statusMap = new Map(), loyalt
   });
 }
 
-function createClaimedPointStatusMap(previousMap = new Map(), order = {}) {
-  const nextMap = new Map(previousMap);
-  [
-    order?.id,
-    order?.orderCode,
-    order?.order_code,
-    order?.displayOrderCode,
-    order?.display_order_code,
-    order?.partnerOrderId,
-    order?.partner_order_id,
-    order?.partnerOrderCode,
-    order?.partner_order_code
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean)
-    .forEach((key) => {
-      nextMap.set(key, "claimed");
-    });
-  return nextMap;
-}
-
 export default function Tracking({
   navigate,
   userProfile,
@@ -128,7 +105,6 @@ export default function Tracking({
   isSessionRestoring = false,
   branches = [],
   demoLoyalty,
-  setDemoLoyalty,
   onReorder,
   onOrderSheetVisibilityChange,
   getStoreBlockNotice,
@@ -143,12 +119,11 @@ export default function Tracking({
   const [isHistoryOrdersLoading, setIsHistoryOrdersLoading] = useState(false);
   const [partnerOrders, setPartnerOrders] = useState([]);
   const [isPartnerOrdersLoading, setIsPartnerOrdersLoading] = useState(false);
-  const [claimingOrderId, setClaimingOrderId] = useState("");
   const [cancellingOrderId, setCancellingOrderId] = useState("");
   const [cancelOrderMessage, setCancelOrderMessage] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [orderFilter, setOrderFilter] = useState("all");
-  const [summaryRefreshKey, setSummaryRefreshKey] = useState(0);
+  const [summaryRefreshKey] = useState(0);
   const [orderSummary, setOrderSummary] = useState({
     totalOrders: 0,
     totalSpent: 0,
@@ -461,21 +436,6 @@ export default function Tracking({
     const receivedAmount = Number(order?.netReceivedAmount ?? order?.loyaltyEligibleAmount ?? 0);
     return order?.sourceType === "partner" && receivedAmount > 0 ? "Thực nhận" : "Tổng tiền";
   };
-  const getClaimablePoints = (order) => {
-    const isPartnerOrder = order?.sourceType === "partner";
-    const amount = Number(
-      isPartnerOrder
-        ? order?.loyaltyEligibleAmount || order?.netReceivedAmount || 0
-        : order?.pointsBaseAmount || order?.totalAmount || order?.total || 0
-    );
-    return Math.max(0, Number(calculateOrderPoints(amount, getLoyaltyRuleConfig()) || 0));
-  };
-  const getOrderRewardPoints = (order) => {
-    const expectedPoints = Number(order?.expectedEarnPoints || 0);
-    if (expectedPoints > 0) return expectedPoints;
-    const savedPoints = Number(order?.pointsEarned || 0);
-    return savedPoints > 0 ? savedPoints : getClaimablePoints(order);
-  };
   const getOrderBranchName = (order) => {
     return getCanonicalOrderBranchName(order, branches);
   };
@@ -520,7 +480,7 @@ export default function Tracking({
       };
     }
     return {
-      label: "Chưa tích điểm",
+      label: order?.sourceType === "partner" ? "Quét QR trên bill để nhận điểm" : "Chưa tích điểm",
       className: "bg-yellow-400 text-white"
     };
   };
@@ -552,104 +512,6 @@ export default function Tracking({
       disposed = true;
     };
   }, [canAccessFullOrderHistory, currentPhone, summaryRefreshKey]);
-
-  const updateClaimedPartnerOrder = (orderId, patch = {}) => {
-    setPartnerOrders((items) => items.map((order) => (
-      String(order.id) === String(orderId)
-        ? { ...order, pointStatus: "claimed", ...patch }
-        : order
-    )));
-  };
-
-  const handleClaimPartnerPoints = async (event, order) => {
-    event.stopPropagation();
-    if (!canAccessFullOrderHistory || !currentPhone || !order?.id) return;
-
-    const claimKey = order.id || order.orderCode;
-    setClaimingOrderId(claimKey);
-    try {
-      const result = await claimPartnerOrderPoints({
-        orderId: order.id,
-        orderCode: order.orderCode,
-        phone: currentPhone
-      });
-
-      if (result.alreadyClaimed) {
-        updateClaimedPartnerOrder(order.id);
-        setCurrentOrderPointStatusMap((previousMap) => createClaimedPointStatusMap(previousMap, order));
-        setSummaryRefreshKey((key) => key + 1);
-        setSelectedOrder((selected) => (
-          String(selected?.id || "") === String(order.id)
-            ? { ...selected, pointStatus: "claimed" }
-            : selected
-        ));
-        setServiceNotice?.({
-          title: "Đơn đã được cộng điểm",
-          description: result.message || "Điểm của đơn này đã được ghi nhận trước đó.",
-          badge: "Tích điểm"
-        });
-        return;
-      }
-
-      if (!result.ok) {
-        if (result.pointStatus === "expired") {
-          setPartnerOrders((items) => items.map((item) => (
-            String(item.id) === String(order.id)
-              ? { ...item, pointStatus: "expired" }
-              : item
-          )));
-          setSummaryRefreshKey((key) => key + 1);
-          setSelectedOrder((selected) => (
-            String(selected?.id || "") === String(order.id)
-              ? { ...selected, pointStatus: "expired" }
-              : selected
-          ));
-        }
-        setServiceNotice?.({
-          title: "Chưa cộng được điểm",
-          description: result.message || "Bạn thử lại sau một chút nhé.",
-          badge: "Tích điểm"
-        });
-        return;
-      }
-
-      updateClaimedPartnerOrder(order.id);
-      setCurrentOrderPointStatusMap((previousMap) => createClaimedPointStatusMap(previousMap, order));
-      setSummaryRefreshKey((key) => key + 1);
-      setSelectedOrder((selected) => (
-        String(selected?.id || "") === String(order.id)
-          ? { ...selected, pointStatus: "claimed" }
-          : selected
-      ));
-      setDemoLoyalty?.({
-        ...(demoLoyalty || {}),
-        totalPoints: result.totalPoints,
-        pointHistory: [
-          {
-            id: `partner-point-${order.id}`,
-            type: "PARTNER_ORDER_EARN",
-            orderId: order.orderCode,
-            displayOrderCode: order.displayOrderCode || order.orderCode,
-            partnerOrderCode: order.orderCode,
-            source: order.partnerSource || order.source || "",
-            points: result.points,
-            amount: getOrderDisplayAmount(order),
-            title: `Cộng điểm từ đơn ${order.displayOrderCode || order.orderCode}`,
-            note: getOrderBranchName(order),
-            createdAt: new Date().toISOString()
-          },
-          ...((demoLoyalty?.pointHistory || []).filter((entry) => String(entry?.id || "") !== `partner-point-${order.id}`))
-        ]
-      });
-      setServiceNotice?.({
-        title: "Đã cộng điểm",
-        description: `Bạn vừa nhận ${result.points.toLocaleString("vi-VN")} điểm từ đơn ${order.displayOrderCode || order.orderCode}.`,
-        badge: "Thành công"
-      });
-    } finally {
-      setClaimingOrderId("");
-    }
-  };
 
   const closeSelectedOrder = () => {
     if (typeof window !== "undefined") {
@@ -974,9 +836,6 @@ export default function Tracking({
             const reviewRewardPoints = Number(reviewRewardDashboard?.settings?.reward_points || 5000);
             const sourceBadge = getOrderSourceBadge(order);
             const pointBadge = getPointLabel(order);
-            const canClaimPoints = canAccessFullOrderHistory && isPartnerOrder && String(order.pointStatus || "").toLowerCase() === "pending";
-            const isClaiming = String(claimingOrderId) === String(order.id || order.orderCode);
-            const rewardPoints = getOrderRewardPoints(order);
             const branchName = getOrderBranchName(order);
             const orderItems = Array.isArray(order?.items) ? order.items : [];
             const firstItemName = String(orderItems[0]?.name || "").trim();
@@ -1010,7 +869,7 @@ export default function Tracking({
                 : isReadyForPickup
                   ? "store"
                   : "clock";
-            const isPointBadgeInformational = ["cancelled", "awaiting_payment"].includes(statusMeta.key) ||
+            const isPointBadgeInformational = isPartnerOrder || ["cancelled", "awaiting_payment"].includes(statusMeta.key) ||
               ["claimed", "waiting_data", "expired"].includes(String(order.pointStatus || "").toLowerCase());
 
             if (!canAccessFullOrderHistory) {
@@ -1154,17 +1013,7 @@ export default function Tracking({
                       <strong>{formatMoney(getOrderDisplayAmount(order))}</strong>
                     </div>
                     <div className="orders-card__actions">
-                    {canClaimPoints ? (
-                      <button
-                        type="button"
-                        disabled={isClaiming}
-                        onClick={(event) => handleClaimPartnerPoints(event, order)}
-                        className="orders-card__claim"
-                      >
-                        <Icon name="gift" size={14} className="shrink-0" />
-                        {isClaiming ? "Đang nhận…" : `Nhận +${rewardPoints.toLocaleString("vi-VN")}`}
-                      </button>
-                    ) : pointBadge ? (
+                    {pointBadge ? (
                       <span className={`orders-card__points ${pointBadge.className}`}>
                         <Icon name={String(order.pointStatus || "").toLowerCase() === "claimed" ? "check" : "clock"} size={14} className="shrink-0" />
                         {pointBadge.label}
