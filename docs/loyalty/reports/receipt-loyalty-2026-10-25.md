@@ -22,11 +22,12 @@
 
 1. Đã khảo sát mã nguồn và schema/hàm production bằng truy vấn đọc. Chưa thay đổi production ở thời điểm tạo ghi chép này.
 2. Đã xây cơ chế token, điều kiện thanh toán, trang riêng và đường in tương thích.
-3. Build/encoding web đã đạt. Kiểm tra SQL trong một transaction rồi ROLLBACK đạt 7 tình huống: chưa trả, trả trước hoàn tất, chống nhận lại/in lại/hoàn tất, hủy thu hồi, đối tác tự cộng khi chuẩn bị, đối tác thiếu số/chờ đối soát rồi nhận QR, giữ trạng thái đã nhận sau hết hạn.
+3. Build/encoding web đã đạt trên main mới nhất. SQL cuối trong một transaction rồi ROLLBACK đạt 11 tình huống: chưa trả; trả trước hoàn tất; không tăng điểm khi anon sửa số điểm trên đơn; chống nhận lại/in lại/hoàn tất; hủy thu hồi; đối tác tự cộng khi chuẩn bị; thiếu số/chờ đối soát rồi nhận QR; giữ trạng thái đã nhận sau hết hạn; chặn bill hết hạn; token không tồn tại; chặn tự động phát điểm khi anon chèn đơn đối tác.
 4. Khách `anon` nhận được qua token trong transaction thử, không có quyền issue token/đọc bảng private. Đã xác nhận không còn đơn thử sau rollback.
 5. POS Jest 3 bộ/15 kiểm tra đạt; kiểm tra gói QR + in lại + tem đạt. Bộ `scripts/receipt-loyalty.test.mjs` kiểm tra QR bill trả tiền, định danh canonical, phiếu làm món không tạo QR, giữ link server, trạng thái đã nhận/hủy/chờ đối soát, banner và link tài khoản đạt.
 6. Đã xem UI local bằng trình duyệt (bản build), trang độc lập không footer, banner theo ảnh. QR nhạy cảm được tạo bằng thư viện tại chỗ, không gửi token tới dịch vụ tạo ảnh ngoài; bỏ token khỏi thống kê lượt truy cập.
 7. Cơ chế mới có công tắc `receipt_private.activation.enabled`, mặc định tắt khi cài migration. Chỉ bật sau khi web production và đường in sẵn sàng. Không yêu cầu OTP và không cấp quyền đăng nhập từ QR.
+   - Kiểm tra RLS hiện hữu phát hiện bảng đơn có quyền ghi runtime rộng. Không thay toàn bộ RLS; trigger mới kiểm tra nguồn staff/service tin cậy và chốt số điểm, căn cứ tiền, rule, số nhận vào bảng private. Endpoint claim không tin số điểm/recipient được sửa trực tiếp trên bảng đơn.
 8. APK đã build thành công: `ghr-pos-mobile-native/releases/GHR-POS-0.4.30.apk`, package `vn.ghr.posmobile`, versionCode 61; ABI arm64-v8a/armeabi-v7a. Chữ ký SHA-256 `728d5843ae0c8883171fdae3fd65b6375810d27ed946297c5cee3a51b62224ea`. APK SHA-256 `CBE0B44B5F858B27ACE5784DC7C9B92AE8176C3A87F424188D8FD342CAE1E03F`.
 
 ## Vận hành và tương thích
@@ -56,4 +57,7 @@
 
 ## Triển khai
 
-Chưa kích hoạt. Mọi checkpoint phải ghi commit, kiểm tra và trạng thái deploy ở đây.
+- PR: https://github.com/ganhhangrongcn1/weborder/pull/12. Nhánh phát hành chỉ gồm 18 file của tính năng.
+- Chưa merge main, chưa cài migration hay kích hoạt production. Truy vấn cuối xác nhận schema production chưa có `receipt_private` và không còn đơn thử.
+- API Vercel từ chối `target=preview`. Lượt tạo preview không có target bị auto-review chặn vì có nguy cơ triển khai production chưa được duyệt. Không thử bypass, không tự chuyển thành production. Cần anh duyệt rõ triển khai web production + Supabase trước bước này.
+- APK cần cài lên máy quán sau khi web/backend đã sẵn sàng. Giấy in thật và hành vi tại quán chưa được xác nhận.

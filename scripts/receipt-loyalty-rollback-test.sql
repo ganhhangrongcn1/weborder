@@ -27,8 +27,11 @@ begin
   insert into receipt_test_results values('paid_before_completion_available',true);
 
   execute 'set local role anon';
+  update public.orders set expected_earn_points=999999 where id=test_order_id;
   view_value:=public.claim_receipt_loyalty(token_value,'0999999901');
   execute 'reset role';
+  if (view_value->>'points')::integer=999999 then raise exception 'Claim trusted client-writable points'; end if;
+  insert into receipt_test_results values('anonymous_order_tampering_cannot_inflate_points',true);
   if view_value->>'status'<>'claimed' or view_value->>'maskedPhone'<>'•••••••901' then raise exception 'Claim failed: %',view_value; end if;
   perform public.claim_receipt_loyalty(token_value,'0999999902');
   perform receipt_private.issue('ORDER',test_order_id);
@@ -104,6 +107,16 @@ begin
     if sqlerrm='Unknown token incorrectly succeeded' then raise; end if;
   end;
   insert into receipt_test_results values('unknown_token_blocked',true);
+
+  partner_id:=gen_random_uuid(); po.id:=partner_id; po.nexpos_order_id:='RECEIPT-ROLLBACK-'||partner_id;
+  po.order_code:=po.nexpos_order_id; po.display_order_code:=po.order_code;
+  execute 'set local role anon';
+  insert into public.partner_orders select po.*;
+  execute 'reset role';
+  if exists(select 1 from receipt_private.receipts where source_id=partner_id::text) then
+    raise exception 'Untrusted partner insert obtained a receipt';
+  end if;
+  insert into receipt_test_results values('anonymous_partner_insert_cannot_auto_award',true);
 end;
 $$;
 select jsonb_agg(jsonb_build_object('scenario',scenario,'passed',passed)) as test_results from receipt_test_results;

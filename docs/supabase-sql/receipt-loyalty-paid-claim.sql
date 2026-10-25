@@ -9,6 +9,11 @@ create table if not exists receipt_private.receipts (
   paid_at timestamptz not null default now(),
   expires_at timestamptz not null default now() + interval '7 days',
   created_at timestamptz not null default now(),
+  earned_points integer not null default 0,
+  base_amount numeric not null default 0,
+  phone_key text not null default '',
+  rule_version_id uuid,
+  details jsonb not null default '{}'::jsonb,
   primary key(source_type, source_id)
 );
 alter table receipt_private.receipts enable row level security;
@@ -30,7 +35,8 @@ revoke all on receipt_private.activation,receipt_private.failures from public,an
 create or replace function receipt_private.staff_allowed(p_branch uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
   select coalesce(auth.jwt()->>'role','')='service_role'
-    or (session_user in ('postgres','supabase_admin') and auth.uid() is null)
+    or (session_user in ('postgres','supabase_admin') and auth.uid() is null
+      and coalesce(current_setting('role',true),'none') not in ('anon','authenticated'))
     or exists(select 1 from public.profiles p where p.auth_user_id=auth.uid()
       and lower(p.status)='active'
       and (p.role='admin' or (p.role in ('staff','kitchen') and p.branch_uuid=p_branch)));
@@ -67,6 +73,9 @@ begin
   end if;
   select * into r from receipt_private.receipts where source_type=p_source and source_id=p_id for update;
   if not found then return; end if;
+  -- Never trust client-writable order fields for the value/recipient of a claim.
+  points_value:=r.earned_points; amount_value:=r.base_amount;
+  rule_id:=r.rule_version_id; original_phone:=r.phone_key;
   cancelled:=state_value in ('cancelled','canceled','cancel','refunded','refund');
   select * into previous from public.loyalty_ledger
     where source_type=p_source and source_order_id=p_id and action=action_value and action_version=1;
@@ -116,15 +125,28 @@ $$;
 
 create or replace function receipt_private.issue(p_source text,p_id text)
 returns text language plpgsql security definer set search_path = '' as $$
-declare result_token text; order_at timestamptz;
+declare result_token text; order_at timestamptz; snapshot jsonb; display_value jsonb; phone_value text;
 begin
   if p_source='ORDER' then
-    select created_at into order_at from public.orders where id=p_id for update;
-  else select coalesce(order_time,created_at) into order_at from public.partner_orders where id::text=p_id for update;
+    select created_at,to_jsonb(o) into order_at,snapshot from public.orders o where id=p_id for update;
+  else select coalesce(order_time,created_at),to_jsonb(po) into order_at,snapshot from public.partner_orders po where id::text=p_id for update;
   end if;
   if order_at is null then return null; end if;
-  insert into receipt_private.receipts(source_type,source_id,expires_at)
-    values(p_source,p_id,order_at+interval '7 days') on conflict do nothing;
+  phone_value:=coalesce(public.normalize_vietnam_phone(coalesce(nullif(snapshot->>'customer_phone_key',''),snapshot->>'customer_phone')),'');
+  display_value:=jsonb_build_object('orderCode',coalesce(nullif(snapshot->>'display_order_code',''),
+      nullif(snapshot->'metadata'->>'displayOrderCode',''),snapshot->>'order_code'),
+    'branchName',snapshot->>'branch_name','createdAt',order_at,
+    'totalAmount',coalesce((snapshot->>'total_amount')::numeric,0),
+    'pointsBaseAmount',coalesce((snapshot->>'points_base_amount')::numeric,0),
+    'source',coalesce(snapshot->>'partner_source','Gánh Hàng Rong'));
+  insert into receipt_private.receipts(source_type,source_id,expires_at,earned_points,base_amount,phone_key,rule_version_id,details)
+    values(p_source,p_id,order_at+interval '7 days',coalesce((snapshot->>'expected_earn_points')::integer,0),
+      coalesce((snapshot->>'points_base_amount')::numeric,0),phone_value,(snapshot->>'loyalty_rule_version_id')::uuid,display_value)
+    on conflict(source_type,source_id) do update set
+      earned_points=excluded.earned_points,base_amount=excluded.base_amount,
+      rule_version_id=excluded.rule_version_id,details=excluded.details,
+      phone_key=coalesce(nullif(receipt_private.receipts.phone_key,''),excluded.phone_key)
+    where receipt_private.receipts.earned_points<=0;
   perform receipt_private.settle(p_source,p_id);
   select token into result_token from receipt_private.receipts where source_type=p_source and source_id=p_id;
   delete from receipt_private.failures where source_type=p_source and source_id=p_id;
@@ -155,6 +177,7 @@ begin
     into details,state_value,points_value,source_phone from public.partner_orders where id::text=r.source_id;
   end if;
   if details is null then raise exception 'Bill không còn khả dụng. Vui lòng liên hệ quán.'; end if;
+  details:=r.details; points_value:=r.earned_points; source_phone:=r.phone_key;
   select * into earned from public.loyalty_ledger where source_type=r.source_type
     and source_order_id=r.source_id and action in ('SETTLE_EARN','CLAIM_PARTNER_EARN') and action_version=1;
   status_value:=case when state_value in ('cancelled','canceled','cancel','refunded','refund') then 'cancelled'
@@ -208,9 +231,10 @@ create or replace function receipt_private.order_changed()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if not (select enabled from receipt_private.activation where singleton) then return new; end if;
+  if not receipt_private.staff_allowed(new.branch_uuid) then return new; end if;
   if pg_trigger_depth()>2 then return new; end if;
   if exists(select 1 from receipt_private.receipts where source_type='ORDER' and source_id=new.id) then
-    perform receipt_private.settle('ORDER',new.id);
+    perform receipt_private.issue('ORDER',new.id);
   elsif receipt_private.staff_allowed(new.branch_uuid)
     and lower(coalesce(new.metadata->>'paymentStatus',new.metadata->>'payment_status','')) in ('paid','converted','completed','success')
     and lower(new.status) not in ('cancelled','canceled','cancel','refunded','refund') then
@@ -228,11 +252,12 @@ create or replace function receipt_private.partner_changed()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if not (select enabled from receipt_private.activation where singleton) then return new; end if;
+  if not receipt_private.staff_allowed(new.branch_uuid) then return new; end if;
   if pg_trigger_depth()>2 then return new; end if;
   -- Merchant contract: partner orders arrive paid; no completion or print wait.
   -- Existing rows are not bulk-awarded or silently backfilled on unrelated updates.
   if exists(select 1 from receipt_private.receipts where source_type='PARTNER_ORDER' and source_id=new.id::text) then
-    perform receipt_private.settle('PARTNER_ORDER',new.id::text);
+    perform receipt_private.issue('PARTNER_ORDER',new.id::text);
   elsif new.created_at >= (select started_at from receipt_private.activation where singleton)
     and lower(coalesce(new.order_status,'')) not in ('cancelled','canceled','cancel','refunded','refund') then
     perform receipt_private.issue('PARTNER_ORDER',new.id::text);

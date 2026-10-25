@@ -201,7 +201,7 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
   const receiptOrderId = toText(text.match(/^@@RECEIPTORDER:(.+)$/m)?.[1]);
   text = text.replace(/^@@RECEIPTORDER:.*\n?/gm, "");
   if (shouldUseDefaultFooter && receiptOrderId && !footerQrUrl) {
-    const controller = new AbortController();
+    const controller = new globalThis.AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
       const { supabase } = require("../supabase/client");
