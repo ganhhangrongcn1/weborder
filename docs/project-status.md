@@ -4,7 +4,17 @@ Ngày rà soát: **22/10/2026**. Phạm vi: mã nguồn và tài liệu trong wo
 
 Danh sách này phân biệt phần đã viết nhưng chưa nối vào app, phần còn thiếu theo roadmap, công việc cần xác minh vận hành và tính năng đang tắt có chủ đích. Chưa kiểm tra lại database production, workflow n8n, bản web đang phục vụ hoặc máy POS tại quầy. Trạng thái production trong các báo cáo cũ chỉ là bằng chứng tại ngày báo cáo.
 
-## Cập nhật mới nhất — 25/10/2026: Testing7, chờ duyệt11quyền, tạm dừng
+## Cập nhật mới nhất — 25/10/2026: phiên bản7 đã gửi xét duyệt
+
+- Đã hoàn tất email xác thực, Điều khoản sử dụng, bước3mô tả tính năng và bước4gửi xét duyệt. Zalo xác nhận **Phiên bản7 đang được xét duyệt**, thời gian submit hiển thị08:40:03 25/10/2026. Chưa được duyệt và chưa Publish/Live.
+- [Ảnh xác nhận phiên bản7](checklist/reports/assets/attendance-review-2026-10-25/version7-submitted.jpg), [báo cáo gửi duyệt](checklist/reports/attendance-review-attempt-2026-10-25.md), [Điều khoản nguồn](checklist/attendance-miniapp-terms-2026-10-25.md).
+- Đã lấy Open API key bằng cách lưu URL webhook thực trên parent appZalo, để trống IP Access; không thuê VPS. Key lưu trong Supabase Secrets, không nằm trong Git/frontend. URL đã lưu và đọc lại trên Zalo.
+- Đã triển khai Edge Function `attendance-zalo-consent` v1 và inbox RLS riêng `attendance_zalo_consent_requests` trong projectqjaklysckgzdfjthzkzu. Test endpoint thực bằng ID tổng hợp đạt: chữ ký đúng200, sai401, sai app403, gửi lặp chỉ1bản ghi. Bản ghi thử/file secret tạm đã xóa. [Báo cáo webhook](checklist/reports/attendance-webhook-2026-10-25.md), [ảnh cấu hình](checklist/reports/assets/attendance-review-2026-10-25/webhook-configured.jpg).
+- **Giới hạn:** webhook mới xác thực/ghi nhận vào trạng thái pending_identity_review; chưa tự xóa dữ liệu, chưa mapping Zalo-to-Auth, chưa worker/thông báo xử lý inbox. Chưa kiểm chứng sự kiện thật từ Zalo. Cần hoàn thiện xử lý yêu cầu trước vận hành dữ liệu nhân sự thật. Không chạy lại migration/deploy hoặc tạo dữ liệu trong đợt đồng bộ Cloud.
+- Frontend vẫn DEMO_ONLY, GPS/QR/chia sẻ SĐT và đăng ký mô phỏng; không bật native API, không chốt lương.11yêu cầu quyền đã nộp riêng trước đó; lần đọc trạng thái gần nhất là Đợi xét duyệt, chưa xác nhận được cấp.
+- Đợt này chỉ đồng bộ mã nguồn webhook/test/SQL và tài liệu/ảnh để Cloud có đúng tiến độ; không push main, không deploy thêm, không gửi lại hồ sơ, không tự Publish/Live, không lập lịch theo dõi. Mốc tạm dừng và các blocker phía dưới là lịch sử, đã được cập nhật bởi mốc này.
+
+## Mốc trước — 25/10/2026: Testing7, chờ duyệt11quyền, tạm dừng
 
 - Testing7 đã upload thành công. Bỏ headerTitle Chấm công nhân viên, title dự phòng là Gánh Hàng Rong; giữ thanh điều hướng/Back. Chưa kiểm chứng thay đổi header trên điện thoại.
 - Đã nộp giải trình và ảnh cho đủ11quyền, UI đều Đợi xét duyệt. Chưa được cấp quyền; nội dung nêu đúng demo chưa gọi API Zalo thật.
