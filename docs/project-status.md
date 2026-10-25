@@ -1,5 +1,40 @@
 # Trạng thái app chấm công Zalo Mini App
 
+## Mốc mới nhất — 25/10/2026: Version 7 đã gửi xét duyệt; chờ kết quả
+
+Đồng bộ riêng delta 11 file `d28901b8c08e4eec68fbb99f2292d8b134cc5fa4`, parent `0a8686b`, trên nền Cloud `d3ef29483cea1a1b07538ac69af64ee7448ae039`. Giữ lịch sử Cloud, không merge nhánh/parent snapshot. Các blocker email/webhook/Điều khoản và trạng thái chưa gửi phát hành của mốc trước bên dưới đã được thay thế bởi cập nhật này.
+
+- Theo bàn giao local, email và Điều khoản đã hoàn tất; bước 3/4 hoàn tất, **GỬI XÉT DUYỆT PHÁT HÀNH VERSION 7 THÀNH CÔNG**. Zalo hiển thị phiên bản 7 đang được xét duyệt, thời gian submit trên UI `08:40:03 25/10/2026`. Giữ nguyên giờ theo UI nguồn, không suy đoán múi giờ. **Chưa được duyệt, chưa Publish/Live.**
+- 11 quyền đã nộp riêng; lần đọc gần nhất Đợi xét duyệt, không suy ra đã được cấp. Mô tả phát hành cuối bằng văn tự nhiên, nêu chức năng và trạng thái demo.
+- API key lấy bằng lưu URL webhook thực trên parent Zalo, IP Access để trống, không thuê VPS. Theo bàn giao, key chỉ trong Supabase Secrets server; không trong Git/chat/frontend, file tạm đã xóa. Cloud không đọc/gửi credentials.
+- Theo bàn giao local, Edge Function attendance-zalo-consent v1 và inbox RLS đã triển khai ở project qjaklysckgzdfjthzkzu. Kiểm thử endpoint với ID tổng hợp: đúng chữ ký 200, sai 401, sai app 403, retry chỉ 1 bản ghi; bản ghi thử đã dọn. Cloud không gọi lại endpoint/migration/deploy/secrets.
+- **Webhook CHỈ ghi nhận pending_identity_review**: chưa mapping Zalo–Auth, chưa tự xóa dữ liệu, chưa worker/thông báo xử lý inbox; chưa nhận sự kiện thật từ Zalo. Chưa đủ xử lý vòng đời dữ liệu nhân sự thật.
+- Frontend vẫn DEMO_ONLY; GPS/QR/SĐT/đăng ký mô phỏng. Không bật API Zalo thật trên frontend hoặc tạo tài khoản.
+- [Báo cáo gửi duyệt](checklist/reports/attendance-review-attempt-2026-10-25.md), [ảnh đã gửi](checklist/reports/assets/attendance-review-2026-10-25/version7-submitted.jpg), [webhook và giới hạn](checklist/reports/attendance-webhook-2026-10-25.md), [Điều khoản nguồn](checklist/attendance-miniapp-terms-2026-10-25.md).
+- Chỉ đồng bộ và xác minh bàn giao, sau đó **TẠM DỪNG chờ yêu cầu tiếp**. Không phát triển, thay đổi DB, triển khai, gửi lại quyền/version, Publish, tạo lịch theo dõi hay push main.
+
+### Kiểm tra bàn giao Cloud d28901b
+
+- Ref/SHA và parent đúng; checkout đầu vào sạch. 10 file nhận nguyên blob khớp nguồn; docs/project-status.md giữ lịch sử và bổ sung mốc mới.
+- Node test riêng webhook dùng synthetic key/in-memory persist: 4/4 đạt; không đọc credentials, gọi endpoint thật hoặc DB.
+- UTF-8 các file văn bản đạt; 2 JPEG verify/load đạt; 19 liên kết Markdown tương đối tồn tại; SQL docs/migration giống từng byte; git diff --check đạt.
+- Không chạy lại migration/deploy/secrets, không tạo tài khoản/dữ liệu hoặc thay đổi DB/API. Không gửi lại quyền/version, Publish/Live, lập lịch, push main. Không build frontend vì scope webhook/tài liệu và bàn giao.
+- Tình trạng triển khai/submit bên trên theo báo cáo local và ảnh nguồn, không xác minh lại Zalo/endpoint từ Cloud. Hoàn tất đồng bộ rồi tạm dừng chờ yêu cầu tiếp; không coi nhận inbox là đã xóa dữ liệu.
+
+### 11 file đồng bộ mốc đã gửi Version 7
+
+- `attendance-miniapp/tests/zalo-consent.test.mjs`
+- `docs/checklist/attendance-miniapp-terms-2026-10-25.md`
+- `docs/checklist/reports/assets/attendance-review-2026-10-25/version7-submitted.jpg`
+- `docs/checklist/reports/assets/attendance-review-2026-10-25/webhook-configured.jpg`
+- `docs/checklist/reports/attendance-review-attempt-2026-10-25.md`
+- `docs/checklist/reports/attendance-webhook-2026-10-25.md`
+- `docs/project-status.md`
+- `docs/supabase-sql/20261025_attendance_zalo_consent_requests.sql`
+- `supabase/functions/attendance-zalo-consent/handler.mjs`
+- `supabase/functions/attendance-zalo-consent/index.ts`
+- `supabase/migrations/20261025070000_attendance_zalo_consent_requests.sql`
+
 ## Mốc mới nhất — 25/10/2026: Testing 7, 11 quyền đợi duyệt; TẠM DỪNG
 
 Nhận riêng delta 4 file từ `0a8686b5f65b5287f45783cca998bc106c8293c0` (parent `52f482f`) trên Cloud `e780cfd89bacb94101ec404bc071c94acd7c69da`. Giữ nội dung Cloud, không merge nhánh/parent snapshot. Các mốc 24/10 và phát biểu chưa nộp quyền bên dưới là lịch sử đã được cập nhật bởi mốc này.
