@@ -44,7 +44,7 @@
 ## Các file trong tính năng
 
 - Mới: `src/pages/ReceiptLoyaltyPage.jsx`, `src/hooks/useReceiptLoyalty.js`, `src/services/receiptLoyaltyService.js`, `src/services/repositories/receiptLoyaltyRepository.js`, `src/styles/receipt-loyalty.css`.
-- Mới: `docs/supabase-sql/receipt-loyalty-paid-claim.sql`, `supabase/migrations/20261025022036_receipt_loyalty_paid_claim.sql`, `scripts/receipt-loyalty.test.mjs`, `scripts/receipt-loyalty-rollback-test.sql`, báo cáo này.
+- Mới: `docs/supabase-sql/receipt-loyalty-paid-claim.sql`, `supabase/migrations/20261025040930_receipt_loyalty_paid_claim.sql`, `scripts/receipt-loyalty.test.mjs`, `scripts/receipt-loyalty-rollback-test.sql`, báo cáo này.
 - Cập nhật: `src/app/routes.jsx`, `src/features/orders/TrackingView.jsx`, `src/hooks/useSiteVisitTracking.js`, `src/services/printerService.js`, `scripts/stamp-print-station.test.mjs`.
 - Cập nhật: `ghr-pos-mobile-native/src/services/pos/posPrinterService.js`, `ghr-pos-mobile-native/src/services/pos/posPrintStationService.js`, `ghr-pos-mobile-native/android/app/build.gradle`.
 
@@ -73,3 +73,15 @@
 - Chưa merge main, chưa cài migration hay kích hoạt production. Truy vấn cuối xác nhận schema production chưa có `receipt_private` và không còn đơn thử.
 - API Vercel từ chối `target=preview`. Lượt tạo preview không có target bị auto-review chặn vì có nguy cơ triển khai production chưa được duyệt. Không thử bypass, không tự chuyển thành production. Cần anh duyệt rõ triển khai web production + Supabase trước bước này.
 - APK cần cài lên máy quán sau khi web/backend đã sẵn sàng. Giấy in thật và hành vi tại quán chưa được xác nhận.
+
+## Đã triển khai production — 25/10/2026
+
+- Anh duyệt rõ merge PR #12, website chính và Supabase trong chat. Các dòng chờ duyệt phía trên là lịch sử trước phát hành.
+- PR #12 đã merge, commit `43667b6bea3e1165b537f21f146ecfdf0e934a93`.
+- Vercel production `dpl_EaVSrW4HWPmWfGfN7HUEyzRKum2v` READY, đúng commit trên, đã gắn `ganhhangrong.vn`/`www.ganhhangrong.vn`. Mở trực tiếp trang `/nhan-diem/` qua trình duyệt để xác nhận UI live.
+- Supabase project `qjaklysckgzdfjthzkzu`: migration `20261025040930_receipt_loyalty_paid_claim` đã cài ở trạng thái tắt, sau khi web READY mới bật. Tên file migration trong repo được đồng bộ version MCP thực tế; nội dung SQL không đổi.
+- Bật `receipt_private.activation.enabled=true`, mốc `2026-10-25 04:11:29 UTC` = **11:11:29 giờ Việt Nam**; chỉ nhận đơn đối tác mới từ mốc này (hoặc xử lý bill cụ thể qua đường được phép), không backfill hàng loạt.
+- Chạy lại 14 ca rollback trên hàm đã cài: đạt. Sau rollback không còn đơn thử hoặc nguồn tem thử; bảng token private không có quyền USAGE/SELECT cho anon. Tại kiểm tra sau bật: 0 dòng failures.
+- Kiểm kê trước bật: 229 đơn đối tác chưa nhận trong 24h gần nhất, gồm 219 có SĐT + điểm sẵn và 10 thiếu số, 0 thiếu đối soát. Đây là số liệu tại thời điểm kiểm kê, không phải bộ lọc chạy cộng bù. Chưa tự cộng nhóm lịch sử này.
+- POS: diff native giữa nguồn APK cuối và commit merge bằng rỗng; APK `GHR-POS-0.4.30.apk` còn đúng SHA-256 đã ghi. Không cần build lại cho các cập nhật SQL/UI sau đó. Máy quán phải cài 0.4.30 để in QR riêng bill; chưa xác nhận cài máy/giấy thật.
+- Hoàn tác vận hành nếu có lỗi: tắt `receipt_private.activation.enabled`; không xóa ledger/tem/token hoặc rollback rộng schema. Website có thể rollback deployment Vercel riêng nếu cần.
