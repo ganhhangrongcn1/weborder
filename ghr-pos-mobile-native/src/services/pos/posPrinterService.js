@@ -198,6 +198,18 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
   const safeSourceType = toText(sourceType).toLowerCase();
   const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN");
   const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType) && !isPreparationTicket;
+  const receiptOrderId = toText(text.match(/^@@RECEIPTORDER:(.+)$/m)?.[1]);
+  text = text.replace(/^@@RECEIPTORDER:.*\n?/gm, "");
+  if (shouldUseDefaultFooter && receiptOrderId && !footerQrUrl) {
+    const controller = new globalThis.AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const { supabase } = require("../supabase/client");
+      const { data, error } = await supabase.rpc("get_receipt_loyalty_link", { p_source: "ORDER", p_id: receiptOrderId }).abortSignal(controller.signal);
+      if (!error && data) footerQrUrl = data;
+    } catch { /* The cashier can still print if the optional receipt link is unavailable. */ }
+    finally { clearTimeout(timeout); }
+  }
   const positioned = placeStampsAfterLoyaltyQr(text, toText(footerText) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_TEXT : ""));
   return printerModule.printReceipt({
     text: positioned.text,
@@ -222,6 +234,7 @@ export function buildPosCustomerBillText({
 } = {}) {
   const paymentPaid = Boolean(paymentConfirmed) && paymentConfirmed?.paid !== false;
   const lines = [
+    ...(paymentPaid && toText(order.id || order.orderCode) ? [`@@RECEIPTORDER:${toText(order.id || order.orderCode)}`] : []),
     "@@CENTER:GÁNH HÀNG RONG",
     `@@CENTER:${paymentPaid ? "HÓA ĐƠN BÁN HÀNG" : "PHIẾU LÀM MÓN"}`,
     `@@BIG:${toText(order.displayOrderCode || order.orderCode || order.id || "POS")}`,

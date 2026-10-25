@@ -10,6 +10,7 @@ const BanhKemBanhTrangPage = lazy(() => import("../pages/BanhKemBanhTrangPage.js
 const QrCodeToolPage = lazy(() => import("../pages/QrCodeToolPage.jsx"));
 const SupervisionRoute = lazy(() => import("../features/supervision/SupervisionRoute.jsx"));
 const RecruitmentPage = lazy(() => import("../features/recruitment/RecruitmentPage.jsx"));
+const ReceiptLoyaltyPage = lazy(() => import("../pages/ReceiptLoyaltyPage.jsx"));
 
 function RouteLoadingFallback() {
   return (
@@ -38,6 +39,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
       <Route path="/" element={<Navigate to="/home" replace />} />
+      <Route path="/nhan-diem/:token?" element={<ReceiptLoyaltyPage />} />
 
       <Route path="/home" element={<AppCustomerRoutes {...customerRouteProps} />} />
       <Route path="/menu" element={<AppCustomerRoutes {...customerRouteProps} />} />
