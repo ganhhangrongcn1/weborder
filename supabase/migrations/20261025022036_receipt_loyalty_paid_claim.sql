@@ -158,6 +158,7 @@ create or replace function public.get_receipt_loyalty(p_token text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare r receipt_private.receipts%rowtype; details jsonb; earned public.loyalty_ledger%rowtype;
   state_value text; status_value text; points_value integer; source_phone text;
+  legacy_claimed boolean:=false; legacy_phone text;
 begin
   if coalesce(p_token,'') !~ '^[a-f0-9]{64}$' then raise exception 'QR không hợp lệ. Vui lòng quét lại bill.'; end if;
   select * into r from receipt_private.receipts where token=p_token;
@@ -175,16 +176,20 @@ begin
       'pointsBaseAmount',points_base_amount,'source',partner_source),lower(order_status),expected_earn_points,
       coalesce(nullif(customer_phone_key,''),customer_phone)
     into details,state_value,points_value,source_phone from public.partner_orders where id::text=r.source_id;
+    select lower(coalesce(point_status,''))='claimed',
+      coalesce(nullif(claimed_customer_phone,''),nullif(customer_phone_key,''),customer_phone)
+    into legacy_claimed,legacy_phone from public.partner_orders where id::text=r.source_id;
   end if;
   if details is null then raise exception 'Bill không còn khả dụng. Vui lòng liên hệ quán.'; end if;
   details:=r.details; points_value:=r.earned_points; source_phone:=r.phone_key;
   select * into earned from public.loyalty_ledger where source_type=r.source_type
     and source_order_id=r.source_id and action in ('SETTLE_EARN','CLAIM_PARTNER_EARN') and action_version=1;
   status_value:=case when state_value in ('cancelled','canceled','cancel','refunded','refund') then 'cancelled'
-    when earned.id is not null then 'claimed' when now()>=r.expires_at then 'expired'
+    when earned.id is not null or legacy_claimed then 'claimed' when now()>=r.expires_at then 'expired'
     when coalesce(points_value,0)<=0 then 'waiting_data' else 'available' end;
   return details||jsonb_build_object('status',status_value,'points',coalesce(earned.points,points_value,0),
-    'maskedPhone',case when earned.id is not null then '•••••••'||right(earned.customer_phone,3) else '' end,
+    'maskedPhone',case when earned.id is not null then '•••••••'||right(earned.customer_phone,3)
+      when legacy_claimed then '•••••••'||right(coalesce(legacy_phone,''),3) else '' end,
     'phoneBound',coalesce(public.normalize_vietnam_phone(source_phone) ~ '^0[35789][0-9]{8}$',false),
     'expiresAt',r.expires_at);
 end;

@@ -9,7 +9,7 @@ import * as jsxRuntime from 'react/jsx-runtime';
 const url = `https://ganhhangrong.vn/nhan-diem/${'a'.repeat(64)}`;
 const prints = [];
 const calls = [];
-const context = vm.createContext({ console, Date, Set, Map, Promise, AbortController, setTimeout, clearTimeout,
+const context = vm.createContext({ console, Date, Set, Map, Promise, AbortController: globalThis.AbortController, setTimeout, clearTimeout,
   require: () => ({ supabase: { rpc: (name, input) => { calls.push({ name, input }); return { abortSignal: async () => ({ data: url }) }; } } })
 });
 const mock = (values) => new vm.SyntheticModule(Object.keys(values), function () {

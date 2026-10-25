@@ -12,7 +12,7 @@ begin
   o.id:=test_order_id; o.order_code:=test_order_id; o.customer_phone:=null; o.customer_name:='Rollback test';
   o.status:='confirmed'; o.kitchen_status:='pending'; o.created_at:=clock_timestamp(); o.updated_at:=o.created_at;
   o.metadata:=jsonb_build_object('source','pos_mobile','paymentStatus','unpaid');
-  o.total_amount:=100000; o.subtotal:=100000; o.promo_discount:=0; o.points_discount:=0;
+  o.total_amount:=100000; o.subtotal:=100000; o.promo_discount:=0; o.promo_code:=''; o.points_discount:=0;
   o.points_spent:=0; o.points_earned:=0; o.expected_earn_points:=1000;
   insert into public.orders select o.*;
   if exists(select 1 from receipt_private.receipts where source_id=test_order_id) then raise exception 'Unpaid bill issued a token'; end if;
@@ -117,6 +117,18 @@ begin
     raise exception 'Untrusted partner insert obtained a receipt';
   end if;
   insert into receipt_test_results values('anonymous_partner_insert_cannot_auto_award',true);
+
+  update public.partner_orders set point_status='claimed',claimed_customer_phone='0999999901' where id=partner_id;
+  perform public.get_receipt_loyalty_link('PARTNER_ORDER',partner_id::text);
+  select token into token_value from receipt_private.receipts where source_type='PARTNER_ORDER' and source_id=partner_id::text;
+  view_value:=public.get_receipt_loyalty(token_value);
+  if view_value->>'status'<>'claimed' or view_value->>'maskedPhone'<>'•••••••901' then
+    raise exception 'Legacy claimed bill shown as unclaimed';
+  end if;
+  if exists(select 1 from public.loyalty_ledger where source_order_id=partner_id::text and action='CLAIM_PARTNER_EARN') then
+    raise exception 'Legacy bill was awarded twice';
+  end if;
+  insert into receipt_test_results values('legacy_claimed_bill_masked_without_second_award',true);
 end;
 $$;
 select jsonb_agg(jsonb_build_object('scenario',scenario,'passed',passed)) as test_results from receipt_test_results;

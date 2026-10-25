@@ -22,13 +22,14 @@
 
 1. Đã khảo sát mã nguồn và schema/hàm production bằng truy vấn đọc. Chưa thay đổi production ở thời điểm tạo ghi chép này.
 2. Đã xây cơ chế token, điều kiện thanh toán, trang riêng và đường in tương thích.
-3. Build/encoding web đã đạt trên main mới nhất. SQL cuối trong một transaction rồi ROLLBACK đạt 11 tình huống: chưa trả; trả trước hoàn tất; không tăng điểm khi anon sửa số điểm trên đơn; chống nhận lại/in lại/hoàn tất; hủy thu hồi; đối tác tự cộng khi chuẩn bị; thiếu số/chờ đối soát rồi nhận QR; giữ trạng thái đã nhận sau hết hạn; chặn bill hết hạn; token không tồn tại; chặn tự động phát điểm khi anon chèn đơn đối tác.
+3. Build/encoding web đã đạt trên main mới nhất. SQL cuối trong một transaction rồi ROLLBACK đạt 12 tình huống: chưa trả; trả trước hoàn tất; không tăng điểm khi anon sửa số điểm trên đơn; chống nhận lại/in lại/hoàn tất; hủy thu hồi; đối tác tự cộng khi chuẩn bị; thiếu số/chờ đối soát rồi nhận QR; giữ trạng thái đã nhận sau hết hạn; chặn bill hết hạn; token không tồn tại; chặn tự động phát điểm khi anon chèn đơn đối tác; bill cũ đã nhận chỉ hiện số che, không cộng lại dù thiếu ledger V2.
 4. Khách `anon` nhận được qua token trong transaction thử, không có quyền issue token/đọc bảng private. Đã xác nhận không còn đơn thử sau rollback.
 5. POS Jest 3 bộ/15 kiểm tra đạt; kiểm tra gói QR + in lại + tem đạt. Bộ `scripts/receipt-loyalty.test.mjs` kiểm tra QR bill trả tiền, định danh canonical, phiếu làm món không tạo QR, giữ link server, trạng thái đã nhận/hủy/chờ đối soát, banner và link tài khoản đạt.
 6. Đã xem UI local bằng trình duyệt (bản build), trang độc lập không footer, banner theo ảnh. QR nhạy cảm được tạo bằng thư viện tại chỗ, không gửi token tới dịch vụ tạo ảnh ngoài; bỏ token khỏi thống kê lượt truy cập.
+   - Lint toàn kho đã chạy nhưng hủy do cấu hình hiện tại quét cả các bản sao/cache và dự án lồng nhau. Không coi là full-lint pass. Lint riêng các file web/JS POS thay đổi đã đạt; không sửa cấu hình lint ngoài phạm vi.
 7. Cơ chế mới có công tắc `receipt_private.activation.enabled`, mặc định tắt khi cài migration. Chỉ bật sau khi web production và đường in sẵn sàng. Không yêu cầu OTP và không cấp quyền đăng nhập từ QR.
    - Kiểm tra RLS hiện hữu phát hiện bảng đơn có quyền ghi runtime rộng. Không thay toàn bộ RLS; trigger mới kiểm tra nguồn staff/service tin cậy và chốt số điểm, căn cứ tiền, rule, số nhận vào bảng private. Endpoint claim không tin số điểm/recipient được sửa trực tiếp trên bảng đơn.
-8. APK đã build thành công: `ghr-pos-mobile-native/releases/GHR-POS-0.4.30.apk`, package `vn.ghr.posmobile`, versionCode 61; ABI arm64-v8a/armeabi-v7a. Chữ ký SHA-256 `728d5843ae0c8883171fdae3fd65b6375810d27ed946297c5cee3a51b62224ea`. APK SHA-256 `CBE0B44B5F858B27ACE5784DC7C9B92AE8176C3A87F424188D8FD342CAE1E03F`.
+8. APK cuối đã build thành công: `ghr-pos-mobile-native/releases/GHR-POS-0.4.30.apk`, package `vn.ghr.posmobile`, versionCode 61; ABI arm64-v8a/armeabi-v7a. Chữ ký SHA-256 `728d5843ae0c8883171fdae3fd65b6375810d27ed946297c5cee3a51b62224ea`. APK SHA-256 `B23B2EC72F7F3331909FBF62D96D14F7ECA3CF2CAB80981ACB164780261E6FC0`. Bản đóng gói thử đầu giữ riêng ở `GHR-POS-0.4.30-candidate-first.apk`; không dùng bản candidate để cài.
 
 ## Vận hành và tương thích
 
