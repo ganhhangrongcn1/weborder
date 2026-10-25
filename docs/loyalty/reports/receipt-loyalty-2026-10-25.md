@@ -60,6 +60,8 @@
 
 ### Điều chỉnh theo phản hồi giao diện và kiểm tra tem
 
+- Anh chốt thời hạn nhận điểm bill là **24 giờ kể từ lúc mua**, thay cho đề xuất 7 ngày. Token dùng order_time/created_at làm mốc; quét lại/in lại không kéo dài hạn. Trang hiển thị cả ngày và giờ hết hạn. Không thu hồi điểm đã nhận chỉ vì bill qua hạn.
+
 - Bỏ khối giới thiệu dài bên trái, giữ tên thương hiệu nhỏ; căn giữa khung voucher, thêm mép răng cưa và hai khuyết ở đường xé. Bỏ dòng hỗ trợ nhỏ dưới cùng theo ảnh anh đánh dấu.
 - Đọc lại hàm tem production: nguồn tem gắn số điện thoại và ngày mua, tối đa 1 tem/SĐT/ngày. Hàm đối tác có nhánh giữ nguyên tem khi khách đã có nguồn tem xác nhận nhận điểm cùng số.
 - Khoảng trống cần xử lý trước kích hoạt: claim QR không OTP với số mới chưa được bảo đảm tạo nguồn tem, vì trigger tem chỉ ghi khi actor là operator. Không coi kiểm tra điểm đã đạt là bằng chứng đã nối đủ tem. Cần bổ sung đường nhận tem tin cậy trong cùng giao dịch nhận QR, giữ nguyên hạn mức/ngày mua và chặn trùng; chưa tự sửa quy tắc tem trong lượt chỉnh UI này.

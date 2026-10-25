@@ -7,7 +7,7 @@ create table if not exists receipt_private.receipts (
   source_id text not null,
   token text not null unique default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
   paid_at timestamptz not null default now(),
-  expires_at timestamptz not null default now() + interval '7 days',
+  expires_at timestamptz not null default now() + interval '24 hours',
   created_at timestamptz not null default now(),
   earned_points integer not null default 0,
   base_amount numeric not null default 0,
@@ -140,7 +140,7 @@ begin
     'pointsBaseAmount',coalesce((snapshot->>'points_base_amount')::numeric,0),
     'source',coalesce(snapshot->>'partner_source','Gánh Hàng Rong'));
   insert into receipt_private.receipts(source_type,source_id,expires_at,earned_points,base_amount,phone_key,rule_version_id,details)
-    values(p_source,p_id,order_at+interval '7 days',coalesce((snapshot->>'expected_earn_points')::integer,0),
+    values(p_source,p_id,order_at+interval '24 hours',coalesce((snapshot->>'expected_earn_points')::integer,0),
       coalesce((snapshot->>'points_base_amount')::numeric,0),phone_value,(snapshot->>'loyalty_rule_version_id')::uuid,display_value)
     on conflict(source_type,source_id) do update set
       earned_points=excluded.earned_points,base_amount=excluded.base_amount,

@@ -21,6 +21,9 @@ begin
   update public.orders set metadata=metadata||jsonb_build_object('paymentStatus','paid') where id=test_order_id;
   select token into token_value from receipt_private.receipts where source_type='ORDER' and source_id=test_order_id;
   if token_value is null then raise exception 'Paid bill did not issue a token'; end if;
+  if (select expires_at from receipt_private.receipts where token=token_value)<>o.created_at+interval '24 hours' then
+    raise exception 'Claim expiry must be exactly 24 hours from purchase';
+  end if;
   view_value:=public.get_receipt_loyalty(token_value);
   if view_value->>'status'<>'available' then raise exception 'Expected available bill, got %',view_value; end if;
   if view_value ? 'customerPhone' or view_value ? 'customerName' or view_value ? 'address' then raise exception 'Private identity leaked'; end if;

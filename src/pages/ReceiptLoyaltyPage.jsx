@@ -52,7 +52,7 @@ export default function ReceiptLoyaltyPage() {
                     <p>Kiểm tra kỹ số điện thoại. Sau khi nhận, bạn cần liên hệ quán để điều chỉnh nếu nhập nhầm.</p>
                     {vm.confirmPhone ? <div className="receipt-rewards__confirm"><span>Nhận điểm vào số</span><strong>{vm.confirmPhone}</strong><button className="receipt-rewards__primary" type="button" disabled={vm.busy} onClick={vm.claim}>{vm.busy ? "Đang nhận điểm…" : "Xác nhận nhận điểm"}</button><button type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={() => vm.setConfirmPhone("")}>Sửa số điện thoại</button></div>
                       : <button className="receipt-rewards__primary" type="submit" disabled={vm.busy}>Nhận điểm</button>}
-                    <small>Nhận trước {new Date(bill.expiresAt).toLocaleDateString("vi-VN")} · Không cần đăng nhập</small>
+                    <small>Nhận trong 24 giờ từ lúc mua · Hạn {new Date(bill.expiresAt).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</small>
                   </form> : <p role="status" className="receipt-rewards__notice">{notices[bill.status] || "Vui lòng liên hệ quán để kiểm tra bill."}</p>}
               </> : null}
               {!vm.loading && bill?.status !== "claimed" && <button type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={vm.refresh}>Kiểm tra lại bill</button>}
