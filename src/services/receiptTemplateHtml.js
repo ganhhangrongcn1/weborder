@@ -5,7 +5,7 @@ function escape(value) {
 }
 export function renderReceiptTemplateBody(text, qrImage = "") {
   return String(text).split("\n").map((line) => {
-    if (line.startsWith("@@RECEIPTORDER:") || line === "@@STAMPEND") return "";
+    if (/^@@RECEIPT(?:ORDER|POINTS):/.test(line) || line === "@@STAMPEND") return "";
     if (line === "@@RULE") return '<hr class="receipt-rule" />';
     if (line === "@@SPACE") return '<div class="receipt-space"></div>';
     if (line === "@@QR") return qrImage
@@ -24,10 +24,10 @@ export function renderReceiptTemplateBody(text, qrImage = "") {
   }).join("");
 }
 export const RECEIPT_TEMPLATE_CSS = `
-  .receipt-paper{background:white;color:#111;padding:18px;font:13px/1.55 Arial,system-ui,sans-serif;overflow-wrap:anywhere}
+  .receipt-paper{background:white;color:#111;padding:16px;font:12px/1.45 Arial,system-ui,sans-serif;overflow-wrap:anywhere}
   .receipt-center{text-align:center}.receipt-bold{font-weight:700}.receipt-big{font-size:24px;font-weight:800}
   .receipt-row{display:flex;justify-content:space-between;gap:12px}.receipt-row>span:last-child{flex-shrink:0}
-  .receipt-rule{border:0;border-top:1px dashed #999;margin:10px 0}.receipt-space{height:8px}
+  .receipt-rule{border:0;border-top:1px dashed #999;margin:7px 0}.receipt-space{height:4px}
   .receipt-qr{display:block;width:145px;height:145px;margin:12px auto}
   .receipt-qr-placeholder{width:120px;height:120px;margin:12px auto;border:2px dashed #555;display:grid;place-items:center;font-weight:700;font-size:11px}
 `;

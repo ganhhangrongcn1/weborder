@@ -349,6 +349,11 @@ function buildReceiptText(order = {}, options = {}) {
   const showMoney = !isPartnerAppReceipt(receipt);
   const receiptPaid = isReceiptPaid(receipt);
   const isPreparationTicket = showMoney && !receiptPaid;
+  if (template.enabled && isPreparationTicket) {
+    receipt.customerName = "";
+    receipt.customerPhone = "";
+    receipt.customerAddress = "";
+  }
   const includeLoyaltyFooter = options.includeLoyaltyFooter !== false;
   const lines = [
     "@@CENTER:GÁNH HÀNG RONG",

@@ -1,5 +1,16 @@
 # Mẫu in bill chung — 25/10/2026
 
+## Rút gọn theo duyệt ngày 26/10/2026
+
+- Mặc định bỏ slogan, ẩn thu ngân và bỏ lời nhắc dài cuối bill món. Bill món chỉ giữ tiêu đề, mã đơn/thẻ rung, kênh/giờ, món, topping và ghi chú; không có tiền/QR/tem/thông tin thành viên.
+- Bill khách gom kênh và giờ một dòng, giữ chi nhánh; bỏ phần địa chỉ/hotline chi nhánh lặp. Chỉ giữ một tổng tiền và một xác nhận thanh toán. Bỏ dòng còn phải thu chỉ khi bằng 0; khoản chưa thu khác 0 và giảm điểm/voucher vẫn giữ nguyên. Tiền khách đưa/thối vẫn chỉ theo builder thanh toán gốc.
+- Anh yêu cầu không ghi “đã tích cho SĐT” và ưu tiên mời khách quét vào website. Không bổ sung tra cứu/trạng thái đã nhận hoặc số nhận vào lời mời. Số thưởng hiển thị riêng như `7000`, không phân cách, không chữ “điểm” hoặc ký hiệu tiền phía sau; nếu chưa có số đáng tin thì không tự suy từ tiền đơn. Định dạng số tiền thanh toán giữ nguyên.
+- Một QR cuối bill, khối tem rút còn hình tem và số tem; website/hotline gộp một dòng. Nội dung tiền/điểm/tem thật và khóa chống nhận trùng không thay đổi.
+- Bộ gọn dùng chung cho web và native direct/cloud. Native đưa số thưởng có sẵn trên đơn qua marker nội bộ rồi loại marker trước khi gửi máy in; không phát sinh điểm khi in.
+- Kiểm tra mẫu/QR/tem đạt; đã mở local. Chưa merge, chưa triển khai production, chưa build/phát hành APK mới.
+- File mới: `ghr-pos-mobile-native/src/services/pos/compactReceiptLayout.js`.
+- File cập nhật: `ghr-pos-mobile-native/src/services/pos/receiptTemplate.js`, `ghr-pos-mobile-native/src/services/pos/posPrinterService.js`, `ghr-pos-mobile-native/src/services/pos/posPrintStationService.js`, `src/services/printerService.js`, `src/services/receiptTemplateHtml.js`, `scripts/receipt-template.test.mjs`, báo cáo này.
+
 ## Mục tiêu và phạm vi
 
 Thêm Admin → Thiết lập hệ thống → Mẫu in bill. Anh chỉnh nội dung chung và xem bố cục ngay, chia bill món và bill khách (POS, website, đối tác). Các renderer cũ hiện có chân bill khác nhau, bill đối tác đưa quảng bá/QR lên trước món; một bộ trình bày dùng chung gom QR/tem/cuối bill về sau phần món và thanh toán.

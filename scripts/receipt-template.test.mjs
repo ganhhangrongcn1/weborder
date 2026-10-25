@@ -12,7 +12,8 @@ async function module(path, deps = {}) {
   await value.link((name) => { assert(deps[name], `Missing mock ${name}`); return deps[name]; });
   await value.evaluate(); return value;
 }
-const engine = await module('ghr-pos-mobile-native/src/services/pos/receiptTemplate.js');
+const compact = await module('ghr-pos-mobile-native/src/services/pos/compactReceiptLayout.js');
+const engine = await module('ghr-pos-mobile-native/src/services/pos/receiptTemplate.js', { './compactReceiptLayout.js': compact });
 const { applyReceiptTemplate, normalizeReceiptTemplate } = engine.namespace;
 const template = normalizeReceiptTemplate({ enabled: true });
 const stamps = await module('ghr-pos-mobile-native/src/services/pos/posStampReceipt.js');
@@ -41,13 +42,18 @@ const samples = await module('src/data/receiptTemplateSamples.js');
 for (const type of ['pos', 'web', 'partner', 'kitchen']) {
   const sample = samples.namespace.createReceiptSample(type, true, true);
   const text = web.namespace.buildReceiptText(sample, { receiptTemplate: template });
-  assert.equal((text.match(/@@BOLDCENTER:GÁNH HÀNG RONG/g) || []).length, 1);
+  assert.equal((text.match(/@@BOLDCENTER:GÁNH HÀNG RONG/g) || []).length, type === 'kitchen' ? 0 : 1);
   assert(text.includes('Bánh tráng cuốn') && text.includes('Thêm trứng') && text.includes('Không hành'));
   assert(text.includes('Ít cay, để riêng nước sốt'));
   assert.equal((text.match(/^@@QR$/gm) || []).length, type === 'kitchen' ? 0 : 1);
-  if (['pos', 'web'].includes(type)) assert(text.includes('70.000') && text.includes('CÒN PHẢI THU\t0'));
+  if (['pos', 'web'].includes(type)) {
+    assert(text.includes('70.000') && !text.includes('CÒN PHẢI THU\t0'));
+    assert.equal((text.match(/ĐÃ THANH TOÁN/g) || []).length, 1);
+  }
   if (type === 'partner') assert(!text.includes('70.000') && !text.includes('80.000'), 'do not expose reconciliation amounts');
   if (type !== 'kitchen') {
+    assert(text.includes('@@BOLDCENTER:7000\n@@QR'), 'reward number has no currency, grouping or suffix');
+    assert(!/7000(?:đ| điểm)/.test(text) && !text.includes('đã tích cho'));
     assert(text.indexOf('@@QR') > text.indexOf('Bánh tráng cuốn'));
     assert(text.indexOf('@@STAMPS:3') > text.indexOf('@@QR'));
     assert.equal(applyReceiptTemplate(text, template), text, 'template must be idempotent across web/print station');
@@ -83,4 +89,6 @@ const hidden = web.namespace.buildReceiptText(samples.namespace.createReceiptSam
 });
 assert(!hidden.includes('0900000000') && !hidden.includes('@@QR') && !hidden.includes('@@STAMPS'));
 assert(!html.namespace.renderReceiptTemplateBody('@@CENTER:<img src=x onerror=alert(1)>').includes('<img'));
+const remaining = compact.namespace.default(['@@ROW:CÒN PHẢI THU\t30.000', '@@ROW:Giảm điểm\t-10.000']);
+assert(remaining.includes('@@ROW:CÒN PHẢI THU\t30.000') && remaining.includes('@@ROW:Giảm điểm\t-10.000'));
 console.log('Receipt template passed: 4 previews, web/native financial preservation, one QR/stamp block, token, preparation/payment exclusions, disabled fallback, escaping.');

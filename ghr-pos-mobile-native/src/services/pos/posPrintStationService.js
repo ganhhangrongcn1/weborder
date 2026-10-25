@@ -226,6 +226,7 @@ function buildPartnerReceiptText(receiptText = "", order = {}) {
     "@@RULE",
     ...(toText(order.branchName || order.branch_name) ? [`Chi nhánh: ${toText(order.branchName || order.branch_name)}`] : []),
     `Nguồn: ${toText(order.platform || order.partnerSource || order.partner_source) || "Đối tác"}`,
+    "Thanh toán: Qua ứng dụng đối tác - ĐÃ THANH TOÁN",
     ...(toText(order.customerName || order.customer_name)
       ? [`Khách: ${toText(order.customerName || order.customer_name)}`]
       : []),
@@ -525,7 +526,8 @@ function buildReceiptTextFromOrder(order = {}, sourceType = "") {
       id: toText(order.id),
       orderCode: toText(order.orderCode || order.order_code || order.id),
       displayOrderCode: toText(order.displayOrderCode || order.display_order_code || order.orderCode || order.id),
-      stampSummary: order.stampSummary
+      stampSummary: order.stampSummary,
+      expectedEarnPoints: order.expectedEarnPoints ?? order.expected_earn_points
     },
     cart,
     totals: {

@@ -202,7 +202,8 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
     || safeSourceType === "qr_order_preparation" || toText(text).includes("CHƯA THANH TOÁN");
   const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType) && !isPreparationTicket;
   const receiptOrderId = toText(text.match(/^@@RECEIPTORDER:(.+)$/m)?.[1]);
-  text = text.replace(/^@@RECEIPTORDER:.*\n?/gm, "");
+  const expectedEarnPoints = Math.max(0, Math.floor(Number(text.match(/^@@RECEIPTPOINTS:(\d+)$/m)?.[1]) || 0));
+  text = text.replace(/^@@RECEIPT(?:ORDER|POINTS):.*\n?/gm, "");
   if (shouldUseDefaultFooter && receiptOrderId && !footerQrUrl) {
     const controller = new globalThis.AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -218,7 +219,7 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
   const combined = [positioned.text, positioned.footerText].filter(Boolean).join("\n");
   const specialSlip = safeSourceType.includes("payment_qr") || safeSourceType === "pos_payment_momo_qr"
     || safeSourceType === "item_label" || safeSourceType === "pos_shift_close";
-  const templateText = specialSlip ? combined : applyReceiptTemplate(combined, template, { preparation: isPreparationTicket });
+  const templateText = specialSlip ? combined : applyReceiptTemplate(combined, template, { preparation: isPreparationTicket, expectedEarnPoints });
   const templateApplied = template.enabled && templateText !== combined;
   return printerModule.printReceipt({
     text: templateApplied ? templateText : positioned.text,
@@ -244,6 +245,8 @@ export function buildPosCustomerBillText({
   const paymentPaid = Boolean(paymentConfirmed) && paymentConfirmed?.paid !== false;
   const lines = [
     ...(paymentPaid && toText(order.id || order.orderCode) ? [`@@RECEIPTORDER:${toText(order.id || order.orderCode)}`] : []),
+    ...(paymentPaid && Number(order.expectedEarnPoints ?? order.expected_earn_points) > 0
+      ? [`@@RECEIPTPOINTS:${Math.floor(Number(order.expectedEarnPoints ?? order.expected_earn_points))}`] : []),
     "@@CENTER:GÁNH HÀNG RONG",
     `@@CENTER:${paymentPaid ? "HÓA ĐƠN BÁN HÀNG" : "PHIẾU LÀM MÓN"}`,
     `@@BIG:${toText(order.displayOrderCode || order.orderCode || order.id || "POS")}`,
