@@ -26,7 +26,7 @@ export function normalizeReceiptTemplate(value = {}) {
   return result;
 }
 
-const STAMP_LINE = /^(?:@@STAMPS:|@@STAMPEND|(?:@@CENTER:)?(?:TÍCH TEM NHẬN QUÀ|TEM THÀNH VIÊN|\d+\/10 tem)|Tem khả dụng|Bạn có \d+\/10 tem|\d+ tem đang giữ|Mỗi ngày tối đa|Hôm nay đã nhận tem|Đủ tem:|Còn \d+ tem để nhận quà|Tem: chưa cập nhật)/;
+const STAMP_LINE = /^(?:@@STAMPS:|@@STAMPEND|(?:@@CENTER:)?(?:TÍCH TEM NHẬN QUÀ|TEM THÀNH VIÊN|Cung cấp SĐT để tích tem|\d+\/10 tem)|Tem khả dụng|Bạn có \d+\/10 tem|\d+ tem đang giữ|Mỗi ngày tối đa|Hôm nay đã nhận tem|Đủ tem:|Còn \d+ tem để nhận quà|Tem: chưa cập nhật)/;
 const PROMO_LINE = /^(?:@@(?:BOLD)?CENTER:)?(?:ĐỪNG BỎ LỠ ĐIỂM|ĐIỂM THÀNH VIÊN|QUÉT QR VÀO WEBSITE|Xem \/ nhận|Quét QR để tích|Quét để nhận|Quét QR để nhận|Quét QR để xem|Nhận trong 24 giờ|Cảm ơn quý khách!|Hotline:|ganhhangrong\.vn)/;
 
 export function applyReceiptTemplate(text = "", value = {}, context = {}) {
@@ -71,19 +71,25 @@ export function applyReceiptTemplate(text = "", value = {}, context = {}) {
     if (config.kitchenReminder) footer.push(`@@CENTER:${config.kitchenReminder}`);
   } else {
     if (config.showLoyalty && context.includeLoyalty !== false) {
-      const legacyPoints = original.join("\n").match(/(?:Quét để nhận |Quét QR để xem \/ nhận )([\d.,]+)(?: điểm| của đơn này)/);
+      const legacyPoints = original.join("\n").match(/(?:Quét để nhận |Quét QR để xem \/ nhận )([\d.,]+)(?: điểm| của đơn này|$)/m);
       const previousNumber = original.find((line, index) => /^@@BOLDCENTER:\d+$/.test(line)
         && original[index - 1] === "@@CENTER:Xem / nhận tích lũy của đơn");
       const points = Math.max(0, Math.floor(Number(context.expectedEarnPoints) || Number(legacyPoints?.[1]?.replace(/[.,]/g, "")) || Number(previousNumber?.slice(13)) || 0));
-      footer.push("@@BOLDCENTER:QUÉT QR VÀO WEBSITE", "@@CENTER:Xem / nhận tích lũy của đơn");
-      if (points > 0) footer.push(`@@BOLDCENTER:${points}`);
+      footer.push("@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM ĐƠN NÀY",
+        points > 0 ? `@@CENTER:Quét để nhận ${points}` : "@@CENTER:Quét để nhận tích lũy của đơn");
       footer.push("@@QR");
       footer.push("@@CENTER:Nhận trong 24 giờ kể từ lúc mua");
     }
-    if (config.showStamps && stamps.length) {
+    if (config.showStamps) {
       const chart = stamps.find((line) => line.startsWith("@@STAMPS:"));
-      if (chart) footer.push("@@RULE", "@@CENTER:TEM THÀNH VIÊN", chart, `@@CENTER:${chart.slice(9)}/10 tem`);
-      footer.push(...stamps.filter((line) => /^\d+ tem đang giữ/.test(line)));
+      const hasPhone = typeof context.hasCustomerPhone === "boolean" ? context.hasCustomerPhone
+        : !original.includes("@@CENTER:Cung cấp SĐT để tích tem") && Boolean(context.customerPhone || chart
+          || original.some((line) => /^(?:SĐT:|Khách:).*0[35789]\d{8}/.test(line)));
+      if (!hasPhone) footer.push("@@RULE", "@@CENTER:TEM THÀNH VIÊN", "@@STAMPS:0", "@@CENTER:Cung cấp SĐT để tích tem");
+      else if (chart) {
+        footer.push("@@RULE", "@@CENTER:TEM THÀNH VIÊN", chart, `@@CENTER:${chart.slice(9)}/10 tem`);
+        footer.push(...stamps.filter((line) => /^\d+ tem đang giữ/.test(line)));
+      }
     }
     const contact = [config.website, config.hotline].filter(Boolean).join(" · ");
     if (contact) footer.push(`@@CENTER:${contact}`);

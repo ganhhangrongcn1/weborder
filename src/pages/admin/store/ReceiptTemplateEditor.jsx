@@ -14,7 +14,7 @@ const FIELDS = [
 const OPTIONS = [
   ["showBranch", "Thông tin chi nhánh"], ["showCashier", "Tên thu ngân"],
   ["showCustomer", "Thông tin khách hàng"], ["showLoyalty", "QR xem / nhận điểm trên bill khách"],
-  ["showStamps", "Tem hiện có khi đã tra cứu được"]
+  ["showStamps", "Tem thành viên (10 ô trống khi chưa có SĐT)"]
 ];
 
 export default function ReceiptTemplateEditor({ draft, update, loading, saving, loaded, notice, save, reset, previewOnly = false }) {

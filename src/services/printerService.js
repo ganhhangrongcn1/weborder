@@ -415,7 +415,8 @@ function buildReceiptText(order = {}, options = {}) {
   }
 
   return applyReceiptTemplate(lines.join("\n"), options.receiptTemplate || getReceiptTemplate(), {
-    preparation: isPreparationTicket, includeLoyalty: includeLoyaltyFooter, expectedEarnPoints: receipt.expectedEarnPoints
+    preparation: isPreparationTicket, includeLoyalty: includeLoyaltyFooter, expectedEarnPoints: receipt.expectedEarnPoints,
+    hasCustomerPhone: Boolean(toText(order.customerPhone || order.customer_phone))
   });
 }
 

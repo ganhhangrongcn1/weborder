@@ -219,7 +219,7 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
   const combined = [positioned.text, positioned.footerText].filter(Boolean).join("\n");
   const specialSlip = safeSourceType.includes("payment_qr") || safeSourceType === "pos_payment_momo_qr"
     || safeSourceType === "item_label" || safeSourceType === "pos_shift_close";
-  const templateText = specialSlip ? combined : applyReceiptTemplate(combined, template, { preparation: isPreparationTicket, expectedEarnPoints });
+  const templateText = specialSlip ? combined : applyReceiptTemplate(combined, template, { preparation: isPreparationTicket, expectedEarnPoints, customerPhone });
   const templateApplied = template.enabled && templateText !== combined;
   return printerModule.printReceipt({
     text: templateApplied ? templateText : positioned.text,

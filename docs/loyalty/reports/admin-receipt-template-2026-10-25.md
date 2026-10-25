@@ -2,6 +2,10 @@
 
 ## Rút gọn theo duyệt ngày 26/10/2026
 
+- Chỉnh tiếp theo ảnh anh duyệt: tiêu đề “ĐỪNG BỎ LỠ ĐIỂM ĐƠN NÀY”, dưới là “Quét để nhận 7000”; không có chữ/ký hiệu đơn vị sau số. Nếu chưa có số thưởng thì dùng lời mời chung, không suy từ tổng tiền.
+- Bill khách thiếu SĐT hiển thị 10 ô tem trống và “Cung cấp SĐT để tích tem”, không giả làm số dư 0/10 đã tra cứu. Có SĐT thì giữ số tem máy chủ đã trả; không ghi điểm/tem khi dựng hoặc in mẫu. Bill món và tùy chọn tắt tem vẫn không hiện khối này.
+- File sửa cho lần phản hồi này: `receiptTemplate.js`, `posPrinterService.js` trong native; `src/services/printerService.js`; `src/pages/admin/store/ReceiptTemplateEditor.jsx`; `scripts/receipt-template.test.mjs`; báo cáo này. Kiểm tra mẫu bổ sung cả ba kênh thiếu SĐT và in lại không lặp khối tem.
+
 - Mặc định bỏ slogan, ẩn thu ngân và bỏ lời nhắc dài cuối bill món. Bill món chỉ giữ tiêu đề, mã đơn/thẻ rung, kênh/giờ, món, topping và ghi chú; không có tiền/QR/tem/thông tin thành viên.
 - Bill khách gom kênh và giờ một dòng, giữ chi nhánh; bỏ phần địa chỉ/hotline chi nhánh lặp. Chỉ giữ một tổng tiền và một xác nhận thanh toán. Bỏ dòng còn phải thu chỉ khi bằng 0; khoản chưa thu khác 0 và giảm điểm/voucher vẫn giữ nguyên. Tiền khách đưa/thối vẫn chỉ theo builder thanh toán gốc.
 - Anh yêu cầu không ghi “đã tích cho SĐT” và ưu tiên mời khách quét vào website. Không bổ sung tra cứu/trạng thái đã nhận hoặc số nhận vào lời mời. Số thưởng hiển thị riêng như `7000`, không phân cách, không chữ “điểm” hoặc ký hiệu tiền phía sau; nếu chưa có số đáng tin thì không tự suy từ tiền đơn. Định dạng số tiền thanh toán giữ nguyên.

@@ -52,7 +52,7 @@ for (const type of ['pos', 'web', 'partner', 'kitchen']) {
   }
   if (type === 'partner') assert(!text.includes('70.000') && !text.includes('80.000'), 'do not expose reconciliation amounts');
   if (type !== 'kitchen') {
-    assert(text.includes('@@BOLDCENTER:7000\n@@QR'), 'reward number has no currency, grouping or suffix');
+    assert(text.includes('@@CENTER:Quét để nhận 7000\n@@QR'), 'reward caption has no currency, grouping or suffix');
     assert(!/7000(?:đ| điểm)/.test(text) && !text.includes('đã tích cho'));
     assert(text.indexOf('@@QR') > text.indexOf('Bánh tráng cuốn'));
     assert(text.indexOf('@@STAMPS:3') > text.indexOf('@@QR'));
@@ -88,6 +88,12 @@ const hidden = web.namespace.buildReceiptText(samples.namespace.createReceiptSam
   receiptTemplate: { ...template, showCustomer: false, showLoyalty: false, showStamps: false }
 });
 assert(!hidden.includes('0900000000') && !hidden.includes('@@QR') && !hidden.includes('@@STAMPS'));
+for (const type of ['pos', 'web', 'partner']) {
+  const noPhone = web.namespace.buildReceiptText(samples.namespace.createReceiptSample(type, true, false), { receiptTemplate: template });
+  assert(noPhone.includes('@@STAMPS:0\n@@CENTER:Cung cấp SĐT để tích tem'));
+  assert.equal(applyReceiptTemplate(noPhone, template), noPhone, 'empty stamp invitation stays stable on reprint');
+  assert(!noPhone.includes('0/10 tem'), 'empty invitation must not pretend to be a retrieved balance');
+}
 assert(!html.namespace.renderReceiptTemplateBody('@@CENTER:<img src=x onerror=alert(1)>').includes('<img'));
 const remaining = compact.namespace.default(['@@ROW:CÒN PHẢI THU\t30.000', '@@ROW:Giảm điểm\t-10.000']);
 assert(remaining.includes('@@ROW:CÒN PHẢI THU\t30.000') && remaining.includes('@@ROW:Giảm điểm\t-10.000'));
