@@ -1,5 +1,28 @@
 # Trạng thái app chấm công Zalo Mini App
 
+## Mốc mới nhất — 25/10/2026: Testing 7, 11 quyền đợi duyệt; TẠM DỪNG
+
+Nhận riêng delta 4 file từ `0a8686b5f65b5287f45783cca998bc106c8293c0` (parent `52f482f`) trên Cloud `e780cfd89bacb94101ec404bc071c94acd7c69da`. Giữ nội dung Cloud, không merge nhánh/parent snapshot. Các mốc 24/10 và phát biểu chưa nộp quyền bên dưới là lịch sử đã được cập nhật bởi mốc này.
+
+- Theo bàn giao local, Testing 7 đã upload, CLI Deploy Done. app-config.json có headerTitle rỗng, title Gánh Hàng Rong; chưa kiểm tra header trên điện thoại.
+- Đã nộp đủ 11 yêu cầu quyền kèm lý do/ảnh, mô tả đúng demo chưa gọi API Zalo thật. UI đủ 11 dòng Đợi xét duyệt; **chưa được cấp quyền**.
+- **Bản 7 CHƯA hoàn tất gửi xét duyệt PHÁT HÀNH**, chưa vào hàng đợi duyệt phát hành: thiếu email xác thực, Webhook rút đồng ý/xóa dữ liệu và Điều khoản sử dụng. Không Publish/Live.
+- Theo yêu cầu chủ app: **TẠM DỪNG chờ kết quả quyền**, chỉ làm tiếp khi anh yêu cầu. Không tự phát triển, nối API/DB, deploy webhook, tạo tài khoản, gửi thêm quyền/duyệt/Live hoặc lập lịch theo dõi. Không push main.
+- [Báo cáo và điểm tiếp tục](checklist/reports/attendance-review-attempt-2026-10-25.md), [ảnh 11 quyền đợi duyệt](checklist/reports/assets/attendance-review-2026-10-25/permissions-11-pending.jpg).
+
+### Kiểm tra Cloud cho mốc tạm dừng
+
+- SHA/parent xác minh đúng; checkout đầu vào sạch. Ba file nhận nguyên bản giống từng byte source; chỉ bổ sung docs/project-status.md, giữ nguyên lịch sử Cloud.
+- JSON hợp lệ; headerTitle rỗng/title Gánh Hàng Rong đúng bàn giao. UTF-8 file văn bản đạt; JPEG verify/load đạt; 13 liên kết Markdown tương đối tồn tại; git diff --check đạt.
+- Chỉ đồng bộ config/tài liệu/ảnh, không build/test code lại, không kiểm tra trạng thái Zalo trực tiếp hoặc header điện thoại. Không thực hiện hành động bên ngoài, không thay đổi DB/API/tài khoản, không deploy, gửi thêm quyền/duyệt/Live hoặc lập lịch. Hoàn tất bàn giao và tạm dừng.
+
+### 4 file đồng bộ tiến độ 25/10
+
+- `attendance-miniapp/app-config.json`
+- `docs/checklist/reports/assets/attendance-review-2026-10-25/permissions-11-pending.jpg`
+- `docs/checklist/reports/attendance-review-attempt-2026-10-25.md`
+- `docs/project-status.md`
+
 ## Bổ sung hồ sơ Testing 6 — 24/10/2026, vẫn WIP/demo
 
 Đồng bộ riêng delta `52f482fc2f35ac6c573a1243bda514e74a3c01a3` (parent `4d2e008`) trên Cloud `73dc3b067d64249929f30df2ac4c6d19eca9bf57`: chỉ 17 đường dẫn docs/assets, không merge toàn nhánh hoặc snapshot parent. Giữ nguyên lịch sử Cloud; bộ 23/10 là tư liệu lịch sử, bảng/ảnh hiện tại dùng bộ dưới đây.

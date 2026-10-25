@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Gánh Hàng Rong · Chấm công",
-    "headerTitle": "Chấm công nhân viên",
+    "title": "Gánh Hàng Rong",
+    "headerTitle": "",
     "headerColor": "#ffffff",
     "textColor": "black",
     "statusBar": "normal",
