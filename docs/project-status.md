@@ -4,7 +4,15 @@ Ngày rà soát: **22/10/2026**. Phạm vi: mã nguồn và tài liệu trong wo
 
 Danh sách này phân biệt phần đã viết nhưng chưa nối vào app, phần còn thiếu theo roadmap, công việc cần xác minh vận hành và tính năng đang tắt có chủ đích. Chưa kiểm tra lại database production, workflow n8n, bản web đang phục vụ hoặc máy POS tại quầy. Trạng thái production trong các báo cáo cũ chỉ là bằng chứng tại ngày báo cáo.
 
-## Cập nhật mới nhất — 24/10/2026: Testing 6, vẫn đang làm dang dở
+## Cập nhật mới nhất — 25/10/2026: Testing7, chờ duyệt11quyền, tạm dừng
+
+- Testing7 đã upload thành công. Bỏ headerTitle Chấm công nhân viên, title dự phòng là Gánh Hàng Rong; giữ thanh điều hướng/Back. Chưa kiểm chứng thay đổi header trên điện thoại.
+- Đã nộp giải trình và ảnh cho đủ11quyền, UI đều Đợi xét duyệt. Chưa được cấp quyền; nội dung nêu đúng demo chưa gọi API Zalo thật.
+- Xét duyệt PHÁT HÀNH phiên bản7 chưa gửi xong: thiếu email xác thực, Webhook xử lý rút đồng ý/xóa dữ liệu và Điều khoản sử dụng. Không Publish/Live.
+- Theo yêu cầu chủ app, tạm dừng chờ kết quả quyền rồi mới làm tiếp. Không tự nối API/DB, triển khai webhook, tạo tài khoản hoặc lập lịch theo dõi.
+- [Báo cáo chi tiết và điểm tiếp tục](checklist/reports/attendance-review-attempt-2026-10-25.md), [ảnh11quyền chờ duyệt](checklist/reports/assets/attendance-review-2026-10-25/permissions-11-pending.jpg).
+
+## Mốc trước — 24/10/2026: Testing 6, vẫn đang làm dang dở
 
 Đã cập nhật [bảng11quyền và14ảnh giao diện Testing6](checklist/reports/attendance-permission-explanations-testing6-2026-10-24.md), chụp từ demo local cùng mã nguồn, chưa phải bằng chứng native Zalo. Bộ23/10 được giữ làm lịch sử. Chưa gửi xin quyền/xét duyệt.
 
