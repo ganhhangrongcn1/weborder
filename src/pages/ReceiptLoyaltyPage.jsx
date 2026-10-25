@@ -37,8 +37,8 @@ export default function ReceiptLoyaltyPage() {
 
         <section className="receipt-rewards__card" aria-label="Điểm thành viên">
           <div className="receipt-rewards__tabs" role="tablist" aria-label="Chức năng">
-            <button id="receipt-claim-tab" type="button" role="tab" aria-selected={tab === "claim"} aria-controls="receipt-panel" onClick={() => setTab("claim")}>Tích điểm đơn</button>
-            <button id="receipt-summary-tab" type="button" role="tab" aria-selected={tab === "summary"} aria-controls="receipt-panel" onClick={() => setTab("summary")}>Xem điểm</button>
+            <button id="receipt-claim-tab" type="button" role="tab" aria-selected={tab === "claim"} aria-controls="receipt-panel" onClick={() => { setTab("claim"); vm.clearError(); }}>Tích điểm đơn</button>
+            <button id="receipt-summary-tab" type="button" role="tab" aria-selected={tab === "summary"} aria-controls="receipt-panel" onClick={() => { setTab("summary"); vm.clearError(); }}>Xem điểm</button>
           </div>
           <div id="receipt-panel" role="tabpanel" aria-labelledby={tab === "claim" ? "receipt-claim-tab" : "receipt-summary-tab"}>
             {tab === "claim" ? <>
@@ -68,7 +68,7 @@ export default function ReceiptLoyaltyPage() {
               {vm.summary && <div className="receipt-rewards__points" role="status"><span>Tổng điểm hiện có</span><strong>{number(vm.summary.totalPoints)} <small>điểm</small></strong></div>}
             </>}
           </div>
-          {vm.error && <p className="receipt-rewards__error" role="alert">{vm.error}</p>}
+          {(vm.error || (tab === "claim" && vm.loadError)) && <p className="receipt-rewards__error" role="alert">{vm.error || vm.loadError}</p>}
           <Link to="/review-rewards" className="receipt-rewards__banner"><span className="receipt-rewards__star" aria-hidden="true">★</span><span><small>THƯỞNG ĐIỂM ĐÁNH GIÁ</small><strong>Đánh giá ngay —<br />Nhận điểm liền tay</strong><em>Đơn đối tác · Google Maps</em></span><span className="receipt-rewards__banner-cta">Xem ngay ›</span></Link>
           <Link className="receipt-rewards__account" to="/profile">Đăng nhập để xem lịch sử và dùng điểm →</Link>
           <p className="receipt-rewards__support">Cần hỗ trợ bill hoặc nhập nhầm số? <a href="tel:0933799061">0933 799 061</a></p>

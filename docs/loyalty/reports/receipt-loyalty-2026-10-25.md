@@ -11,7 +11,8 @@
 ## Khảo sát
 
 - Nhánh gốc `codex/cloud-source-20261023`, commit `d28901b`; đã fetch GitHub. Nhánh này có công việc riêng ngoài main; không merge/push main để tránh đưa các phần đó lên production.
-- Nhánh triển khai `codex/receipt-loyalty-20261025`.
+- Checkpoint đầu `codex/receipt-loyalty-20261025` / `b048f05` đã push.
+- Nhánh phát hành `codex/receipt-loyalty-release-20261025` được tạo từ `origin/main` (`8a53a05`), chỉ cherry-pick tính năng. Giữ route tuyển dụng và các bản sửa POS trên main. Không đưa công việc chấm công của nhánh gốc lên main.
 - QR cũ là `/orders?phone=...`; khách nhận điểm đối tác qua tài khoản đúng số.
 - Supabase hiện khóa sự kiện theo nguồn + id đơn + action + version và idempotency key.
 - Đơn đối tác chỉ tính điểm trên tiền thực nhận; thiếu đối soát phải giữ chờ, không dùng tổng bill thay thế.
@@ -22,7 +23,28 @@
 1. Đã khảo sát mã nguồn và schema/hàm production bằng truy vấn đọc. Chưa thay đổi production ở thời điểm tạo ghi chép này.
 2. Đã xây cơ chế token, điều kiện thanh toán, trang riêng và đường in tương thích.
 3. Build/encoding web đã đạt. Kiểm tra SQL trong một transaction rồi ROLLBACK đạt 7 tình huống: chưa trả, trả trước hoàn tất, chống nhận lại/in lại/hoàn tất, hủy thu hồi, đối tác tự cộng khi chuẩn bị, đối tác thiếu số/chờ đối soát rồi nhận QR, giữ trạng thái đã nhận sau hết hạn.
-4. Đang bổ sung kiểm tra quyền khách vãng lai, đường in và UI; chưa kích hoạt production.
+4. Khách `anon` nhận được qua token trong transaction thử, không có quyền issue token/đọc bảng private. Đã xác nhận không còn đơn thử sau rollback.
+5. POS Jest 3 bộ/15 kiểm tra đạt; kiểm tra gói QR + in lại + tem đạt. Bộ `scripts/receipt-loyalty.test.mjs` kiểm tra QR bill trả tiền, định danh canonical, phiếu làm món không tạo QR, giữ link server, trạng thái đã nhận/hủy/chờ đối soát, banner và link tài khoản đạt.
+6. Đã xem UI local bằng trình duyệt (bản build), trang độc lập không footer, banner theo ảnh. QR nhạy cảm được tạo bằng thư viện tại chỗ, không gửi token tới dịch vụ tạo ảnh ngoài; bỏ token khỏi thống kê lượt truy cập.
+7. Cơ chế mới có công tắc `receipt_private.activation.enabled`, mặc định tắt khi cài migration. Chỉ bật sau khi web production và đường in sẵn sàng. Không yêu cầu OTP và không cấp quyền đăng nhập từ QR.
+8. APK đã build thành công: `ghr-pos-mobile-native/releases/GHR-POS-0.4.30.apk`, package `vn.ghr.posmobile`, versionCode 61; ABI arm64-v8a/armeabi-v7a. Chữ ký SHA-256 `728d5843ae0c8883171fdae3fd65b6375810d27ed946297c5cee3a51b62224ea`. APK SHA-256 `CBE0B44B5F858B27ACE5784DC7C9B92AE8176C3A87F424188D8FD342CAE1E03F`.
+
+## Vận hành và tương thích
+
+- Máy POS cũ vẫn in QR theo số; cần cài APK mới để in QR riêng bill. Không được coi build APK là đã cài tại quán.
+- Luồng bán hàng/in vẫn chạy nếu dịch vụ link lỗi; giới hạn chờ link 5 giây, UI nhận điểm 10 giây. Bảng private `failures` giữ lỗi tự động để đối soát; không hiển thị token/SĐT ra log công khai.
+- Gói in `qr_order_bundle`: phiếu làm món không có QR thưởng; bill khách thứ hai giữ `footerQrUrl` từ máy chủ.
+- Bỏ nút khách bấm nhận điểm đối tác tại `/orders`; giữ RPC cũ cho client cũ và công cụ điều chỉnh của nhân viên. Khóa sự kiện vẫn chung.
+- Nhập nhầm số sau khi nhận cần nhân viên đối soát, điều chỉnh qua công cụ hiện có có ghi lịch sử; khách không tự chuyển điểm bằng QR. Không thay thông tin giao hàng hoặc gắn tài khoản đăng nhập khi nhận điểm.
+- Bill cũ không có token vẫn mở tra cứu theo SĐT; in lại bill chính thức có thể tạo token, không cộng trùng. Không tự quét/cộng hàng loạt đơn lịch sử.
+- Trường hợp thu hồi gặp lỗi nghiệp vụ FIFO/điểm đã dùng phải đối soát từ `receipt_private.failures`; không xóa lịch sử ledger hay tự sửa số dư.
+
+## Các file trong tính năng
+
+- Mới: `src/pages/ReceiptLoyaltyPage.jsx`, `src/hooks/useReceiptLoyalty.js`, `src/services/receiptLoyaltyService.js`, `src/services/repositories/receiptLoyaltyRepository.js`, `src/styles/receipt-loyalty.css`.
+- Mới: `docs/supabase-sql/receipt-loyalty-paid-claim.sql`, `supabase/migrations/20261025022036_receipt_loyalty_paid_claim.sql`, `scripts/receipt-loyalty.test.mjs`, `scripts/receipt-loyalty-rollback-test.sql`, báo cáo này.
+- Cập nhật: `src/app/routes.jsx`, `src/features/orders/TrackingView.jsx`, `src/hooks/useSiteVisitTracking.js`, `src/services/printerService.js`, `scripts/stamp-print-station.test.mjs`.
+- Cập nhật: `ghr-pos-mobile-native/src/services/pos/posPrinterService.js`, `ghr-pos-mobile-native/src/services/pos/posPrintStationService.js`, `ghr-pos-mobile-native/android/app/build.gradle`.
 
 ## Kiểm tra bắt buộc trước kích hoạt
 

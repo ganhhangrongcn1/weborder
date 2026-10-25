@@ -3,7 +3,6 @@ import { NativeModules, Platform } from "react-native";
 
 import { getCashBreakdownEntries } from "./posCashBreakdownService";
 import { formatMoney } from "../../utils/format";
-import { supabase } from "../supabase/client";
 
 const printerModule = NativeModules.PosPrinter || null;
 const NO_FOOTER_SOURCE_TYPES = new Set([
@@ -201,11 +200,15 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
   const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType) && !isPreparationTicket;
   const receiptOrderId = toText(text.match(/^@@RECEIPTORDER:(.+)$/m)?.[1]);
   text = text.replace(/^@@RECEIPTORDER:.*\n?/gm, "");
-  if (shouldUseDefaultFooter && receiptOrderId && !footerQrUrl && supabase) {
+  if (shouldUseDefaultFooter && receiptOrderId && !footerQrUrl) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
     try {
-      const { data, error } = await supabase.rpc("get_receipt_loyalty_link", { p_source: "ORDER", p_id: receiptOrderId });
+      const { supabase } = require("../supabase/client");
+      const { data, error } = await supabase.rpc("get_receipt_loyalty_link", { p_source: "ORDER", p_id: receiptOrderId }).abortSignal(controller.signal);
       if (!error && data) footerQrUrl = data;
     } catch { /* The cashier can still print if the optional receipt link is unavailable. */ }
+    finally { clearTimeout(timeout); }
   }
   const positioned = placeStampsAfterLoyaltyQr(text, toText(footerText) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_TEXT : ""));
   return printerModule.printReceipt({

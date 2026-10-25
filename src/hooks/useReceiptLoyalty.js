@@ -10,17 +10,18 @@ export default function useReceiptLoyalty(token) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const active = useRef(0);
   const submitting = useRef(false);
 
   const refresh = useCallback(async () => {
     const request = ++active.current;
-    setLoading(true); setError("");
+    setLoading(true); setLoadError("");
     try {
       const data = await readReceiptLoyalty(token);
       if (request === active.current) setReceipt(data);
     } catch (failure) {
-      if (request === active.current) setError(failure.message);
+      if (request === active.current) setLoadError(failure.message);
     } finally {
       if (request === active.current) setLoading(false);
     }
@@ -60,5 +61,5 @@ export default function useReceiptLoyalty(token) {
   }
 
   return { receipt, phone, setPhone, summaryPhone, setSummaryPhone, summary, confirmPhone,
-    setConfirmPhone, loading, busy, error, refresh, review, claim, lookup };
+    setConfirmPhone, loading, busy, error, loadError, clearError: () => setError(""), refresh, review, claim, lookup };
 }

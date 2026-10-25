@@ -15,7 +15,8 @@ alter table receipt_private.receipts enable row level security;
 revoke all on receipt_private.receipts from public, anon, authenticated;
 
 create table if not exists receipt_private.activation (
-  singleton boolean primary key default true check(singleton), started_at timestamptz not null default now()
+  singleton boolean primary key default true check(singleton), started_at timestamptz not null default now(),
+  enabled boolean not null default false
 );
 insert into receipt_private.activation(singleton) values(true) on conflict do nothing;
 create table if not exists receipt_private.failures (
@@ -51,6 +52,9 @@ begin
     original_phone:=public.normalize_vietnam_phone(o.customer_phone);
     points_value:=o.expected_earn_points; amount_value:=o.points_base_amount;
     rule_id:=o.loyalty_rule_version_id; code_value:=o.order_code; state_value:=lower(o.status);
+    if lower(coalesce(o.metadata->>'paymentStatus',o.metadata->>'payment_status','')) in ('refunded','refund','cancelled','canceled') then
+      state_value:='refunded';
+    end if;
     action_value:='SETTLE_EARN';
   elsif p_source='PARTNER_ORDER' then
     select * into po from public.partner_orders where id::text=p_id for update;
@@ -141,6 +145,8 @@ begin
       'branchName',branch_name,'createdAt',created_at,'totalAmount',total_amount,
       'pointsBaseAmount',points_base_amount,'source','Gánh Hàng Rong'),lower(status),expected_earn_points,customer_phone
     into details,state_value,points_value,source_phone from public.orders where id=r.source_id;
+    if exists(select 1 from public.orders where id=r.source_id
+      and lower(coalesce(metadata->>'paymentStatus',metadata->>'payment_status','')) in ('refunded','refund','cancelled','canceled')) then state_value:='refunded'; end if;
   else
     select jsonb_build_object('orderCode',coalesce(nullif(display_order_code,''),order_code),
       'branchName',branch_name,'createdAt',coalesce(order_time,created_at),'totalAmount',total_amount,
@@ -166,6 +172,9 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare r receipt_private.receipts%rowtype; current_view jsonb; phone_key text;
 begin
   -- Capability authorizes only this bill; no access to account or order history.
+  if not (select enabled from receipt_private.activation where singleton) then
+    raise exception 'Hệ thống đang tạm ngưng nhận điểm. Vui lòng thử lại sau.';
+  end if;
   current_view:=public.get_receipt_loyalty(p_token);
   if current_view->>'status'='claimed' then return current_view; end if;
   if current_view->>'status'<>'available' then raise exception 'Bill chưa đủ điều kiện hoặc đã hết hạn nhận điểm.'; end if;
@@ -181,6 +190,7 @@ create or replace function public.get_receipt_loyalty_link(p_source text,p_id te
 returns text language plpgsql security definer set search_path = '' as $$
 declare branch_value uuid; state_value text; paid boolean; url text;
 begin
+  if not (select enabled from receipt_private.activation where singleton) then return null; end if;
   if p_source='ORDER' then
     select branch_uuid,lower(status),lower(coalesce(metadata->>'paymentStatus',metadata->>'payment_status',''))
       in ('paid','converted','completed','success') into branch_value,state_value,paid from public.orders where id=p_id;
@@ -197,6 +207,7 @@ $$;
 create or replace function receipt_private.order_changed()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+  if not (select enabled from receipt_private.activation where singleton) then return new; end if;
   if pg_trigger_depth()>2 then return new; end if;
   if exists(select 1 from receipt_private.receipts where source_type='ORDER' and source_id=new.id) then
     perform receipt_private.settle('ORDER',new.id);
@@ -216,6 +227,7 @@ $$;
 create or replace function receipt_private.partner_changed()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+  if not (select enabled from receipt_private.activation where singleton) then return new; end if;
   if pg_trigger_depth()>2 then return new; end if;
   -- Merchant contract: partner orders arrive paid; no completion or print wait.
   -- Existing rows are not bulk-awarded or silently backfilled on unrelated updates.
@@ -237,9 +249,11 @@ create or replace function receipt_private.print_job_created()
 returns trigger language plpgsql security definer set search_path = '' as $$
 declare source_value text; id_value text; url text; branch_value uuid;
 begin
-  if new.job_type<>'customer_bill' or coalesce(new.payload->>'text','') like '%PHIẾU LÀM MÓN%'
+  if not (select enabled from receipt_private.activation where singleton) then return new; end if;
+  if new.job_type<>'customer_bill' or (coalesce(new.payload->>'text','') like '%PHIẾU LÀM MÓN%'
+      and lower(new.source_type)<>'qr_order_bundle')
     or lower(new.source_type) in ('pos_payment_qr','pos_payment_momo_qr','pickup_order_payment_qr',
-      'delivery_order_payment_qr','qr_order_preparation','qr_order_bundle','item_label','pos_shift_close') then return new; end if;
+      'delivery_order_payment_qr','qr_order_preparation','item_label','pos_shift_close') then return new; end if;
   id_value:=coalesce(nullif(new.payload->'order'->>'id',''),new.order_id);
   source_value:=case when lower(new.source_type) in ('partner','partner_order','grab','grabfood',
     'shopee','shopeefood','xanhngon','nexpos','foodapp','food_app') then 'PARTNER_ORDER' else 'ORDER' end;

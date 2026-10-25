@@ -12,9 +12,13 @@ async function rpc(name, payload, { write = false, staff = false } = {}) {
     ? getSupabaseKitchenAuthClient() || getSupabaseAdminAuthClient()
     : getSupabaseRuntimeClient() || await initSupabaseRuntimeClient();
   if (!client) throw new Error("Chưa kết nối được hệ thống. Vui lòng thử lại.");
-  const { data, error } = await client.rpc(name, payload);
-  if (error) throw new Error(error.message || "Chưa xử lý được bill. Vui lòng thử lại.");
-  return data;
+  const controller = new globalThis.AbortController();
+  const timeout = setTimeout(() => controller.abort(), staff ? 5000 : 10000);
+  try {
+    const { data, error } = await client.rpc(name, payload).abortSignal(controller.signal);
+    if (error) throw new Error(error.message || "Chưa xử lý được bill. Vui lòng thử lại.");
+    return data;
+  } finally { clearTimeout(timeout); }
 }
 
 export default {

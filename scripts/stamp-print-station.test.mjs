@@ -4,7 +4,8 @@ import vm from 'node:vm';
 const base = new URL('../ghr-pos-mobile-native/src/services/pos/', import.meta.url);
 const context = vm.createContext({console, Date, Set, Map, Promise, setTimeout: (fn, ms) => { const t=setTimeout(fn, ms > 10000 ? ms : 1); if(ms>10000)t.unref();return t; },clearTimeout});
 const printed=[]; const lookups=[]; const updates=[];
-const job={id:'test-print',job_type:'customer_bill',source_type:'qr_order_bundle',created_at:new Date().toISOString(),payload:{text:'@@CENTER:PHIẾU LÀM MÓN',secondaryText:'@@CENTER:HÓA ĐƠN BÁN HÀNG\nĐÃ THANH TOÁN',order:{customerPhone:'0901234567'}}};
+const receiptUrl='https://ganhhangrong.vn/nhan-diem/'+'a'.repeat(64);
+const job={id:'test-print',job_type:'customer_bill',source_type:'qr_order_bundle',created_at:new Date().toISOString(),payload:{text:'@@CENTER:PHIẾU LÀM MÓN',secondaryText:'@@CENTER:HÓA ĐƠN BÁN HÀNG\nĐÃ THANH TOÁN',footerQrUrl:receiptUrl,order:{customerPhone:'0901234567'}}};
 const chain={update(value){updates.push(value);return this;},eq(){return this;},gte(){return this;},select(){return this;},maybeSingle:async()=>({data:job}),then(resolve){return Promise.resolve({error:null}).then(resolve);}};
 const receipt=new vm.SourceTextModule(fs.readFileSync(new URL('posStampReceipt.js',base),'utf8'),{context});
 await receipt.link(()=>{});await receipt.evaluate();
@@ -24,10 +25,14 @@ assert.equal(lookups.length,2,'one summary read per QR customer bill, including 
 assert(lookups.every(x=>x.phone==='0901234567'&&x.options.force));
 for(const index of [0,2])assert(!printed[index].text.includes('@@STAMPS'),'preparation ticket must not show stamps');
 for(const index of [1,3]){
+ assert.equal(printed[index].footerQrUrl,receiptUrl,'paid secondary customer bill preserves its receipt token');
  assert(!printed[index].text.includes('@@STAMPS'));
  assert(printed[index].footerText.includes('@@STAMPS:1'));
  assert(printed[index].footerText.indexOf('@@STAMPS:1')>printed[index].footerText.indexOf('@@QR'));
  assert(!printed[index].footerText.includes('@@STAMPEND'));
 }
+for(const index of [0,2])assert.equal(printed[index].footerQrUrl,'','preparation ticket must not receive a loyalty footer QR');
+const partner=station.namespace.buildPrintPayload({job_type:'customer_bill',source_type:'partner',payload:{text:'@@BIG:GF-123\n@@BOLDROW:Món\t1',receiptLoyaltyUrl:receiptUrl,order:{id:'partner-uuid',customerPhone:'0901234567'}}});
+assert.equal(partner.qrUrl,receiptUrl,'partner receipt must prefer the canonical token over the legacy phone URL');
 assert.equal(updates.filter(x=>x.status==='printed').length,2);
 console.log('QR bundle customer receipt and reprint passed; one read per bill, no stamp-award call.');

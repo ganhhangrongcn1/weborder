@@ -64,7 +64,8 @@ function getPrinterConfig(overrides = {}) {
     receiptWidthMm: toReceiptWidth(overrides.receiptWidthMm || env.VITE_RECEIPT_WIDTH_MM),
     storeName: toText(overrides.storeName || env.VITE_RECEIPT_STORE_NAME || DEFAULT_STORE_NAME),
     timeoutMs: toNumber(overrides.timeoutMs || env.VITE_PRINT_BRIDGE_TIMEOUT_MS, DEFAULT_BRIDGE_TIMEOUT_MS),
-    loyaltyUrl: toText(overrides.loyaltyUrl || env.VITE_RECEIPT_LOYALTY_URL || LOYALTY_QR_URL)
+    loyaltyUrl: toText(overrides.loyaltyUrl || env.VITE_RECEIPT_LOYALTY_URL || LOYALTY_QR_URL),
+    loyaltyQrImage: toText(overrides.loyaltyQrImage)
   };
 }
 
@@ -408,6 +409,8 @@ function escapeHtml(value = "") {
 }
 
 function qrImageUrl(value = LOYALTY_QR_URL) {
+  // A receipt token is a bearer capability: never send it to a QR image vendor.
+  if (String(value).includes("/nhan-diem/")) return "";
   return `https://api.qrserver.com/v1/create-qr-code/?size=170x170&margin=8&data=${encodeURIComponent(value)}`;
 }
 
@@ -586,7 +589,7 @@ function buildReceiptHtml(order = {}, options = {}) {
       ${isPreparationTicket ? "" : `
         <div class="line"></div>
         <div class="center"><strong>ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY</strong></div>
-        <img class="qr" src="${qrImageUrl(config.loyaltyUrl)}" alt="QR tích điểm" />
+        <img class="qr" src="${config.loyaltyQrImage || qrImageUrl(config.loyaltyUrl)}" alt="QR tích điểm" />
         <div class="center">Quét QR để tích 10 - 15% giá trị đơn</div>
       ${!isPreparationTicket && receipt.stampSummary?.enabled ? `<div class="line"></div><div class="center"><strong>TÍCH TEM NHẬN QUÀ</strong></div>${buildStampReceiptSvg(receipt.stampSummary.available)}<div>Tem khả dụng hiện tại: ${escapeHtml(receipt.stampSummary.available)}/10</div><div>Mỗi ngày tối đa 1 tem / số điện thoại.</div>` : ""}
         <div class="center"><strong>ganhhangrong.vn</strong></div>
@@ -993,7 +996,10 @@ export async function printCustomerBill(order = {}, options = {}) {
   if (order.id && (isPartnerAppReceipt(normalizeReceiptOrder(order)) || isReceiptPaid(normalizeReceiptOrder(order)))) {
     try {
       const url = await prepareReceiptLoyaltyUrl(order);
-      if (url) options = { ...options, loyaltyUrl: url };
+      if (url) {
+        const QRCode = (await import("qrcode")).default;
+        options = { ...options, loyaltyUrl: url, loyaltyQrImage: await QRCode.toDataURL(url, { width: 170, margin: 2 }) };
+      }
     } catch {
       // Keep printing available. The legacy QR remains usable during rollout.
     }

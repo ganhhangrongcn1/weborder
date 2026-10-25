@@ -1,6 +1,7 @@
 -- Run in ONE transaction after the candidate migration, then ROLLBACK.
 -- No test row, point, print job or program change may be committed.
 create temporary table receipt_test_results (scenario text, passed boolean);
+update receipt_private.activation set enabled=true where singleton;
 do $$
 declare o public.orders%rowtype; po public.partner_orders%rowtype;
   test_order_id text:='RECEIPT-ROLLBACK-'||gen_random_uuid(); partner_id uuid:=gen_random_uuid();
@@ -80,6 +81,29 @@ begin
   -- Already claimed must remain claimed, not become claimable after expiry.
   if public.get_receipt_loyalty(token_value)->>'status'<>'claimed' then raise exception 'Claim state changed after expiry'; end if;
   insert into receipt_test_results values('claimed_state_survives_expiry',true);
+
+  partner_id:=gen_random_uuid(); po.id:=partner_id; po.nexpos_order_id:='RECEIPT-ROLLBACK-'||partner_id;
+  po.order_code:=po.nexpos_order_id; po.display_order_code:=po.order_code;
+  po.net_received_amount:=100000;
+  po.raw_data:=jsonb_build_object('finance_data',jsonb_build_object('real_received',100000));
+  insert into public.partner_orders select po.*;
+  select token into token_value from receipt_private.receipts where source_type='PARTNER_ORDER' and source_id=partner_id::text;
+  update receipt_private.receipts set expires_at=now()-interval '1 second' where token=token_value;
+  if public.get_receipt_loyalty(token_value)->>'status'<>'expired' then raise exception 'Expired bill still available'; end if;
+  begin
+    perform public.claim_receipt_loyalty(token_value,'0999999901');
+    raise exception 'Expired claim incorrectly succeeded';
+  exception when others then
+    if sqlerrm='Expired claim incorrectly succeeded' then raise; end if;
+  end;
+  insert into receipt_test_results values('unclaimed_expired_bill_blocked',true);
+  begin
+    perform public.get_receipt_loyalty(repeat('b',64));
+    raise exception 'Unknown token incorrectly succeeded';
+  exception when others then
+    if sqlerrm='Unknown token incorrectly succeeded' then raise; end if;
+  end;
+  insert into receipt_test_results values('unknown_token_blocked',true);
 end;
 $$;
 select jsonb_agg(jsonb_build_object('scenario',scenario,'passed',passed)) as test_results from receipt_test_results;
