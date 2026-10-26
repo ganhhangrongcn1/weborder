@@ -2,7 +2,7 @@
 import compactReceiptLayout from "./compactReceiptLayout.js";
 export const RECEIPT_TEMPLATE_KEY = "ghr_receipt_template";
 export const DEFAULT_RECEIPT_TEMPLATE = {
-  version: 1, enabled: false,
+  version: 1, enabled: true,
   brand: "GÁNH HÀNG RONG", slogan: "",
   customerTitle: "HÓA ĐƠN BÁN HÀNG", kitchenTitle: "PHIẾU LÀM MÓN",
   thanks: "Cảm ơn anh chị. Hẹn gặp lại!", website: "ganhhangrong.vn", hotline: "0933799061",
@@ -23,6 +23,9 @@ export function normalizeReceiptTemplate(value = {}) {
   for (const key of ["brand", "customerTitle", "kitchenTitle"]) {
     if (!result[key]) result[key] = DEFAULT_RECEIPT_TEMPLATE[key];
   }
+  // The approved shared template is mandatory in POS 0.4.31 and the web release.
+  // Old enabled=false snapshots must not resurrect the retired print layout.
+  result.enabled = true;
   return result;
 }
 

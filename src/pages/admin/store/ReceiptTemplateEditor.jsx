@@ -39,7 +39,7 @@ export default function ReceiptTemplateEditor({ draft, update, loading, saving, 
       </header>
       <div className="receipt-template-note">
         <strong>{previewOnly ? "Bản xem thử riêng, không lưu cấu hình hay gửi lệnh in." : draft.enabled ? "Đang dùng mẫu chung trên các phiên bản hỗ trợ." : "Đang xem thử, chưa áp dụng mẫu chung."}</strong>
-        <p>Thay đổi bên dưới chỉ có hiệu lực sau khi bấm Lưu và áp dụng. POS cần bản cập nhật hỗ trợ mẫu chung; bản 0.4.30 chưa có phần này.</p>
+        <p>Thay đổi bên dưới chỉ có hiệu lực sau khi bấm Lưu và áp dụng. POS từ bản 0.4.31 hỗ trợ mẫu chung.</p>
       </div>
       <div className="receipt-template-layout">
         <div className="receipt-template-controls admin-stack">

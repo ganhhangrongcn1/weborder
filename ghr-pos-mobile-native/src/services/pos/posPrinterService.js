@@ -221,12 +221,19 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
     || safeSourceType === "item_label" || safeSourceType === "pos_shift_close";
   const templateText = specialSlip ? combined : applyReceiptTemplate(combined, template, { preparation: isPreparationTicket, expectedEarnPoints, customerPhone });
   const templateApplied = template.enabled && templateText !== combined;
+  // Android's legacy rasterizer removes inline loyalty QR sections from bodyText.
+  // Send the shared footer through its dedicated channel instead of losing it.
+  const templateFooterStart = templateApplied
+    ? templateText.indexOf("\n@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM ĐƠN NÀY") : -1;
+  const dedicatedFooter = templateFooterStart >= 0;
+  const templateQrUrl = toText(qrUrl || footerQrUrl) || buildReceiptFooterQrUrl(customerPhone);
   return printerModule.printReceipt({
-    text: templateApplied ? templateText : positioned.text,
-    qrUrl: templateApplied ? (qrUrl || footerQrUrl || buildReceiptFooterQrUrl(customerPhone)) : qrUrl,
+    text: dedicatedFooter ? templateText.slice(0, templateFooterStart)
+      : templateApplied ? templateText : positioned.text,
+    qrUrl: dedicatedFooter ? "" : templateApplied ? templateQrUrl : qrUrl,
     sourceType: safeSourceType || sourceType,
-    footerText: templateApplied ? "" : positioned.footerText,
-    footerQrUrl: templateApplied ? "" : toText(footerQrUrl) || (shouldUseDefaultFooter ? buildReceiptFooterQrUrl(customerPhone) : "")
+    footerText: dedicatedFooter ? templateText.slice(templateFooterStart + 1) : templateApplied ? "" : positioned.footerText,
+    footerQrUrl: dedicatedFooter ? templateQrUrl : templateApplied ? "" : toText(footerQrUrl) || (shouldUseDefaultFooter ? buildReceiptFooterQrUrl(customerPhone) : "")
   });
 }
 

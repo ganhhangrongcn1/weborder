@@ -2,6 +2,11 @@
 
 ## Rút gọn theo duyệt ngày 26/10/2026
 
+- Anh duyệt merge PR #14, triển khai web chính và build APK kế tiếp. Bản phát hành chuẩn bị: `vn.ghr.posmobile`, versionName `0.4.31`, versionCode `62`, giữ khóa ký release hiện hữu. APK 0.4.30 thực tế code 61; metadata tải xuống cũ đang ghi 60, nên bản mới phải công bố đúng 62 sau kiểm chứng APK.
+- Theo chỉ đạo không quay về mẫu cũ: mẫu chung bắt buộc, kể cả cấu hình chưa tồn tại hoặc có enabled=false cũ; web bỏ HTML bill legacy. Giữ các bộ tính tiền/món gốc làm dữ liệu đầu vào, không sửa nghiệp vụ điểm/tem.
+- Rà soát Android thực phát hiện rasterizer cũ loại QR inline khỏi phần thân. Đã đưa khối QR/tem mới vào đúng kênh footerText/footerQrUrl riêng, có kiểm tra để không mất phần cuối trên máy thật. Lệnh web đã trả và đơn đối tác ưu tiên dựng lại từ dữ liệu đơn có cấu trúc thay cho text cũ nằm trong hàng đợi; phiếu QR thanh toán/nhãn/ca vẫn đi luồng riêng.
+- File sửa bổ sung cho phát hành: `ghr-pos-mobile-native/android/app/build.gradle`, `ghr-pos-mobile-native/__tests__/posPrinterService.test.js`, `ghr-pos-mobile-native/src/services/pos/receiptTemplate.js`, `ghr-pos-mobile-native/src/services/pos/posPrinterService.js`, `ghr-pos-mobile-native/src/services/pos/posPrintStationService.js`, `scripts/receipt-template.test.mjs`, `src/services/printerService.js`, `src/pages/admin/store/ReceiptTemplateEditor.jsx` và báo cáo này. POS Jest 5 bộ/21 ca đạt; mock kết nối native ở test dựng bill, không sửa cấu hình auth runtime.
+
 - Lời nhắc tem cập nhật tiếp: thiếu SĐT ghi “Quét mã bên trên để tích tem đổi quà”; có 3 tem ghi “Còn 7 tem nữa để nhận quà” thay số dư 3/10. Đủ 10 tem ghi “Đã đủ tem để nhận quà”. Nếu admin tắt QR, dùng lời nhắc cung cấp SĐT thay vì chỉ tới mã không có trên bill. Kiểm tra in lại và đủ 10 tem, không thay logic tích/đổi tem. File sửa: bộ trình bày `receiptTemplate.js`, `scripts/receipt-template.test.mjs`, báo cáo này.
 
 - Chỉnh tiếp theo ảnh anh duyệt: tiêu đề “ĐỪNG BỎ LỠ ĐIỂM ĐƠN NÀY”, dưới là “Quét để nhận 7000”; không có chữ/ký hiệu đơn vị sau số. Nếu chưa có số thưởng thì dùng lời mời chung, không suy từ tổng tiền.

@@ -1,8 +1,7 @@
-import buildStampReceiptSvg from "./stampReceiptService.js";
 import { readStampSummary } from "./stampProgramService.js";
 import { prepareReceiptLoyaltyUrl } from "./receiptLoyaltyService.js";
 import { getReceiptTemplate, loadReceiptTemplate } from "./receiptTemplateService.js";
-import { applyReceiptTemplate } from "../../ghr-pos-mobile-native/src/services/pos/receiptTemplate.js";
+import { applyReceiptTemplate, normalizeReceiptTemplate } from "../../ghr-pos-mobile-native/src/services/pos/receiptTemplate.js";
 import buildTemplatePrintHtml from "./receiptTemplateHtml.js";
 const PRINTER_MODE = {
   webPrint: "webPrint",
@@ -339,7 +338,7 @@ function pushPartnerLoyaltyPrompt(lines, expectedEarnPoints = 0) {
 function buildReceiptText(order = {}, options = {}) {
   const config = getPrinterConfig(options);
   const receipt = normalizeReceiptOrder(order, options);
-  const template = options.receiptTemplate || getReceiptTemplate();
+  const template = normalizeReceiptTemplate(options.receiptTemplate || getReceiptTemplate());
   if (template.enabled && !template.showCustomer) {
     receipt.customerName = "";
     receipt.customerPhone = "";
@@ -437,201 +436,9 @@ function qrImageUrl(value = LOYALTY_QR_URL) {
 
 function buildReceiptHtml(order = {}, options = {}) {
   const config = getPrinterConfig(options);
-  const template = options.receiptTemplate || getReceiptTemplate();
-  if (template.enabled) {
-    return buildTemplatePrintHtml(buildReceiptText(order, options), {
-      qrImage: config.loyaltyQrImage || qrImageUrl(config.loyaltyUrl), width: config.receiptWidthMm
-    });
-  }
-  const receipt = normalizeReceiptOrder(order, options);
-  const showMoney = !isPartnerAppReceipt(receipt);
-  const total = getReceiptTotal(receipt);
-  const receiptPaid = isReceiptPaid(receipt);
-  const paymentLabel = getReceiptPaymentLabel(receipt);
-  const isPreparationTicket = showMoney && !receiptPaid;
-
-  const itemRows = receipt.items.length
-    ? receipt.items.map((item) => {
-      const lineTotal = item.total > 0 ? item.total : item.price * item.quantity;
-      const optionRows = item.options.map((option) => `<div class="sub">+ ${escapeHtml(option)}</div>`).join("");
-      const noteRow = item.note ? `<div class="sub">Ghi chú: ${escapeHtml(item.note)}</div>` : "";
-
-      return `
-        <div class="item">
-          <div>
-            <strong>${item.quantity} x ${escapeHtml(item.name)}</strong>
-            ${optionRows}
-            ${noteRow}
-          </div>
-          ${showMoney && !isPreparationTicket ? `<strong>${lineTotal ? toMoney(lineTotal) : ""}</strong>` : ""}
-        </div>
-      `;
-    }).join("")
-    : `<div class="empty">Chưa có chi tiết món.</div>`;
-
-  return `<!doctype html>
-<html lang="vi">
-  <head>
-    <meta charset="UTF-8" />
-    <title>In bill ${escapeHtml(receipt.orderCode)}</title>
-    <style>
-      @page { size: ${config.receiptWidthMm}mm auto; margin: 0; }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: #ffffff;
-        color: #111111;
-        font-family: system-ui, Arial, sans-serif;
-        font-size: 12px;
-        line-height: 1.35;
-      }
-      .receipt {
-        width: ${config.receiptWidthMm}mm;
-        padding: 10px 8px 14px;
-      }
-      h1 {
-        margin: 0 0 2px;
-        text-align: center;
-        font-size: 16px;
-        line-height: 1.15;
-      }
-      .order-label {
-        margin-top: 4px;
-        text-align: center;
-        font-size: 12px;
-        font-weight: 800;
-      }
-      .order-code {
-        text-align: center;
-        font-size: 46px;
-        line-height: 1.02;
-        font-weight: 1000;
-        letter-spacing: 0;
-        overflow-wrap: anywhere;
-      }
-      .center { text-align: center; }
-      .meta-gap { height: 6px; }
-      .muted { color: #333333; }
-      .line {
-        border-top: 1px dashed #111111;
-        margin: 8px -2px;
-      }
-      .row, .item {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 8px;
-        align-items: start;
-      }
-      .item {
-        padding: 7px 0;
-        border-bottom: 1px dashed #111111;
-      }
-      .item:last-child { border-bottom: 0; }
-      .sub {
-        margin-top: 2px;
-        color: #333333;
-        font-size: 11px;
-      }
-      .total {
-        margin-top: 5px;
-        font-size: 15px;
-        font-weight: 900;
-      }
-      .gift-box {
-        margin: 9px 0 8px;
-        border: 2px solid #111111;
-        padding: 7px 5px;
-        text-align: center;
-      }
-      .gift-title {
-        font-size: 14px;
-        font-weight: 1000;
-        line-height: 1.1;
-      }
-      .gift-text {
-        margin-top: 3px;
-        font-size: 19px;
-        font-weight: 1000;
-        line-height: 1.15;
-      }
-      .empty {
-        padding: 8px 0;
-        color: #333333;
-      }
-      .qr {
-        display: block;
-        width: 36mm;
-        height: 36mm;
-        margin: 8px auto 6px;
-      }
-      .thanks {
-        margin-top: 6px;
-        text-align: center;
-        font-weight: 800;
-      }
-    </style>
-  </head>
-  <body>
-    <main class="receipt">
-      <h1>${escapeHtml(config.storeName)}</h1>
-      <div class="order-label">${isPreparationTicket ? "PHIẾU LÀM MÓN" : "HÓA ĐƠN BÁN HÀNG"}</div>
-      <div class="order-code">${escapeHtml(receipt.orderCode || "CHƯA CÓ MÃ")}</div>
-      <div class="line"></div>
-      ${receipt.branchName ? `<div><strong>Chi nhánh:</strong> ${escapeHtml(receipt.branchName)}</div>` : ""}
-      <div><strong>Nguồn:</strong> ${escapeHtml(receipt.platform)}</div>
-      <div><strong>Giờ:</strong> ${escapeHtml(formatDateTime(receipt.createdAt))}</div>
-      <div class="meta-gap"></div>
-      <div><strong>Khách:</strong> ${escapeHtml(receipt.customerName)}${receipt.customerPhone ? ` - ${escapeHtml(receipt.customerPhone)}` : ""}</div>
-      ${receipt.customerAddress ? `<div><strong>Địa chỉ:</strong> ${escapeHtml(receipt.customerAddress)}</div>` : ""}
-      <div class="meta-gap"></div>
-      ${receipt.fulfillmentType ? `<div><strong>Hình thức:</strong> ${escapeHtml(receipt.fulfillmentType)}</div>` : ""}
-      ${receipt.paymentMethod ? `<div><strong>Thanh toán:</strong> ${escapeHtml(paymentLabel)} - ${receiptPaid ? "ĐÃ THANH TOÁN" : "CHƯA THANH TOÁN"}</div>` : ""}
-      ${isPreparationTicket ? `<div class="center"><strong>*** CHƯA THANH TOÁN TẠI QUẦY ***</strong></div>` : ""}
-      <div class="line"></div>
-      ${itemRows}
-      ${showMoney && !isPreparationTicket ? `
-        <div class="line"></div>
-        ${receipt.subtotal > 0 ? `<div class="row"><span>Tạm tính</span><strong>${toMoney(receipt.subtotal)}</strong></div>` : ""}
-        ${receipt.promoCode ? `<div class="row"><span>Mã giảm giá</span><strong>${escapeHtml(receipt.promoCode)}</strong></div>` : ""}
-        ${receipt.discount > 0 ? `<div class="row"><span>Giảm giá</span><strong>-${toMoney(receipt.discount)}</strong></div>` : ""}
-        ${receipt.shippingFee > 0 ? `<div class="row"><span>Phí ship</span><strong>${toMoney(receipt.shippingFee)}</strong></div>` : ""}
-        ${receiptPaid ? `
-          <div class="row"><span>TỔNG ĐƠN</span><strong>${toMoney(total)}</strong></div>
-          <div class="row total"><span>ĐÃ THANH TOÁN ${escapeHtml(paymentLabel)}</span><strong>${toMoney(receipt.paymentAmount || total)}</strong></div>
-          <div class="row total"><span>CÒN PHẢI THU</span><strong>0</strong></div>
-          <div class="center"><strong>*** KHÔNG THU THÊM TIỀN ***</strong></div>
-        ` : `
-          <div class="row total"><span>TỔNG CẦN THU</span><strong>${toMoney(total)}</strong></div>
-          <div class="center"><strong>*** CHƯA THANH TOÁN ***</strong></div>
-        `}
-      ` : ""}
-      ${receipt.note ? `<div class="line"></div><div><strong>Ghi chú đơn:</strong> ${escapeHtml(receipt.note)}</div>` : ""}
-      ${!isPartnerAppReceipt(receipt) && (receipt.branchName || receipt.branchAddress || receipt.branchPhone) ? `
-        <div class="line"></div>
-        <div class="center"><strong>Thông tin chi nhánh</strong></div>
-        ${receipt.branchName ? `<div class="center">${escapeHtml(receipt.branchName)}</div>` : ""}
-        ${receipt.branchAddress ? `<div class="center">${escapeHtml(receipt.branchAddress)}</div>` : ""}
-        ${receipt.branchPhone ? `<div class="center">${escapeHtml(receipt.branchPhone)}</div>` : ""}
-      ` : ""}
-      ${isPreparationTicket ? "" : `
-        <div class="line"></div>
-        <div class="center"><strong>ĐỪNG BỎ LỠ ĐIỂM CỦA ĐƠN NÀY</strong></div>
-        <img class="qr" src="${config.loyaltyQrImage || qrImageUrl(config.loyaltyUrl)}" alt="QR tích điểm" />
-        <div class="center">Quét QR để tích 10 - 15% giá trị đơn</div>
-      ${!isPreparationTicket && receipt.stampSummary?.enabled ? `<div class="line"></div><div class="center"><strong>TÍCH TEM NHẬN QUÀ</strong></div>${buildStampReceiptSvg(receipt.stampSummary.available)}<div>Tem khả dụng hiện tại: ${escapeHtml(receipt.stampSummary.available)}/10</div><div>Mỗi ngày tối đa 1 tem / số điện thoại.</div>` : ""}
-        <div class="center"><strong>ganhhangrong.vn</strong></div>
-        <div class="center">Hotline: ${SUPPORT_HOTLINE}</div>
-        <div class="thanks">Cảm ơn quý khách!</div>
-      `}
-    </main>
-    <script>
-      window.addEventListener("load", () => {
-        window.focus();
-        window.print();
-      });
-    </script>
-  </body>
-</html>`;
+  return buildTemplatePrintHtml(buildReceiptText(order, options), {
+    qrImage: config.loyaltyQrImage || qrImageUrl(config.loyaltyUrl), width: config.receiptWidthMm
+  });
 }
 
 function buildBridgeUrl(path = "", bridgeUrl = "") {

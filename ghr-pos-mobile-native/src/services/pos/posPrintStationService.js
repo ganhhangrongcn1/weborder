@@ -187,12 +187,20 @@ function isPartnerOrderPrintJob(job = {}) {
 }
 
 function buildPartnerReceiptText(receiptText = "", order = {}) {
+  // Prefer structured order data to any stale text queued by an older client.
+  // Build items without prices; partner reconciliation amounts are internal.
+  if (Array.isArray(order.items) && order.items.length) {
+    receiptText = buildReceiptTextFromOrder({
+      ...order, paymentStatus: "unpaid", payment_status: "unpaid", paidAt: "", paid_at: ""
+    }, "partner").replace("@@CENTER:PHIẾU LÀM MÓN", "@@CENTER:HÓA ĐƠN BÁN HÀNG")
+      .replace("@@CENTER:*** CHƯA THANH TOÁN TẠI QUẦY ***", "");
+  }
   const lines = toText(receiptText).split("\n");
   const orderCodeIndex = lines.findIndex((line) => line.startsWith("@@BIG:"));
   const firstItemIndex = lines.findIndex((line) => line.startsWith("@@BOLDROW:"));
   if (orderCodeIndex < 0) return toText(receiptText);
 
-  const headerLines = lines.slice(0, orderCodeIndex + 1);
+  const headerLines = ["@@CENTER:GÁNH HÀNG RONG", "@@CENTER:HÓA ĐƠN BÁN HÀNG", lines[orderCodeIndex]];
   const itemLines = firstItemIndex >= 0
     ? lines.slice(firstItemIndex)
     : lines.slice(orderCodeIndex + 1).filter((line) => (
@@ -446,8 +454,8 @@ export function buildPrintPayload(job = {}) {
   const isItemLabel = toText(job.job_type) === ITEM_LABEL_JOB_TYPE || sourceType === ITEM_LABEL_JOB_TYPE;
   const order = getObject(payload.order);
   const payloadText = toText(payload.text);
-  const secondaryText = toText(payload.secondaryText) || (payload.secondaryOrder
-    ? buildReceiptTextFromOrder(getObject(payload.secondaryOrder), "pos_phone_payment") : "");
+  const secondaryText = (payload.secondaryOrder
+    ? buildReceiptTextFromOrder(getObject(payload.secondaryOrder), "pos_phone_payment") : "") || toText(payload.secondaryText);
   const paymentStatus = normalizeSourceToken(order.paymentStatus || order.payment_status);
   const paidAt = toText(order.paidAt || order.paid_at);
   const legacyUnpaidReceipt =
@@ -460,8 +468,11 @@ export function buildPrintPayload(job = {}) {
   const generatedText = shouldBuildPreparationTicket
     ? buildReceiptTextFromOrder(order, sourceType)
     : "";
-  const originalText = generatedText || payloadText || buildReceiptTextFromOrder(order, sourceType);
   const isPartnerReceipt = isPartnerOrderPrintJob(job);
+  const currentPaidText = !isItemLabel && !isPartnerReceipt && !NO_FOOTER_SOURCE_TYPES.has(sourceType)
+    && (paidAt || ["paid", "converted"].includes(paymentStatus))
+    ? buildReceiptTextFromOrder(order, sourceType) : "";
+  const originalText = generatedText || currentPaidText || payloadText || buildReceiptTextFromOrder(order, sourceType);
   const text = isPartnerReceipt ? buildPartnerReceiptText(originalText, order) : originalText;
   const isPreparationTicket = text.includes("@@CENTER:PHIẾU LÀM MÓN");
   const skipFooter = isItemLabel || NO_FOOTER_SOURCE_TYPES.has(sourceType) || isPreparationTicket || isPartnerReceipt;

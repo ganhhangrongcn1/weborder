@@ -69,10 +69,10 @@ const paid = native.namespace.buildPosCustomerBillText({ order,
   paymentConfirmed: { paid: true, method: 'cash', amount: 70000, received: 100000, change: 30000 }
 });
 await native.namespace.printLocalReceipt({ text: paid, sourceType: 'pos', footerQrUrl: token });
-assert.equal(printed[0].qrUrl, token);
-assert.equal(printed[0].footerText, '');
+assert.equal(printed[0].footerQrUrl, token);
+assert(printed[0].footerText.includes('@@QR') && !printed[0].text.includes('@@QR'), 'Android rasterizer must receive the complete QR through its dedicated footer');
 assert(printed[0].text.includes('Khách đưa\t100.000') && printed[0].text.includes('Tiền thối\t30.000'));
-assert.equal((printed[0].text.match(/@@STAMPS:3/g) || []).length, 1);
+assert.equal((printed[0].footerText.match(/@@STAMPS:3/g) || []).length, 1);
 assert(!printed[0].text.includes('@@RECEIPTORDER:'));
 const preparation = native.namespace.buildPosPreparationBillText({ order, cart: [{ name: 'Trà', quantity: 2, note: 'Ít đá' }] });
 await native.namespace.printLocalReceipt({ text: preparation, sourceType: 'qr_order_preparation' });
@@ -83,7 +83,9 @@ assert.equal(printed[2].text, bank);
 assert.equal(printed[2].qrUrl, 'bank://payment');
 activeTemplate = normalizeReceiptTemplate();
 await native.namespace.printLocalReceipt({ text: paid, sourceType: 'pos', footerQrUrl: token });
-assert.equal(printed[3].footerQrUrl, token, 'disabled config preserves current behavior');
+assert.equal(printed[3].footerQrUrl, token, 'missing config preserves token and uses approved layout');
+assert(printed[3].footerText.includes('ĐỪNG BỎ LỠ ĐIỂM ĐƠN NÀY'));
+assert.equal(normalizeReceiptTemplate({ enabled: false }).enabled, true, 'legacy disable flag must not restore old layout');
 assert(!normalizeReceiptTemplate({ brand: 'x\n@@QR\x1b' }).brand.includes('@@'));
 const hidden = web.namespace.buildReceiptText(samples.namespace.createReceiptSample('pos', true, true), {
   receiptTemplate: { ...template, showCustomer: false, showLoyalty: false, showStamps: false }
@@ -102,4 +104,23 @@ const fullStampSample = samples.namespace.createReceiptSample('pos', true, true)
 fullStampSample.stampSummary.available = 10;
 const fullStampText = web.namespace.buildReceiptText(fullStampSample, { receiptTemplate: template });
 assert(fullStampText.includes('Đã đủ tem để nhận quà') && !fullStampText.includes('Còn 0 tem'));
+const station = await module('ghr-pos-mobile-native/src/services/pos/posPrintStationService.js', {
+  './posStampReceipt': stamps,
+  './posStampService': mock({ withPosStampSummary: async (order) => order }),
+  'react-native': mock({ AppState: { currentState: 'active' } }),
+  '../supabase/client': mock({ supabase: null }),
+  './posPrinterService': native
+});
+for (const type of ['web', 'partner']) {
+  const sample = { ...samples.namespace.createReceiptSample(type, true, false), id: `${type}-canonical` };
+  const payload = station.namespace.buildPrintPayload({ source_type: type === 'partner' ? 'partner' : 'website', job_type: 'customer_bill',
+    payload: { order: sample, text: 'OLD-QUEUED-LAYOUT', receiptLoyaltyUrl: token, footerQrUrl: token } });
+  assert(!payload.text.includes('OLD-QUEUED-LAYOUT'), 'structured order data must replace stale queued text');
+  if (type === 'partner') assert(!payload.text.includes('70.000') && !payload.text.includes('80.000'));
+  await native.namespace.printLocalReceipt(payload);
+  const raster = printed[printed.length - 1];
+  assert(raster.footerText.includes('ĐỪNG BỎ LỠ ĐIỂM ĐƠN NÀY') && raster.footerText.includes('Quét để nhận 7000'));
+  assert.equal(raster.footerQrUrl, token);
+  assert(!raster.text.includes('@@QR') && raster.footerText.includes('@@STAMPS:0'));
+}
 console.log('Receipt template passed: 4 previews, web/native financial preservation, one QR/stamp block, token, preparation/payment exclusions, disabled fallback, escaping.');
