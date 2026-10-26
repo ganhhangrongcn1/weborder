@@ -1,4 +1,5 @@
-/* global describe, it, expect */
+/* global describe, it, expect, jest */
+jest.mock('../src/services/supabase/client', () => ({ supabase: null }));
 
 import { buildPosCustomerBillText } from "../src/services/pos/posPrinterService";
 

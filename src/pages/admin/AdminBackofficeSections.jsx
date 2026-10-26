@@ -6,6 +6,7 @@ import AppearanceSettings from "./store/AppearanceSettings.jsx";
 import BranchSettings from "./store/BranchSettings.jsx";
 import BranchAccountSettings from "./store/BranchAccountSettings.jsx";
 import AppDownloadSettings from "./store/AppDownloadSettings.jsx";
+import ReceiptTemplateSettings from "./store/ReceiptTemplateSettings.jsx";
 import PromotionTabsManager from "./promotions/PromotionTabsManager.jsx";
 import { AdminPlaceholder } from "./ui/AdminCommon.jsx";
 
@@ -114,6 +115,7 @@ export default function AdminBackofficeSections({
             <ShippingSettings shippingConfig={shippingConfig} onSave={onSaveShipping} />
           )}
           {activeSubSection === "grab" && <GrabAutomationSettings />}
+          {activeSubSection === "receipt-template" && <ReceiptTemplateSettings />}
 
           {activeSubSection === "zalo" && (
             <ZaloSettings zaloConfig={zaloConfig} setZaloConfig={setZaloConfig} onSave={onSaveZalo} />
@@ -127,7 +129,7 @@ export default function AdminBackofficeSections({
             <AppDownloadSettings />
           )}
 
-          {!["branches", "shipping", "grab", "kitchen", "zalo", "accounts", "downloads"].includes(activeSubSection) && (
+          {!["branches", "shipping", "grab", "kitchen", "zalo", "accounts", "downloads", "receipt-template"].includes(activeSubSection) && (
             <AdminPlaceholder text="Đang phát triển" />
           )}
         </div>

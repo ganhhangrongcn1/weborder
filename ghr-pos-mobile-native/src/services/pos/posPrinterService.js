@@ -3,6 +3,8 @@ import { NativeModules, Platform } from "react-native";
 
 import { getCashBreakdownEntries } from "./posCashBreakdownService";
 import { formatMoney } from "../../utils/format";
+import { applyReceiptTemplate } from "./receiptTemplate";
+import { loadPosReceiptTemplate } from "./posReceiptTemplateService";
 
 const printerModule = NativeModules.PosPrinter || null;
 const NO_FOOTER_SOURCE_TYPES = new Set([
@@ -196,10 +198,12 @@ export async function stopLocalPrintStationService() {
 export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = "", footerText = "", footerQrUrl = "", customerPhone = "" } = {}) {
   if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
   const safeSourceType = toText(sourceType).toLowerCase();
-  const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN");
+  const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN")
+    || safeSourceType === "qr_order_preparation" || toText(text).includes("CHƯA THANH TOÁN");
   const shouldUseDefaultFooter = !NO_FOOTER_SOURCE_TYPES.has(safeSourceType) && !isPreparationTicket;
   const receiptOrderId = toText(text.match(/^@@RECEIPTORDER:(.+)$/m)?.[1]);
-  text = text.replace(/^@@RECEIPTORDER:.*\n?/gm, "");
+  const expectedEarnPoints = Math.max(0, Math.floor(Number(text.match(/^@@RECEIPTPOINTS:(\d+)$/m)?.[1]) || 0));
+  text = text.replace(/^@@RECEIPT(?:ORDER|POINTS):.*\n?/gm, "");
   if (shouldUseDefaultFooter && receiptOrderId && !footerQrUrl) {
     const controller = new globalThis.AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -211,12 +215,25 @@ export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = ""
     finally { clearTimeout(timeout); }
   }
   const positioned = placeStampsAfterLoyaltyQr(text, toText(footerText) || (shouldUseDefaultFooter ? DEFAULT_RECEIPT_FOOTER_TEXT : ""));
+  const template = await loadPosReceiptTemplate();
+  const combined = [positioned.text, positioned.footerText].filter(Boolean).join("\n");
+  const specialSlip = safeSourceType.includes("payment_qr") || safeSourceType === "pos_payment_momo_qr"
+    || safeSourceType === "item_label" || safeSourceType === "pos_shift_close";
+  const templateText = specialSlip ? combined : applyReceiptTemplate(combined, template, { preparation: isPreparationTicket, expectedEarnPoints, customerPhone });
+  const templateApplied = template.enabled && templateText !== combined;
+  // Android's legacy rasterizer removes inline loyalty QR sections from bodyText.
+  // Send the shared footer through its dedicated channel instead of losing it.
+  const templateFooterStart = templateApplied
+    ? templateText.indexOf("\n@@BOLDCENTER:ĐỪNG BỎ LỠ ĐIỂM ĐƠN NÀY") : -1;
+  const dedicatedFooter = templateFooterStart >= 0;
+  const templateQrUrl = toText(qrUrl || footerQrUrl) || buildReceiptFooterQrUrl(customerPhone);
   return printerModule.printReceipt({
-    text: positioned.text,
-    qrUrl,
+    text: dedicatedFooter ? templateText.slice(0, templateFooterStart)
+      : templateApplied ? templateText : positioned.text,
+    qrUrl: dedicatedFooter ? "" : templateApplied ? templateQrUrl : qrUrl,
     sourceType: safeSourceType || sourceType,
-    footerText: positioned.footerText,
-    footerQrUrl: toText(footerQrUrl) || (shouldUseDefaultFooter ? buildReceiptFooterQrUrl(customerPhone) : "")
+    footerText: dedicatedFooter ? templateText.slice(templateFooterStart + 1) : templateApplied ? "" : positioned.footerText,
+    footerQrUrl: dedicatedFooter ? templateQrUrl : templateApplied ? "" : toText(footerQrUrl) || (shouldUseDefaultFooter ? buildReceiptFooterQrUrl(customerPhone) : "")
   });
 }
 
@@ -235,6 +252,8 @@ export function buildPosCustomerBillText({
   const paymentPaid = Boolean(paymentConfirmed) && paymentConfirmed?.paid !== false;
   const lines = [
     ...(paymentPaid && toText(order.id || order.orderCode) ? [`@@RECEIPTORDER:${toText(order.id || order.orderCode)}`] : []),
+    ...(paymentPaid && Number(order.expectedEarnPoints ?? order.expected_earn_points) > 0
+      ? [`@@RECEIPTPOINTS:${Math.floor(Number(order.expectedEarnPoints ?? order.expected_earn_points))}`] : []),
     "@@CENTER:GÁNH HÀNG RONG",
     `@@CENTER:${paymentPaid ? "HÓA ĐƠN BÁN HÀNG" : "PHIẾU LÀM MÓN"}`,
     `@@BIG:${toText(order.displayOrderCode || order.orderCode || order.id || "POS")}`,

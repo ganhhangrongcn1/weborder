@@ -1,0 +1,21 @@
+.receipt-template-settings h2{font-size:22px;font-weight:750;margin:0 0 6px}
+.receipt-template-settings h3{font-size:16px;font-weight:700;margin:0}
+.receipt-template-settings p{color:#6b6258;font-size:13px;line-height:1.65;margin:4px 0}
+.receipt-template-note{padding:16px 20px;background:#fff7e8;border:1px solid #ead5b0;border-radius:12px;font-size:14px}
+.receipt-template-layout{display:grid;grid-template-columns:minmax(280px,1fr) minmax(340px,1fr);gap:24px;align-items:start}
+.receipt-template-card{padding:20px;background:#fff;border:1px solid #e7e2db;border-radius:14px}
+.receipt-template-controls label>span{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.receipt-template-controls .receipt-template-check>span{margin:0}
+.receipt-template-check{display:flex;gap:10px;align-items:center;font-size:13px;cursor:pointer}
+.receipt-template-check input{width:17px;height:17px;accent-color:#71492b;flex-shrink:0}
+.receipt-template-actions{display:flex;flex-wrap:wrap;gap:10px}
+.receipt-template-tabs{display:flex;flex-wrap:wrap;gap:6px}
+.receipt-template-tabs button{padding:8px 12px;border:1px solid #ded5c9;border-radius:8px;background:#fff;font-size:13px;font-weight:600}
+.receipt-template-tabs button[aria-pressed=true]{background:#523e2c;border-color:#523e2c;color:white}
+.receipt-template-preview-options{display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:13px}
+.receipt-template-preview-options select{margin-left:6px;padding:6px;border:1px solid #ddd;border-radius:6px}
+.receipt-template-paper-wrap{padding:28px 12px;background:#eae7e1;border-radius:14px;margin-top:16px;display:flex;justify-content:center;overflow:auto}
+.receipt-template-paper-wrap .receipt-paper{flex-shrink:0;box-shadow:0 4px 15px #00000010}
+.receipt-template-preview-panel>.receipt-template-caption{padding:8px 4px}
+@media(min-width:1100px){.receipt-template-preview-panel{position:sticky;top:20px}}
+@media(max-width:850px){.receipt-template-layout{grid-template-columns:1fr}.receipt-template-preview-panel{position:static}}
