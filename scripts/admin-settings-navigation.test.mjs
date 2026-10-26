@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { adminPathToState, adminNavToPath } from "../src/app/routeState.js";
 import { navGroups, getAdminPageTitle } from "../src/pages/admin/adminNavigation.js";
 import { getAdminModuleAccessPolicy, filterAdminNavigationByAccess } from "../src/pages/admin/adminModuleAccessPolicy.js";
@@ -27,4 +28,16 @@ test("new global settings do not become available to branch or warehouse account
     const entries = filterAdminNavigationByAccess(navGroups, policy).flatMap((group) => group.items || []);
     assert.equal(entries.some((item) => item.section === "store"), false);
   }
+});
+
+test("receipt settings survive direct links and reloads through the protected admin route", () => {
+  const item = navGroups.flatMap((group) => group.items || []).find((entry) => entry.id === "store-receipt-template");
+  assert.equal(adminNavToPath(item), "/admin/settings/receipt-template");
+  for (const path of [adminNavToPath(item), "/admin/settings/receipt-template/"]) {
+    assert.deepEqual(adminPathToState(path), {
+      section: "store", activeAdminNav: item.id, activeSubSection: "receipt-template"
+    });
+  }
+  const routes = readFileSync(new URL("../src/app/routes.jsx", import.meta.url), "utf8");
+  assert.match(routes, /<Route path="\/admin\/settings\/receipt-template" element=\{<AppAdminRoutes adminAppProps=\{adminAppProps\} \/>\} \/>/);
 });
