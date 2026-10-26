@@ -2,6 +2,8 @@
 
 ## Rút gọn theo duyệt ngày 26/10/2026
 
+- Lời nhắc tem cập nhật tiếp: thiếu SĐT ghi “Quét mã bên trên để tích tem đổi quà”; có 3 tem ghi “Còn 7 tem nữa để nhận quà” thay số dư 3/10. Đủ 10 tem ghi “Đã đủ tem để nhận quà”. Nếu admin tắt QR, dùng lời nhắc cung cấp SĐT thay vì chỉ tới mã không có trên bill. Kiểm tra in lại và đủ 10 tem, không thay logic tích/đổi tem. File sửa: bộ trình bày `receiptTemplate.js`, `scripts/receipt-template.test.mjs`, báo cáo này.
+
 - Chỉnh tiếp theo ảnh anh duyệt: tiêu đề “ĐỪNG BỎ LỠ ĐIỂM ĐƠN NÀY”, dưới là “Quét để nhận 7000”; không có chữ/ký hiệu đơn vị sau số. Nếu chưa có số thưởng thì dùng lời mời chung, không suy từ tổng tiền.
 - Bill khách thiếu SĐT hiển thị 10 ô tem trống và “Cung cấp SĐT để tích tem”, không giả làm số dư 0/10 đã tra cứu. Có SĐT thì giữ số tem máy chủ đã trả; không ghi điểm/tem khi dựng hoặc in mẫu. Bill món và tùy chọn tắt tem vẫn không hiện khối này.
 - File sửa cho lần phản hồi này: `receiptTemplate.js`, `posPrinterService.js` trong native; `src/services/printerService.js`; `src/pages/admin/store/ReceiptTemplateEditor.jsx`; `scripts/receipt-template.test.mjs`; báo cáo này. Kiểm tra mẫu bổ sung cả ba kênh thiếu SĐT và in lại không lặp khối tem.

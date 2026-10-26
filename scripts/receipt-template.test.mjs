@@ -56,6 +56,7 @@ for (const type of ['pos', 'web', 'partner', 'kitchen']) {
     assert(!/7000(?:đ| điểm)/.test(text) && !text.includes('đã tích cho'));
     assert(text.indexOf('@@QR') > text.indexOf('Bánh tráng cuốn'));
     assert(text.indexOf('@@STAMPS:3') > text.indexOf('@@QR'));
+    assert(text.includes('Còn 7 tem nữa để nhận quà') && !text.includes('3/10 tem'));
     assert.equal(applyReceiptTemplate(text, template), text, 'template must be idempotent across web/print station');
   }
   const document = web.namespace.buildReceiptHtml(sample, { receiptTemplate: template, loyaltyQrImage: 'data:image/png;base64,TEST' });
@@ -90,11 +91,15 @@ const hidden = web.namespace.buildReceiptText(samples.namespace.createReceiptSam
 assert(!hidden.includes('0900000000') && !hidden.includes('@@QR') && !hidden.includes('@@STAMPS'));
 for (const type of ['pos', 'web', 'partner']) {
   const noPhone = web.namespace.buildReceiptText(samples.namespace.createReceiptSample(type, true, false), { receiptTemplate: template });
-  assert(noPhone.includes('@@STAMPS:0\n@@CENTER:Cung cấp SĐT để tích tem'));
+  assert(noPhone.includes('@@STAMPS:0\n@@CENTER:Quét mã bên trên để tích tem đổi quà'));
   assert.equal(applyReceiptTemplate(noPhone, template), noPhone, 'empty stamp invitation stays stable on reprint');
   assert(!noPhone.includes('0/10 tem'), 'empty invitation must not pretend to be a retrieved balance');
 }
 assert(!html.namespace.renderReceiptTemplateBody('@@CENTER:<img src=x onerror=alert(1)>').includes('<img'));
 const remaining = compact.namespace.default(['@@ROW:CÒN PHẢI THU\t30.000', '@@ROW:Giảm điểm\t-10.000']);
 assert(remaining.includes('@@ROW:CÒN PHẢI THU\t30.000') && remaining.includes('@@ROW:Giảm điểm\t-10.000'));
+const fullStampSample = samples.namespace.createReceiptSample('pos', true, true);
+fullStampSample.stampSummary.available = 10;
+const fullStampText = web.namespace.buildReceiptText(fullStampSample, { receiptTemplate: template });
+assert(fullStampText.includes('Đã đủ tem để nhận quà') && !fullStampText.includes('Còn 0 tem'));
 console.log('Receipt template passed: 4 previews, web/native financial preservation, one QR/stamp block, token, preparation/payment exclusions, disabled fallback, escaping.');

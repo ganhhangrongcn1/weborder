@@ -26,7 +26,7 @@ export function normalizeReceiptTemplate(value = {}) {
   return result;
 }
 
-const STAMP_LINE = /^(?:@@STAMPS:|@@STAMPEND|(?:@@CENTER:)?(?:TÍCH TEM NHẬN QUÀ|TEM THÀNH VIÊN|Cung cấp SĐT để tích tem|\d+\/10 tem)|Tem khả dụng|Bạn có \d+\/10 tem|\d+ tem đang giữ|Mỗi ngày tối đa|Hôm nay đã nhận tem|Đủ tem:|Còn \d+ tem để nhận quà|Tem: chưa cập nhật)/;
+const STAMP_LINE = /^(?:@@STAMPS:|@@STAMPEND|(?:@@CENTER:)?(?:TÍCH TEM NHẬN QUÀ|TEM THÀNH VIÊN|Cung cấp SĐT để tích tem|Quét mã bên trên để tích tem đổi quà|Còn \d+ tem nữa để nhận quà|Đã đủ tem để nhận quà|\d+\/10 tem)|Tem khả dụng|Bạn có \d+\/10 tem|\d+ tem đang giữ|Mỗi ngày tối đa|Hôm nay đã nhận tem|Đủ tem:|Còn \d+ tem để nhận quà|Tem: chưa cập nhật)/;
 const PROMO_LINE = /^(?:@@(?:BOLD)?CENTER:)?(?:ĐỪNG BỎ LỠ ĐIỂM|ĐIỂM THÀNH VIÊN|QUÉT QR VÀO WEBSITE|Xem \/ nhận|Quét QR để tích|Quét để nhận|Quét QR để nhận|Quét QR để xem|Nhận trong 24 giờ|Cảm ơn quý khách!|Hotline:|ganhhangrong\.vn)/;
 
 export function applyReceiptTemplate(text = "", value = {}, context = {}) {
@@ -83,11 +83,14 @@ export function applyReceiptTemplate(text = "", value = {}, context = {}) {
     if (config.showStamps) {
       const chart = stamps.find((line) => line.startsWith("@@STAMPS:"));
       const hasPhone = typeof context.hasCustomerPhone === "boolean" ? context.hasCustomerPhone
-        : !original.includes("@@CENTER:Cung cấp SĐT để tích tem") && Boolean(context.customerPhone || chart
+        : !original.some((line) => ["@@CENTER:Cung cấp SĐT để tích tem", "@@CENTER:Quét mã bên trên để tích tem đổi quà"].includes(line)) && Boolean(context.customerPhone || chart
           || original.some((line) => /^(?:SĐT:|Khách:).*0[35789]\d{8}/.test(line)));
-      if (!hasPhone) footer.push("@@RULE", "@@CENTER:TEM THÀNH VIÊN", "@@STAMPS:0", "@@CENTER:Cung cấp SĐT để tích tem");
+      if (!hasPhone) footer.push("@@RULE", "@@CENTER:TEM THÀNH VIÊN", "@@STAMPS:0", context.includeLoyalty !== false && config.showLoyalty
+        ? "@@CENTER:Quét mã bên trên để tích tem đổi quà" : "@@CENTER:Cung cấp SĐT để tích tem");
       else if (chart) {
-        footer.push("@@RULE", "@@CENTER:TEM THÀNH VIÊN", chart, `@@CENTER:${chart.slice(9)}/10 tem`);
+        const remaining = Math.max(0, 10 - Math.floor(Number(chart.slice(9)) || 0));
+        footer.push("@@RULE", "@@CENTER:TEM THÀNH VIÊN", chart, remaining > 0
+          ? `@@CENTER:Còn ${remaining} tem nữa để nhận quà` : "@@CENTER:Đã đủ tem để nhận quà");
         footer.push(...stamps.filter((line) => /^\d+ tem đang giữ/.test(line)));
       }
     }
