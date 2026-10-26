@@ -211,6 +211,13 @@ export function adminPathToState(pathname = "/admin") {
       activeSubSection: "downloads"
     };
   }
+  if (path === "/admin/settings/receipt-template") {
+    return {
+      section: "store",
+      activeAdminNav: "store-receipt-template",
+      activeSubSection: "receipt-template"
+    };
+  }
   if (path === "/admin/settings/shipping") {
     return { section: "store", activeAdminNav: "store-shipping", activeSubSection: "shipping" };
   }
@@ -277,6 +284,7 @@ export function adminNavToPath(item) {
   if (item.id === "store-accounts") return "/admin/settings/accounts";
   if (item.id === "store-zalo") return "/admin/settings/zalo";
   if (item.id === "store-downloads") return "/admin/settings/downloads";
+  if (item.id === "store-receipt-template") return "/admin/settings/receipt-template";
   if (item.id === "store-ui") return "/admin/ui";
   if (item.id === "promo-campaign") return "/admin/promotions";
   if (item.id === "cakes-main") return "/admin/cakes";

@@ -89,6 +89,7 @@ export default function AppRoutes({ adminAppProps, customerRouteProps }) {
       <Route path="/admin/settings/accounts" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/settings/zalo" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/settings/downloads" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
+      <Route path="/admin/settings/receipt-template" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/settings/shipping" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/settings/grab" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
       <Route path="/admin/settings/kitchen" element={<AppAdminRoutes adminAppProps={adminAppProps} />} />
