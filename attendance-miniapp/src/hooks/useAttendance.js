@@ -63,7 +63,7 @@ export default function useAttendance() {
     if (result.status !== "matched") return result;
     if (state.phones[actor.id]) return { status: "matched", message: "Đối chiếu mẫu khớp. Tài khoản đã có liên kết, không ghi đè thông tin." };
     await update((data) => applyDemoPhoneLink(data, actor, result));
-    return { status: "matched", message: "Đã đối chiếu và lưu liên kết số điện thoại mẫu. Bạn có thể tiếp tục chấm công." };
+    return { status: "matched", message: "Đã lưu liên kết số điện thoại mẫu với tài khoản đang đăng nhập. Thao tác này không cộng điểm hoặc đổi quyền tài khoản." };
   });
   const saveMaterial = (id) => run(async () => {
     if (!TRAINING_MATERIALS.some((item) => item.id === id)) throw new Error("Không tìm thấy tài liệu.");

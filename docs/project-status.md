@@ -1,5 +1,14 @@
 # Trạng thái app chấm công Zalo Mini App
 
+## Mốc mới nhất — 27/10/2026: Testing 8, tích điểm và điểm danh
+
+- Local đã hoàn thiện màn đăng nhập với dòng Tích điểm thành viên nhỏ, canh giữa dưới thương hiệu; sau đăng nhập có hai mục riêng Tích điểm và Điểm danh. Có Trang chủ/Back quay về màn chọn. [Chi tiết UI](checklist/reports/attendance-module-entry-2026-10-27.md).
+- Chủ app xác nhận QR đăng nhập CLI. Upload **Testing Version 8** thành công, ghi chú membership-and-attendance-demo; portal xác nhận Testing lúc09:13:54 27/10/2026. Không gửi xét duyệt phiên bản hoặc Publish/Live. [Ảnh xác nhận](checklist/reports/assets/attendance-testing8-2026-10-27/testing8-confirmed.jpg), [QR Testing8](checklist/reports/assets/attendance-testing8-2026-10-27/testing8-qr.jpg).
+- [Giải trình số điện thoại mới](checklist/reports/attendance-phone-explanation-2026-10-27.md): chia sẻ tự nguyện sau đăng nhập để đối chiếu hồ sơ; từ chối vẫn tích điểm/điểm danh; không dùng số để tự cộng điểm hoặc cấp quyền nhân viên. Đã thống nhất nội dung trong Tài khoản, bảng chia sẻ và Quyền riêng tư.
+- Trên Zalo, Version7 hiện Rejected. Quyền số điện thoại và các quyền đã xin vẫn Đợi xét duyệt; chưa được cấp. Trang Quản lý quyền không hiện thao tác sửa yêu cầu đang chờ, nên **chưa nộp lại/thay thế giải trình cũ trên portal**; chỉ lưu nội dung mới và minh bạch trạng thái, không hủy hay nộp trùng yêu cầu.
+- Vẫn DEMO_ONLY; hóa đơn/quà/điểm theo phiên và số điện thoại mẫu, chưa gọi API Zalo native hay ghi điểm mua hàng thật. Build584041byte,8test về liên kết, native guard, ledger và điều hướng đạt. Chưa kiểm chứng bản8 trên điện thoại Zalo.
+- Đồng bộ source/docs/assets, không gửi secret/QR đăng nhập/tài khoản, không đổi DB, không deploy webhook lại, không tự gửi lại phiên bản/Publish Live hoặc lập lịch theo dõi. Các mốc cũ bên dưới là lịch sử.
+
 ## Mốc mới nhất — 27/10/2026: thêm tích điểm mua hàng cho nhân viên (demo)
 
 Chủ app yêu cầu thêm tính năng tích điểm thành viên vào app hiện tại, chọn tích theo mua hàng tại quán. Đã thêm tab điểm/lịch sử/đổi quà và nhãn “Tích điểm thành viên” ở màn đăng nhập, kèm ngữ cảnh nhân viên và lý do đăng nhập ngắn gọn. Đây là bản demo bộ nhớ theo phiên, hóa đơn/quà mẫu, không tích điểm vào DB hoặc hệ thống khách hàng thật. Quy đổi mẫu 1.000đ = 1 điểm, chờ chốt chính sách khi vận hành.
