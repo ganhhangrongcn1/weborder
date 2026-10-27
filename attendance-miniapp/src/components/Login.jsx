@@ -17,7 +17,6 @@ export default function Login({ app }) {
     <div className="login-brand"><Brand showSubtitle={false}/></div>
     {register ? <Register onBack={() => setRegister(false)}/> : <section className="login-panel" aria-labelledby="login-title">
       <h1 id="login-title">Tích điểm thành viên</h1>
-      <p className="login-intro">Dành cho nhân viên Gánh Hàng Rong. Đăng nhập để xem điểm mua hàng và giờ công cá nhân.</p>
       <form onSubmit={(event) => { event.preventDefault(); app.login(username, password); }}>
         <label htmlFor="attendance-username">Tài khoản</label>
         <div className="login-input"><Symbol kind="user"/><input id="attendance-username" autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Nhập tài khoản" required/></div>
