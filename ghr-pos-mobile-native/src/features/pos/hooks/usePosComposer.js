@@ -23,6 +23,7 @@ import {
 import { createPosTakeawayOrderMobile } from "../../../services/pos/posOrderService";
 import { getPosOrderPayableAmount, isZeroPosOrder } from "../../../services/pos/posZeroOrderPolicy";
 import { invalidatePosStamps } from "../../../services/pos/posStampService";
+import { getWebsiteOrderAlertChanges, isWebsiteOrderPaid, playPosOrderAlert } from "../../../services/pos/posOrderAlertService";
 import { readPhoneCustomerBillStatus } from "../../../services/pos/posPhoneOrderService";
 import {
   buildPosCustomerBillText,
@@ -31,7 +32,6 @@ import {
   buildPosShiftCloseReceiptText,
   openLocalCashDrawer,
   playLocalQrPaymentAlert,
-  playLocalWebsiteOrderAlert,
   printLocalReceipt,
   startLocalPrintStationService,
   stopLocalPrintStationService
@@ -294,16 +294,11 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
 
   useEffect(() => {
     const websiteOrders = [...pickupOrders, ...deliveryOrders];
-    const nextIds = new Set(websiteOrders.map((order) => String(order?.id || "").trim()).filter(Boolean));
-    const knownIds = knownWebsiteOrderIdsRef.current;
-    knownWebsiteOrderIdsRef.current = nextIds;
-    if (knownIds === null) return;
-    if (websiteOrders.some((order) => {
-      const id = String(order?.id || "").trim();
-      return id && !knownIds.has(id);
-    })) {
-      if (deviceMode !== "phone") playLocalWebsiteOrderAlert().catch(() => {});
-    }
+    const { next, events } = getWebsiteOrderAlertChanges(websiteOrders, knownWebsiteOrderIdsRef.current);
+    knownWebsiteOrderIdsRef.current = next;
+    if (deviceMode !== "phone") events.forEach((order) => {
+      playPosOrderAlert(order.id, isWebsiteOrderPaid(order) ? "paid" : "website").catch(() => {});
+    });
   }, [deliveryOrders, pickupOrders, deviceMode]);
 
   useEffect(() => {

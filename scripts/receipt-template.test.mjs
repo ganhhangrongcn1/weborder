@@ -105,6 +105,7 @@ fullStampSample.stampSummary.available = 10;
 const fullStampText = web.namespace.buildReceiptText(fullStampSample, { receiptTemplate: template });
 assert(fullStampText.includes('Đã đủ tem để nhận quà') && !fullStampText.includes('Còn 0 tem'));
 const station = await module('ghr-pos-mobile-native/src/services/pos/posPrintStationService.js', {
+  './posOrderAlertService': mock({ playPosOrderAlert: async () => false, isWebsiteOrderPaid: (order) => order.paymentStatus === 'paid' || Boolean(order.paidAt) }),
   './posStampReceipt': stamps,
   './posStampService': mock({ withPosStampSummary: async (order) => order }),
   'react-native': mock({ AppState: { currentState: 'active' } }),
