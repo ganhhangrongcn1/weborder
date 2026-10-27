@@ -12,6 +12,7 @@ export default function StampCard({ phone = "", navigate, detailed = false, setC
   const [notice, setNotice] = useState("");
   if (data && !data.enabled) return null;
   const available = data?.available || 0;
+  const canRedeem = Boolean(phone && available >= 10 && !loading && !error);
   const chooseGift = (gift) => {
     if (!phone || available < 10 || !setCart) return;
     setCart((items) => [...items.filter((item) => !item.stampGift), buildStampGift(gift, phone)]);
@@ -19,15 +20,17 @@ export default function StampCard({ phone = "", navigate, detailed = false, setC
     setNotice(`Đã thêm ${gift.name} — quà đổi tem 0đ vào giỏ.`);
     navigate?.("checkout", "menu");
   };
-  return <section className={`stamp-card${detailed ? " stamp-card--rewards" : ""}`} aria-label="Tích tem nhận quà">
+  return <section className={`stamp-card${detailed ? " stamp-card--rewards" : ""}${canRedeem ? " stamp-card--ready" : ""}`} aria-label="Tích tem nhận quà">
     <header><h2><Icon name="gift" size={21} /> Tem của bạn</h2><span className="stamp-card__count">{available}/10 tem</span></header>
     {loading ? <p role="status">Đang tải thẻ tem…</p> : error ? <p role="alert">{error}</p> : <>
       <div className="stamp-card__grid" aria-label={`${available} tem khả dụng`}>
-        {Array.from({ length: 10 }, (_, i) => <span key={i} className={i < available ? "is-earned" : ""}>{i < available ? "✓" : i === 9 ? <Icon name="gift" size={15} /> : ""}</span>)}
+        {Array.from({ length: 10 }, (_, i) => <span key={i} className={`${i < available ? "is-earned" : ""}${canRedeem && i === 9 ? " stamp-card__reward-slot" : ""}`}>
+          {canRedeem && i === 9 ? <Icon name="gift" size={20} /> : i < available ? "✓" : i === 9 ? <Icon name="gift" size={15} /> : ""}
+        </span>)}
       </div>
       <div className="stamp-card__footer">
         <span>{!phone ? "Đăng nhập để xem tem" : available >= 10 ? "Bạn đã đủ tem nhận quà!" : <>Còn <strong>{10 - available} tem</strong> để nhận quà</>}</span>
-        <button type="button" aria-haspopup={detailed ? "dialog" : undefined} onClick={() => detailed ? setShowRewards(true) : navigate?.("loyalty", "loyalty")}>Xem thưởng <span aria-hidden="true">›</span></button>
+        <button type="button" aria-haspopup={detailed ? "dialog" : undefined} onClick={() => detailed ? setShowRewards(true) : navigate?.("loyalty", "loyalty")}>{canRedeem ? "Đổi quà ngay" : "Xem thưởng"} <span aria-hidden="true">›</span></button>
       </div>
       {detailed && showRewards && <CustomerBottomSheet title="Đổi tem nhận quà" onClose={() => setShowRewards(false)} className="stamp-rewards-sheet" contentClassName="stamp-rewards-sheet__content">
         <div className="stamp-rewards-sheet__summary">

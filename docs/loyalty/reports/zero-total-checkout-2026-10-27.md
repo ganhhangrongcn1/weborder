@@ -7,3 +7,4 @@
 - Test `scripts/checkout-zero-total.test.mjs`: lựa chọn MoMo/QR cũ, tổng 0, thêm món có tiền, giao hàng, payload, HTML một hình thức duy nhất và thực thi createOrderAsync với adapter giả lập (0đ preparing, có tiền pending_payment).
 - ESLint phạm vi sửa và kiểm tra encoding đạt. Script SQL giả lập cũ `stamp-program.test.mjs` chưa chạy được do thiếu gói PGlite trong thư mục tmp; không thay đổi SQL trong bản sửa này. Không tạo đơn hoặc đổi tem thật.
 - `npm run build` đạt: 705 file kiểm tra encoding, 5313 module Vite.
+- PR #17 đã merge, production `231bfa80a816ca7a68ee439a5c7f4e567a48b4e5`, deployment `dpl_D92YyeUufjnYbT2civVnCPr1akEp` READY. `/checkout` trên tên miền chính trả HTTP 200 và JavaScript có nội dung đơn 0đ mới. Chưa đặt đơn đổi tem thật qua giao diện.
