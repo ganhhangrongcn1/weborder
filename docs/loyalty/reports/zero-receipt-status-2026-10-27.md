@@ -10,3 +10,11 @@
 
 - Cập nhật: `src/services/receiptLoyaltyService.js`, `src/pages/ReceiptLoyaltyPage.jsx`.
 - Mới: `src/services/receiptLoyaltyDisplayService.js`, `scripts/receipt-zero-total.test.mjs`, ghi chú này.
+
+## Triển khai và xác minh
+
+- PR #20 đã merge vào main: `7235a43597c9ae5eaf8405eb6234f206c779ed32`.
+- Vercel production `dpl_2ghnJUDkXHsn7TKWi4xLGKvTiRfr` READY, đúng merge SHA. Cloud build thành công; build local chậm đã dừng sau bước transforming, không tính là local build đạt.
+- Kiểm thử chuyên biệt, ESLint các file nguồn sửa và encoding 706 file đều đạt.
+- Đã mở trực tiếp QR GHR-7526 tại ganhhangrong.vn bằng trình duyệt local: tổng bill 0đ, hiện thông báo không tích thêm điểm hoặc tem; không có +0 điểm, chờ đối soát, form nhận điểm hoặc nút kiểm tra lại. Không gửi yêu cầu nhận điểm.
+- POS 0.4.32/code 63 giữ nguyên; không cần APK mới cho sửa hiển thị này.
