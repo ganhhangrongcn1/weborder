@@ -1,5 +1,6 @@
 import repository from "./repositories/receiptLoyaltyRepository.js";
 import { getCustomerKey } from "./storageService.js";
+import { normalizeReceiptLoyaltyDisplay } from "./receiptLoyaltyDisplayService.js";
 
 export function normalizeReceiptPhone(value = "") {
   const phone = getCustomerKey(value);
@@ -9,11 +10,11 @@ export function normalizeReceiptPhone(value = "") {
 
 export function readReceiptLoyalty(token) {
   if (!/^[a-f0-9]{64}$/.test(String(token || ""))) throw new Error("Vui lòng quét mã QR ở cuối bill để mở đúng đơn của bạn.");
-  return repository.read(token);
+  return repository.read(token).then(normalizeReceiptLoyaltyDisplay);
 }
 
 export function claimReceiptLoyalty(token, phone) {
-  return repository.claim(token, normalizeReceiptPhone(phone));
+  return repository.claim(token, normalizeReceiptPhone(phone)).then(normalizeReceiptLoyaltyDisplay);
 }
 
 export function readReceiptPointSummary(phone) {

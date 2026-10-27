@@ -5,6 +5,7 @@ import "../styles/receipt-loyalty.css";
 
 const number = (value) => Number(value || 0).toLocaleString("vi-VN");
 const notices = {
+  not_eligible: "Đơn 0đ không tích thêm điểm hoặc tem.",
   cancelled: "Bill đã hủy hoặc hoàn tiền, không được nhận điểm.",
   expired: "Bill đã hết thời hạn nhận điểm. Vui lòng liên hệ quán nếu cần hỗ trợ.",
   waiting_data: "Điểm đang chờ đối soát. Bạn có thể quét lại QR này sau, không cần chờ đơn hoàn thành."
@@ -43,9 +44,9 @@ export default function ReceiptLoyaltyPage() {
                   <div><dt>Kênh mua</dt><dd>{bill.source}</dd></div>
                   <div><dt>Ngày mua</dt><dd>{new Date(bill.createdAt).toLocaleString("vi-VN")}</dd></div>
                   <div><dt>Tổng bill</dt><dd>{number(bill.totalAmount)}đ</dd></div>
-                  <div><dt>Giá trị tính điểm</dt><dd>{number(bill.pointsBaseAmount)}đ</dd></div>
+                  {bill.status !== "not_eligible" && <div><dt>Giá trị tính điểm</dt><dd>{number(bill.pointsBaseAmount)}đ</dd></div>}
                 </dl>
-                <div className="receipt-rewards__points"><span>{bill.status === "claimed" ? "Điểm đã ghi nhận" : "Điểm của đơn này"}</span><strong>+{number(bill.points)} <small>điểm</small></strong></div>
+                {bill.status !== "not_eligible" && <div className="receipt-rewards__points"><span>{bill.status === "claimed" ? "Điểm đã ghi nhận" : "Điểm của đơn này"}</span><strong>+{number(bill.points)} <small>điểm</small></strong></div>}
                 {bill.status === "claimed" ? <div className="receipt-rewards__success" role="status"><strong>✓ Bill đã được tích điểm</strong><p>Đã tích cho số {bill.maskedPhone}. Bill này không thể nhận thêm lần nữa.</p></div>
                   : bill.status === "available" ? <form onSubmit={vm.review} className="receipt-rewards__form">
                     <label htmlFor="receipt-phone">Số điện thoại nhận điểm</label>
@@ -56,7 +57,7 @@ export default function ReceiptLoyaltyPage() {
                     <small>Nhận trong 24 giờ từ lúc mua · Hạn {new Date(bill.expiresAt).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</small>
                   </form> : <p role="status" className="receipt-rewards__notice">{notices[bill.status] || "Vui lòng liên hệ quán để kiểm tra bill."}</p>}
               </> : null}
-              {!vm.loading && bill?.status !== "claimed" && <button type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={vm.refresh}>Kiểm tra lại bill</button>}
+              {!vm.loading && !["claimed", "not_eligible"].includes(bill?.status) && <button type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={vm.refresh}>Kiểm tra lại bill</button>}
             </> : <>
               <header className="receipt-rewards__heading"><span>THÀNH VIÊN GÁNH HÀNG RONG</span><h2>Xem điểm bạn đang có</h2><p>Tra cứu số dư điểm. Lịch sử mua và đổi thưởng được bảo vệ trong tài khoản của bạn.</p></header>
               <div className="receipt-rewards__tear" aria-hidden="true" />
