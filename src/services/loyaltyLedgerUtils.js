@@ -134,6 +134,7 @@ export function resolveOrderPointStatus(order = {}, lookup = {}) {
   const rawStatus = normalizeOrderPointStatus(order?.pointStatus || order?.point_status || "");
   if (rawStatus === "expired") return "expired";
   if (isBlockedOrderPointStatus(rawStatus)) return "blocked";
+  if (rawStatus === "claimed") return "claimed";
   if (getNetOrderPoints(lookup, order) > 0) return "claimed";
   if (rawStatus === "waiting_data") return "waiting_data";
   return "pending";

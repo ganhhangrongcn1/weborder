@@ -28,6 +28,7 @@ import {
   resolveOrderPointStatus
 } from "../../services/loyaltyLedgerUtils.js";
 import useGuestOrderLookup from "./hooks/useGuestOrderLookup.js";
+import { getOrderPointBadge } from "../../services/orderPointDisplayService.js";
 import useCheckinPromoConfig from "./hooks/useCheckinPromoConfig.js";
 import CheckinPromoCard from "./components/CheckinPromoCard.jsx";
 import ReviewRewardPromoCard from "./components/ReviewRewardPromoCard.jsx";
@@ -448,41 +449,7 @@ export default function Tracking({
   };
   const getPointLabel = (order) => {
     const orderStatus = getCustomerOrderDisplayStatus(order);
-    if (order?.sourceType !== "partner" && orderStatus.key === "cancelled") {
-      return {
-        label: "Không tích điểm",
-        className: "bg-red-50 text-red-700"
-      };
-    }
-    if (order?.sourceType !== "partner" && orderStatus.key === "awaiting_payment") {
-      return {
-        label: "Chưa tích điểm",
-        className: "bg-slate-100 text-slate-600"
-      };
-    }
-    const pointStatus = String(order.pointStatus || "").toLowerCase();
-    if (pointStatus === "claimed") {
-      return {
-        label: "Đã tích điểm",
-        className: "bg-green-50 text-green-700"
-      };
-    }
-    if (pointStatus === "waiting_data") {
-      return {
-        label: "Chờ đối soát",
-        className: "bg-slate-100 text-slate-600"
-      };
-    }
-    if (pointStatus === "expired") {
-      return {
-        label: "Đã hết hạn tích điểm",
-        className: "bg-red-50 text-red-700"
-      };
-    }
-    return {
-      label: order?.sourceType === "partner" ? "Quét QR trên bill để nhận điểm" : "Chưa tích điểm",
-      className: "bg-yellow-400 text-white"
-    };
+    return getOrderPointBadge(order, { orderStatusKey: orderStatus.key });
   };
   useEffect(() => {
     let disposed = false;
@@ -869,8 +836,6 @@ export default function Tracking({
                 : isReadyForPickup
                   ? "store"
                   : "clock";
-            const isPointBadgeInformational = isPartnerOrder || ["cancelled", "awaiting_payment"].includes(statusMeta.key) ||
-              ["claimed", "waiting_data", "expired"].includes(String(order.pointStatus || "").toLowerCase());
 
             if (!canAccessFullOrderHistory) {
               return (
@@ -898,18 +863,10 @@ export default function Tracking({
                         <p className="text-sm text-brown/60">
                           {getOrderAmountLabel(order)}: <strong className="text-base text-brown">{formatMoney(getOrderDisplayAmount(order))}</strong>
                         </p>
-                        {pointBadge && isPointBadgeInformational ? (
+                        {pointBadge ? (
                           <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${pointBadge.className}`}>
                             {pointBadge.label}
                           </span>
-                        ) : pointBadge ? (
-                          <button
-                            type="button"
-                            onClick={() => handleGuestPointLogin(order)}
-                            className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${pointBadge.className}`}
-                          >
-                            {pointBadge.label}
-                          </button>
                         ) : null}
                       </div>
                       {canTrackJourney || isExpiredPayment ? (
