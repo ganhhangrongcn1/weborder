@@ -1,7 +1,7 @@
 # Điều khoản sử dụng và thông tin xử lý dữ liệu cá nhân
 
 Gánh Hàng Rong — Mini App ID 2442731166050783503
-Cập nhật ngày 25/10/2026. Áp dụng cho bản thử nghiệm hiện tại.
+Cập nhật ngày 27/10/2026. Áp dụng cho bản Testing 9.
 
 ## 1. Đơn vị vận hành và liên hệ
 
@@ -9,7 +9,9 @@ Cập nhật ngày 25/10/2026. Áp dụng cho bản thử nghiệm hiện tại.
 
 ## 2. Phạm vi dịch vụ
 
-Mini App hỗ trợ trải nghiệm quản lý chấm công, xem lịch sử giờ công, gửi yêu cầu điều chỉnh và đọc tài liệu đào tạo. Bản hiện tại là thử nghiệm, chưa sử dụng làm căn cứ chốt lương, xử lý kỷ luật hoặc quyết định nhân sự. Tài khoản truy cập dữ liệu thử nghiệm phải được cấp quyền phù hợp. Không dùng dữ liệu thật hoặc tài liệu riêng tư để thử khi chưa được đơn vị vận hành hướng dẫn.
+App dành cho nhân viên Gánh Hàng Rong. Sau khi đăng nhập, bạn chọn Tích điểm để xem điểm mua hàng, thử nhận điểm từ hóa đơn mẫu và đổi quà mẫu; hoặc chọn Điểm danh để xem giờ làm, gửi yêu cầu sửa giờ công và xem tài liệu đào tạo của quán. Tài khoản riêng giúp mỗi nhân viên xem đúng thông tin của mình.
+
+Đây là bản thử nghiệm, chưa dùng để tính lương, quyết định nhân sự hoặc đổi quà thật. Chỉ dùng tài khoản thử đã được cấp. Không đưa hồ sơ thật hay tài liệu riêng tư vào bản thử khi chưa được quán hướng dẫn.
 
 Đăng ký bằng số điện thoại hiện chỉ mô phỏng kiểm tra thông tin trên giao diện, chưa tạo tài khoản đăng nhập thật và chưa xác minh sở hữu số. GPS, QR và chia sẻ số điện thoại đang dùng dữ liệu mẫu; chưa gọi API Zalo thật. Việc gửi xin quyền nền tảng không đồng nghĩa đã thu thập dữ liệu hoặc quyền đã được cấp.
 
@@ -18,6 +20,8 @@ Mini App hỗ trợ trải nghiệm quản lý chấm công, xem lịch sử gi�
 Dữ liệu thử nghiệm có thể gồm mã định danh tài khoản, tên hiển thị, mã nhân viên, lịch sử vào và ra ca, yêu cầu điều chỉnh, lý do, minh chứng do người dùng chủ động cung cấp, trạng thái liên kết số mẫu và tài liệu đã đánh dấu xem lại. Tài khoản, trạng thái chấm công thử và mục đã lưu được lưu trên Supabase trong phạm vi tài khoản được cấp quyền. Mật khẩu được gửi đến dịch vụ xác thực khi đăng nhập; không đưa mật khẩu vào báo cáo hoặc ảnh minh họa.
 
 Những thông tin này được sử dụng để xác thực truy cập, thể hiện các luồng chấm công thử, đối chiếu yêu cầu điều chỉnh và hỗ trợ người dùng. Không sử dụng để bán dữ liệu hoặc quảng cáo dựa trên dữ liệu cá nhân.
+
+Điểm mua hàng và lịch sử đổi quà hiện chỉ dùng hóa đơn mẫu, giữ trong bộ nhớ của phiên đăng nhập và mất khi tải lại hoặc đăng xuất. Quy đổi 1.000đ thành 1 điểm là số liệu thử, chưa phải chính sách đã áp dụng tại quán. Không cộng điểm vào hệ thống khách hàng, không xác minh hóa đơn thật và không phát hành quà có giá trị sử dụng.
 
 Khi Zalo gửi sự kiện rút đồng ý, máy chủ ghi nhận ID người dùng Zalo, mã ứng dụng, thời điểm sự kiện và trạng thái xử lý để tiếp nhận yêu cầu và tránh xử lý trùng. Hàng đợi này không mở cho tài khoản người dùng truy cập.
 
@@ -32,7 +36,7 @@ Quyền chỉ được sử dụng sau khi nền tảng cấp quyền cần thi�
 5. Rung: phản hồi ngắn đi kèm thông báo kết quả thao tác.
 6. Camera: chụp ảnh minh chứng khi người dùng chủ động chọn; không tự chụp hoặc truy cập nền.
 7. Chọn media: chọn ảnh, video hoặc tài liệu minh chứng; không yêu cầu đọc toàn bộ thư viện của thiết bị.
-8. Số điện thoại: người dùng chủ động chia sẻ số liên kết với Zalo tại Thông tin tài khoản để đối chiếu hồ sơ nhân viên. Từ chối không chặn chấm công. Không tự ghi đè hồ sơ hoặc cấp quyền nhân viên chỉ dựa trên số điện thoại.
+8. Số điện thoại: sau khi đăng nhập, bạn tự chọn chia sẻ số Zalo tại Thông tin tài khoản để đối chiếu hồ sơ nhân viên. Chỉ nhận sau khi bạn cho phép. Từ chối vẫn dùng tích điểm và điểm danh. Nếu chưa khớp, giữ nguyên liên kết cũ và nhờ quản lý kiểm tra; không tự tạo hồ sơ, cấp quyền hay cộng điểm dựa vào số được chia sẻ. Bản thử hiện chỉ dùng số mẫu.
 9. Lưu video: lưu video đào tạo do đơn vị cung cấp khi người dùng chọn để xem lại. Đánh dấu xem lại trong app khác với lưu vào thư viện thiết bị.
 10. Tải tệp: tải tài liệu hướng dẫn hoặc báo cáo giờ công cá nhân khi người dùng yêu cầu.
 11. Mở tài liệu: xem trước PDF hướng dẫn và tài liệu nội bộ.
