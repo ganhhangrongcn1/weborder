@@ -32,10 +32,23 @@ export function normalizeReceiptTemplate(value = {}) {
 const STAMP_LINE = /^(?:@@STAMPS:|@@STAMPEND|(?:@@CENTER:)?(?:TÍCH TEM NHẬN QUÀ|TEM THÀNH VIÊN|Cung cấp SĐT để tích tem|Quét mã bên trên để tích tem đổi quà|Còn \d+ tem nữa để nhận quà|Đã đủ tem để nhận quà|\d+\/10 tem)|Tem khả dụng|Bạn có \d+\/10 tem|\d+ tem đang giữ|Mỗi ngày tối đa|Hôm nay đã nhận tem|Đủ tem:|Còn \d+ tem để nhận quà|Tem: chưa cập nhật)/;
 const PROMO_LINE = /^(?:@@(?:BOLD)?CENTER:)?(?:ĐỪNG BỎ LỠ ĐIỂM|ĐIỂM THÀNH VIÊN|QUÉT QR VÀO WEBSITE|Xem \/ nhận|Quét QR để tích|Quét để nhận|Quét QR để nhận|Quét QR để xem|Nhận trong 24 giờ|Cảm ơn quý khách!|Hotline:|ganhhangrong\.vn)/;
 
+// Older MoMo jobs have ASCII labels. Canonicalize only known labels, never item text.
+function normalizeLegacyReceiptLine(line) {
+  return line.replace(/^@@CENTER:HOA DON BAN HANG$/, "@@CENTER:HÓA ĐƠN BÁN HÀNG")
+    .replace(/^Chi nhanh:/, "Chi nhánh:").replace(/^Thu ngan:/, "Thu ngân:")
+    .replace(/^Nguon:/, "Nguồn:").replace(/^Ghi chu:/, "Ghi chú:").replace(/^Ma TT:/, "Mã TT:")
+    .replace(/^Thanh toan: Vi MoMo - DA THANH TOAN$/, "Thanh toán: Ví MoMo - ĐÃ THANH TOÁN")
+    .replace(/^(@@(?:BOLD)?ROW:)TONG DON\t/, "$1TỔNG ĐƠN\t")
+    .replace(/^(@@(?:BOLD)?ROW:)DA THANH TOAN MOMO\t/, "$1ĐÃ THANH TOÁN VÍ MOMO\t")
+    .replace(/^(@@(?:BOLD)?ROW:)CON PHAI THU\t/, "$1CÒN PHẢI THU\t")
+    .replace(/^@@CENTER:\*\*\* KHONG THU THEM TIEN \*\*\*$/, "@@CENTER:*** KHÔNG THU THÊM TIỀN ***")
+    .replace(/^(@@(?:BOLD)?ROW:.*\t[\d.,]+)d$/, "$1đ");
+}
+
 export function applyReceiptTemplate(text = "", value = {}, context = {}) {
   const config = normalizeReceiptTemplate(value);
   if (!config.enabled || !text) return text;
-  const original = String(text).split("\n");
+  const original = String(text).split("\n").map(normalizeLegacyReceiptLine);
   // These are payment slips/labels/shift reports, not customer or kitchen bills.
   if (!original.some((line) => line === "@@CENTER:PHIẾU LÀM MÓN" || line === "@@CENTER:HÓA ĐƠN BÁN HÀNG"
     || line === `@@CENTER:${config.customerTitle}` || line === `@@CENTER:${config.kitchenTitle}`)) return text;

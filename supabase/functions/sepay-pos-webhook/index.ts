@@ -556,6 +556,10 @@ function buildPrintOrder(order: JsonRecord, items: JsonRecord[]) {
     promoCode: toText(order.promo_code || metadata.promoCode),
     createdAt: normalizeIsoDate(order.updated_at || order.created_at),
     subtotal: toNumber(order.subtotal),
+    promoDiscount: toNumber(order.promo_discount),
+    pointsDiscount: toNumber(order.points_discount),
+    expectedEarnPoints: toNumber(order.expected_earn_points),
+    paymentStatus: "paid",
     shippingFee: toNumber(order.shipping_fee),
     discount:
       toNumber(order.promo_discount) +

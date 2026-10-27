@@ -1,4 +1,5 @@
 import { supabase } from "../supabase/client";
+import { isZeroPosOrder } from "./posZeroOrderPolicy";
 
 const WEBSITE_ORDER_SELECT = [
   "id",
@@ -402,7 +403,7 @@ function buildWebsitePaymentPatch({
   const fulfillmentType = order?.fulfillmentType === "delivery" ? "delivery" : "pickup";
   const normalizedPaidAt = toText(paidAt) || new Date().toISOString();
   const normalizedCashierName = toText(cashierName) || metadata.cashierName || "POS mobile";
-  const amount = Math.max(0, toNumber(paymentAmount || order?.collectAmount || order?.totalAmount || order?.paymentAmount));
+  const amount = isZeroPosOrder(order) ? 0 : Math.max(0, toNumber(paymentAmount || order?.collectAmount || order?.totalAmount || order?.paymentAmount));
   const nextMetadata = {
     ...metadata,
     paymentMethod,
@@ -470,7 +471,7 @@ export async function markWebsiteOrderPaidCash({
     order,
     shiftId,
     cashierName,
-    paymentMethod: "cash",
+    paymentMethod: isZeroPosOrder(order) ? "counter" : "cash",
     paymentAmount,
     paymentReference,
     cashReceived,
@@ -497,7 +498,7 @@ export async function markWebsiteOrderPaidCash({
   return {
     ok: true,
     order: nextOrder,
-    message: `Đã thu tiền mặt ${getWebsiteOrderLabel(nextOrder)} ${nextOrder.displayOrderCode || nextOrder.orderCode || orderId}.`
+    message: isZeroPosOrder(nextOrder) ? "Đã xác nhận đơn 0đ, không thu tiền." : `Đã thu tiền mặt ${getWebsiteOrderLabel(nextOrder)} ${nextOrder.displayOrderCode || nextOrder.orderCode || orderId}.`
   };
 }
 
@@ -509,6 +510,7 @@ export async function markWebsiteOrderPaidQr({
   paidAt = "",
   paymentAmount = 0
 } = {}) {
+  if (isZeroPosOrder(order)) return { ok: false, message: "Đơn 0đ không cần thanh toán QR." };
   const orderId = toText(order?.id);
   const shiftId = toText(shift?.id);
   if (!supabase) return { ok: false, message: "Supabase chưa sẵn sàng." };

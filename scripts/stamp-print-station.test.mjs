@@ -11,11 +11,12 @@ const receipt=new vm.SourceTextModule(fs.readFileSync(new URL('posStampReceipt.j
 await receipt.link(()=>{});await receipt.evaluate();
 function mock(values){return new vm.SyntheticModule(Object.keys(values),function(){for(const [k,v]of Object.entries(values))this.setExport(k,v);},{context});}
 const dependencies={
+ './posOrderAlertService':mock({playPosOrderAlert:async()=>false,isWebsiteOrderPaid:order=>order.paymentStatus==='paid'||Boolean(order.paidAt)}),
  './posStampReceipt':receipt,
  './posStampService':mock({withPosStampSummary:async(order,phone,options)=>{lookups.push({phone,options});return {...order,stampSummary:{enabled:true,available:1}};}}),
  'react-native':mock({AppState:{currentState:'active'}}),
  '../supabase/client':mock({supabase:{from:()=>chain}}),
- './posPrinterService':mock({buildReceiptFooterQrUrl:()=>'',buildPosCustomerBillText:()=>'',playLocalNewOrderAlert:async()=>true,playLocalQrPaymentAlert:async()=>true,printLocalReceipt:async(payload)=>{printed.push({...payload,...receipt.namespace.placeStampsAfterLoyaltyQr(payload.text,payload.footerText)});}}),
+ './posPrinterService':mock({buildReceiptFooterQrUrl:()=>'',buildPosCustomerBillText:()=>'',buildPosPreparationBillText:()=>'',playLocalNewOrderAlert:async()=>true,playLocalQrPaymentAlert:async()=>true,printLocalReceipt:async(payload)=>{printed.push({...payload,...receipt.namespace.placeStampsAfterLoyaltyQr(payload.text,payload.footerText)});}}),
 };
 const station=new vm.SourceTextModule(fs.readFileSync(new URL('posPrintStationService.js',base),'utf8')+'\nexport {processPrintJobOnce};',{context});
 await station.link(name=>dependencies[name]);await station.evaluate();

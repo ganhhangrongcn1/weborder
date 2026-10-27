@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { POS_COLORS, POS_RADIUS } from "../../../styles/posTheme";
 import PosIcon from "./PosIcon";
+import PosStampRewardBadge from "./PosStampRewardBadge";
 
 function toDigits(value = "") {
   return String(value || "").replace(/\D+/g, "").slice(0, 10);
@@ -16,9 +17,11 @@ export default function PosCustomerSummaryCard({
   lookup,
   onOpen,
   onClear,
-  rightAction = null
+  rightAction = null,
+  stampState = {}
 }) {
   const customer = lookup?.result;
+  const stampReady = Boolean(stampState.data?.enabled && stampState.data.available >= 10 && !stampState.loading && !stampState.error);
   const hasInput = Boolean(customerName || customerPhone);
   const isRegistered = Boolean(customer?.registeredCustomer);
   const availablePoints = Number(customer?.loyalty?.totalPoints || 0);
@@ -38,7 +41,7 @@ export default function PosCustomerSummaryCard({
           : "Chưa nhập SĐT";
 
   return (
-    <View style={styles.panel}>
+    <View style={[styles.panel, stampReady && styles.rewardPanel]}>
       <View style={styles.headRow}>
         <View style={styles.titleWrap}>
           <View style={styles.titleIcon}>
@@ -49,6 +52,7 @@ export default function PosCustomerSummaryCard({
             <Text style={styles.subtitle}>{customer ? "Đã nhận diện quyền lợi" : "Không bắt buộc"}</Text>
           </View>
         </View>
+        {stampReady && onOpen ? <Pressable accessibilityRole="button" accessibilityLabel="Khách đủ tem đổi quà. Mở quyền lợi" onPress={onOpen}><PosStampRewardBadge /></Pressable> : null}
         {rightAction ? <View style={styles.headAction}>{rightAction}</View> : null}
       </View>
 
@@ -114,6 +118,7 @@ export default function PosCustomerSummaryCard({
 }
 
 const styles = StyleSheet.create({
+  rewardPanel: { borderWidth: 2, borderColor: "#df951e", backgroundColor: "#fff8df" },
   panel: {
     gap: 8,
     backgroundColor: POS_COLORS.surface,

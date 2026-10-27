@@ -70,7 +70,7 @@ test('zero price stamp gift only offers cash confirmation without a QR transfer'
  act(()=>{tree=renderer.create(<PosPhoneSaleWorkspace orderMode pager="02" cart={[{quantity:1}]} totals={{total:0}} onSendOrder={send}/>);});
  const button=label=>tree.root.findAllByType(Pressable).find(n=>n.findAllByType(Text).some(t=>t.props.children===label));
  act(()=>button('Giỏ · 1 món').props.onPress());
- expect(button('QR')).toBeUndefined();act(()=>button('Đổi quà').props.onPress());
+ expect(button('QR')).toBeUndefined();act(()=>button('Xác nhận đơn 0đ').props.onPress());
  expect(send).toHaveBeenCalledWith('cash');act(()=>tree.unmount());
 });
 

@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 
 import { POS_COLORS, POS_RADIUS, POS_SHADOW } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
+import { isZeroPosOrder } from "../../../services/pos/posZeroOrderPolicy";
 import { getPosDialogWidth, POS_MODAL } from "./posModalTokens";
 
 function formatDateTime(value = "") {
@@ -175,7 +176,7 @@ export default function PosOrderDetailModal({
               </ScrollView>
 
               <View style={styles.actions}>
-                {order.metadata?.deviceMode === "phone" && order.status === "pending_payment" && [{label:"Tiền mặt", action:onPayCash},{label:"Mở QR",action:onPayQr}].filter(item => item.action).map(item => <Pressable key={item.label} style={[styles.actionButton,styles.ghostAction]} disabled={actionBusy} onPress={() => { onClose?.(); item.action(order); }}><Text style={styles.ghostActionText}>{item.label}</Text></Pressable>)}
+                {order.metadata?.deviceMode === "phone" && order.status === "pending_payment" && [{label:isZeroPosOrder(order) ? "Xác nhận đơn 0đ" : "Tiền mặt", action:onPayCash},...(!isZeroPosOrder(order) ? [{label:"Mở QR",action:onPayQr}] : [])].filter(item => item.action).map(item => <Pressable key={item.label} style={[styles.actionButton,styles.ghostAction]} disabled={actionBusy} onPress={() => { onClose?.(); item.action(order); }}><Text style={styles.ghostActionText}>{item.label}</Text></Pressable>)}
                 {typeof onReprint === "function" && <Pressable
                   style={[styles.actionButton, styles.ghostAction]}
                   onPress={() => onReprint?.(order)}

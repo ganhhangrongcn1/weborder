@@ -1,13 +1,13 @@
 import { buildStampReceiptSection } from "./posStampReceipt";
 import { withPosStampSummary } from "./posStampService";
+import { isWebsiteOrderPaid, playPosOrderAlert } from "./posOrderAlertService";
 import { AppState } from "react-native";
 
 import { supabase } from "../supabase/client";
 import {
   buildReceiptFooterQrUrl,
   buildPosCustomerBillText,
-  playLocalNewOrderAlert,
-  playLocalQrPaymentAlert,
+  buildPosPreparationBillText,
   printLocalReceipt
 } from "./posPrinterService";
 
@@ -99,15 +99,15 @@ function pruneRecentAlerts(now = Date.now()) {
 
 function buildAlertKey(job = {}, payload = {}) {
   const order = getObject(payload.order);
-  return normalizeSourceToken(
-    job.order_code ||
+  return toText(
+    order.id || job.order_id || job.order_code ||
       order.orderCode ||
       order.order_code ||
       order.displayOrderCode ||
       order.display_order_code ||
       order.id ||
       job.id
-  );
+  ).toLowerCase();
 }
 
 function isQrPaymentPrintPayload(payload = {}, sourceType = "") {
@@ -118,10 +118,10 @@ function isQrPaymentPrintPayload(payload = {}, sourceType = "") {
       order.paymentMethod ||
       order.payment_method
   );
-  return sourceType === "qr_order" ||
+  return isWebsiteOrderPaid(order) && (method === "momo" || sourceType === "qr_order" ||
     method.includes("qr") ||
     method.includes("bank") ||
-    Boolean(toText(order.paymentReference || order.payment_reference || payload.paymentReference || payload.payment_reference));
+    Boolean(toText(order.paymentReference || order.payment_reference || payload.paymentReference || payload.payment_reference)));
 }
 
 function isPosOrderPrintJob(job = {}) {
@@ -454,8 +454,8 @@ export function buildPrintPayload(job = {}) {
   const isItemLabel = toText(job.job_type) === ITEM_LABEL_JOB_TYPE || sourceType === ITEM_LABEL_JOB_TYPE;
   const order = getObject(payload.order);
   const payloadText = toText(payload.text);
-  const secondaryText = (payload.secondaryOrder
-    ? buildReceiptTextFromOrder(getObject(payload.secondaryOrder), "pos_phone_payment") : "") || toText(payload.secondaryText);
+  const secondaryText = (payload.secondaryOrder || payload.secondaryText
+    ? buildReceiptTextFromOrder(getObject(payload.secondaryOrder || payload.order), payload.secondaryOrder ? "pos_phone_payment" : sourceType) : "") || toText(payload.secondaryText);
   const paymentStatus = normalizeSourceToken(order.paymentStatus || order.payment_status);
   const paidAt = toText(order.paidAt || order.paid_at);
   const legacyUnpaidReceipt =
@@ -472,7 +472,8 @@ export function buildPrintPayload(job = {}) {
   const currentPaidText = !isItemLabel && !isPartnerReceipt && !NO_FOOTER_SOURCE_TYPES.has(sourceType)
     && (paidAt || ["paid", "converted"].includes(paymentStatus))
     ? buildReceiptTextFromOrder(order, sourceType) : "";
-  const originalText = generatedText || currentPaidText || payloadText || buildReceiptTextFromOrder(order, sourceType);
+  const bundledPreparation = secondaryText && payloadText.includes("@@CENTER:PHIẾU LÀM MÓN");
+  const originalText = bundledPreparation ? (!payload.secondaryOrder && buildReceiptTextFromOrder(order, sourceType, true)) || payloadText : generatedText || currentPaidText || payloadText || buildReceiptTextFromOrder(order, sourceType);
   const text = isPartnerReceipt ? buildPartnerReceiptText(originalText, order) : originalText;
   const isPreparationTicket = text.includes("@@CENTER:PHIẾU LÀM MÓN");
   const skipFooter = isItemLabel || NO_FOOTER_SOURCE_TYPES.has(sourceType) || isPreparationTicket || isPartnerReceipt;
@@ -501,7 +502,7 @@ export function buildPrintPayload(job = {}) {
   };
 }
 
-function buildReceiptTextFromOrder(order = {}, sourceType = "") {
+function buildReceiptTextFromOrder(order = {}, sourceType = "", preparation = false) {
   const items = Array.isArray(order.items) ? order.items : [];
   if (!items.length) return "";
 
@@ -522,12 +523,17 @@ function buildReceiptTextFromOrder(order = {}, sourceType = "") {
       lineTotal: toNumber(itemObject.lineTotal || itemObject.total || itemObject.price * quantity),
       note: toText(itemObject.note),
       selectedOptions: options.map((option) => ({
-        name: toText(option.name || option.label || option.value)
+        name: toText(typeof option === "string" ? option : option.name || option.label || option.value)
       })).filter((option) => option.name)
     };
   });
 
   const paymentMethod = normalizeSourceToken(order.paymentMethod || order.payment_method);
+  if (preparation) return buildPosPreparationBillText({
+    order, cart, pagerNumber: order.pagerNumber || order.pager_number,
+    branchName: order.branchName || order.branch_name,
+    orderNote: order.note || order.orderNote || order.order_note
+  });
   const paymentStatus = normalizeSourceToken(order.paymentStatus || order.payment_status);
   const paidAt = toText(order.paidAt || order.paid_at);
   const paymentPaid = ["paid", "converted"].includes(paymentStatus) || Boolean(paidAt);
@@ -543,7 +549,7 @@ function buildReceiptTextFromOrder(order = {}, sourceType = "") {
     cart,
     totals: {
       subtotal: toNumber(order.subtotal || order.totalAmount),
-      voucherDiscount: toNumber(order.discount || order.promoDiscount || order.voucherDiscount),
+      voucherDiscount: toNumber(order.promoDiscount ?? order.voucherDiscount ?? order.discount),
       pointsDiscount: toNumber(order.pointsDiscount || order.pointsDiscountAmount),
       total: toNumber(order.totalAmount || order.total_amount)
     },
@@ -582,17 +588,17 @@ async function playPrintJobAlert(printPayload = {}) {
       return false;
     }
     recentAlertByOrderKey.set(alertKey, { type: nextType, at: Date.now() });
-    return playLocalNewOrderAlert();
+    return playPosOrderAlert(alertKey, "new");
   }
 
   if (previousIsFresh && previous.type === "qr") return false;
   recentAlertByOrderKey.set(alertKey, { type: nextType, at: now });
 
   if (printPayload.isQrPayment) {
-    const played = await playLocalQrPaymentAlert();
+    const played = await playPosOrderAlert(alertKey, "paid");
     if (played) return true;
   }
-  return playLocalNewOrderAlert();
+  return false;
 }
 
 async function processPrintJobOnce(job, branchUuid, deviceId, onStatus) {

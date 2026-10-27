@@ -244,7 +244,7 @@ export async function readPosOrderForPrint(orderId = "") {
   const [{ data: orderRow, error: orderError }, { data: itemRows, error: itemError }] = await Promise.all([
     supabase
       .from("orders")
-      .select("id,order_code,customer_name,customer_phone,total_amount,subtotal,promo_discount,points_discount,points_earned,payment_method,status,kitchen_status,branch_name,metadata,created_at")
+      .select("id,order_code,customer_name,customer_phone,total_amount,subtotal,promo_discount,points_discount,points_earned,expected_earn_points,payment_method,status,kitchen_status,branch_name,metadata,created_at")
       .eq("id", safeOrderId)
       .maybeSingle(),
     supabase
@@ -295,6 +295,7 @@ export async function readPosOrderForPrint(orderId = "") {
   return {
     ok: true,
     printableOrder: {
+      expectedEarnPoints: Number(orderRow.expected_earn_points || 0),
       id: toText(orderRow.id || orderRow.order_code),
       displayOrderCode: toText(metadata.displayOrderCode || orderRow.order_code || orderRow.id),
       customerName: toText(orderRow.customer_name),
