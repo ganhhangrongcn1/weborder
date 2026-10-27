@@ -19,7 +19,8 @@
 - Jest cuối: 15 suites / 45 tests đạt; gồm tem, 0đ, ba đường in, ASCII cũ, tiền thối, event thanh toán, dedup và chuyển trạng thái.
 - `receipt-template.test.mjs` và `stamp-print-station.test.mjs` đạt; không gọi nhận điểm/tem/in thật.
 - Hai file TypeScript webhook qua kiểm tra cú pháp esbuild. ESLint runtime sửa đạt.
-- Lệnh compile Java riêng có loại task bundle không dùng được do phụ thuộc generated resources của Gradle. Không coi đó là lỗi mã Java hoặc build APK mới thành công. APK cuối phải build lại đầy đủ không bỏ task.
+- Full `app:assembleRelease --console=plain --no-daemon` đã đạt với toàn bộ phần sửa bổ sung (5m06s), gồm biên dịch Java âm thanh. Không bỏ task trong bản build này.
+- `npm run build` và UTF-8 đạt (5313 module), hai test template/stamp print station đạt sau lần sửa cuối.
 - Chưa xác nhận giấy/âm trên máy tại quán. Trang tải vẫn 0.4.31, giữ PR #19 draft và code trên nhánh cloud theo yêu cầu chờ gom lỗi.
 
 ## File bổ sung/cập nhật trong lượt này
@@ -36,3 +37,13 @@
 - `scripts/receipt-template.test.mjs`, `scripts/stamp-print-station.test.mjs`
 - `supabase/functions/momo-payment-webhook/index.ts`, `supabase/functions/sepay-pos-webhook/index.ts`
 - Ghi chú này và ghi chú POS 0.4.32.
+
+## APK nội bộ, chưa phát hành
+
+- Source đã build: `848574fe5c20df1ff19ae1324ef6661491900229`.
+- File: `ghr-pos-mobile-native/releases/GHR-POS-0.4.32-candidate-receipts-audio.apk`, kèm manifest cùng tên.
+- Package `vn.ghr.posmobile`, versionName 0.4.32, versionCode 63; ABI arm64-v8a và armeabi-v7a.
+- 31,199,463 bytes; SHA-256 `ece0685b89c91812b0af7c725d9a8b9eca458fc93da211a7deffc419a280c46d`.
+- apksigner xác nhận chữ ký hợp lệ, cùng chứng thư thực tế của APK 0.4.31: `728d5843ae0c8883171fdae3fd65b6375810d27ed946297c5cee3a51b62224ea`.
+- Đã kiểm tra chỉ đọc: `ghr_app_downloads` vẫn 0.4.31 / 62. Không upload APK, không deploy Edge Functions và không merge PR.
+- Khi người dùng chốt phát hành: rà lại có thay đổi runtime mới hay không, build lại nếu cần; triển khai hai webhook, merge nhánh và phát hành APK đồng bộ theo quy trình. Giấy/âm thanh thực tế tại quán vẫn cần kiểm tra.

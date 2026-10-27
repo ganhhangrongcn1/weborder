@@ -47,3 +47,4 @@
 - Build đầu ở commit `2ef53b1a77374abb47bb29e084055e19df0f2b2b` đã thành công (9m36s). Giữ riêng `releases/GHR-POS-0.4.32-candidate-before-momo.apk`, SHA-256 `9cc43dc14c54355b1504c566997206e4415744d9a0395a12b19565b7b54fc724`. Bản này chưa có phần sửa bill/âm báo MoMo bổ sung sau đó, không dùng làm bản phát hành cuối.
 - Tem của đơn website giữ tới khi hoàn tất; POS thanh toán được máy chủ xem là settled và trừ tại thời điểm đó theo quy tắc cũ. Không thay đổi thời điểm trừ tem trong bản sửa.
 - Xem ghi chú bổ sung `pos-website-receipt-payment-audio-2026-10-27.md` cho các lỗi đang gộp tiếp.
+- Candidate đầy đủ sửa bill/âm thanh đã build và xác minh package/chữ ký: `GHR-POS-0.4.32-candidate-receipts-audio.apk` (source 848574f), chỉ lưu nội bộ. Không nhầm với candidate-before-momo.
