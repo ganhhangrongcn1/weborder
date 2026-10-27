@@ -1,5 +1,6 @@
 import { getCustomerKey } from "./storageService.js";
 import { orderRepository } from "./repositories/orderRepository.js";
+import { normalizeCheckoutPaymentMethod } from "./checkoutPaymentPolicy.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
 import { composeMemberLoyaltySnapshot } from "./memberLoyaltySnapshotService.js";
 import { applyOrderLoyaltyAsync, calculateOrderPoints, getLoyaltyRuleConfigAsync } from "./loyaltyService.js";
@@ -502,6 +503,7 @@ export async function createOrderAsync(params) {
   if (stampGifts.length && (stampGifts.length !== 1 || fulfillmentType !== "pickup" || stampGifts[0].stampPhone !== getCustomerKey(deliveryInfo?.phone || userProfile.phone))) {
     throw new Error("Quà đổi tem cần đúng số điện thoại và nhận tại quán.");
   }
+  const normalizedPaymentMethod = normalizeCheckoutPaymentMethod(paymentMethod, totalAmount);
   const checkoutAttempt = getOrCreateCheckoutOrderAttempt({
     cart,
     totalAmount,
@@ -509,14 +511,13 @@ export async function createOrderAsync(params) {
     fulfillmentType,
     branchInfo,
     pickupTimeText,
-    paymentMethod
+    paymentMethod: normalizedPaymentMethod
   });
   const createdAt = checkoutAttempt.createdAt;
   const { orderCode, displayOrderCode } = checkoutAttempt;
   const subtotalAmount = Number(
     subtotal ?? cart.reduce((sum, item) => sum + Number(item?.lineTotal || 0), 0)
   );
-  const normalizedPaymentMethod = String(paymentMethod || "").trim().toLowerCase();
   const isPrepaidPayment = ["bank_qr", "momo"].includes(normalizedPaymentMethod);
   const [validatedVoucher, loyaltyRule, customerActionProof] = await Promise.all([
     withCheckoutStepTimeout(
@@ -605,7 +606,7 @@ export async function createOrderAsync(params) {
     deliveryBranchAddress: fulfillmentType === "delivery" ? (branchInfo?.address || "") : "",
     pickupTimeText,
     deliveryAddress: fulfillmentType === "pickup" ? "Khách tự đến lấy" : (deliveryInfo?.address || userProfile.addresses[0]?.detail || ""),
-    paymentMethod,
+    paymentMethod: normalizedPaymentMethod,
     paymentStatus: isPrepaidPayment ? "unpaid" : "pending",
     paymentReference: isPrepaidPayment ? orderCode : "",
     paymentAmount: totalAmount,

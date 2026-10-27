@@ -17,6 +17,7 @@ import {
   readCheckoutVoucherIntent
 } from "../../services/checkoutVoucherIntentService.js";
 import { validateCheckoutContact } from "../../services/checkoutOrderService.js";
+import { resolveCheckoutPaymentMethod } from "../../services/checkoutPaymentPolicy.js";
 import { deliveryFee, freeshipMinSubtotal } from "../../constants/storeConfig.js";
 import { checkoutFallbackCoupons } from "../../data/storeDefaults.js";
 import { optionModalText } from "../../data/uiText.js";
@@ -341,34 +342,14 @@ export default function Checkout({
   const webMomoEnabled = checkoutTotal > 0 && selectedBranchInfo?.paymentSettings?.webMomoEnabled !== false;
   const webBankQrEnabled = checkoutTotal > 0 && selectedBranchInfo?.paymentSettings?.webBankQrEnabled === true;
   const webCounterPaymentEnabled = checkoutTotal === 0 || selectedBranchInfo?.paymentSettings?.webCounterPaymentEnabled !== false;
+  const effectivePaymentMethod = resolveCheckoutPaymentMethod({
+    total: checkoutTotal, fulfillmentType, paymentMethod,
+    webMomoEnabled, webBankQrEnabled, webCounterPaymentEnabled
+  });
   useEffect(() => {
     if (hasStampGift && fulfillmentType !== "pickup") setFulfillmentType("pickup");
   }, [hasStampGift, fulfillmentType]);
 
-  useEffect(() => {
-    if (!(isQrCounterOrder || fulfillmentType === "pickup")) return;
-
-    const selectedMethodEnabled =
-      (paymentMethod === "momo" && webMomoEnabled) ||
-      (paymentMethod === "bank_qr" && webBankQrEnabled) ||
-      (paymentMethod === "counter" && webCounterPaymentEnabled);
-    if (selectedMethodEnabled) return;
-
-    if (webMomoEnabled) {
-      setPaymentMethod("momo");
-    } else if (webBankQrEnabled) {
-      setPaymentMethod("bank_qr");
-    } else if (webCounterPaymentEnabled) {
-      setPaymentMethod("counter");
-    }
-  }, [
-    fulfillmentType,
-    isQrCounterOrder,
-    paymentMethod,
-    webBankQrEnabled,
-    webCounterPaymentEnabled,
-    webMomoEnabled
-  ]);
   const pickupTimeText = isQrCounterOrder
     ? "Đặt liền tại quầy"
     : pickupMode === "soon"
@@ -431,7 +412,7 @@ export default function Checkout({
     deliverySourceBranch,
     pickupTimeText,
     orderSource: isQrCounterOrder ? "qr_counter" : "online",
-    paymentMethod: fulfillmentType === "pickup" ? paymentMethod : "COD",
+    paymentMethod: effectivePaymentMethod,
     navigate,
     onNotice: setCheckoutNotice,
     onVoucherRejected: () => setSelectedPromo(null)
@@ -511,9 +492,6 @@ export default function Checkout({
     if (usePoints) setUsePoints(false);
   }, [isQrCounterOrder, isRegisteredCustomer, selectedPromo, usePoints]);
 
-  useEffect(() => {
-    setPaymentMethod(isQrCounterOrder || fulfillmentType === "pickup" ? "momo" : "COD");
-  }, [fulfillmentType, isQrCounterOrder]);
 
   const handleCheckoutPlaceOrder = async () => {
     if (isPlacingOrder) return;
@@ -753,7 +731,7 @@ export default function Checkout({
           webMomoEnabled={webMomoEnabled}
           webBankQrEnabled={webBankQrEnabled}
           webCounterPaymentEnabled={webCounterPaymentEnabled}
-          paymentMethod={paymentMethod}
+          paymentMethod={effectivePaymentMethod}
           setPaymentMethod={setPaymentMethod}
         />
       </div>
@@ -775,9 +753,9 @@ export default function Checkout({
           >
             {isPlacingOrder
               ? "Đang xác nhận…"
-              : paymentMethod === "bank_qr"
+              : effectivePaymentMethod === "bank_qr"
                 ? "Đặt & thanh toán QR"
-                : paymentMethod === "momo"
+                : effectivePaymentMethod === "momo"
                   ? "Thanh toán bằng MoMo"
                   : "Đặt món"}
           </button>
@@ -791,7 +769,7 @@ export default function Checkout({
         cart={cart}
         branch={selectedBranchInfo}
         pickupTimeText={pickupTimeText}
-        paymentMethod={paymentMethod}
+        paymentMethod={effectivePaymentMethod}
         total={checkoutTotal}
         earnedPoints={earnedPreviewPoints}
         formatMoney={formatMoney}
