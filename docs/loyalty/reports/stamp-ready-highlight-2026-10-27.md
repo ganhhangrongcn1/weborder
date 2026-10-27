@@ -5,3 +5,5 @@
 - Giữ nguyên hành vi mở chọn quà/đi đến trang loyalty; không thay đổi dữ liệu, điều kiện, giữ/trừ/hoàn tem hoặc thanh toán.
 - Kiểm tra trực quan bằng component thật với hook dữ liệu minh họa offline: 10 tem nổi bật, 9 tem giữ kiểu cũ, nút mở sheet đổi quà. Không kết nối Supabase hoặc tạo đơn trong bản xem thử.
 - File cập nhật: `src/features/loyalty/components/StampCard.jsx`, `src/styles/stamp-card.css`. Ghi chú này là file mới; script xem thử tạm không đưa lên Git.
+- ESLint, UTF-8 và `npm run build` đạt (5313 module). PR #18 đã merge; production main `50569c35c63833827f343c742a21e9feac504f7c`, deployment `dpl_Avqh4yuMfq7WkVkD32EQJkHk4jHm` READY trên ganhhangrong.vn.
+- Đã đóng bản xem thử và xóa đúng script tạm sau khi lưu ảnh minh họa. Không cần cập nhật APK POS.
