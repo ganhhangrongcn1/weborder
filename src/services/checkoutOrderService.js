@@ -1,6 +1,7 @@
 ﻿import { getCustomerKey } from "./storageService.js";
 
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
+import { normalizeCheckoutPaymentMethod } from "./checkoutPaymentPolicy.js";
 
 const VOUCHER_REASON_MESSAGES = {
   voucher_code_required: "Voucher chưa có mã hợp lệ. Vui lòng chọn lại voucher.",
@@ -162,6 +163,6 @@ export function buildCreateOrderPayload({
     orderSource,
     branchInfo: fulfillmentType === "pickup" ? selectedBranchInfo : deliverySourceBranch,
     pickupTimeText: fulfillmentType === "pickup" ? pickupTimeText : "",
-    paymentMethod
+    paymentMethod: normalizeCheckoutPaymentMethod(paymentMethod, checkoutTotal)
   };
 }

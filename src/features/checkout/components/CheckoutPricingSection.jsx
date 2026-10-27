@@ -224,7 +224,7 @@ export default function CheckoutPricingSection({
                 <Icon name="bag" size={18} />
                 <span>
                   <strong>Thanh toán tại quầy</strong>
-                  <small>Thanh toán khi nhận món</small>
+                  <small>{Number(checkoutTotal) === 0 ? "Đơn 0đ · Không cần thanh toán" : "Thanh toán khi nhận món"}</small>
                 </span>
                 {isCounterSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
               </button>
