@@ -11,6 +11,16 @@
 .stamp-card__footer { font-size:12px; color:#74685b; }
 .stamp-card__footer button { flex-shrink:0; display:flex; align-items:center; gap:6px; min-height:44px; padding:6px 0 6px 8px; border:0; background:transparent; color:#ad5000; font:inherit; font-weight:750; cursor:pointer; }
 .stamp-card__footer button span { font-size:23px; }
+.stamp-card--ready { border:2px solid #eb951b; background:#fff9e9; box-shadow:0 5px 18px #bd790b14; }
+.stamp-card--ready .stamp-card__count { padding:5px 9px; border-radius:20px; background:#ffebbd; color:#824000; font-weight:800; }
+.stamp-card--ready .stamp-card__grid>span.stamp-card__reward-slot { background:#cf6500; border-color:#cf6500; color:#fff; box-shadow:0 0 0 4px #f5b13b26; }
+.stamp-card__reward-slot svg { width:70%; height:70%; transform-origin:50% 85%; animation:stamp-gift-wiggle 5s ease-in-out infinite; }
+.stamp-card--ready .stamp-card__footer { flex-direction:column; align-items:stretch; gap:12px; color:#824000; font-size:14px; font-weight:750; }
+.stamp-card--ready .stamp-card__footer button { justify-content:center; padding:10px 16px; border-radius:12px; background:#b95000; color:#fff; font-size:15px; font-weight:800; }
+.stamp-card--ready .stamp-card__footer button:hover { background:#984200; }
+.stamp-card--ready .stamp-card__footer button:focus-visible { outline:3px solid #824000; outline-offset:3px; }
+@keyframes stamp-gift-wiggle { 0%,24%,100% { transform:rotate(0); } 4%,12% { transform:rotate(-12deg); } 8%,16% { transform:rotate(12deg); } 20% { transform:rotate(-5deg); } }
+@media(prefers-reduced-motion:reduce) { .stamp-card__reward-slot svg { animation:none; } }
 .stamp-card p,.stamp-rewards-sheet p,.stamp-rewards-sheet summary { font-size:13px; line-height:1.6; color:#74685b; }
 .stamp-rewards-sheet__content { padding:0 20px 24px; }
 .stamp-rewards-sheet__summary { text-align:center; background:#fff4e2; border-radius:16px; padding:14px 16px; color:#995000; }
