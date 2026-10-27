@@ -18,3 +18,10 @@
 - `node scripts/order-point-display.test.mjs`: trạng thái claimed khi fallback thiếu lịch sử, hủy, thanh toán, đối soát, mốc 24h, thiếu/sai SĐT và đơn đủ điều kiện nhưng chưa có xác nhận cộng.
 - Build, UTF-8, lint phạm vi thay đổi và kiểm tra diff trước khi phát hành.
 - Không nhận điểm/tem thật, tạo đơn thật hoặc in bill để kiểm thử.
+
+## Phát hành
+
+- Test 12 trường hợp, ESLint phạm vi sửa và kiểm tra UTF-8 đều đạt. Build local chạy quá chậm trong sandbox nên đã dừng, không báo local build đạt.
+- Vercel preview và production build đều READY. PR #16 đã merge; main `de6ad016a8e68be6176287f61b8c070154913418`.
+- Production `dpl_G73THwr4PFXzoSiyPTATFrnLuY5h`, alias `ganhhangrong.vn` và `www.ganhhangrong.vn`.
+- Kiểm tra HTTP `/orders` trả 200; JavaScript trên tên miền chính có các nhãn mới và không còn chuỗi “Quét QR trên bill để nhận điểm”. Chưa chạy lại tra cứu bằng SĐT thật qua giao diện.
