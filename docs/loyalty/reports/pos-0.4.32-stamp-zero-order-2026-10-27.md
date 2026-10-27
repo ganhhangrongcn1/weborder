@@ -1,5 +1,7 @@
 # POS 0.4.32 — dấu hiệu đổi tem và xác nhận đơn 0đ
 
+**Trạng thái mới nhất:** đã phát hành theo xác nhận tiếp theo của người dùng. Xem `pos-0.4.32-release-2026-10-27.md`; phần tạm giữ dưới đây là lịch sử chuẩn bị.
+
 ## Phạm vi
 
 - SĐT hợp lệ được tra tem sau 400ms, dùng chung kết quả cho thẻ khách hàng và modal quyền lợi. Tận dụng cache/in-flight 60 giây hiện có; không thêm polling hoặc realtime. Đổi SĐT/tài khoản bỏ kết quả cũ; lỗi/offline không báo đủ tem. Cache invalidation sau đơn làm cập nhật cả hai nơi.

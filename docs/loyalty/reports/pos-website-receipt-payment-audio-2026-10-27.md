@@ -1,5 +1,7 @@
 # Bill và âm báo thanh toán website — 27/10/2026
 
+**Trạng thái mới nhất:** đã phát hành theo xác nhận tiếp theo của người dùng. Xem `pos-0.4.32-release-2026-10-27.md`. Các trạng thái chưa deploy/ON HOLD bên dưới là lịch sử lúc chuẩn bị.
+
 ## Bằng chứng chỉ đọc
 
 - Ảnh bill GHR-1798 khớp đơn MoMo `GHR261027105111125`, chi nhánh UUID `c0d35bd0-e614-4973-9eb2-17e78fb9a245`.
