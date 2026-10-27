@@ -14,7 +14,7 @@ export default function Login({ app }) {
   const [register, setRegister] = useState(false);
   const [support, setSupport] = useState(false);
   return <main className="login-page reference-login">
-    <div className="login-brand"><Brand showSubtitle={false}/>{!register && <h1 id="login-title">Tích điểm thành viên</h1>}</div>
+    <div className="login-brand"><Brand showSubtitle={false}/>{!register && <h1 id="login-title">Điểm danh và tích điểm</h1>}</div>
     {register ? <Register onBack={() => setRegister(false)}/> : <section className="login-panel" aria-labelledby="login-title">
       <form onSubmit={(event) => { event.preventDefault(); app.login(username, password); }}>
         <label htmlFor="attendance-username">Tài khoản</label>
