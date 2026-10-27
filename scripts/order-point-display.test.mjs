@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import { getOrderPointBadge } from "../src/services/orderPointDisplayService.js";
+import { resolveOrderPointStatus } from "../src/services/loyaltyLedgerUtils.js";
+
+const now = Date.parse("2026-10-27T10:00:00+07:00");
+const order = { sourceType: "partner", customerPhone: "0901234567", createdAt: new Date(now - 1000).toISOString() };
+const label = (patch, options = {}) => getOrderPointBadge({ ...order, ...patch }, { now, ...options }).label;
+assert.equal(resolveOrderPointStatus({ pointStatus: "claimed" }), "claimed", "source award must survive an empty history fallback");
+assert.equal(label({ pointStatus: "claimed" }), "Đã tích điểm");
+assert.equal(label({ pointStatus: "claimed", createdAt: "2025-01-01" }), "Đã tích điểm", "awarded receipts do not become expired");
+assert.equal(label({ pointStatus: "claimed" }, { orderStatusKey: "cancelled" }), "Không tích điểm");
+assert.equal(label({ pointStatus: "blocked" }), "Không tích điểm");
+assert.equal(label({}, { orderStatusKey: "awaiting_payment" }), "Chờ thanh toán để tích điểm");
+assert.equal(label({ pointStatus: "waiting_data" }), "Chờ đối soát để tích điểm");
+assert.equal(label({ createdAt: new Date(now - 86400000).toISOString() }), "Đã hết hạn tích điểm");
+assert.equal(label({ customerPhone: "" }), "Chưa có SĐT nhận điểm");
+assert.equal(label({ customerPhone: "090***4567" }), "SĐT chưa hợp lệ để tích điểm");
+assert.equal(label({ customerPhone: "+84901234567" }), "Đang cập nhật điểm");
+assert.equal(label({}), "Đang cập nhật điểm", "eligible order alone is not proof of an award");
+console.log("Order point display: 12 scenarios passed");
