@@ -1,4 +1,4 @@
-export const PAGES = ["checkin", "history", "corrections", "training", "account", "branch"];
+export const PAGES = ["membership", "checkin", "history", "corrections", "training", "account", "branch"];
 export function parseDestination(hash) {
   const params = new URLSearchParams(String(hash || "").replace(/^#\/?/, ""));
   const page = params.get("page");

@@ -1,5 +1,13 @@
 # Trạng thái app chấm công Zalo Mini App
 
+## Mốc mới nhất — 27/10/2026: thêm tích điểm mua hàng cho nhân viên (demo)
+
+Chủ app yêu cầu thêm tính năng tích điểm thành viên vào app hiện tại, chọn tích theo mua hàng tại quán. Đã thêm tab điểm/lịch sử/đổi quà và nhãn “Tích điểm thành viên” ở màn đăng nhập, kèm ngữ cảnh nhân viên và lý do đăng nhập ngắn gọn. Đây là bản demo bộ nhớ theo phiên, hóa đơn/quà mẫu, không tích điểm vào DB hoặc hệ thống khách hàng thật. Quy đổi mẫu 1.000đ = 1 điểm, chờ chốt chính sách khi vận hành.
+
+Ngày 26/10, chủ app gửi ảnh thông báo Zalo từ chối do màn đăng nhập thiếu ngữ cảnh đối tượng/lý do đăng nhập. Không suy ra kết quả riêng của 11 quyền. Các mốc đã gửi/đang chờ duyệt bên dưới là lịch sử, không còn là xác nhận trạng thái mới nhất. Thay đổi này chưa upload/gửi duyệt lại và chưa kiểm tra thiết bị.
+
+[Chi tiết tính năng, kiểm tra và toàn bộ 12 file thay đổi](checklist/reports/attendance-membership-points-2026-10-27.md). 25/25 test đạt; build/lint riêng/UTF-8 đạt. Không nối DB/API mới hoặc deploy.
+
 ## Mốc mới nhất — 25/10/2026: Version 7 đã gửi xét duyệt; chờ kết quả
 
 Đồng bộ riêng delta 11 file `d28901b8c08e4eec68fbb99f2292d8b134cc5fa4`, parent `0a8686b`, trên nền Cloud `d3ef29483cea1a1b07538ac69af64ee7448ae039`. Giữ lịch sử Cloud, không merge nhánh/parent snapshot. Các blocker email/webhook/Điều khoản và trạng thái chưa gửi phát hành của mốc trước bên dưới đã được thay thế bởi cập nhật này.

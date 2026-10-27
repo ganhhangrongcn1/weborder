@@ -13,6 +13,7 @@ export default function PrivacyNotice({ onClose }) {
     <h2 id="privacy-title">Quyền riêng tư</h2>
     <p>Thông tin sử dụng trong ứng dụng chấm công Gánh Hàng Rong.</p>
     <h3>Tài khoản và giờ công</h3><p>Tài khoản được quản lý cấp để truy cập dữ liệu chấm công được phân quyền. Giờ vào ca, giờ ra ca và yêu cầu điều chỉnh được dùng để đối chiếu công việc.</p>
+    <h3>Tích điểm thành viên</h3><p>Tính năng tích điểm mua hàng hiện dùng hóa đơn và quà mẫu, chỉ giữ trong phiên đăng nhập và mất khi tải lại hoặc đăng xuất. Không ghi điểm vào dữ liệu chấm công, điểm khách hàng hoặc hệ thống ưu đãi thật.</p>
     <h3>Liên kết số điện thoại</h3><p>Bạn có thể liên kết số điện thoại tại Thông tin tài khoản sau khi đăng nhập. Ứng dụng chỉ thực hiện khi bạn chọn và đồng ý liên kết.</p>
     <h3>Vị trí, camera và tệp</h3><p>Chỉ kiểm tra vị trí khi bạn chủ động thao tác, không theo dõi liên tục. Ảnh và tệp minh chứng chỉ được chọn hoặc chụp khi bạn yêu cầu để phục vụ đối chiếu chấm công.</p>
     <h3>Phạm vi bản trải nghiệm</h3><p>Bản hiện tại dùng vị trí, QR và số điện thoại mẫu; chưa lấy thông tin qua API Zalo thật. Tài khoản và dữ liệu thử nghiệm được lưu trên Supabase trong kho Testing.</p>

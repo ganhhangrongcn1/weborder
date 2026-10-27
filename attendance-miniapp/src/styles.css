@@ -284,3 +284,22 @@ section, article { scroll-margin-top: 88px; }
 }
 button.primary { font-size: 16px; }
 .login-submit { font-size: 16px; }
+
+/* Membership purchase points, alongside existing employee attendance. */
+.sidebar nav { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.login-panel h1 + .login-intro { margin-top: -12px; margin-bottom: 22px; line-height: 1.55; }
+.membership-page { display: grid; gap: 18px; }
+.membership-page > .notice { margin: 0; }
+.member-card { background: linear-gradient(125deg, #fff1aa, #ffdb40); }
+.member-card h2 { margin-bottom: 18px; }
+.member-card p { color: #55491f; }
+.member-balance { display: block; font-size: 46px; line-height: 1.2; margin-bottom: 16px; }
+.member-balance small { color: #55491f; font-size: 18px; }
+.membership-page form { display: grid; gap: 12px; }
+.membership-page form label { margin: 0; }
+.member-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 14px; }
+.member-rewards article { border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.member-ledger { list-style: none; padding: 0; margin: 0; }
+.member-ledger li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.member-ledger small { display: block; margin-top: 5px; }
+@media(max-width: 360px) { .sidebar nav { padding-inline: 4px; gap: 0; } .sidebar nav button span { font-size: 10px; } }

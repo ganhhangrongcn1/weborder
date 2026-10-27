@@ -1,4 +1,5 @@
 const paths = {
+  membership: <><path className="icon-tone" d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1Z"/><path d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1Z"/></>,
   checkin: <><rect className="icon-tone" x="4" y="5" width="16" height="16" rx="3"/><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4m8-4v4M4 10h16m-12 5 2.5 2.5L16 13"/></>,
   history: <><circle className="icon-tone" cx="12" cy="12" r="8"/><path d="M4.5 7.5A8.5 8.5 0 1 1 3.6 15M3.5 3.5v4.5H8"/><path d="M12 7.5V12l3 2"/></>,
   corrections: <><path className="icon-tone" d="M6 3h8l4 4v5l-7 8H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M10 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8l4 4v3M13 3v5h5M8 12h3m-3 4h1m5 5-2.5.5L12 19l6.5-6.5a1.4 1.4 0 0 1 2 2L14 21Zm3-7 2 2"/></>,
