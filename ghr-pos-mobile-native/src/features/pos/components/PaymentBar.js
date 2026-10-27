@@ -7,6 +7,7 @@ import PosIcon from "./PosIcon";
 
 function buildPaymentStatus(paymentConfirmed = null) {
   if (!paymentConfirmed) return "Chưa xác nhận thanh toán";
+  if (Number(paymentConfirmed.amount) === 0) return "Đã xác nhận đơn 0đ · Không thu tiền";
   if (paymentConfirmed.method === "cash") {
     return `Tiền mặt · khách đưa ${formatMoney(paymentConfirmed.received || 0)} · thối ${formatMoney(paymentConfirmed.change || 0)}`;
   }
@@ -78,10 +79,10 @@ export default function PaymentBar({
         >
           <View style={styles.buttonRow}>
             <PosIcon name="cash" size={16} color={disabled ? POS_COLORS.muted : POS_COLORS.slate} />
-            <Text style={[styles.secondaryText, disabled && styles.disabledText]}>{total === 0 ? "Xác nhận tại quầy" : "Tiền mặt"}</Text>
+            <Text style={[styles.secondaryText, disabled && styles.disabledText]}>{Number(total) === 0 ? "Xác nhận đơn 0đ" : "Tiền mặt"}</Text>
           </View>
         </Pressable>
-        <Pressable
+        {Number(total) > 0 && <Pressable
           style={[styles.secondary, qrLoading && styles.qrLoadingButton, disabled && styles.disabledButton, compact && { flexBasis: "45%" }]}
           onPress={onOpenQrPayment}
           disabled={disabled || qrLoading || total <= 0}
@@ -96,7 +97,7 @@ export default function PaymentBar({
               {qrLoading ? "Đang tạo QR..." : "QR"}
             </Text>
           </View>
-        </Pressable>
+        </Pressable>}
         <Pressable
           style={[styles.primary, !readyToCreate && styles.primaryDisabled, compact && { flexBasis: "100%" }]}
           onPress={onCreateOrder}

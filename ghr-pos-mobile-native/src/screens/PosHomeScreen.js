@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import CashPaymentModal from "../features/pos/components/CashPaymentModal";
+import usePosStampSummary from "../hooks/usePosStampSummary";
+import { isZeroPosOrder, getPosOrderPayableAmount } from "../services/pos/posZeroOrderPolicy";
 import PosBenefitCard from "../features/pos/components/PosBenefitCard";
 import PosAppUpdateCard from "../features/pos/components/PosAppUpdateCard";
 import PaymentBar from "../features/pos/components/PaymentBar";
@@ -214,6 +216,7 @@ export default function PosHomeScreen() {
     dismissLastClosedShift,
     hasOpenShift
   } = usePosComposer({ historyVisible: activeTab === "history", deviceMode: device.mode });
+  const stampState = usePosStampSummary(customerPhone, profile?.authUserId || profile?.id || "");
   const hasBenefitSignal = Boolean(
     (Array.isArray(promotionHints) && promotionHints.length) ||
       (loyaltyBenefit?.checkoutVouchers || []).length ||
@@ -337,10 +340,14 @@ export default function PosHomeScreen() {
     setCashReceived("");
   };
 
-  const handleOpenPickupCashModal = (order) => {
+  const handleOpenPickupCashModal = async (order) => {
     if (!order?.id) return;
+    if (isZeroPosOrder(order)) {
+      await confirmPickupOrderCashPayment(order, "0");
+      return;
+    }
     setSelectedPickupOrder(order);
-    setPickupCashReceived(String(getCashPaymentSummary(order.collectAmount || order.totalAmount || order.paymentAmount || 0).paymentAmount || ""));
+    setPickupCashReceived(String(getCashPaymentSummary(getPosOrderPayableAmount(order)).paymentAmount || ""));
     setPickupCashPaymentOpen(true);
   };
 
@@ -745,7 +752,7 @@ export default function PosHomeScreen() {
         onSelectCategory={setActiveCategory} onAddProduct={handleProductPress} />}
       customer={<View>
         <PosCustomerSummaryCard customerName={customerName} customerPhone={customerPhone}
-          setCustomerName={setCustomerName} setCustomerPhone={setCustomerPhone} lookup={customerLookup}
+          setCustomerName={setCustomerName} setCustomerPhone={setCustomerPhone} lookup={customerLookup} stampState={stampState}
           onOpen={() => setCustomerModalOpen(true)}
           onClear={() => { setCustomerName(""); setCustomerPhone(""); setSelectedVoucherId(""); setPointsInput(""); }} />
 
@@ -790,6 +797,7 @@ export default function PosHomeScreen() {
               setCustomerName={setCustomerName}
               setCustomerPhone={setCustomerPhone}
               lookup={customerLookup}
+              stampState={stampState}
               onOpen={() => setCustomerModalOpen(true)}
               onClear={() => {
                 setCustomerName("");
@@ -1446,6 +1454,7 @@ export default function PosHomeScreen() {
         renderTrigger={false}
       />
       <PosCustomerModal
+        stampState={stampState}
         products={allProducts}
         stampDisabled={busy || Boolean(paymentConfirmed)}
         onChooseStampGift={async (product) => { if (await addStampGift(product)) setCustomerModalOpen(false); }}

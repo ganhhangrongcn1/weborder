@@ -11,6 +11,7 @@ export default function PosCustomerModal({
   products = [],
   onChooseStampGift,
   stampDisabled = false,
+  stampState,
   customerName,
   setCustomerName,
   customerPhone,
@@ -57,7 +58,7 @@ export default function PosCustomerModal({
               setPointsInput={setPointsInput}
               onClear={onClear}
             />
-            <PosStampPanel phone={customerPhone} products={products} onChoose={onChooseStampGift} disabled={stampDisabled} />
+            <PosStampPanel phone={customerPhone} products={products} onChoose={onChooseStampGift} disabled={stampDisabled} state={stampState} />
           </ScrollView>
 
           <Pressable style={styles.doneButton} onPress={onClose}>

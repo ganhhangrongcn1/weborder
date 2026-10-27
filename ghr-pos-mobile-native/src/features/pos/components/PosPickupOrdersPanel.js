@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { POS_COLORS, POS_RADIUS } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
 import PosIcon from "./PosIcon";
+import { getPosOrderPayableAmount, isZeroPosOrder } from "../../../services/pos/posZeroOrderPolicy";
 
 const FILTERS = [
   { id: "action", label: "Cần làm ngay" },
@@ -40,6 +41,7 @@ function getKitchenLabel(order = {}) {
 
 function getPaymentLabel(order = {}) {
   const paid = order.paymentStatus === "paid";
+  if (isZeroPosOrder(order)) return paid ? "Đã xác nhận đơn 0đ" : "Chờ xác nhận đơn 0đ";
   if (!paid) {
     return order.fulfillmentType === "delivery" ? "Chưa thu shipper" : "Chưa thanh toán";
   }
@@ -50,7 +52,7 @@ function getPaymentLabel(order = {}) {
 }
 
 function getOrderAmount(order = {}) {
-  return Number(order.collectAmount || order.totalAmount || order.paymentAmount || 0);
+  return getPosOrderPayableAmount(order);
 }
 
 function parsePickupTime(value = "") {
@@ -80,7 +82,7 @@ function getNextAction(order = {}) {
   if (schedule.scheduled) return `Chưa tới giờ làm · Bắt đầu ${formatClock(schedule.workAt)}`;
   const paid = order.paymentStatus === "paid";
   const kitchenLabel = getKitchenLabel(order);
-  if (!paid) return order.fulfillmentType === "delivery" ? "Cần thu tiền từ shipper" : "Cần thu tiền khách";
+  if (!paid) return isZeroPosOrder(order) ? "Cần xác nhận đơn 0đ" : order.fulfillmentType === "delivery" ? "Cần thu tiền từ shipper" : "Cần thu tiền khách";
   if (kitchenLabel === "Bếp đã xong") return order.fulfillmentType === "delivery" ? "Sẵn sàng giao shipper" : "Sẵn sàng trả khách";
   return kitchenLabel;
 }
@@ -172,10 +174,10 @@ function WebsiteOrderCard({ order, activeShiftId, shiftOpenedAt, loading, onPayC
         {paid ? (
           <View style={styles.paidConfirmation}>
             <PosIcon name="cash" size={14} color={POS_COLORS.primaryDark} />
-            <Text style={styles.paidConfirmationText}>Thanh toán hoàn tất</Text>
+            <Text style={styles.paidConfirmationText}>{isZeroPosOrder(order) ? "Đã xác nhận đơn 0đ" : "Thanh toán hoàn tất"}</Text>
           </View>
         ) : <View style={styles.paymentActions}>
-          <Pressable
+          {!isZeroPosOrder(order) && <Pressable
             style={[styles.qrButton, loading && styles.disabledButton]}
             hitSlop={8}
             onPress={() => onPayQr?.(order)}
@@ -183,7 +185,7 @@ function WebsiteOrderCard({ order, activeShiftId, shiftOpenedAt, loading, onPayC
           >
             <PosIcon name="qr" size={14} color={POS_COLORS.slate} />
             <Text style={styles.qrButtonText}>QR</Text>
-          </Pressable>
+          </Pressable>}
 
           <Pressable
             style={[styles.cashButton, loading && styles.disabledButton]}
@@ -193,7 +195,7 @@ function WebsiteOrderCard({ order, activeShiftId, shiftOpenedAt, loading, onPayC
           >
             <PosIcon name="cash" size={14} color={POS_COLORS.primaryDark} />
             <Text style={styles.cashButtonText}>
-              {isDelivery ? "Thu shipper" : "Tiền mặt"}
+              {isZeroPosOrder(order) ? "Xác nhận đơn 0đ" : isDelivery ? "Thu shipper" : "Tiền mặt"}
             </Text>
           </Pressable>
         </View>}

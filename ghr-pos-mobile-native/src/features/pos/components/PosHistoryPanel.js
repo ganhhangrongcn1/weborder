@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { POS_COLORS, POS_RADIUS } from "../../../styles/posTheme";
 import { formatMoney } from "../../../utils/format";
 import PosOrderDetailModal from "./PosOrderDetailModal";
+import { isZeroPosOrder } from "../../../services/pos/posZeroOrderPolicy";
 
 const STATUS_FILTERS = [
   { id: "all", label: "Tất cả" },
@@ -176,7 +177,7 @@ function OrderCard({ order, loading, onOpen, onPayCash, onPayQr }) {
         </View>
       </View>
       {order.metadata?.deviceMode === "phone" && (onPayCash || onPayQr) && getOrderStatusGroup(order) === "pending_payment" && <View style={styles.inlineActions}>
-        {[{ label: "Tiền mặt", action: onPayCash }, { label: "QR", action: onPayQr }].filter(item => item.action).map(item =>
+        {[{ label: isZeroPosOrder(order) ? "Xác nhận đơn 0đ" : "Tiền mặt", action: onPayCash }, ...(!isZeroPosOrder(order) ? [{ label: "QR", action: onPayQr }] : [])].filter(item => item.action).map(item =>
           <Pressable key={item.label} accessibilityRole="button" style={styles.cancelPill} disabled={loading}
             onPress={event => { event.stopPropagation?.(); item.action(order); }}><Text style={styles.tapHint}>{item.label}</Text></Pressable>)}
       </View>}

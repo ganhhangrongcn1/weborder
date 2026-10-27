@@ -4,8 +4,16 @@ import { normalizeCustomerPhone } from "./posCustomerService";
 const cache = new Map();
 const pending = new Map();
 let generation = 0;
+const invalidationListeners = new Set();
+export function subscribePosStampInvalidation(listener) {
+  invalidationListeners.add(listener);
+  return () => invalidationListeners.delete(listener);
+}
 export const posStampRequestStats = { requests: 0, hits: 0, shared: 0 };
-export function invalidatePosStamps() { generation += 1; cache.clear(); pending.clear(); }
+export function invalidatePosStamps() {
+  generation += 1; cache.clear(); pending.clear();
+  invalidationListeners.forEach((listener) => listener());
+}
 export async function readPosStamps(phone, { force = false } = {}) {
   const normalized = normalizeCustomerPhone(phone);
   if (!supabase || !/^0[35789]\d{8}$/.test(normalized)) return null;

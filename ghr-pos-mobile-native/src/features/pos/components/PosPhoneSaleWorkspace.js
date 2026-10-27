@@ -62,7 +62,7 @@ export default function PosPhoneSaleWorkspace({ menu, customer, cartPanel, payme
           </View>
           <View style={styles.actions}>
           <Pressable accessibilityRole="button" disabled={busy} onPress={onOpenBenefit} style={[styles.benefit, busy && styles.disabled]}><PosIcon name="voucher" color={POS_COLORS.primaryDark} /><Text style={styles.backText}>Ưu đãi</Text></Pressable>
-            {[{ method: "cash", icon: "cash", label: Number(totals.total) === 0 ? "Đổi quà" : "Tiền mặt" }, ...(Number(totals.total) > 0 ? [{ method: "bank_qr", icon: "qr", label: "QR" }] : [])].map(item => <Pressable key={item.method}
+            {[{ method: "cash", icon: "cash", label: Number(totals.total) === 0 ? "Xác nhận đơn 0đ" : "Tiền mặt" }, ...(Number(totals.total) > 0 ? [{ method: "bank_qr", icon: "qr", label: "QR" }] : [])].map(item => <Pressable key={item.method}
               accessibilityRole="button" disabled={busy || !pager || Boolean(pagerBusy)}
               style={[styles.primary, styles.paymentAction, (busy || !pager || pagerBusy) && styles.disabled]}
               onPress={() => onSendOrder?.(item.method)}><PosIcon name={item.icon} color="#fff" /><Text style={styles.primaryText}>{item.label}</Text></Pressable>)}

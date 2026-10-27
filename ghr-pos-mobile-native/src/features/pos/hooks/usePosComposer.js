@@ -21,6 +21,8 @@ import {
   normalizeCustomerPhone
 } from "../../../services/pos/posCustomerService";
 import { createPosTakeawayOrderMobile } from "../../../services/pos/posOrderService";
+import { getPosOrderPayableAmount, isZeroPosOrder } from "../../../services/pos/posZeroOrderPolicy";
+import { invalidatePosStamps } from "../../../services/pos/posStampService";
 import { readPhoneCustomerBillStatus } from "../../../services/pos/posPhoneOrderService";
 import {
   buildPosCustomerBillText,
@@ -121,6 +123,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
   if (!coalesceShiftSummaryRef.current) coalesceShiftSummaryRef.current = createPosReadCoalescer();
   const shiftSummaryRequestIdRef = useRef(0);
   const createCashOrderInFlightRef = useRef(false);
+  const pickupPaymentInFlightRef = useRef(false);
   const connectionRecoveryInFlightRef = useRef(false);
   const benefitChangeInFlightRef = useRef(false);
   const offlineSyncInFlightRef = useRef(false);
@@ -320,7 +323,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
   );
 
   const getWebsiteOrderAmount = (order = {}) => (
-    Number(order?.collectAmount || order?.totalAmount || order?.paymentAmount || 0)
+    getPosOrderPayableAmount(order)
   );
 
   const getWebsiteOrderQrSourceType = (order = {}) => (
@@ -2191,12 +2194,16 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
 
   const confirmPickupOrderCashPayment = async (order = {}, cashReceived = "") => {
     if (!order?.id) return false;
+    if (pickupPaymentInFlightRef.current || order.paymentStatus === "paid") return false;
     if (!shift?.id) {
       setPickupOrdersError("Cần mở ca POS trước khi thu tiền đơn hẹn lấy.");
       return false;
     }
 
+    pickupPaymentInFlightRef.current = true;
+    try {
     const amount = getWebsiteOrderAmount(order);
+    if (!Number.isFinite(amount) || amount < 0) { setPickupOrdersError("Chưa xác định được số tiền đơn. Vui lòng tải lại."); return false; }
     const cashSummary = getCashPaymentSummary(amount);
     const normalizedReceived = normalizeCashReceived(cashReceived);
     if (normalizedReceived < cashSummary.paymentAmount) {
@@ -2256,7 +2263,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     const printResult = await printPickupCustomerBill({
       order: result.order || order,
       paymentConfirmed: {
-        method: "cash",
+        method: isZeroPosOrder(order) ? "counter" : "cash",
         amount: cashSummary.paymentAmount,
         originalAmount: cashSummary.originalAmount,
         cashRoundingDiscount: cashSummary.cashRoundingDiscount,
@@ -2270,8 +2277,8 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
 
     let drawerMessage = "";
     try {
-      if (deviceMode === "cashier") await openLocalCashDrawer();
-      drawerMessage = deviceMode === "cashier" ? " Đã gửi lệnh mở két tiền." : "";
+      if (deviceMode === "cashier" && !isZeroPosOrder(order)) await openLocalCashDrawer();
+      drawerMessage = deviceMode === "cashier" && !isZeroPosOrder(order) ? " Đã gửi lệnh mở két tiền." : "";
     } catch (error) {
       drawerMessage = ` Chưa mở được két: ${error?.message || "kiểm tra máy in/két tiền."}`;
     }
@@ -2281,10 +2288,13 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       await refreshPosRuntime(profile.branchUuid);
     }
     await refreshShiftSummary(shift);
+    invalidatePosStamps();
     return true;
+    } finally { pickupPaymentInFlightRef.current = false; setPickupOrdersLoading(false); }
   };
 
   const openPickupOrderQrPayment = async (order = {}) => {
+    if (isZeroPosOrder(order)) { setPickupOrdersError("Đơn 0đ không cần QR. Vui lòng xác nhận đơn 0đ."); return false; }
     if (!order?.id) return false;
     const phoneOrder = order.metadata?.deviceMode === "phone";
     if (phoneOrder && phoneQrOpenInFlightRef.current) return false;
