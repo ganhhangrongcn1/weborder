@@ -1,0 +1,23 @@
+.reference-login .login-brand { flex-direction: column; align-items: center; gap: 22px; padding-bottom: 28px; }
+.reference-login .login-brand > h1 { width: 100%; margin: 0; text-align: center; font-size: clamp(24px, 6vw, 28px); line-height: 1.3; letter-spacing: -.5px; }
+.attendance-app.module-home { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.module-home .workspace main { max-width: 620px; padding-top: 36px; }
+.module-home .page-title { justify-content: center; text-align: center; margin-bottom: 30px; }
+.module-choices { display: grid; gap: 18px; }
+.module-choice { display: flex; align-items: center; gap: 18px; width: 100%; min-height: 136px; padding: 24px; border-radius: 24px; text-align: left; background: #fff; border: 1px solid var(--line); }
+.module-choice:hover { background: #fffdf5; border-color: #d6bd5b; }
+.module-symbol { display: grid; place-items: center; flex-shrink: 0; width: 64px; height: 64px; border-radius: 19px; background: #fff2b8; color: #725600; }
+.module-checkin .module-symbol { background: #f0eee7; color: #575345; }
+.module-symbol .attendance-icon { width: 32px; height: 32px; }
+.module-copy { display: grid; gap: 8px; min-width: 0; }
+.module-copy strong { font-size: 22px; line-height: 1.25; font-weight: 750; }
+.module-copy > span { color: #6a665e; font-size: 14px; font-weight: 400; line-height: 1.5; }
+.module-arrow { margin-left: auto; font-size: 26px; color: #85744b; }
+@media (max-width: 420px) {
+  .module-home .workspace main { padding-top: 30px; }
+  .module-choice { min-height: 124px; gap: 14px; padding: 20px 18px; }
+  .module-symbol { width: 54px; height: 54px; border-radius: 17px; }
+  .module-copy strong { font-size: 21px; }
+  .module-copy > span { font-size: 13px; }
+  .module-arrow { font-size: 22px; }
+}

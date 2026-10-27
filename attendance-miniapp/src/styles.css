@@ -286,7 +286,7 @@ button.primary { font-size: 16px; }
 .login-submit { font-size: 16px; }
 
 /* Membership purchase points, alongside existing employee attendance. */
-.sidebar nav { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.sidebar nav { grid-template-columns: repeat(var(--nav-columns, 6), minmax(0, 1fr)); }
 .login-panel h1 + .login-intro { margin-top: -12px; margin-bottom: 22px; line-height: 1.55; }
 .membership-page { display: grid; gap: 18px; }
 .membership-page > .notice { margin: 0; }

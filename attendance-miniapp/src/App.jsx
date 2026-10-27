@@ -2,7 +2,7 @@ import Membership from "./components/Membership.jsx";
 import useMemberPoints from "./features/membership/useMemberPoints.js";
 import useAppNavigation from "./hooks/useAppNavigation.js";
 import BranchDetails from "./components/BranchDetails.jsx";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import useAttendance from "./hooks/useAttendance.js";
 import Login from "./components/Login.jsx";
 import Checkin from "./components/Checkin.jsx";
@@ -12,9 +12,11 @@ import Training from "./components/Training.jsx";
 import Account from "./components/Account.jsx";
 import Brand from "./components/Brand.jsx";
 import NavigationIcon from "./components/NavigationIcon.jsx";
+import ModuleHome from "./components/ModuleHome.jsx";
 import { employeeName } from "./services/attendancePresentation.js";
+import "./styles/module-entry.css";
 
-const tabs = [["membership", "Tích điểm", "06"], ["checkin", "Chấm công", "01"], ["history", "Lịch sử", "02"], ["corrections", "Điều chỉnh", "03"], ["training", "Đào tạo", "04"], ["account", "Tài khoản", "05"]];
+const tabs = [["home", "Trang chủ"], ["membership", "Tích điểm"], ["checkin", "Điểm danh"], ["history", "Lịch sử"], ["corrections", "Điều chỉnh"], ["training", "Đào tạo"], ["account", "Tài khoản"]];
 const screens = { membership: Membership, checkin: Checkin, history: History, corrections: Corrections, training: Training, account: Account, branch: BranchDetails };
 
 export default function App() {
@@ -27,11 +29,21 @@ export default function App() {
 
 function MemberWorkspace({ app, navigation, tab }) {
   const membership = useMemberPoints(app.actor);
+  const [module, setModule] = useState(null);
+  useEffect(() => { navigation.reset("home"); }, [navigation.reset]);
+  const isHome = tab === "home";
+  const visibleTabs = tabs.filter(([id]) => module === "membership" ? ["home", "membership", "account"].includes(id) : id !== "membership");
+  const openPage = (page) => {
+    if (page === "home") setModule(null);
+    if (page === "membership") setModule("membership");
+    if (page === "checkin") setModule("attendance");
+    app.clearNotices(); navigation.navigate(page);
+  };
   const Screen = screens[tab];
-  return <div className="attendance-app"><aside className="sidebar"><Brand/><nav aria-label="Tích điểm và chấm công">{tabs.map(([id, label]) => <button key={id} disabled={app.busy} aria-current={tab === id ? "page" : undefined} onClick={() => { app.clearNotices(); navigation.navigate(id); }}><NavigationIcon name={id}/><span>{label}</span></button>)}</nav><div className="sidebar-footer">Gánh Hàng Rong · Nhân sự</div></aside>
-    <div className="workspace"><header><button aria-label="Quay lại trang trước" onClick={navigation.back}>←</button><div className="header-brand"><Brand/></div><div className="header-profile"><span className="avatar">{employeeName(app.actor.name).split(" ").at(-1)?.slice(0, 1)}</span><div><strong>{employeeName(app.actor.name)}</strong><small>{app.actor.role === "manager" ? "Quản lý" : "Nhân viên"}</small></div></div><button className="logout-button" disabled={app.busy} onClick={app.logout}>Đăng xuất</button></header>
-      <main><div className="page-title"><div><p className="eyebrow">Gánh Hàng Rong · Nhân sự</p><h1>{tabs.find(([id]) => id === tab)?.[1] || "Chi nhánh"}</h1></div><span className="badge">{app.actor.role === "manager" ? "Quản lý" : "Nhân viên"}</span></div>
+  return <div className={`attendance-app${isHome ? " module-home" : ""}`}>{!isHome && <aside className="sidebar"><Brand showSubtitle={false}/><nav aria-label="Chức năng" style={{ "--nav-columns": visibleTabs.length }}>{visibleTabs.map(([id, label]) => <button key={id} disabled={app.busy} aria-current={tab === id ? "page" : undefined} onClick={() => openPage(id)}><NavigationIcon name={id}/><span>{label}</span></button>)}</nav><div className="sidebar-footer">Gánh Hàng Rong</div></aside>}
+    <div className="workspace"><header>{!isHome && <button aria-label="Quay lại trang trước" onClick={navigation.back}>←</button>}<div className="header-brand"><Brand showSubtitle={false}/></div><div className="header-profile"><span className="avatar">{employeeName(app.actor.name).split(" ").at(-1)?.slice(0, 1)}</span><div><strong>{employeeName(app.actor.name)}</strong><small>{app.actor.role === "manager" ? "Quản lý" : "Nhân viên"}</small></div></div><button className="logout-button" disabled={app.busy} onClick={app.logout}>Đăng xuất</button></header>
+      <main><div className="page-title"><div><p className="eyebrow">Gánh Hàng Rong</p><h1>{isHome ? "Chọn chức năng" : tabs.find(([id]) => id === tab)?.[1] || "Chi nhánh"}</h1></div>{!isHome && <span className="badge">{app.actor.role === "manager" ? "Quản lý" : "Nhân viên"}</span>}</div>
       {app.error && <div role="alert" className="notice error">{app.error}</div>}{app.message && <div role="status" className="notice success">{app.message}</div>}{app.busy && <div role="status" className="notice">Đang xử lý…</div>}
-      <Screen app={app} navigation={navigation} membership={membership}/><footer>Gánh Hàng Rong · Hệ thống chấm công nhân viên</footer></main>
+      {isHome ? <ModuleHome onChoose={openPage}/> : <Screen app={app} navigation={navigation} membership={membership}/>}<footer>Gánh Hàng Rong</footer></main>
     </div></div>;
 }

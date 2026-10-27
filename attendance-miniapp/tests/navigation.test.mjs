@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { parseDestination, destinationHash, phoneHref, zaloHref, externalHref } from "../src/services/navigationService.js";
 test("đường dẫn trang và chi nhánh, không cho URL thực thi tùy ý", () => {
   assert.deepEqual(parseDestination(destinationHash("branch", "demo-store")), { page: "branch", branch: "demo-store" });
-  assert.equal(parseDestination("#page=unknown").page, "checkin");
+  assert.equal(parseDestination("#page=unknown").page, "home");
   assert.throws(() => destinationHash("javascript:alert(1)"));
   assert.equal(phoneHref(""), null);
   assert.equal(phoneHref("0900 000 001"), "tel:0900000001");
@@ -11,6 +11,13 @@ test("đường dẫn trang và chi nhánh, không cho URL thực thi tùy ý", 
   assert.equal(zaloHref("https://evil.example"), null);
   assert.equal(zaloHref("javascript:alert(1)"), null);
   assert.equal(zaloHref("https://zalo.me/123456"), "https://zalo.me/123456");
+});
+
+test("màn chọn mặc định và hai mục dùng đường dẫn riêng", () => {
+  assert.deepEqual(parseDestination(""), { page: "home", branch: "" });
+  for (const page of ["home", "membership", "checkin"]) {
+    assert.deepEqual(parseDestination(destinationHash(page)), { page, branch: "" });
+  }
 });
 
 test("link ngoài chỉ nhận HTTPS và không chứa tài khoản trong URL", () => {

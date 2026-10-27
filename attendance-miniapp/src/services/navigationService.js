@@ -1,8 +1,8 @@
-export const PAGES = ["membership", "checkin", "history", "corrections", "training", "account", "branch"];
+export const PAGES = ["home", "membership", "checkin", "history", "corrections", "training", "account", "branch"];
 export function parseDestination(hash) {
   const params = new URLSearchParams(String(hash || "").replace(/^#\/?/, ""));
   const page = params.get("page");
-  return { page: PAGES.includes(page) ? page : "checkin", branch: (params.get("branch") || "").slice(0, 80) };
+  return { page: PAGES.includes(page) ? page : "home", branch: (params.get("branch") || "").slice(0, 80) };
 }
 export function destinationHash(page, branch = "") {
   if (!PAGES.includes(page)) throw new Error("Trang không hợp lệ.");

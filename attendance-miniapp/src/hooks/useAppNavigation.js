@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { parseDestination, destinationHash } from "../services/navigationService.js";
 
 export default function useAppNavigation() {
@@ -38,5 +38,12 @@ export default function useAppNavigation() {
     setRoute({ page, branch });
   };
   const back = () => { if (depth.current > 1) window.history.back(); };
-  return { ...route, navigate, back };
+  const reset = useCallback((page = "home") => {
+    const hash = destinationHash(page);
+    window.history.replaceState({ attendanceNavigation: true, depth: 0 }, "", hash);
+    window.history.pushState({ attendanceNavigation: true, depth: 1 }, "", hash);
+    depth.current = 1;
+    setRoute({ page, branch: "" });
+  }, []);
+  return { ...route, navigate, back, reset };
 }

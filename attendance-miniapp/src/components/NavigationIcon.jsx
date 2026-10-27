@@ -1,4 +1,5 @@
 const paths = {
+  home: <><path className="icon-tone" d="m3 10 9-7 9 7v10H3Z"/><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-7h6v7"/></>,
   membership: <><path className="icon-tone" d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1Z"/><path d="m12 3 3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 10l6-1Z"/></>,
   checkin: <><rect className="icon-tone" x="4" y="5" width="16" height="16" rx="3"/><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4m8-4v4M4 10h16m-12 5 2.5 2.5L16 13"/></>,
   history: <><circle className="icon-tone" cx="12" cy="12" r="8"/><path d="M4.5 7.5A8.5 8.5 0 1 1 3.6 15M3.5 3.5v4.5H8"/><path d="M12 7.5V12l3 2"/></>,
