@@ -1,5 +1,6 @@
 import { AdminSelect } from "../ui/index.js";
 import { AdminButton, AdminInput } from "../ui/AdminCommon.jsx";
+import { RECRUITMENT_OPTIONS } from "../../../../supabase/functions/_shared/recruitmentSchema.js";
 
 export const QUESTION_TYPES = { text: "Trả lời ngắn", textarea: "Trả lời dài", radio: "Chọn một đáp án", checkbox: "Chọn nhiều đáp án", date: "Ngày", tel: "Số điện thoại" };
 export default function RecruitmentQuestionEditor({ question: q, index, count, update, move, onShowQuestion, previewAccepting }) {
@@ -19,8 +20,15 @@ export default function RecruitmentQuestionEditor({ question: q, index, count, u
         <label><input type="checkbox" checked={q.required} disabled={locked} onChange={(event) => update({ required: event.target.checked })} /><span>Bắt buộc trả lời<small>{q.required ? "Cần điền trước khi gửi hồ sơ." : "Ứng viên có thể bỏ qua."}</small></span></label>
       </div>
       {locked && <p className="recruitment-editor-note">Câu này luôn hiển thị và bắt buộc để Gánh liên hệ, phân loại hồ sơ.</p>}
-      {choice && <div className="recruitment-editor-options"><h3>Các đáp án</h3><p>{q.id === "branch" ? "Danh sách chi nhánh được giữ cố định để hồ sơ và thống kê không bị lẫn." : "Mỗi ô là một đáp án. Thay đổi ở đây hiện ngay trong bản xem trước."}</p>
-        {options.map((value, optionIndex) => <div className="recruitment-editor-option" key={optionIndex}><span aria-hidden="true">{q.type === "radio" ? "○" : "□"}</span><AdminInput aria-label={`Đáp án ${optionIndex + 1}`} maxLength={200} value={value} readOnly={q.id === "branch"} onChange={(event) => update({ options: options.map((item, i) => i === optionIndex ? event.target.value : item) })} />
+      {choice && <div className="recruitment-editor-options"><h3>{q.id === "branch" ? "Chi nhánh đang tuyển" : "Các đáp án"}</h3><p>{q.id === "branch" ? "Bỏ chọn chi nhánh đã đủ người để ẩn khỏi form. Bật lại khi cần tuyển; hồ sơ và thống kê cũ vẫn được giữ. Cần giữ ít nhất một chi nhánh, hoặc tạm ngưng nhận hồ sơ ở mục Nội dung & tiếp nhận." : "Mỗi ô là một đáp án. Thay đổi ở đây hiện ngay trong bản xem trước."}</p>
+        {(q.id === "branch" ? RECRUITMENT_OPTIONS.branch : options).map((value, optionIndex) => q.id === "branch" ? (
+          <label className="recruitment-branch-option" key={value}>
+            <input type="checkbox" aria-label={`Tuyển tại ${value}`} checked={options.includes(value)}
+              disabled={options.includes(value) && options.length === 1}
+              onChange={(event) => update({ options: RECRUITMENT_OPTIONS.branch.filter((branch) => branch === value ? event.target.checked : options.includes(branch)) })} />
+            <span>{value}<small>{options.includes(value) ? "Đang tuyển · Hiện trên form" : "Tạm ngưng · Đang ẩn"}</small></span>
+          </label>
+        ) : <div className="recruitment-editor-option" key={optionIndex}><span aria-hidden="true">{q.type === "radio" ? "○" : "□"}</span><AdminInput aria-label={`Đáp án ${optionIndex + 1}`} maxLength={200} value={value} onChange={(event) => update({ options: options.map((item, i) => i === optionIndex ? event.target.value : item) })} />
           {q.id !== "branch" && <button type="button" aria-label={`Xóa đáp án ${optionIndex + 1}`} disabled={options.length <= 1} onClick={() => update({ options: options.filter((_, i) => i !== optionIndex) })}>×</button>}
         </div>)}
         {invalidOptions && <p className="recruitment-editor-error">Đáp án không được để trống hoặc trùng nhau.</p>}

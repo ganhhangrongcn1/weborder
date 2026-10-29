@@ -34,6 +34,10 @@
 .recruitment-builder-controls input[type=checkbox] { width: 18px; min-width: 18px; height: 18px; min-height: 18px; padding: 0; margin: 2px 0 0; accent-color: #a87b00; }
 .recruitment-editor-switches small, .recruitment-content-editor small { display: block; font-size: 11px; line-height: 1.6; color: #667085; font-weight: 400; margin-top: 4px; }
 .recruitment-editor-note { margin: 0; font-size: 12px; line-height: 1.6; color: #667085; background: #f8fafc; padding: 12px; border-radius: 8px; }
+.recruitment-branch-option { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; }
+.recruitment-branch-option input { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; accent-color: #8a6400; }
+.recruitment-branch-option span { min-width: 0; font-size: 13px; line-height: 1.6; }
+.recruitment-branch-option small { display: block; font-size: 12px; color: #667085; }
 .recruitment-editor-options h3 { font-size: 14px; margin: 0 0 6px; }
 .recruitment-editor-options > p { font-size: 12px; color: #667085; line-height: 1.6; margin: 0 0 10px; }
 .recruitment-editor-option { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; min-width: 0; }

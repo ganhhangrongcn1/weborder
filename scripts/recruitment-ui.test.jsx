@@ -1,4 +1,4 @@
-/* global Response */
+/* global Response, structuredClone */
 import React from "react";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -15,6 +15,40 @@ import { application } from "./recruitment-fixture.mjs";
 globalThis.document = { title: "Gánh", getElementById: () => ({ focus() {} }) };
 globalThis.requestAnimationFrame = (callback) => callback();
 const event = { preventDefault() {} };
+
+test("Admin pauses and reopens a branch; applicant preview immediately follows the saved choices", async () => {
+  const baseline = structuredClone(DEFAULT_RECRUITMENT_CONFIG);
+  const branchOptions = baseline.questions.find((q) => q.id === "branch").options;
+  const paused = branchOptions.find((value) => value.includes("Lê Hồng Phong"));
+  let draft;
+  let saved;
+  function Harness() {
+    const [config, setConfig] = React.useState(baseline);
+    draft = config;
+    return <RecruitmentFormEditor draft={config} setDraft={setConfig} baseline={baseline} ready save={() => { saved = structuredClone(config); }} />;
+  }
+  let view;
+  try {
+    await act(async () => { view = create(<Harness />); });
+    await act(async () => { view.root.findByProps({ "aria-label": "Danh sách câu hỏi" }).findAllByType("button")[5].props.onClick(); });
+    const control = () => view.root.findByProps({ "aria-label": `Tuyển tại ${paused}` });
+    assert.equal(control().props.checked, true);
+    await act(async () => { control().props.onChange({ target: { checked: false } }); });
+    assert.equal(control().props.checked, false);
+    assert.equal(draft.questions.find((q) => q.id === "branch").options.length, 3);
+    assert.equal(view.root.findAllByType("input").some((input) => input.props.type === "radio" && input.props.value === paused), false);
+    await act(async () => { view.root.findByType("form").props.onSubmit(event); });
+    assert.equal(saved.questions.find((q) => q.id === "branch").options.includes(paused), false);
+    await act(async () => { control().props.onChange({ target: { checked: true } }); });
+    assert.equal(view.root.findAllByType("input").some((input) => input.props.type === "radio" && input.props.value === paused), true);
+    assert.deepEqual(draft.questions.find((q) => q.id === "branch").options, branchOptions);
+    for (const value of branchOptions.slice(1)) {
+      await act(async () => { view.root.findByProps({ "aria-label": `Tuyển tại ${value}` }).props.onChange({ target: { checked: false } }); });
+    }
+    assert.equal(view.root.findByProps({ "aria-label": `Tuyển tại ${branchOptions[0]}` }).props.disabled, true);
+    assert.equal(baseline.questions.find((q) => q.id === "branch").options.length, 4);
+  } finally { if (view) await act(async () => { view.unmount(); }); }
+});
 
 test("actual hook: validation, rapid double click, failure, retry, edit and success", async () => {
   let state;

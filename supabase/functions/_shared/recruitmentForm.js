@@ -41,7 +41,13 @@ export function validateFormConfig(input) {
       if (!Array.isArray(q.options) || !q.options.length || q.options.length > 20) throw new Error("Cần từ 1 đến 20 lựa chọn.");
       result.options = q.options.map((value) => text(value, 200));
       if (new Set(result.options).size !== result.options.length) throw new Error("Lựa chọn không được trùng nhau.");
-      if (q.id === "branch" && JSON.stringify(result.options) !== JSON.stringify(RECRUITMENT_OPTIONS.branch)) throw new Error("Giữ mã chi nhánh cố định để phân loại hồ sơ.");
+      if (q.id === "branch") {
+        if (result.options.some((option) => !RECRUITMENT_OPTIONS.branch.includes(option))) {
+          throw new Error("Giữ mã chi nhánh cố định để phân loại hồ sơ.");
+        }
+        // Visibility may change; stable branch labels and canonical ordering do not.
+        result.options = RECRUITMENT_OPTIONS.branch.filter((option) => result.options.includes(option));
+      }
     }
     return result;
   });

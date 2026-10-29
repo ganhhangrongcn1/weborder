@@ -1,4 +1,4 @@
-/* global Request, Response */
+/* global Request, structuredClone */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_RECRUITMENT_CONFIG, validateFormConfig, validateConfiguredApplication } from "../supabase/functions/_shared/recruitmentForm.js";
@@ -10,6 +10,48 @@ import { navGroups } from "../src/pages/admin/adminNavigation.js";
 import { application } from "./recruitment-fixture.mjs";
 
 const copy = () => structuredClone(DEFAULT_RECRUITMENT_CONFIG);
+test("branches can pause and reopen without renaming branches or changing historical config", () => {
+  const historical = copy();
+  const config = copy();
+  const branch = config.questions.find((q) => q.id === "branch");
+  const paused = branch.options.find((value) => value.includes("Lê Hồng Phong"));
+  branch.options = branch.options.filter((value) => value !== paused);
+  const validated = validateFormConfig(config);
+  assert.equal(validated.questions.find((q) => q.id === "branch").options.length, 3);
+  assert.equal(validateConfiguredApplication({ ...application, branch: paused }, validated, "2026-10-29").valid, false);
+  assert.ok(validateConfiguredApplication({ ...application, branch: paused }, validated, "2026-10-29").errors.branch);
+  assert.equal(validateConfiguredApplication(application, validated, "2026-10-29").valid, true);
+  assert.equal(historical.questions.find((q) => q.id === "branch").options.length, 4);
+  branch.options.push(paused);
+  assert.deepEqual(validateFormConfig(config).questions.find((q) => q.id === "branch").options,
+    historical.questions.find((q) => q.id === "branch").options);
+  branch.options = [];
+  assert.throws(() => validateFormConfig(config));
+});
+
+test("server rejects paused branch and stale forms before saving or notifying", async () => {
+  const config = copy();
+  const branch = config.questions.find((q) => q.id === "branch");
+  const paused = branch.options.find((value) => value.includes("Lê Hồng Phong"));
+  branch.options = branch.options.filter((value) => value !== paused);
+  let writes = 0;
+  const client = {
+    from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { config, revision: 5 } }) }) }) }),
+    rpc: async () => { writes++; throw new Error("Must not save a paused/stale form"); }
+  };
+  const handle = createRecruitmentHandler({ getClient: () => client,
+    env: (key) => key === "RECRUITMENT_INTAKE_ENABLED" ? "true" : "" });
+  for (const [formVersion, expected] of [[4, 409], [5, 400]]) {
+    const response = await handle(new Request("https://isolated.invalid", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        action: "submit", requestId: "11111111-1111-4111-8111-111111111111", formVersion,
+        application: { ...application, branch: paused }
+      })
+    }));
+    assert.equal(response.status, expected);
+  }
+  assert.equal(writes, 0);
+});
 test("HR menu route maps and stays hidden for branch operators", () => {
   assert.equal(adminPathToState("/admin/recruitment").section, "recruitment");
   const item = navGroups.find((group) => group.id === "people-supervision").items.find((q) => q.id === "recruitment-main");
