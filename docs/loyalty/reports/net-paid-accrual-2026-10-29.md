@@ -23,7 +23,7 @@
 - `src/services/checkoutOrderService.js`: payload tiền tích điểm.
 - `src/services/orderService.js`: tính lại từ tiền sau xác thực voucher thay vì tin căn cứ truyền vào.
 - `scripts/loyalty-net-paid.test.mjs`: kiểm tra hồi quy.
-- `supabase/migrations/20261029033530_loyalty_earn_on_net_paid.sql`: migration đã áp dụng.
+- `supabase/migrations/20261029033846_loyalty_earn_on_net_paid.sql`: migration đã áp dụng, tên file khớp phiên bản trong lịch sử Supabase.
 - `docs/supabase-sql/2026-10-29-loyalty-earn-on-net-paid.sql`: bản SQL tham chiếu.
 - `docs/supabase-sql/2026-10-29-loyalty-earn-on-net-paid-validation.sql`: kiểm tra trigger trong bảng tạm.
 - `docs/supabase-sql/2026-10-29-loyalty-earn-on-net-paid-rollback.sql`: định nghĩa gốc để hoàn tác khi cần.

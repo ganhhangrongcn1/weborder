@@ -1,3 +1,4 @@
+-- Remote migration version: 20261029033846 (Supabase apply_migration).
 -- New orders earn on net paid merchandise only; historical snapshots and ledger stay unchanged.
 create or replace function loyalty_private.order_net_paid_earn_amount(
   p_subtotal numeric, p_promo_discount numeric, p_points_discount numeric,
