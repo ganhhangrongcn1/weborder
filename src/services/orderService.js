@@ -1,4 +1,5 @@
 import { getCustomerKey } from "./storageService.js";
+import { calculateLoyaltyEarnAmount } from "./loyaltyEarnAmountService.js";
 import { orderRepository } from "./repositories/orderRepository.js";
 import { normalizeCheckoutPaymentMethod } from "./checkoutPaymentPolicy.js";
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
@@ -47,14 +48,13 @@ function getOrderPhoneForLoyalty(order = {}) {
 }
 
 function getOrderPointsBaseAmount(order = {}) {
-  return Number(
-    order.pointsBaseAmount ??
-      Math.max(
-        Number(order.subtotal ?? order.totalAmount ?? order.total ?? 0) -
-          Number(order.promoDiscount || 0),
-        0
-      )
-  );
+  return Number(order.pointsBaseAmount ?? calculateLoyaltyEarnAmount({
+    subtotal: order.subtotal,
+    promoDiscount: order.promoDiscount,
+    pointsDiscount: order.pointsDiscountAmount ?? order.pointsDiscount,
+    totalAmount: order.totalAmount ?? order.total,
+    shippingFee: order.shippingFee
+  }));
 }
 
 function buildOrderLoyaltyPayload(order = {}) {
@@ -448,7 +448,6 @@ export async function createOrderAsync(params) {
   const {
     cart,
     totalAmount,
-    pointsBaseAmount,
     subtotal,
     shippingFee = 0,
     originalShippingFee = shippingFee,
@@ -551,9 +550,10 @@ export async function createOrderAsync(params) {
   const appliedPromoCode = validatedVoucher.promoCode;
   const appliedPromoSource = validatedVoucher.promoSource;
   const appliedPromoVoucherId = validatedVoucher.promoVoucherId;
-  const pointsAmount = Number(
-    pointsBaseAmount ?? Math.max(subtotalAmount - Number(appliedPromoDiscount || 0), 0)
-  );
+  const pointsAmount = calculateLoyaltyEarnAmount({
+    subtotal: subtotalAmount, promoDiscount: appliedPromoDiscount,
+    pointsDiscount: pointsDiscountAmount, totalAmount, shippingFee
+  });
   const pointsEarned = calculateOrderPoints(pointsAmount, loyaltyRule);
   const branchIdentifiers = resolveBranchIdentifiers(branchInfo, fulfillmentType);
   const initialOrderStatus = isPrepaidPayment ? "pending_payment" : "preparing";

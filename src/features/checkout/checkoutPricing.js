@@ -1,6 +1,7 @@
 import { getActivePromotions } from "../../utils/pureHelpers.js";
 import { buildUsedVoucherLookupFromOrders } from "../../services/loyaltyService.js";
 import { isVoucherAllowedForBranch } from "../../services/voucherBranchScopeService.js";
+import { calculateLoyaltyEarnAmount } from "../../services/loyaltyEarnAmountService.js";
 
 function getDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -263,7 +264,6 @@ export function calculateCheckoutPricing({
   const redeemValue = Math.max(1, Number(loyaltyRule?.redeemValue || 1));
   const maxRedemptionPercent = Math.min(50, Math.max(0, Number(loyaltyRule?.maxRedemptionPercent ?? 50)));
   const pointsBaseAmount = Math.max(Number(subtotal || 0) - Number(promoDiscount || 0), 0);
-  const earnedPreviewPoints = Math.floor((pointsBaseAmount / currencyPerPoint) * pointPerUnit);
   const maxRedeemUnitsByPoints = Math.floor(Number(availablePoints || 0) / redeemPointUnit);
   const configuredPointDiscountLimit = Math.floor(pointsBaseAmount * maxRedemptionPercent / 100);
   const combinedBenefitLimit = Math.floor(
@@ -276,6 +276,9 @@ export function calculateCheckoutPricing({
   const pointsSpent = spendUnits * redeemPointUnit;
   const pointsDiscount = spendUnits * redeemValue;
   const checkoutTotal = Math.max(subtotal - promoDiscount - pointsDiscount + checkoutShip, 0);
+  const earnedPreviewPoints = Math.floor((calculateLoyaltyEarnAmount({
+    subtotal, promoDiscount, pointsDiscount, totalAmount: checkoutTotal, shippingFee: checkoutShip
+  }) / currencyPerPoint) * pointPerUnit);
 
   return {
     baseCheckoutShip,

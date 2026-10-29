@@ -2,6 +2,7 @@
 
 import { coreSupabaseRepository } from "./repositories/coreSupabaseRepository.js";
 import { normalizeCheckoutPaymentMethod } from "./checkoutPaymentPolicy.js";
+import { calculateLoyaltyEarnAmount } from "./loyaltyEarnAmountService.js";
 
 const VOUCHER_REASON_MESSAGES = {
   voucher_code_required: "Voucher chưa có mã hợp lệ. Vui lòng chọn lại voucher.",
@@ -144,7 +145,9 @@ export function buildCreateOrderPayload({
   return {
     totalAmount: checkoutTotal,
     subtotal,
-    pointsBaseAmount: Math.max(Number(subtotal || 0) - Number(promoDiscount || 0), 0),
+    pointsBaseAmount: calculateLoyaltyEarnAmount({
+      subtotal, promoDiscount, pointsDiscount, totalAmount: checkoutTotal, shippingFee: checkoutShip
+    }),
     shippingFee: checkoutShip,
     originalShippingFee: baseCheckoutShip,
     shippingSupportDiscount: autoShipSupport,
