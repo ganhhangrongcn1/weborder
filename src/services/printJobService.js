@@ -486,7 +486,8 @@ export async function createItemLabelPrintJobs(order = {}, selectedUnits = [], o
       job_type: ITEM_LABEL_JOB_TYPE,
       status: PRINT_JOB_STATUS.pending,
       order_id: null,
-      order_code: `${orderCode || "ORDER"}-TEM-${shortBatchId}-${sequenceIndex + 1}`,
+      // Keep label jobs distinct from POS-* customer bills in deployed consumers.
+      order_code: `TEM-${orderCode || "ORDER"}-${shortBatchId}-${sequenceIndex + 1}`,
       source_type: ITEM_LABEL_JOB_TYPE,
       payload: buildItemLabelPrintPayload(order, item, {
         batchId,

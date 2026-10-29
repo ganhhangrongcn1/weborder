@@ -510,14 +510,23 @@ function buildPrintJobPayload(order = {}, options = {}) {
   };
 }
 
+function normalizeItemLabelItem(item = {}) {
+  const normalized = normalizeReceiptItem({
+    ...item,
+    options: item.selectedOptions ?? item.options ?? item.toppings ?? item.optionGroups
+  });
+  return { name: normalized.name, quantity: 1, note: normalized.note, options: normalized.options };
+}
+
 function buildItemLabelText(order = {}, item = {}, label = {}, options = {}) {
   const config = getPrinterConfig(options);
   const width = config.receiptWidthMm === 58 ? 32 : 48;
   const orderCode = toText(order.displayOrderCode || order.orderCode || order.order_code || order.id);
   const itemName = toText(item.name || item.productName || item.product_name || "Món");
   const note = toText(item.note);
-  const orderNote = toText(order.note || order.metadata?.note || order.raw?.metadata?.note);
-  const optionsText = normalizeReceiptItem(item).options;
+  const orderNote = toText(order.note || order.orderNote || order.order_note
+    || order.metadata?.note || order.metadata?.orderNote || order.raw?.metadata?.note);
+  const optionsText = normalizeItemLabelItem(item).options;
   const unitNumber = Math.max(1, Math.floor(toNumber(label.unitNumber, 1)));
   const totalUnits = Math.max(unitNumber, Math.floor(toNumber(label.totalUnits, 1)));
   const itemNumber = Math.max(1, Math.floor(toNumber(label.itemNumber, 1)));
@@ -586,8 +595,10 @@ function buildItemLabelPrintPayload(order = {}, item = {}, label = {}, options =
       totalUnits: Math.max(1, Math.floor(toNumber(label.totalUnits, 1)))
     },
     order: {
-      ...normalizeReceiptOrder(order, options),
-      items: [{ ...normalizeReceiptItem(item), quantity: 1 }]
+      // Labels are independent print documents. Source/payment/customer metadata
+      // makes deployed POS consumers incorrectly rebuild them as full receipts.
+      orderCode: toText(order.displayOrderCode || order.orderCode || order.order_code || order.id),
+      items: [normalizeItemLabelItem(item)]
     }
   };
 }
