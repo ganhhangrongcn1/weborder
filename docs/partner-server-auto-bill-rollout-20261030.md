@@ -55,6 +55,19 @@ không phải chờ quét xong cả batch HUB. Lỗi in không rollback đơn đ
 
 ## Kích hoạt và theo dõi
 
+Đã bật canary Thích Quảng Đức `69e589d15f07d302954e2f63`, branch
+`99ffd49c-c0e3-4267-a384-35c6298b1abf`, activated_at
+`2026-10-30T13:42:12.037056Z` (20:42:12 UTC+7). Printer cashier-80mm,
+Xprinter 80mm, khớp cấu hình các job production trước đó. Chỉ đơn mới tạo
+sau mốc này tham gia; không tạo intent cho lịch sử. Ba HUB khác giữ Kitchen.
+
+Web implementation commit `a82da9c`, Vercel
+`dpl_Dqu56JCx9MURwJ74XzgSyASWjJVo` production READY. GET custom domain
+/kitchen trả app root; manifest trỏ printerService-CIAGOS9R.js JavaScript 200.
+Checkpoint 20:42:53: chưa có intent/đơn mới tại scope sau bật, không lỗi sync;
+polling tự nhiên có auto_bill.failed=0. Đây là đã triển khai và bật canary,
+chưa phải bằng chứng nhận/in bill thật hoặc tốc độ, chưa mở rộng server bốn HUB.
+
 Chỉ kích hoạt một HUB sau khi kiểm tra scope/branch/printer. Giữ ba HUB khác
 tạo bill qua Kitchen như cũ. Theo dõi intent → job, producer auto-server-partner,
 duplicate identity/job, trạng thái thiết bị và đồng hồ server. Không tạo đơn,
