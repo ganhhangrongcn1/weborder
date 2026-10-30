@@ -57,6 +57,7 @@ unit test thay cho nghiệm thu thật.
 ## File trong phạm vi
 
 - `services/nexpos-events/observer.mjs` — cập nhật.
+- `services/nexpos-events/prepare.sh` — cập nhật để chuẩn bị đủ module phụ thuộc.
 - `services/nexpos-events/signalDelivery.mjs` — mới.
 - `services/nexpos-events/deploy-reviewed.sh` — mới.
 - `services/nexpos-events/worker-files.sha256` — mới.
@@ -74,3 +75,24 @@ unit test thay cho nghiệm thu thật.
 - `docs/nexpos-order-id-rollout-20261030.md` — mới.
 
 Kết quả cài VPS, bật cờ và quan sát thật sẽ bổ sung sau kiểm tra trực tiếp.
+
+## Kết quả production lúc 18:24 UTC+7
+
+- VPS đã tải đúng commit `f4fb9e68f0e65560c86d81093e5df5e348a99f51`, cả bốn
+  file worker khớp manifest SHA-256, Node syntax check đạt, systemd active.
+- Khóa worker vẫn root:ghr-observer 640; không tạo/chuyển khóa mới. Đã đăng
+  nhập bằng phiên root được anh cho phép, không ghi mật khẩu vào source/log.
+  Đã đăng xuất root sau triển khai.
+- Cloud nhận worker_version=order-id-v1, connected=true; sau bật cờ một HUB,
+  cloud nhận delivery_mode=immediate-v1. Bootstrap/reconnect và heartbeat đạt.
+- Polling 15 giây vẫn active; các lượt sau importer v42 thành công, 0 lỗi liên
+  tiếp. Feature scope chỉ đúng canary; ba HUB polling khác giữ nguyên.
+- Tại checkpoint chưa có receipt ID thật sau bật, không tồn pending ID.
+  Đây là triển khai đã chạy và kiểm tra kết nối, chưa phải bằng chứng độ trễ
+  đơn thật/Kitchen hoặc đủ điều kiện mở rộng 4 HUB.
+- Build web đã đạt, 5.315 module, Vite 3 phút 25 giây; encoding 707 file đạt.
+  Không sửa frontend. Cảnh báo Browserslist và chunk size có sẵn.
+- Security advisor chỉ báo RLS-no-policy cho hai bảng service-only mới như
+  thiết kế. Anon/authenticated không được đọc queue hay gọi RPC enqueue.
+- Lịch theo dõi đã cập nhật để đọc receipt ID, metadata.id_only và lỗi theo ID.
+  Giữ một HUB, không dùng socket mở để tự động mở rộng.

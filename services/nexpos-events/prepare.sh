@@ -9,7 +9,7 @@ target=/opt/ghr-nexpos-observer
 [ ! -e "$target" ] || { echo 'Refusing to overwrite existing observer'; exit 2; }
 test -x /opt/ghr-node/bin/node
 install -d -m 755 "$target"
-for file in services/nexpos-events/observer.mjs services/nexpos-events/ghr-nexpos-observer.service supabase/functions/nexpos-event-observer/policy.mjs; do
+for file in services/nexpos-events/observer.mjs services/nexpos-events/signalDelivery.mjs services/nexpos-events/ghr-nexpos-observer.service supabase/functions/nexpos-event-observer/policy.mjs supabase/functions/nexpos-event-observer/signals.mjs; do
   install -d -m 755 "$target/$(dirname "$file")"
   curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
     "https://raw.githubusercontent.com/ganhhangrongcn1/weborder/$revision/$file" \
