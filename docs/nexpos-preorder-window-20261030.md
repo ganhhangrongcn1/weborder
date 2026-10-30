@@ -65,5 +65,10 @@ Kết quả canary và mở rộng thực tế ghi bổ sung sau khi xác minh.
   Bộ nghe WSS vẫn chỉ quan sát 1 HUB; chưa kích hoạt đồng bộ đơn qua WSS.
 - Sau mở rộng, lượt rare 10:17:03–10:17:06 chạy thành công trên 4 HUB,
   12 request danh sách, quan sát 2 bản ghi. Các lượt fast sau đó cũng thành công.
-- 9 kiểm tra chuyên biệt đã đạt. Kiểm tra encoding quét 707 file đã đạt;
-  trạng thái full build được báo riêng, không dùng thay bằng chứng production.
+- 9 kiểm tra chuyên biệt đã đạt. Kiểm tra encoding quét 707 file đã đạt.
+- Full `npm run build` đã đạt: 5.315 module, Vite hoàn tất trong 33,28 giây
+  ở lượt chạy PTY. Chỉ có cảnh báo Browserslist cũ và kích thước chunk.
+  Không có thay đổi frontend trong bản sửa. Build không thay cho bằng chứng
+  nhận đơn hoặc in giấy tại cửa hàng.
+- Mã nguồn bản sửa đã đồng bộ lên main, commit `8521ab6`; function v39 trên
+  Supabase và cấu hình 4 HUB đã được kiểm tra trực tiếp, không chỉ kiểm tra Git.
