@@ -34,3 +34,33 @@ Luồng sync production và polling dự phòng vẫn được giữ nguyên.
 
 Muốn xác minh ID cần quan sát lại lúc HUB thực sự có sự kiện mới/đổi trạng thái;
 không tạo hoặc thay đổi đơn thật chỉ để thử.
+
+## Đã xác minh ID trong sự kiện thật — 16:02 ngày 30/10
+
+Anh báo vừa có đơn. Kiểm tra đúng HUB thấy GF-886 đã vào Supabase lúc
+15:53:07, một dòng món, DOING; sau đó chuyển PICK lúc 16:00:28. Không suy ra
+ID của sự kiện cũ từ mã hiển thị hoặc từ các bộ đếm của worker.
+
+Lượt quan sát trực tiếp bắt `saas_order_status_change` lúc 16:00:05.990 với
+các trường `brand_ids`, `hub_ids`, `message_id`, `new_status`, `old_status`,
+`order_ids`, `site_ids`, `topic`. `order_ids` là array; `message_id` không được
+coi là ID đơn.
+
+Lượt tiếp theo, giới hạn 110 giây, bắt sự kiện cùng topic lúc 16:02:44.299:
+
+- `data.order_ids[0]` được đối chiếu trực tiếp với `nexpos_order_id` đúng HUB.
+- Đúng một bản ghi, mã hiển thị SF-0941. Khi nhận sự kiện DB còn DOING;
+  sau đó polling/luồng đồng bộ tự nhiên đã cập nhật PICK.
+- GET chi tiết bằng ID nguồn trả HTTP 200; `data.order_id` khớp identity đã
+  lưu, HUB khớp, trạng thái API và DB đều PICK tại lần đối chiếu.
+- Chỉ trả kết quả đối chiếu và mã hiển thị đã có trong DB; không lưu giá trị
+  ứng viên chưa xác minh, raw event, token hoặc dữ liệu khách hàng.
+
+Kết luận: topic đổi trạng thái có ID đơn dùng được trong `data.order_ids`.
+Có thể thiết kế đường lấy chi tiết đúng các ID này. Chưa đủ bằng chứng khẳng
+định mọi sự kiện đơn mới/in đều có cùng trường hoặc nguồn luôn phát đủ sự kiện;
+vẫn cần fallback theo HUB và polling đối soát.
+
+Đã vô hiệu hóa lại probe bằng handler cố định 410, JWT verification bật,
+deployment v7; không còn đọc phiên/database hoặc mở WSS. Không thay importer,
+worker hay luồng ghi đơn để thử. Chưa triển khai tối ưu đồng bộ theo ID.
