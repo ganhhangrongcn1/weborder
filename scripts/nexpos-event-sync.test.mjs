@@ -70,6 +70,7 @@ async function run({ status = 'DOING', existing = false, failCommit = false, det
   const module = new SourceTextModule(source, { context: ctx });
   await module.link(specifier => {
     const values = specifier.startsWith('npm:') ? { createClient: () => client }
+      : specifier.includes('autoPrint') ? { dispatchPartnerAutoBills: async () => ({ claimed: 0, enqueued: 0, failed: 0 }) }
       : specifier.includes('eventSync') ? eventPolicy : windowPolicy;
     return new SyntheticModule(Object.keys(values), function () {
       for (const [key, value] of Object.entries(values)) this.setExport(key, value);

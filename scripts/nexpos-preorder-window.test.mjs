@@ -56,6 +56,7 @@ test('deployed entrypoint compiles, keeps v38 Grab codes, and batches existing a
   const module = new SourceTextModule(source, { context });
   await module.link(specifier => {
     const values = specifier.startsWith('npm:') ? { createClient() {} }
+      : specifier.includes('autoPrint') ? { dispatchPartnerAutoBills: async () => ({ claimed: 0, enqueued: 0, failed: 0 }) }
       : specifier.includes('eventSync') ? eventPolicy : windowPolicy;
     return new SyntheticModule(Object.keys(values), function () {
       for (const [key, value] of Object.entries(values)) this.setExport(key, value);

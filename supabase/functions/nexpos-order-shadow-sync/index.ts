@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { PREORDER_WINDOW_CONFIG_KEY, normalizePreorderWindowConfig, getPreorderQueryWindow } from "./preorderWindow.mjs";
 import { EVENT_STATUSES, lease, commitOrder, scopedRows, normalizeDetail } from "./eventSync.mjs";
+import { dispatchPartnerAutoBills } from "./autoPrint.mjs";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -640,6 +641,15 @@ Deno.serve(async (request) => {
 
     const snapshotReadMs = Date.now() - snapshotStartedAt;
     const processingStartedAt = Date.now();
+    const autoBill = { claimed: 0, enqueued: 0, failed: 0 };
+    const drainAutoBills = async () => {
+      try {
+        const result = await dispatchPartnerAutoBills(client, owner);
+        autoBill.claimed += result.claimed;
+        autoBill.enqueued += result.enqueued;
+        autoBill.failed += result.failed;
+      } catch { autoBill.failed += 1; }
+    };
     let matchedCount = 0;
     let mismatchCount = 0;
     let missingCount = 0;
@@ -845,6 +855,9 @@ Deno.serve(async (request) => {
           p_generation: work.get(toText(order.hub_id || order.nexpos_hub_id)) ?? null
         }, idEvent);
       }
+      // New eligible orders do not wait for the rest of the HUB batch to finish.
+      if (createdThisOrder || (effectiveExisting?.nexpos_status === "PRE_ORDER"
+        && ["DOING", "PICK"].includes(orderStatus(order)))) await drainAutoBills();
     }
 
     await lease(client, owner, "renew");
@@ -862,12 +875,15 @@ Deno.serve(async (request) => {
       }).eq("hub_id", target.hub_id).eq("order_id", target.order_id).eq("generation", target.generation);
       if (idAckError) throw idAckError;
     }
+    // Printing failures never roll back accepted orders or block source polling.
+    await drainAutoBills();
     const finishedAt = new Date().toISOString();
     await client.from("nexpos_shadow_sync_runs").update({
       finished_at: finishedAt, status: "success", hub_count: hubIds.length,
       request_count: requestCount, observed_count: observed.length,
       matched_count: matchedCount, mismatch_count: mismatchCount, missing_count: missingCount,
       metadata: {
+        auto_bill: autoBill,
         timings_ms: { setup: setupMs, source_fetch: sourceFetchMs, snapshot_read: snapshotReadMs,
           processing_and_ack: Date.now() - processingStartedAt },
         id_event_count: idRows.length,

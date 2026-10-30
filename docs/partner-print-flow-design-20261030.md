@@ -1,5 +1,9 @@
 # Thiết kế tinh gọn nhận đơn và in bill đối tác — 30/10/2026
 
+> Cập nhật: anh đã yêu cầu triển khai; xem
+> [biên bản triển khai server tạo bill](partner-server-auto-bill-rollout-20261030.md).
+> Nội dung bên dưới là baseline thiết kế trước triển khai, không thay thế biên bản mới.
+
 ## Trạng thái
 
 Đây là phương án thiết kế sau đối chiếu cloud main `581a00b` và hợp đồng in

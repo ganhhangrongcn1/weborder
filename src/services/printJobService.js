@@ -316,10 +316,9 @@ async function findExistingCustomerBillPrintJob(client, row = {}) {
       .eq("printer_key", row.printer_key || DEFAULT_PRINTER_KEY)
       .eq(key.column, key.value)
       .gte("created_at", getAutoPrintCutoffIso())
-      .in("status", [
-        PRINT_JOB_STATUS.pending,
-        PRINT_JOB_STATUS.printing
-      ])
+      .in("status", String(row.requested_by || "").startsWith("auto-kitchen:")
+        ? [PRINT_JOB_STATUS.pending, PRINT_JOB_STATUS.printing, PRINT_JOB_STATUS.printed, PRINT_JOB_STATUS.failed]
+        : [PRINT_JOB_STATUS.pending, PRINT_JOB_STATUS.printing])
       .order("created_at", { ascending: false })
       .limit(1);
 
