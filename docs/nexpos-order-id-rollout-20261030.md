@@ -1,5 +1,33 @@
 # Tăng tốc WSS theo ID đơn — 30/10/2026
 
+## Biên bản kiểm tra 19:53 UTC+7 và kế hoạch giãn polling
+
+Anh yêu cầu lưu kết quả và đồng bộ cloud. Đây là checkpoint lúc 19:53 ngày
+30/10/2026, không phải cam kết trạng thái vĩnh viễn hoặc phép đo Kitchen.
+
+- Worker connected=true, enrollment đúng bốn HUB, sync_enabled và
+  id_sync_enabled=true; hàng đợi ID/HUB trống, control không lỗi liên tiếp.
+- Từ 19:40:22: 57 lượt thành công (14 WSS, 43 polling), 0 lỗi lấy ID.
+  Tổng request NexPOS trong các lượt này: WSS 80, polling 284. Đây là request
+  nguồn, không phải tổng request Supabase hoặc phép đo chi phí.
+- Cả bốn HUB có receipt ID: 30/4 2, Thích Quảng Đức 1, Lê Hồng Phong 1,
+  Việt Sing 4. Receipt không tương đương số đơn mới hoặc đầy đủ nghiệm thu.
+- Hai đơn mới: XN-8795 (Thích Quảng Đức, 19:41:38) và GF-842 (Việt Sing,
+  19:52:56), đều thuộc lượt trigger=wss, id_only=false (đối soát HUB).
+  Trong cửa sổ này polling created_count=0. Không suy ra WSS sẽ không bỏ sót.
+- Chỉ khoảng 13 phút và hai đơn mới, chưa đủ bằng chứng bao phủ trên cả bốn
+  HUB, hủy thật/reconnect và Kitchen. Quyết định: giữ polling 15 giây; không
+  sửa cron, rare/full/late hay PRE_ORDER ±7 ngày trong lượt ghi biên bản này.
+- Anh đã cho phép giãn polling từng bước khi đủ ổn định, không cần hỏi lại.
+  Trước giãn cần đối chiếu đơn chỉ polling tìm được, backlog/độ trễ/lỗi,
+  đúng identity/món/tiền và hoạt động thực mỗi HUB. Giữ dự phòng; phục hồi
+  15 giây khi có dấu hiệu chậm/sót hoặc lỗi. Không tắt hẳn polling.
+- Automation hiện theo dõi cả bốn HUB và điều kiện giãn, thông báo thay đổi
+  đáng kể/lỗi; không dừng chỉ vì bật đủ scope. Enrollment hết hạn
+  06/11/2026 07:42 UTC+7; cần chú ý gia hạn trước thời điểm đó.
+
+Lượt này chỉ cập nhật tài liệu; không đổi code/function/schema hoặc dữ liệu đơn.
+
 ## Mở rộng bốn HUB theo yêu cầu trực tiếp 19:37 UTC+7
 
 Anh yêu cầu áp dụng ngay bốn HUB và làm an toàn; yêu cầu này thay điều kiện
