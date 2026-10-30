@@ -5,7 +5,7 @@ const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
 
 // Own machine authentication: only a hash is stored in DB; no public enrollment endpoint.
-// This function never invokes the importer and never writes orders.
+// Reports atomically enqueue invalidations in DB. Only the existing importer writes orders.
 Deno.serve(async (request) => {
   if (request.method !== 'POST') return reply({ error: 'method_not_allowed' }, 405);
   const token = request.headers.get('x-worker-token') || '';
@@ -18,7 +18,7 @@ Deno.serve(async (request) => {
   });
   try {
     const { data: worker, error } = await client.from('nexpos_event_workers')
-      .select('worker_id,hub_ids,last_seen_at,last_bootstrap_at')
+      .select('worker_id,hub_ids,last_seen_at,last_bootstrap_at,sync_enabled')
       .eq('worker_id', WORKER_ID).eq('token_sha256', tokenHash).eq('enabled', true)
       .gt('expires_at', new Date().toISOString()).maybeSingle();
     if (error) throw error;
@@ -60,6 +60,23 @@ Deno.serve(async (request) => {
         .or(`last_seen_at.is.null,last_seen_at.lt.${new Date(Date.now() - 20_000).toISOString()}`)
         .select('worker_id').maybeSingle();
       if (saveError) throw saveError;
+      if (saved && worker.sync_enabled) {
+        // Durable DB queue is the source of truth; a lost wake is retried by polling.
+        const wake = async () => {
+          const { data: pending } = await client.from('nexpos_event_pending')
+            .select('generation,completed_generation').in('hub_id', allowedHubs);
+          if (!pending?.some(row => row.generation > row.completed_generation)) return;
+          const { data: control } = await client.from('nexpos_shadow_sync_control')
+            .select('cron_secret').eq('control_key', 'nexpos_partner_orders').maybeSingle();
+          if (!control?.cron_secret) return;
+          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/nexpos-order-shadow-sync`, {
+            method: 'POST', signal: AbortSignal.timeout(60_000),
+            headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+              'x-cron-secret': control.cron_secret, 'x-nexpos-event-wake': '1' }
+          });
+        };
+        EdgeRuntime.waitUntil(wake().catch(() => {}));
+      }
       return reply({ ok: Boolean(saved), mode: 'observe', hub_ids: allowedHubs }, saved ? 200 : 429);
     }
     return reply({ error: 'invalid_action' }, 400);

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import { createContext, SourceTextModule, SyntheticModule } from 'node:vm';
 import * as windowPolicy from '../supabase/functions/nexpos-order-shadow-sync/preorderWindow.mjs';
+import * as eventPolicy from '../supabase/functions/nexpos-order-shadow-sync/eventSync.mjs';
 import { getPreorderQueryWindow, normalizePreorderWindowConfig } from '../supabase/functions/nexpos-order-shadow-sync/preorderWindow.mjs';
 
 const canary = '69e18c814673b293b04be1ab';
@@ -54,7 +55,8 @@ test('deployed entrypoint compiles, keeps v38 Grab codes, and batches existing a
   const source = stripTypeScriptTypes(raw) + '\nexport { normalizedDisplayCode, readGrabAutomationConfig };';
   const module = new SourceTextModule(source, { context });
   await module.link(specifier => {
-    const values = specifier.startsWith('npm:') ? { createClient() {} } : windowPolicy;
+    const values = specifier.startsWith('npm:') ? { createClient() {} }
+      : specifier.includes('eventSync') ? eventPolicy : windowPolicy;
     return new SyntheticModule(Object.keys(values), function () {
       for (const [key, value] of Object.entries(values)) this.setExport(key, value);
     }, { context });

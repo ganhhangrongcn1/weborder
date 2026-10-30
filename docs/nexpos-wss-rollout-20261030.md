@@ -1,5 +1,10 @@
 # NexPOS WSS rollout - 30/10/2026
 
+> Current implementation: see `nexpos-event-sync-20261030.md`. Importer v40 and
+> broker v2 supersede the observation-only phase below. Sync is enabled for one
+> canary HUB; four-HUB live business acceptance remains pending. Historical v38
+> notes below are not deployment instructions; preserve the v39 preorder fix.
+
 ## Baseline
 
 - Latest verified cloud main: `922e0b527168154158eb2c684cb4352bf2cea2a1`.

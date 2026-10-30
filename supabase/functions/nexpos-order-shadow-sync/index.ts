@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { PREORDER_WINDOW_CONFIG_KEY, normalizePreorderWindowConfig, getPreorderQueryWindow } from "./preorderWindow.mjs";
+import { EVENT_STATUSES, lease, commitOrder, scopedRows } from "./eventSync.mjs";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -241,10 +242,10 @@ async function login(client: ReturnType<typeof createClient>) {
 }
 async function nexposFetch(client: ReturnType<typeof createClient>, url: string, cookieRef: { value: string }) {
   if (!cookieRef.value) cookieRef.value = await readCookie(client) || await login(client);
-  let result = await fetch(url, { headers: { Accept: "application/json", Cookie: cookieRef.value } });
+  let result = await fetch(url, { headers: { Accept: "application/json", Cookie: cookieRef.value }, signal: AbortSignal.timeout(15000) });
   if (result.status === 401) {
     cookieRef.value = await login(client);
-    result = await fetch(url, { headers: { Accept: "application/json", Cookie: cookieRef.value } });
+    result = await fetch(url, { headers: { Accept: "application/json", Cookie: cookieRef.value }, signal: AbortSignal.timeout(15000) });
   }
   if (!result.ok) throw new Error(`nexpos_list_${result.status}`);
   return result.json();
@@ -333,7 +334,9 @@ async function createMissingPartnerOrder(
   finance: ReturnType<typeof financeSnapshot>,
   promotions: JsonRecord[],
   payloadHash: string,
-  now: string
+  now: string,
+  owner: string,
+  generation: number | null
 ) {
   if (items.length === 0) throw new Error(`dual_write_missing_items:${source}:${identity}`);
   const rawCode = orderCode(order);
@@ -406,17 +409,6 @@ async function createMissingPartnerOrder(
     nexpos_promotion_data: promotions,
     nexpos_enrichment_hash: payloadHash
   };
-  const { data: inserted, error: insertError } = await client.from("partner_orders")
-    .insert(orderRow).select("id,partner_source,nexpos_order_id,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,ingested_by,payload_version,nexpos_enrichment_hash").single();
-  if (insertError) {
-    if (toText(insertError.code) !== "23505") throw new Error(`dual_write_order_insert:${insertError.message}`);
-    const { data: raced, error: raceError } = await client.from("partner_orders")
-      .select("id,partner_source,nexpos_order_id,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,ingested_by,payload_version,nexpos_enrichment_hash")
-      .eq("partner_source", source).eq("nexpos_order_id", identity).maybeSingle();
-    if (raceError || !raced?.id) throw new Error(`dual_write_order_race:${raceError?.message || "missing"}`);
-    return { row: raced as JsonRecord, created: false };
-  }
-
   const itemRows = items.map((item, index) => {
     const quantity = Math.max(1, toNumber(item.quantity, 1));
     const originalLineTotal = nonnegative(item.price);
@@ -424,7 +416,6 @@ async function createMissingPartnerOrder(
     const originalUnitPrice = originalLineTotal / quantity;
     const discountedUnitPrice = discountedLineTotal / quantity;
     return {
-      partner_order_id: inserted.id,
       order_code: canonicalCode,
       display_order_code: displayCode,
       partner_source: source,
@@ -458,22 +449,11 @@ async function createMissingPartnerOrder(
       }
     };
   });
-  const { error: itemsError } = await client.from("partner_order_items").insert(itemRows);
-  if (itemsError) {
-    await client.from("partner_orders").delete().eq("id", inserted.id);
-    throw new Error(`dual_write_item_insert:${itemsError.message}`);
-  }
-  for (const promotion of promotions) {
-    const { error: promotionError } = await client.from("partner_order_promotions").upsert({
-      partner_order_id: inserted.id,
-      ...promotion,
-      updated_at: now
-    }, { onConflict: "partner_order_id,promotion_key" });
-    if (promotionError) {
-      await client.from("partner_orders").delete().eq("id", inserted.id);
-      throw new Error(`dual_write_promotion:${promotionError.message}`);
-    }
-  }
+  const result = await commitOrder(client, {
+    p_owner: owner, p_order: orderRow, p_items: itemRows, p_promotions: promotions,
+    p_existing_id: null, p_expected_hash: null, p_observed_at: now, p_generation: generation
+  });
+  const inserted = result.row;
   if (customerPhone) {
     await client.rpc("upsert_customer_stub_profile", {
       p_phone: customerPhone,
@@ -482,7 +462,7 @@ async function createMissingPartnerOrder(
       p_source_ref: toText(inserted.id)
     });
   }
-  return { row: inserted as JsonRecord, created: true };
+  return { row: inserted as JsonRecord, created: result.created };
 }
 function buildDifferences(shadow: JsonRecord, existing: JsonRecord | undefined) {
   if (!existing) return ["missing_in_n8n"];
@@ -514,6 +494,7 @@ Deno.serve(async (request) => {
     return response({ ok: true, skipped: true, reason: "disabled" });
   }
   if (toText(request.headers.get("x-cron-secret")) !== toText(control.cron_secret)) return response({ ok: false }, 401);
+  const eventOnly = request.headers.get("x-nexpos-event-wake") === "1";
   const tradingWindow = isActiveTradingWindow();
   const lateReconciliationWindow = isLateReconciliationWindow();
   if (!tradingWindow && !lateReconciliationWindow) {
@@ -525,20 +506,15 @@ Deno.serve(async (request) => {
   const lastFullSweepAt = new Date(toText(control.last_full_sweep_at)).getTime();
   const lastRareSweepAt = new Date(toText(control.last_rare_sweep_at)).getTime();
   const fullSweepDue = !Number.isFinite(lastFullSweepAt) || Date.now() - lastFullSweepAt >= 5 * 60 * 1000;
-  if (lateReconciliationWindow && !fullSweepDue) {
+  if (!eventOnly && lateReconciliationWindow && !fullSweepDue) {
     return response({ ok: true, skipped: true, reason: "late_reconciliation_not_due" });
   }
   const isFullStatusSweep = tradingWindow && fullSweepDue;
   const isRareStatusSweep = isFullStatusSweep
     || !Number.isFinite(lastRareSweepAt)
     || Date.now() - lastRareSweepAt >= 60 * 1000;
-  const lockSeconds = isFullStatusSweep || lateReconciliationWindow ? 50 : 12;
-  const { data: locked } = await client.from("nexpos_shadow_sync_control").update({
-    locked_until: new Date(Date.now() + lockSeconds * 1000).toISOString(),
-    last_started_at: startedAt,
-    updated_at: startedAt
-  }).eq("control_key", CONTROL_KEY).or(`locked_until.is.null,locked_until.lt.${startedAt}`).select("control_key").maybeSingle();
-  if (!locked) return response({ ok: true, skipped: true, reason: "lock_race" });
+  const owner = crypto.randomUUID();
+  if (!await lease(client, owner, "acquire")) return response({ ok: true, skipped: true, reason: "lock_race" });
 
   const { data: run } = await client.from("nexpos_shadow_sync_runs").insert({ started_at: startedAt }).select("id").single();
   const runId = toText(run?.id);
@@ -547,7 +523,17 @@ Deno.serve(async (request) => {
     const { data: hubRows, error: hubError } = await client.from("nexpos_shadow_hubs")
       .select("nexpos_hub_id").eq("enabled", true);
     if (hubError) throw hubError;
-    const hubIds = Array.from(new Set((hubRows || []).map((row) => toText(row.nexpos_hub_id)).filter(Boolean)));
+    let hubIds = Array.from(new Set((hubRows || []).map((row) => toText(row.nexpos_hub_id)).filter(Boolean)));
+    const { data: enrollments, error: enrollmentError } = await client.from("nexpos_event_workers")
+      .select("hub_ids").eq("enabled", true).eq("sync_enabled", true).gt("expires_at", startedAt);
+    if (enrollmentError) throw enrollmentError;
+    const eventAllowed = new Set(syncMode === "dual_write" ? (enrollments || []).flatMap(row => row.hub_ids || []) : []);
+    const { data: pending, error: pendingError } = await client.from("nexpos_event_pending")
+      .select("hub_id,generation,completed_generation").in("hub_id", hubIds);
+    if (pendingError) throw pendingError;
+    const work = new Map((pending || []).filter(row => eventAllowed.has(row.hub_id)
+      && row.generation > row.completed_generation).map(row => [row.hub_id, row.generation]));
+    if (eventOnly) hubIds = hubIds.filter(id => work.has(id));
     const cookieRef = { value: "" };
     const grabAutomationConfig = await readGrabAutomationConfig(client);
     const observed: JsonRecord[] = [];
@@ -562,7 +548,8 @@ Deno.serve(async (request) => {
     const to = new Date(Date.now() + 3600000).toISOString();
 
     for (const hubId of hubIds) {
-      for (const status of pollStatuses) {
+      const statuses = work.has(hubId) ? EVENT_STATUSES : pollStatuses;
+      for (const status of statuses) {
         for (let page = 1; page <= MAX_PAGES_PER_HUB; page += 1) {
           const queryWindow = getPreorderQueryWindow({
             status, hubId, config: grabAutomationConfig.preorderWindow, fallback: { from, to }
@@ -571,12 +558,37 @@ Deno.serve(async (request) => {
             status, from: queryWindow.from, to: queryWindow.to, filter_type: "hub", hub_ids: hubId,
             "table[page]": String(page), "table[items_per_page]": String(PAGE_SIZE)
           });
+          await lease(client, owner, "renew");
           const payload = await nexposFetch(client, `${BASE_URL}/order-service/site/orders?${params}`, cookieRef);
           requestCount += 1;
           const rows = extractRows(payload).map(getObject).filter((row) => orderIdentity(row));
-          observed.push(...rows);
+          observed.push(...scopedRows(rows, hubId));
+          if (work.has(hubId) && rows.length === PAGE_SIZE && page === MAX_PAGES_PER_HUB) throw new Error("sync_page_limit");
           if (rows.length < PAGE_SIZE) break;
         }
+      }
+    }
+
+    if (work.size) {
+      // A scheduled order can move to CANCEL/PICK outside the old list time window.
+      // Recheck known preorders by stable source ID, using the verified detail GET.
+      const { data: tracked, error: trackedError } = await client.from("partner_orders")
+        .select("nexpos_order_id,nexpos_hub_id").in("nexpos_hub_id", [...work.keys()])
+        .eq("nexpos_status", "PRE_ORDER").limit(21);
+      if (trackedError) throw trackedError;
+      if ((tracked || []).length > 20) throw new Error("sync_tracked_preorder_limit");
+      const seen = new Set(observed.map(orderIdentity));
+      for (const prior of tracked || []) {
+        if (seen.has(prior.nexpos_order_id)) continue;
+        await lease(client, owner, "renew");
+        const payload = getObject(await nexposFetch(client,
+          `${BASE_URL}/order-service/site/orders/${encodeURIComponent(prior.nexpos_order_id)}`, cookieRef));
+        requestCount += 1;
+        const detail = getObject(payload.data);
+        if (orderIdentity(detail) !== prior.nexpos_order_id || scopedRows([detail], prior.nexpos_hub_id).length !== 1) {
+          throw new Error("sync_detail_scope_mismatch");
+        }
+        observed.push(detail);
       }
     }
 
@@ -602,8 +614,9 @@ Deno.serve(async (request) => {
     let autoPrepAdjustedCount = 0;
     const autoPrepErrors: string[] = [];
     const autoPrepAttemptedOrderIds = new Set<string>();
-    const now = new Date().toISOString();
+    const now = startedAt;
     for (const order of observed) {
+      await lease(client, owner, "renew");
       const source = normalizeSource(order.source || order.partner_source || order.platform);
       const identity = orderIdentity(order);
       const previousShadowRow = shadowMap.get(`${source}:${identity}`);
@@ -672,12 +685,14 @@ Deno.serve(async (request) => {
         last_compared_at: now
       });
       let effectiveExisting = existing;
+      let createdThisOrder = false;
       if (!existing && syncMode === "dual_write") {
         const ingestResult = await createMissingPartnerOrder(
           client, order, source, identity, normalizedCode, items.map(getObject),
-          finance, promotions, payloadHash, now
+          finance, promotions, payloadHash, now, owner, work.get(toText(order.hub_id || order.nexpos_hub_id)) ?? null
         );
         effectiveExisting = ingestResult.row;
+        createdThisOrder = ingestResult.created;
         existingMap.set(`${source}:${identity}`, ingestResult.row);
         shadow.matched_partner_order_id = ingestResult.row.id;
         if (ingestResult.created) createdCount += 1;
@@ -744,35 +759,24 @@ Deno.serve(async (request) => {
             synced_at: now
           });
         }
-        const { error: enrichmentError } = await client.from("partner_orders")
-          .update(enrichmentUpdate).eq("id", effectiveExisting.id);
-        if (enrichmentError) throw enrichmentError;
-
-        for (const promotion of promotions) {
-          const { error: promotionError } = await client.from("partner_order_promotions").upsert({
-            partner_order_id: effectiveExisting.id,
-            ...promotion,
-            updated_at: now
-          }, { onConflict: "partner_order_id,promotion_key" });
-          if (promotionError) throw promotionError;
-        }
-
         const { data: partnerItems, error: partnerItemsError } = await client.from("partner_order_items")
           .select("id,line_index").eq("partner_order_id", effectiveExisting.id);
         if (partnerItemsError) throw partnerItemsError;
-        if (items.length > 0 && (partnerItems || []).length < items.length) continue;
+        if (items.length > 0 && (partnerItems || []).length < items.length) throw new Error("sync_item_count_mismatch");
 
+        const itemPatches: JsonRecord[] = [];
         const itemRowByIndex = new Map((partnerItems || []).map((item) => [toNumber(item.line_index, -1), item]));
         for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {
           const item = getObject(items[itemIndex]);
           const partnerItem = itemRowByIndex.get(itemIndex);
-          if (!partnerItem?.id) continue;
+          if (!partnerItem?.id) throw new Error("sync_item_index_missing");
           const quantity = Math.max(1, toNumber(item.quantity, 1));
           const originalLineTotal = nonnegative(item.price);
           const discountedLineTotal = nonnegative(item.discount_price ?? item.price);
           const originalUnitPrice = originalLineTotal / quantity;
           const discountedUnitPrice = discountedLineTotal / quantity;
-          const { error: itemError } = await client.from("partner_order_items").update({
+          itemPatches.push({
+            id: partnerItem.id,
             quantity,
             unit_price: originalUnitPrice,
             line_total: discountedLineTotal,
@@ -787,25 +791,41 @@ Deno.serve(async (request) => {
               platform_discount: toNumber(item.platform_discount, 0),
               seller_discount: toNumber(item.seller_discount, 0),
               is_gift: Boolean(item.is_gift)
-            },
-            updated_at: now
-          }).eq("id", partnerItem.id);
-          if (itemError) throw itemError;
+            }
+          });
         }
 
-        const { error: hashError } = await client.from("partner_orders").update({
-          nexpos_enrichment_hash: payloadHash
-        }).eq("id", effectiveExisting.id);
-        if (hashError) throw hashError;
+        await commitOrder(client, {
+          p_owner: owner, p_order: { ...enrichmentUpdate, nexpos_enrichment_hash: payloadHash },
+          p_items: itemPatches, p_promotions: promotions, p_existing_id: effectiveExisting.id,
+          p_expected_hash: effectiveExisting.nexpos_enrichment_hash || null, p_observed_at: startedAt,
+          p_generation: work.get(toText(order.hub_id || order.nexpos_hub_id)) ?? null
+        });
+      } else if (!createdThisOrder && effectiveExisting?.id && work.has(toText(order.hub_id || order.nexpos_hub_id))) {
+        // Record a verified unchanged REST snapshot without rewriting business fields.
+        await commitOrder(client, {
+          p_owner: owner, p_order: { nexpos_enrichment_hash: payloadHash }, p_items: [], p_promotions: [],
+          p_existing_id: effectiveExisting.id, p_expected_hash: payloadHash, p_observed_at: startedAt,
+          p_generation: work.get(toText(order.hub_id || order.nexpos_hub_id))
+        });
       }
     }
 
+    await lease(client, owner, "renew");
+    for (const [hubId, generation] of work) {
+      const { error: ackError } = await client.from("nexpos_event_pending").update({
+        completed_generation: generation, completed_at: new Date().toISOString(), last_run_id: runId
+      }).eq("hub_id", hubId).lt("completed_generation", generation);
+      if (ackError) throw ackError;
+    }
     const finishedAt = new Date().toISOString();
     await client.from("nexpos_shadow_sync_runs").update({
       finished_at: finishedAt, status: "success", hub_count: hubIds.length,
       request_count: requestCount, observed_count: observed.length,
       matched_count: matchedCount, mismatch_count: mismatchCount, missing_count: missingCount,
       metadata: {
+        event_generations: Object.fromEntries(work),
+        trigger: eventOnly ? "wss" : "polling",
         poll_type: lateReconciliationWindow
           ? "late_reconciliation"
           : isFullStatusSweep
@@ -825,12 +845,12 @@ Deno.serve(async (request) => {
       }
     }).eq("id", runId);
     const controlUpdate: JsonRecord = {
-      locked_until: null, last_finished_at: finishedAt, last_success_at: finishedAt,
+      last_finished_at: finishedAt, last_success_at: finishedAt,
       consecutive_failures: 0, last_error: null, updated_at: finishedAt
     };
-    if (isFullStatusSweep || lateReconciliationWindow) controlUpdate.last_full_sweep_at = finishedAt;
-    if (isRareStatusSweep) controlUpdate.last_rare_sweep_at = finishedAt;
-    await client.from("nexpos_shadow_sync_control").update(controlUpdate).eq("control_key", CONTROL_KEY);
+    if (!eventOnly && (isFullStatusSweep || lateReconciliationWindow)) controlUpdate.last_full_sweep_at = finishedAt;
+    if (!eventOnly && isRareStatusSweep) controlUpdate.last_rare_sweep_at = finishedAt;
+    await client.from("nexpos_shadow_sync_control").update(controlUpdate).eq("control_key", CONTROL_KEY).eq("lock_owner", owner);
     return response({
       ok: true, observed: observed.length, matched: matchedCount,
       mismatch: mismatchCount, missing: missingCount, created: createdCount,
@@ -845,10 +865,12 @@ Deno.serve(async (request) => {
       finished_at: finishedAt, status: "failed", request_count: requestCount, error_message: message
     }).eq("id", runId);
     await client.from("nexpos_shadow_sync_control").update({
-      locked_until: null, last_finished_at: finishedAt,
+      last_finished_at: finishedAt,
       consecutive_failures: toNumber(control.consecutive_failures) + 1,
       last_error: message, updated_at: finishedAt
-    }).eq("control_key", CONTROL_KEY);
+    }).eq("control_key", CONTROL_KEY).eq("lock_owner", owner);
     return response({ ok: false, error: message }, 500);
+  } finally {
+    await lease(client, owner, "release").catch(() => {});
   }
 });
