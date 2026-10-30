@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { readMetadata, SOCKET_URL, TOPICS } from '../../supabase/functions/nexpos-event-observer/policy.mjs';
+import { readSignal } from '../../supabase/functions/nexpos-event-observer/signals.mjs';
+import { createSignalDelivery } from './signalDelivery.mjs';
 
 const endpoint = process.env.GHR_OBSERVER_URL;
 if (!endpoint || new URL(endpoint).origin !== 'https://qjaklysckgzdfjthzkzu.supabase.co') {
@@ -10,10 +12,12 @@ const token = (await readFile(process.env.GHR_OBSERVER_TOKEN_FILE || '/etc/ghr-n
 if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('invalid_worker_token');
 const state = {
   connected: false, opens: 0, closes: 0, messages: 0, rejected: 0, events: {},
-  started_at: new Date().toISOString(), last_event_at: null, last_message_at: null
+  started_at: new Date().toISOString(), last_event_at: null, last_message_at: null,
+  delivery_mode: 'metadata', worker_version: 'order-id-v1'
 };
 let stopping = false;
 let socket;
+let immediateMode = false;
 let backoff = 3000;
 const abort = new AbortController();
 async function call(body) {
@@ -24,6 +28,13 @@ async function call(body) {
   if (!response.ok) throw new Error(`observer_http_${response.status}`);
   return response.json();
 }
+const delivery = createSignalDelivery({
+  send: async signals => {
+    const result = await call({ action: 'events', signals });
+    if (!result.ok) throw new Error('signal_not_queued');
+  },
+  onError: () => console.log('signal_delivery_retry')
+});
 async function connect(config) {
   await new Promise(resolve => {
     socket = new WebSocket(SOCKET_URL);
@@ -50,6 +61,9 @@ async function connect(config) {
       socket.send(JSON.stringify({ access_token: config.access_token, topic: TOPICS.join(', ') }));
       state.connected = true;
       state.opens++;
+      if (immediateMode) delivery.push(config.hub_ids.map(hub_id => ({
+        hub_id, topic: 'reconnect', order_ids: [], received_at: new Date().toISOString()
+      })));
       console.log('socket_open observe');
     });
     socket.addEventListener('message', event => {
@@ -59,6 +73,10 @@ async function connect(config) {
       const metadata = readMetadata(event.data, config.hub_ids);
       if (!metadata) { state.rejected++; return; }
       state.last_event_at = new Date().toISOString();
+      if (immediateMode) {
+        const signals = readSignal(event.data, config.hub_ids, state.last_event_at);
+        if (signals) delivery.push(signals);
+      }
       for (const hub of metadata.hubs) {
         state.events[hub] ||= {};
         state.events[hub][metadata.topic] = (state.events[hub][metadata.topic] || 0) + 1;
@@ -75,6 +93,7 @@ async function reports() {
       const result = await call({ action: 'report', report: state });
       // Stop an obsolete scope immediately; a fresh bootstrap enforces changes.
       if (JSON.stringify([...result.hub_ids].sort()) !== JSON.stringify([...activeHubs].sort())) socket?.close();
+      if (Boolean(result.id_sync_enabled) !== immediateMode) socket?.close();
     } catch {
       // Fail closed when enrollment is revoked or cloud authorization is unavailable.
       socket?.close();
@@ -87,6 +106,7 @@ let activeHubs = [];
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => {
   stopping = true;
   abort.abort();
+  delivery.stop();
   socket?.close();
 });
 const reporting = reports();
@@ -95,6 +115,9 @@ while (!stopping) {
     const config = await call({ action: 'bootstrap' });
     if (config.mode !== 'observe' || !Array.isArray(config.hub_ids) || !config.hub_ids.length) throw new Error('invalid_scope');
     activeHubs = config.hub_ids;
+    immediateMode = config.id_sync_enabled === true;
+    delivery.setEnabled(immediateMode);
+    state.delivery_mode = immediateMode ? 'immediate-v1' : 'metadata';
     await connect(config);
   } catch { if (!stopping) console.log('connection_unavailable'); }
   if (!stopping) await sleep(backoff + Math.random() * 1000, undefined, { signal: abort.signal }).catch(() => {});

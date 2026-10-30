@@ -1,8 +1,25 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { sanitizeReport, WORKER_ID } from './policy.mjs';
+import { sanitizeSignals } from './signals.mjs';
 
 const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
+
+async function wakeImporter(client) {
+  const { data: control } = await client.from('nexpos_shadow_sync_control')
+    .select('cron_secret').eq('control_key', 'nexpos_partner_orders').maybeSingle();
+  if (!control?.cron_secret) return;
+  for (const delay of [0, 300, 900, 1800]) {
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    const result = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/nexpos-order-shadow-sync`, {
+      method: 'POST', signal: AbortSignal.timeout(60_000),
+      headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'x-cron-secret': control.cron_secret, 'x-nexpos-event-wake': '1' }
+    });
+    const body = await result.json().catch(() => ({}));
+    if (!result.ok || !['locked', 'lock_race'].includes(body.reason)) return;
+  }
+}
 
 // Own machine authentication: only a hash is stored in DB; no public enrollment endpoint.
 // Reports atomically enqueue invalidations in DB. Only the existing importer writes orders.
@@ -18,7 +35,7 @@ Deno.serve(async (request) => {
   });
   try {
     const { data: worker, error } = await client.from('nexpos_event_workers')
-      .select('worker_id,hub_ids,last_seen_at,last_bootstrap_at,sync_enabled')
+      .select('worker_id,hub_ids,last_seen_at,last_bootstrap_at,sync_enabled,id_sync_enabled')
       .eq('worker_id', WORKER_ID).eq('token_sha256', tokenHash).eq('enabled', true)
       .gt('expires_at', new Date().toISOString()).maybeSingle();
     if (error) throw error;
@@ -49,7 +66,19 @@ Deno.serve(async (request) => {
       if (!accessToken || !Number.isFinite(expiresAt) || expiresAt < Date.now() + 300_000) {
         return reply({ error: 'source_session_unavailable' }, 503);
       }
-      return reply({ access_token: accessToken, hub_ids: allowedHubs, mode: 'observe' });
+      return reply({ access_token: accessToken, hub_ids: allowedHubs, mode: 'observe', id_sync_enabled: worker.id_sync_enabled === true });
+    }
+    if (body.action === 'events') {
+      if (!worker.sync_enabled || !worker.id_sync_enabled) return reply({ error: 'id_sync_disabled' }, 409);
+      const signals = sanitizeSignals(body.signals, allowedHubs);
+      if (!signals) return reply({ error: 'invalid_signals' }, 400);
+      const { data: queued, error: queueError } = await client.rpc('nexpos_enqueue_signals', {
+        p_worker_id: WORKER_ID, p_signals: signals
+      });
+      if (queueError) throw queueError;
+      if (!queued) return reply({ error: 'rate_limited' }, 429);
+      EdgeRuntime.waitUntil(wakeImporter(client).catch(() => {}));
+      return reply({ ok: true, hub_ids: allowedHubs, id_sync_enabled: true });
     }
     if (body.action === 'report') {
       const report = sanitizeReport(body.report, allowedHubs);
@@ -66,18 +95,12 @@ Deno.serve(async (request) => {
           const { data: pending } = await client.from('nexpos_event_pending')
             .select('generation,completed_generation').in('hub_id', allowedHubs);
           if (!pending?.some(row => row.generation > row.completed_generation)) return;
-          const { data: control } = await client.from('nexpos_shadow_sync_control')
-            .select('cron_secret').eq('control_key', 'nexpos_partner_orders').maybeSingle();
-          if (!control?.cron_secret) return;
-          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/nexpos-order-shadow-sync`, {
-            method: 'POST', signal: AbortSignal.timeout(60_000),
-            headers: { Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-              'x-cron-secret': control.cron_secret, 'x-nexpos-event-wake': '1' }
-          });
+          await wakeImporter(client);
         };
         EdgeRuntime.waitUntil(wake().catch(() => {}));
       }
-      return reply({ ok: Boolean(saved), mode: 'observe', hub_ids: allowedHubs }, saved ? 200 : 429);
+      return reply({ ok: Boolean(saved), mode: 'observe', hub_ids: allowedHubs,
+        id_sync_enabled: worker.id_sync_enabled === true }, saved ? 200 : 429);
     }
     return reply({ error: 'invalid_action' }, 400);
   } catch {

@@ -336,7 +336,8 @@ async function createMissingPartnerOrder(
   payloadHash: string,
   now: string,
   owner: string,
-  generation: number | null
+  generation: number | null,
+  idEvent = null
 ) {
   if (items.length === 0) throw new Error(`dual_write_missing_items:${source}:${identity}`);
   const rawCode = orderCode(order);
@@ -452,7 +453,7 @@ async function createMissingPartnerOrder(
   const result = await commitOrder(client, {
     p_owner: owner, p_order: orderRow, p_items: itemRows, p_promotions: promotions,
     p_existing_id: null, p_expected_hash: null, p_observed_at: now, p_generation: generation
-  });
+  }, idEvent);
   const inserted = result.row;
   if (customerPhone) {
     await client.rpc("upsert_customer_stub_profile", {
@@ -525,7 +526,7 @@ Deno.serve(async (request) => {
     if (hubError) throw hubError;
     let hubIds = Array.from(new Set((hubRows || []).map((row) => toText(row.nexpos_hub_id)).filter(Boolean)));
     const { data: enrollments, error: enrollmentError } = await client.from("nexpos_event_workers")
-      .select("hub_ids").eq("enabled", true).eq("sync_enabled", true).gt("expires_at", startedAt);
+      .select("worker_id,hub_ids,id_sync_enabled").eq("enabled", true).eq("sync_enabled", true).gt("expires_at", startedAt);
     if (enrollmentError) throw enrollmentError;
     const eventAllowed = new Set(syncMode === "dual_write" ? (enrollments || []).flatMap(row => row.hub_ids || []) : []);
     const { data: pending, error: pendingError } = await client.from("nexpos_event_pending")
@@ -533,7 +534,16 @@ Deno.serve(async (request) => {
     if (pendingError) throw pendingError;
     const work = new Map((pending || []).filter(row => eventAllowed.has(row.hub_id)
       && row.generation > row.completed_generation).map(row => [row.hub_id, row.generation]));
-    if (eventOnly) hubIds = hubIds.filter(id => work.has(id));
+    const idWorkers = new Set((enrollments || []).filter(row => row.id_sync_enabled).map(row => row.worker_id));
+    const { data: idPending, error: idPendingError } = await client.from("nexpos_order_event_pending")
+      .select("hub_id,order_id,generation,worker_id,received_at").in("hub_id", hubIds)
+      .in("worker_id", [...idWorkers]).eq("pending", true).lte("retry_at", startedAt).order("signaled_at").limit(8);
+    if (idPendingError) throw idPendingError;
+    const idRows = (idPending || []).filter(row => idWorkers.has(row.worker_id) && eventAllowed.has(row.hub_id));
+    const idWork = new Map(idRows.map(row => [row.hub_id + ':' + row.order_id, row]));
+    const fallbackHubs = new Set();
+    const idFailures = new Set();
+    if (eventOnly) hubIds = hubIds.filter(id => work.has(id) || idRows.some(row => row.hub_id === id));
     const cookieRef = { value: "" };
     const grabAutomationConfig = await readGrabAutomationConfig(client);
     const observed: JsonRecord[] = [];
@@ -547,8 +557,24 @@ Deno.serve(async (request) => {
     const from = new Date(Date.now() - 6 * 3600000).toISOString();
     const to = new Date(Date.now() + 3600000).toISOString();
 
+    for (const target of idRows) {
+      await lease(client, owner, "renew");
+      try {
+        const payload = getObject(await nexposFetch(client,
+          `${BASE_URL}/order-service/site/orders/${encodeURIComponent(target.order_id)}`, cookieRef));
+        requestCount += 1;
+        observed.push(normalizeDetail(getObject(payload.data), target.order_id, target.hub_id));
+      } catch {
+        idFailures.add(target.hub_id + ':' + target.order_id);
+        fallbackHubs.add(target.hub_id);
+        // Keep the durable ID pending without preventing polling for other HUBs.
+        await client.from("nexpos_order_event_pending").update({ retry_at: new Date(Date.now() + 30000).toISOString() })
+          .eq("hub_id", target.hub_id).eq("order_id", target.order_id).eq("generation", target.generation);
+      }
+    }
     for (const hubId of hubIds) {
-      const statuses = work.has(hubId) ? EVENT_STATUSES : pollStatuses;
+      if (eventOnly && !work.has(hubId) && !fallbackHubs.has(hubId)) continue;
+      const statuses = work.has(hubId) || fallbackHubs.has(hubId) ? EVENT_STATUSES : pollStatuses;
       for (const status of statuses) {
         for (let page = 1; page <= MAX_PAGES_PER_HUB; page += 1) {
           const queryWindow = getPreorderQueryWindow({
@@ -589,7 +615,10 @@ Deno.serve(async (request) => {
       }
     }
 
-    const identities = observed.map(orderIdentity);
+    const uniqueObserved = [...new Map(observed.map(order => [
+      toText(order.hub_id || order.nexpos_hub_id) + ':' + orderIdentity(order), order
+    ])).values()];
+    const identities = uniqueObserved.map(orderIdentity);
     const { data: existingRows } = identities.length ? await client.from("partner_orders")
       .select("id,partner_source,nexpos_order_id,order_code,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,ingested_by,payload_version,nexpos_enrichment_hash")
       .in("nexpos_order_id", identities) : { data: [] };
@@ -612,10 +641,11 @@ Deno.serve(async (request) => {
     const autoPrepErrors: string[] = [];
     const autoPrepAttemptedOrderIds = new Set<string>();
     const now = startedAt;
-    for (const order of observed) {
+    for (const order of uniqueObserved) {
       await lease(client, owner, "renew");
       const source = normalizeSource(order.source || order.partner_source || order.platform);
       const identity = orderIdentity(order);
+      const idEvent = idWork.get(toText(order.hub_id || order.nexpos_hub_id) + ":" + identity) || null;
       const previousShadowRow = shadowMap.get(`${source}:${identity}`);
       const previousShadow = getObject(previousShadowRow?.raw_data);
       const previouslyAppliedMinutes = toNumber(previousShadow.__ghr_auto_prep_minutes, 0);
@@ -686,7 +716,7 @@ Deno.serve(async (request) => {
       if (!existing && syncMode === "dual_write") {
         const ingestResult = await createMissingPartnerOrder(
           client, order, source, identity, normalizedCode, items.map(getObject),
-          finance, promotions, payloadHash, now, owner, work.get(toText(order.hub_id || order.nexpos_hub_id)) ?? null
+          finance, promotions, payloadHash, now, owner, work.get(toText(order.hub_id || order.nexpos_hub_id)) ?? null, idEvent
         );
         effectiveExisting = ingestResult.row;
         createdThisOrder = ingestResult.created;
@@ -797,14 +827,14 @@ Deno.serve(async (request) => {
           p_items: itemPatches, p_promotions: promotions, p_existing_id: effectiveExisting.id,
           p_expected_hash: effectiveExisting.nexpos_enrichment_hash || null, p_observed_at: startedAt,
           p_generation: work.get(toText(order.hub_id || order.nexpos_hub_id)) ?? null
-        });
-      } else if (!createdThisOrder && effectiveExisting?.id && work.has(toText(order.hub_id || order.nexpos_hub_id))) {
+        }, idEvent);
+      } else if (!createdThisOrder && effectiveExisting?.id && (idEvent || work.has(toText(order.hub_id || order.nexpos_hub_id)))) {
         // Record a verified unchanged REST snapshot without rewriting business fields.
         await commitOrder(client, {
           p_owner: owner, p_order: { nexpos_enrichment_hash: payloadHash }, p_items: [], p_promotions: [],
           p_existing_id: effectiveExisting.id, p_expected_hash: payloadHash, p_observed_at: startedAt,
-          p_generation: work.get(toText(order.hub_id || order.nexpos_hub_id))
-        });
+          p_generation: work.get(toText(order.hub_id || order.nexpos_hub_id)) ?? null
+        }, idEvent);
       }
     }
 
@@ -815,12 +845,23 @@ Deno.serve(async (request) => {
       }).eq("hub_id", hubId).lt("completed_generation", generation);
       if (ackError) throw ackError;
     }
+    for (const target of idRows) {
+      if (!uniqueObserved.some(order => orderIdentity(order) === target.order_id
+        && toText(order.hub_id || order.nexpos_hub_id) === target.hub_id)) continue;
+      const { error: idAckError } = await client.from("nexpos_order_event_pending").update({
+        completed_generation: target.generation, pending: false, completed_at: new Date().toISOString()
+      }).eq("hub_id", target.hub_id).eq("order_id", target.order_id).eq("generation", target.generation);
+      if (idAckError) throw idAckError;
+    }
     const finishedAt = new Date().toISOString();
     await client.from("nexpos_shadow_sync_runs").update({
       finished_at: finishedAt, status: "success", hub_count: hubIds.length,
       request_count: requestCount, observed_count: observed.length,
       matched_count: matchedCount, mismatch_count: mismatchCount, missing_count: missingCount,
       metadata: {
+        id_event_count: idRows.length,
+        id_fetch_failure_count: idFailures.size,
+        id_only: eventOnly && work.size === 0 && fallbackHubs.size === 0,
         event_generations: Object.fromEntries(work),
         trigger: eventOnly ? "wss" : "polling",
         poll_type: lateReconciliationWindow

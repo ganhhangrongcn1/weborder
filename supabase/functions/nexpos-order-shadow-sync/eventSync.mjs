@@ -8,8 +8,10 @@ export async function lease(client, owner, action) {
   return data === true;
 }
 
-export async function commitOrder(client, input) {
-  const { data, error } = await client.rpc('nexpos_commit_order', input);
+export async function commitOrder(client, input, idEvent = null) {
+  const args = idEvent ? { ...input, p_hub: idEvent.hub_id, p_source_id: idEvent.order_id,
+    p_generation: idEvent.generation } : input;
+  const { data, error } = await client.rpc(idEvent ? 'nexpos_commit_id_order' : 'nexpos_commit_order', args);
   // Database error text may contain customer values; expose only a stable code.
   if (error) throw new Error(`sync_commit_failed:${error.code || 'unknown'}`);
   if (!data?.row?.id) throw new Error('sync_commit_missing_order');

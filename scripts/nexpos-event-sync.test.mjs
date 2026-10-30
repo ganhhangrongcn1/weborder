@@ -7,7 +7,7 @@ import * as eventPolicy from '../supabase/functions/nexpos-order-shadow-sync/eve
 import * as windowPolicy from '../supabase/functions/nexpos-order-shadow-sync/preorderWindow.mjs';
 
 const hub = '69e18c814673b293b04be1ab';
-async function run({ status = 'DOING', existing = false, failCommit = false, detailOnly = false } = {}) {
+async function run({ status = 'DOING', existing = false, failCommit = false, detailOnly = false, idOnly = false } = {}) {
   let handle;
   const commits = [], writes = [], urls = [], leases = [];
   const client = {
@@ -18,8 +18,9 @@ async function run({ status = 'DOING', existing = false, failCommit = false, det
         const data = {
           nexpos_shadow_sync_control: { mode: 'dual_write', cron_secret: 'test', last_full_sweep_at: new Date().toISOString(), last_rare_sweep_at: new Date().toISOString() },
           nexpos_shadow_hubs: [{ nexpos_hub_id: hub }, { nexpos_hub_id: 'other' }],
-          nexpos_event_workers: [{ hub_ids: [hub] }],
-          nexpos_event_pending: [{ hub_id: hub, generation: 3, completed_generation: 2 }],
+          nexpos_event_workers: [{ worker_id: 'worker', hub_ids: [hub], id_sync_enabled: idOnly }],
+          nexpos_event_pending: idOnly ? [] : [{ hub_id: hub, generation: 3, completed_generation: 2 }],
+          nexpos_order_event_pending: idOnly ? [{ hub_id: hub, order_id: 'synthetic', worker_id: 'worker', generation: 7 }] : [],
           integration_sessions: { session_value: '__token=test', expires_at: new Date(Date.now() + 3600000).toISOString() },
           app_configs: [{ id: 'ghr_partner_order_automation', value: { grabAutoPrepEnabled: false } }],
           partner_orders: existing ? [{ id: 'order', partner_source: 'grabfood', nexpos_order_id: 'synthetic', nexpos_hub_id: hub, ingested_by: 'supabase', nexpos_enrichment_hash: 'before' }] : [],
@@ -29,7 +30,7 @@ async function run({ status = 'DOING', existing = false, failCommit = false, det
         return { data, error: null };
       };
       const q = {
-        select() { return q; }, eq() { return q; }, gt() { return q; }, lt() { return q; }, in() { return q; }, or() { return q; }, limit() { return q; },
+        select() { return q; }, eq() { return q; }, gt() { return q; }, lt() { return q; }, lte() { return q; }, order() { return q; }, in() { return q; }, or() { return q; }, limit() { return q; },
         insert(value) { write = value; writes.push({ table, value }); return q; },
         update(value) { write = value; writes.push({ table, value }); return q; },
         upsert(value) { write = value; writes.push({ table, value }); return q; },
@@ -40,7 +41,7 @@ async function run({ status = 'DOING', existing = false, failCommit = false, det
     },
     async rpc(name, input) {
       if (name === 'nexpos_sync_lease') { leases.push(input); return { data: true }; }
-      assert.equal(name, 'nexpos_commit_order');
+      assert.equal(name, idOnly ? 'nexpos_commit_id_order' : 'nexpos_commit_order');
       commits.push(input);
       if (failCommit) return { error: { code: 'TEST' } };
       return { data: { row: { ...input.p_order, id: 'order' }, created: !existing } };
@@ -131,4 +132,15 @@ test('real detail envelope separates immutable order_id from short_order_id', ()
   assert.equal(normalized.order_id, 'GF-113F');
   assert.throws(() => eventPolicy.normalizeDetail(detail, 'GF-113F', hub), /scope_mismatch/);
   assert.throws(() => eventPolicy.normalizeDetail(detail, 'immutable-id', 'other'), /scope_mismatch/);
+});
+
+test('verified ID wake fetches one detail, preserves business mapping and acks only its generation', async () => {
+  const r = await run({ idOnly: true, existing: true, status: 'PICK' });
+  assert.equal(r.response.status, 200);
+  assert.deepEqual(r.urls, ['https://saas-api.nexpos.io/v1/order-service/site/orders/synthetic']);
+  assert.equal(r.commits[0].p_generation, 7);
+  assert.equal(r.commits[0].p_source_id, 'synthetic');
+  assert.equal(r.commits[0].p_hub, hub);
+  assert.equal(r.commits[0].p_order.order_status, 'ready');
+  assert.ok(r.writes.some(w => w.table === 'nexpos_order_event_pending' && w.value.completed_generation === 7));
 });

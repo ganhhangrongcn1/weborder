@@ -4,17 +4,18 @@ import { readFile } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
 import { createContext, SourceTextModule, SyntheticModule } from 'node:vm';
 import * as policy from '../supabase/functions/nexpos-event-observer/policy.mjs';
+import * as signals from '../supabase/functions/nexpos-event-observer/signals.mjs';
 
-async function harness({ enrolled = true, expired = false, sync = false, pending = false } = {}) {
+async function harness({ enrolled = true, expired = false, sync = false, pending = false, idSync = false } = {}) {
   let handle;
   const writes = [];
   const reads = [];
   const wakes = [], background = [];
-  const createClient = () => ({ from(table) {
+  const createClient = () => ({ rpc: async () => ({ data: true }), from(table) {
     reads.push(table);
     let writing = false;
     const result = () => {
-      if (table === 'nexpos_event_workers') return { data: enrolled ? { worker_id: policy.WORKER_ID, hub_ids: ['one', 'disabled'], sync_enabled: sync } : null, error: null };
+      if (table === 'nexpos_event_workers') return { data: enrolled ? { worker_id: policy.WORKER_ID, hub_ids: ['one', 'disabled'], sync_enabled: sync, id_sync_enabled: idSync } : null, error: null };
       if (table === 'nexpos_event_pending') return { data: pending ? [{ generation: 2, completed_generation: 1 }] : [], error: null };
       if (table === 'nexpos_shadow_sync_control') return { data: { cron_secret: 'synthetic-cron-secret' }, error: null };
       if (table === 'nexpos_shadow_hubs') return { data: [{ nexpos_hub_id: 'one' }], error: null };
@@ -38,7 +39,7 @@ async function harness({ enrolled = true, expired = false, sync = false, pending
   const source = stripTypeScriptTypes(await readFile(new URL('../supabase/functions/nexpos-event-observer/index.ts', import.meta.url), 'utf8'));
   const module = new SourceTextModule(source, { context });
   await module.link(specifier => {
-    const values = specifier.startsWith('npm:') ? { createClient } : policy;
+    const values = specifier.startsWith('npm:') ? { createClient } : specifier.includes('signals') ? signals : policy;
     return new SyntheticModule(Object.keys(values), function () {
       for (const [key, value] of Object.entries(values)) this.setExport(key, value);
     }, { context });
@@ -54,6 +55,18 @@ test('missing or unregistered machine credential never reaches source session', 
   assert.equal((await h.request({ action: 'bootstrap' })).status, 401);
   assert.deepEqual(h.reads, ['nexpos_event_workers']);
   assert.equal(h.writes.length, 0);
+});
+
+test('ID delivery requires explicit feature scope and rejects a disabled HUB', async () => {
+  const off = await harness({ sync: true });
+  assert.equal((await off.request({ action: 'events', signals: [] })).status, 409);
+  const on = await harness({ sync: true, idSync: true });
+  const payload = [{ hub_id: 'one', topic: 'saas_order_status_change', order_ids: ['opaque-id'], received_at: new Date().toISOString() }];
+  assert.equal((await on.request({ action: 'events', signals: payload })).status, 200);
+  await Promise.all(on.background);
+  assert.equal(on.wakes.length, 1);
+  payload[0].hub_id = 'disabled';
+  assert.equal((await on.request({ action: 'events', signals: payload })).status, 400);
 });
 test('bootstrap intersects current enabled hubs; expired sessions fail closed', async () => {
   const h = await harness();
