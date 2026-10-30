@@ -17,9 +17,8 @@ import {
 } from "../services/kitchenRequestAuditService.js";
 import { branchOptionMatchesOrder } from "../services/branchIdentityService.js";
 import createKitchenRefreshQueue from "../services/kitchenRefreshQueue.js";
+import createKitchenRealtimeRefreshScheduler from "../services/kitchenRealtimeRefreshScheduler.js";
 
-const REALTIME_RELOAD_DELAY_MS = 2000;
-const ITEM_REALTIME_RELOAD_DELAY_MS = 5000;
 const KITCHEN_BACKGROUND_REFRESH_MS = 60000;
 const KITCHEN_RECENT_FULL_REFRESH_DEDUP_MS = 5000;
 const RECENT_ORDER_ITEM_SYNC_MS = 2 * 60 * 1000;
@@ -630,8 +629,6 @@ export default function useKitchenOrders(options = null) {
   const loadScope = useMemo(() => ({}), [dateFilter, enabled, options]);
   const currentLoadScopeRef = useRef(loadScope);
   currentLoadScopeRef.current = loadScope;
-  const realtimeReloadTimerRef = useRef(null);
-  const pendingRealtimeSourceRef = useRef(null);
   const lastFullLoadCompletedAtRef = useRef(0);
   const lastFullLoadStartedAtRef = useRef(0);
   const recentlyClosedOrderKeysRef = useRef(new Map());
@@ -837,6 +834,10 @@ export default function useKitchenOrders(options = null) {
     }
     let alive = true;
     let unsubscribe = () => {};
+    const realtimeRefresh = createKitchenRealtimeRefreshScheduler(({ sourceType, receivedAt }) => {
+      if (!alive || lastFullLoadStartedAtRef.current >= receivedAt) return;
+      void loadOrders({ silent: true, sourceType });
+    });
     setRealtimeStatus(buildKitchenRealtimeStatus("connecting"));
 
     async function startRealtime() {
@@ -848,20 +849,8 @@ export default function useKitchenOrders(options = null) {
         if (!realtimeEventMatchesDate(change, dateRange, currentOrdersRef.current)) return;
         if (!shouldReloadForKitchenRealtime(change, currentOrdersRef.current)) return;
 
-        const sourceType = getRealtimeSourceType(change);
-        pendingRealtimeSourceRef.current = pendingRealtimeSourceRef.current === null
-          ? sourceType
-          : pendingRealtimeSourceRef.current === sourceType ? sourceType : "";
-        if (realtimeReloadTimerRef.current) {
-          window.clearTimeout(realtimeReloadTimerRef.current);
-        }
-        realtimeReloadTimerRef.current = window.setTimeout(() => {
-          realtimeReloadTimerRef.current = null;
-          const pendingSource = pendingRealtimeSourceRef.current;
-          pendingRealtimeSourceRef.current = null;
-          if (lastFullLoadStartedAtRef.current >= realtimeEventReceivedAt) return;
-          loadOrders({ silent: true, sourceType: pendingSource || "" });
-        }, isRealtimeItemTable(change.table) ? ITEM_REALTIME_RELOAD_DELAY_MS : REALTIME_RELOAD_DELAY_MS);
+        realtimeRefresh.schedule({ sourceType: getRealtimeSourceType(change),
+          receivedAt: realtimeEventReceivedAt, item: isRealtimeItemTable(change.table) });
       }, {
         branchUuid: options.branchUuid,
         onStatus: (nextStatus) => {
@@ -882,11 +871,7 @@ export default function useKitchenOrders(options = null) {
 
     return () => {
       alive = false;
-      if (realtimeReloadTimerRef.current) {
-        window.clearTimeout(realtimeReloadTimerRef.current);
-        realtimeReloadTimerRef.current = null;
-      }
-      pendingRealtimeSourceRef.current = null;
+      realtimeRefresh.cancel();
       unsubscribe?.();
     };
   }, [dateFilter, enabled, loadOrders, realtimeReconnectKey]);
