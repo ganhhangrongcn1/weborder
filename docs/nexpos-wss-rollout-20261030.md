@@ -31,10 +31,12 @@ Files:
 - `services/nexpos-events/observer.mjs`: Node 24 worker, reconnect/backoff,
   bounded connection lifetime and application heartbeat.
 - `services/nexpos-events/ghr-nexpos-observer.service`: restricted service user.
-- `supabase/migrations/20261030002627_nexpos_wss_observation.sql`: private-to-
+- `supabase/migrations/20261030002921_nexpos_wss_observation.sql`: private-to-
   service-role enrollment table with RLS, no public/client grants.
 - `docs/supabase-sql/nexpos-wss-observation.sql`: matching SQL artifact.
-- `scripts/nexpos-event-observer*.test.mjs`: auth and metadata tests.
+- `scripts/nexpos-event-observer.test.mjs`: metadata tests.
+- `scripts/nexpos-event-observer-auth.test.mjs`: broker authentication tests.
+- `services/nexpos-events/prepare.sh`: prepare reviewed files without activation.
 
 ## Activation gate
 
@@ -87,5 +89,12 @@ Actual deployment/observation outcomes must be recorded separately from this pla
 - VPS Node 24.15.0 runtime was downloaded from nodejs.org and its archive SHA-256
   matched the official SHASUMS256.txt. No order importer changes were deployed.
 - Canary scope chosen for the pending observation is HUB `69e18c814673b293b04be1ab`.
+- VPS observation files were prepared from cloud commit
+  `2b4c0a4498e272cdf4570fdcb46bf4ae313692ed`; service verified disabled/inactive,
+  without a worker credential. Source syntax and systemd unit verification passed.
+- Local migration filename matches the version actually applied by the cloud
+  migration tool, `20261030002921`; do not apply it a second time.
+- Web encoding passed for 707 source files. Full web build reached Vite but
+  did not finish in the verification window; do not record a passing web build.
 - Preparation is not completed WSS synchronization. Do not expand to four HUBs
   until the live canary gate and synchronization implementation are complete.
