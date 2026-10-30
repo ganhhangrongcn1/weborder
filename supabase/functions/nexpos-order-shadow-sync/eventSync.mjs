@@ -20,3 +20,15 @@ export async function commitOrder(client, input) {
 export function scopedRows(rows, hubId) {
   return rows.filter(row => String(row.hub_id || row.nexpos_hub_id || '') === hubId);
 }
+
+export function normalizeDetail(detail, expectedId, hubId) {
+  // Detail API: order_id is the immutable ID, short_order_id is the display code.
+  // List API: id is the immutable ID, order_id is the display code.
+  const explicitId = detail.id || detail._id || detail.order_uuid || detail.orderId;
+  const identity = explicitId || detail.order_id;
+  const code = detail.short_order_id || (explicitId ? detail.order_id : '');
+  if (identity !== expectedId || !code || scopedRows([detail], hubId).length !== 1) {
+    throw new Error('sync_detail_scope_mismatch');
+  }
+  return { ...detail, id: expectedId, order_id: code };
+}

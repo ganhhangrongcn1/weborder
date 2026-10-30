@@ -73,6 +73,37 @@ Kết quả canary trực tiếp sẽ được ghi sau khi production có sự k
 - Advisor chỉ báo RLS không có policy cho hai bảng mới: chủ đích service-only,
   không có quyền bảng/RPC cho anon hoặc authenticated.
 
+## Nghiệm thu trực tiếp lúc 15:26–15:31 UTC+7
+
+- Hàng đợi đã xử lý đủ 58/58 thế hệ; 841 receipt là số lượt đối chiếu đơn,
+  không phải 841 đơn mới. Có 44 lượt gọi WSS và 1.038 lượt polling thành công.
+- Có 6 receipt tạo đơn mới: 5 thuộc lượt gọi WSS, 1 thuộc polling xử lý hàng đợi
+  WSS. Cả 6 đúng một identity nguồn, đủ số món, giá/số lượng/thành tiền khớp
+  raw REST đã lưu, mỗi đơn đúng một CLAIM_PARTNER_EARN.
+- Có bằng chứng DOING→PICK và PICK→FINISH; ví dụ GF-249 được tạo lúc 15:03,
+  PICK 15:10 và FINISH 15:20. Truy vấn theo ID nội bộ receipt, không lấy mã hiển
+  thị làm identity vì mã này có thể trùng giữa các ngày.
+- GET chi tiết GF-249 trả 200, đúng HUB, FINISH, số món và thực nhận khớp DB.
+  Điểm đơn đã claimed giữ snapshot theo trigger hiện tại khi thực nhận thay đổi;
+  không tự tính lại điểm hay sửa ledger lịch sử.
+- Chưa có CANCEL trong receipt; chưa mở rộng. Không có bằng chứng in giấy tại
+  thiết bị cửa hàng nên không khẳng định đã nghiệm thu in thực tế.
+- Một lượt polling lúc 13:21 lỗi mạng nguồn, các lượt sau phục hồi; tại checkpoint
+  hiện tại 0 lỗi liên tiếp, không tồn đọng thế hệ.
+
+### Sửa envelope API chi tiết, importer v41
+
+GET trực tiếp cho thấy API danh sách dùng `id` làm identity, `order_id` là mã
+hiển thị; API chi tiết lại dùng `order_id` làm identity và `short_order_id` là
+mã hiển thị. Bản v40 có thể từ chối nhánh kiểm tra preorder ngoài cửa sổ do khác
+envelope này; chưa ghi nhận lỗi nhánh đó trong production hiện tại.
+
+V41 chuẩn hóa riêng response chi tiết trước khi dùng importer cũ, kiểm tra ID
+nguồn và HUB đúng yêu cầu; không dùng mã hiển thị để làm identity. Đã xác minh
+`detail.order_id` bằng `nexpos_order_id`, `detail.short_order_id` bằng mã nguồn,
+HUB/site/order_time trùng mẫu GF-249. 15 test Node đạt, gồm sai HUB/sai ID và
+envelope thực tế. Không đổi lịch polling, scope canary, migration hay logic tiền.
+
 ## Danh sách file đồng bộ lên main
 
 Mới trên main (gồm các file quan sát đã triển khai ở giai đoạn trước):

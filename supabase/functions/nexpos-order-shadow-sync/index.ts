@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { PREORDER_WINDOW_CONFIG_KEY, normalizePreorderWindowConfig, getPreorderQueryWindow } from "./preorderWindow.mjs";
-import { EVENT_STATUSES, lease, commitOrder, scopedRows } from "./eventSync.mjs";
+import { EVENT_STATUSES, lease, commitOrder, scopedRows, normalizeDetail } from "./eventSync.mjs";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -584,10 +584,7 @@ Deno.serve(async (request) => {
         const payload = getObject(await nexposFetch(client,
           `${BASE_URL}/order-service/site/orders/${encodeURIComponent(prior.nexpos_order_id)}`, cookieRef));
         requestCount += 1;
-        const detail = getObject(payload.data);
-        if (orderIdentity(detail) !== prior.nexpos_order_id || scopedRows([detail], prior.nexpos_hub_id).length !== 1) {
-          throw new Error("sync_detail_scope_mismatch");
-        }
+        const detail = normalizeDetail(getObject(payload.data), prior.nexpos_order_id, prior.nexpos_hub_id);
         observed.push(detail);
       }
     }

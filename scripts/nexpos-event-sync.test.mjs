@@ -123,3 +123,12 @@ test('a known preorder cancelled outside the list window is rechecked by stable 
   assert.ok(r.urls.some(url => url.endsWith('/orders/synthetic')));
   assert.equal(r.commits[0].p_order.order_status, 'cancelled');
 });
+
+test('real detail envelope separates immutable order_id from short_order_id', () => {
+  const detail = { order_id: 'immutable-id', short_order_id: 'GF-113F', hub_id: hub, status: 'CANCEL' };
+  const normalized = eventPolicy.normalizeDetail(detail, 'immutable-id', hub);
+  assert.equal(normalized.id, 'immutable-id');
+  assert.equal(normalized.order_id, 'GF-113F');
+  assert.throws(() => eventPolicy.normalizeDetail(detail, 'GF-113F', hub), /scope_mismatch/);
+  assert.throws(() => eventPolicy.normalizeDetail(detail, 'immutable-id', 'other'), /scope_mismatch/);
+});
