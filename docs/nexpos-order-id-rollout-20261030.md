@@ -20,8 +20,8 @@ Kitchen; không coi việc bật phạm vi là hoàn tất kiểm chứng nghi�
 - Đổi automation sang theo dõi bốn HUB, giữ các giới hạn đo/không tạo giao dịch.
   Rollback có thể thu scope về Thích Quảng Đức hoặc tắt tăng tốc; polling còn.
 - Bốn HUB bootstrap lúc 19:40:22, heartbeat 19:40:49 connected=true.
-  Lượt đối soát khởi đầu 19:40:27 hoàn tất 19:41:27, không lỗi; tải khởi đầu
-  kéo dài khoảng 60 giây, không phải số đo nhận một đơn hoặc cam kết độ trễ.
+  Lượt đối soát khởi đầu 19:40:27 hoàn tất 19:41:03, không lỗi, 24 request;
+  kéo dài khoảng 36 giây, không phải số đo nhận một đơn hoặc cam kết độ trễ.
   Polling 15 giây active, control consecutive_failures=0; tiếp tục theo dõi tải
   khi nhiều HUB có sự kiện đồng thời, chưa tuyên bố nhanh hơn TFood.
 
