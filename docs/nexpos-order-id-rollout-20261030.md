@@ -31,6 +31,10 @@ khớp local `324cb9e`; source production v42 khớp đủ ba file trước sử
   chi tiết, id_only=true, 0 lỗi ID; DB có một identity và 3 dòng món. Setup
   1166ms, source_fetch 1218ms, snapshot_read 285ms, processing/ack 1207ms.
   Chưa phải đơn mới, chưa kiểm tra màn hình Kitchen hoặc đủ mẫu để so tốc độ.
+- GET chi tiết GF-646 chỉ đọc HTTP 200, identity/HUB khớp, API và DB đều
+  FINISH. Sau đó có thêm GF-495 DOING→PICK, worker→commit khoảng 4,267s.
+- Build `npm.cmd run build` đạt: 5315 module, 2 phút 23 giây; chỉ cảnh báo
+  Browserslist và chunk size. Cần chạy ngoài sandbox để tiến trình con hoạt động.
 
 File sửa trong lượt này: `supabase/functions/nexpos-order-shadow-sync/index.ts`
 và tài liệu này. Không sửa worker VPS hay frontend.
