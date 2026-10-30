@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { PREORDER_WINDOW_CONFIG_KEY, normalizePreorderWindowConfig, getPreorderQueryWindow } from "./preorderWindow.mjs";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -57,11 +58,13 @@ function normalizeGrabAutomationConfig(value: unknown) {
 }
 async function readGrabAutomationConfig(client: ReturnType<typeof createClient>) {
   const { data, error } = await client.from("app_configs")
-    .select("value")
-    .eq("id", PARTNER_AUTOMATION_CONFIG_KEY)
-    .maybeSingle();
+    .select("id,value")
+    .in("id", [PARTNER_AUTOMATION_CONFIG_KEY, PREORDER_WINDOW_CONFIG_KEY]);
   if (error) throw new Error(`grab_automation_config:${error.message}`);
-  return normalizeGrabAutomationConfig(data?.value);
+  return {
+    ...normalizeGrabAutomationConfig(data?.find((row) => row.id === PARTNER_AUTOMATION_CONFIG_KEY)?.value),
+    preorderWindow: normalizePreorderWindowConfig(data?.find((row) => row.id === PREORDER_WINDOW_CONFIG_KEY)?.value)
+  };
 }
 function bangkokMinuteOfDay(date = new Date()) {
   return (date.getUTCHours() * 60 + date.getUTCMinutes() + 7 * 60) % (24 * 60);
@@ -109,7 +112,7 @@ function normalizedDisplayCode(source: string, rawCode: string) {
   const digits = rawCode.replace(/\D/g, "");
   if (source === "grabfood") {
     const preorderSuffix = /F$/i.test(rawCode) ? "F" : "";
-    return `GF-${digits.slice(-3).padStart(3, "0")}${preorderSuffix}`;
+    return `GF-${digits.padStart(3, "0")}${preorderSuffix}`;
   }
   if (source === "shopeefood") return `SF-${digits.slice(-4).padStart(4, "0")}`;
   if (source === "xanhngon") return `XN-${digits.slice(-4).padStart(4, "0")}`;
@@ -416,7 +419,10 @@ async function createMissingPartnerOrder(
 
   const itemRows = items.map((item, index) => {
     const quantity = Math.max(1, toNumber(item.quantity, 1));
-    const rawLineTotal = item.discount_price ?? item.price;
+    const originalLineTotal = nonnegative(item.price);
+    const discountedLineTotal = nonnegative(item.discount_price ?? item.price);
+    const originalUnitPrice = originalLineTotal / quantity;
+    const discountedUnitPrice = discountedLineTotal / quantity;
     return {
       partner_order_id: inserted.id,
       order_code: canonicalCode,
@@ -428,8 +434,8 @@ async function createMissingPartnerOrder(
       partner_item_name: toText(item.name) || `Món ${index + 1}`,
       web_product_name: "",
       quantity,
-      unit_price: nonnegative(item.price),
-      line_total: nonnegative(rawLineTotal),
+      unit_price: originalUnitPrice,
+      line_total: discountedLineTotal,
       options: normalizeOptions(item.options),
       note: toText(item.note),
       item_status: "pending",
@@ -438,8 +444,8 @@ async function createMissingPartnerOrder(
       nexpos_site_id: toText(order.site_id || order.nexpos_site_id),
       item_key: `${canonicalCode}-${index}`,
       line_index: index,
-      original_unit_price: nonnegative(item.price),
-      discounted_unit_price: nonnegative(item.discount_price),
+      original_unit_price: originalUnitPrice,
+      discounted_unit_price: discountedUnitPrice,
       item_discount_amount: nonnegative(item.discount),
       platform_discount_amount: nonnegative(item.platform_discount),
       seller_discount_amount: nonnegative(item.seller_discount),
@@ -558,8 +564,11 @@ Deno.serve(async (request) => {
     for (const hubId of hubIds) {
       for (const status of pollStatuses) {
         for (let page = 1; page <= MAX_PAGES_PER_HUB; page += 1) {
+          const queryWindow = getPreorderQueryWindow({
+            status, hubId, config: grabAutomationConfig.preorderWindow, fallback: { from, to }
+          });
           const params = new URLSearchParams({
-            status, from, to, filter_type: "hub", hub_ids: hubId,
+            status, from: queryWindow.from, to: queryWindow.to, filter_type: "hub", hub_ids: hubId,
             "table[page]": String(page), "table[items_per_page]": String(PAGE_SIZE)
           });
           const payload = await nexposFetch(client, `${BASE_URL}/order-service/site/orders?${params}`, cookieRef);
@@ -758,9 +767,17 @@ Deno.serve(async (request) => {
           const item = getObject(items[itemIndex]);
           const partnerItem = itemRowByIndex.get(itemIndex);
           if (!partnerItem?.id) continue;
+          const quantity = Math.max(1, toNumber(item.quantity, 1));
+          const originalLineTotal = nonnegative(item.price);
+          const discountedLineTotal = nonnegative(item.discount_price ?? item.price);
+          const originalUnitPrice = originalLineTotal / quantity;
+          const discountedUnitPrice = discountedLineTotal / quantity;
           const { error: itemError } = await client.from("partner_order_items").update({
-            original_unit_price: toNumber(item.price, 0),
-            discounted_unit_price: toNumber(item.discount_price, 0),
+            quantity,
+            unit_price: originalUnitPrice,
+            line_total: discountedLineTotal,
+            original_unit_price: originalUnitPrice,
+            discounted_unit_price: discountedUnitPrice,
             item_discount_amount: toNumber(item.discount, 0),
             platform_discount_amount: toNumber(item.platform_discount, 0),
             seller_discount_amount: toNumber(item.seller_discount, 0),
