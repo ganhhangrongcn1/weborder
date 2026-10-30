@@ -48,6 +48,12 @@ nhận listener/REST và Android nhận đơn/in, chưa mô tả đủ nơi tạ
 ưu tiên order, cleanup, busy follow-up, đổi scope, unmount và lỗi đọc.
 Build đạt: 5316 module, 1 phút 29 giây, encoding 708 file đạt; chỉ cảnh báo
 Browserslist và chunk size. Không thay đổi giao diện hoặc cấu hình máy in.
+ESLint hai file runtime sửa đạt, không lỗi/warning. Implementation commit
+`68f7455`, Vercel `dpl_6muDXivCKfZ8ty25nrwzbjD19U8H` production READY.
+GET custom domain ganhhangrong.vn/kitchen trả 200/app root; đọc manifest thật
+thấy KitchenPage-CWFacEW8.js là JavaScript 200, có nhánh 750:250 của scheduler
+mới và không còn pendingRealtimeSourceRef cũ. Alias vercel.app yêu cầu SSO nên
+không dùng HTTP 200 trang login làm bằng chứng ứng dụng.
 Sau deploy cần tải lại tab Kitchen để dùng code mới; không cần rebuild APK.
 Chỉ đo tốc độ vận hành sau khi tab thực sự dùng bản mới; không coi build hoặc
 READY thay cho chứng minh bill ra giấy nhanh hơn.
