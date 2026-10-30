@@ -521,12 +521,13 @@ Deno.serve(async (request) => {
   const runId = toText(run?.id);
   let requestCount = 0;
   try {
-    const { data: hubRows, error: hubError } = await client.from("nexpos_shadow_hubs")
-      .select("nexpos_hub_id").eq("enabled", true);
+    const [{ data: hubRows, error: hubError }, { data: enrollments, error: enrollmentError }] = await Promise.all([
+      client.from("nexpos_shadow_hubs").select("nexpos_hub_id").eq("enabled", true),
+      client.from("nexpos_event_workers").select("worker_id,hub_ids,id_sync_enabled")
+        .eq("enabled", true).eq("sync_enabled", true).gt("expires_at", startedAt)
+    ]);
     if (hubError) throw hubError;
     let hubIds = Array.from(new Set((hubRows || []).map((row) => toText(row.nexpos_hub_id)).filter(Boolean)));
-    const { data: enrollments, error: enrollmentError } = await client.from("nexpos_event_workers")
-      .select("worker_id,hub_ids,id_sync_enabled").eq("enabled", true).eq("sync_enabled", true).gt("expires_at", startedAt);
     if (enrollmentError) throw enrollmentError;
     const eventAllowed = new Set(syncMode === "dual_write" ? (enrollments || []).flatMap(row => row.hub_ids || []) : []);
     const { data: pending, error: pendingError } = await client.from("nexpos_event_pending")
@@ -557,6 +558,8 @@ Deno.serve(async (request) => {
     const from = new Date(Date.now() - 6 * 3600000).toISOString();
     const to = new Date(Date.now() + 3600000).toISOString();
 
+    const sourceStartedAt = Date.now();
+    const setupMs = sourceStartedAt - new Date(startedAt).getTime();
     for (const target of idRows) {
       await lease(client, owner, "renew");
       try {
@@ -615,22 +618,28 @@ Deno.serve(async (request) => {
       }
     }
 
+    const sourceFetchMs = Date.now() - sourceStartedAt;
+    const snapshotStartedAt = Date.now();
     const uniqueObserved = [...new Map(observed.map(order => [
       toText(order.hub_id || order.nexpos_hub_id) + ':' + orderIdentity(order), order
     ])).values()];
     const identities = uniqueObserved.map(orderIdentity);
-    const { data: existingRows } = identities.length ? await client.from("partner_orders")
+    const [existingResult, shadowResult] = identities.length ? await Promise.all([client.from("partner_orders")
       .select("id,partner_source,nexpos_order_id,order_code,display_order_code,nexpos_status,nexpos_hub_id,nexpos_site_id,branch_id,total_amount,ingested_by,payload_version,nexpos_enrichment_hash")
-      .in("nexpos_order_id", identities) : { data: [] };
-    const existingMap = new Map((existingRows || []).map((row) => [`${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`, row]));
-    const { data: shadowRows } = identities.length ? await client.from("nexpos_shadow_orders")
+      .in("nexpos_order_id", identities), client.from("nexpos_shadow_orders")
       .select("partner_source,nexpos_order_id,payload_hash,comparison_status,comparison_differences,business_comparison_status,business_comparison_differences,matched_partner_order_id,last_seen_at,raw_data")
-      .in("nexpos_order_id", identities) : { data: [] };
+      .in("nexpos_order_id", identities)]) : [{ data: [], error: null }, { data: [], error: null }];
+    if (existingResult.error || shadowResult.error) throw new Error("sync_snapshot_read_failed");
+    const existingRows = existingResult.data;
+    const shadowRows = shadowResult.data;
+    const existingMap = new Map((existingRows || []).map((row) => [`${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`, row]));
     const shadowMap = new Map((shadowRows || []).map((row) => [
       `${toText(row.partner_source)}:${toText(row.nexpos_order_id)}`,
       row
     ]));
 
+    const snapshotReadMs = Date.now() - snapshotStartedAt;
+    const processingStartedAt = Date.now();
     let matchedCount = 0;
     let mismatchCount = 0;
     let missingCount = 0;
@@ -859,6 +868,8 @@ Deno.serve(async (request) => {
       request_count: requestCount, observed_count: observed.length,
       matched_count: matchedCount, mismatch_count: mismatchCount, missing_count: missingCount,
       metadata: {
+        timings_ms: { setup: setupMs, source_fetch: sourceFetchMs, snapshot_read: snapshotReadMs,
+          processing_and_ack: Date.now() - processingStartedAt },
         id_event_count: idRows.length,
         id_fetch_failure_count: idFailures.size,
         id_only: eventOnly && work.size === 0 && fallbackHubs.size === 0,

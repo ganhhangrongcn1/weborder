@@ -1,5 +1,35 @@
 # Tăng tốc WSS theo ID đơn — 30/10/2026
 
+## Cập nhật 19:08 UTC+7: v43 và chuyển HUB thử nghiệm
+
+Anh yêu cầu tối ưu và thử HUB khác vì 30/4 ít đơn. Cloud main đã fetch và
+khớp local `324cb9e`; source production v42 khớp đủ ba file trước sửa.
+
+- V43 cho hai cặp truy vấn đọc độc lập chạy song song: HUB/enrollment và
+  order/shadow snapshot. Snapshot đọc lỗi sẽ dừng an toàn thay vì coi như thiếu
+  đơn. Không song song các ghi, không thay khóa hoặc ánh xạ nghiệp vụ.
+- Thêm `metadata.timings_ms`: setup, source_fetch, snapshot_read,
+  processing_and_ack. Đây là thời lượng trong importer, không phải Kitchen.
+- 20 test Node đạt; source v43 production khớp ba file đã kiểm tra, JWT bật.
+- Ba giờ trước chuyển: Thích Quảng Đức 17 đơn, Việt Sing 12, Lê Hồng Phong 12,
+  30/4 6. Chuyển enrollment `vncloud-primary` từ 30/4 sang duy nhất
+  `69e589d15f07d302954e2f63` (277 Thích Quảng Đức), sau khi queue cũ hết.
+  Worker bootstrap lại 19:08:10, gửi tín hiệu reconnect 19:08:11.
+- Polling 15 giây/rare/full/late và PRE_ORDER ±7 ngày giữ nguyên bốn HUB.
+  Ba HUB tắt không thay đổi. Không tạo đơn/đổi trạng thái để thử.
+- Hai receipt ID trước chuyển thuộc SF-6443 ở HUB 30/4: DOING→PICK 3,286622s,
+  PICK→FINISH 2,768046s worker→commit, mỗi lượt GET một đơn, không lỗi ID.
+  Đây không phải mẫu của HUB mới hoặc phép đo đến Kitchen; có sai số đồng hồ.
+- Chưa kết luận mức tăng tốc sau v43; cần receipt thật và timings mới.
+  Automation đã cập nhật HUB và phiên bản, vẫn chỉ một HUB thử nghiệm.
+- Lượt reconnect HUB mới 19:08:12 thành công, không tạo đơn: setup 645ms,
+  fetch nguồn 6369ms (8 request), đọc snapshot 277ms, xử lý/ack 9183ms.
+  Đây là đối soát reconnect, không phải độ trễ nhận đơn mới. Hàng đợi sau đó
+  trống, control 0 lỗi; polling 15 giây còn active. Encoding 707 file đạt.
+
+File sửa trong lượt này: `supabase/functions/nexpos-order-shadow-sync/index.ts`
+và tài liệu này. Không sửa worker VPS hay frontend.
+
 ## Baseline và phạm vi
 
 Main cloud trước sửa: `6db10af`. Importer production trước sửa v41, broker v2.
