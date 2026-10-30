@@ -62,3 +62,39 @@ Cảnh báo Browserslist và chunk lớn có sẵn. Build không thay nghiệm t
 
 Kết quả canary trực tiếp sẽ được ghi sau khi production có sự kiện tự nhiên.
 
+## Kiểm tra trực tiếp lúc 11:03 UTC+7
+
+- Canary sync bật lúc khoảng 10:59:38; worker vẫn kết nối và gửi heartbeat.
+- Các lượt polling sau v40 thành công, 0 lỗi liên tiếp; cron 15 giây giữ nguyên.
+- Từ lúc bật chưa có thế hệ sự kiện mới: pending rỗng, 0 receipt WSS.
+  Hai đơn SF-3525/SF-8260 đang PICK/ready, GF-113F còn PRE_ORDER/new.
+  Không quy các trạng thái này cho WSS khi không có receipt chứng minh.
+- Chưa mở rộng ba HUB còn lại. Automation tiếp tục chờ sự kiện thật.
+- Advisor chỉ báo RLS không có policy cho hai bảng mới: chủ đích service-only,
+  không có quyền bảng/RPC cho anon hoặc authenticated.
+
+## Danh sách file đồng bộ lên main
+
+Mới trên main (gồm các file quan sát đã triển khai ở giai đoạn trước):
+
+- `docs/nexpos-event-sync-20261030.md`
+- `docs/nexpos-wss-rollout-20261030.md`
+- `docs/supabase-sql/nexpos-event-sync.sql`
+- `docs/supabase-sql/nexpos-wss-observation.sql`
+- `scripts/nexpos-event-observer-auth.test.mjs`
+- `scripts/nexpos-event-observer.test.mjs`
+- `scripts/nexpos-event-sync-db.test.sql`
+- `scripts/nexpos-event-sync.test.mjs`
+- `services/nexpos-events/ghr-nexpos-observer.service`
+- `services/nexpos-events/observer.mjs`
+- `services/nexpos-events/prepare.sh`
+- `supabase/functions/nexpos-event-observer/index.ts`
+- `supabase/functions/nexpos-event-observer/policy.mjs`
+- `supabase/functions/nexpos-order-shadow-sync/eventSync.mjs`
+- `supabase/migrations/20261030002921_nexpos_wss_observation.sql`
+- `supabase/migrations/20261030035833_nexpos_event_sync.sql`
+
+Cập nhật trên main:
+
+- `scripts/nexpos-preorder-window.test.mjs`
+- `supabase/functions/nexpos-order-shadow-sync/index.ts`
