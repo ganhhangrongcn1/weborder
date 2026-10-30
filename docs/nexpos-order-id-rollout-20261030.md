@@ -1,5 +1,23 @@
 # Tăng tốc WSS theo ID đơn — 30/10/2026
 
+## Trạng thái mới nhất: đã tắt lịch kiểm tra định kỳ theo yêu cầu anh
+
+Ngày 30/10/2026, anh yêu cầu tắt lịch kiểm tra và ghi lại quyết định này.
+
+- Đã xóa automation `theo-d-i-wss-nexpos-m-t-hub` (lịch Codex kiểm tra mỗi
+  15 phút); công cụ quản lý automation xác nhận `deleteStatus=deleted`.
+- Chỉ tắt lịch kiểm tra của Codex. WSS trên VPS vẫn giữ phạm vi bốn HUB:
+  Thích Quảng Đức, 30/4, Lê Hồng Phong và Việt Sing.
+- Polling Supabase dự phòng 15 giây, các lượt rare/full/late và cấu hình
+  PRE_ORDER ±7 ngày giữ nguyên. Không thay worker, enrollment hay cron khi
+  tắt lịch kiểm tra. Ba HUB đang tắt vẫn tắt.
+- Không tiếp tục theo dõi định kỳ hoặc tự giãn polling theo automation cũ.
+  Khi cần, anh sẽ yêu cầu kiểm tra lại; lúc đó phải đọc trạng thái production
+  mới nhất, không coi checkpoint trong tài liệu này là dữ liệu hiện thời.
+- Các mục nói automation còn hoạt động bên dưới là lịch sử, đã được thay
+  bằng quyết định mới nhất này. Không có giám sát Codex tự động sau khi xóa.
+
+
 ## Biên bản kiểm tra 19:53 UTC+7 và kế hoạch giãn polling
 
 Anh yêu cầu lưu kết quả và đồng bộ cloud. Đây là checkpoint lúc 19:53 ngày
