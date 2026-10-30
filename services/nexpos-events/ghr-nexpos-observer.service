@@ -1,0 +1,28 @@
+[Unit]
+Description=GHR NexPOS metadata observer (no order writes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ghr-observer
+Group=ghr-observer
+WorkingDirectory=/opt/ghr-nexpos-observer
+Environment=GHR_OBSERVER_URL=https://qjaklysckgzdfjthzkzu.supabase.co/functions/v1/nexpos-event-observer
+Environment=GHR_OBSERVER_TOKEN_FILE=/etc/ghr-nexpos-observer/worker-token
+ExecStart=/opt/ghr-node/bin/node /opt/ghr-nexpos-observer/services/nexpos-events/observer.mjs
+Restart=always
+RestartSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/ghr-nexpos-observer
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M
+CPUQuota=30%
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
