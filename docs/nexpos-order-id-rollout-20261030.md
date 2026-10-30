@@ -1,5 +1,31 @@
 # Tăng tốc WSS theo ID đơn — 30/10/2026
 
+## Mở rộng bốn HUB theo yêu cầu trực tiếp 19:37 UTC+7
+
+Anh yêu cầu áp dụng ngay bốn HUB và làm an toàn; yêu cầu này thay điều kiện
+chờ nghiệm thu canary đầy đủ trước mở rộng. Chưa có nghiệm thu hủy thật và
+Kitchen; không coi việc bật phạm vi là hoàn tất kiểm chứng nghiệp vụ.
+
+- Fetch cloud `e7ef633`, fast-forward giữ nguyên sửa loyalty độc lập; không
+  sửa/deploy lại code importer v43, broker v3 hoặc worker order-id-v1.
+- Mở scope enrollment tuần tự: Thích Quảng Đức + 30/4, thêm Lê Hồng Phong,
+  sau khi heartbeat/bootstrap và hàng đợi xử lý thành công mới thêm Việt Sing.
+- Scope bốn HUB: `69e589d15f07d302954e2f63`, `69e18c814673b293b04be1ab`,
+  `69e58a284b940f84934e2f85`, `6aba1e110c6383c2a1fa3e5e`.
+- Giữ sync_enabled/id_sync_enabled, polling 15 giây và rare/full/late,
+  PRE_ORDER ±7 ngày, khóa gia hạn/chủ sở hữu và ánh xạ nghiệp vụ hiện có.
+  Ba HUB tắt không bật. Không tạo đơn hay thay trạng thái để thử.
+- Hai và ba HUB: worker bootstrap đúng scope, connected=true, hàng đợi ID/HUB
+  hết, consecutive_failures=0 trước bước tiếp theo.
+- Đổi automation sang theo dõi bốn HUB, giữ các giới hạn đo/không tạo giao dịch.
+  Rollback có thể thu scope về Thích Quảng Đức hoặc tắt tăng tốc; polling còn.
+- Bốn HUB bootstrap lúc 19:40:22, heartbeat 19:40:49 connected=true.
+  Lượt đối soát khởi đầu 19:40:27 hoàn tất 19:41:27, không lỗi; tải khởi đầu
+  kéo dài khoảng 60 giây, không phải số đo nhận một đơn hoặc cam kết độ trễ.
+  Polling 15 giây active, control consecutive_failures=0; tiếp tục theo dõi tải
+  khi nhiều HUB có sự kiện đồng thời, chưa tuyên bố nhanh hơn TFood.
+
+
 ## Cập nhật 19:08 UTC+7: v43 và chuyển HUB thử nghiệm
 
 Anh yêu cầu tối ưu và thử HUB khác vì 30/4 ít đơn. Cloud main đã fetch và
