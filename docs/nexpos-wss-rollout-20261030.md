@@ -98,3 +98,35 @@ Actual deployment/observation outcomes must be recorded separately from this pla
   did not finish in the verification window; do not record a passing web build.
 - Preparation is not completed WSS synchronization. Do not expand to four HUBs
   until the live canary gate and synchronization implementation are complete.
+
+## Authorized activation - 30/10/2026, 07:42 (UTC+7)
+
+- User explicitly authorized the authenticated broker, a separate worker key,
+  and transferring the existing NexPOS source session from Supabase to VPS
+  `180.93.195.93` for WSS. The earlier credential approval blocker is resolved.
+- Deployed `nexpos-event-observer` v1, ACTIVE; its own machine-key authentication
+  is enforced with platform JWT validation disabled for this machine endpoint.
+- Missing key and a 64-character unregistered key both returned HTTP 401 in live
+  tests. Five local broker/metadata tests passed again.
+- Generated the 256-bit worker key on VPS; raw key was not exported to local
+  files or source. VPS file is root-owned, group `ghr-observer`, mode 640.
+  DB stores its SHA-256 only. Enrollment expires 06/11/2026 at 07:42 UTC+7;
+  renew or rotate deliberately before that date if observation must continue.
+- Enrolled only `69e18c814673b293b04be1ab`. Worker service enabled and started
+  under the dedicated non-login user. No Supabase service-role key was given
+  to VPS. Broker bootstrap and metadata reports succeeded from VPS.
+- First source socket opened at 07:42:58 UTC+7; the worker received a source
+  message at 07:43:27.899. That message was not a scoped business event and was
+  discarded by the metadata allowlist. Socket open/source response does not
+  establish event coverage or order-sync acceptance.
+- A controlled worker restart at 07:44:57 UTC+7 recovered successfully. At
+  07:46:01.936, cloud received a fresh report from the new process: connected,
+  one socket open, two received messages, zero closes and zero scoped business
+  events. Last source response was at 07:45:58.998. This passes worker restart
+  recovery, not new-order/cancellation/status acceptance or source-token renewal.
+- No scoped new-order/cancellation/status events had arrived at this checkpoint.
+  Order synchronization through WSS is NOT activated. Four-HUB expansion is NOT
+  performed. All four existing polling HUBs and 15-second fallback cron remain
+  unchanged. Do not equate observing a socket with faster ingestion in production.
+- No frontend or importer code was changed in this activation turn. Web build
+  remains the earlier uncompleted check; it is not represented as passing.
