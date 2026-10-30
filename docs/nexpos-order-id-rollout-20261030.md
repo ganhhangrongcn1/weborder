@@ -26,6 +26,11 @@ khớp local `324cb9e`; source production v42 khớp đủ ba file trước sử
   fetch nguồn 6369ms (8 request), đọc snapshot 277ms, xử lý/ack 9183ms.
   Đây là đối soát reconnect, không phải độ trễ nhận đơn mới. Hàng đợi sau đó
   trống, control 0 lỗi; polling 15 giây còn active. Encoding 707 file đạt.
+- 19:09:56 nhận WSS của GF-646 đúng HUB mới, PICK→FINISH; commit lúc
+  19:10:00, khoảng 4,010378s từ worker (khác đồng hồ) đến commit. Một request
+  chi tiết, id_only=true, 0 lỗi ID; DB có một identity và 3 dòng món. Setup
+  1166ms, source_fetch 1218ms, snapshot_read 285ms, processing/ack 1207ms.
+  Chưa phải đơn mới, chưa kiểm tra màn hình Kitchen hoặc đủ mẫu để so tốc độ.
 
 File sửa trong lượt này: `supabase/functions/nexpos-order-shadow-sync/index.ts`
 và tài liệu này. Không sửa worker VPS hay frontend.
