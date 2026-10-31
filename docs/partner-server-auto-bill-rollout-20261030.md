@@ -1,5 +1,46 @@
 # Server tạo bill đối tác — 30/10/2026
 
+## Mới nhất 31/10/2026: đã bật server tạo bill đúng bốn HUB
+
+Theo yêu cầu trực tiếp của anh, mở rộng cấu hình từng bước lúc 07:29–07:30
+UTC+7, sau mỗi bước kiểm tra scope hợp lệ và không còn intent pending/processing:
+
+| HUB | Branch UUID | Mốc bật server (UTC+7) |
+| --- | --- | --- |
+| Thích Quảng Đức | 99ffd49c-c0e3-4267-a384-35c6298b1abf | 30/10 20:42:12 (giữ mốc cũ) |
+| 30/4 | c0d35bd0-e614-4973-9eb2-17e78fb9a245 | 31/10 07:29:51 |
+| Lê Hồng Phong | 2ae2433d-081e-4a1c-a65f-8b158f48df56 | 31/10 07:29:58 |
+| Việt Sing | b108f000-02dc-4f04-8a97-996bbfc27fb8 | 31/10 07:30:08 |
+
+- Chỉ đơn tạo sau activated_at của từng HUB được tham gia; không enqueue lại
+  lịch sử. Bốn scope đúng HUB/branch đang bật, ba HUB tắt không thay đổi.
+- Xprinter 80mm/cashier-80mm khớp job production của từng chi nhánh.
+- Không đổi code/function/schema, template hoặc APK trong lượt mở rộng này.
+  Giữ unique auto_bill_key xuyên suốt printed/failed, In lại thủ công không có
+  key tự động, In tem giữ nguyên luồng. Không tạo đơn hoặc in thử thật.
+- WSS vẫn bốn HUB; polling NexPOS 15 giây active, lịch rare/full/late, refresh
+  Kitchen và quét POS giữ nguyên. Không bật lại automation đã xóa.
+- Checkpoint sau bật: enabled_scopes=4, invalid_hubs=0, pending_intents=0.
+  Worker kết nối; control không lỗi liên tiếp. Hiện ngoài giờ importer hoạt
+  động, nên chưa có lượt sync/bill thật mới để nghiệm thu ba HUB vừa mở.
+  Không gọi việc cấu hình thành công là chứng minh đã in giấy cả bốn HUB.
+
+### Bằng chứng canary trước mở rộng
+
+Năm đơn SF-9969, GF-204, SF-8196, GF-010, GF-717 đều có đúng một job tự động
+producer=auto-server-partner, intent enqueued ngay lần đầu và POS báo printed.
+Commit đơn → tạo job lần lượt 0,448 / 0,722 / 0,447 / 0,531 / 0,642 giây,
+trung vị 0,531 giây (timestamp server). Không tồn intent, không job server failed.
+GF-010 và GF-717 có thêm job không mang dấu tự động sau khoảng 13–15 phút;
+không tính chúng thành duplicate auto. Chưa xác minh người bấm/lý do in lại.
+Timestamp thiết bị lệch đồng hồ, không dùng hiệu số âm làm phép đo giấy ra.
+
+### Rollback phạm vi
+
+Có thể tắt enabled theo từng HUB để quay về Kitchen; giữ nguyên các key/job
+đã tạo để tránh in lại. Không xóa intent hoặc job và không chạy backfill bill.
+Phần canary một HUB bên dưới là lịch sử, đã được thay bằng phạm vi bốn HUB này.
+
 ## Phạm vi
 
 Anh yêu cầu triển khai flow đã thảo luận; tối ưu màn hình Kitchen để sau.
