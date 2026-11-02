@@ -1,5 +1,36 @@
 # Quan sát ID đơn WSS NexPOS — 30/10/2026
 
+## Lượt bắt mẫu nền có thời hạn — 02/11/2026 15:10–15:19 UTC+7
+
+Anh yêu cầu bắt sự kiện đơn mới, không cần anh báo đúng thời điểm. Console
+CUA và native đều lỗi khởi tạo kernel assets nên không sửa worker VPS trong
+lượt này. Thay bằng probe Supabase tạm có JWT/cron-secret, trả HTTP202 ngay
+rồi nghe nền theo đoạn 85 giây, tự nối đoạn tới hết hạn hoặc bắt được mẫu.
+Không giữ pg_net chờ socket dài như các lượt trước.
+
+- Run `1c0f6457-eee2-445e-906a-2f6eed770697`, started15:10:59, expires15:18:59,
+  chỉ bốn HUB đang bật. Bảng nexpos_wss_inspection_runs RLS/service-only,
+  anon không SELECT, authenticated không INSERT; chỉ giữ metadata đã lọc.
+- Không lưu raw payload/token/customer data hoặc giá trị ID chưa xác minh.
+  Ứng viên chỉ dùng trong bộ nhớ để GET REST, kiểm identity/HUB và đọc DB;
+  chỉ display code đã khớp duy nhất DB được giữ trong kết quả.
+- Chỉ mẫu topic mới/print có ID đã khớp với đơn tạo trong run mới dừng sớm;
+  mẫu đổi trạng thái của đơn cũ không được coi là ID sự kiện tạo mới.
+- Probe có hard expiry trước khi đọc DB/phiên. Bản mặc định không render
+  deadline trả410. V14 bị guard này chặn, chưa mở socket; V15 đã render đúng
+  deadline và request84416 trả202, lease của run đã được nhận.
+- Migration20261102081052, không đụng bảng đơn/luồng kinh doanh. 3 test đạt:
+  expired/unrendered không đọc credential, thiếu xác thực không đọc run/phiên,
+  parser hỗ trợ JSON lồng nhưng không trả customer/token fields.
+- Có đúng một automation tạm `ch-t-l-t-b-t-id-n-m-i-wss` kiểm kết quả và đóng
+  probe sau lượt này, tự xóa sau cleanup. Không khôi phục lịch kiểm tra vận
+  hành bốn HUB cũ; không đổi polling30giây hoặc parser sync dựa vào một mẫu.
+- Sau hết run phải deploy lại stub410/JWTtrue, xác minh source không còn đọc
+  DB/phiên/mởWS, ghi kết quả và xóa automation tạm. Chưa coi là đã bắt được ID.
+
+Source quan sát tạm: scripts/nexpos-bounded-schema-observer.mjs; bản runtime
+chỉ tồn tại khi deploy chủ động. Repo giữ stub410 ở function chính.
+
 ## Anh báo đơn mới — 02/11/2026 khoảng 14:56 UTC+7
 
 - Đơn mới gần nhất là GF-305, HUB 30/4. Lượt trigger=wss bắt đầu 14:55:59,
