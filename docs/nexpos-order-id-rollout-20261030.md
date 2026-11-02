@@ -1,5 +1,29 @@
 # Tăng tốc WSS theo ID đơn — 30/10/2026
 
+## Đối soát sau giãn polling — 02/11/2026 khoảng 14:49–14:51 UTC+7
+
+Anh yêu cầu kiểm tra WSS ổn định và có sót đơn không. Chỉ đọc dữ liệu/API;
+không tạo, đổi trạng thái hoặc in thử, không sửa lịch polling hay worker.
+
+- Heartbeat worker 14:49:37, connected=true đúng bốn HUB, queue ID/HUB trống;
+  control last_success 14:49:30, consecutive_failures=0.
+- Từ mốc đổi polling 10:48:02: 228 lượt WSS success tạo 59 đơn; 423 lượt
+  polling success tạo 5 đơn, 0 lỗi fetch theo ID. Có 3 lượt failed do REST
+  network/timeout lúc 14:00,14:02,14:19; các lượt sau đã phục hồi. Không suy ra
+  5 đơn do polling tạo là WSS bỏ sót, vì polling có thể xử lý trước hoặc lấy bù.
+- Đối chiếu GET REST chỉ đọc đúng bốn HUB và năm trạng thái PRE_ORDER/DOING/
+  PICK/FINISH/CANCEL. Các trạng thái thường lấy phạm vi order_time từ 10:48:02
+  tới lúc kiểm tra +1h; PRE_ORDER giữ ±7 ngày. 20 request 84322–84341 HTTP200,
+  mỗi trang dưới 20 dòng nên không còn trang kế theo hợp đồng phân trang này.
+- Tổng 64 đơn nguồn: 30/4 13, Thích Quảng Đức 20, Lê Hồng Phong 15, Việt Sing
+  16. Đối chiếu theo source ID và HUB: missing_orders=0, status_differences=0
+  trên từng HUB. Kiểm tra partner_source+nexpos_order_id không có duplicate
+  trong đơn tạo sau mốc giãn. Không xuất raw payload/token/customer data.
+- Kết luận giới hạn: chưa phát hiện sót đơn hoặc lệch trạng thái trong tập
+  nguồn/phạm vi đã đối soát. Không phải bằng chứng WSS nhận 100% sự kiện hoặc
+  toàn bộ lịch sử không thiếu. Giữ polling 30 giây và rare/full/late để lấy bù;
+  không giãn thêm và không bật lại automation theo dõi đã xóa.
+
 ## Mới nhất 02/11/2026 10:48 UTC+7: polling dự phòng 30 giây
 
 Anh yêu cầu trực tiếp giãn polling lên 30 giây. Nhận định polling đang lấy
