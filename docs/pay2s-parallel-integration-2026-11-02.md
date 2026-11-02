@@ -26,6 +26,10 @@ Thêm Pay2S cho chuyển khoản QR website nhận tại quán, QR tại quầy 
 6. Tạo một đơn website nhận tại quán và một bill POS với đúng số thử. Kiểm tra QR, thanh toán, đúng đơn, gửi bếp, in bill, điểm/voucher; thử retry và đơn hết hạn. Khách ngoài danh sách vẫn SePay.
 7. Chỉ sau nghiệm thu mới chuyển từng chi nhánh sang chính thức. Tắt Pay2S chỉ ảnh hưởng phiên mới; phiên đã tạo giữ provider ban đầu.
 
+### Trạng thái liên kết MB hộ kinh doanh
+
+Người dùng xác nhận tài khoản đứng tên hộ kinh doanh và đã tự điền form MB ở tab Hộ kinh doanh/Doanh nghiệp. Form trả lỗi chung **“Record is not exist”** trước bước OTP/liên kết thành công. Chưa xác định trường nào không khớp hoặc nguyên nhân phía MB/Pay2S. Không đổi sang loại tài khoản cá nhân, không tự gửi lại dữ liệu hay bấm chấp thuận quyền truy cập. Trên màn hình người dùng đã soạn yêu cầu hỗ trợ; cần Pay2S tra log hoặc xác nhận điều kiện MB hộ kinh doanh. Không ghi số tài khoản, MST/CCCD hoặc số điện thoại trên form vào repo.
+
 ## Kiểm tra
 
 - `npm run build`: đạt; kiểm tra UTF-8 đạt.
@@ -43,10 +47,21 @@ Thêm Pay2S cho chuyển khoản QR website nhận tại quán, QR tại quầy 
 - Migration `pay2s_parallel_payments` đã áp dụng.
 - `pay2s-payment-webhook` v3, verify_jwt=false, tự kiểm tra Bearer token và từ chối nếu chưa có secret. HTTP 503 `pay2s_not_configured` đã xác minh từ endpoint thật.
 - `sepay-pos-webhook` v54, giữ verify_jwt=false và secret hiện có.
-- `pos-payment-session-api` v42, giữ verify_jwt=true.
-- `qr-payment-session-api` v38, giữ verify_jwt=false và hợp đồng xác thực hiện có.
+- `pos-payment-session-api` v43, giữ verify_jwt=true.
+- `qr-payment-session-api` v39, giữ verify_jwt=false và hợp đồng xác thực hiện có.
 - Cả bốn chi nhánh vẫn Pay2S off. Không sửa app_configs hoặc thông tin nhận tiền SePay. Đã chuẩn bị cấu hình thử MB tại Thích Quảng Đức như mô tả trên.
-- PR #21 và #22 đã gộp; production Vercel `dpl_6nFkdWUtr2FnHq4hzHwmf1dvhoTC` **READY**, source `66f410b9c7cb8ac317750b4174075daefac151d5`. Cấu hình MB riêng đã được build và triển khai lên website.
+- PR #21, #22 và #23 đã gộp; production Vercel `dpl_GXBaJP8FDQR9iacRQv8RVmrTJfi3` **READY**, source `76086d82ca0d802b872a9a9f09adaaad2462efaa`. Cấu hình MB riêng và QR/thông tin tài khoản theo phiên đã được build và triển khai lên website. Đã mở trực tiếp tab Thanh toán của Thích Quảng Đức, xác nhận SePay Sacombank, Pay2S MB và mode off.
+- Kiểm tra cuối: 0 receipt Pay2S thật, 0 chi nhánh bật Pay2S. Không có webhook SePay tự nhiên trong 1 giờ quan sát; bằng chứng SePay sau thay đổi là kiểm tra hồi quy, chưa phải giao dịch ngân hàng thật.
+
+## APK cài thử
+
+- Đã build **POS 0.4.33 / versionCode 64**, package `vn.ghr.posmobile`, hai ABI `arm64-v8a`, `armeabi-v7a`.
+- File local: `ghr-pos-mobile-native/releases/GHR-POS-0.4.33-pay2s-test.apk`, 31.759.975 bytes.
+- SHA-256: `5e9b09d6b18dd94fa01c2ddbcad61893b7906155d2d667b01aa31a2c331c30de`.
+- Chữ ký release SHA-256: `728d5843ae0c8883171fdae3fd65b6375810d27ed946297c5cee3a51b62224ea`, đối chiếu bằng apksigner với APK 0.4.32 đã xác minh (SHA-256 `ece0685b89c91812b0af7c725d9a8b9eca458fc93da211a7deffc419a280c46d`). Cùng package/chữ ký để cài đè; chưa kiểm chứng cài đặt thật trên thiết bị trong phiên này.
+- Đã trích bytecode từ APK và so SHA-256 với bytecode vừa biên dịch: `f86fa11f59aae383128afb8faff768ffd1b5a336ed51d5f804368954a4aca708`. Xác nhận có `bank_account_snapshot`, `bankTransfer`, production environment và `__DEV__ = false`.
+- Chưa thay metadata bản POS tải/cập nhật chung; đây là file thử riêng, cần cài lên máy thử rồi kiểm tra ngân hàng/bếp/in giấy.
+- Build CLI Metro mặc định chậm ở bước băm toàn bộ thư viện. Bản thử dùng Node 22.23.4 portable từ nodejs.org (đã kiểm tra checksum), Metro một worker, `useWatchman=false`, `unstable_lazySha1=true`; gọi trực tiếp `unstable_buildBundleWithConfig` của CLI React Native với `dev=false`, `minify=false`, tạo bundle và copy đầy đủ asset bằng chính hàm CLI. Biên dịch Hermes bằng compiler đang có trong dự án và `-O`, sau đó Gradle chạy đủ assembleRelease/signing với init script tạm cấp bytecode đã kiểm tra cho tác vụ bundle. Không sửa/commit cấu hình Metro hoặc thay khóa ký, dependencies, Node hệ thống. Các helper build tạm nằm dưới `.tmp/` và không thuộc source phát hành.
 
 ## File cập nhật
 
@@ -82,3 +97,4 @@ Thêm Pay2S cho chuyển khoản QR website nhận tại quán, QR tại quầy 
 - `docs/pay2s-parallel-integration-2026-11-02.md`
 
 Tài liệu giao thức: https://developer.pay2s.vn/docs/webhook/tai-lieu-ky-thuat/
+
