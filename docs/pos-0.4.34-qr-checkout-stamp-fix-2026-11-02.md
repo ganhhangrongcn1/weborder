@@ -27,7 +27,16 @@
 - SQL chạy BEGIN/ROLLBACK trên Supabase đạt cả trước và sau triển khai; gọi thật với role authenticated, test đổi tem 0đ không địa chỉ, trừ đúng một lần/retry/hủy, QR SePay/Pay2S, sai tiền/tổng món, retry khác payload, hết hạn, sai chi nhánh, không phải nhân viên, thẻ đã dùng và quyền anon. Không để lại đơn hoặc tài khoản tem fixture.
 - Migration `pos_qr_checkout_and_stamp_defaults` và bổ sung `pos_qr_checkout_pager_guard` đã áp dụng.
 - Edge `pos-payment-session-api` v46 ACTIVE, `verify_jwt=true`; v46 bổ sung chặn đọc/phục hồi phiên checkout mới chưa attach. Các action cũ giữ nguyên hợp đồng cho POS cũ.
-- APK và kết quả build được bổ sung sau khi đóng/xác minh xong. Chưa đo lại tốc độ và chưa đổi tem thật trên thiết bị với bản sửa; cần thử tại 30/4 trước khi phát hành chung.
+- Chưa đo lại tốc độ và chưa đổi tem thật trên thiết bị với bản sửa; cần thử tại 30/4 trước khi phát hành chung.
+
+## APK release cài thử
+
+- File: `ghr-pos-mobile-native/releases/GHR-POS-0.4.34.apk`, **31.760.755 bytes**, package `vn.ghr.posmobile`, version **0.4.34 / code 65**, ABI `arm64-v8a` và `armeabi-v7a`.
+- SHA-256 APK: `d86664a532b899255df32d8df09df9fe3ab30ba0a701f1fcad7eb247e61dc385`.
+- Certificate SHA-256: `728d5843ae0c8883171fdae3fd65b6375810d27ed946297c5cee3a51b62224ea`, cùng chữ ký release đã xác minh trước; cài đè, không gỡ app.
+- Gradle `assembleRelease` đạt: 4 phút 36 giây, 146 tasks. Dùng temporary init script cấp bytecode Hermes production vừa biên dịch; không bỏ tác vụ đóng gói/ký. Trích bytecode từ APK và SHA-256 khớp chính xác bytecode mới, có action `create_checkout`, snapshot ngân hàng và checkout tem.
+- APK mới là file local để cài thử, **chưa upload hoặc thay metadata POS cập nhật chung**. Source đã đồng bộ Cloud qua `baa5476`, `b001d99`; phần server đã triển khai như trên.
+- Thử nghiệm tại quán: cài đè trên một máy 30/4 → tạo QR khách thử và đo từ bấm nút tới QR → tự chuyển tiền kiểm tra đúng đơn/bếp/bill → chọn khách đủ 10 tem, chọn quà, xác nhận 0đ, hoàn thành, kiểm tra trừ đúng 10 tem một lần và in bill 0đ. Thử lại/reprint không trừ tem thêm. Chưa coi kiểm thử giả lập là bằng chứng thiết bị đã đạt.
 
 ## File cập nhật
 
