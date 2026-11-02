@@ -23,7 +23,8 @@ export async function resolveBankTransferRoute(settings = {}, phone = "", reques
   }
   return {
     provider: "pay2s",
-    providerPayload: { bankTransfer: { provider: "pay2s", accountNumber, accountName, bankBin, bankName: separateAccount ? text(settings.pay2sBankName) : text(settings.bankName), mode } }
+    providerPayload: { bankTransfer: { provider: "pay2s", accountNumber, accountName, bankBin,
+      bankName: separateAccount ? text(settings.pay2sBankName) || (bankBin === "970422" ? "MB Bank" : bankBin) : text(settings.bankName), mode } }
   };
 }
 

@@ -89,7 +89,10 @@ export default function OrderSuccess({
   const orderId = order?.id || order?.orderCode || "";
   const isQrPaymentOrder = isPrepaidPickupOrder(order);
   const isMomoPayment = isMomoPaymentOrder(order);
-  const [paymentSession, setPaymentSession] = useState(null);
+  const [paymentSessionState, setPaymentSession] = useState(null);
+  const paymentSession = paymentSessionState &&
+    String(paymentSessionState.order_id || paymentSessionState.orderId || "") === String(orderId)
+    ? paymentSessionState : null;
   const [paymentMessage, setPaymentMessage] = useState("");
   const [momoQrImageUrl, setMomoQrImageUrl] = useState("");
   const [momoLaunchAttempted, setMomoLaunchAttempted] = useState(false);
@@ -103,7 +106,7 @@ export default function OrderSuccess({
   const fulfillmentText = getFulfillmentText(order);
   const branchText = getBranchText(order);
   const paymentBranch = useMemo(() => findQrOrderPaymentBranch(order, branches), [branches, order]);
-  const paymentConfig = useMemo(() => getQrOrderPaymentConfig(paymentBranch), [paymentBranch]);
+  const paymentConfig = useMemo(() => getQrOrderPaymentConfig(paymentBranch, paymentSession), [paymentBranch, paymentSession]);
   const paymentReference = getQrOrderPaymentReference(order, paymentSession);
   const momoPaymentLinks = getMomoPaymentLinks(paymentSession);
   const momoQrPayload = momoPaymentLinks.qrCodeUrl;
@@ -603,7 +606,8 @@ export default function OrderSuccess({
                       <span>
                         {isMomoPayment
                           ? "MoMo chưa bật QR trực tiếp cho tài khoản này. Anh/chị bấm Mở MoMo để vào thẳng bước xác nhận thanh toán."
-                          : "Chi nhánh này chưa có cấu hình tài khoản ngân hàng. Anh/chị thanh toán tại quầy giúp em."}
+                          : !paymentSession ? "Đang tạo QR thanh toán. Anh/chị vui lòng chờ một chút."
+                            : "Chi nhánh này chưa có cấu hình tài khoản ngân hàng. Anh/chị thanh toán tại quầy giúp em."}
                       </span>
                     </div>
                   )}
@@ -622,7 +626,7 @@ export default function OrderSuccess({
                         <strong>{paymentReference}</strong>
                       </span>
                     ) : null}
-                    {!isMomoPayment && paymentConfig.ready ? (
+                    {!isMomoPayment && paymentSession && paymentConfig.ready ? (
                       <span>
                         <small>Tài khoản nhận</small>
                         <strong>{paymentConfig.bankName} · {paymentConfig.accountNumber}</strong>
