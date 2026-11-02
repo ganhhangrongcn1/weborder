@@ -42,6 +42,18 @@ bill server, in lại và in tem. Không bật HUB tắt, không tạo giao dị
 
 ## Triển khai
 
-Đã áp dụng migration20261102083005 và broker v4; tương thích worker v1 cũ
-chưa gửi ID từ hai topic mới. Đang cập nhật VPS trước khi nhận hoàn tất.
-Không khôi phục lịch giám sát.
+Đã áp dụng migration20261102083005 và broker v4. Worker VPS đã cập nhật
+đúng commit11e92a269224063f87ffa75e1cb2a3757a8b57be bằng deploy-reviewed.sh:
+cả bốn file SHA-256 OK, Node syntax OK, systemd active, khóa vẫn
+root:ghr-observer640. Không đọc/xuất khóa. Đã đăng xuất root sau triển khai.
+
+Heartbeat15:32:53 UTC+7 xác nhận order-id-v2, connected=true,
+delivery_mode=immediate-v1, đúng bốn HUB. Reconnect đã gửi đối soát bốn HUB;
+importer có lượt thành công sau restart, last_success15:33:21, lỗi liên tiếp0.
+Polling vẫn30seconds, grants RPC anon/authenticated vẫn false.
+
+Checkpoint chưa có receipt ID thật sau cập nhật; không tuyên bố đã đo được
+độ trễ đơn mới, Kitchen hoặc giấy in của v2. Kiểm tra không thấy auto_bill_key
+trùng sau mốc cài. Không khôi phục lịch giám sát hay mở lại probe tạm.
+Enrollment hiện hết hạn06/11/2026 07:42UTC+7, cần gia hạn trước hạn để WSS
+tiếp tục; polling không phụ thuộc enrollment này.
