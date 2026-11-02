@@ -1,6 +1,15 @@
 # Tích hợp Pay2S song song SePay — 02/11/2026
 
-## Tạm dừng theo yêu cầu người dùng — 02/11/2026
+## Đã tiếp tục, chờ thử giao dịch thật — 02/11/2026
+
+- Người dùng đã liên kết MB thành công, sau đó xác nhận cho tạo webhook tiền vào và lưu token trên server GHR để thử riêng. Pay2S hiển thị tài khoản MB hộ kinh doanh đang hoạt động; QR do Pay2S tạo dùng cùng tài khoản liên kết, không thấy số VA khác trong màn hình đã kiểm tra.
+- Đã tạo webhook ID `3760`, chỉ nhận tiền vào, không giới hạn mẫu mã thanh toán, gửi về endpoint GHR bên dưới. Token riêng được lưu vào Supabase secret `PAY2S_WEBHOOK_TOKEN`; không lưu token hoặc số tài khoản vào tài liệu/Git. File trung chuyển token tạm đã xóa sau khi lưu và kiểm tra.
+- Kiểm tra HTTP thật: token sai trả `401 unauthorized`; token đúng với danh sách giao dịch rỗng trả `400 invalid_transactions`. Đây là bằng chứng xác thực đã cấu hình, chưa chứng minh Pay2S đã chuyển một giao dịch ngân hàng thật.
+- Chỉ chi nhánh Thích Quảng Đức (`branches.id=47`) ở `pay2sMode=test`, giữ nguyên danh sách hash số thử đã chuẩn bị. Tài khoản MB riêng được đối chiếu QR Pay2S và lưu vào cấu hình chi nhánh; provider/tài khoản SePay cũ giữ nguyên. Ba chi nhánh còn lại vẫn off; khách ngoài danh sách thử tiếp tục SePay.
+- Chạy lại 13 kiểm tra Node về routing, snapshot QR website/POS, webhook và SePay: đạt. Chưa có receipt Pay2S thật tại thời điểm cập nhật. Chờ người dùng tạo đơn website thử, đối chiếu QR trước khi người dùng tự chuyển tiền, sau đó kiểm tra thanh toán/bếp/in/điểm; POS cần cài APK thử trước khi nghiệm thu trên thiết bị.
+- Không bật chính thức và không thay bản POS cập nhật chung. Không bật gửi thông báo Pay2S qua n8n/Zalo.
+
+## Lịch sử tạm dừng trước khi MB liên kết thành công — 02/11/2026
 
 - Người dùng yêu cầu dừng tại đây, đồng bộ Cloud và ghi lại tiến trình để tiếp tục vào dịp khác. Không tiếp tục liên kết ngân hàng, gửi form, tạo webhook, bật thử hay chuyển provider cho đến khi người dùng yêu cầu làm tiếp.
 - Người dùng phỏng đoán hồ sơ hộ kinh doanh chưa được MB xác nhận. Đây **chưa phải nguyên nhân đã được MB/Pay2S xác nhận**; bằng chứng hiện có chỉ là lỗi “Record is not exist” khi liên kết MB ở chế độ Hộ kinh doanh/Doanh nghiệp.
