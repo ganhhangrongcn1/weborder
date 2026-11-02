@@ -31,8 +31,8 @@ Thêm Pay2S cho chuyển khoản QR website nhận tại quán, QR tại quầy 
 - `npm run build`: đạt; kiểm tra UTF-8 đạt.
 - Lint các JS/JSX thay đổi: đạt.
 - Typecheck các Edge Function và shared module: đạt (shim Deno/npm chỉ dùng kiểm tra local, không commit).
-- 12 kiểm tra Node: route mặc định, danh sách thử, tài khoản MB riêng, snapshot, parsing, token, batch lỗi, retry, POS không in hai bill, SePay vẫn chốt phiên của mình; chạy trực tiếp service native để kiểm tra QR MB/Sacombank và cờ hỗ trợ snapshot.
-- Đã bổ sung test Jest POS; tiến trình Jest không trả kết quả trong môi trường hiện tại, không coi là đã đạt. Kiểm tra native trực tiếp qua bundle Node đạt; APK và thiết bị là các bước xác nhận riêng.
+- 13 kiểm tra Node: route mặc định, danh sách thử, tài khoản MB riêng, snapshot, parsing, token, batch lỗi, retry, POS không in hai bill, SePay vẫn chốt phiên của mình; chạy trực tiếp service native để kiểm tra QR MB/Sacombank và cờ hỗ trợ snapshot. Website chỉ hiện QR sau khi có phiên của đúng đơn và thông tin tài khoản dạng chữ khớp QR; phiên Pay2S thiếu snapshot không lấy lại tài khoản SePay.
+- Jest POS: **2 suites / 13 tests đạt** (`posPaymentRecovery`, `posWebsitePaymentAlert`), chạy với quyền đọc cache hệ thống và loại thư mục build khỏi quét. Các lần chạy sandbox trước không trả kết quả; không dùng các lần đó làm bằng chứng. Kiểm tra native trực tiếp qua bundle Node cũng đạt; APK và thiết bị là các bước xác nhận riêng.
 - SQL regression trên Supabase: đạt; dữ liệu giả lập rollback toàn bộ. Có sai tiền/tài khoản/ngân hàng, outgoing, unmatched, hết hạn/hủy, phiên SePay, duplicate, xung đột payload, thanh toán website nguyên tử và quyền truy cập anon/authenticated.
 - Security advisor: bảng receipt bật RLS, không có policy cho client là chủ đích; chỉ service_role có quyền đọc/ghi và gọi RPC.
 - `smoke-order-success-payment.mjs` hiện lỗi assertion regex cũ trên Checkout (`fulfillmentType === "pickup" ? paymentMethod : "COD"`); Checkout đã dùng `resolveCheckoutPaymentMethod` từ trước và không sửa trong đợt này. Không thay code sản phẩm để khớp regex cũ.
@@ -46,11 +46,13 @@ Thêm Pay2S cho chuyển khoản QR website nhận tại quán, QR tại quầy 
 - `pos-payment-session-api` v42, giữ verify_jwt=true.
 - `qr-payment-session-api` v38, giữ verify_jwt=false và hợp đồng xác thực hiện có.
 - Cả bốn chi nhánh vẫn Pay2S off. Không sửa app_configs hoặc thông tin nhận tiền SePay. Đã chuẩn bị cấu hình thử MB tại Thích Quảng Đức như mô tả trên.
+- PR #21 và #22 đã gộp; production Vercel `dpl_6nFkdWUtr2FnHq4hzHwmf1dvhoTC` **READY**, source `66f410b9c7cb8ac317750b4174075daefac151d5`. Cấu hình MB riêng đã được build và triển khai lên website.
 
 ## File cập nhật
 
 - `src/pages/admin/store/BranchSettings.jsx`
 - `src/services/qrPaymentService.js`
+- `src/features/orders/OrderSuccessView.jsx`
 - `supabase/functions/pos-payment-session-api/index.ts`
 - `supabase/functions/qr-payment-session-api/index.ts`
 - `supabase/functions/sepay-pos-webhook/index.ts`

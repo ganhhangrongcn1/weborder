@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { resolveBankTransferRoute } from "../supabase/functions/_shared/bankTransferRouting.js";
 import { parsePay2sTransaction, verifyPay2sToken } from "../supabase/functions/_shared/pay2sPayload.js";
 import { hashPay2sTestPhones } from "../src/services/pay2sTestPhoneService.js";
+import { buildQrOrderPaymentImageUrl, getQrOrderPaymentConfig } from "../src/services/qrPaymentService.js";
 
 const settings = { accountNumber: "00123456789", bankBin: "970416", bankName: "ACB", accountName: "TEST" };
 const payload = { id: 123, accountNumber: "00123456789", gateway: "ACB", transferAmount: 25000,
@@ -58,4 +59,17 @@ test("webhook authentication fails closed", async () => {
   assert.equal(await verifyPay2sToken("Bearer wrong", "test-token"), false);
   assert.equal(await verifyPay2sToken(null, "test-token"), false);
   assert.equal(await verifyPay2sToken("Bearer test-token", ""), false);
+});
+
+test("website waits for its session and shows the same MB account in QR and text", () => {
+  const branch = { paymentSettings: { bankBin: "970403", accountNumber: "11111111", accountName: "SACOM TEST" } };
+  const order = { id: "GHR-12345", source: "online", fulfillmentType: "pickup", paymentMethod: "bank_qr", total: 25000 };
+  const session = { id: "test", provider: "pay2s", providerPayload: { bankTransfer: {
+    bankBin: "970422", bankName: "MB Bank", accountNumber: "0022222222", accountName: "MB TEST"
+  } } };
+  assert.equal(buildQrOrderPaymentImageUrl({ branch, order }), "");
+  assert.match(buildQrOrderPaymentImageUrl({ branch, order, session }), /970422-0022222222/);
+  assert.equal(getQrOrderPaymentConfig(branch, session).accountNumber, "0022222222");
+  assert.equal(getQrOrderPaymentConfig(branch, session).bankName, "MB Bank");
+  assert.equal(buildQrOrderPaymentImageUrl({ branch, order, session: { id: "bad", provider: "pay2s" } }), "");
 });

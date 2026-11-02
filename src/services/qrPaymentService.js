@@ -189,12 +189,11 @@ export function findQrOrderPaymentBranch(order = {}, branches = []) {
 export function buildQrOrderPaymentImageUrl({ order = {}, branch = {}, session = null } = {}) {
   const safeOrder = getObject(order);
   if (isMomoPaymentOrder(safeOrder)) return "";
-  const bankSnapshot = getObject(getObject(session?.providerPayload || session?.provider_payload).bankTransfer);
-  const paymentBranch = session?.provider === "pay2s" && bankSnapshot.accountNumber && bankSnapshot.bankBin
-    ? { ...branch, paymentSettings: { ...getObject(branch.paymentSettings), ...bankSnapshot } }
-    : branch;
+  if (isPrepaidPickupOrder(safeOrder) && !session?.id) return "";
+  const config = getQrOrderPaymentConfig(branch, session);
+  if (!config.ready) return "";
   return buildPosQrImageUrl({
-    branch: paymentBranch,
+    branch: { ...branch, paymentSettings: config },
     amount: session?.amount_expected || safeOrder.totalAmount || safeOrder.total,
     orderIdentity: {
       orderCode: safeOrder.orderCode || safeOrder.id,
@@ -204,8 +203,13 @@ export function buildQrOrderPaymentImageUrl({ order = {}, branch = {}, session =
   });
 }
 
-export function getQrOrderPaymentConfig(branch = {}) {
-  return getPosQrPaymentConfig(branch);
+export function getQrOrderPaymentConfig(branch = {}, session = null) {
+  if (session?.provider !== "pay2s") return getPosQrPaymentConfig(branch);
+  const snapshot = getObject(getObject(session?.providerPayload || session?.provider_payload).bankTransfer);
+  return getPosQrPaymentConfig({ paymentSettings: {
+    provider: "pay2s", bankBin: toText(snapshot.bankBin), bankName: toText(snapshot.bankName),
+    accountNumber: toText(snapshot.accountNumber), accountName: toText(snapshot.accountName)
+  } });
 }
 
 export function getMomoPaymentLinks(session = null) {
