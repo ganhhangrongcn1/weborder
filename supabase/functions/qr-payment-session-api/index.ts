@@ -1,3 +1,4 @@
+import { loadBankTransferRoute } from "../_shared/bankTransferRouting.js";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 type JsonRecord = Record<string, unknown>;
@@ -863,7 +864,19 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
 
   const metadata = getObject(order.metadata);
   const paymentMethod = toText(order.payment_method || metadata.paymentMethod || metadata.payment_method).toLowerCase();
-  const provider = getPaymentProvider(order, body);
+  const existing = await findSession(serviceClient, {
+    ...body,
+    order_id: toText(order.id)
+  });
+  let bankRoute;
+  try {
+    bankRoute = existing
+      ? { provider: existing.provider, providerPayload: getObject(existing.provider_payload) }
+      : await loadBankTransferRoute(serviceClient, toText(order.pickup_branch_uuid || order.branch_uuid), order.customer_phone, getPaymentProvider(order, body));
+  } catch (error) {
+    return response({ ok: false, message: error instanceof Error ? error.message : "Chưa đọc được cấu hình thanh toán." }, 503);
+  }
+  const provider = bankRoute.provider;
   const requestKey = buildQrOrderRequestKey(order.id, provider);
   const branchUuid = toText(order.pickup_branch_uuid || order.branch_uuid) || null;
   const branchName = toText(order.pickup_branch_name || order.branch_name);
@@ -873,10 +886,6 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     : null;
   const posShiftId = toText(order.pos_shift_id || metadata.posShiftId || metadata.pos_shift_id || activeShift?.id);
 
-  const existing = await findSession(serviceClient, {
-    ...body,
-    order_id: toText(order.id)
-  });
   if (existing) {
     let nextSession = await expireQrOrderSessionIfNeeded(serviceClient, existing);
     if (toText(nextSession?.status).toLowerCase() === "expired") {
@@ -982,7 +991,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
           paymentReference
         }
       },
-      provider_payload: {},
+      provider_payload: bankRoute.providerPayload,
       order_id: toText(order.id),
       expires_at: expiresAt,
       created_at: now.toISOString(),
@@ -1016,6 +1025,7 @@ async function createSession(serviceClient: ReturnType<typeof createClient>, bod
     paymentAmount: amountExpected,
     paymentReference,
     qrPaymentSessionId: data.id,
+    ...(provider === "pay2s" ? { paymentProvider: provider } : {}),
     ...(posShiftId ? {
       posShiftId,
       pos_shift_id: posShiftId
