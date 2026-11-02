@@ -1,5 +1,30 @@
 # Tăng tốc WSS theo ID đơn — 30/10/2026
 
+## Mới nhất 02/11/2026 10:48 UTC+7: polling dự phòng 30 giây
+
+Anh yêu cầu trực tiếp giãn polling lên 30 giây. Nhận định polling đang lấy
+trước WSS là giả thuyết, chưa được xác minh; việc đổi lịch là bước thử vận hành
+theo yêu cầu mới, không phải kết luận đã chứng minh WSS bao phủ mọi đơn mới.
+
+- Kiểm tra trước đổi: worker bốn HUB connected=true, heartbeat mới, queue ID/HUB
+  trống, control consecutive_failures=0. Giữ toàn bộ mapping và luồng bill.
+- Dùng cron.alter_job chỉ đổi schedule jobid=6 từ `15 seconds` thành
+  `30 seconds`; active vẫn true. Không đổi command/credential, không tạo job
+  thứ hai. Tên lịch sử `nexpos-shadow-sync-active-hours-15-seconds` được giữ để
+  không phá tham chiếu; schedule thực mới là nguồn xác nhận nhịp 30 giây.
+- Giữ WSS bốn HUB, đối soát khi reconnect, rare/full/late trong importer,
+  PRE_ORDER ±7 ngày, tạo bill server/chống trùng/In lại/In tem hiện tại.
+- Giảm một nửa số nhịp cron theo lý thuyết; chưa đo tổng request Supabase hay
+  chi phí sau thay vì WSS, khóa bận và tải thực tế cũng ảnh hưởng.
+- Polling lấy bù có thể chậm hơn tối đa khoảng một nhịp trong điều kiện lý
+  tưởng; không cam kết không bao giờ chậm/sót. Có thể khôi phục 15 giây bằng
+  cron.alter_job(job_id:=6,schedule:='15 seconds') nếu độ trễ/backlog bất thường.
+- Không bật lại automation kiểm tra định kỳ. Các mục ghi polling 15 giây bên
+  dưới là lịch sử và được thay bằng lịch 30 giây hiện tại này.
+- Xác minh cron.job_run_details: hai lượt 10:48:18 và 10:48:48 succeeded,
+  cách nhau khoảng 30,018 giây. Đây là cron gửi request thành công; kiểm tra
+  độc lập control có last_success 10:49:04, 0 lỗi liên tiếp, WSS connected.
+
 ## Trạng thái mới nhất: đã tắt lịch kiểm tra định kỳ theo yêu cầu anh
 
 Ngày 30/10/2026, anh yêu cầu tắt lịch kiểm tra và ghi lại quyết định này.
