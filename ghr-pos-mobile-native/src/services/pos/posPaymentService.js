@@ -62,8 +62,12 @@ function getPaymentSettings(branch = {}) {
   };
 }
 
-export function getPosQrPaymentConfig(branch = {}) {
-  const config = getPaymentSettings(branch);
+export function getPosQrPaymentConfig(branch = {}, session = null) {
+  const baseConfig = getPaymentSettings(branch);
+  const snapshot = getObject(session?.providerPayload?.bankTransfer || session?.provider_payload?.bankTransfer);
+  const config = session?.provider === "pay2s"
+    ? { ...baseConfig, provider: "pay2s", bankBin: toText(snapshot.bankBin), accountNumber: toText(snapshot.accountNumber), accountName: toText(snapshot.accountName) }
+    : baseConfig;
   return {
     ...config,
     ready: Boolean(config.bankBin && config.accountNumber && config.accountName)
@@ -95,8 +99,8 @@ export function isPosQrSessionReadyForDisplay(session = null) {
   );
 }
 
-export function buildPosQrImageUrl({ branch = {}, amount = 0, orderIdentity = {} } = {}) {
-  const config = getPosQrPaymentConfig(branch);
+export function buildPosQrImageUrl({ branch = {}, amount = 0, orderIdentity = {}, session = null } = {}) {
+  const config = getPosQrPaymentConfig(branch, session);
   if (!config.ready) return "";
 
   const safeAmount = Math.max(0, Math.floor(toNumber(amount)));

@@ -2135,6 +2135,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       ? qrSession?.momoQrValue
       : qrSession?.qrImageUrl || buildPosQrImageUrl({
           branch,
+          session: qrSession,
           amount: qrSession?.amountExpected || totals.total,
           orderIdentity: identity
         });
@@ -2477,6 +2478,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     const amount = pickupQrSession?.amountExpected || getWebsiteOrderAmount(pickupQrOrder) || 0;
     const qrUrl = buildPosQrImageUrl({
       branch,
+      session: pickupQrSession,
       amount,
       orderIdentity: {
         ...identity,

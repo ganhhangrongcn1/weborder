@@ -187,7 +187,7 @@ async function invokeSessionAction(body = {}) {
 
   const invokeWithSession = async (session) => {
     const result = await supabase.functions.invoke("pos-payment-session-api", {
-      body,
+      body: { ...body, bank_account_snapshot: true },
       headers: { Authorization: `Bearer ${toText(session?.access_token)}` }
     });
     if (result.error && !result.data && result.error.context?.clone) {
@@ -258,6 +258,7 @@ export async function createPosPaymentSession(input = {}) {
       payment_reference: paymentReference,
       request_key: toText(input.requestKey) || null,
       provider: toText(input.provider).toLowerCase() || "sepay",
+      bank_account_snapshot: true,
       source,
       status: POS_PAYMENT_SESSION_STATUSES.PENDING_PAYMENT,
       branch_uuid: toText(input.branchUuid) || null,

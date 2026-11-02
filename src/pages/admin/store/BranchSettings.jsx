@@ -855,7 +855,7 @@ export default function BranchSettings({
                       <p className="text-xs text-brown/60">
                         POS dùng các ô này để tạo QR chuyển khoản. Nếu chọn SePay tự động thì chi nhánh này sẽ dùng mã đơn đầy đủ để chờ webhook SePay tự xác nhận thanh toán. Lưu chi nhánh là sẽ cập nhật luôn lên Supabase.
                       </p>
-                      <Pay2sSettings branchId={branchId} settings={paymentSettings}
+                      <Pay2sSettings branchId={branchId} settings={paymentSettings} bankOptions={BANK_OPTIONS}
                         onChange={(field, value) => updateBranchPaymentField(branch.id, field, value)} />
                       {String(paymentSettings.provider || "vietqr").toLowerCase() === "sepay" ? (
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs text-emerald-800">

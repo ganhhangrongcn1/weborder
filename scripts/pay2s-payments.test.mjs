@@ -22,6 +22,11 @@ test("routing snapshots the receiving account and rejects incomplete bank detail
   assert.equal(route.providerPayload.bankTransfer.accountNumber, "00123456789");
   assert.equal(route.providerPayload.bankTransfer.bankBin, "970416");
   await assert.rejects(resolveBankTransferRoute({ pay2sMode: "live" }));
+  const mbRoute = await resolveBankTransferRoute({ ...settings, pay2sMode: "live", pay2sBankBin: "970422", pay2sAccountNumber: "0099999999", pay2sAccountName: "MB TEST" });
+  assert.equal(mbRoute.providerPayload.bankTransfer.accountNumber, "0099999999");
+  assert.equal(mbRoute.providerPayload.bankTransfer.bankBin, "970422");
+  assert.equal(settings.accountNumber, "00123456789");
+  await assert.rejects(resolveBankTransferRoute({ ...settings, pay2sMode: "live", pay2sBankBin: "970422" }));
 });
 
 test("test phone configuration normalizes and deduplicates numbers", async () => {
@@ -35,6 +40,7 @@ test("Pay2S payload supports missing paymentCode and Vietnam local timestamps", 
   assert.equal(tx.transactionDate, "2026-11-02T03:00:00.000Z");
   assert.equal(tx.accountNumber, "00123456789");
   assert.equal(tx.bankBin, "970416");
+  assert.equal(parsePay2sTransaction({ ...payload, gateway: "MBB" }).bankBin, "970422");
   assert.deepEqual(parsePay2sTransaction({ ...payload, content: "TT GHR-12345-QR-77889" }).references, ["GHR12345QR77889"]);
   assert.deepEqual(parsePay2sTransaction({ ...payload, content: "XGHR12345Y" }).references, []);
   assert.deepEqual(parsePay2sTransaction({ ...payload, content: "TT POS-20261102-123456" }).references, ["POS20261102123456"]);
