@@ -2,6 +2,7 @@
 
 ## Đã tiếp tục, chờ thử giao dịch thật — 02/11/2026
 
+- Cập nhật mới nhất theo yêu cầu người dùng: **chuyển phạm vi thử sang Đường 30/4 (`branches.id=48`)**, cùng tài khoản MB và danh sách một số thử; Thích Quảng Đức (`id=47`) đã tắt Pay2S. Chỉ phiên mới ở 30/4 của số thử dùng Pay2S; phiên cũ giữ nguyên provider. Các mô tả bật thử Thích Quảng Đức bên dưới là lịch sử trước lần chuyển này.
 - Người dùng đã liên kết MB thành công, sau đó xác nhận cho tạo webhook tiền vào và lưu token trên server GHR để thử riêng. Pay2S hiển thị tài khoản MB hộ kinh doanh đang hoạt động; QR do Pay2S tạo dùng cùng tài khoản liên kết, không thấy số VA khác trong màn hình đã kiểm tra.
 - Đã tạo webhook ID `3760`, chỉ nhận tiền vào, không giới hạn mẫu mã thanh toán, gửi về endpoint GHR bên dưới. Token riêng được lưu vào Supabase secret `PAY2S_WEBHOOK_TOKEN`; không lưu token hoặc số tài khoản vào tài liệu/Git. File trung chuyển token tạm đã xóa sau khi lưu và kiểm tra.
 - Kiểm tra HTTP thật: token sai trả `401 unauthorized`; token đúng với danh sách giao dịch rỗng trả `400 invalid_transactions`. Đây là bằng chứng xác thực đã cấu hình, chưa chứng minh Pay2S đã chuyển một giao dịch ngân hàng thật.
