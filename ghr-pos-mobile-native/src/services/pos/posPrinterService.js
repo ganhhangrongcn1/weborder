@@ -1,3 +1,4 @@
+import { localizeBankQrUrl } from "../../shared/pos/bankQrPayload";
 import { placeStampsAfterLoyaltyQr } from "./posStampReceipt";
 import { NativeModules, Platform } from "react-native";
 
@@ -196,6 +197,10 @@ export async function stopLocalPrintStationService() {
 }
 
 export async function printLocalReceipt({ text = "", qrUrl = "", sourceType = "", footerText = "", footerQrUrl = "", customerPhone = "" } = {}) {
+  if (qrUrl.startsWith("https://img.vietqr.io/image/")) {
+    qrUrl = localizeBankQrUrl(qrUrl);
+    if (!qrUrl) throw new Error("Thông tin QR chuyển khoản không hợp lệ để in.");
+  }
   if (!isLocalPrinterAvailable()) throw new Error("Native printer bridge chưa sẵn sàng.");
   const safeSourceType = toText(sourceType).toLowerCase();
   const isPreparationTicket = toText(text).includes("@@CENTER:PHIẾU LÀM MÓN")

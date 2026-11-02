@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { forgetPosQrDraft } from "./posQrDraftService";
 
 import { createPosOrderIdentity } from "../../shared/pos/posOrderIdentity";
 import { supabase } from "../supabase/client";
@@ -187,6 +188,7 @@ async function invokeSessionAction(body = {}) {
 
   const invokeWithSession = async (session) => {
     const result = await supabase.functions.invoke("pos-payment-session-api", {
+      region: "ap-southeast-1",
       body: { ...body, bank_account_snapshot: true },
       headers: { Authorization: `Bearer ${toText(session?.access_token)}` }
     });
@@ -297,6 +299,10 @@ export async function readPosPaymentSession(sessionId = "") {
   return result.session;
 }
 
+export function recoverPosQrDraft(branchUuid, requestKey) {
+  return invokeSessionAction({ action: "recover_checkout", branch_uuid: branchUuid, request_key: requestKey });
+}
+
 export async function listPosPaymentSessions(branchUuid = "") {
   const safeBranchUuid = toText(branchUuid);
   if (!safeBranchUuid) return [];
@@ -339,12 +345,16 @@ export function subscribePosPaymentSessions(branchUuid = "", onChange) {
   };
 }
 
-export function cancelPosPaymentSession(sessionId = "", reason = "") {
-  return invokeSessionAction({
+export async function cancelPosPaymentSession(sessionId = "", reason = "") {
+  const result = await invokeSessionAction({
     action: "cancel",
     session_id: toText(sessionId),
     reason: toText(reason)
   });
+  if (result.ok && result.session?.status === "cancelled") {
+    await forgetPosQrDraft(result.session.branchUuid, result.session.paymentReference);
+  }
+  return result;
 }
 
 export function confirmPosPaymentSessionManually(sessionId = "") {

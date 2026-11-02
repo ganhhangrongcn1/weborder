@@ -16,6 +16,7 @@ import PosHistoryPanel from "../features/pos/components/PosHistoryPanel";
 import PrinterDisconnectedModal from "../features/pos/components/PrinterDisconnectedModal";
 import PosIcon from "../features/pos/components/PosIcon";
 import PosMenuPanel from "../features/pos/components/PosMenuPanel";
+import PosCategorySidebar from "../features/pos/components/PosCategorySidebar";
 import PosPhoneSaleWorkspace from "../features/pos/components/PosPhoneSaleWorkspace";
 import PosPhoneNavigation, { PosPhoneMore } from "../features/pos/components/PosPhoneNavigation";
 import PosPagerModal from "../features/pos/components/PosPagerModal";
@@ -100,7 +101,7 @@ export default function PosHomeScreen() {
     if (!isPhonePortrait && activeTab === "more") setActiveTab("settings");
   }, [isPhonePortrait, activeTab]);
   const isWide = width >= 820;
-  const orderColumnWidth = isWide ? Math.min(480, Math.max(420, Math.round(width * 0.36))) : "100%";
+  const orderColumnWidth = isWide ? Math.min(430, Math.max(330, Math.round(width * 0.34))) : "100%";
   const estimatedMenuWidth = isWide && typeof orderColumnWidth === "number" ? width - orderColumnWidth - 42 : width;
   const productColumns = estimatedMenuWidth >= 760 ? 3 : 2;
   const {
@@ -770,8 +771,11 @@ export default function PosHomeScreen() {
 
   const renderSaleWorkspace = () => (
     <View style={[styles.workspace, !isWide && styles.workspaceStack]}>
+      {isWide ? <PosCategorySidebar categories={categories} activeCategory={activeCategory} onSelectCategory={setActiveCategory} /> : null}
       <View style={styles.menuColumn}>
         <PosMenuPanel
+          listLayout={isWide}
+          hideCategories={isWide}
           products={products}
           categories={categories}
           activeCategory={activeCategory}

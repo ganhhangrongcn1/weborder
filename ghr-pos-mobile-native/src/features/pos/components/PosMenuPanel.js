@@ -14,6 +14,8 @@ const PosMenuPanel = memo(function PosMenuPanel({
   activeCategory = ALL_CATEGORY,
   columns = 3,
   compact = false,
+  listLayout = false,
+  hideCategories = false,
   pagerEnabled = true,
   normalizedPager = "",
   pagerBusy = false,
@@ -23,17 +25,18 @@ const PosMenuPanel = memo(function PosMenuPanel({
   onAddProduct
 }) {
   const listCategories = categories.length ? categories : [ALL_CATEGORY];
-  const safeColumns = Math.max(2, Math.min(3, Number(columns || 2)));
+  const safeColumns = listLayout ? 1 : Math.max(2, Math.min(3, Number(columns || 2)));
   const cardWidth = safeColumns === 3 ? "31.8%" : "48.7%";
   const pagerSelected = Boolean(normalizedPager);
 
   const renderProduct = useCallback(({ item }) => (
     <Pressable
       key={item.id}
-      style={[styles.productCard, { width: cardWidth }]}
+      accessibilityRole="button" accessibilityLabel={`Thêm ${item.name}`}
+      style={[styles.productCard, listLayout ? styles.listCard : { width: cardWidth }]}
       onPress={() => onAddProduct(item)}
     >
-      <View style={styles.imageSlot}>
+      <View style={[styles.imageSlot, listLayout && styles.listImage]}>
         {item.image ? (
           <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
         ) : (
@@ -41,7 +44,7 @@ const PosMenuPanel = memo(function PosMenuPanel({
         )}
       </View>
 
-      <View style={styles.productBody}>
+      <View style={[styles.productBody, listLayout && styles.listBody]}>
         <View style={styles.productCopy}>
           <Text style={styles.productName} numberOfLines={2}>
             {item.name}
@@ -54,8 +57,9 @@ const PosMenuPanel = memo(function PosMenuPanel({
         </View>
         <Text style={styles.productPrice}>{formatMoney(item.price)}</Text>
       </View>
+      {listLayout ? <View style={styles.addAction}><Text style={styles.addText}>+ Thêm</Text></View> : null}
     </Pressable>
-  ), [cardWidth, onAddProduct]);
+  ), [cardWidth, onAddProduct, listLayout]);
 
   return (
     <View style={styles.panel}>
@@ -74,12 +78,12 @@ const PosMenuPanel = memo(function PosMenuPanel({
           </Text>
         </Pressable>
       </View>
-      <PosCategoryTabs
+      {!hideCategories ? <PosCategoryTabs
         singleRow={compact}
         categories={listCategories}
         activeCategory={activeCategory}
         onSelectCategory={onSelectCategory}
-      />
+      /> : null}
 
       <FlatList
         key={safeColumns}
@@ -89,7 +93,7 @@ const PosMenuPanel = memo(function PosMenuPanel({
         renderItem={renderProduct}
         style={styles.productFrame}
         contentContainerStyle={styles.productList}
-        columnWrapperStyle={styles.productRow}
+        columnWrapperStyle={safeColumns > 1 ? styles.productRow : undefined}
         showsVerticalScrollIndicator={false}
         initialNumToRender={12}
         maxToRenderPerBatch={9}
@@ -104,6 +108,12 @@ const PosMenuPanel = memo(function PosMenuPanel({
 export default PosMenuPanel;
 
 const styles = StyleSheet.create({
+  listCard: { width: "100%", minHeight: 88, flexDirection: "row", alignItems: "center", marginBottom: 9, padding: 9, gap: 10 },
+  listImage: { width: 64, height: 64, aspectRatio: 1, borderRadius: 9 },
+  listBody: { flex: 1, minHeight: 64, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0 },
+  addAction: { minHeight: 42, paddingHorizontal: 11, borderRadius: 9, justifyContent: "center",
+    backgroundColor: POS_COLORS.primarySoft },
+  addText: { color: POS_COLORS.primaryDark, fontWeight: "800", fontSize: 13 },
   panel: {
     flex: 1,
     minHeight: 0,

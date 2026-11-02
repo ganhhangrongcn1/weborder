@@ -6,7 +6,7 @@ type JsonRecord = Record<string, unknown>;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-region",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
@@ -455,7 +455,7 @@ async function createSession(
   try {
     bankRoute = await loadBankTransferRoute(serviceClient, branchUuid, body.customer_phone, toText(body.provider).toLowerCase() || "sepay");
     if (bankRoute.provider === "pay2s" && body.bank_account_snapshot !== true) {
-      return response({ ok: false, message: "Vui lòng cập nhật POS để hiển thị đúng tài khoản Pay2S." }, 409);
+      bankRoute = { provider: "sepay", providerPayload: {} };
     }
   } catch (error) {
     return response({ ok: false, message: error instanceof Error ? error.message : "Chưa đọc được cấu hình thanh toán." }, 503);
@@ -949,12 +949,18 @@ Deno.serve(async (request) => {
     requestedBranchUuid: toText(getObject(payload.session).branch_uuid)
   });
   if (action === "create_checkout") {
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: toText(request.headers.get("Authorization")) } },
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-    return createPosQrCheckout({ payload, userClient, serviceClient, reply: response,
-      createSession: (input: JsonRecord) => createSession(serviceClient, access.profile, input) });
+    return createPosQrCheckout({ payload, profile: access.profile, serviceClient, reply: response });
+  }
+  if (action === "recover_checkout") {
+    const branchUuid = toText(payload.branch_uuid);
+    const requestKey = toText(payload.request_key);
+    if (!canAccessBranch(access.profile, branchUuid) || !/^[A-Za-z0-9:_-]{6,120}$/.test(requestKey)) {
+      return response({ ok: false, message: "Không có quyền khôi phục bill này." }, 403);
+    }
+    const { data, error } = await serviceClient.from("pos_payment_sessions").select(SESSION_COLUMNS)
+      .eq("request_key", requestKey).eq("branch_uuid", branchUuid).maybeSingle();
+    if (error) return response({ ok: false, message: "Chưa đọc được bill trước. Vui lòng thử lại." }, 503);
+    return response({ ok: true, session: data });
   }
   if (action === "create") {
     return createSession(serviceClient, access.profile, getObject(payload.session));

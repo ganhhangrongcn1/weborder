@@ -1,3 +1,5 @@
+import { buildBankQrPayload } from "../../shared/pos/bankQrPayload.js";
+
 function toText(value = "") {
   return String(value || "").normalize("NFC").trim();
 }
@@ -112,4 +114,11 @@ export function buildPosQrImageUrl({ branch = {}, amount = 0, orderIdentity = {}
   });
 
   return `https://img.vietqr.io/image/${config.bankBin}-${config.accountNumber}-compact2.png?${query.toString()}`;
+}
+
+export function buildPosQrPayload({ branch = {}, amount = 0, orderIdentity = {}, session = null } = {}) {
+  if (!session?.id) return "";
+  const config = getPosQrPaymentConfig(branch, session);
+  return buildBankQrPayload({ ...config, amount: session.amountExpected ?? session.amount_expected ?? amount,
+    reference: buildPosPaymentReference(orderIdentity, branch) });
 }

@@ -250,6 +250,7 @@ export default function BranchSettings({
               ...item,
               paymentSettings: {
                 ...(item?.paymentSettings && typeof item.paymentSettings === "object" ? item.paymentSettings : {}),
+                ...(field === "pay2sBankBin" ? { pay2sBankName: BANK_OPTIONS.find(bank => bank.bin === value)?.name || "" } : {}),
                 [field]: field === "pay2sTestPhoneHashes" && Array.isArray(value)
                   ? value : typeof value === "boolean" ? value : String(value || "").trim()
               }
@@ -327,6 +328,12 @@ export default function BranchSettings({
 
   const handleSaveBranches = async () => {
     if (!branchesDirty || branchSaving) return;
+    const invalid = draftBranches.find(branch => {
+      const settings = branch.paymentSettings || {};
+      return ["live", "test"].includes(settings.pay2sMode) &&
+        (!/^\d{6}$/.test(settings.pay2sBankBin || "") || !/^\d{1,34}$/.test(settings.pay2sAccountNumber || "") || !String(settings.pay2sAccountName || "").trim());
+    });
+    if (invalid) { setBranchSaveMessage("Chưa đủ thông tin tài khoản Pay2S tại " + invalid.name + "."); return; }
     setBranchSaving(true);
     setBranchSaveMessage("");
     try {
@@ -399,6 +406,19 @@ export default function BranchSettings({
           </div>
         </div>
         {branchSaveMessage ? <p className="admin-store-message">{branchSaveMessage}</p> : null}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50/60 p-4">
+          <div><strong className="text-sm text-brown">Thanh toán QR toàn hệ thống</strong>
+            <p className="mt-1 text-xs text-brown/70">{draftBranches.filter(branch => branch.paymentSettings?.pay2sMode === "live").length}/{draftBranches.length} chi nhánh chọn Pay2S. POS cũ vẫn SePay đến khi cập nhật.</p></div>
+          <AdminButton variant="secondary" onClick={() => {
+            const source = draftBranches.find(branch => branch.paymentSettings?.pay2sBankBin && branch.paymentSettings?.pay2sAccountNumber && branch.paymentSettings?.pay2sAccountName)?.paymentSettings;
+            if (!source) { setBranchSaveMessage("Điền tài khoản Pay2S ở một chi nhánh trước khi áp dụng chung."); return; }
+            setDraftBranches(current => current.map(branch => ({ ...branch, paymentSettings: {
+              ...branch.paymentSettings, pay2sMode: "live", pay2sBankBin: source.pay2sBankBin,
+              pay2sBankName: source.pay2sBankName, pay2sAccountNumber: source.pay2sAccountNumber, pay2sAccountName: source.pay2sAccountName
+            } })));
+            setBranchSaveMessage("Đã chọn Pay2S cùng tài khoản cho các chi nhánh. Kiểm tra rồi bấm Lưu thay đổi chi nhánh để áp dụng.");
+          }}>Dùng chung tài khoản Pay2S</AdminButton>
+        </div>
         <div className="admin-table">
           {draftBranches.map((branch) => {
             const { openTime, closeTime } = extractOpenCloseTime(branch);
@@ -414,9 +434,14 @@ export default function BranchSettings({
               webBankQrEnabled,
               webCounterPaymentEnabled
             ].filter(Boolean).length;
-            const qrPaymentConfig = getPosQrPaymentConfig(branch);
+            const previewSettings = paymentSettings.pay2sMode === "live" ? {
+              ...paymentSettings, provider: "pay2s", bankBin: paymentSettings.pay2sBankBin,
+              bankName: paymentSettings.pay2sBankName, accountNumber: paymentSettings.pay2sAccountNumber,
+              accountName: paymentSettings.pay2sAccountName } : paymentSettings;
+            const previewBranch = { ...branch, paymentSettings: previewSettings };
+            const qrPaymentConfig = getPosQrPaymentConfig(previewBranch);
             const paymentPreviewOpen = previewBranchId === branch.id;
-            const paymentPreviewUrl = paymentPreviewOpen && qrPaymentConfig.ready ? getBranchPaymentPreviewUrl(branch) : "";
+            const paymentPreviewUrl = paymentPreviewOpen && qrPaymentConfig.ready ? getBranchPaymentPreviewUrl(previewBranch) : "";
             const qrRefreshKey = getQrRefreshKey(branch);
             const qrRefreshVersion = qrRefreshVersionByBranchId[qrRefreshKey] || 0;
             const branchId = String(branch?.id || "");
@@ -743,6 +768,8 @@ export default function BranchSettings({
                     </div>
 
 
+                      <Pay2sSettings branchId={branchId} settings={paymentSettings} bankOptions={BANK_OPTIONS}
+                        onChange={(field, value) => updateBranchPaymentField(branch.id, field, value)} />
                     <div className={`admin-branch-subcard admin-branch-pos-card${expandedPosBranchId === branchId ? " is-expanded" : ""}`}>
                       <button
                         type="button"
@@ -752,7 +779,7 @@ export default function BranchSettings({
                         onClick={() => setExpandedPosBranchId(expandedPosBranchId === branchId ? "" : branchId)}
                       >
                         <span>
-                          <strong>QR chuyển khoản tại POS</strong>
+                          <strong>SePay dự phòng / POS chưa cập nhật</strong>
                           <small>
                             {qrPaymentConfig.ready
                               ? `${paymentSettings.bankName || "Đã cấu hình ngân hàng"} · ${paymentSettings.accountNumber || "Đã có tài khoản"}`
@@ -760,7 +787,7 @@ export default function BranchSettings({
                           </small>
                         </span>
                         <span className="admin-branch-pos-toggle__action">
-                          {expandedPosBranchId === branchId ? "Thu gọn" : "Cấu hình nâng cao"}
+                          {expandedPosBranchId === branchId ? "Thu gọn" : "Sửa cấu hình SePay"}
                           <span aria-hidden="true">⌄</span>
                         </span>
                       </button>
@@ -855,9 +882,8 @@ export default function BranchSettings({
                       <p className="text-xs text-brown/60">
                         POS dùng các ô này để tạo QR chuyển khoản. Nếu chọn SePay tự động thì chi nhánh này sẽ dùng mã đơn đầy đủ để chờ webhook SePay tự xác nhận thanh toán. Lưu chi nhánh là sẽ cập nhật luôn lên Supabase.
                       </p>
-                      <Pay2sSettings branchId={branchId} settings={paymentSettings} bankOptions={BANK_OPTIONS}
-                        onChange={(field, value) => updateBranchPaymentField(branch.id, field, value)} />
-                      {String(paymentSettings.provider || "vietqr").toLowerCase() === "sepay" ? (
+
+                      {paymentSettings.pay2sMode !== "live" && String(paymentSettings.provider || "vietqr").toLowerCase() === "sepay" ? (
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs text-emerald-800">
                           Đang bật chế độ SePay tự động cho chi nhánh này. Khi Edge Function webhook đã deploy đúng trên Supabase thì đơn QR thanh toán xong sẽ tự xác nhận, tự gửi bếp và tự tạo lệnh in bill.
                         </div>
@@ -889,11 +915,11 @@ export default function BranchSettings({
                                   QR mẫu {String(branch?.name || "")}
                                 </strong>
                                 <span>
-                                  Chế độ: {String(paymentSettings.provider || "vietqr").toLowerCase() === "sepay" ? "SePay tự động" : "VietQR thủ công"}
+                                  Chế độ: {previewSettings.provider === "pay2s" ? "Pay2S tự động" : "SePay / VietQR dự phòng"}
                                 </span>
                                 <span>Số tiền test: 25.000đ</span>
                                 <span>Nội dung: TEST-QR</span>
-                                <span>{paymentSettings.accountNumber || "Chưa có số tài khoản"} · {paymentSettings.accountName || "Chưa có tên tài khoản"}</span>
+                                <span>{previewSettings.accountNumber || "Chưa có số tài khoản"} · {previewSettings.accountName || "Chưa có tên tài khoản"}</span>
                                 {paymentSettings.sepayBankAccountId ? (
                                   <span>SePay Account ID: {paymentSettings.sepayBankAccountId}</span>
                                 ) : null}

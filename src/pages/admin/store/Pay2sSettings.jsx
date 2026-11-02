@@ -17,21 +17,38 @@ export default function Pay2sSettings({ branchId, settings, bankOptions = [], on
     finally { setSaving(false); }
   };
   return (
-    <div className="space-y-3 rounded-xl border border-sky-200 bg-sky-50 p-4">
-      <strong className="text-sm text-brown">Pay2S cho website và POS</strong>
-      <label className="block space-y-1 text-xs text-brown/80">
-        <span>Chế độ Pay2S</span>
-        <select className="admin-input w-full" value={mode} onChange={(event) => onChange("pay2sMode", event.target.value)}>
-          <option value="off">Tắt Pay2S — giữ SePay</option>
-          <option value="test">Thử theo số điện thoại — khách khác vẫn dùng SePay</option>
-          <option value="live">Dùng Pay2S cho đơn QR mới</option>
-        </select>
-      </label>
+    <section className="space-y-4 rounded-2xl border border-orange-200 bg-orange-50/60 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h3 className="text-base font-bold text-brown">Ngân hàng nhận tiền QR</h3>
+          <p className="mt-1 text-xs text-brown/70">Chọn dịch vụ cho các đơn mới tại chi nhánh này.</p></div>
+        <span className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-brown">
+          {mode === "live" ? "Pay2S đang hoạt động" : mode === "test" ? "Pay2S đang thử riêng" : "Đang dùng SePay"}
+        </span>
+      </div>
+      <div role="group" aria-label="Dịch vụ nhận tiền QR" className="grid gap-2 md:grid-cols-3">
+        {[
+          ["live", `Pay2S · ${bankOptions.find(bank => bank.bin === settings.pay2sBankBin)?.name || "Ngân hàng"}`, "Nhận tự động cho mọi khách"],
+          ["test", "Thử riêng Pay2S", "Chỉ dùng cho số điện thoại thử"],
+          ["off", "SePay dự phòng", "Dùng lại tài khoản SePay cũ"]
+        ].map(([value, title, hint]) => <button key={value} type="button" aria-pressed={mode === value}
+          onClick={() => onChange("pay2sMode", value)}
+          className={`rounded-xl border p-3 text-left transition ${mode === value ? "border-orange-500 bg-white ring-1 ring-orange-400" : "border-brown/10 bg-white/60 hover:bg-white"}`}>
+          <strong className="block text-sm text-brown">{title}</strong><small className="mt-1 block text-xs text-brown/65">{hint}</small>
+        </button>)}
+      </div>
+      <div className="rounded-xl border border-orange-100 bg-white px-4 py-3 text-sm text-brown">
+        <strong>{bankOptions.find(bank => bank.bin === settings.pay2sBankBin)?.name || "Chưa chọn ngân hàng Pay2S"}</strong>
+        <span className="ml-2 font-mono">{settings.pay2sAccountNumber || "Chưa nhập số tài khoản"}</span>
+        <p className="mt-1 text-xs text-brown/70">{settings.pay2sAccountName || "Chưa nhập tên chủ tài khoản"}</p>
+      </div>
+      <details className="rounded-xl border border-brown/10 bg-white p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-brown">Sửa tài khoản Pay2S nhận tiền</summary>
+        <div className="mt-3 space-y-3">
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="space-y-1 text-xs text-brown/80">
           <span>Ngân hàng riêng cho Pay2S</span>
           <select className="admin-input w-full" value={settings.pay2sBankBin || ""} onChange={(event) => onChange("pay2sBankBin", event.target.value)}>
-            <option value="">Dùng tài khoản SePay hiện tại</option>
+            <option value="">Chọn ngân hàng nhận tiền</option>
             {bankOptions.map((bank) => <option key={bank.bin} value={bank.bin}>{bank.name}</option>)}
           </select>
         </label>
@@ -46,6 +63,8 @@ export default function Pay2sSettings({ branchId, settings, bankOptions = [], on
             placeholder="Tên chủ tài khoản" onChange={(event) => onChange("pay2sAccountName", event.target.value)} />
         </label>
       </div>
+        </div>
+      </details>
       {mode === "test" ? (
         <div className="space-y-2 text-xs text-brown/80">
           <label htmlFor={`pay2s-test-phones-${branchId}`}>Số điện thoại được thử Pay2S</label>
@@ -58,13 +77,11 @@ export default function Pay2sSettings({ branchId, settings, bankOptions = [], on
           {message ? <p role="status">{message}</p> : null}
         </div>
       ) : null}
-      <p className="text-xs text-brown/70">
-        Các ô Pay2S không thay đổi tài khoản SePay ở phía trên. Nếu Pay2S cấp tài khoản ảo (VA), nhập đúng số VA nhận tiền sau khi liên kết ngân hàng và cấu hình webhook.
-        POS cần bản hỗ trợ tài khoản Pay2S riêng trước khi thử.
-        Trong chế độ thử, nhập đúng số điện thoại thử khi đặt đơn website hoặc tạo bill POS.
-        Đơn đã tạo giữ nguyên nhà cung cấp thanh toán.
+      <p className="text-xs leading-relaxed text-brown/70">
+        Website và POS từ 0.4.33 dùng tài khoản Pay2S này khi bật. POS cũ tiếp tục SePay đến khi được cập nhật.
+        Đơn đã tạo giữ nguyên tài khoản và dịch vụ ban đầu. Bấm “Lưu thay đổi chi nhánh” để áp dụng lựa chọn.
       </p>
       {mode === "live" ? <p className="text-xs font-semibold text-amber-800">Chỉ lưu chế độ này sau khi đã thử nhận tiền, gửi bếp và in bill thành công.</p> : null}
-    </div>
+    </section>
   );
 }

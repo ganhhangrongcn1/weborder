@@ -1,3 +1,5 @@
+import { getPosQrDraftIdentity, forgetPosQrDraft } from "../../../services/pos/posQrDraftService";
+import { recoverPosQrDraft } from "../../../services/pos/posPaymentSessionService";
 import { mergePosHistoryOrders } from "../../../services/pos/posHistoryDisplayService";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
@@ -440,6 +442,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     setQrError("");
     if (profile?.branchUuid) {
       await forgetPosPaymentSession(profile.branchUuid);
+      await forgetPosQrDraft(profile.branchUuid);
     }
   };
 
@@ -1872,7 +1875,18 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
 
     const liveBenefit = loyaltyValidation.benefit || loyaltyBenefit;
     const liveTotals = buildTotalsWithBenefit(liveBenefit);
-    const orderIdentity = createPosOrderIdentity(new Date());
+    let orderIdentity;
+    try {
+      orderIdentity = paymentProvider === "momo" ? createPosOrderIdentity(new Date()) : await getPosQrDraftIdentity({
+        branchUuid: profile.branchUuid,
+        fingerprint: JSON.stringify({ cart, totals: liveTotals, phone: normalizeCustomerPhone(customerPhone),
+          customerName, pager: normalizedPager, note: orderNote, shift: shift.id,
+          voucher: liveBenefit.selectedVoucherKey, points: liveBenefit.pointsSpent }),
+        recover: requestKey => recoverPosQrDraft(profile.branchUuid, requestKey)
+      });
+    } catch (error) {
+      setQrLoading(false); setQrError(error.message); return;
+    }
     setQrPreviewIdentity(orderIdentity);
     const paymentReference = buildPosPaymentReference(orderIdentity, branch);
     const requestKey = `pos:${paymentProvider}:${profile.branchUuid}:${orderIdentity.orderCode}`;
