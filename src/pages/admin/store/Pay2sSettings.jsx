@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AdminButton, AdminInput } from "../ui/index.js";
 import { hashPay2sTestPhones } from "../../../services/pay2sTestPhoneService.js";
 
-export default function Pay2sSettings({ branchId, settings, onChange }) {
+export default function Pay2sSettings({ branchId, settings, bankOptions = [], onChange }) {
   const mode = settings.pay2sMode || "off";
   const [phones, setPhones] = useState("");
   const [message, setMessage] = useState("");
@@ -27,6 +27,25 @@ export default function Pay2sSettings({ branchId, settings, onChange }) {
           <option value="live">Dùng Pay2S cho đơn QR mới</option>
         </select>
       </label>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="space-y-1 text-xs text-brown/80">
+          <span>Ngân hàng riêng cho Pay2S</span>
+          <select className="admin-input w-full" value={settings.pay2sBankBin || ""} onChange={(event) => onChange("pay2sBankBin", event.target.value)}>
+            <option value="">Dùng tài khoản SePay hiện tại</option>
+            {bankOptions.map((bank) => <option key={bank.bin} value={bank.bin}>{bank.name}</option>)}
+          </select>
+        </label>
+        <label className="space-y-1 text-xs text-brown/80">
+          <span>Số tài khoản nhận tiền Pay2S</span>
+          <AdminInput className="admin-input" autoComplete="off" inputMode="numeric" value={settings.pay2sAccountNumber || ""}
+            placeholder="Số tài khoản/VA do Pay2S cung cấp" onChange={(event) => onChange("pay2sAccountNumber", event.target.value.replace(/\s/g, ""))} />
+        </label>
+        <label className="space-y-1 text-xs text-brown/80">
+          <span>Tên chủ tài khoản Pay2S</span>
+          <AdminInput className="admin-input" autoComplete="off" value={settings.pay2sAccountName || ""}
+            placeholder="Tên chủ tài khoản" onChange={(event) => onChange("pay2sAccountName", event.target.value)} />
+        </label>
+      </div>
       {mode === "test" ? (
         <div className="space-y-2 text-xs text-brown/80">
           <label htmlFor={`pay2s-test-phones-${branchId}`}>Số điện thoại được thử Pay2S</label>
@@ -40,7 +59,8 @@ export default function Pay2sSettings({ branchId, settings, onChange }) {
         </div>
       ) : null}
       <p className="text-xs text-brown/70">
-        Dùng tài khoản ngân hàng và QR của chi nhánh ở phía trên. Cần liên kết tài khoản này với Pay2S và cấu hình webhook trước khi thử.
+        Các ô Pay2S không thay đổi tài khoản SePay ở phía trên. Nếu Pay2S cấp tài khoản ảo (VA), nhập đúng số VA nhận tiền sau khi liên kết ngân hàng và cấu hình webhook.
+        POS cần bản hỗ trợ tài khoản Pay2S riêng trước khi thử.
         Trong chế độ thử, nhập đúng số điện thoại thử khi đặt đơn website hoặc tạo bill POS.
         Đơn đã tạo giữ nguyên nhà cung cấp thanh toán.
       </p>

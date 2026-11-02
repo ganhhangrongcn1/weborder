@@ -14,14 +14,16 @@ export async function resolveBankTransferRoute(settings = {}, phone = "", reques
     ? Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalizedPhone)))).map((byte) => byte.toString(16).padStart(2, "0")).join("") : "";
   const usePay2s = mode === "live" || (mode === "test" && phoneHash && testHashes.includes(phoneHash));
   if (!usePay2s) return { provider: "sepay", providerPayload: {} };
-  const accountNumber = text(settings.accountNumber || settings.bankAccountNumber);
-  const bankBin = text(settings.bankBin || settings.bankCode);
-  if (!accountNumber || !bankBin || !text(settings.accountName || settings.bankAccountName)) {
+  const separateAccount = [settings.pay2sBankBin, settings.pay2sAccountNumber, settings.pay2sAccountName].some((value) => text(value));
+  const accountNumber = text(separateAccount ? settings.pay2sAccountNumber : settings.accountNumber || settings.bankAccountNumber);
+  const bankBin = text(separateAccount ? settings.pay2sBankBin : settings.bankBin || settings.bankCode);
+  const accountName = text(separateAccount ? settings.pay2sAccountName : settings.accountName || settings.bankAccountName);
+  if (!accountNumber || !bankBin || !accountName) {
     throw new Error("Chi nhánh chưa đủ thông tin tài khoản để thử Pay2S.");
   }
   return {
     provider: "pay2s",
-    providerPayload: { bankTransfer: { provider: "pay2s", accountNumber, bankBin, bankName: text(settings.bankName), mode } }
+    providerPayload: { bankTransfer: { provider: "pay2s", accountNumber, accountName, bankBin, bankName: separateAccount ? text(settings.pay2sBankName) : text(settings.bankName), mode } }
   };
 }
 

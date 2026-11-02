@@ -387,6 +387,9 @@ async function createSession(
       .maybeSingle();
 
     if (existingOrderSession) {
+      if (existingOrderSession.provider === "pay2s" && body.bank_account_snapshot !== true) {
+        return response({ ok: false, message: "Vui lòng cập nhật POS để hiển thị đúng tài khoản Pay2S." }, 409);
+      }
       return response({ ok: true, session: existingOrderSession, reused: true });
     }
   }
@@ -405,6 +408,9 @@ async function createSession(
         toText(existing.branch_uuid) === branchUuid &&
         toMoney(existing.amount_expected) === amountExpected;
       if (sameBill && ["draft", "pending_payment", "paid", "converting"].includes(toText(existing.status))) {
+        if (existing.provider === "pay2s" && body.bank_account_snapshot !== true) {
+          return response({ ok: false, message: "Vui lòng cập nhật POS để hiển thị đúng tài khoản Pay2S." }, 409);
+        }
         return response({ ok: true, session: existing, reused: true });
       }
       return response({ ok: false, message: "Mã thanh toán đã được dùng cho bill khác." }, 409);
@@ -447,6 +453,9 @@ async function createSession(
   let bankRoute;
   try {
     bankRoute = await loadBankTransferRoute(serviceClient, branchUuid, body.customer_phone, toText(body.provider).toLowerCase() || "sepay");
+    if (bankRoute.provider === "pay2s" && body.bank_account_snapshot !== true) {
+      return response({ ok: false, message: "Vui lòng cập nhật POS để hiển thị đúng tài khoản Pay2S." }, 409);
+    }
   } catch (error) {
     return response({ ok: false, message: error instanceof Error ? error.message : "Chưa đọc được cấu hình thanh toán." }, 503);
   }
@@ -758,6 +767,9 @@ async function getSession(
     return response({ ok: false, message: "Tài khoản không có quyền tại chi nhánh này." }, 403);
   }
 
+  if (current.data.provider === "pay2s" && body.bank_account_snapshot !== true) {
+    return response({ ok: false, message: "Vui lòng cập nhật POS để hiển thị đúng tài khoản Pay2S." }, 409);
+  }
   return response({ ok: true, session: current.data });
 }
 
@@ -882,7 +894,7 @@ async function listSessions(
     }, 500);
   }
 
-  return response({ ok: true, sessions: data || [] });
+  return response({ ok: true, sessions: (data || []).filter((session) => session.provider !== "pay2s" || body.bank_account_snapshot === true) });
 }
 
 Deno.serve(async (request) => {

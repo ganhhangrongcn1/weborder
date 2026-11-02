@@ -22,7 +22,7 @@ jest.mock("../src/services/supabase/client", () => ({
 
 import { supabase } from "../src/services/supabase/client";
 import { createPosPaymentSession } from "../src/services/pos/posPaymentSessionService";
-import { isPosQrSessionReadyForDisplay } from "../src/services/pos/posPaymentService";
+import { isPosQrSessionReadyForDisplay, buildPosQrImageUrl } from "../src/services/pos/posPaymentService";
 
 const mockGetSession = supabase.auth.getSession;
 const mockRefreshSession = supabase.auth.refreshSession;
@@ -65,6 +65,16 @@ describe("POS QR payment recovery", () => {
     expect(result.ok).toBe(true);
     expect(result.session.provider).toBe("pay2s");
     expect(isPosQrSessionReadyForDisplay(result.session)).toBe(true);
+    expect(mockInvoke.mock.calls[0][1].body.bank_account_snapshot).toBe(true);
+    expect(mockInvoke.mock.calls[0][1].body.session.bank_account_snapshot).toBe(true);
+  });
+  test("QR Pay2S dùng snapshot MB riêng, SePay vẫn dùng tài khoản Sacombank", () => {
+    const branch = { paymentSettings: { bankBin: "970403", accountNumber: "11111111", accountName: "SACOM TEST" } };
+    const session = { provider: "pay2s", providerPayload: { bankTransfer: { bankBin: "970422", accountNumber: "0022222222", accountName: "MB TEST" } } };
+    const input = { branch, amount: 25000, orderIdentity: { paymentReference: "GHR-12345" } };
+    expect(buildPosQrImageUrl(input)).toContain("970403-11111111");
+    expect(buildPosQrImageUrl({ ...input, session })).toContain("970422-0022222222");
+    expect(buildPosQrImageUrl({ ...input, session: { provider: "pay2s" } })).toBe("");
   });
   test("403 giữ thông báo quyền và không refresh hoặc gửi lại", async () => {
     mockInvoke.mockResolvedValue({ data: null, error: {

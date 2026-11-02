@@ -40,10 +40,10 @@ export default function QrPaymentModal({
     || sessionPaid;
   const canRetryFinalize = sessionPaid && Boolean(errorMessage);
   const qrUrl = hasCreatedSession
-    ? buildPosQrImageUrl({ branch, amount, orderIdentity: identity })
+    ? buildPosQrImageUrl({ branch, amount, orderIdentity: identity, session: draftSession })
     : "";
   const momoQrValue = String(draftSession?.momoQrValue || "").trim();
-  const config = getPosQrPaymentConfig(branch);
+  const config = getPosQrPaymentConfig(branch, draftSession);
   const transferContent = hasCreatedSession
     ? draftSession.paymentReference
     : "";
