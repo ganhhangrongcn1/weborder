@@ -3,7 +3,7 @@ import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
 import CustomerOrderActionPanel from "../../components/customer/CustomerOrderActionPanel.jsx";
 import { formatMoney } from "../../utils/format.js";
-import { paymentQrImageToPng } from "../../services/paymentQrImageService.js";
+import { getPaymentQrRasterSource, paymentQrImageToPng } from "../../services/paymentQrImageService.js";
 import {
   cancelCustomerUnpaidOrder,
   prepareOrderForPaymentResume
@@ -87,6 +87,7 @@ export default function OrderSuccess({
 }) {
   const [orderOverride, setOrderOverride] = useState(null);
   const [bankQrPng, setBankQrPng] = useState({ url: "", image: "" });
+  const [bankQrFallbackUrl, setBankQrFallbackUrl] = useState("");
   const order = orderOverride || initialOrder;
   const orderId = order?.id || order?.orderCode || "";
   const isQrPaymentOrder = isPrepaidPickupOrder(order);
@@ -117,10 +118,11 @@ export default function OrderSuccess({
   const momoFallbackPaymentUrl = getFallbackMomoPaymentUrl(paymentSession);
   const bankQrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
   const qrPaymentImageUrl = isMomoPayment ? momoQrImageUrl : bankQrPaymentImageUrl;
-  const displayedQrImageUrl = !isMomoPayment && bankQrPng.url === qrPaymentImageUrl
-    ? bankQrPng.image : qrPaymentImageUrl;
+  const useOriginalQrImage = bankQrFallbackUrl === qrPaymentImageUrl;
+  const displayedQrImageUrl = isMomoPayment || useOriginalQrImage ? qrPaymentImageUrl
+    : bankQrPng.url === qrPaymentImageUrl ? bankQrPng.image : getPaymentQrRasterSource(qrPaymentImageUrl);
   const handleQrImageLoad = event => {
-    if (isMomoPayment || !qrPaymentImageUrl || displayedQrImageUrl.startsWith("data:")) return;
+    if (isMomoPayment || useOriginalQrImage || !qrPaymentImageUrl || displayedQrImageUrl.startsWith("data:")) return;
     try {
       setBankQrPng({ url: qrPaymentImageUrl, image: paymentQrImageToPng(event.currentTarget) });
     } catch {
@@ -601,8 +603,12 @@ export default function OrderSuccess({
                       <div className="qr-payment-wait-card__qr">
                         <img
                           src={displayedQrImageUrl}
-                          crossOrigin={isMomoPayment ? undefined : "anonymous"}
+                          key={`${qrPaymentImageUrl}:${useOriginalQrImage}`}
+                          crossOrigin={isMomoPayment || useOriginalQrImage ? undefined : "anonymous"}
                           onLoad={handleQrImageLoad}
+                          onError={() => {
+                            if (!isMomoPayment && !useOriginalQrImage) setBankQrFallbackUrl(qrPaymentImageUrl);
+                          }}
                           alt={isMomoPayment ? "QR thanh toán MoMo" : "QR thanh toán ngân hàng"}
                           width="210"
                           height="210"

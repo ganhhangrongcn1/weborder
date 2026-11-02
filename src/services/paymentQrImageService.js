@@ -1,5 +1,18 @@
 // Keep VietQR's complete image (bank, recipient and amount). Some .png URLs
 // redirect to SVG; rasterize the loaded image so long-press saves a real PNG.
+export function getPaymentQrRasterSource(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.origin === "https://img.vietqr.io" && /^\/image\/[^/]+\.png$/.test(parsed.pathname)) {
+      // The PNG redirect itself lacks CORS headers. Request the CORS-enabled
+      // SVG directly, keeping the exact bank/account/query unchanged.
+      parsed.pathname = parsed.pathname.replace(/\.png$/, ".svg");
+      return parsed.href;
+    }
+  } catch { /* Keep unrelated or malformed URLs unchanged. */ }
+  return url;
+}
+
 export function paymentQrImageToPng(image) {
   const width = image?.naturalWidth;
   const height = image?.naturalHeight;
