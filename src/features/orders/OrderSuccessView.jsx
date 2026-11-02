@@ -3,14 +3,13 @@ import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
 import CustomerOrderActionPanel from "../../components/customer/CustomerOrderActionPanel.jsx";
 import { formatMoney } from "../../utils/format.js";
-import { renderBankQrImage } from "../../services/bankQrPayload.js";
 import {
   cancelCustomerUnpaidOrder,
   prepareOrderForPaymentResume
 } from "../../services/customerOrderActionService.js";
 import {
   buildMomoPaymentQrImageUrl,
-  buildQrOrderPaymentPayload,
+  buildQrOrderPaymentImageUrl,
   createQrOrderPaymentSession,
   findQrOrderPaymentBranch,
   getFallbackMomoPaymentUrl,
@@ -114,16 +113,7 @@ export default function OrderSuccess({
   const isZaloBrowser = useMemo(() => isZaloInAppBrowser(), []);
   const momoDirectPaymentUrl = getPreferredMomoPaymentUrl(paymentSession);
   const momoFallbackPaymentUrl = getFallbackMomoPaymentUrl(paymentSession);
-  const bankPayload = buildQrOrderPaymentPayload({ order, branch: paymentBranch, session: paymentSession });
-  const [bankQrRender, setBankQrRender] = useState({ payload: "", image: "" });
-  const bankQrPaymentImageUrl = bankQrRender.payload === bankPayload ? bankQrRender.image : "";
-  useEffect(() => {
-    let active = true;
-    if (bankPayload) renderBankQrImage(bankPayload).then(image => {
-      if (active) setBankQrRender({ payload: bankPayload, image });
-    }).catch(() => { if (active) setPaymentMessage("Chưa vẽ được mã QR. Anh/chị tải lại trang để thử lại."); });
-    return () => { active = false; };
-  }, [bankPayload]);
+  const bankQrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
   const qrPaymentImageUrl = isMomoPayment ? momoQrImageUrl : bankQrPaymentImageUrl;
   const qrPaymentPaid = isQrPaymentOrder && isQrOrderPaid(order, paymentSession);
   const orderMetadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : order || {};

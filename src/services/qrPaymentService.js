@@ -1,6 +1,5 @@
 import { initSupabaseRuntimeClient } from "./supabase/supabaseRuntimeClient.js";
 import { buildPosQrImageUrl, getPosQrPaymentConfig } from "./posPaymentService.js";
-import { buildBankQrPayload } from "./bankQrPayload.js";
 
 export const QR_ORDER_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
 const paymentSessionCreateTasks = new Map();
@@ -213,13 +212,6 @@ export function getQrOrderPaymentConfig(branch = {}, session = null) {
   } });
 }
 
-export function buildQrOrderPaymentPayload({ order = {}, branch = {}, session = null } = {}) {
-  if (!session?.id || isMomoPaymentOrder(order)) return "";
-  const config = getQrOrderPaymentConfig(branch, session);
-  return buildBankQrPayload({ ...config, amount: session.amount_expected ?? session.amountExpected,
-    reference: getQrOrderPaymentReference(order, session) });
-}
-
 export function getMomoPaymentLinks(session = null) {
   const providerPayload = getObject(session?.providerPayload || session?.provider_payload);
   return {
@@ -311,7 +303,6 @@ async function invokeQrPaymentFunction(payload) {
   let error = null;
   try {
     const result = await client.functions.invoke("qr-payment-session-api", {
-      region: "ap-southeast-1",
       body: payload
     });
     data = result.data;
