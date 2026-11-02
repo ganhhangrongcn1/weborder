@@ -98,10 +98,16 @@ async function observe(client, run, secret) {
           const query = () => client.from('partner_orders').select('id,display_order_code,created_at,nexpos_status')
             .eq('nexpos_hub_id', hub).eq('nexpos_order_id', c.id).limit(2);
           let result = await query();
-          if (!result.data?.length) { await new Promise(resolve => setTimeout(resolve, 2000)); result = await query(); }
+          for (const delay of [2000, 3000, 3000]) {
+            if (result.data?.length) break;
+            await new Promise(resolve => setTimeout(resolve, delay)); result = await query();
+          }
           const order = result.data?.length === 1 ? result.data[0] : null;
           const fresh = Boolean(order && Date.parse(order.created_at) >= Date.parse(run.started_at));
-          sample.matches.push({ path: c.path, hub, rest_verified: true, db_unique: Boolean(order),
+          // Only a REST-verified identity is hashed; never store an unverified ID.
+          const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(c.id));
+          const idHash = [...new Uint8Array(digest)].map(v => v.toString(16).padStart(2, '0')).join('');
+          sample.matches.push({ path: c.path, hub, rest_verified: true, verified_id_sha256: idHash, db_unique: Boolean(order),
             display_code: order?.display_order_code, db_created_during_run: fresh,
             old_status: ['NEW','PENDING','CREATED','PRE_ORDER','DOING','PICK','FINISH','CANCEL'].includes(data.old_status) ? data.old_status : null });
           if (fresh && (data.topic !== 'saas_order_status_change' || ['NEW','PENDING','CREATED'].includes(data.old_status))) captured = true;

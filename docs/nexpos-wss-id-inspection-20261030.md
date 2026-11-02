@@ -31,6 +31,13 @@ Không giữ pg_net chờ socket dài như các lượt trước.
 Source quan sát tạm: scripts/nexpos-bounded-schema-observer.mjs; bản runtime
 chỉ tồn tại khi deploy chủ động. Repo giữ stub410 ở function chính.
 
+Cập nhật trong lượt: V16 bổ sung SHA-256 chỉ cho identity đã khớp REST đúng
+HUB (không lưu identity gốc), để đối chiếu DB sau khi importer ghi xong;
+thử đọc DB lại trong tối đa 8 giây. Mẫu non-status lúc15:13:06–15:13:09 đã
+có data.order_ids (saas_notifications) và data.order_id (saas_print_bill),
+REST verified=true, nhưng DB chưa có tại lần đọc ban đầu. Chưa gán các mẫu đó
+cho một mã đơn cụ thể chỉ từ timestamp. Tiếp tục chờ bằng chứng nối chính xác.
+
 ## Anh báo đơn mới — 02/11/2026 khoảng 14:56 UTC+7
 
 - Đơn mới gần nhất là GF-305, HUB 30/4. Lượt trigger=wss bắt đầu 14:55:59,
