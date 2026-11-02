@@ -1,5 +1,34 @@
 # Quan sát ID đơn WSS NexPOS — 30/10/2026
 
+## Kiểm tra lại 02/11/2026, 10:41–10:45 UTC+7
+
+Anh yêu cầu kiểm tra ID sự kiện đơn mới và chỉ giãn polling nếu đủ ổn định.
+Cloud main đã fetch, khớp local; không thay code worker/importer hoặc logic bill.
+
+- Bốn HUB connected=true, heartbeat mới, queue ID/HUB trống, control không lỗi
+  liên tiếp. Enrollment hiện hết hạn 06/11/2026 07:42 UTC+7.
+- Thống kê 24 giờ tại checkpoint đầu: 694 lượt WSS success tạo 176 đơn;
+  2598 lượt polling success tạo 41 đơn; 0 lỗi fetch ID. Có hai lỗi kết nối REST
+  trước đó đã phục hồi. Không suy ra 41 đơn là WSS bỏ sót: polling có thể thắng
+  lượt hoặc xử lý queue; chưa phân biệt đủ nguyên nhân để giảm dự phòng.
+- Không có receipt ID tạo mới (source_status_before=null) được tìm thấy trong
+  truy vấn kiểm tra. Đây không chứng minh sự kiện đơn mới không có ID, vì parser
+  hiện chỉ chấp nhận order_ids từ topic trạng thái đã xác minh.
+- Đã quan sát ngắn có JWT và cron-secret, chỉ HUB Thích Quảng Đức. Probe v8
+  có hạn tuyệt đối và giới hạn lượt 110 giây; request 83552 bắt đầu 10:43:10,
+  kết thúc 10:45:00, HTTP200, socket mở, 3 message nhưng events nghiệp vụ rỗng.
+  Không có mẫu để xác minh ID đơn mới; không kết luận WSS thiếu ID.
+- Không ghi đơn/đổi trạng thái/in/điểm, không lưu raw event hoặc ID chưa kiểm
+  chứng, không đưa credential/token/customer data ra ngoài. Chỉ metadata.
+- Sau lượt đã triển khai lại handler cố định410, JWTtrue, probe v9. Đã đọc
+  source production xác minh không còn createClient, integration_sessions hoặc
+  WebSocket. Endpoint quan sát không được để mở chờ đơn dài hạn.
+- Quyết định: chưa giãn polling. Job nexpos-shadow-sync-active-hours-15-seconds
+  vẫn active/schedule15seconds; giữ rare/full/late và toàn bộ dự phòng hiện có.
+  Không bật lại automation kiểm tra định kỳ đã xóa.
+
+Phần bên dưới là lịch sử các lượt ngày 30/10, không thay kết luận mới nhất này.
+
 ## Quyền và phạm vi
 
 Anh đã cho phép triển khai đầu quan sát tạm có xác thực trên Supabase để kiểm
