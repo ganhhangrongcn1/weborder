@@ -1,4 +1,5 @@
 import { loadBankTransferRoute } from "../_shared/bankTransferRouting.js";
+import { createPosQrCheckout } from "../_shared/posQrCheckout.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 type JsonRecord = Record<string, unknown>;
@@ -942,6 +943,14 @@ Deno.serve(async (request) => {
     profileBranchUuid: toText(access.profile.branch_uuid),
     requestedBranchUuid: toText(getObject(payload.session).branch_uuid)
   });
+  if (action === "create_checkout") {
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: toText(request.headers.get("Authorization")) } },
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    return createPosQrCheckout({ payload, userClient, serviceClient, reply: response,
+      createSession: (input: JsonRecord) => createSession(serviceClient, access.profile, input) });
+  }
   if (action === "create") {
     return createSession(serviceClient, access.profile, getObject(payload.session));
   }

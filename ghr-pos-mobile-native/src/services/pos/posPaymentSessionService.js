@@ -234,6 +234,10 @@ async function invokeSessionAction(body = {}) {
     };
   }
 
+  if (body.action === "create_checkout" &&
+    (data.session?.source !== "qr_order" || data.session?.order_id !== body.pending_order?.order?.id)) {
+    return { ok: false, message: "Phiên QR chưa gắn đủ đơn. Giữ bill và thử lại." };
+  }
   return {
     ok: true,
     session: normalizeSessionRow(data.session),
@@ -253,7 +257,8 @@ export async function createPosPaymentSession(input = {}) {
   }
 
   return invokeSessionAction({
-    action: "create",
+    action: input.pendingOrder ? "create_checkout" : "create",
+    ...(input.pendingOrder ? { pending_order: input.pendingOrder } : {}),
     session: {
       payment_reference: paymentReference,
       request_key: toText(input.requestKey) || null,

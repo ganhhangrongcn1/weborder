@@ -1894,36 +1894,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       customerName: customerName || customerLookup.result?.customerName || "",
       customerPhone: normalizeCustomerPhone(customerPhone)
     };
-    const result = await createPosPaymentSession({
-      requestKey,
-      paymentReference,
-      provider: paymentProvider,
-      branchUuid: profile.branchUuid,
-      posShiftId: shift.id,
-      branchName: profile.branchName,
-      cashierName: profile.name || profile.email,
-      customerName,
-      customerPhone: normalizeCustomerPhone(customerPhone),
-      pagerNumber: normalizedPager,
-      pagerEnabled,
-      amountExpected: liveTotals.total,
-      cart,
-      orderIdentity,
-      checkout
-    }).catch((error) => ({
-      ok: false,
-      message: error?.message || "Không kết nối được máy chủ để tạo QR. Vui lòng thử lại."
-    }));
-
-    if (!result.ok) {
-      setQrLoading(false);
-      setQrError(result.message || "Không tạo được phiên thanh toán QR.");
-      setShiftMessage(result.message || "Không tạo được phiên thanh toán QR.");
-      setQrModalOpen(true);
-      return;
-    }
-
-    const pendingOrderResult = await createPosTakeawayOrderMobile({
+    const pendingOrderInput = {
       cart,
       totals: liveTotals,
       pagerNumber: normalizedPager,
@@ -1951,10 +1922,62 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       paymentReference,
       posShiftId: shift.id,
       paymentMeta: {
-        paymentSessionId: result.session.id,
         requestKey
       },
       orderIdentity
+    };
+    let pendingOrder = null;
+    if (paymentProvider !== "momo" && !cart.some(item => item.stampGift || item.metadata?.stampGift)) {
+      const prepared = await createPosTakeawayOrderMobile({ ...pendingOrderInput, prepareOnly: true });
+      if (!prepared.ok) {
+        setQrLoading(false);
+        setQrError(prepared.message);
+        return;
+      }
+      pendingOrder = { order: prepared.orderRow, items: prepared.itemRows };
+    }
+
+    const result = await createPosPaymentSession({
+      requestKey,
+      paymentReference,
+      provider: paymentProvider,
+      branchUuid: profile.branchUuid,
+      posShiftId: shift.id,
+      branchName: profile.branchName,
+      cashierName: profile.name || profile.email,
+      customerName,
+      customerPhone: normalizeCustomerPhone(customerPhone),
+      pagerNumber: normalizedPager,
+      pagerEnabled,
+      amountExpected: liveTotals.total,
+      cart,
+      orderIdentity,
+      checkout,
+      pendingOrder
+    }).catch((error) => ({
+      ok: false,
+      message: error?.message || "Không kết nối được máy chủ để tạo QR. Vui lòng thử lại."
+    }));
+
+    if (!result.ok) {
+      setQrLoading(false);
+      setQrError(result.message || "Không tạo được phiên thanh toán QR.");
+      setShiftMessage(result.message || "Không tạo được phiên thanh toán QR.");
+      setQrModalOpen(true);
+      return;
+    }
+
+    if (pendingOrder) {
+      setQrSession(result.session);
+      await rememberPosPaymentSession(profile.branchUuid, result.session.id);
+      setQrLoading(false);
+      setShiftMessage("Đã tạo QR, đang chờ khách chuyển khoản.");
+      return;
+    }
+
+    const pendingOrderResult = await createPosTakeawayOrderMobile({
+      ...pendingOrderInput,
+      paymentMeta: { ...pendingOrderInput.paymentMeta, paymentSessionId: result.session.id }
     });
     if (!pendingOrderResult.ok || pendingOrderResult.offline) {
       await cancelPosPaymentSession(result.session.id, "Không tạo được đơn chờ thanh toán QR");

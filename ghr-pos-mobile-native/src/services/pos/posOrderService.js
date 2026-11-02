@@ -217,7 +217,8 @@ export async function createPosTakeawayOrderMobile({
   paymentMeta = null,
   orderIdentity: providedOrderIdentity = null,
   skipOfflineQueue = false,
-  phoneOrder = false
+  phoneOrder = false,
+  prepareOnly = false
 } = {}) {
   const items = normalizeCartForOrder(cart);
   if (!items.length) return { ok: false, message: "Chưa có món trong bill." };
@@ -406,6 +407,8 @@ export async function createPosTakeawayOrderMobile({
       total_amount: totalAmount,
       branch_uuid: branchInfo.branchUuid || null,
       branch_name: branchInfo.branchName,
+      branch_address: toText(branch?.branchAddress || branch?.address),
+      pickup_branch_address: toText(branch?.pickupBranchAddress || branch?.branchAddress || branch?.address),
       pickup_branch_uuid: branchInfo.pickupBranchUuid || null,
       pickup_branch_name: branchInfo.pickupBranchName,
       pickup_time_text: "Lấy tại quầy",
@@ -413,20 +416,6 @@ export async function createPosTakeawayOrderMobile({
       pos_shift_id: shiftId || null,
       metadata
     };
-
-    if (displayCustomerPhone) {
-      const profileResult = await ensurePosGuestProfile({
-        phone: displayCustomerPhone,
-        name: customerName || safeCustomerLookup?.customerName || "",
-        source: "pos_mobile",
-        sourceRef: orderIdentity.orderCode
-      });
-      if (profileResult.ok) {
-        customerProfileReady = true;
-      } else {
-        profileWarning = ` Chưa tạo được hồ sơ khách vãng lai: ${profileResult.message || "kiểm tra RPC upsert_customer_stub_profile."}`;
-      }
-    }
 
     const itemRows = items.map((item, index) => {
       const optionGroups = buildSelectedOptionGroups(item.selectedOptions);
@@ -455,6 +444,22 @@ export async function createPosTakeawayOrderMobile({
         }
       };
     });
+
+    if (prepareOnly) return { ok: true, orderRow, itemRows };
+
+    if (displayCustomerPhone) {
+      const profileResult = await ensurePosGuestProfile({
+        phone: displayCustomerPhone,
+        name: customerName || safeCustomerLookup?.customerName || "",
+        source: "pos_mobile",
+        sourceRef: orderIdentity.orderCode
+      });
+      if (profileResult.ok) {
+        customerProfileReady = true;
+      } else {
+        profileWarning = ` Chưa tạo được hồ sơ khách vãng lai: ${profileResult.message || "kiểm tra RPC upsert_customer_stub_profile."}`;
+      }
+    }
 
     let orderWriteResult = {};
     try {

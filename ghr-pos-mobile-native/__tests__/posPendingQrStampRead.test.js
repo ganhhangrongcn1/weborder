@@ -41,6 +41,30 @@ test('pending QR saves order/items without waiting for display stamps or awardin
   expect(applyPosOrderLoyaltyMobile).not.toHaveBeenCalled();
 });
 
+test('preparing combined QR payload does no network IO or customer/stamp mutation', async () => {
+  const result = await createPosTakeawayOrderMobile({ ...bill, prepareOnly: true });
+  expect(result.ok).toBe(true);
+  expect(result.orderRow.status).toBe('pending_payment');
+  expect(result.orderRow.branch_address).toBe('');
+  expect(result.itemRows).toHaveLength(1);
+  expect(ensurePosGuestProfile).not.toHaveBeenCalled();
+  expect(supabase.from).not.toHaveBeenCalled();
+  expect(supabase.rpc).not.toHaveBeenCalled();
+  expect(readPosStamps).not.toHaveBeenCalled();
+});
+
+test('0d stamp gift passes non-null branch address to authoritative checkout', async () => {
+  const result = await createPosTakeawayOrderMobile({ ...bill, totals: { subtotal: 0, total: 0 },
+    paymentMethod: 'cash', paymentStatus: 'paid', paymentAmount: 0,
+    cart: [{ id: 'gift', name: 'Quà thử', price: 0, quantity: 1,
+      stampGift: true, stampPhone: bill.customerPhone }] });
+  expect(result.ok).toBe(true);
+  expect(supabase.rpc).toHaveBeenCalledWith('checkout_stamp_order', expect.objectContaining({
+    p_order: expect.objectContaining({ total_amount: 0, branch_address: '', payment_method: 'cash' }),
+    p_items: [expect.objectContaining({ quantity: 1, unit_price: 0, line_total: 0 })]
+  }));
+});
+
 test('phone order uses atomic RPC, stays pending and neither writes separate items nor awards points', async () => {
   const result = await createPosTakeawayOrderMobile({ ...bill, phoneOrder: true, paymentMethod: 'cash', paymentStatus: 'unpaid' });
   expect(result.ok).toBe(true);
