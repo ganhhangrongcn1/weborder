@@ -1,5 +1,27 @@
 # Quan sát ID đơn WSS NexPOS — 30/10/2026
 
+## Đã bắt ID đơn mới thật — 02/11/2026 15:16 UTC+7
+
+Run `1c0f6457-eee2-445e-906a-2f6eed770697` kết thúc sớm status=captured,
+16 message, 10 sample. Đã nối chính xác identity đã xác minh REST với database
+bằng SHA-256 (không xuất ID thô), không suy từ mã hiển thị hoặc timestamp:
+
+- 15:16:28.523, topic saas_notifications, đường `data.order_ids`: ID khớp
+  duy nhất GF-222, đúng HUB Lê Hồng Phong `69e58a284b940f84934e2f85`.
+- 15:16:30.310 và 15:16:30.732, topic saas_print_bill, đường `data.order_id`:
+  cùng identity GF-222, REST đúng identity/HUB, DB duy nhất.
+- Đơn GF-222 vào Supabase 15:16:35.705953; sự kiện notifications mang ID đến
+  trước khi DB có đơn khoảng 7,18 giây (mốc event/DB chỉ để mô tả trình tự).
+  Server tạo bill 15:16:36.324897, POS báo printed. Lượt tạo đơn trigger=wss.
+- Mẫu status_change GF-305 lúc15:16:02 là đơn cũ, không dùng chứng minh đơn mới.
+- Kết luận: đã có mẫu thực cho thấy ID nguồn dùng được ngay ở sự kiện
+  notifications và print của đơn mới. Chưa chứng minh tất cả loại notifications
+  đều là tạo mới hoặc độ phủ đủ mọi đơn; chưa đổi parser worker/broker/importer.
+- Đã vô hiệu hóa probe bằng stub410/JWTtrue v17; đọc lại source xác nhận không
+  createClient/integration_sessions/WebSocket. Run đã dừng, không tạo/hủy/in thử.
+  Giữ polling30giây, WSS/bill4HUB và khóa hiện có. Automation chốt lượt tạm
+  được xóa sau ghi biên bản, không khôi phục lịch giám sát cũ.
+
 ## Lượt bắt mẫu nền có thời hạn — 02/11/2026 15:10–15:19 UTC+7
 
 Anh yêu cầu bắt sự kiện đơn mới, không cần anh báo đúng thời điểm. Console
