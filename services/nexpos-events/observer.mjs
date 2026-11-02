@@ -13,7 +13,7 @@ if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('invalid_worker_token');
 const state = {
   connected: false, opens: 0, closes: 0, messages: 0, rejected: 0, events: {},
   started_at: new Date().toISOString(), last_event_at: null, last_message_at: null,
-  delivery_mode: 'metadata', worker_version: 'order-id-v1'
+  delivery_mode: 'metadata', worker_version: 'order-id-v2'
 };
 let stopping = false;
 let socket;

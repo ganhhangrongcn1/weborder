@@ -16,7 +16,23 @@ test('live status envelope preserves opaque IDs and drops raw customer/token fie
   assert.equal(parsed.length, 1);
   assert.equal(sanitizeSignals(parsed, ['other']), null);
   assert.equal(sanitizeSignals([{ ...signal(['x']), topic: 'arbitrary' }], [hub]), null);
-  assert.deepEqual(readSignal(JSON.stringify({ data: { hub_id: hub, topic: 'saas_notifications', order_ids: ['x'] } }), [hub])[0].order_ids, []);
+  assert.deepEqual(readSignal(JSON.stringify({ data: { hub_id: hub, topic: 'saas_notifications', order_ids: ['x'] } }), [hub])[0].order_ids, ['x']);
+});
+
+test('new-order fields survive worker and broker; unknown shapes reconcile HUB', () => {
+  for (const [topic, fields] of [
+    ['saas_notifications', { order_ids: ['opaque-new', 'opaque-new'] }],
+    ['saas_print_bill', { order_id: 'opaque-new' }]
+  ]) {
+    const parsed = readSignal(JSON.stringify({ data: { hub_ids: [hub], topic, ...fields } }), [hub]);
+    assert.deepEqual(parsed[0].order_ids, ['opaque-new']);
+    assert.deepEqual(sanitizeSignals(parsed, [hub])[0].order_ids, ['opaque-new']);
+  }
+  for (const fields of [{}, { order_ids: ['ok', 'bad id'] }, { order_ids: Array(33).fill('x') }, { order_id: 'unknown-field' }]) {
+    assert.deepEqual(readSignal(JSON.stringify({ data: { hub_id: hub, topic: 'saas_notifications', ...fields } }), [hub])[0].order_ids, []);
+  }
+  assert.deepEqual(sanitizeSignals([{ ...signal(['x']), topic: 'reconnect' }], [hub])[0].order_ids, []);
+  assert.equal(readSignal(JSON.stringify({ data: { hub_id: 'disabled', topic: 'saas_print_bill', order_id: 'x' } }), [hub]), null);
 });
 
 test('first event sends immediately; events while busy are coalesced and delivered afterwards', async () => {

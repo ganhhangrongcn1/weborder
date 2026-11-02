@@ -26,7 +26,7 @@ export function sanitizeReport(value, allowedHubs) {
     last_message_at: validTime(value.last_message_at),
     started_at: validTime(value.started_at)
   };
-  if (value.worker_version === 'order-id-v1') report.worker_version = 'order-id-v1';
+  if (['order-id-v1', 'order-id-v2'].includes(value.worker_version)) report.worker_version = value.worker_version;
   if (value.delivery_mode === 'immediate-v1') report.delivery_mode = 'immediate-v1';
   for (const hub of allowedHubs) {
     report.events[hub] = {};
