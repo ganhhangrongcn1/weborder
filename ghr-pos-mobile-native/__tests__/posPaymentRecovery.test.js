@@ -57,6 +57,15 @@ const createInput = {
 };
 
 describe("POS QR payment recovery", () => {
+  test("giữ provider Pay2S do máy chủ trả về cho bill thử, không ép lại SePay", async () => {
+    mockInvoke.mockResolvedValue({
+      data: { ok: true, session: { ...successfulFunctionResponse.data.session, provider: "pay2s" } }, error: null
+    });
+    const result = await createPosPaymentSession(createInput);
+    expect(result.ok).toBe(true);
+    expect(result.session.provider).toBe("pay2s");
+    expect(isPosQrSessionReadyForDisplay(result.session)).toBe(true);
+  });
   test("403 giữ thông báo quyền và không refresh hoặc gửi lại", async () => {
     mockInvoke.mockResolvedValue({ data: null, error: {
       message: "Edge Function returned a non-2xx status code",

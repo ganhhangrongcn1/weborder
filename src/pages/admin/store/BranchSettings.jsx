@@ -1,3 +1,4 @@
+import Pay2sSettings from "./Pay2sSettings.jsx";
 import { useEffect, useMemo, useState } from "react";
 import { goongAutocomplete, goongPlaceDetail, hasGoongApiKey } from "../../../services/goongService.js";
 import { buildPosQrImageUrl, getPosQrPaymentConfig } from "../../../services/posPaymentService.js";
@@ -249,7 +250,8 @@ export default function BranchSettings({
               ...item,
               paymentSettings: {
                 ...(item?.paymentSettings && typeof item.paymentSettings === "object" ? item.paymentSettings : {}),
-                [field]: typeof value === "boolean" ? value : String(value || "").trim()
+                [field]: field === "pay2sTestPhoneHashes" && Array.isArray(value)
+                  ? value : typeof value === "boolean" ? value : String(value || "").trim()
               }
             }
           : item
@@ -853,6 +855,8 @@ export default function BranchSettings({
                       <p className="text-xs text-brown/60">
                         POS dùng các ô này để tạo QR chuyển khoản. Nếu chọn SePay tự động thì chi nhánh này sẽ dùng mã đơn đầy đủ để chờ webhook SePay tự xác nhận thanh toán. Lưu chi nhánh là sẽ cập nhật luôn lên Supabase.
                       </p>
+                      <Pay2sSettings branchId={branchId} settings={paymentSettings}
+                        onChange={(field, value) => updateBranchPaymentField(branch.id, field, value)} />
                       {String(paymentSettings.provider || "vietqr").toLowerCase() === "sepay" ? (
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs text-emerald-800">
                           Đang bật chế độ SePay tự động cho chi nhánh này. Khi Edge Function webhook đã deploy đúng trên Supabase thì đơn QR thanh toán xong sẽ tự xác nhận, tự gửi bếp và tự tạo lệnh in bill.

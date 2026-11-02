@@ -1,3 +1,4 @@
+import { loadBankTransferRoute } from "../_shared/bankTransferRouting.js";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 type JsonRecord = Record<string, unknown>;
@@ -443,6 +444,12 @@ async function createSession(
     }, 409);
   }
 
+  let bankRoute;
+  try {
+    bankRoute = await loadBankTransferRoute(serviceClient, branchUuid, body.customer_phone, toText(body.provider).toLowerCase() || "sepay");
+  } catch (error) {
+    return response({ ok: false, message: error instanceof Error ? error.message : "Chưa đọc được cấu hình thanh toán." }, 503);
+  }
   const now = new Date();
   const expiresAt = new Date(now.getTime() + POS_PAYMENT_SESSION_TIMEOUT_MS).toISOString();
   const { data, error } = await serviceClient
@@ -450,7 +457,7 @@ async function createSession(
     .insert({
       payment_reference: paymentReference,
       request_key: requestKey || null,
-      provider: toText(body.provider).toLowerCase() || "sepay",
+      provider: bankRoute.provider,
       source,
       status: "pending_payment",
       branch_uuid: branchUuid,
@@ -465,7 +472,7 @@ async function createSession(
       amount_paid: 0,
       cart_snapshot: cartSnapshot,
       checkout_snapshot: checkoutSnapshot,
-      provider_payload: {},
+      provider_payload: bankRoute.providerPayload,
       order_id: orderId || null,
       expires_at: expiresAt,
       created_at: now.toISOString(),

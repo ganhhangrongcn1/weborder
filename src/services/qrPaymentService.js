@@ -189,8 +189,12 @@ export function findQrOrderPaymentBranch(order = {}, branches = []) {
 export function buildQrOrderPaymentImageUrl({ order = {}, branch = {}, session = null } = {}) {
   const safeOrder = getObject(order);
   if (isMomoPaymentOrder(safeOrder)) return "";
+  const bankSnapshot = getObject(getObject(session?.providerPayload || session?.provider_payload).bankTransfer);
+  const paymentBranch = session?.provider === "pay2s" && bankSnapshot.accountNumber && bankSnapshot.bankBin
+    ? { ...branch, paymentSettings: { ...getObject(branch.paymentSettings), ...bankSnapshot } }
+    : branch;
   return buildPosQrImageUrl({
-    branch,
+    branch: paymentBranch,
     amount: session?.amount_expected || safeOrder.totalAmount || safeOrder.total,
     orderIdentity: {
       orderCode: safeOrder.orderCode || safeOrder.id,
