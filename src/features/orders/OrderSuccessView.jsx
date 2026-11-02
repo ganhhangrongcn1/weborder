@@ -3,6 +3,7 @@ import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
 import CustomerOrderActionPanel from "../../components/customer/CustomerOrderActionPanel.jsx";
 import { formatMoney } from "../../utils/format.js";
+import { paymentQrImageToPng } from "../../services/paymentQrImageService.js";
 import {
   cancelCustomerUnpaidOrder,
   prepareOrderForPaymentResume
@@ -85,6 +86,7 @@ export default function OrderSuccess({
   isOrderRestoring = false
 }) {
   const [orderOverride, setOrderOverride] = useState(null);
+  const [bankQrPng, setBankQrPng] = useState({ url: "", image: "" });
   const order = orderOverride || initialOrder;
   const orderId = order?.id || order?.orderCode || "";
   const isQrPaymentOrder = isPrepaidPickupOrder(order);
@@ -115,6 +117,16 @@ export default function OrderSuccess({
   const momoFallbackPaymentUrl = getFallbackMomoPaymentUrl(paymentSession);
   const bankQrPaymentImageUrl = buildQrOrderPaymentImageUrl({ order, branch: paymentBranch, session: paymentSession });
   const qrPaymentImageUrl = isMomoPayment ? momoQrImageUrl : bankQrPaymentImageUrl;
+  const displayedQrImageUrl = !isMomoPayment && bankQrPng.url === qrPaymentImageUrl
+    ? bankQrPng.image : qrPaymentImageUrl;
+  const handleQrImageLoad = event => {
+    if (isMomoPayment || !qrPaymentImageUrl || displayedQrImageUrl.startsWith("data:")) return;
+    try {
+      setBankQrPng({ url: qrPaymentImageUrl, image: paymentQrImageToPng(event.currentTarget) });
+    } catch {
+      setPaymentMessage("QR vẫn quét được, nhưng chưa chuyển được ảnh để lưu PNG. Anh/chị thử tải lại trang bằng Chrome hoặc Safari.");
+    }
+  };
   const qrPaymentPaid = isQrPaymentOrder && isQrOrderPaid(order, paymentSession);
   const orderMetadata = order?.metadata && typeof order.metadata === "object" ? order.metadata : order || {};
   const qrPaymentCancelled = isQrPaymentOrder &&
@@ -588,7 +600,9 @@ export default function OrderSuccess({
                     <>
                       <div className="qr-payment-wait-card__qr">
                         <img
-                          src={qrPaymentImageUrl}
+                          src={displayedQrImageUrl}
+                          crossOrigin={isMomoPayment ? undefined : "anonymous"}
+                          onLoad={handleQrImageLoad}
                           alt={isMomoPayment ? "QR thanh toán MoMo" : "QR thanh toán ngân hàng"}
                           width="210"
                           height="210"
