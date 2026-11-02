@@ -1,5 +1,24 @@
 # Quan sát ID đơn WSS NexPOS — 30/10/2026
 
+## Anh báo đơn mới — 02/11/2026 khoảng 14:56 UTC+7
+
+- Đơn mới gần nhất là GF-305, HUB 30/4. Lượt trigger=wss bắt đầu 14:55:59,
+  tạo đơn 14:56:04.303566, server tạo bill 14:56:05.377459 (1,074 giây sau
+  ghi đơn), POS báo printed 14:56:07.593. Timestamp thiết bị có thể lệch đồng hồ.
+- Khi bắt đầu kiểm tra, probe được mở theo scope Thích Quảng Đức của lượt
+  trước, sau truy vấn nhận diện đơn đã chuyển cấu hình quan sát sang đúng
+  30/4. Không dùng mẫu ở HUB khác để kết luận về GF-305.
+- Request 84362: Thích Quảng Đức, 14:56:49–14:58:39, 110 giây, socket mở,
+  6 message, events nghiệp vụ rỗng. Request 84365: 30/4, 14:58:41–15:00:31,
+  110 giây, socket mở, 7 message, events nghiệp vụ rỗng, cả hai HTTP200.
+  pg_net xử lý lượt sau trễ hơn lúc gửi, không coi thời điểm enqueue HTTP là
+  thời điểm đang nghe WSS. Sự kiện tạo GF-305 đã xảy ra trước các lượt quan sát.
+- Không có bằng chứng về trường ID trong sự kiện tạo mới của GF-305. Không
+  suy ngược từ ID database hoặc trạng thái printed thành ID có trong WSS.
+- Probe đã trở lại handler410/JWTtrue v12; đọc lại source xác nhận không có
+  client/session/WebSocket. Các socket lượt ngắn tự đóng khi hết hạn. Không
+  thay luồng sync, không tạo/hủy/in thử đơn, giữ polling30giây; không bật automation.
+
 ## Kiểm tra lại 02/11/2026, 10:41–10:45 UTC+7
 
 Anh yêu cầu kiểm tra ID sự kiện đơn mới và chỉ giãn polling nếu đủ ổn định.
