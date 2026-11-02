@@ -24,7 +24,7 @@ export function parsePay2sTransaction(input) {
   const add = (value) => { const key = text(value).toUpperCase().replace(/[^A-Z0-9]/g, ""); if (key) references.add(key); };
   // paymentCode is optional. Never match short substrings of longer order codes.
   add(input.paymentCode);
-  for (const match of text(input.content).toUpperCase().matchAll(/(?:^|[^A-Z0-9])(GHR-?\d{4,}(?:-?QR-?\d{4,})?|POS-?\d{8}-?\d{6})(?=$|[^A-Z0-9])/g)) add(match[1]);
+  for (const match of text(input.content).toUpperCase().matchAll(/(?:^|[^A-Z0-9])(GHR-?\d{4,}(?:-?QR-?\d{4,})?|POS[ -]*\d{8}[ -]*\d{6})(?=$|[^A-Z0-9])/g)) add(match[1]);
   return {
     id, accountNumber, amount, direction, transactionDate: time.toISOString(),
     references: [...references], gateway: text(input.gateway),

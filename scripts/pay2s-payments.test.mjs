@@ -45,6 +45,10 @@ test("Pay2S payload supports missing paymentCode and Vietnam local timestamps", 
   assert.deepEqual(parsePay2sTransaction({ ...payload, content: "TT GHR-12345-QR-77889" }).references, ["GHR12345QR77889"]);
   assert.deepEqual(parsePay2sTransaction({ ...payload, content: "XGHR12345Y" }).references, []);
   assert.deepEqual(parsePay2sTransaction({ ...payload, content: "TT POS-20261102-123456" }).references, ["POS20261102123456"]);
+  assert.deepEqual(parsePay2sTransaction({ ...payload, content: "MBVCB.123.POS 20261102 201308.CT tu TEST" }).references, ["POS20261102201308"]);
+  for (const content of ['XPOS 20261102 201308','POS 20261102 2013089','POS 2026110 201308']) {
+    assert.deepEqual(parsePay2sTransaction({...payload,content}).references,[]);
+  }
 });
 
 test("bad amounts, missing identities and bad dates cannot settle orders", () => {
