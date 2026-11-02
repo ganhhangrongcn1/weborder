@@ -1,5 +1,14 @@
 # Tích hợp Pay2S song song SePay — 02/11/2026
 
+## Tạm dừng theo yêu cầu người dùng — 02/11/2026
+
+- Người dùng yêu cầu dừng tại đây, đồng bộ Cloud và ghi lại tiến trình để tiếp tục vào dịp khác. Không tiếp tục liên kết ngân hàng, gửi form, tạo webhook, bật thử hay chuyển provider cho đến khi người dùng yêu cầu làm tiếp.
+- Người dùng phỏng đoán hồ sơ hộ kinh doanh chưa được MB xác nhận. Đây **chưa phải nguyên nhân đã được MB/Pay2S xác nhận**; bằng chứng hiện có chỉ là lỗi “Record is not exist” khi liên kết MB ở chế độ Hộ kinh doanh/Doanh nghiệp.
+- Đã đồng bộ source lên `main`, triển khai website/Supabase và lưu APK thử 0.4.33 đã xác minh chữ ký, phiên bản và bytecode. Bản POS cập nhật chung chưa đổi; chưa cài/thử thật trên thiết bị, chưa giao dịch ngân hàng thật hoặc nghiệm thu in giấy.
+- Tại thời điểm ghi nhận tạm dừng: kiểm tra Cloud cho thấy **0/4 chi nhánh bật Pay2S**. SePay và tài khoản Sacombank hiện có được giữ nguyên; cấu hình MB/số thử tại Thích Quảng Đức chỉ ở trạng thái chuẩn bị.
+- Điểm tiếp tục: nhận kết quả xác minh hồ sơ/hỗ trợ từ MB/Pay2S → hoàn tất liên kết MB và lấy tài khoản/VA đúng → tạo webhook IN và lưu token server → cài APK lên một máy thử → chỉ bật chế độ thử cho số đã chuẩn bị → thử website/POS, bếp/in bill và đối soát trùng/hết hạn. Chỉ chuyển chính thức sau khi người dùng chấp thuận kết quả thử.
+- Tài liệu này là điểm bàn giao chính; đường dẫn APK, checksum, trạng thái triển khai, kiểm tra và toàn bộ file thay đổi nằm ở các mục bên dưới.
+
 ## Phạm vi
 
 Thêm Pay2S cho chuyển khoản QR website nhận tại quán, QR tại quầy và POS Android hiện có. Không thay đổi MoMo, tiền mặt hoặc các chi nhánh sang Pay2S. Đối chiếu `origin/main` và production Vercel cùng commit `a41693c0eaa6f4c26dae4790532a296822a6558b`; ba Edge Function thanh toán và hai helper đang chạy khớp source local trước khi sửa.
