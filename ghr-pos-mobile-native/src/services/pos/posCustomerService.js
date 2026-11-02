@@ -494,6 +494,34 @@ function buildCustomerDisplayName(profile = null, stats = {}, latestOrderName = 
   return "";
 }
 
+// Payment validation needs fresh entitlements, not CRM statistics or history.
+export async function refreshPosPaymentCustomer(rawPhone = "", previousCustomer = null) {
+  const phone = normalizeCustomerPhone(rawPhone);
+  if (!supabase || !isValidVietnamMobilePhone(phone)) {
+    return { ok: false, message: "Không kiểm tra được quyền lợi khách hàng." };
+  }
+  const [accountResult, ruleResult, profileResult] = await Promise.all([
+    supabase.from("loyalty_accounts").select("customer_phone,total_points,vouchers,voucherHistory:metadata->voucherHistory,updated_at")
+      .eq("customer_phone", phone).maybeSingle(),
+    supabase.from("app_configs").select("id,value,updated_at").eq("id", "ghr_loyalty").maybeSingle(),
+    supabase.from("profiles").select("id,phone,name,registered,auth_user_id").in("phone", buildPhoneVariants(phone))
+  ]);
+  if (accountResult.error || ruleResult.error || profileResult.error) {
+    return { ok: false, message: "Chưa kiểm tra được điểm/voucher mới nhất. Giữ bill và thử lại." };
+  }
+  const row = accountResult.data;
+  const loyalty = normalizeLoyaltyData(row ? { ...row, metadata: { voucherHistory: row.voucherHistory } } : null, phone);
+  const previous = normalizeCustomerPhone(previousCustomer?.phone) === phone ? previousCustomer : {};
+  const profile = pickBestProfile(profileResult.data, phone);
+  return {
+    ...previous, ok: true, phone, loyalty, profile,
+    registeredCustomer: isRegisteredProfile(profile),
+    customerName: getRealCustomerName(profile) || previous.customerName || "",
+    loyaltyRule: normalizeLoyaltyConfig(ruleResult.data),
+    availableVouchers: loyalty.voucherHistory.map(normalizeVoucher).filter(voucher => isVoucherActive(voucher)).slice(0, 8)
+  };
+}
+
 export async function lookupPosCustomerByPhone(rawPhone = "") {
   const phone = normalizeCustomerPhone(rawPhone);
   if (!isValidVietnamMobilePhone(phone)) {

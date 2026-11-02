@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { forgetPosQrDraft } from "./posQrDraftService";
+import { compactPosQrCheckout } from "./posPaymentSnapshotService";
 
 import { createPosOrderIdentity } from "../../shared/pos/posOrderIdentity";
 import { supabase } from "../supabase/client";
@@ -182,15 +183,23 @@ export async function forgetPosPaymentSession(branchUuid = "") {
   await AsyncStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(sessions));
 }
 
-async function invokeSessionAction(body = {}) {
-  const initialAuth = await refreshPosPaymentAuthSession();
+async function invokeSessionAction(body = {}, authPreparation = null) {
+  const authStarted = Date.now();
+  let initialAuth = authPreparation ? await authPreparation : await refreshPosPaymentAuthSession();
+  if (initialAuth.ok && isSessionNearExpiry(initialAuth.session)) initialAuth = await refreshPosPaymentAuthSession();
   if (!initialAuth.ok) return { ok: false, message: initialAuth.message };
+  const authWaitMs = Date.now() - authStarted;
 
   const invokeWithSession = async (session) => {
+    const started = Date.now();
     const result = await supabase.functions.invoke("pos-payment-session-api", {
       region: "ap-southeast-1",
       body: { ...body, bank_account_snapshot: true },
       headers: { Authorization: `Bearer ${toText(session?.access_token)}` }
+    });
+    if (body.action === "create_checkout") console.info("[pos-qr-api]", {
+      auth_wait_ms: authWaitMs, request_chars: JSON.stringify(body).length,
+      network_ms: Date.now() - started, ok: !result.error
     });
     if (result.error && !result.data && result.error.context?.clone) {
       try {
@@ -251,6 +260,7 @@ async function invokeSessionAction(body = {}) {
 }
 
 export async function createPosPaymentSession(input = {}) {
+  if (input.pendingOrder) input = { ...input, ...compactPosQrCheckout(input) };
   const orderIdentity = input.orderIdentity || createPosOrderIdentity(new Date());
   const paymentReference = toText(input.paymentReference || orderIdentity.orderCode).toUpperCase();
   const source = toText(input.source).toLowerCase() || "pos";
@@ -285,7 +295,7 @@ export async function createPosPaymentSession(input = {}) {
         : { orderIdentity },
       provider_payload: {}
     }
-  });
+  }, input.authPreparation);
 }
 
 export async function readPosPaymentSession(sessionId = "") {

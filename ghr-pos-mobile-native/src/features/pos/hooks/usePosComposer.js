@@ -1,5 +1,6 @@
 import { getPosQrDraftIdentity, forgetPosQrDraft } from "../../../services/pos/posQrDraftService";
 import { recoverPosQrDraft } from "../../../services/pos/posPaymentSessionService";
+import { createPosQrTiming } from "../../../services/pos/posQrTimingService";
 import { mergePosHistoryOrders } from "../../../services/pos/posHistoryDisplayService";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
@@ -20,6 +21,7 @@ import {
 import {
   isValidVietnamMobilePhone,
   lookupPosCustomerByPhone,
+  refreshPosPaymentCustomer,
   normalizeCustomerPhone
 } from "../../../services/pos/posCustomerService";
 import { createPosTakeawayOrderMobile } from "../../../services/pos/posOrderService";
@@ -1579,7 +1581,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     }
   };
 
-  const validateLiveLoyaltySelection = async () => {
+  const validateLiveLoyaltySelection = async ({ paymentOnly = false } = {}) => {
     const normalizedPhone = normalizeCustomerPhone(customerPhone);
     const selectedVoucher = loyaltyBenefit.selectedVoucher;
     const requestedPoints = Math.max(
@@ -1600,7 +1602,9 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     }
 
     try {
-      const latestCustomer = await lookupPosCustomerByPhone(normalizedPhone);
+      const latestCustomer = paymentOnly
+        ? await refreshPosPaymentCustomer(normalizedPhone, customerLookup.result)
+        : await lookupPosCustomerByPhone(normalizedPhone);
       if (!latestCustomer?.ok) {
         return {
           ok: false,
@@ -1864,161 +1868,176 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     setQrError("");
     setShiftMessage("Đang tạo mã QR thanh toán...");
 
-    const loyaltyValidation = await validateLiveLoyaltySelection();
-    if (!loyaltyValidation.ok) {
-      const validationMessage = loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại.";
-      setQrLoading(false);
-      setQrError(validationMessage);
-      setShiftMessage(validationMessage);
-      return;
-    }
-
-    const liveBenefit = loyaltyValidation.benefit || loyaltyBenefit;
-    const liveTotals = buildTotalsWithBenefit(liveBenefit);
-    let orderIdentity;
+    const qrTiming = createPosQrTiming();
+    let qrReady = false;
+    const authPreparation = refreshPosPaymentAuthSession().catch(() => ({
+      ok: false, message: "Không kiểm tra được phiên đăng nhập POS. Giữ bill và thử lại."
+    }));
     try {
-      orderIdentity = paymentProvider === "momo" ? createPosOrderIdentity(new Date()) : await getPosQrDraftIdentity({
-        branchUuid: profile.branchUuid,
-        fingerprint: JSON.stringify({ cart, totals: liveTotals, phone: normalizeCustomerPhone(customerPhone),
-          customerName, pager: normalizedPager, note: orderNote, shift: shift.id,
-          voucher: liveBenefit.selectedVoucherKey, points: liveBenefit.pointsSpent }),
-        recover: requestKey => recoverPosQrDraft(profile.branchUuid, requestKey)
-      });
-    } catch (error) {
-      setQrLoading(false); setQrError(error.message); return;
-    }
-    setQrPreviewIdentity(orderIdentity);
-    const paymentReference = buildPosPaymentReference(orderIdentity, branch);
-    const requestKey = `pos:${paymentProvider}:${profile.branchUuid}:${orderIdentity.orderCode}`;
-    const checkout = {
-      pagerEnabled,
-      orderIdentity,
-      posShiftId: shift.id,
-      shift,
-      totals: liveTotals,
-      promoDiscount: liveBenefit.voucherDiscount,
-      promoCode: String(liveBenefit.selectedVoucher?.code || "").trim().toUpperCase(),
-      promoSource: String(liveBenefit.selectedVoucher?.source || ""),
-      promoVoucherId: String(liveBenefit.selectedVoucher?.id || "").trim(),
-      selectedVoucherKey: liveBenefit.selectedVoucherKey,
-      pointsDiscount: liveBenefit.pointsSpent,
-      pointsDiscountAmount: liveBenefit.pointsDiscount,
-      pointRedeemRule: liveBenefit.loyaltyRule,
-      customerLookup: loyaltyValidation.customer || customerLookup.result,
-      customerName: customerName || customerLookup.result?.customerName || "",
-      customerPhone: normalizeCustomerPhone(customerPhone)
-    };
-    const pendingOrderInput = {
-      cart,
-      totals: liveTotals,
-      pagerNumber: normalizedPager,
-      pagerEnabled,
-      customerName: customerName || customerLookup.result?.customerName || "",
-      customerPhone: normalizeCustomerPhone(customerPhone),
-      branch: {
-        branchUuid: profile.branchUuid,
-        branchName: profile.branchName
-      },
-      orderNote,
-      shift,
-      cashierName: profile.name || profile.email,
-      customerLookup: loyaltyValidation.customer || customerLookup.result,
-      promoDiscount: liveBenefit.voucherDiscount,
-      promoCode: checkout.promoCode,
-      promoSource: checkout.promoSource,
-      promoVoucherId: checkout.promoVoucherId,
-      pointsDiscount: liveBenefit.pointsSpent,
-      pointsDiscountAmount: liveBenefit.pointsDiscount,
-      pointRedeemRule: liveBenefit.loyaltyRule,
-      paymentMethod: paymentProvider === "momo" ? "momo" : "bank_qr",
-      paymentStatus: "pending_payment",
-      paymentAmount: liveTotals.total,
-      paymentReference,
-      posShiftId: shift.id,
-      paymentMeta: {
-        requestKey
-      },
-      orderIdentity
-    };
-    let pendingOrder = null;
-    if (paymentProvider !== "momo" && !cart.some(item => item.stampGift || item.metadata?.stampGift)) {
-      const prepared = await createPosTakeawayOrderMobile({ ...pendingOrderInput, prepareOnly: true });
-      if (!prepared.ok) {
+      const loyaltyValidation = await validateLiveLoyaltySelection({ paymentOnly: paymentProvider !== "momo" });
+      qrTiming.mark("benefit_ms");
+      if (!loyaltyValidation.ok) {
+        const validationMessage = loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại.";
         setQrLoading(false);
-        setQrError(prepared.message);
+        setQrError(validationMessage);
+        setShiftMessage(validationMessage);
         return;
       }
-      pendingOrder = { order: prepared.orderRow, items: prepared.itemRows };
-    }
 
-    const result = await createPosPaymentSession({
-      requestKey,
-      paymentReference,
-      provider: paymentProvider,
-      branchUuid: profile.branchUuid,
-      posShiftId: shift.id,
-      branchName: profile.branchName,
-      cashierName: profile.name || profile.email,
-      customerName,
-      customerPhone: normalizeCustomerPhone(customerPhone),
-      pagerNumber: normalizedPager,
-      pagerEnabled,
-      amountExpected: liveTotals.total,
-      cart,
-      orderIdentity,
-      checkout,
-      pendingOrder
-    }).catch((error) => ({
-      ok: false,
-      message: error?.message || "Không kết nối được máy chủ để tạo QR. Vui lòng thử lại."
-    }));
+      const liveBenefit = loyaltyValidation.benefit || loyaltyBenefit;
+      const liveTotals = buildTotalsWithBenefit(liveBenefit);
+      let orderIdentity;
+      try {
+        orderIdentity = paymentProvider === "momo" ? createPosOrderIdentity(new Date()) : await getPosQrDraftIdentity({
+          branchUuid: profile.branchUuid,
+          fingerprint: JSON.stringify({ cart, totals: liveTotals, phone: normalizeCustomerPhone(customerPhone),
+            customerName, pager: normalizedPager, note: orderNote, shift: shift.id,
+            voucher: liveBenefit.selectedVoucherKey, points: liveBenefit.pointsSpent }),
+          recover: requestKey => recoverPosQrDraft(profile.branchUuid, requestKey)
+        });
+      } catch (error) {
+        setQrLoading(false); setQrError(error.message); return;
+      }
+      qrTiming.mark("draft_ms");
+      setQrPreviewIdentity(orderIdentity);
+      const paymentReference = buildPosPaymentReference(orderIdentity, branch);
+      const requestKey = `pos:${paymentProvider}:${profile.branchUuid}:${orderIdentity.orderCode}`;
+      const checkout = {
+        pagerEnabled,
+        orderIdentity,
+        posShiftId: shift.id,
+        shift,
+        totals: liveTotals,
+        promoDiscount: liveBenefit.voucherDiscount,
+        promoCode: String(liveBenefit.selectedVoucher?.code || "").trim().toUpperCase(),
+        promoSource: String(liveBenefit.selectedVoucher?.source || ""),
+        promoVoucherId: String(liveBenefit.selectedVoucher?.id || "").trim(),
+        selectedVoucherKey: liveBenefit.selectedVoucherKey,
+        pointsDiscount: liveBenefit.pointsSpent,
+        pointsDiscountAmount: liveBenefit.pointsDiscount,
+        pointRedeemRule: liveBenefit.loyaltyRule,
+        customerLookup: loyaltyValidation.customer || customerLookup.result,
+        customerName: customerName || customerLookup.result?.customerName || "",
+        customerPhone: normalizeCustomerPhone(customerPhone)
+      };
+      const pendingOrderInput = {
+        cart,
+        totals: liveTotals,
+        pagerNumber: normalizedPager,
+        pagerEnabled,
+        customerName: customerName || customerLookup.result?.customerName || "",
+        customerPhone: normalizeCustomerPhone(customerPhone),
+        branch: {
+          branchUuid: profile.branchUuid,
+          branchName: profile.branchName
+        },
+        orderNote,
+        shift,
+        cashierName: profile.name || profile.email,
+        customerLookup: loyaltyValidation.customer || customerLookup.result,
+        promoDiscount: liveBenefit.voucherDiscount,
+        promoCode: checkout.promoCode,
+        promoSource: checkout.promoSource,
+        promoVoucherId: checkout.promoVoucherId,
+        pointsDiscount: liveBenefit.pointsSpent,
+        pointsDiscountAmount: liveBenefit.pointsDiscount,
+        pointRedeemRule: liveBenefit.loyaltyRule,
+        paymentMethod: paymentProvider === "momo" ? "momo" : "bank_qr",
+        paymentStatus: "pending_payment",
+        paymentAmount: liveTotals.total,
+        paymentReference,
+        posShiftId: shift.id,
+        paymentMeta: {
+          requestKey
+        },
+        orderIdentity
+      };
+      let pendingOrder = null;
+      if (paymentProvider !== "momo" && !cart.some(item => item.stampGift || item.metadata?.stampGift)) {
+        const prepared = await createPosTakeawayOrderMobile({ ...pendingOrderInput, prepareOnly: true });
+        if (!prepared.ok) {
+          setQrLoading(false);
+          setQrError(prepared.message);
+          return;
+        }
+        pendingOrder = { order: prepared.orderRow, items: prepared.itemRows };
+      }
+      qrTiming.mark("prepare_ms");
 
-    if (!result.ok) {
+      const result = await createPosPaymentSession({
+        authPreparation,
+        requestKey,
+        paymentReference,
+        provider: paymentProvider,
+        branchUuid: profile.branchUuid,
+        posShiftId: shift.id,
+        branchName: profile.branchName,
+        cashierName: profile.name || profile.email,
+        customerName,
+        customerPhone: normalizeCustomerPhone(customerPhone),
+        pagerNumber: normalizedPager,
+        pagerEnabled,
+        amountExpected: liveTotals.total,
+        cart,
+        orderIdentity,
+        checkout,
+        pendingOrder
+      }).catch((error) => ({
+        ok: false,
+        message: error?.message || "Không kết nối được máy chủ để tạo QR. Vui lòng thử lại."
+      }));
+      qrTiming.mark("session_ms");
+
+      if (!result.ok) {
+        setQrLoading(false);
+        setQrError(result.message || "Không tạo được phiên thanh toán QR.");
+        setShiftMessage(result.message || "Không tạo được phiên thanh toán QR.");
+        setQrModalOpen(true);
+        return;
+      }
+
+      if (pendingOrder) {
+        setQrSession(result.session);
+        await rememberPosPaymentSession(profile.branchUuid, result.session.id);
+        setQrLoading(false);
+        qrTiming.mark("remember_ms");
+        qrReady = true;
+        setShiftMessage("Đã tạo QR, đang chờ khách chuyển khoản.");
+        return;
+      }
+
+      const pendingOrderResult = await createPosTakeawayOrderMobile({
+        ...pendingOrderInput,
+        paymentMeta: { ...pendingOrderInput.paymentMeta, paymentSessionId: result.session.id }
+      });
+      if (!pendingOrderResult.ok || pendingOrderResult.offline) {
+        await cancelPosPaymentSession(result.session.id, "Không tạo được đơn chờ thanh toán QR");
+        const message = pendingOrderResult.message || "Không tạo được đơn chờ thanh toán QR.";
+        setQrLoading(false);
+        setQrError(message);
+        setShiftMessage(message);
+        setQrModalOpen(true);
+        return;
+      }
+
+      const attached = await attachPosPaymentSessionOrder(result.session.id, pendingOrderResult.order?.id || orderIdentity.orderCode);
+      if (!attached.ok || !attached.session?.id) {
+        await cancelPosPaymentSession(result.session.id, "Không gắn được đơn chờ thanh toán vào QR");
+        const message = attached.message || "Không gắn được đơn chờ thanh toán vào QR.";
+        setQrLoading(false);
+        setQrError(message);
+        setShiftMessage(message);
+        setQrModalOpen(true);
+        return;
+      }
+
+      setQrSession(attached.session);
+      await rememberPosPaymentSession(profile.branchUuid, attached.session.id);
       setQrLoading(false);
-      setQrError(result.message || "Không tạo được phiên thanh toán QR.");
-      setShiftMessage(result.message || "Không tạo được phiên thanh toán QR.");
       setQrModalOpen(true);
-      return;
-    }
-
-    if (pendingOrder) {
-      setQrSession(result.session);
-      await rememberPosPaymentSession(profile.branchUuid, result.session.id);
-      setQrLoading(false);
       setShiftMessage("Đã tạo QR, đang chờ khách chuyển khoản.");
-      return;
-    }
-
-    const pendingOrderResult = await createPosTakeawayOrderMobile({
-      ...pendingOrderInput,
-      paymentMeta: { ...pendingOrderInput.paymentMeta, paymentSessionId: result.session.id }
-    });
-    if (!pendingOrderResult.ok || pendingOrderResult.offline) {
-      await cancelPosPaymentSession(result.session.id, "Không tạo được đơn chờ thanh toán QR");
-      const message = pendingOrderResult.message || "Không tạo được đơn chờ thanh toán QR.";
-      setQrLoading(false);
-      setQrError(message);
-      setShiftMessage(message);
-      setQrModalOpen(true);
-      return;
-    }
-
-    const attached = await attachPosPaymentSessionOrder(result.session.id, pendingOrderResult.order?.id || orderIdentity.orderCode);
-    if (!attached.ok || !attached.session?.id) {
-      await cancelPosPaymentSession(result.session.id, "Không gắn được đơn chờ thanh toán vào QR");
-      const message = attached.message || "Không gắn được đơn chờ thanh toán vào QR.";
-      setQrLoading(false);
-      setQrError(message);
-      setShiftMessage(message);
-      setQrModalOpen(true);
-      return;
-    }
-
-    setQrSession(attached.session);
-    await rememberPosPaymentSession(profile.branchUuid, attached.session.id);
-    setQrLoading(false);
-    setQrModalOpen(true);
-    setShiftMessage("Đã tạo QR, đang chờ khách chuyển khoản.");
+      qrReady = true;
+    } finally { qrTiming.finish(qrReady); }
   };
 
   const cancelQrPayment = async (session = null) => {

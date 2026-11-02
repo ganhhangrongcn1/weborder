@@ -26,3 +26,24 @@ test('never expose QR from an unattached combined response', async () => {
   supabase.functions.invoke.mockResolvedValue({ data: { ok: true, session: { id: 'session', source: 'pos' } } });
   expect((await createPosPaymentSession(input)).ok).toBe(false);
 });
+
+test('reuse authentication prepared in parallel without reading it again', async () => {
+  supabase.functions.invoke.mockResolvedValue({data:{ok:true,session:{id:'session',source:'qr_order',order_id:'POS-TEST'}}});
+  const result=await createPosPaymentSession({...input,authPreparation:Promise.resolve({ok:true,session:{
+    access_token:'prepared-token',expires_at:Math.floor(Date.now()/1000)+3600}})});
+  expect(result.ok).toBe(true);expect(supabase.auth.getSession).not.toHaveBeenCalled();
+  expect(supabase.functions.invoke.mock.calls[0][1].headers.Authorization).toBe('Bearer prepared-token');
+});
+
+test('failed parallel authentication cannot create a payment session', async()=>{
+  const result=await createPosPaymentSession({...input,authPreparation:Promise.resolve({ok:false,message:'sign in again'})});
+  expect(result.ok).toBe(false);expect(supabase.functions.invoke).not.toHaveBeenCalled();
+});
+
+test('do not reuse prepared authentication that expired while validating benefits',async()=>{
+  supabase.functions.invoke.mockResolvedValue({data:{ok:true,session:{id:'session',source:'qr_order',order_id:'POS-TEST'}}});
+  const result=await createPosPaymentSession({...input,authPreparation:Promise.resolve({ok:true,session:{
+    access_token:'old-prepared-token',expires_at:Math.floor(Date.now()/1000)-1}})});
+  expect(result.ok).toBe(true);expect(supabase.auth.getSession).toHaveBeenCalledTimes(1);
+  expect(supabase.functions.invoke.mock.calls[0][1].headers.Authorization).toBe('Bearer test-token');
+});
