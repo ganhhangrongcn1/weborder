@@ -13,19 +13,20 @@
 - Public RPC là SECURITY INVOKER; helper SECURITY DEFINER nằm trong schema riêng, kiểm tra auth.uid(), vai trò hoạt động, chi nhánh, ca, phiên/tiền/khách/thẻ/mã yêu cầu, tổng món và retry fingerprint. Cần helper vì phiên không có UPDATE grant cho client; giữ nguyên việc không cấp UPDATE bảng cho authenticated, không nới RLS.
 - Khóa theo phiên và theo thẻ rung, không tạo hai đơn hoạt động cùng thẻ; retry cùng payload không ghi lại món, retry khác payload bị từ chối. Lỗi lưu SQL rollback cả đơn/món/attach; phản hồi mạng không rõ kết quả không tự hủy phiên có thể đã commit.
 - Ghi thời gian tạo phiên/lưu checkout vào log server, không ghi nội dung giỏ/điện thoại/token. Client chặn QR nếu response chưa gắn đúng đơn.
+- Server đánh dấu phiên checkout mới và ẩn khỏi đọc/danh sách phục hồi khi chưa lưu/attach xong, tránh mở QR từ phiên dở dang sau lỗi mạng. Phiên legacy không bị ẩn.
 - MoMo, pickup/đơn từ điện thoại và QR có quà tem cùng món trả tiền giữ luồng cũ. Đơn quà 0đ vẫn xác nhận tại quầy qua `checkout_stamp_order`.
 - RPC đổi tem bổ sung default cho text tùy chọn, giữ nguyên kiểm tra khách, sản phẩm, quyền, giữ/trừ/hoàn tem. POS mới cũng truyền địa chỉ không null. Bản POS hiện tại hưởng sửa server mà không cần cài APK mới cho riêng lỗi null này.
 - Không đổi cấu hình Pay2S/SePay của chi nhánh và chưa cập nhật APK chung. 30/4 vẫn chỉ thử riêng Pay2S.
 
 ## Kiểm tra và triển khai
 
-- 18 Node tests đạt: thêm checkout mới, dữ liệu sai, chờ lưu/attach, lỗi/retry; giữ hồi quy Pay2S/SePay/QR website/POS.
+- 19 Node tests đạt: thêm checkout mới, dữ liệu sai, chờ lưu/attach, lỗi/retry, đọc/phục hồi không lộ QR dở dang; giữ hồi quy Pay2S/SePay/QR website/POS.
 - 3 Jest suites / 18 tests đạt: `posCombinedQrCheckout`, `posPendingQrStampRead`, `posPaymentRecovery`. Giới hạn Jest roots vào `__tests__` để tránh quét build/APK; các lần chạy trước bị dừng và không dùng làm bằng chứng đạt.
 - Typecheck Edge/shared, lint ba source native thay đổi và UTF-8 đạt.
 - Web Vite build đạt (5.319 modules). Đã tạo bundle production bằng Node 22 portable + Metro CLI hiện có và biên dịch Hermes; không thay cấu hình Metro/Node hệ thống. Bytecode SHA-256 `6776264f0f836f22bd96dc99fd58af9f9428905222b09754a20d725f7751dec8`. Gradle/signing/kiểm tra APK là bước riêng bên dưới.
 - SQL chạy BEGIN/ROLLBACK trên Supabase đạt cả trước và sau triển khai; gọi thật với role authenticated, test đổi tem 0đ không địa chỉ, trừ đúng một lần/retry/hủy, QR SePay/Pay2S, sai tiền/tổng món, retry khác payload, hết hạn, sai chi nhánh, không phải nhân viên, thẻ đã dùng và quyền anon. Không để lại đơn hoặc tài khoản tem fixture.
 - Migration `pos_qr_checkout_and_stamp_defaults` và bổ sung `pos_qr_checkout_pager_guard` đã áp dụng.
-- Edge `pos-payment-session-api` v45 ACTIVE, `verify_jwt=true`; đọc lại source Cloud xác nhận action và helper mới. Các action cũ giữ nguyên hợp đồng cho POS cũ.
+- Edge `pos-payment-session-api` v46 ACTIVE, `verify_jwt=true`; v46 bổ sung chặn đọc/phục hồi phiên checkout mới chưa attach. Các action cũ giữ nguyên hợp đồng cho POS cũ.
 - APK và kết quả build được bổ sung sau khi đóng/xác minh xong. Chưa đo lại tốc độ và chưa đổi tem thật trên thiết bị với bản sửa; cần thử tại 30/4 trước khi phát hành chung.
 
 ## File cập nhật

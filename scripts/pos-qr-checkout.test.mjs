@@ -15,7 +15,8 @@ test('SePay and Pay2S combined checkout return QR only after atomic save/attach 
   for (const provider of ['sepay', 'pay2s']) {
     let finish; const events = [];
     const response = createPosQrCheckout({ payload, reply,
-      createSession: async () => { events.push('session'); return reply({ ok: true, session: { id: 'session', provider } }); },
+      createSession: async (input) => { assert.equal(input.checkout_snapshot.combinedCheckout, true);
+        events.push('session'); return reply({ ok: true, session: { id: 'session', provider } }); },
       userClient: { rpc: async (name, args) => { events.push(name); assert.equal(args.p_session_id, 'session');
         await new Promise(resolve => { finish = resolve; }); return { data: { ...session, provider } }; } } });
     await new Promise(resolve => setImmediate(resolve));
@@ -58,4 +59,36 @@ test('definitive SQL error cancels only the newly created, still unattached pend
     serviceClient: { from: () => ({ update: () => q }) } });
   assert.equal(response.status, 409);
   assert.deepEqual(conditions, [['id', 'session'], ['source', 'pos'], ['status', 'pending_payment']]);
+});
+
+test('read and recovery list hide combined sessions until their order is attached; legacy remains available', async () => {
+  let handler;
+  const id='11111111-1111-4111-8111-111111111111';
+  const branch='22222222-2222-4222-8222-222222222222';
+  const pending={ id, provider:'sepay', branch_uuid:branch, source:'pos', status:'pending_payment',
+    checkout_snapshot:{ combinedCheckout:true } };
+  const legacy={ ...pending, id:'legacy', checkout_snapshot:{} };
+  const attached={ ...pending, id:'attached', source:'qr_order', order_id:'POS-TEST' };
+  globalThis.posCheckoutApiClient={
+    auth:{ getUser:async()=>({data:{user:{id:'operator'}}}) },
+    from:(table)=>{
+      let columns='';
+      const q={ select:(value)=>{columns=value;return q;}, maybeSingle:async()=>({data:table==='profiles'
+        ?{ id:'operator',role:'staff',status:'active',branch_uuid:branch }:pending}),
+      then:(resolve,reject)=>Promise.resolve({data:columns==='id,order_id,payment_reference'?[]:[pending,legacy,attached]}).then(resolve,reject) };
+      for(const key of ['eq','in','lt','order','limit','update']) q[key]=()=>q;
+      return q;
+    }
+  };
+  globalThis.Deno={env:{get:()=> 'test-config'},serve:fn=>{handler=fn;}};
+  const api=await build({entryPoints:['supabase/functions/pos-payment-session-api/index.ts'],bundle:true,
+    write:false,format:'esm',platform:'node',plugins:[{name:'fake-client',setup(builder){
+      builder.onResolve({filter:/^npm:@supabase/},()=>({path:'client',namespace:'mock'}));
+      builder.onLoad({filter:/.*/,namespace:'mock'},()=>({contents:'export const createClient=()=>globalThis.posCheckoutApiClient;'}));
+    }}]});
+  await import(`data:text/javascript;base64,${Buffer.from(api.outputFiles[0].contents).toString('base64')}`);
+  const request=body=>new Request('https://example.invalid',{method:'POST',headers:{Authorization:'Bearer test'},body:JSON.stringify(body)});
+  assert.equal((await handler(request({action:'read',session_id:id}))).status,409);
+  const listed=await (await handler(request({action:'list',branch_uuid:branch}))).json();
+  assert.deepEqual(listed.sessions.map(row=>row.id),['legacy','attached']);
 });

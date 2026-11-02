@@ -771,6 +771,9 @@ async function getSession(
   if (current.data.provider === "pay2s" && body.bank_account_snapshot !== true) {
     return response({ ok: false, message: "Vui lòng cập nhật POS để hiển thị đúng tài khoản Pay2S." }, 409);
   }
+  if (current.data.source === "pos" && getObject(current.data.checkout_snapshot).combinedCheckout === true) {
+    return response({ ok: false, message: "Phiên QR đang chờ lưu đơn. Giữ bill và thử lại." }, 409);
+  }
   return response({ ok: true, session: current.data });
 }
 
@@ -895,7 +898,9 @@ async function listSessions(
     }, 500);
   }
 
-  return response({ ok: true, sessions: (data || []).filter((session) => session.provider !== "pay2s" || body.bank_account_snapshot === true) });
+  return response({ ok: true, sessions: (data || []).filter((session) =>
+    (session.provider !== "pay2s" || body.bank_account_snapshot === true) &&
+    !(session.source === "pos" && getObject(session.checkout_snapshot).combinedCheckout === true)) });
 }
 
 Deno.serve(async (request) => {

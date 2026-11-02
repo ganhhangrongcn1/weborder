@@ -13,7 +13,8 @@ export async function createPosQrCheckout({ payload, createSession, userClient, 
     || !Array.isArray(pending.items) || !pending.items.length) {
     return reply({ ok: false, message: "Dữ liệu đơn và phiên QR không khớp." }, 400);
   }
-  const createdResponse = await createSession(input);
+  const createdResponse = await createSession({ ...input,
+    checkout_snapshot: { ...input.checkout_snapshot, combinedCheckout: true } });
   const created = await createdResponse.json();
   if (!createdResponse.ok || !created.ok) return reply(created, createdResponse.status);
   const sessionMs = Math.round(performance.now() - started);
