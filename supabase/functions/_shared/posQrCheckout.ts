@@ -16,11 +16,12 @@ export async function createPosQrCheckout({ payload, profile, serviceClient, rep
   try { route = await resolveRoute(serviceClient, input.branch_uuid, input.customer_phone, input.provider); }
   catch { return reply({ ok: false, message: "Chưa đọc được cấu hình nhận tiền. Giữ bill và thử lại." }, 503); }
   const routeMs = Math.round(performance.now() - started);
-  const saved = await serviceClient.rpc("create_pos_bank_checkout", {
+  let saved;
+  try { saved = await serviceClient.rpc("create_pos_bank_checkout", {
     p_actor: profile.auth_user_id,
     p_session: { ...input, provider: route.provider, provider_payload: route.providerPayload },
     p_order: order, p_items: pending.items
-  }).catch(() => ({ error: { message: "Kết nối bị gián đoạn khi lưu đơn QR." } }));
+  }); } catch { saved = { error: { message: "Kết nối bị gián đoạn khi lưu đơn QR." } }; }
   if (saved.error || !saved.data?.session?.id) {
     console.warn("[pos-qr-checkout] atomic save failed", { code: saved.error?.code || "no_response" });
     return reply({ ok: false, message: saved.error?.message || "Chưa lưu được đơn QR. Giữ bill và thử lại." },

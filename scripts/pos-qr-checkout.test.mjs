@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createClient } from '@supabase/supabase-js';
 import { build } from 'esbuild';
 const compiled = await build({ entryPoints: ['supabase/functions/_shared/posQrCheckout.ts'],bundle:true,write:false,format:'esm',platform:'node' });
 const {createPosQrCheckout}=await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].contents).toString('base64')}`);
@@ -9,6 +10,17 @@ const payload={session:{source:'pos',provider:'sepay',bank_account_snapshot:true
 const profile={auth_user_id:'verified-user'};
 const session={id:'session',source:'qr_order',order_id:'POS-TEST',status:'pending_payment'};
 const resolveRoute=async()=>({provider:'pay2s',providerPayload:{bankTransfer:{accountNumber:'000001'}}});
+
+test('real Supabase RPC builder is awaited without assuming a Promise.catch method',async()=>{
+  let calls=0;
+  const serviceClient=createClient('https://example.invalid','test-key',{auth:{persistSession:false},global:{fetch:async(url,options)=>{
+    calls++; assert.match(String(url),/rpc\/create_pos_bank_checkout$/);
+    assert.equal(JSON.parse(options.body).p_actor,profile.auth_user_id);
+    return new Response(JSON.stringify({session,reused:false}),{status:200,headers:{'Content-Type':'application/json'}});
+  }}});
+  const result=await createPosQrCheckout({payload,profile,resolveRoute,reply,serviceClient});
+  assert.equal(result.status,200);assert.equal((await result.json()).session.id,'session');assert.equal(calls,1);
+});
 
 test('one atomic RPC uses verified actor and server-selected account, waits for commit before returning QR',async()=>{
   let finish;let calls=0;

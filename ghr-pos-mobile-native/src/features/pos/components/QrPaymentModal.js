@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, useWindow
 import QRCode from "react-native-qrcode-svg";
 
 import {
-  buildPosQrPayload,
+  buildPosQrImageUrl,
   getPosQrPaymentConfig,
   isPosQrSessionReadyForDisplay
 } from "../../../services/pos/posPaymentService";
@@ -40,7 +40,7 @@ export default function QrPaymentModal({
     || sessionPaid;
   const canRetryFinalize = sessionPaid && Boolean(errorMessage);
   const qrUrl = hasCreatedSession
-    ? buildPosQrPayload({ branch, amount, orderIdentity: identity, session: draftSession })
+    ? buildPosQrImageUrl({ branch, amount, orderIdentity: identity, session: draftSession })
     : "";
   const momoQrValue = String(draftSession?.momoQrValue || "").trim();
   const config = getPosQrPaymentConfig(branch, draftSession);
@@ -100,7 +100,7 @@ export default function QrPaymentModal({
               ) : isMomo && momoQrValue ? (
                 <QRCode value={momoQrValue} size={qrSize} backgroundColor="#ffffff" color="#111827" />
               ) : qrUrl ? (
-                <QRCode value={qrUrl} size={qrSize} quietZone={12} backgroundColor="#ffffff" color="#111827" />
+                <Image source={{ uri: qrUrl }} style={{ width: qrSize, height: qrSize }} resizeMode="contain" />
               ) : (
                 <Text style={styles.qrFallback}>Chưa tạo được QR</Text>
               )}
