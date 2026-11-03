@@ -5,6 +5,7 @@ type NotificationEvent = "web_order_created" | "web_order_paid";
 type NotifyOptions = {
   event?: NotificationEvent;
   paymentConfirmed?: boolean;
+  messageOnly?: boolean;
 };
 
 const DEFAULT_WEB_ORDER_WEBHOOK_URL = "https://n8nhosting-13007771.phoai.vn/webhook/ac55da0e-a0d8-47e5-89c7-fcaa07fb736d";
@@ -297,7 +298,10 @@ export async function notifyWebsiteOrder(
     raw: { ...metadata, ...order, metadata }
   };
   const body = new URLSearchParams();
-  Object.entries(payload).forEach(([key, value]) => {
+  const deliveryPayload = options.messageOnly
+    ? { event, eventKey, orderId, orderCode, zaloMessage }
+    : payload;
+  Object.entries(deliveryPayload).forEach(([key, value]) => {
     body.set(key, typeof value === "object" ? JSON.stringify(value) : String(value ?? ""));
   });
 
@@ -306,7 +310,8 @@ export async function notifyWebsiteOrder(
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body
+      body,
+      signal: AbortSignal.timeout(10000)
     });
     if (!response.ok) throw new Error(`Webhook Zalo trả về HTTP ${response.status}.`);
 

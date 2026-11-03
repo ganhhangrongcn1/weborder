@@ -2,6 +2,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { parsePay2sTransaction, verifyPay2sToken } from "../_shared/pay2sPayload.js";
 import { markOrderPaidFromPaymentSession } from "../_shared/bankTransferSettlement.ts";
 import { settlePaidPosOrderLoyalty } from "../_shared/posPaidOrderLoyalty.ts";
+import { notifyPaidWebsiteOrder } from "../_shared/webOrderPaidNotification.ts";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { "Content-Type": "application/json; charset=utf-8" }
@@ -48,8 +49,16 @@ export async function handlePay2sWebhook(request: Request) {
           const orderResult = await client.from("orders").select("id,customer_phone,promo_code,metadata").eq("id", session.order_id).single();
           if (orderResult.error) throw orderResult.error;
           await settlePaidPosOrderLoyalty(client, orderResult.data);
-          // Pay2S only settles payments, kitchen state and printing here.
-          // External customer/order notifications need separate authorization.
+          if (["web", "online", "website", "qr_order"].includes(String(session.source).toLowerCase())) {
+            try {
+              await notifyPaidWebsiteOrder(client, { id: session.order_id }, {
+                paymentConfirmed: true, messageOnly: true
+              });
+            } catch {
+              // Notification ledger records the failure; never undo a durable payment.
+              console.error("[pay2s-payment-webhook] website Zalo notification failed", session.order_id);
+            }
+          }
         }
         const { error: completeError } = await client.from("pay2s_webhook_receipts")
           .update({ completed_at: new Date().toISOString(), result: "processed" }).eq("transaction_id", transaction.id);
