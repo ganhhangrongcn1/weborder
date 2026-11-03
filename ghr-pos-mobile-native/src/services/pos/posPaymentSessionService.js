@@ -197,7 +197,7 @@ async function invokeSessionAction(body = {}, authPreparation = null) {
       body: { ...body, bank_account_snapshot: true },
       headers: { Authorization: `Bearer ${toText(session?.access_token)}` }
     });
-    if (body.action === "create_checkout") console.info("[pos-qr-api]", {
+    if (["create_checkout", "create_checkout_v2"].includes(body.action)) console.info("[pos-qr-api]", {
       auth_wait_ms: authWaitMs, request_chars: JSON.stringify(body).length,
       network_ms: Date.now() - started, ok: !result.error
     });
@@ -230,6 +230,7 @@ async function invokeSessionAction(body = {}, authPreparation = null) {
     const forbidden = getErrorStatus(error) === 403;
     return {
       ok: false,
+      code: toText(data?.code), quote: data?.quote || null,
       message: requiresLogin
         ? "Phiên đăng nhập POS đã hết hạn. Vui lòng đăng nhập lại."
         : toText(data?.message) || (forbidden
@@ -241,11 +242,12 @@ async function invokeSessionAction(body = {}, authPreparation = null) {
   if (!data?.ok) {
     return {
       ok: false,
+      code: toText(data?.code), quote: data?.quote || null,
       message: toText(data?.message) || "Dịch vụ thanh toán từ chối yêu cầu."
     };
   }
 
-  if (body.action === "create_checkout" &&
+  if (["create_checkout", "create_checkout_v2"].includes(body.action) &&
     (data.session?.source !== "qr_order" || data.session?.order_id !== body.pending_order?.order?.id)) {
     return { ok: false, message: "Phiên QR chưa gắn đủ đơn. Giữ bill và thử lại." };
   }
@@ -261,6 +263,14 @@ async function invokeSessionAction(body = {}, authPreparation = null) {
 
 export async function createPosPaymentSession(input = {}) {
   if (input.pendingOrder) input = { ...input, ...compactPosQrCheckout(input) };
+  if (input.serverBenefits && input.pendingOrder) {
+    const checkout = { ...input.checkout };
+    const metadata = { ...input.pendingOrder.order.metadata };
+    delete checkout.customerLookup;
+    delete metadata.customerLookup;
+    input = { ...input, checkout, pendingOrder: { ...input.pendingOrder,
+      order: { ...input.pendingOrder.order, metadata } } };
+  }
   const orderIdentity = input.orderIdentity || createPosOrderIdentity(new Date());
   const paymentReference = toText(input.paymentReference || orderIdentity.orderCode).toUpperCase();
   const source = toText(input.source).toLowerCase() || "pos";
@@ -269,7 +279,8 @@ export async function createPosPaymentSession(input = {}) {
   }
 
   return invokeSessionAction({
-    action: input.pendingOrder ? "create_checkout" : "create",
+    action: input.pendingOrder ? input.serverBenefits ? "create_checkout_v2" : "create_checkout" : "create",
+    ...(input.serverBenefits && input.pendingOrder ? { benefit_intent: input.benefitIntent } : {}),
     ...(input.pendingOrder ? { pending_order: input.pendingOrder } : {}),
     session: {
       payment_reference: paymentReference,

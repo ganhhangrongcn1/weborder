@@ -23,6 +23,7 @@ export default function QrPaymentModal({
   processing,
   printBusy = false,
   errorMessage,
+  benefitQuote = null,
   useSystemModal = false,
   onClose,
   onCancel,
@@ -144,7 +145,9 @@ export default function QrPaymentModal({
 
             {!hasCreatedSession && !loading && typeof onRetry === "function" ? (
               <Pressable style={styles.primaryButton} onPress={onRetry}>
-                <Text style={styles.primaryText}>Thử kết nối lại</Text>
+                <Text style={styles.primaryText}>{benefitQuote
+                  ? benefitQuote.total === 0 ? "Đóng để xác nhận đơn 0đ" : "Xác nhận số tiền mới và tạo QR"
+                  : "Thử kết nối lại"}</Text>
               </Pressable>
             ) : null}
 

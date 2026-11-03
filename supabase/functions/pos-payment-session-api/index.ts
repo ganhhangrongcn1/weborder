@@ -948,7 +948,7 @@ Deno.serve(async (request) => {
     profileBranchUuid: toText(access.profile.branch_uuid),
     requestedBranchUuid: toText(getObject(payload.session).branch_uuid)
   });
-  if (action === "create_checkout") {
+  if (["create_checkout", "create_checkout_v2"].includes(action)) {
     return createPosQrCheckout({ payload, profile: access.profile, serviceClient, reply: response });
   }
   if (action === "recover_checkout") {

@@ -190,6 +190,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState("");
+  const [qrBenefitQuote, setQrBenefitQuote] = useState(null);
   const [qrPrintBusy, setQrPrintBusy] = useState(false);
   const [pickupQrSession, setPickupQrSession] = useState(null);
   const [pickupQrOrder, setPickupQrOrder] = useState(null);
@@ -1835,7 +1836,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       });
     return confirmation;
   };
-  const openQrPayment = async (provider = "sepay") => {
+  const openQrPayment = async (provider = "sepay", acceptedQuote = null) => {
     if (deviceMode !== "cashier") { setShiftMessage("Tạo đơn rồi chọn Tiền mặt hoặc QR để thanh toán."); return false; }
     const paymentProvider = provider === "momo" ? "momo" : "sepay";
     if (!profile || !shift?.id) {
@@ -1869,12 +1870,16 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     setShiftMessage("Đang tạo mã QR thanh toán...");
 
     const qrTiming = createPosQrTiming();
+    const serverBenefits = paymentProvider !== "momo" && !cart.some(item => item.stampGift || item.metadata?.stampGift);
+    setQrBenefitQuote(null);
     let qrReady = false;
     const authPreparation = refreshPosPaymentAuthSession().catch(() => ({
       ok: false, message: "Không kiểm tra được phiên đăng nhập POS. Giữ bill và thử lại."
     }));
     try {
-      const loyaltyValidation = await validateLiveLoyaltySelection({ paymentOnly: paymentProvider !== "momo" });
+      const loyaltyValidation = serverBenefits
+        ? { ok: true, benefit: loyaltyBenefit, customer: customerLookup.result }
+        : await validateLiveLoyaltySelection({ paymentOnly: paymentProvider !== "momo" });
       qrTiming.mark("benefit_ms");
       if (!loyaltyValidation.ok) {
         const validationMessage = loyaltyValidation.message || "Không áp dụng được ưu đãi loyalty hiện tại.";
@@ -1886,6 +1891,13 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
 
       const liveBenefit = loyaltyValidation.benefit || loyaltyBenefit;
       const liveTotals = buildTotalsWithBenefit(liveBenefit);
+      if (acceptedQuote && (liveTotals.total !== Number(acceptedQuote.total)
+        || liveBenefit.pointsSpent !== Number(acceptedQuote.pointsSpent)
+        || liveBenefit.voucherDiscount !== Number(acceptedQuote.voucherDiscount))) {
+        setQrLoading(false);
+        setQrError("Bill đã thay đổi khác số tiền vừa xác nhận. Đóng QR và kiểm tra giỏ hàng trước khi tạo lại.");
+        return;
+      }
       let orderIdentity;
       try {
         orderIdentity = paymentProvider === "momo" ? createPosOrderIdentity(new Date()) : await getPosQrDraftIdentity({
@@ -1965,6 +1977,9 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       qrTiming.mark("prepare_ms");
 
       const result = await createPosPaymentSession({
+        serverBenefits,
+        benefitIntent: { pointsRequested: liveBenefit.pointsSpent, promoCode: checkout.promoCode,
+          promoSource: checkout.promoSource, promoVoucherId: checkout.promoVoucherId },
         authPreparation,
         requestKey,
         paymentReference,
@@ -1989,6 +2004,21 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
       qrTiming.mark("session_ms");
 
       if (!result.ok) {
+        if (result.code === "benefits_changed" && result.quote) {
+          const quote = result.quote;
+          setQrBenefitQuote(quote);
+          setPointsInput(String(quote.pointsSpent || ""));
+          setSelectedVoucherId(quote.selectedVoucherKey || "");
+          if (quote.customer) setCustomerLookup(current => ({ loading: false, error: "", result: {
+            ...current.result, ...quote.customer,
+            loyaltyRule: { ...current.result?.loyaltyRule, ...quote.customer.loyaltyRule }
+          } }));
+          if (quote.coupon) setRawCoupons(current => [quote.coupon,
+            ...current.filter(coupon => String(coupon.code).toUpperCase() !== quote.coupon.code)]);
+          // No session was created. If local cleanup fails, the next attempt
+          // can still recover the old key and confirm that it is absent.
+          await forgetPosQrDraft(profile.branchUuid, orderIdentity.orderCode).catch(() => {});
+        }
         setQrLoading(false);
         setQrError(result.message || "Không tạo được phiên thanh toán QR.");
         setShiftMessage(result.message || "Không tạo được phiên thanh toán QR.");
@@ -3084,6 +3114,7 @@ export default function usePosComposer({ historyVisible = false, deviceMode = "c
     setQrModalOpen,
     qrLoading,
     qrError,
+    qrBenefitQuote,
     qrPrintBusy,
     pickupQrSession,
     pickupQrOrder,

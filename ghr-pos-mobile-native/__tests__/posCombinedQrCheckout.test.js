@@ -40,6 +40,28 @@ test('failed parallel authentication cannot create a payment session', async()=>
   expect(result.ok).toBe(false);expect(supabase.functions.invoke).not.toHaveBeenCalled();
 });
 
+test('v2 sends benefit intent without CRM snapshots and returns one saved session',async()=>{
+  supabase.functions.invoke.mockResolvedValue({data:{ok:true,session:{id:'session',source:'qr_order',order_id:'POS-TEST'}}});
+  const result=await createPosPaymentSession({...input,serverBenefits:true,benefitIntent:{pointsRequested:9000},
+    checkout:{customerLookup:{phone:'0900000099',history:'private'},pointsDiscount:9000},
+    pendingOrder:{order:{id:'POS-TEST',metadata:{customerLookup:{history:'private'},pointsSpent:9000}},items:[]}});
+  expect(result.ok).toBe(true);expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
+  const body=supabase.functions.invoke.mock.calls[0][1].body;
+  expect(body.action).toBe('create_checkout_v2');expect(body.benefit_intent.pointsRequested).toBe(9000);
+  expect(body.session.checkout_snapshot.customerLookup).toBeUndefined();
+  expect(body.pending_order.order.metadata.customerLookup).toBeUndefined();
+  expect(body.pending_order.order.metadata.pointsSpent).toBe(9000);
+});
+
+test('v2 propagates changed-benefit quote without silently retrying or exposing QR',async()=>{
+  supabase.functions.invoke.mockResolvedValue({error:{context:{status:409,clone:()=>({json:async()=>({
+    ok:false,code:'benefits_changed',message:'confirm amount',quote:{total:20000,pointsSpent:5000}})})}}});
+  const result=await createPosPaymentSession({...input,serverBenefits:true,benefitIntent:{pointsRequested:9000}});
+  expect(result.ok).toBe(false);expect(result.session).toBeUndefined();
+  expect(result.code).toBe('benefits_changed');expect(result.quote.total).toBe(20000);
+  expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
+});
+
 test('do not reuse prepared authentication that expired while validating benefits',async()=>{
   supabase.functions.invoke.mockResolvedValue({data:{ok:true,session:{id:'session',source:'qr_order',order_id:'POS-TEST'}}});
   const result=await createPosPaymentSession({...input,authPreparation:Promise.resolve({ok:true,session:{

@@ -100,8 +100,8 @@ android {
         applicationId "vn.ghr.posmobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 68
-        versionName "0.4.37"
+        versionCode 69
+        versionName "0.4.38"
     }
     signingConfigs {
         debug {

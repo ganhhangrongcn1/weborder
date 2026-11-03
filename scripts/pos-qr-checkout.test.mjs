@@ -11,6 +11,18 @@ const profile={auth_user_id:'verified-user'};
 const session={id:'session',source:'qr_order',order_id:'POS-TEST',status:'pending_payment'};
 const resolveRoute=async()=>({provider:'pay2s',providerPayload:{bankTransfer:{accountNumber:'000001'}}});
 
+test('v2 makes one transactional RPC and never returns a QR when server benefits require confirmation',async()=>{
+  let calls=0;
+  const intent={pointsRequested:9000};
+  const response=await createPosQrCheckout({payload:{...payload,action:'create_checkout_v2',benefit_intent:intent},profile,resolveRoute,reply,
+    serviceClient:{rpc:(name,args)=>{
+      calls++;assert.equal(name,'create_pos_bank_checkout_v2');assert.deepEqual(args.p_intent,intent);
+      return {then:(resolve,reject)=>Promise.resolve({data:{needs_confirmation:true,quote:{total:20000,pointsSpent:5000}}}).then(resolve,reject)};
+    }}});
+  assert.equal(calls,1);assert.equal(response.status,409);
+  const body=await response.json();assert.equal(body.code,'benefits_changed');assert.equal(body.quote.total,20000);assert.equal(body.session,undefined);
+});
+
 test('real Supabase RPC builder is awaited without assuming a Promise.catch method',async()=>{
   let calls=0;
   const serviceClient=createClient('https://example.invalid','test-key',{auth:{persistSession:false},global:{fetch:async(url,options)=>{

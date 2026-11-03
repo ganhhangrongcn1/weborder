@@ -160,6 +160,7 @@ export default function PosHomeScreen() {
     setQrModalOpen,
     qrLoading,
     qrError,
+    qrBenefitQuote,
     qrPrintBusy,
     pickupQrSession,
     pickupQrOrder,
@@ -1552,7 +1553,8 @@ export default function PosHomeScreen() {
       <QrPaymentModal
         visible={qrModalOpen}
         branch={branch}
-        amount={qrSession?.amountExpected || totals.total}
+        amount={qrBenefitQuote?.total ?? qrSession?.amountExpected ?? totals.total}
+        benefitQuote={qrBenefitQuote}
         draftSession={qrSession}
         previewIdentity={qrPreviewIdentity}
         loading={qrLoading}
@@ -1563,7 +1565,7 @@ export default function PosHomeScreen() {
         onCancel={() => cancelQrPayment(qrSession)}
         onConfirmPaid={confirmQrPaidManually}
         onPrint={printQrReceiptNow}
-        onRetry={() => openQrPayment(qrSession?.provider || "sepay")}
+        onRetry={() => qrBenefitQuote?.total === 0 ? setQrModalOpen(false) : openQrPayment(qrSession?.provider || "sepay", qrBenefitQuote)}
       />
       <PrinterDisconnectedModal
         visible={!isPhoneMode && printerDisconnectedOpen}
