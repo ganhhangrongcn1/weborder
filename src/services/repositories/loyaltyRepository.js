@@ -473,7 +473,7 @@ export const loyaltyRepository = {
       client
     });
   },
-  async processCheckinByPhoneAsync(phone, { idempotencyKey = "" } = {}, fallback = {}, options = {}) {
+  async processCheckinByPhoneAsync(phone, { idempotencyKey = "", checkinDate } = {}, fallback = {}, options = {}) {
     const key = getCustomerKey(phone);
     if (!key) return { ...(fallback || {}), phone: key };
     if (!shouldWriteDomainToSupabase("loyalty")) {
@@ -483,21 +483,50 @@ export const loyaltyRepository = {
       return this.getByPhoneAsync(key, fallback);
     }
 
+    let receipt;
+    let confirmationError;
     try {
-      await coreSupabaseRepository.processLoyaltyCheckin({ idempotencyKey });
-      const remoteOnly =
-        normalizeLoyaltyByPhoneMap({ [key]: await coreSupabaseRepository.readLoyaltyForPhoneFromTable(key) })[key] ||
-        { ...(fallback || {}), phone: key };
+      receipt = await coreSupabaseRepository.processLoyaltyCheckin({ idempotencyKey });
+    } catch (error) {
+      confirmationError = error;
+    }
+
+    let remoteOnly;
+    try {
+      const snapshot = await coreSupabaseRepository.readLoyaltyForPhoneFromTable(key);
+      if (checkinDate && snapshot?.lastCheckinDate === checkinDate) {
+        remoteOnly = normalizeLoyaltyByPhoneMap({ [key]: snapshot })[key];
+      }
+    } catch (error) {
+      confirmationError ||= error;
+    }
+
+    if (!remoteOnly) {
+      if (checkinDate && receipt?.ok === true && receipt.action === "CHECKIN" && receipt.event_id) {
+        return {
+          ...fallback,
+          phone: key,
+          totalPoints: Number(receipt.balance_after),
+          checkinStreak: Number(receipt.checkin_streak),
+          lastCheckinDate: checkinDate,
+          checkinHistory: [...new Set([...(fallback?.checkinHistory || []), checkinDate])]
+        };
+      }
+      const error = confirmationError || new Error("Chưa thể xác nhận điểm danh.");
+      logSupabaseError("process loyalty v2 checkin", error, { phone: key });
+      if (options?.throwOnError) throw error;
+      return this.getByPhoneAsync(key, fallback);
+    }
+
+    try {
       const localAll = normalizeLoyaltyByPhoneMap(await repository.getAsync(STORAGE_KEYS.loyaltyByPhone, {}));
       const nextAll = normalizeLoyaltyByPhoneMap({ ...localAll, [key]: remoteOnly });
       await repository.setAsync(STORAGE_KEYS.loyaltyByPhone, nextAll);
       loyaltyRemoteCache = { value: nextAll, cachedAt: Date.now() };
       notifyLoyaltyChanged();
-      return remoteOnly;
     } catch (error) {
-      logSupabaseError("process loyalty v2 checkin", error, { phone: key });
-      if (options?.throwOnError) throw error;
-      return this.getByPhoneAsync(key, fallback);
+      logSupabaseError("cache confirmed loyalty checkin", error, { phone: key });
     }
+    return remoteOnly;
   }
 };
