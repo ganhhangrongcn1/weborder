@@ -1,8 +1,8 @@
 /* global self, caches, Response */
 
 const CACHE_PREFIX = "ghr-order";
-const SHELL_CACHE_NAME = `${CACHE_PREFIX}-shell-v4`;
-const RUNTIME_CACHE_NAME = `${CACHE_PREFIX}-runtime-v4`;
+const SHELL_CACHE_NAME = `${CACHE_PREFIX}-shell-v5`;
+const RUNTIME_CACHE_NAME = `${CACHE_PREFIX}-runtime-v5`;
 const APP_SHELL = ["/", "/manifest.webmanifest", "/pwa-icon-192.png", "/pwa-icon-512.png"];
 
 async function cacheResponse(cacheName, request, response) {

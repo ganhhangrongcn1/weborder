@@ -2,8 +2,9 @@
 .home-brand-member { position:relative; isolation:isolate; padding:18px 16px 16px; overflow:hidden; border-radius:20px; background:var(--ghr-yellow); }
 .home-brand-texture { position:absolute; inset:0; z-index:0; color:#111; opacity:.07; pointer-events:none; }
 .home-brand-watermark { position:absolute; top:-20px; right:-28px; z-index:0; width:200px; height:200px; object-fit:contain; opacity:.07; mix-blend-mode:multiply; transform:rotate(-12deg); pointer-events:none; }
-.home-brand-masthead { position:relative; z-index:1; display:flex; align-items:center; gap:10px; margin:0 0 18px; padding:0; color:#111; background:transparent; }
+.home-brand-masthead { position:relative; z-index:1; display:flex; align-items:center; gap:10px; margin:0 0 18px; padding:0; color:#111; background:transparent; mix-blend-mode:multiply; }
 .home-brand-masthead>img,.home-brand-mark { flex:0 0 40px; width:40px; height:40px; object-fit:contain; border-radius:10px; }
+.home-brand-masthead>img { flex-basis:50px; width:50px; height:50px; background:transparent; border:0; box-shadow:none; filter:grayscale(1) contrast(4); }
 .home-brand-mark { display:grid; place-items:center; background:#111; color:var(--ghr-yellow); font-size:26px; font-weight:850; }
 .home-brand-masthead>span:last-child { display:grid; gap:2px; min-width:0; }
 :root[data-customer-theme] .customer-shell .home-brand-masthead :is(strong,small) { color:#111; }
