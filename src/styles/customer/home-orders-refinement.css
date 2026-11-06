@@ -1,15 +1,18 @@
 /* Home review entry and order actions use the same flat mobile language. */
 :root[data-customer-theme] .customer-shell .home-review-action {
-  display:flex; align-items:flex-start; gap:14px; width:100%; padding:18px;
+  display:flex; align-items:center; gap:10px; width:100%; padding:9px 12px;
   border:0; border-radius:16px; background:var(--ghr-highlight-bg); text-align:left;
 }
 .home-review-action__icon { display:grid; place-items:center; flex:0 0 44px; height:44px; border-radius:13px; background:var(--ghr-yellow); color:#111; }
-.home-review-action__copy { display:grid; gap:5px; min-width:0; }
+.home-review-action__copy { display:grid; flex:1; gap:4px; min-width:0; }
 :root[data-customer-theme] .customer-shell .home-review-action__copy small { color:var(--ghr-highlight-ink); font-size:11px; font-weight:650; }
 :root[data-customer-theme] .customer-shell .home-review-action__copy strong { color:var(--ghr-ink); font-size:18px; line-height:1.35; letter-spacing:-.3px; }
 .home-review-action__copy>span { color:var(--ghr-highlight-muted); font-size:11px; line-height:1.6; }
-.home-review-action__copy em { display:flex; align-items:center; gap:6px; width:max-content; min-height:32px; margin-top:5px; padding:0 10px; border-radius:9px; background:var(--ghr-yellow); color:#111; font-size:12px; font-weight:650; font-style:normal; }
-.home-review-action__copy em svg { transform:rotate(180deg); }
+.home-review-action__arrow { flex-shrink:0; color:var(--ghr-highlight-ink); transform:rotate(180deg); }
+.customer-shell > main:has(.home-native-home) { padding-bottom:var(--customer-bottom-nav-height); }
+@media (max-height: 690px) {
+  .home-native-home .home-review-action__copy>span { display:none; }
+}
 :root[data-customer-theme] .customer-shell .orders-summary-strip { border:0; background:var(--ghr-surface); border-radius:16px; padding:14px 0; }
 :root[data-customer-theme] .customer-shell .orders-summary-strip>div { padding:0 12px; }
 :root[data-customer-theme] .customer-shell .orders-summary-strip p { display:flex; align-items:center; gap:6px; min-height:32px; margin-bottom:8px; font-size:11px; color:var(--ghr-muted); }

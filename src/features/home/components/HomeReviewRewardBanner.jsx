@@ -18,7 +18,8 @@ export default function HomeReviewRewardBanner({
     <section className="home-review-reward" aria-label={title}>
       <CustomerControl type="button" className="home-review-action" onClick={onOpen}>
         <span className="home-review-action__icon"><Icon name="star" size={24} weight="fill" /></span>
-        <span className="home-review-action__copy"><small>Quà cảm ơn từ Gánh</small><strong>{title}</strong><span>{displayedSubtitle}</span><em>Khám phá ngay <Icon name="back" size={15} /></em></span>
+        <span className="home-review-action__copy"><small>Quà cảm ơn từ Gánh</small><strong>{title}</strong><span>{displayedSubtitle}</span></span>
+        <Icon name="back" size={16} className="home-review-action__arrow" />
       </CustomerControl>
     </section>
   );
