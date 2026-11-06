@@ -1,3 +1,4 @@
+import CustomerControl from "../../components/customer/CustomerControl.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import { CustomerButton, CustomerCard } from "../../components/customer/CustomerUI.jsx";
@@ -565,9 +566,9 @@ export default function OrderSuccess({
                         {isZaloBrowser ? "Tiếp tục thanh toán MoMo" : "Mở ứng dụng MoMo"}
                       </a>
                     ) : (
-                      <button className="momo-app-payment__primary" type="button" disabled>
+                      <CustomerControl className="momo-app-payment__primary" type="button" disabled>
                         Đang chuẩn bị giao dịch...
-                      </button>
+                      </CustomerControl>
                     )}
 
                     {momoLaunchAttempted ? (
@@ -660,12 +661,12 @@ export default function OrderSuccess({
                         Mở MoMo để thanh toán
                       </a>
                     ) : (
-                      <button type="button" onClick={handleCopyPaymentReference}>Sao chép nội dung</button>
+                      <CustomerControl type="button" onClick={handleCopyPaymentReference}>Sao chép nội dung</CustomerControl>
                     )}
                     {!isMomoPayment && qrPaymentImageUrl ? (
-                      <button type="button" onClick={handleShowQrSaveGuide}>
+                      <CustomerControl type="button" onClick={handleShowQrSaveGuide}>
                         Cách lưu QR
-                      </button>
+                      </CustomerControl>
                     ) : null}
                     {isMomoPayment && momoFallbackPaymentUrl ? (
                       <a href={momoFallbackPaymentUrl} rel="noreferrer" onClick={handleMomoLaunch}>
@@ -711,7 +712,7 @@ export default function OrderSuccess({
           ) : null}
 
           {!isQrPaymentWaiting && !qrPaymentExpired ? (
-            <button type="button" className="success-member-prompt mt-4" onClick={handleMemberAction}>
+            <CustomerControl type="button" className="success-member-prompt mt-4" onClick={handleMemberAction}>
               <span className="success-member-prompt__icon" aria-hidden="true">
                 <Icon name={isRegisteredCustomer ? "star" : "gift"} size={18} />
               </span>
@@ -720,7 +721,7 @@ export default function OrderSuccess({
                 <small>{memberPromptText}</small>
               </span>
               <span className="success-member-prompt__action">{memberActionText}</span>
-            </button>
+            </CustomerControl>
           ) : null}
         </CustomerCard>
       </div>

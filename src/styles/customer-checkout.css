@@ -354,9 +354,9 @@
   min-height: 42px;
   flex: 0 0 auto;
   border-radius: 11px;
-  background: #168244;
+  background: var(--ghr-yellow, #ffda21);
   padding: 0 13px;
-  color: #ffffff;
+  color: var(--ghr-ink, #302b22);
   font-size: 12px;
   font-weight: 900;
 }
@@ -493,7 +493,7 @@
 }
 
 .order-detail-total.discount strong {
-  color: #16a34a;
+  color: var(--ghr-selected, #6b4f23);
 }
 
 .order-detail-total.grand {
@@ -721,8 +721,8 @@
 }
 
 .promo-select.is-applied {
-  border-color: rgba(22, 130, 68, 0.24);
-  background: #f4fff7;
+  border-color: var(--ghr-accent-line, #d7bd75);
+  background: var(--ghr-accent-soft, #fff4cf);
 }
 
 .promo-select__copy {
@@ -755,13 +755,13 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
-  color: #e55b00;
+  color: var(--ghr-selected, #6b4f23);
   font-size: 12px;
   font-weight: 900;
 }
 
 .promo-select.is-applied .promo-select__status {
-  color: #168244;
+  color: var(--ghr-selected, #6b4f23);
 }
 
 .promo-select__status .icon-ux {
@@ -1096,7 +1096,7 @@
 .points-limit-note {
   display: block;
   margin-top: 7px;
-  color: #8a6b54;
+  color: var(--ghr-muted, #77736b);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.45;
@@ -1129,9 +1129,9 @@ button.payment-card {
 }
 
 .payment-card.active {
-  border-color: rgba(255, 106, 0, 0.45);
-  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
-  box-shadow: 0 12px 28px rgba(255, 106, 0, 0.1);
+  border-color: var(--ghr-accent-line, #d7bd75);
+  background: #fffaf0;
+  box-shadow: none;
 }
 
 .payment-card__selected {
@@ -1141,7 +1141,7 @@ button.payment-card {
   margin-left: auto;
   place-items: center;
   border-radius: 999px;
-  background: #168244;
+  background: var(--ghr-selected, #6b4f23);
   color: #ffffff;
   font-size: 13px;
   font-weight: 900;
@@ -1250,7 +1250,7 @@ button.payment-card {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  border: 1.8px solid #ff7a00;
+  border: 1.8px solid var(--ghr-accent, #765621);
   border-radius: 4px;
   transform: rotate(-18deg);
 }
@@ -1262,12 +1262,12 @@ button.payment-card {
   width: 3px;
   height: 3px;
   border-radius: 999px;
-  background: #ff7a00;
+  background: var(--ghr-accent, #765621);
   content: "";
 }
 
 .discount-line strong {
-  color: #16a34a;
+  color: var(--ghr-selected, #6b4f23);
 }
 
 .summary-final {

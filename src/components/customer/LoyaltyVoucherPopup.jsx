@@ -1,3 +1,4 @@
+import CustomerControl from "./CustomerControl.jsx";
 import { useMemo } from "react";
 import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
 
@@ -65,14 +66,14 @@ export default function LoyaltyVoucherPopup({
       showHeader={false}
       footer={(
         <div className="loyalty-voucher-footer">
-          <button type="button" className="cta w-full" onClick={onPrimaryAction}>
+          <CustomerControl type="button" className="cta w-full" onClick={onPrimaryAction}>
             Dùng ngay
-          </button>
+          </CustomerControl>
         </div>
       )}
     >
       <section className="loyalty-voucher-card">
-        <button type="button" className="loyalty-voucher-close" onClick={onClose} aria-label="Đóng">X</button>
+        <CustomerControl type="button" className="loyalty-voucher-close" onClick={onClose} aria-label="Đóng">X</CustomerControl>
 
         <div className="loyalty-voucher-hero">
           <p className="loyalty-voucher-pill">Quà tặng dành riêng cho bạn</p>

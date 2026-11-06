@@ -1,6 +1,13 @@
+import useCustomerCartSheet from "../../../hooks/useCustomerCartSheet.js";
+import useBranchCartGuard from "../../../hooks/useBranchCartGuard.js";
+import BranchCartChangeSheet from "../../../components/customer/BranchCartChangeSheet.jsx";
+import useCustomerAppearance from "../../../hooks/useCustomerAppearance.js";
+import CustomerCartSheet from "../../../components/customer/CustomerCartSheet.jsx";
 import { useEffect, useMemo, useState } from "react";
 import "../../../styles/customer.css";
 import BottomNav from "../../../components/BottomNav.jsx";
+import HomeBranchPlannerModal from "../../home/components/HomeBranchPlannerModal.jsx";
+import useMenuBranchPicker from "../../menu/hooks/useMenuBranchPicker.js";
 import StoreStatusModal from "../../../components/customer/StoreStatusModal.jsx";
 import ActiveOrderJourneySheet from "../../../components/customer/ActiveOrderJourneySheet.jsx";
 import ActiveOrderFloatboard from "../../../components/customer/ActiveOrderFloatboard.jsx";
@@ -43,7 +50,7 @@ function resolveQrLockedBranch(branches = [], checkoutPreset = {}) {
 
 export default function CustomerShell({
   page,
-  pageProps,
+  pageProps: originalPageProps,
   activeTab,
   handleBottomNav,
   openOptionModalFromHome,
@@ -99,6 +106,10 @@ export default function CustomerShell({
   setServiceNotice,
   getStoreBlockNotice
 }) {
+  useCustomerAppearance(true);
+  const branchGuard = useBranchCartGuard({cart:originalPageProps.cart,catalog:originalPageProps.branchCartCatalog,branches:originalPageProps.branches,setCart:originalPageProps.setCart,catalogReady:!originalPageProps.isMenuLoading});
+  const pageProps = {...originalPageProps,requestBranchChange:branchGuard.requestChange};
+  const menuBranchPicker = useMenuBranchPicker({branches:pageProps.branches,checkoutPreset:pageProps.checkoutPreset,setCheckoutPreset:pageProps.setCheckoutPreset,requestBranchChange:branchGuard.requestChange,onSelected:()=>navigate("menu","menu")});
   const isQrRoute = typeof window !== "undefined" && /^\/qr\/[^/]+/i.test(window.location.pathname || "");
   const isQrCounterFlow = isQrRoute || (String(pageProps?.checkoutPreset?.orderSource || pageProps?.checkoutPreset?.source || "").toLowerCase() === "qr_counter" && Boolean(pageProps?.checkoutPreset?.qrBranchLocked));
   const qrAllowedPages = ["home", "qr-entry", "menu", "detail", "checkout", "tracking", "success", "loyalty", "account"];
@@ -239,6 +250,8 @@ export default function CustomerShell({
     navigate("checkout", "orders");
   };
 
+  const cartSheet = useCustomerCartSheet({ setCart: pageProps.setCart, openCartItemEditor, onCheckout: handleOpenCheckout });
+
   const closeOrderJourney = () => {
     setIsJourneyOpen(false);
   };
@@ -309,9 +322,12 @@ export default function CustomerShell({
     navigate("account", "account");
   };
 
+  const renderLoyalty = (navigateRewards = navigate) => (<LoyaltyPage setCart={pageProps.setCart} setCheckoutPreset={pageProps.setCheckoutPreset} render={pageProps.Loyalty} navigate={navigateRewards} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} demoOrders={profileOrders} checkoutCoupons={pageProps.checkoutCoupons || pageProps.coupons} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />);
+
   const shouldShowQrSignupAction = !isRegisteredCustomer && !hasCustomerAuthSession;
 
   return (
+
     <div className="customer-shell min-h-screen bg-app text-brown">
       <main className="mx-auto min-h-screen w-full max-w-[430px] bg-cream pb-24 shadow-preview">
         {!isQrCounterFlow && <PwaInstallBanner />}
@@ -328,12 +344,14 @@ export default function CustomerShell({
                   : <HomePage render={pageProps.Home} {...pageProps} hasCustomerAuthSession={hasCustomerAuthSession} currentPhone={currentPhone} coupons={pageProps.homeCoupons || pageProps.coupons} smartPromotions={pageProps.homeSmartPromotions || pageProps.smartPromotions} openProduct={openOptionModalFromHome} openOptionModal={openOptionModalFromHome} />
               )}
               {page === "qr-entry" && <QrOrderEntryPage branches={pageProps.branches} checkoutPreset={pageProps.checkoutPreset} setCheckoutPreset={pageProps.setCheckoutPreset} navigate={pageProps.navigate} isBranchOpenNow={pageProps.isBranchOpenNow} buildOutOfHoursNotice={pageProps.buildOutOfHoursNotice} setServiceNotice={pageProps.setServiceNotice} />}
-              {page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
+              {isQrCounterFlow && page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
+              {!isQrCounterFlow && page === "menu" && <MenuPage render={pageProps.Menu} {...pageProps} />}
+              {!isQrCounterFlow && page === "loyalty" && renderLoyalty()}
               {page === "detail" && <ProductDetailPage render={pageProps.Detail} {...pageProps} />}
               {page === "checkout" && <CheckoutPage render={pageProps.Checkout} {...pageProps} coupons={pageProps.checkoutCoupons || pageProps.coupons} smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions} openCartItemEditor={openCartItemEditor} />}
               {page === "success" && <SuccessPage render={pageProps.Success} navigate={pageProps.navigate} order={successOrder} setCurrentOrder={setCurrentOrder} onReorder={reorderOrder} isRegisteredCustomer={isRegisteredCustomer} currentPhone={currentPhone} branches={pageProps.branches} isOrderRestoring={isSessionRestoring || isSessionBootstrapping || isMomoReturnRecovering} />}
               {page === "tracking" && <TrackingPage render={pageProps.Tracking} {...pageProps} navigate={pageProps.navigate} userProfile={trackingUserProfile} currentOrder={successOrder} setCurrentOrder={setCurrentOrder} currentPhone={currentPhone} onReorder={reorderOrder} isOrdersLoading={isOrdersLoading} hasFetchedOrdersOnce={hasFetchedOrdersOnce} isSessionRestoring={isSessionRestoring} onOrderSheetVisibilityChange={setIsTrackingOrderSheetOpen} />}
-              {page === "loyalty" && <LoyaltyPage setCart={pageProps.setCart} setCheckoutPreset={pageProps.setCheckoutPreset} render={pageProps.Loyalty} navigate={pageProps.navigate} userProfile={composedUserProfile} setUserProfile={setUserProfile} demoLoyalty={profileLoyalty} setDemoLoyalty={pageProps.setDemoLoyaltyState || pageProps.setDemoLoyalty || saveDemoLoyalty} demoOrders={profileOrders} checkoutCoupons={pageProps.checkoutCoupons || pageProps.coupons} subtotal={subtotal} isRegisteredCustomer={isRegisteredCustomer} hasCustomerAuthSession={hasCustomerAuthSession} requiresCustomerAuthSession={requiresCustomerAuthSession} currentPhone={currentPhone} />}
+              {page === "loyalty" && isQrCounterFlow && renderLoyalty()}
               {page === "reviewRewards" && <ReviewRewardsPage navigate={pageProps.navigate} branches={pageProps.branches || branches} />}
               {page === "account" && <AccountPage render={pageProps.Account} {...pageProps} navigate={pageProps.navigate} userProfile={composedUserProfile} demoUser={activeDemoUser} setDemoUser={saveDemoUser} currentPhone={currentPhone} isRegisteredCustomer={isRegisteredCustomer} loginOrRegisterByPhone={loginOrRegisterByPhone} logoutDemoUser={logoutDemoUser} demoAddresses={demoAddresses} setDemoAddresses={saveDemoAddresses} demoLoyalty={profileLoyalty} demoOrders={profileOrders} />}
             </div>
@@ -389,14 +407,18 @@ export default function CustomerShell({
               <CustomerFloatingCartBar
                 count={cartCount}
                 subtotal={subtotal}
-                onClick={handleOpenCheckout}
+                onClick={cartSheet.openCart}
+                onContinue={cartSheet.continueCheckout}
                 formatMoney={formatMoney}
                 products={pageProps.products}
                 smartPromotions={pageProps.checkoutSmartPromotions || pageProps.smartPromotions}
               />
             )}
 
+            {cartSheet.isCartOpen && !isChoosingProduct && <CustomerCartSheet cart={pageProps.cart} setCart={pageProps.setCart} subtotal={subtotal} onClose={cartSheet.closeCart} onContinue={cartSheet.continueCheckout} onEdit={cartSheet.editItem} onQuantityChange={cartSheet.updateQuantity} />}
+
             {toastVisible && <CustomerToast message="Đã thêm vào giỏ" />}
+            <BranchCartChangeSheet guard={branchGuard} />
             <QrCounterGuideModal
               open={showQrMemberPrompt}
               showSignupAction={shouldShowQrSignupAction}
@@ -407,8 +429,12 @@ export default function CustomerShell({
             {!shouldHideBottomNav && (
               isQrCounterFlow
                 ? <BottomNav activeTab={activeTab} onChange={handleQrBottomNav} items={qrBottomNavItems} />
-                : <BottomNav activeTab={activeTab} onChange={handleBottomNav} />
+                : <BottomNav activeTab={page === "checkout" ? "menu" : activeTab} onChange={tab=>tab === "menu" ? menuBranchPicker.openPicker() : handleBottomNav(tab)} />
             )}
+            {!isQrCounterFlow && <HomeBranchPlannerModal open={menuBranchPicker.open} onClose={menuBranchPicker.closePicker}
+              title="Chọn chi nhánh" subtitle="Chọn quán trước khi xem thực đơn." iconName="store" enableNearby
+              branches={menuBranchPicker.availableBranches} selectedBranchId={menuBranchPicker.selectedBranchId}
+              onSelectBranch={()=>{}} onConfirm={menuBranchPicker.selectBranch} />}
             {isJourneyOpen && journeyOrder && !serviceNotice ? (
               <ActiveOrderJourneySheet
                 order={journeyOrder}
@@ -422,5 +448,6 @@ export default function CustomerShell({
         )}
       </main>
     </div>
+
   );
 }

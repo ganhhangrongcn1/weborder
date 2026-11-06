@@ -1,0 +1,55 @@
+/* Quiet app feedback: a short arrival, no looping or layout animation. */
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .reward-rules>div { background:var(--ghr-surface-soft); border:0; border-radius:12px; color:var(--ghr-ink); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .reward-rules>div>span { color:var(--ghr-muted); font-weight:500; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .reward-rules>div>strong { color:var(--ghr-ink); font-weight:650; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .reward-rules-example { background:var(--ghr-highlight-bg); color:var(--ghr-ink); border-left:3px solid var(--ghr-yellow); font-weight:500; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .reward-rules-example :is(span,svg) { color:var(--ghr-ink); }
+.checkin-chain-summary { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:12px 0 0; font-size:11px; color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-bottom-sheet .checkin-chain-summary strong { padding:5px 8px; border-radius:7px; background:var(--ghr-yellow); color:#111; font-size:11px; font-weight:650; }
+.checkin-reward-timeline { display:flex; margin:20px 0 0; padding:0; list-style:none; }
+.checkin-reward-timeline li { position:relative; display:flex; flex:1; flex-direction:column; align-items:center; gap:4px; min-width:0; text-align:center; }
+.checkin-reward-timeline li:not(:last-child)::before { content:""; position:absolute; left:50%; top:13px; width:100%; height:3px; background:var(--ghr-line); }
+.checkin-reward-timeline li.is-reached:has(+li.is-reached)::before { background:var(--ghr-yellow); }
+.checkin-reward-timeline__dot { position:relative; display:grid; place-items:center; box-sizing:border-box; width:30px; height:30px; margin-bottom:7px; border:3px solid var(--ghr-surface-soft); border-radius:50%; background:var(--ghr-line); color:var(--ghr-muted); }
+.checkin-reward-timeline .is-reached .checkin-reward-timeline__dot { background:var(--ghr-yellow); color:#111; }
+.checkin-reward-timeline [aria-current="step"] .checkin-reward-timeline__dot { border:2px solid var(--ghr-yellow); background:var(--ghr-surface-soft); color:var(--ghr-ink); }
+.checkin-reward-timeline li>span:not(.checkin-reward-timeline__dot) { font-size:11px; color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-bottom-sheet .checkin-reward-timeline strong { color:var(--ghr-ink); font-size:17px; line-height:1.4; font-variant-numeric:tabular-nums; }
+.checkin-reward-timeline small,.checkin-reward-timeline em { color:var(--ghr-muted); font-size:10px; font-style:normal; }
+:root[data-customer-theme] .customer-bottom-sheet .checkin-chain-next { padding:12px; margin:18px 0 0; border-radius:10px; background:var(--ghr-highlight-bg); color:var(--ghr-ink); font-size:12px; line-height:1.6; }
+:root[data-customer-theme] .customer-bottom-sheet .checkin-chain-next strong { color:var(--ghr-ink); font-weight:650; }
+:root[data-customer-theme] .customer-shell .orders-summary-strip>div:nth-child(2) { background:transparent; border-radius:0; border-left-color:var(--ghr-line); }
+:root[data-customer-theme] .customer-shell .orders-summary-strip>div:nth-child(2) :is(strong,p) { color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-shell .orders-summary-strip p { min-height:28px; margin-bottom:8px; white-space:nowrap; color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-shell .orders-summary-strip strong { display:block; letter-spacing:-.3px; }
+:root[data-customer-theme] .customer-shell .orders-summary-strip small { font-size:10px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-google-card {
+  grid-template-columns:42px minmax(0,1fr); padding:16px; gap:12px; align-items:start;
+}
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-google-card__reward {
+  position:static; grid-column:2; justify-self:start; min-height:28px; margin-top:-3px;
+  padding:4px 10px; border:0; border-radius:8px; font-size:12px; font-weight:650;
+}
+.review-reward-google-card__hint { display:flex; align-items:center; gap:5px; margin-top:6px; font-size:12px; font-weight:650; color:var(--ghr-ink); }
+.review-reward-google-card__hint svg { transform:rotate(-90deg); }
+:root[data-customer-theme] .customer-shell .customer-bottom-nav__item { gap:4px; background:transparent; border-radius:0; color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-shell .customer-bottom-nav__icon { display:grid; place-items:center; width:42px; height:30px; margin:0; border-radius:10px; background:transparent; transition:background-color .16s ease,color .16s ease; }
+:root[data-customer-theme] .customer-shell .customer-bottom-nav__item--active { background:transparent; color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-shell .customer-bottom-nav__icon--active { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] .customer-shell .customer-bottom-nav__icon--active svg { color:#111; }
+:root[data-customer-theme] .customer-shell .customer-bottom-nav__item--active .customer-bottom-nav__label { color:var(--ghr-ink); font-weight:700; }
+:root[data-customer-theme] .customer-shell .toast {
+  z-index:130; max-width:calc(100vw - 32px); width:max-content; min-height:48px;
+  bottom:calc(var(--customer-bottom-nav-height,74px) + 70px + env(safe-area-inset-bottom));
+  padding:8px 14px 8px 8px; border:0; border-radius:14px; background:var(--ghr-ink); color:var(--ghr-surface);
+  box-shadow:none; backdrop-filter:none; animation:toast-in .18s ease-out;
+}
+:root[data-customer-theme] .customer-shell .toast>span { flex-shrink:0; background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] .customer-shell .toast strong { color:var(--ghr-surface); font-size:13px; font-weight:600; white-space:normal; }
+.checkin-feedback { display:flex; align-items:flex-start; gap:8px; padding:12px; border-radius:12px; background:var(--ghr-surface-soft); color:var(--ghr-ink); font-size:12px; line-height:1.5; }
+.checkin-feedback svg { flex-shrink:0; margin-top:1px; color:var(--ghr-ink); }
+.checkin-feedback--success { background:var(--ghr-highlight-bg); }
+@media(prefers-reduced-motion:reduce) {
+  :root[data-customer-theme] .customer-shell .toast { animation:none; }
+  :root[data-customer-theme] .customer-shell .customer-bottom-nav__icon { transition:none; }
+}

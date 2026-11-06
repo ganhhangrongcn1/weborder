@@ -1,0 +1,27 @@
+/* StampCard is identical on home and rewards; detailed only controls gift/history access. */
+:root[data-customer-theme] .customer-shell .stamp-card {
+  margin:0; padding:12px 16px 8px; border:0; border-radius:16px; background:var(--ghr-surface); color:var(--ghr-ink); box-shadow:none;
+}
+:root[data-customer-theme] .customer-shell .stamp-card header { min-height:24px; gap:12px; }
+:root[data-customer-theme] .customer-shell .stamp-card h2 { gap:8px; font-size:15px; line-height:1.4; }
+:root[data-customer-theme] .customer-shell .stamp-card h2 svg { box-sizing:border-box; width:21px; height:21px; padding:0; border:0; border-radius:0; background:transparent; color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__count { color:var(--ghr-muted); font-size:11px; }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__grid { align-items:center; gap:5px; margin:6px 0 0; }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__grid>span {
+  box-sizing:border-box; display:grid; place-items:center; justify-self:center; width:min(22px,100%); height:auto;
+  min-width:0; aspect-ratio:1; padding:0; border:0; border-radius:50%; background:transparent; color:var(--ghr-ink); box-shadow:none;
+}
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__grid>span:not(:last-child)::before { content:""; display:block; width:12px; height:12px; border:0; border-radius:50%; background:var(--ghr-line); box-shadow:none; }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__grid>span.is-earned:not(:last-child)::before { width:14px; height:14px; background:var(--ghr-yellow); box-shadow:none; }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__grid>span:last-child { border:1px solid var(--ghr-yellow); background:var(--ghr-surface); }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__grid>span:last-child svg { width:14px; height:14px; color:var(--ghr-ink); animation:none; }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__grid>span:last-child.is-earned { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__grid>span:last-child.is-earned svg { color:#111; }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__footer { color:var(--ghr-muted); font-size:11px; }
+:root[data-customer-theme] .customer-shell .stamp-card .stamp-card__footer button { color:var(--ghr-ink); font-size:12px; }
+:root[data-customer-theme] .customer-shell .stamp-card--ready .stamp-card__count { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] .customer-shell .stamp-card--ready .stamp-card__footer button { background:var(--ghr-yellow); color:#111; border-radius:999px; }
+:root[data-customer-theme] .customer-shell .rewards-overview { background:var(--ghr-page); }
+:root[data-customer-theme] .customer-shell .rewards-overview .rewards-hero { border:0; border-radius:0; padding-bottom:20px; background:var(--ghr-surface); }
+:root[data-customer-theme] .customer-shell .rewards-overview .rewards-overview__body { display:grid; gap:12px; padding:12px 16px 20px; background:var(--ghr-page); }
+:root[data-customer-theme] .customer-shell .rewards-overview .rewards-shortcuts { margin:0; }

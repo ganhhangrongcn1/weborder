@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import Icon from "../../../components/Icon.jsx";
 import AppBanner from "../../../components/app/Banner.jsx";
 
@@ -77,13 +78,13 @@ export default function HomeHero({
           <strong>{subtitle}</strong>
         </div>
         <div className="home2026-header-actions">
-          <button type="button" onClick={() => navigate("loyalty", "rewards")} className="home2026-action-btn" aria-label="Ưu đãi">
+          <CustomerControl type="button" onClick={() => navigate("loyalty", "rewards")} className="home2026-action-btn" aria-label="Ưu đãi">
             <Icon name="gift" size={17} />
             {voucherCount > 0 ? <span className="home2026-voucher-badge">{voucherBadge}</span> : null}
-          </button>
-          <button type="button" onClick={() => navigate("account", "account")} className="home2026-action-btn" aria-label="Tài khoản">
+          </CustomerControl>
+          <CustomerControl type="button" onClick={() => navigate("account", "account")} className="home2026-action-btn" aria-label="Tài khoản">
             <Icon name="user" size={17} />
-          </button>
+          </CustomerControl>
         </div>
       </div>
 
@@ -101,7 +102,7 @@ export default function HomeHero({
           </div>
           <div className="home2026-dots" role="group" aria-label={bannerAria}>
             {banners.map((banner, index) => (
-              <button
+              <CustomerControl
                 key={banner.id}
                 type="button"
                 onClick={() => selectBanner(index)}

@@ -1,0 +1,46 @@
+/* The stamp dialog is portaled outside customer-shell; theme it explicitly. */
+:root[data-customer-theme] .customer-shell .checkout-page--compact .checkout-benefits-card .promo-select.is-applied { border:1.5px solid var(--ghr-yellow); background:var(--ghr-surface); border-radius:14px; padding:14px 12px; }
+:root[data-customer-theme] .customer-shell .checkout-page--compact .promo-select.is-applied .promo-select__copy strong { color:var(--ghr-ink); font-size:16px; font-weight:750; letter-spacing:.3px; }
+:root[data-customer-theme] .customer-shell .checkout-page--compact .promo-select.is-applied .checkout-promo-icon { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] .customer-shell .checkout-page--compact .promo-select.is-applied .promo-select__status { display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap; padding:7px 8px; border-radius:8px; background:var(--ghr-yellow); color:#111; font-size:10px; font-weight:650; }
+:root[data-customer-theme] .customer-shell .checkout-page--compact .promo-select.is-applied .promo-select__status svg { color:#111; transform:none; }
+:root[data-customer-theme] .customer-shell .checkout-page--compact .promo-select.is-applied .promo-select__status svg:last-child { display:none; }
+:root[data-customer-theme] .customer-bottom-sheet.stamp-rewards-sheet .stamp-rewards-sheet__summary { position:relative; padding:16px; border-radius:14px; background:var(--ghr-highlight-bg); text-align:left; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-rewards-sheet__summary h3 { margin:0 0 6px; padding-right:66px; color:var(--ghr-ink); font-size:17px; line-height:1.4; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-rewards-sheet__summary p { margin:0; padding-right:60px; color:var(--ghr-highlight-muted); font-size:12px; line-height:1.6; }
+:root[data-customer-theme] .customer-bottom-sheet.stamp-rewards-sheet .stamp-rewards-sheet__summary>strong { position:absolute; top:16px; right:12px; padding:7px; border-radius:9px; background:var(--ghr-yellow); color:#111; font-size:12px; }
+:root[data-customer-theme] .stamp-rewards-sheet h3 { color:var(--ghr-ink); font-size:14px; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__gifts button { gap:12px; padding:12px; min-height:84px; border:0; border-radius:14px; background:var(--ghr-surface-soft); color:var(--ghr-ink); box-shadow:none; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__gifts button:disabled { opacity:1; cursor:default; background:var(--ghr-surface-soft); }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__gifts button>span { color:var(--ghr-ink); font-size:14px; font-weight:600; line-height:1.5; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__gifts small { color:var(--ghr-muted); font-size:11px; font-weight:400; margin-top:4px; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__gifts button:not(:disabled)::after { content:"›"; display:grid; place-items:center; flex:0 0 32px; height:32px; margin-left:auto; border-radius:10px; background:var(--ghr-yellow); color:#111; font-size:24px; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__gifts img { flex:0 0 60px; width:60px; height:60px; border-radius:10px; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-disclosure { border-color:var(--ghr-line); margin-top:16px; padding-top:6px; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-disclosure summary { color:var(--ghr-ink); font-size:13px; min-height:44px; }
+:root[data-customer-theme] .stamp-rewards-sheet :is(.stamp-rules,.stamp-card__timeline small,.stamp-disclosure p) { color:var(--ghr-muted); font-size:12px; line-height:1.7; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__timeline { border-color:var(--ghr-line); }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__timeline li::before { background:var(--ghr-yellow); }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-card__timeline strong { color:var(--ghr-ink); font-size:13px; font-weight:600; }
+:root[data-customer-theme] .stamp-rewards-sheet .stamp-disclosure button { min-height:44px; padding:10px 14px; border:0; border-radius:12px; background:var(--ghr-surface-soft); color:var(--ghr-ink); font-weight:600; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__filters button { min-height:44px; padding:0 12px; border:0; border-radius:12px; background:var(--ghr-surface-soft); color:var(--ghr-muted); box-shadow:none; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__filters button.is-active { background:var(--ghr-yellow); color:#111; font-weight:650; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__group>h3 { color:var(--ghr-muted); font-size:11px; font-weight:500; margin:18px 0 8px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__list { background:var(--ghr-surface-soft); border:0; border-radius:14px; overflow:hidden; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__item { background:transparent; border-color:var(--ghr-line); gap:10px; padding:14px 12px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__mark.is-earned { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__mark.is-spent { background:var(--ghr-surface); color:var(--ghr-muted); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__item strong { color:var(--ghr-ink); font-size:12px; font-weight:600; line-height:1.5; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__item small { color:var(--ghr-muted); font-size:11px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__item>b { color:var(--ghr-ink); font-size:12px; white-space:nowrap; font-weight:650; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__item>b.is-spent { color:var(--ghr-muted); font-weight:500; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .loyalty-point-history__more { width:100%; min-height:44px; border:0; border-radius:12px; background:var(--ghr-surface-soft); color:var(--ghr-ink); font-weight:600; }
+:root[data-customer-theme] .customer-shell .orders-guest-lookup { padding:18px 16px; border:0; border-radius:16px; background:var(--ghr-surface); }
+:root[data-customer-theme] .customer-shell .orders-guest-lookup>div:first-child>div { margin:0 0 12px; background:var(--ghr-yellow); color:#111; width:40px; height:40px; border-radius:12px; }
+:root[data-customer-theme] .customer-shell .orders-guest-lookup :is(h2,p) { text-align:left; }
+:root[data-customer-theme] .customer-shell .orders-guest-lookup h2 { color:var(--ghr-ink); font-size:18px; }
+:root[data-customer-theme] .customer-shell .orders-guest-lookup p { color:var(--ghr-muted); font-size:12px; }
+:root[data-customer-theme] .customer-shell .orders-guest-lookup input { min-height:48px; padding:12px; border:1px solid transparent; border-radius:12px; background:var(--ghr-surface-soft); color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-shell .orders-guest-lookup input:focus-visible { outline:2px solid var(--ghr-yellow); outline-offset:2px; }
+:root[data-customer-theme] .customer-shell .orders-guest-lookup [aria-live] { padding:12px; border-radius:12px; background:var(--ghr-highlight-bg); color:var(--ghr-ink); font-size:12px; font-weight:500; }
+@media(max-width:360px) { :root[data-customer-theme] .customer-bottom-sheet .loyalty-point-history__item { grid-template-columns:28px minmax(0,1fr); } :root[data-customer-theme] .customer-bottom-sheet .loyalty-point-history__item>b { grid-column:2; } }

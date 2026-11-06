@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import { useMemo, useState } from "react";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
 import { getLoyaltyText } from "../../../services/loyaltyConfigService.js";
@@ -147,7 +148,7 @@ export default function PointHistoryList({ entries, pageSize = 12 }) {
     <div className="loyalty-point-history">
       <div className="loyalty-point-history__filters" role="group" aria-label="Lọc lịch sử điểm">
         {HISTORY_FILTERS.map((filter) => (
-          <button
+          <CustomerControl
             key={filter.id}
             type="button"
             className={activeFilter === filter.id ? "is-active" : ""}
@@ -155,7 +156,7 @@ export default function PointHistoryList({ entries, pageSize = 12 }) {
             onClick={() => selectFilter(filter.id)}
           >
             {filter.label}
-          </button>
+          </CustomerControl>
         ))}
       </div>
 
@@ -195,13 +196,13 @@ export default function PointHistoryList({ entries, pageSize = 12 }) {
       ) : null}
 
       {hasMore ? (
-        <button
+        <CustomerControl
           type="button"
           className="loyalty-point-history__more"
           onClick={() => setVisibleCount((current) => current + safePageSize)}
         >
           Xem thêm {remainingCount} giao dịch
-        </button>
+        </CustomerControl>
       ) : null}
     </div>
   );

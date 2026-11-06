@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import { useRef, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
@@ -40,7 +41,7 @@ function PasswordField({
           className="pr-12"
           onChange={onChange}
         />
-        <button
+        <CustomerControl
           type="button"
           className={`account-auth-password-toggle${isVisible ? " is-visible" : ""}`}
           onClick={() => setIsVisible((current) => !current)}
@@ -49,7 +50,7 @@ function PasswordField({
           disabled={disabled}
         >
           <Icon name={isVisible ? "eyeOff" : "eye"} size={18} />
-        </button>
+        </CustomerControl>
       </div>
       {error ? <small id={errorId} className="account-field-error" role="alert">{error}</small> : null}
     </label>
@@ -216,7 +217,7 @@ export default function ProfileModal({
     >
       {isPasswordMode ? (
         <form id={PASSWORD_FORM_ID} className="space-y-3" noValidate onSubmit={handleChangePassword}>
-          <button
+          <CustomerControl
             type="button"
             onClick={() => {
               setMode("profile");
@@ -227,7 +228,7 @@ export default function ProfileModal({
           >
             <Icon name="back" size={16} />
             Quay lại hồ sơ
-          </button>
+          </CustomerControl>
           <PasswordField
             id="account-current-password"
             name="current-password"

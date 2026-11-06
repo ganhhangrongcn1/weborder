@@ -56,7 +56,7 @@ export default function OrderJourneyTimeline({ order, compact = false }) {
           <span aria-hidden="true"><Icon name="gift" size={15} /></span>
           <p>
             <strong>Xong đơn là có điểm</strong>
-            <small>Tích 10–15% giá trị đơn theo hạng của bạn.</small>
+            <small>Điểm được ghi nhận khi đơn hoàn tất.</small>
           </p>
         </aside>
       ) : null}

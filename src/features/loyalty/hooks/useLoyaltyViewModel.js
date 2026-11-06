@@ -201,12 +201,24 @@ export default function useLoyaltyViewModel({
     return saved;
   }
 
+  const checkinLock = useRef(false);
+  const [checkinPending, setCheckinPending] = useState(false);
+  const [checkinFeedback, setCheckinFeedback] = useState(null);
   async function handleCheckin() {
+    if (checkinLock.current || !checkinEnabled || checkedInToday) return;
+    checkinLock.current = true;
+    setCheckinPending(true);
+    setCheckinFeedback(null);
+    try { await performCheckin(); }
+    finally { checkinLock.current = false; setCheckinPending(false); }
+  }
+
+  async function performCheckin() {
     if (!checkinEnabled || checkedInToday) return;
     const canUseLocalMemberCheckin = Boolean(currentPhone || isRegisteredCustomer);
     const shouldUseProtectedCheckin = Boolean(currentPhone) && requiresCustomerAuthSession;
     if (shouldUseProtectedCheckin && !hasCustomerAuthSession) {
-      alert("Phiên đăng nhập thành viên đã hết. Anh đăng xuất rồi đăng nhập lại giúp em 1 lần để điểm danh nhé.");
+      setCheckinFeedback({ type: "error", message: "Phiên đăng nhập đã hết. Vui lòng đăng nhập lại để điểm danh." });
       return;
     }
     if (!canUseLocalMemberCheckin && !shouldUseProtectedCheckin) return;
@@ -273,10 +285,14 @@ export default function useLoyaltyViewModel({
           }));
         }
         if (voucher) setLuckyVoucher(voucher);
+        setCheckinFeedback({ type: "success", message: "Đã ghi nhận điểm danh hôm nay. Điểm của bạn đã được cập nhật." });
         return;
       } catch (error) {
         console.error("[loyalty] processCheckinByPhoneAsync failed", error);
-        alert(error?.message || "Điểm danh chưa thành công. Anh đăng xuất rồi đăng nhập lại giúp em 1 lần nhé.");
+        const needsLogin = /auth|session|jwt|token|đăng nhập|phiên/i.test(String(error?.message || ""));
+        setCheckinFeedback({ type: "error", message: needsLogin
+          ? "Phiên đăng nhập đã hết. Vui lòng đăng nhập lại để điểm danh."
+          : "Chưa thể xác nhận điểm danh. Vui lòng thử lại sau, Gánh sẽ không cộng trùng điểm." });
         return;
       }
     }
@@ -289,6 +305,7 @@ export default function useLoyaltyViewModel({
       pointHistory: [...pointEntries, ...(Array.isArray(profile?.pointHistory) ? profile.pointHistory : [])]
     }));
     if (voucher) setLuckyVoucher(voucher);
+    setCheckinFeedback({ type: "success", message: "Đã ghi nhận điểm danh hôm nay." });
   }
 
   function resetDemo() {
@@ -334,6 +351,8 @@ export default function useLoyaltyViewModel({
     progressPercent,
     recentDays,
     handleCheckin,
+    checkinPending,
+    checkinFeedback,
     resetDemo
   };
 }

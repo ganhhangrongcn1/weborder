@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import { processUploadImage } from "../../../utils/imageUpload.js";
@@ -406,7 +407,7 @@ export default function ReviewRewardPanel({
         <div className="review-reward-resubmit-note">
           <span><Icon name="refresh" size={18} /></span>
           <div><strong>Gửi lại ảnh cần bổ sung</strong><small>Đơn hàng hoặc chi nhánh cũ đã được giữ sẵn.</small></div>
-          <button type="button" onClick={() => {
+          <CustomerControl type="button" onClick={() => {
             setResubmittingClaimId("");
             setSelectedSource("");
             setSelectedOrderId("");
@@ -414,7 +415,7 @@ export default function ReviewRewardPanel({
             setProof(null);
             setProofPreview("");
             setMessage("");
-          }}>Hủy</button>
+          }}>Hủy</CustomerControl>
         </div>
       ) : null}
       {selectedSource === "googlemaps" ? (
@@ -425,7 +426,7 @@ export default function ReviewRewardPanel({
             <small>{returnedFromMaps ? "Bây giờ hãy chọn ảnh bạn vừa chụp." : "Sau đó quay lại trang này để gửi ảnh nhận điểm."}</small>
           </div>
           {!returnedFromMaps ? (
-            <button type="button" onClick={openGoogleReview}>Mở Google Maps</button>
+            <CustomerControl type="button" onClick={openGoogleReview}>Mở Google Maps</CustomerControl>
           ) : null}
         </div>
       ) : null}
@@ -464,14 +465,14 @@ export default function ReviewRewardPanel({
           </>
         )}
       </label>
-      <button
+      <CustomerControl
         type="button"
         className="review-reward-submit"
         disabled={submitting || !proof}
         onClick={submit}
       >
         {submitting ? "Đang gửi..." : resubmittingClaimId ? "Gửi lại ảnh mới" : "Gửi ảnh để Gánh duyệt"}
-      </button>
+      </CustomerControl>
       {message ? <p className="review-reward-message review-reward-message--inline" role="status">{message}</p> : null}
     </div>
   );
@@ -488,9 +489,9 @@ export default function ReviewRewardPanel({
     >
       {variant === "page" ? (
         <div className="review-reward-pagebar">
-          <button type="button" onClick={onBack} aria-label="Quay về trang chủ">
+          <CustomerControl type="button" onClick={onBack} aria-label="Quay về trang chủ">
             <Icon name="back" size={20} />
-          </button>
+          </CustomerControl>
           <div>
             <span>Gánh Hàng Rong</span>
             <h1>Nhận điểm từ đánh giá</h1>
@@ -508,24 +509,24 @@ export default function ReviewRewardPanel({
 
       {data?.settings?.enabled !== false ? (
         <div className={`review-reward-point-showcase${showGoogleReview ? "" : " is-single"}`} aria-label="Mức điểm thưởng">
-          <button type="button" onClick={choosePartnerReview} aria-label={`Chọn đánh giá đơn đối tác để nhận ${partnerRewardPoints.toLocaleString("vi-VN")} điểm`}>
+          <CustomerControl type="button" onClick={choosePartnerReview} aria-label={`Chọn đánh giá đơn đối tác để nhận ${partnerRewardPoints.toLocaleString("vi-VN")} điểm`}>
             <span>Đơn đối tác</span>
             <strong>+{partnerRewardPoints.toLocaleString("vi-VN")}</strong>
             <small>điểm</small>
-          </button>
+          </CustomerControl>
           {showGoogleReview ? (
-            <button type="button" onClick={chooseGoogleMapsReview} aria-label={`Chọn đánh giá Google Maps để nhận ${googleRewardPoints.toLocaleString("vi-VN")} điểm`}>
+            <CustomerControl type="button" onClick={chooseGoogleMapsReview} aria-label={`Chọn đánh giá Google Maps để nhận ${googleRewardPoints.toLocaleString("vi-VN")} điểm`}>
               <span>Google Maps</span>
               <strong>+{googleRewardPoints.toLocaleString("vi-VN")}</strong>
               <small>điểm</small>
-            </button>
+            </CustomerControl>
           ) : null}
         </div>
       ) : null}
 
       {showHistory && data ? (
         <div className="review-reward-view-tabs" role="tablist" aria-label="Chương trình đánh giá">
-          <button
+          <CustomerControl
             type="button"
             role="tab"
             aria-selected={activeView === "submit"}
@@ -533,8 +534,8 @@ export default function ReviewRewardPanel({
             onClick={() => setActiveView("submit")}
           >
             Gửi đánh giá
-          </button>
-          <button
+          </CustomerControl>
+          <CustomerControl
             type="button"
             role="tab"
             aria-selected={activeView === "history"}
@@ -542,7 +543,7 @@ export default function ReviewRewardPanel({
             onClick={() => setActiveView("history")}
           >
             Kết quả đã gửi
-          </button>
+          </CustomerControl>
         </div>
       ) : null}
 
@@ -556,9 +557,9 @@ export default function ReviewRewardPanel({
               <p>Dùng đúng số điện thoại đã đặt món trên GrabFood, ShopeeFood hoặc Xanh Ngon.</p>
             </div>
             {variant === "page" ? (
-              <button type="button" className="review-reward-login" onClick={onLogin}>
+              <CustomerControl type="button" className="review-reward-login" onClick={onLogin}>
                 Đăng nhập và chọn đơn
-              </button>
+              </CustomerControl>
             ) : null}
           </div>
         ) : (
@@ -566,9 +567,9 @@ export default function ReviewRewardPanel({
             <Icon name="clock" size={28} />
             <strong>Chưa tải được chương trình</strong>
             <p>Kết nối đang gián đoạn. Tài khoản của bạn vẫn được giữ nguyên.</p>
-            <button type="button" className="review-reward-login" onClick={load}>
+            <CustomerControl type="button" className="review-reward-login" onClick={load}>
               Thử lại
-            </button>
+            </CustomerControl>
           </div>
         )
       ) : data.settings?.enabled === false ? (
@@ -582,44 +583,49 @@ export default function ReviewRewardPanel({
           {resubmittingClaimId ? renderProofUpload() : (
           <>
           {showGoogleReview ? (
-            <button
+            <CustomerControl
               ref={googleReviewCardRef}
               type="button"
               className={`review-reward-google-card${selectedSource === "googlemaps" ? " is-selected" : ""}`}
-              aria-expanded={selectedSource === "googlemaps"}
+              aria-label="Đánh giá Google Maps, chọn chi nhánh bên dưới"
               onClick={() => {
-                setSelectedSource((current) => current === "googlemaps" ? "" : "googlemaps");
+                setSelectedSource("googlemaps");
                 setSelectedOrderId("");
                 setSelectedBranchId("");
                 setOrdersOpen(false);
                 setProof(null);
                 setProofPreview("");
                 setMessage("");
+                googleReviewCardRef.current?.nextElementSibling?.scrollIntoView({ behavior: "smooth", block: "nearest" });
               }}
             >
               <span className="review-reward-google-card__icon"><Icon name="location" size={22} /></span>
               <span>
                 <strong>Đánh giá Google Maps</strong>
-                <small>Chọn chi nhánh Gánh bạn từng mua để chia sẻ cảm nhận</small>
+                <small>Chọn chi nhánh bạn đã ghé</small>
+                <span className="review-reward-google-card__hint">Chọn chi nhánh bên dưới<Icon name="back" size={15} /></span>
               </span>
               <span className="review-reward-google-card__reward" aria-label={`Nhận ${googleRewardPoints.toLocaleString("vi-VN")} điểm`}>
                 +{googleRewardPoints.toLocaleString("vi-VN")} điểm
               </span>
-            </button>
+            </CustomerControl>
           ) : null}
 
-          {showGoogleReview && selectedSource === "googlemaps" ? (
+          {showGoogleReview ? (
             <div className="review-reward-selection-step">
               <div className="review-reward-section-title">
                 <div><h3>Chọn chi nhánh</h3><p>Google Maps sẽ mở ngay để bạn viết đánh giá.</p></div>
               </div>
               <div className="review-reward-branches">
                 {availableReviewBranches.map((branch) => (
-                  <button
+                  <CustomerControl
                     key={branch.id}
                     type="button"
                     className={selectedBranchId === branch.id ? "is-selected" : ""}
                     onClick={() => {
+                      setSelectedSource("googlemaps");
+                      setSelectedOrderId("");
+                      setOrdersOpen(false);
                       setSelectedBranchId(branch.id);
                       setProof(null);
                       setProofPreview("");
@@ -635,7 +641,7 @@ export default function ReviewRewardPanel({
                   >
                     <strong>{branch.name}</strong>
                     <small>{branch.address || "Xem địa điểm"} · Đánh giá ngay</small>
-                  </button>
+                  </CustomerControl>
                 ))}
                 {!availableReviewBranches.length ? (
                   <div className="review-reward-empty-state review-reward-empty-state--compact">
@@ -656,7 +662,7 @@ export default function ReviewRewardPanel({
             </div>
             {reviewOrders.length ? (
               <div className={`review-reward-order-picker${ordersOpen ? " is-open" : ""}`}>
-                <button
+                <CustomerControl
                   type="button"
                   className="review-reward-order-picker__trigger"
                   aria-expanded={ordersOpen}
@@ -677,13 +683,13 @@ export default function ReviewRewardPanel({
                     )}
                   </span>
                   <Icon name="back" size={17} />
-                </button>
+                </CustomerControl>
                 {ordersOpen ? <div className="review-reward-orders" id="review-reward-order-options">
                   {reviewOrders.map((order) => {
                   const rewardMeta = ORDER_REWARD_META[order.reward_status]
                     || (order.locked ? ORDER_REWARD_META.submitted : ORDER_REWARD_META.eligible);
                   return (
-                    <button
+                    <CustomerControl
                       key={order.id}
                       type="button"
                       disabled={order.locked}
@@ -706,7 +712,7 @@ export default function ReviewRewardPanel({
                         <span><strong>Đơn {order.order_code}</strong><small>{order.branch_name} · {formatDate(order.order_time)}</small></span>
                         <b>+{partnerRewardPoints.toLocaleString("vi-VN")}</b>
                       </span>
-                    </button>
+                    </CustomerControl>
                   );
                   })}
                 </div> : null}
@@ -732,14 +738,14 @@ export default function ReviewRewardPanel({
           </div>
           <div className="review-reward-filters" role="tablist" aria-label="Lọc lịch sử">
             {HISTORY_FILTERS.map((filter) => (
-              <button
+              <CustomerControl
                 key={filter.id}
                 type="button"
                 className={historyFilter === filter.id ? "is-active" : ""}
                 onClick={() => setHistoryFilter(filter.id)}
               >
                 {filter.label}
-              </button>
+              </CustomerControl>
             ))}
           </div>
 
@@ -765,9 +771,9 @@ export default function ReviewRewardPanel({
                         <small className="review-reward-claim__reason">{claim.rejection_reason}</small>
                       ) : null}
                       {claim.status === "rejected" && claim.can_resubmit ? (
-                        <button type="button" className="review-reward-claim__retry" onClick={() => startResubmission(claim)}>
+                        <CustomerControl type="button" className="review-reward-claim__retry" onClick={() => startResubmission(claim)}>
                           <Icon name="image" size={14} /> Gửi lại ảnh
-                        </button>
+                        </CustomerControl>
                       ) : null}
                       {claim.status === "rejected" && !claim.can_resubmit ? (
                         <small>Đã quá thời hạn gửi lại. Vui lòng liên hệ Gánh để được hỗ trợ.</small>

@@ -1,10 +1,12 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import CustomerAppearanceToggle from "../../../components/customer/CustomerAppearanceToggle.jsx";
 import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
-import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import AccountPanel from "../../../pages/customer/account/AccountPanel.jsx";
 import AddressCard from "../../../pages/customer/account/AddressCard.jsx";
-import ReviewRewardPanel from "./ReviewRewardPanel.jsx";
+import ReviewRewardSheet from "./ReviewRewardSheet.jsx";
+import CustomerHighlight from "../../../components/customer/CustomerHighlight.jsx";
 
 function OverviewSkeleton() {
   return (
@@ -81,9 +83,9 @@ export default function AccountDashboard({
             <strong>Dữ liệu chưa đồng bộ đầy đủ</strong>
             <p>{vm.accountOverview.error}</p>
           </div>
-          <button type="button" onClick={() => vm.accountOverview.refresh()}>
+          <CustomerControl type="button" onClick={() => vm.accountOverview.refresh()}>
             Thử lại
-          </button>
+          </CustomerControl>
         </div>
       ) : null}
 
@@ -107,14 +109,14 @@ export default function AccountDashboard({
             <h2 id="account-profile-name">{vm.displayName}</h2>
             <p className="account-profile-phone">{vm.accountUser.phone}</p>
           </div>
-          <button
+          <CustomerControl
             type="button"
             onClick={() => vm.setProfileOpen(true)}
             className="account-profile-edit"
             aria-label="Chỉnh sửa hồ sơ và mật khẩu"
           >
             <Icon name="edit" size={18} />
-          </button>
+          </CustomerControl>
         </div>
       </section>
 
@@ -124,7 +126,7 @@ export default function AccountDashboard({
             <h2 id="account-overview-title">Tổng quan thành viên</h2>
             <p>Tính từ đơn hợp lệ trên mọi kênh.</p>
           </div>
-          {vm.accountOverview.isLoading ? <span>Đang cập nhật…</span> : null}
+          {vm.accountOverview.isLoading ? <span className="customer-inline-loading" role="status">Đang cập nhật…</span> : null}
         </div>
 
         {showOverviewSkeleton ? (
@@ -150,46 +152,16 @@ export default function AccountDashboard({
         )}
       </section>
 
-      <button
-        type="button"
+      <CustomerHighlight
         className="account-review-reward-card"
         onClick={() => setReviewRewardOpen(true)}
         aria-haspopup="dialog"
-      >
-        <span className="account-review-reward-card__icon">
-          <Icon name="star" size={21} />
-        </span>
-        <span className="account-review-reward-card__content">
-          <strong>Đánh giá 5 sao, nhận 5.000đ</strong>
-          <small>Xem đơn đủ điều kiện và kết quả đã gửi</small>
-        </span>
-        <Icon name="back" size={18} className="account-review-reward-card__arrow" />
-      </button>
+        title="Đánh giá nhận điểm"
+        description="Xem đơn đủ điều kiện và kết quả đã gửi"
+      />
 
       {reviewRewardOpen ? (
-        <CustomerBottomSheet
-          onClose={() => setReviewRewardOpen(false)}
-          ariaLabel="Thưởng điểm đánh giá"
-          backdropClassName="account-review-reward-sheet-backdrop"
-          className="account-review-reward-sheet"
-          contentClassName="account-review-reward-sheet__content"
-          showHeader={false}
-        >
-          <div className="account-review-reward-sheet__topbar">
-            <div>
-              <span>Gánh Hàng Rong</span>
-              <strong>Thưởng điểm đánh giá</strong>
-            </div>
-            <button
-              type="button"
-              onClick={() => setReviewRewardOpen(false)}
-              aria-label="Đóng"
-            >
-              <Icon name="close" size={20} />
-            </button>
-          </div>
-          <ReviewRewardPanel showHistory />
-        </CustomerBottomSheet>
+        <ReviewRewardSheet onClose={() => setReviewRewardOpen(false)} />
       ) : null}
 
       <AccountPanel
@@ -221,7 +193,7 @@ export default function AccountDashboard({
             />
           ) : null}
           {vm.addresses.length > 1 ? (
-            <button
+            <CustomerControl
               type="button"
               onClick={() => vm.setShowAllAddresses((current) => !current)}
               className="account-address-toggle"
@@ -229,14 +201,15 @@ export default function AccountDashboard({
               {vm.showAllAddresses
                 ? "Thu gọn danh sách"
                 : `Xem tất cả ${vm.addresses.length} địa chỉ`}
-            </button>
+            </CustomerControl>
           ) : null}
         </div>
       </AccountPanel>
 
-      <button type="button" onClick={logoutDemoUser} className="account-logout">
+      <CustomerAppearanceToggle />
+      <CustomerControl type="button" onClick={logoutDemoUser} className="account-logout">
         Đăng xuất
-      </button>
+      </CustomerControl>
     </div>
   );
 }

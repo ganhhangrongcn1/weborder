@@ -1,3 +1,4 @@
+import CustomerControl from "./CustomerControl.jsx";
 import Icon from "../Icon.jsx";
 import { getCustomerOrderJourney } from "../../services/customerOrderStatusService.js";
 import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
@@ -23,14 +24,14 @@ export default function ActiveOrderJourneySheet({ order, branches = [], onClose,
       showHeader={false}
       footer={(
         <div className="order-journey-sheet__actions">
-          <button type="button" className="order-journey-sheet__secondary" onClick={onClose}>
+          <CustomerControl type="button" className="order-journey-sheet__secondary" onClick={onClose}>
             Đóng
-          </button>
-          <button type="button" className="order-journey-sheet__primary" onClick={onOpenOrders}>
+          </CustomerControl>
+          <CustomerControl type="button" className="order-journey-sheet__primary" onClick={onOpenOrders}>
             <Icon name="eye" size={16} />
             Xem chi tiết đơn
             <span aria-hidden="true">›</span>
-          </button>
+          </CustomerControl>
         </div>
       )}
     >
@@ -43,7 +44,7 @@ export default function ActiveOrderJourneySheet({ order, branches = [], onClose,
           <h2>{journey.title}</h2>
           <p>{orderCode}</p>
         </div>
-        <button type="button" onClick={onClose} aria-label="Đóng hành trình đơn hàng">×</button>
+        <CustomerControl type="button" onClick={onClose} aria-label="Đóng hành trình đơn hàng">×</CustomerControl>
       </header>
 
       <div className={`order-journey-sheet__status order-journey-sheet__status--${journey.statusKey}`} role="status">

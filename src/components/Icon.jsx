@@ -1,5 +1,7 @@
 import {
   Archive,
+  Lightning,
+  MapPin,
   Bag,
   Bell,
   Bicycle,
@@ -8,6 +10,9 @@ import {
   Check,
   Clock,
   Coffee,
+  Coins,
+  Crown,
+  LockSimple,
   DownloadSimple,
   Eye,
   EyeSlash,
@@ -34,6 +39,7 @@ import {
   Star,
   Storefront,
   Tag,
+  Ticket,
   Trash,
   UserCircle,
   WarningCircle,
@@ -43,11 +49,18 @@ import {
 
 const iconComponents = {
   archive: Archive,
+  flash: Lightning,
+  location: MapPin,
   home: House,
   store: Storefront,
   menu: List,
   dish: ForkKnife,
   tag: Tag,
+  ticket: Ticket,
+  coins: Coins,
+  crown: Crown,
+  lock: LockSimple,
+  sparkle: Sparkle,
   sale: SealPercent,
   star: Star,
   bag: Bag,
@@ -88,7 +101,7 @@ export default function Icon({ name, size = 20, className = "", weight = "bold" 
 
   return (
     <IconComponent
-      className={`icon-ux ${className}`.trim()}
+      className={`icon-ux icon-ux--phosphor ${className}`.trim()}
       size={size}
       weight={weight}
       aria-hidden="true"

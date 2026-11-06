@@ -1,9 +1,11 @@
+import CustomerControl from "./CustomerControl.jsx";
 import { useEffect } from "react";
 import { toppings as toppingSeed } from "../../data/products.js";
 import { formatMoney } from "../../utils/format.js";
 import { getDefaultOrderChoices, getRequiredExactAllOptions } from "../../utils/pureHelpers.js";
 import Icon from "../Icon.jsx";
 import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
+import CustomerSelectionIndicator from "./CustomerSelectionIndicator.jsx";
 
 function getOptionGroupTitle(groupName) {
   const normalizedName = String(groupName || "").trim();
@@ -150,14 +152,16 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
 
   return (
     <CustomerBottomSheet
+      title={submitLabel === optionModalText.updateItem ? "Chỉnh món" : "Thêm món mới"}
       ariaLabel={optionModalText.aria}
       onClose={onClose}
-      closeOnBackdrop={false}
+      closeOnBackdrop
       className="option-sheet customer-option-sheet"
       contentClassName="customer-option-sheet-scroll"
       footer={(
         <div className="option-modal-footer">
-          <button type="button" onClick={handleAddToCart} className="cta option-modal-submit" disabled={hasMissingRequiredSelection()}>
+          {hasMissingRequiredSelection() && <p className="option-modal-required-hint" role="status">Vui lòng chọn đủ các tuỳ chọn bắt buộc.</p>}
+          <CustomerControl type="button" onClick={handleAddToCart} className="cta option-modal-submit" disabled={hasMissingRequiredSelection()}>
             <span>{finalSubmitLabel}</span>
             <span className="option-modal-submit__summary">
               {hasStrikePrice && (
@@ -167,28 +171,30 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
               )}
               <strong>{quantity} món · {formatMoney(total)}</strong>
             </span>
-          </button>
+          </CustomerControl>
         </div>
       )}
-      showHeader={false}
+      showHandle={false}
     >
-        <div className="option-modal-sticky-header flex items-start gap-3">
-          <img src={product.image} alt={product.name} width="96" height="96" className="h-24 w-24 rounded-[22px] object-cover shadow-soft" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <h2 className="customer-modal-title line-clamp-2 text-brown">{product.name}</h2>
-              <button type="button" onClick={onClose} aria-label={optionModalText.close} className="option-modal-close">
-                <Icon name="close" size={18} />
-              </button>
-            </div>
+        <div className="option-modal-sticky-header">
+          <img src={product.image} alt={product.name} width="96" height="96" />
+          <div className="option-modal-product-copy">
+              <h2 className="customer-modal-title">{product.name}</h2>
             <p className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-brown/55">{product.short}</p>
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <div className="option-modal-product-price">
+              <span>
               {hasStrikePrice && (
                 <span className="text-xs font-bold text-brown/35 line-through">
                   {formatMoney(originalProductPrice)}
                 </span>
               )}
               <strong className="block text-lg font-black text-orange-600">{formatMoney(productPrice)}</strong>
+              </span>
+              <div className="option-modal-quantity" role="group" aria-label="Số lượng món">
+                <CustomerControl type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="qty-btn" aria-label="Giảm số lượng" disabled={quantity <= 1}><Icon name="minus" size={15} /></CustomerControl>
+                <output aria-live="polite">{quantity}</output>
+                <CustomerControl type="button" onClick={() => setQuantity(quantity + 1)} className="qty-btn" aria-label="Tăng số lượng"><Icon name="plus" size={15} /></CustomerControl>
+              </div>
             </div>
           </div>
         </div>
@@ -208,21 +214,21 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
                       : group.required ? optionModalText.requiredOne : optionModalText.optionalMany}
                   >
                     {isSpiceLikeGroup ? (
-                      <div className="option-spice-grid" role="radiogroup" aria-label={groupTitle}>
+                      <div className="option-spice-grid" role={group.type === "single" ? "radiogroup" : "group"} aria-label={groupTitle}>
                         {group.options.map((option) => {
                           const active = isCustomOptionActive(group, option);
                           return (
-                            <button
+                            <CustomerControl
                               type="button"
                               key={option.id}
-                              role="radio"
+                              role={group.type === "single" ? "radio" : "checkbox"}
                               aria-checked={active}
                               onClick={() => toggleCustomOption(group, option)}
                               className={"option " + (active ? "option-active" : "")}
                             >
                               <span>{option.name}</span>
-                              {active ? <Icon name="check" size={14} /> : null}
-                            </button>
+                              <CustomerSelectionIndicator selected={active} />
+                            </CustomerControl>
                           );
                         })}
                       </div>
@@ -232,8 +238,8 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
                           const active = isCustomOptionActive(group, option);
                           const qty = getToppingQuantity(option.id, group.id);
                           return (
-                            <div key={option.id} className={"modal-topping " + (active ? "modal-topping-active is-active" : "")}>
-                              <button
+                            <div key={option.id} data-selection-type={group.type} className={"modal-topping " + (active ? "modal-topping-active is-active" : "")}>
+                              <CustomerControl
                                 type="button"
                                 onClick={() => toggleCustomOption(group, option)}
                                 className="modal-topping__select"
@@ -244,19 +250,17 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
                                   <span>{option.name}</span>
                                   <strong>{Number(option.price) > 0 ? "+" + formatMoney(Number(option.price)) : optionModalText.zeroDong}</strong>
                                 </span>
-                                <span className="modal-topping__indicator">
-                                  <Icon name={active ? "check" : "plus"} size={15} />
-                                </span>
-                              </button>
+                                <CustomerSelectionIndicator selected={active} className="modal-topping__indicator" />
+                              </CustomerControl>
                               {group.type !== "single" && !group.required && qty > 0 && (
                                 <div className="modal-topping-count" aria-label={`Số lượng ${option.name}: ${qty}`}>
-                                  <button type="button" onClick={() => changeCustomOptionQuantity(group, option, -1)} aria-label={`Giảm ${option.name}`}>
+                                  <CustomerControl type="button" onClick={() => changeCustomOptionQuantity(group, option, -1)} aria-label={`Giảm ${option.name}`}>
                                     <Icon name="minus" size={13} />
-                                  </button>
+                                  </CustomerControl>
                                   <output aria-live="polite">{qty}</output>
-                                  <button type="button" onClick={() => changeCustomOptionQuantity(group, option, 1)} aria-label={`Tăng ${option.name}`}>
+                                  <CustomerControl type="button" onClick={() => changeCustomOptionQuantity(group, option, 1)} aria-label={`Tăng ${option.name}`}>
                                     <Icon name="plus" size={13} />
-                                  </button>
+                                  </CustomerControl>
                                 </div>
                               )}
                             </div>
@@ -275,18 +279,6 @@ export default function OptionModal({ product, selectedSpice, setSelectedSpice, 
             <textarea name="item-note" autoComplete="off" value={note} onChange={(event) => setNote(event.target.value)} className="note-input mt-3" rows="2" placeholder={optionModalText.notePlaceholder} />
           </label>
 
-          <div className="flex items-center justify-between">
-            <span className="label">{optionModalText.quantity}</span>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setQuantity(Math.max(1, quantity - 1))} className="qty-btn" aria-label="Giảm số lượng" disabled={quantity <= 1}>
-                <Icon name="minus" size={15} />
-              </button>
-              <output className="w-8 text-center font-black" aria-live="polite" aria-label={`Số lượng ${quantity}`}>{quantity}</output>
-              <button type="button" onClick={() => setQuantity(quantity + 1)} className="qty-btn text-orange-600" aria-label="Tăng số lượng">
-                <Icon name="plus" size={15} />
-              </button>
-            </div>
-          </div>
 
         </div>
     </CustomerBottomSheet>

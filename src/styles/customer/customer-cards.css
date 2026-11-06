@@ -1,0 +1,145 @@
+@import "./customer-font.css";
+@import "./customer-selection.css";
+
+/* Foodu-inspired density and selection cards, adapted for Vietnamese text. */
+:is(.customer-shell,.customer-bottom-sheet,.customer-modal-frame__panel,.branch-picker-panel,.cake-page,.receipt-rewards) {
+  font-family:Inter,system-ui,Arial,sans-serif;
+  font-weight:400; -webkit-font-smoothing:antialiased;
+  --customer-radius-sm:12px; --customer-radius-md:16px; --customer-radius-lg:20px;
+}
+.cake-page.cake-page,.receipt-rewards.receipt-rewards { font-family:Inter,system-ui,Arial,sans-serif; }
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel,.cake-page,.receipt-rewards) :is(button,input,textarea,select) { font-family:inherit; }
+.customer-shell :is(h1,h2,h3,h4,strong,b),.customer-bottom-sheet :is(h1,h2,h3,strong,b),.branch-picker-panel :is(h2,h3,strong) { font-weight:650; letter-spacing:-.025em; }
+.customer-shell :is(p,small,label),.customer-bottom-sheet :is(p,small,label) { letter-spacing:0; }
+.customer-shell :is(.customer-card,.account-panel,.pickup-time-card),.customer-shell .checkout-page--compact .checkout-card,
+.customer-shell .checkout-pricing-group,.customer-shell .rewards-shortcuts button {
+  border:1px solid #f0f0ed; border-radius:20px; background:#fff; box-shadow:0 4px 18px #302b2204;
+}
+.customer-shell .checkout-page--compact .checkout-pricing-group>.checkout-card { border:0; border-radius:0; box-shadow:none; }
+.customer-shell .checkout-page--compact .checkout-pricing-group>.checkout-total-card { border-top:1px solid var(--ghr-line); }
+.customer-shell .checkout-page--compact .checkout-page-content { gap:12px; }
+.customer-shell .checkout-page--compact .checkout-card { padding:14px; }
+.customer-shell .checkout-page--compact .checkout-card-head h2 { font-size:15px; font-weight:650; }
+.customer-shell .checkout-page--compact .checkout-pickup-branch .branch-card,
+.customer-shell .branch-card,.branch-picker-panel .branch-card,
+.customer-shell .checkout-page--compact .payment-card {
+  gap:12px; min-height:72px; padding:13px 14px; border:1px solid #f0f0ed; border-radius:20px; background:#fff;
+  box-shadow:0 4px 16px #302b2204; text-align:left;
+}
+.customer-shell .branch-card.branch-card-active,.branch-picker-panel .branch-card.branch-card-active,
+.customer-shell .checkout-page--compact .checkout-pickup-branch .branch-card.branch-card-active,
+.customer-shell .checkout-page--compact .payment-card.active {
+  border-color:#ead475; background:#fff; box-shadow:0 4px 18px #e0bd2010;
+}
+.customer-shell .checkout-pickup-branch .checkout-pickup-branch__icon,
+.branch-picker-panel .branch-card>span:first-child {
+  display:grid; place-items:center; width:42px; height:42px; flex:0 0 42px; border-radius:50%; background:var(--ghr-yellow-soft); color:var(--ghr-ink);
+}
+.customer-shell .checkout-page--compact .checkout-pickup-branch .branch-card>span:first-child { flex:0 0 42px; }
+.customer-shell .branch-card strong,.branch-picker-panel .branch-card strong,
+.customer-shell .checkout-page--compact .checkout-pickup-branch .branch-card strong,
+.customer-shell .checkout-page--compact .payment-card strong { font-size:13px; font-weight:650; line-height:1.45; color:var(--ghr-ink); }
+.customer-shell .branch-card small,.branch-picker-panel .branch-card small,
+.customer-shell .checkout-page--compact .checkout-pickup-branch .branch-card small,
+.customer-shell .checkout-page--compact .payment-card small { font-size:11px; font-weight:400; color:var(--ghr-muted); line-height:1.5; }
+.customer-shell .branch-card em,.branch-picker-panel .branch-card em { font-size:10px; font-weight:450; color:var(--ghr-muted); }
+.customer-shell .checkout-page--compact .payment-card>.icon-ux {
+  box-sizing:content-box; width:20px; height:20px; flex:0 0 20px; padding:10px; border-radius:50%; background:var(--ghr-yellow-soft); color:var(--ghr-ink);
+}
+.customer-shell .payment-card__brand { width:40px; height:40px; object-fit:contain; }
+.customer-shell .checkout-page--compact .checkout-benefits-card .promo-select { border-radius:18px; padding:12px; min-height:70px; background:#fff; }
+.customer-shell .checkout-page--compact .checkout-benefits-card .promo-select.is-applied { background:#fffdf3; }
+.customer-shell :is(.checkout-promo-icon,.checkout-points-icon,.checkout-subsection-icon) { border-radius:50%; background:var(--ghr-yellow-soft); }
+.customer-shell .checkout-earned-points { border-radius:16px; border-color:#f0e8bc; padding:10px 12px; }
+.customer-shell .checkout-benefit-heading { font-size:16px; }
+.customer-shell .checkout-page--compact .checkout-benefits-card .promo-select__copy strong,
+.customer-shell .checkout-page--compact .checkout-benefits-card .points-row strong { font-size:13px; font-weight:650; }
+.customer-shell .checkout-page--compact .checkout-cart-item { border-radius:0; box-shadow:none; padding:10px 0; }
+.customer-shell .checkout-page--compact .checkout-cart-item h3 { font-size:13px; font-weight:600; }
+.customer-shell .checkout-page--compact .checkout-cart-item>img,.customer-cart-sheet .checkout-cart-item>img { border-radius:12px; }
+.customer-shell :is(.cta,.customer-button,.account-auth-submit,.cart-glass-cta),
+.customer-bottom-sheet :is(.cta,.customer-button,.customer-primary-action) { font-weight:600; letter-spacing:0; }
+.customer-shell .customer-button.customer-button--primary { font-weight:600; }
+.customer-shell .customer-page-header__title,.customer-bottom-sheet .customer-sheet-title h2 { font-size:18px; font-weight:650; }
+.customer-shell .menu-storefront__toolbar h1 { font-size:21px; font-weight:700; }
+.customer-shell .home2026-greeting-copy strong { font-weight:650; }
+.customer-shell .product-row-title { font-weight:600; }
+.customer-shell .customer-offer-card,.customer-bottom-sheet .customer-offer-card { border-radius:20px; box-shadow:0 4px 16px #302b2205; }
+.customer-shell .customer-offer-card h3,.customer-bottom-sheet .customer-offer-card h3 { font-weight:600; }
+.customer-shell .rewards-overview { font-family:inherit; }
+.customer-shell .rewards-hero__heading h1 { font-weight:700; }
+.customer-shell .rewards-hero__balance>div>strong { font-weight:750; letter-spacing:-.04em; }
+.customer-shell .rewards-overview .stamp-card { border-radius:20px; padding:16px; }
+.customer-shell .rewards-shortcuts button { padding:16px; }
+.customer-shell .rewards-shortcuts strong { font-size:16px; font-weight:650; }
+.customer-shell .rewards-tier-link b { font-weight:650; }
+.customer-shell .account-page-content>.bg-white { border-radius:20px; border-color:#f0f0ed; }
+.customer-bottom-sheet.rewards-benefits-page { font-family:Inter,system-ui,Arial,sans-serif; }
+.rewards-benefits-page :is(.rewards-benefits-current,.rewards-benefit-tier) { border-radius:20px; }
+.rewards-benefits-page :is(h1,h2,h3) { font-weight:650; letter-spacing:-.025em; }
+@media(max-width:360px) {
+  .customer-shell .checkout-page--compact .checkout-card { padding:12px; }
+  .customer-shell .checkout-page--compact .checkout-pickup-branch .branch-card,.customer-shell .checkout-page--compact .payment-card { padding:12px; gap:9px; }
+}
+
+/* Product options use the same card and selection language as checkout. */
+.customer-option-sheet .customer-option-group { margin:12px 12px 0; padding:0; border:1px solid #f0f0ed; border-radius:18px; background:#fff; overflow:hidden; box-shadow:0 3px 14px #302b2203; }
+.customer-option-sheet .customer-option-group+.customer-option-group { margin-top:12px; }
+.customer-option-sheet .customer-option-group__head { padding:12px; background:#fff; border-bottom:1px solid #f3f3ef; gap:8px; }
+.customer-option-sheet .customer-option-group__head .label { color:var(--ghr-ink); font-size:13px; font-weight:650; }
+.customer-option-sheet .customer-option-group__badge { flex-shrink:0; max-width:46%; border-radius:999px; padding:4px 7px; background:var(--ghr-yellow-soft); color:var(--ghr-accent); font-size:9px; font-weight:500; }
+.customer-option-sheet .customer-option-group .option-spice-grid .option { min-height:50px; padding:12px; font-size:13px; font-weight:450; gap:12px; }
+.customer-option-sheet .customer-option-group .option-choice-grid .modal-topping { min-height:50px; border-bottom:1px solid #f3f3ef; }
+.customer-option-sheet .customer-option-group .modal-topping__select { min-height:50px; padding:12px; gap:12px; }
+.customer-option-sheet .modal-topping__copy>span { font-size:13px; font-weight:450; }
+.customer-option-sheet .modal-topping__copy>strong { font-size:11px; font-weight:400; }
+.customer-option-sheet .customer-option-group .option:last-child,.customer-option-sheet .customer-option-group .modal-topping:last-child { border-bottom:0; }
+.customer-option-sheet .option-spice-grid .option[aria-checked]::after { content:none; display:none; }
+.customer-option-sheet .customer-modal-title { font-size:17px; font-weight:650; letter-spacing:-.025em; }
+.customer-option-sheet .option-modal-product-price strong { font-weight:650; color:var(--ghr-ink); }
+.customer-option-sheet .modal-topping-count { padding:0 12px 10px; }
+.customer-option-sheet .modal-topping-count button { border-radius:50%; }
+.customer-option-sheet .customer-option-group .option-spice-grid .option,
+.customer-option-sheet .customer-option-group .modal-topping__select { display:flex; width:100%; align-items:center; justify-content:space-between; text-align:left; cursor:pointer; }
+.customer-option-sheet .option-spice-grid .option>span:first-child,.customer-option-sheet .modal-topping__copy { flex:1; min-width:0; }
+.customer-option-sheet .customer-selection-indicator { pointer-events:none; }
+.customer-option-sheet .customer-option-group__badge { background:#f2f2ef; color:#55564f; }
+.customer-shell .rewards-shortcuts button::after { display:none; }
+.customer-shell .rewards-shortcuts button>span { background:var(--ghr-yellow); border:0; color:var(--ghr-ink); }
+
+/* Stamp progress is a quiet dot row, with a clear earned state and gift endpoint. */
+.customer-shell .stamp-card .stamp-card__grid { align-items:center; gap:6px; margin:18px 0 14px; }
+.customer-shell .stamp-card .stamp-card__grid>span,
+.customer-shell .stamp-card .stamp-card__grid>span.is-earned {
+  position:relative; justify-self:center; box-sizing:border-box; width:100%; max-width:28px; aspect-ratio:1;
+  border:0; border-radius:50%; background:transparent; color:var(--ghr-ink); box-shadow:none;
+}
+.customer-shell .stamp-card .stamp-card__grid>span:not(:last-child)::before {
+  content:""; width:12px; height:12px; border-radius:50%; background:#d8dbd4;
+}
+.customer-shell .stamp-card .stamp-card__grid>span.is-earned:not(:last-child)::before {
+  width:14px; height:14px; background:var(--ghr-ink); box-shadow:0 0 0 3px var(--ghr-yellow);
+}
+.customer-shell .stamp-card .stamp-card__grid>span:last-child {
+  border:1px solid var(--ghr-button-border); background:var(--ghr-yellow-soft); color:var(--ghr-ink);
+}
+.customer-shell .stamp-card .stamp-card__grid>span.stamp-card__reward-slot {
+  background:var(--ghr-yellow); border-color:#b99a0b; box-shadow:0 0 0 3px #ffda2133;
+}
+
+/* Wallet sheets share the white surface of the customer cards. */
+.customer-bottom-sheet.rewards-detail-sheet { border:0; background:#fff; }
+.customer-bottom-sheet.rewards-detail-sheet .customer-sheet-header {
+  background:#fff; border:0; outline:0; box-shadow:none; padding:8px 16px 12px;
+}
+.rewards-detail-sheet .customer-sheet-title,.rewards-detail-sheet .customer-sheet-title h2 {
+  border:0; outline:0; border-radius:0; background:transparent; box-shadow:none;
+}
+.customer-bottom-sheet.rewards-detail-sheet .loyalty-detail-sheet__content { padding:0 16px 20px; background:#fff; }
+.rewards-detail-sheet .loyalty-voucher-group>h3 { margin:4px 0 12px; color:var(--ghr-muted); font-size:12px; font-weight:500; }
+.rewards-detail-sheet .customer-offer-card { border-color:#e8e8e2; box-shadow:none; }
+.rewards-detail-sheet .customer-offer-card__mark { background:#fff8d6; color:var(--ghr-ink); }
+.rewards-detail-sheet .customer-offer-card__value,.rewards-detail-sheet .customer-offer-card h3 { color:var(--ghr-ink); }
+.rewards-detail-sheet .customer-offer-card__details span,.rewards-detail-sheet .customer-offer-card__code { color:var(--ghr-muted); font-weight:400; }
+.rewards-detail-sheet .loyalty-voucher-archive { background:#f7f7f5; border:1px solid #eeeee8; border-radius:16px; box-shadow:none; }
+.rewards-detail-sheet .loyalty-voucher-archive>summary { color:#686a61; font-weight:500; }

@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 
@@ -11,9 +12,9 @@ export default function AccountNoticeModal({ notice, onClose }) {
       className="promo-sheet"
       showHeader={false}
       footer={(
-        <button type="button" className="cta w-full" onClick={onClose}>
+        <CustomerControl type="button" className="cta w-full" onClick={onClose}>
           Đã hiểu
-        </button>
+        </CustomerControl>
       )}
     >
       <div className="space-y-4 pb-2 text-center">

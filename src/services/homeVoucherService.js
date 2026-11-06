@@ -67,6 +67,8 @@ function normalizeCouponCard(coupon = {}, source = "coupon") {
     badge: isLoyalty ? "THÀNH VIÊN" : "ƯU ĐÃI",
     title: coupon.name || formatDiscountTitle(coupon),
     reward: discountTitle,
+    expiresAt: String(coupon.expiredAt || coupon.endAt || coupon.expiry || ""),
+    description: String(coupon.description || coupon.terms || ""),
     code: String(coupon.code || "ƯU ĐÃI").trim().toUpperCase(),
     icon: isLoyalty ? "gift" : "tag",
     lines: [
@@ -109,6 +111,7 @@ function buildLoyaltyCards(coupons = [], loyalty = {}, now = new Date(), isRegis
       value: Number(matchedCoupon?.value || voucher.value || 0),
       maxDiscount: Number(matchedCoupon?.maxDiscount || voucher.maxDiscount || 0),
       minOrder: Number(matchedCoupon?.minOrder || voucher.minOrder || 0),
+      expiredAt: voucher.expiredAt || voucher.endAt || voucher.expiry || matchedCoupon?.endAt || matchedCoupon?.expiry,
       voucherType: "loyalty"
     }, "loyalty");
   }).filter(Boolean);

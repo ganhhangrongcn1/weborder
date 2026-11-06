@@ -85,6 +85,8 @@ export default function Loyalty(props) {
       progressPercent={vm.progressPercent}
       recentDays={vm.recentDays}
       handleCheckin={vm.handleCheckin}
+      checkinPending={vm.checkinPending}
+      checkinFeedback={vm.checkinFeedback}
       canCheckin={canUseProtectedLoyaltyAction}
       canShowLoyaltyPopups={canUseProtectedLoyaltyAction}
       checkinAuthNotice={

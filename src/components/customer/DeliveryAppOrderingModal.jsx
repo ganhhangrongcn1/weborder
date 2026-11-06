@@ -1,6 +1,8 @@
+import CustomerControl from "./CustomerControl.jsx";
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../Icon.jsx";
 import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
+import CustomerSelectionIndicator from "./CustomerSelectionIndicator.jsx";
 import { getDeliveryAppBrand } from "../../services/deliveryAppService.js";
 
 function DeliveryAppLogo({ app }) {
@@ -41,16 +43,17 @@ export default function DeliveryAppOrderingModal({ open, branches = [], onClose 
     >
       <div className="delivery-ordering-branch-list" role="list" aria-label="Chọn chi nhánh">
         {branches.map((branch) => (
-          <button
+          <CustomerControl
             type="button"
             key={branch.branchId}
             className={branch.branchId === selectedBranch?.branchId ? "is-active" : ""}
+            aria-pressed={branch.branchId === selectedBranch?.branchId}
             onClick={() => setSelectedBranchId(branch.branchId)}
           >
             <span className="delivery-ordering-branch-icon"><Icon name="store" size={18} /></span>
             <span><strong>{branch.branchName}</strong>{branch.branchAddress ? <small>{branch.branchAddress}</small> : null}</span>
-            <i aria-hidden="true">{branch.branchId === selectedBranch?.branchId ? "✓" : ""}</i>
-          </button>
+            <CustomerSelectionIndicator selected={branch.branchId === selectedBranch?.branchId} />
+          </CustomerControl>
         ))}
       </div>
 
@@ -62,11 +65,11 @@ export default function DeliveryAppOrderingModal({ open, branches = [], onClose 
         {linkedApps.length ? (
           <div className="delivery-ordering-app-grid">
             {linkedApps.map((app) => (
-              <button type="button" key={app.id} onClick={() => openApp(app.url)}>
+              <CustomerControl type="button" key={app.id} onClick={() => openApp(app.url)}>
                 <DeliveryAppLogo app={app} />
                 <span><strong>{app.name}</strong><small>Mở ứng dụng</small></span>
                 <Icon name="back" size={16} className="delivery-ordering-app-arrow" />
-              </button>
+              </CustomerControl>
             ))}
           </div>
         ) : (

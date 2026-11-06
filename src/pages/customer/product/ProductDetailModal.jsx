@@ -1,4 +1,6 @@
-﻿import Icon from "../../../components/Icon.jsx";
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import CustomerBadge from "../../../components/customer/CustomerBadge.jsx";
+import Icon from "../../../components/Icon.jsx";
 import { formatMoney } from "../../../utils/format.js";
 import { spiceLevels } from "../../../constants/storeConfig.js";
 
@@ -40,14 +42,14 @@ export default function ProductDetailModal({
       <div className="relative">
         <img src={selectedProduct.image} alt={selectedProduct.name} className="h-72 w-full rounded-b-[34px] object-cover" />
         <div className="absolute inset-x-4 top-4 flex items-center justify-between">
-          <button onClick={() => navigate("menu", "menu")} className="float-btn">‹</button>
+          <CustomerControl onClick={() => navigate("menu", "menu")} className="float-btn">‹</CustomerControl>
           <div className="flex gap-2">
-            <button aria-label="Chia sẻ" className="float-btn"><Icon name="share" size={18} /></button>
-            <button aria-label="Yêu thích" className="float-btn text-orange-600"><Icon name="heart" size={18} /></button>
+            <CustomerControl aria-label="Chia sẻ" className="float-btn"><Icon name="share" size={18} /></CustomerControl>
+            <CustomerControl aria-label="Yêu thích" className="float-btn text-orange-600"><Icon name="heart" size={18} /></CustomerControl>
           </div>
         </div>
         {badgeText ? (
-          <span className="absolute bottom-4 left-4 rounded-full bg-red-600 px-3 py-1 text-xs font-black uppercase text-white">{badgeText}</span>
+          <CustomerBadge className="absolute bottom-4 left-4">{badgeText}</CustomerBadge>
         ) : null}
       </div>
 
@@ -63,9 +65,9 @@ export default function ProductDetailModal({
 
         <OptionGroup title="Chọn vị">
           {spiceLevels.map((level) => (
-            <button key={level} onClick={() => setSelectedSpice(level)} className={`option ${selectedSpice === level ? "option-active" : ""}`}>
+            <CustomerControl key={level} onClick={() => setSelectedSpice(level)} className={`option ${selectedSpice === level ? "option-active" : ""}`}>
               {level}
-            </button>
+            </CustomerControl>
           ))}
         </OptionGroup>
 
@@ -74,10 +76,10 @@ export default function ProductDetailModal({
             {toppings.map((topping) => {
               const active = selectedToppings.some((item) => item.id === topping.id);
               return (
-                <button key={topping.id} onClick={() => toggleTopping(topping)} className={`topping-card ${active ? "topping-active" : ""}`}>
+                <CustomerControl key={topping.id} onClick={() => toggleTopping(topping)} className={`topping-card ${active ? "topping-active" : ""}`}>
                   + {topping.name}
                   <span>{formatMoney(topping.price)}</span>
-                </button>
+                </CustomerControl>
               );
             })}
           </div>
@@ -91,9 +93,9 @@ export default function ProductDetailModal({
         <div className="flex items-center justify-between">
           <span className="label">Số lượng</span>
           <div className="flex items-center gap-3">
-            <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="qty-btn">-</button>
+            <CustomerControl onClick={() => setQuantity(Math.max(1, quantity - 1))} className="qty-btn">-</CustomerControl>
             <span className="w-8 text-center font-black">{quantity}</span>
-            <button onClick={() => setQuantity(quantity + 1)} className="qty-btn text-orange-600">+</button>
+            <CustomerControl onClick={() => setQuantity(quantity + 1)} className="qty-btn text-orange-600">+</CustomerControl>
           </div>
         </div>
 
@@ -105,9 +107,9 @@ export default function ProductDetailModal({
       </div>
 
       <div className="sticky bottom-[72px] z-30 mt-5 bg-gradient-to-t from-cream via-cream px-4 pt-4">
-        <button onClick={() => addToCart(selectedProduct, selectedSpice, selectedToppings, quantity)} className="cta w-full">
+        <CustomerControl onClick={() => addToCart(selectedProduct, selectedSpice, selectedToppings, quantity)} className="cta w-full">
           Thêm vào giỏ - {formatMoney(total)}
-        </button>
+        </CustomerControl>
       </div>
     </section>
   );

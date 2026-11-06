@@ -1,7 +1,7 @@
 .customer-shell .icon-ux {
   transform-origin: center;
   transform-box: fill-box;
-  transition: transform 0.18s ease, opacity 0.18s ease;
+  transition: transform 0.18s ease, scale 0.18s ease, opacity 0.18s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -15,14 +15,16 @@
   }
 }
 
-.customer-shell button:hover .icon-ux,
-.customer-shell a:hover .icon-ux {
-  transform: scale(1.06);
+@media (hover: hover) and (pointer: fine) {
+  .customer-shell button:hover .icon-ux,
+  .customer-shell a:hover .icon-ux {
+    scale: 1.04;
+  }
 }
 
 .customer-shell button:active .icon-ux,
 .customer-shell a:active .icon-ux {
-  transform: scale(0.97);
+  scale: 0.97;
 }
 
 .customer-shell .menu-search .icon-ux {

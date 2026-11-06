@@ -1,6 +1,6 @@
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import { CustomerButton } from "../../../components/customer/CustomerUI.jsx";
-import { getLoyaltyTierIconSymbol } from "../../../services/loyaltyProgramConfigService.js";
+import Icon from "../../../components/Icon.jsx";
 
 export default function TierUpgradeModal({ tier, onClose }) {
   if (!tier) return null;
@@ -19,7 +19,7 @@ export default function TierUpgradeModal({ tier, onClose }) {
     >
       <div className="loyalty-tier-upgrade">
         <span className="loyalty-tier-upgrade__icon" aria-hidden="true">
-          {getLoyaltyTierIconSymbol(tier.iconKey)}
+          <Icon name="crown" size={34} weight="regular" />
         </span>
         <p>Hạng mới đã mở khóa</p>
         <h2>Chúc mừng bạn đã lên {tier.name}!</h2>

@@ -1,3 +1,4 @@
+import CustomerControl from "./CustomerControl.jsx";
 import { createPortal } from "react-dom";
 import Icon from "../Icon.jsx";
 import { CustomerButton, CustomerModalFrame } from "./CustomerUI.jsx";
@@ -40,14 +41,14 @@ export default function QrCounterGuideModal({
       ariaLabel="Hướng dẫn đặt món QR tại quầy"
       onBackdropClick={onClose}
     >
-      <button
+      <CustomerControl
         type="button"
         className="qr-counter-guide__close"
         aria-label="Đóng hướng dẫn đặt món QR"
         onClick={onClose}
       >
         <Icon name="close" size={18} />
-      </button>
+      </CustomerControl>
 
       <div className="qr-counter-guide__badge">
         <Icon name="star" size={17} />
@@ -76,10 +77,10 @@ export default function QrCounterGuideModal({
           Tiếp tục
         </CustomerButton>
         {showSignupAction ? (
-          <button type="button" className="qr-counter-guide__member-action" onClick={onSignup}>
+          <CustomerControl type="button" className="qr-counter-guide__member-action" onClick={onSignup}>
             <Icon name="user" size={16} />
             <span>Đăng nhập để tích điểm</span>
-          </button>
+          </CustomerControl>
         ) : (
           <p className="qr-counter-guide__member-note">
             <Icon name="star" size={16} />

@@ -1,11 +1,14 @@
+@import "./customer/brand-controls.css";
+@import "./customer/customer-cards.css";
+@import "./customer/customer-neutral.css";
 .cake-page {
-  --cake-ink: #211711;
-  --cake-muted: #79552e;
-  --cake-cream: #fff9ec;
+  --cake-ink: var(--ghr-ink);
+  --cake-muted: var(--ghr-muted);
+  --cake-cream: #f7f7f5;
   --cake-surface: #ffffff;
   --cake-line: #f0d89d;
-  --cake-brand: #f4cb32;
-  --cake-brand-soft: #fff4c2;
+  --cake-brand: var(--ghr-yellow);
+  --cake-brand-soft: var(--ghr-yellow-soft);
   --cake-accent: #e21b1b;
   min-height: 100dvh;
   background: var(--cake-cream);
@@ -32,7 +35,7 @@
 
 .cake-eyebrow {
   margin: 0 0 8px;
-  color: #8a3b12;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 800;
   text-transform: uppercase;
@@ -76,7 +79,7 @@
 }
 
 .cake-hero__actions span {
-  color: #5d3b18;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 750;
 }
@@ -155,7 +158,7 @@
 
 .cake-section-head > p {
   margin: 0;
-  color: #79552e;
+  color: var(--ghr-ink);
   font-weight: 750;
 }
 
@@ -165,7 +168,7 @@
   border: 1px dashed rgba(122, 74, 44, 0.28);
   border-radius: 8px;
   background: rgba(255, 250, 241, 0.86);
-  color: #79552e;
+  color: var(--ghr-ink);
   font-weight: 800;
 }
 
@@ -213,7 +216,7 @@
   max-width: calc(100% - 14px);
   overflow: hidden;
   background: rgba(255, 255, 255, 0.94);
-  color: #6d3d0d;
+  color: var(--ghr-ink);
   font-size: 10px;
   line-height: 1;
   padding: 6px 8px;
@@ -240,7 +243,7 @@
 .cake-card__body p {
   overflow: hidden;
   margin: 0;
-  color: #8a6540;
+  color: var(--ghr-ink);
   font-size: 10px;
   font-weight: 800;
   line-height: 1.25;
@@ -271,7 +274,7 @@
   border: 1px solid #f0c35c;
   border-radius: 10px;
   background: var(--cake-brand-soft);
-  color: #7a3c0d;
+  color: var(--ghr-ink);
   cursor: pointer;
   font-size: 12px;
   font-weight: 900;
@@ -394,7 +397,7 @@
 
 .cake-detail__content p {
   margin: 0;
-  color: #5d4634;
+  color: var(--ghr-ink);
   line-height: 1.55;
 }
 
@@ -408,7 +411,7 @@
 .cake-form-message {
   border-radius: 8px;
   background: #fff4c2;
-  color: #6d4519;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 800;
   padding: 9px 10px;
@@ -426,7 +429,7 @@
 
 .cake-pickup-title {
   margin: 0;
-  color: #5b432f;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 900;
 }
@@ -445,7 +448,7 @@
 .cake-detail__cols ul {
   margin: 0;
   padding-left: 18px;
-  color: #4b3527;
+  color: var(--ghr-ink);
   font-size: 14px;
   line-height: 1.45;
 }
@@ -458,7 +461,7 @@
 .cake-accessory-stack > ul {
   margin: 0;
   padding-left: 18px;
-  color: #4b3527;
+  color: var(--ghr-ink);
   font-size: 14px;
   line-height: 1.45;
 }
@@ -475,7 +478,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #6d4519;
+  color: var(--ghr-ink);
   font-size: 15px;
   font-weight: 700;
   line-height: 1.35;
@@ -499,7 +502,7 @@
 
 .cake-optional-addon h4 {
   margin: 0 0 8px;
-  color: #7a3c0d;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 900;
 }
@@ -517,7 +520,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  color: #4b3527;
+  color: var(--ghr-ink);
   font-size: 13px;
 }
 
@@ -528,7 +531,7 @@
 }
 
 .cake-optional-addon li em {
-  color: #7f6a4d;
+  color: var(--ghr-ink);
   font-style: normal;
   font-weight: 700;
   white-space: nowrap;
@@ -545,7 +548,7 @@
   border: 1px solid var(--cake-line);
   border-radius: 10px;
   background: var(--cake-surface);
-  color: #7a3c0d;
+  color: var(--ghr-ink);
   cursor: pointer;
   font-size: 12px;
   font-weight: 800;
@@ -602,7 +605,7 @@
   position: absolute;
   top: 50%;
   right: 14px;
-  color: #8a3b12;
+  color: var(--ghr-ink);
   font-size: 24px;
   font-weight: 800;
   line-height: 1;
@@ -614,13 +617,13 @@
 }
 
 .cake-addon-disclosure summary > span {
-  color: #4b3527;
+  color: var(--ghr-ink);
   font-size: 14px;
   font-weight: 900;
 }
 
 .cake-addon-disclosure summary > small {
-  color: #80664e;
+  color: var(--ghr-ink);
   font-size: 12px;
   font-weight: 650;
   line-height: 1.4;
@@ -644,7 +647,7 @@
 }
 
 .cake-addon-order-box label > span {
-  color: #5b432f;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 900;
 }
@@ -663,7 +666,7 @@
 }
 
 .cake-addon-order-box textarea::placeholder {
-  color: #9e9388;
+  color: var(--ghr-ink);
   opacity: 1;
 }
 
@@ -673,7 +676,7 @@
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: #4b3527;
+  color: var(--ghr-ink);
 }
 
 .cake-addon-check > span {
@@ -726,7 +729,7 @@
 }
 
 .cake-addon-option-grid span {
-  color: #a64b0f;
+  color: var(--ghr-ink);
   font-size: 12px;
   font-weight: 800;
 }
@@ -738,7 +741,7 @@
 }
 
 .cake-addon-note-inline span {
-  color: #5b432f;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 800;
 }
@@ -779,14 +782,14 @@
 
 .cake-addon-popup__body h4 {
   margin: 4px 0 0;
-  color: #7a3c0d;
+  color: var(--ghr-ink);
   font-size: 16px;
   font-weight: 900;
 }
 
 .cake-addon-popup__body p {
   margin: 0;
-  color: #4b3527;
+  color: var(--ghr-ink);
   line-height: 1.6;
 }
 
@@ -821,7 +824,7 @@
 }
 
 .cake-addon-popup__gallery figcaption {
-  color: #4b3527;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 700;
 }
@@ -862,14 +865,14 @@
 
 .cake-success-popup h3 {
   margin: 0 0 10px;
-  color: #20130d;
+  color: var(--ghr-ink);
   font-size: 24px;
   line-height: 1.18;
 }
 
 .cake-success-popup p {
   margin: 0 0 12px;
-  color: #6d503e;
+  color: var(--ghr-ink);
   font-size: 15px;
   line-height: 1.55;
 }
@@ -885,7 +888,7 @@
 }
 
 .cake-success-popup__code span {
-  color: #7a552f;
+  color: var(--ghr-ink);
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
@@ -900,7 +903,7 @@
   padding: 10px;
   border-radius: 12px;
   background: var(--cake-brand-soft);
-  color: #65451e !important;
+  color: var(--ghr-ink) !important;
   font-weight: 800;
 }
 
@@ -913,7 +916,7 @@
   border: 1px solid var(--cake-line);
   border-radius: 12px;
   background: var(--cake-surface);
-  color: #5d3b18;
+  color: var(--ghr-ink);
   cursor: pointer;
   font-weight: 850;
   padding: 12px 16px;
@@ -977,7 +980,7 @@
   place-items: center;
   border-radius: 8px;
   background: var(--cake-brand-soft);
-  color: #8a3b12;
+  color: var(--ghr-ink);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -992,7 +995,7 @@
 .cake-note-field {
   display: grid;
   gap: 6px;
-  color: #5b432f;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 800;
 }
@@ -1029,13 +1032,13 @@
 }
 
 .cake-time-picker > div > span {
-  color: #4b3527;
+  color: var(--ghr-ink);
   font-size: 13px;
   font-weight: 950;
 }
 
 .cake-time-picker small {
-  color: #79552e;
+  color: var(--ghr-ink);
   font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
@@ -1063,7 +1066,7 @@
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #694a2d;
+  color: var(--ghr-ink);
   cursor: pointer;
   font-weight: 850;
   padding: 11px;
@@ -1097,12 +1100,12 @@
 }
 
 .cake-page .branch-card em {
-  color: #8a3b12;
+  color: var(--ghr-ink);
 }
 
 .cake-page .branch-radio {
   border-color: #e7a800;
-  color: #8a3b12;
+  color: var(--ghr-ink);
 }
 
 .cake-branch-icon {
@@ -1113,7 +1116,7 @@
   place-items: center;
   border-radius: 12px;
   background: var(--cake-brand-soft);
-  color: #8a3b12;
+  color: var(--ghr-ink);
 }
 
 .cake-page :is(a, button, input, select, textarea):focus-visible {
@@ -1154,7 +1157,7 @@
 .cake-secondary-btn:hover {
   border-color: #dca63a;
   background: var(--cake-brand-soft);
-  color: #4f2d09;
+  color: var(--ghr-ink);
 }
 
 .cake-addon-option-grid button:hover,
@@ -1174,7 +1177,7 @@
 
 .cake-zalo-copy-note {
   margin: -2px 0 0;
-  color: #85634a;
+  color: var(--ghr-ink);
   font-size: 12px;
   font-weight: 750;
   line-height: 1.45;

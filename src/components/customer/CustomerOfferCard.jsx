@@ -1,3 +1,4 @@
+import CustomerControl from "./CustomerControl.jsx";
 import Icon from "../Icon.jsx";
 
 export default function CustomerOfferCard({
@@ -58,14 +59,15 @@ export default function CustomerOfferCard({
         <div className="customer-offer-card__footer">
           <span className="customer-offer-card__code">{codeLabel}</span>
           {actionLabel && onAction ? (
-            <button
+            <CustomerControl
+              appearance="primary"
               type="button"
               onClick={onAction}
               disabled={disabled}
             >
               {actionLabel}
-              <Icon name={selected ? "check" : actionIcon} size={15} />
-            </button>
+              <Icon name={selected && actionIcon !== "close" ? "check" : actionIcon} size={15} />
+            </CustomerControl>
           ) : null}
         </div>
       </div>

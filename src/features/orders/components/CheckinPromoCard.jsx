@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import Icon from "../../../components/Icon.jsx";
 
 function formatPointValue(value = 0) {
@@ -10,7 +11,7 @@ export default function CheckinPromoCard({
   onClick
 }) {
   return (
-    <button
+    <CustomerControl
       type="button"
       className="orders-checkin-promo"
       onClick={onClick}
@@ -22,10 +23,9 @@ export default function CheckinPromoCard({
       </div>
 
       <div className="orders-checkin-promo__copy">
-        <h2>Nhận {formatPointValue(cyclePoints)} chỉ bằng điểm danh</h2>
+        <h2>Điểm danh nhận quà</h2>
         <p>
-          Mở Gánh điểm danh mỗi ngày nhận {formatPointValue(dailyPoints)}.
-          Có thể nhận đến {formatPointValue(cyclePoints)} mỗi tháng.
+          Nhận {formatPointValue(dailyPoints)} mỗi ngày. Tích lũy đến {formatPointValue(cyclePoints)}/tháng.
         </p>
       </div>
 
@@ -38,6 +38,6 @@ export default function CheckinPromoCard({
       <span className="orders-checkin-promo__action">
         Nhận điểm ngay <Icon name="back" size={15} />
       </span>
-    </button>
+    </CustomerControl>
   );
 }

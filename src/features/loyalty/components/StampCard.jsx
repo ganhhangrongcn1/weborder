@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import { useState } from "react";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import Icon from "../../../components/Icon.jsx";
@@ -25,12 +26,12 @@ export default function StampCard({ phone = "", navigate, detailed = false, setC
     {loading ? <p role="status">Đang tải thẻ tem…</p> : error ? <p role="alert">{error}</p> : <>
       <div className="stamp-card__grid" aria-label={`${available} tem khả dụng`}>
         {Array.from({ length: 10 }, (_, i) => <span key={i} className={`${i < available ? "is-earned" : ""}${canRedeem && i === 9 ? " stamp-card__reward-slot" : ""}`}>
-          {canRedeem && i === 9 ? <Icon name="gift" size={20} /> : i < available ? "✓" : i === 9 ? <Icon name="gift" size={15} /> : ""}
+          {i === 9 ? <Icon name="gift" size={15} /> : null}
         </span>)}
       </div>
       <div className="stamp-card__footer">
         <span>{!phone ? "Đăng nhập để xem tem" : available >= 10 ? "Bạn đã đủ tem nhận quà!" : <>Còn <strong>{10 - available} tem</strong> để nhận quà</>}</span>
-        <button type="button" aria-haspopup={detailed ? "dialog" : undefined} onClick={() => detailed ? setShowRewards(true) : navigate?.("loyalty", "loyalty")}>{canRedeem ? "Đổi quà ngay" : "Xem thưởng"} <span aria-hidden="true">›</span></button>
+        <CustomerControl type="button" aria-haspopup={detailed ? "dialog" : undefined} onClick={() => detailed ? setShowRewards(true) : navigate?.("loyalty", "loyalty")}>{canRedeem ? "Đổi quà ngay" : "Xem thưởng"} <span aria-hidden="true">›</span></CustomerControl>
       </div>
       {detailed && showRewards && <CustomerBottomSheet title="Đổi tem nhận quà" onClose={() => setShowRewards(false)} className="stamp-rewards-sheet" contentClassName="stamp-rewards-sheet__content">
         <div className="stamp-rewards-sheet__summary">
@@ -40,11 +41,11 @@ export default function StampCard({ phone = "", navigate, detailed = false, setC
         </div>
         {data.held > 0 && <p>{data.held} tem đang giữ cho đơn chờ hoàn tất.</p>}
         {phone && data.earnedToday && <p>Hôm nay bạn đã nhận tem.</p>}
-        {!phone && <button type="button" className="stamp-rewards-sheet__login" onClick={() => navigate?.("account", "account")}>Đăng nhập để xem và đổi tem</button>}
-        <h3>Chọn 1 trong 3 món quà</h3>
-        <div className="stamp-card__gifts">{(data.gifts || []).map((gift) => <button type="button" key={gift.id} disabled={!phone || available < 10 || !setCart} onClick={() => chooseGift(gift)}>
+        {!phone && <CustomerControl type="button" className="stamp-rewards-sheet__login" onClick={() => navigate?.("account", "account")}>Đăng nhập để xem và đổi tem</CustomerControl>}
+        <h3>Chọn 1 món quà</h3>
+        <div className="stamp-card__gifts">{(data.gifts || []).map((gift) => <CustomerControl type="button" key={gift.id} disabled={!phone || available < 10 || !setCart} onClick={() => chooseGift(gift)}>
           {gift.image && <img src={gift.image} alt="" loading="lazy" />}<span>{gift.name}<small>Đổi 10 tem · 0đ</small></span>
-        </button>)}</div>
+        </CustomerControl>)}</div>
         {!data.gifts?.length && <p>Quà tặng đang được cập nhật. Bạn quay lại sau nhé.</p>}
         {notice && <p role="status">{notice}</p>}
         <details className="stamp-disclosure"><summary>Thể lệ tích tem & đổi quà</summary>
@@ -58,7 +59,7 @@ export default function StampCard({ phone = "", navigate, detailed = false, setC
         </details>
         {phone && <details className="stamp-disclosure"><summary>Lịch sử tem</summary>{historyError && <p role="alert">{historyError}</p>}
           <ol className="stamp-card__timeline">{history.map((event) => <li key={event.id}><strong>{eventLabels[event.kind] || event.kind}</strong><small>{new Date(event.created_at).toLocaleString("vi-VN")} · {event.source === "partner_orders" ? "Đơn đối tác" : "Đơn tại Gánh"}</small></li>)}</ol>
-          {!history.length && !historyError && <p>Chưa có lịch sử tích tem.</p>}{hasMore && <button type="button" onClick={loadMore}>Xem thêm</button>}</details>}
+          {!history.length && !historyError && <p>Chưa có lịch sử tích tem.</p>}{hasMore && <CustomerControl type="button" onClick={loadMore}>Xem thêm</CustomerControl>}</details>}
       </CustomerBottomSheet>}
     </>}
   </section>;

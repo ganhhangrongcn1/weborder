@@ -13,6 +13,7 @@ export default function useHomeEffects({
   setSelectedDeliveryBranch,
   setActiveBanner,
   bannersLength,
+  autoRotateBanners = true,
   smartPromotions,
   setSecondsLeft,
   setHomePopupOpen,
@@ -29,11 +30,13 @@ export default function useHomeEffects({
   }, [deliveryBranches, selectedDeliveryBranchInfo, setSelectedDeliveryBranch]);
 
   useEffect(() => {
+    if (!autoRotateBanners || bannersLength < 2) return undefined;
     const timer = window.setInterval(() => setActiveBanner((index) => (index + 1) % Math.max(bannersLength, 1)), 4200);
     return () => window.clearInterval(timer);
-  }, [bannersLength, setActiveBanner]);
+  }, [autoRotateBanners, bannersLength, setActiveBanner]);
 
   useEffect(() => {
+    if (!setSecondsLeft) return undefined;
     const getActiveFlashEnd = () => {
       const now = new Date();
       const activeEnds = getActiveFlashSalePromotions(smartPromotions, now)

@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 export default function HomeFulfillmentCard({
   deliveryEnabled = true,
   homeFulfillment,
@@ -10,22 +11,22 @@ export default function HomeFulfillmentCard({
   return (
     <div className="pickup-time-card">
       <div className="pickup-mode-tabs service-tabs" role="group" aria-label="Chọn hình thức nhận món">
-        <button
+        <CustomerControl
           type="button"
           onClick={onPickup}
           className={homeFulfillment === "pickup" ? "active" : ""}
           aria-pressed={homeFulfillment === "pickup"}
         >
           <span>Tự lấy</span>
-        </button>
-        <button
+        </CustomerControl>
+        <CustomerControl
           type="button"
           onClick={onDelivery}
           className={homeFulfillment === "delivery" ? "active" : ""}
           aria-pressed={homeFulfillment === "delivery"}
         >
           <span>{deliveryEnabled ? "Giao hàng" : "Đặt qua ứng dụng"}</span>
-        </button>
+        </CustomerControl>
       </div>
       <div className="home2026-fulfillment-note">
         {homeFulfillment === "pickup"

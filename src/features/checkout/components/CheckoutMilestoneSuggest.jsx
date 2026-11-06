@@ -1,4 +1,5 @@
-﻿import { useMemo, useState } from "react";
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
@@ -152,7 +153,7 @@ export default function CheckoutMilestoneSuggest({
   return (
     <CheckoutCard title="Ưu đãi tiếp theo" className="checkout-milestone-card">
       {showMilestoneBox && (
-        <button type="button" onClick={() => setIsMilestoneModalOpen(true)} className="milestone-box milestone-box-v2 w-full text-left">
+        <CustomerControl type="button" onClick={() => setIsMilestoneModalOpen(true)} className="milestone-box milestone-box-v2 w-full text-left">
           <div className="milestone-copy">
             <span>{missing > 0 ? suggestText.nearLabel : suggestText.doneLabel}</span>
             <strong>{missing > 0 ? `${suggestText.addMore} ${formatMoney(missing)} ${suggestText.toGet} ${nextMilestone.title}` : `${suggestText.reached} ${nextMilestone.title}`}</strong>
@@ -164,12 +165,12 @@ export default function CheckoutMilestoneSuggest({
           <div className="milestone-track">
             <div style={{ width: `${progress}%` }} />
           </div>
-        </button>
+        </CustomerControl>
       )}
 
       {toppingSuggestions.length || mainSuggestions.length ? (
         <div className="checkout-suggestion-disclosure">
-          <button
+          <CustomerControl
             type="button"
             className="checkout-suggestion-toggle"
             aria-expanded={isSuggestionsOpen}
@@ -180,7 +181,7 @@ export default function CheckoutMilestoneSuggest({
               <small>{isSuggestionsOpen ? "Thu gọn danh sách món" : "Xem topping và món phù hợp"}</small>
             </span>
             <Icon name="back" size={15} className={isSuggestionsOpen ? "is-open" : ""} />
-          </button>
+          </CustomerControl>
 
           {isSuggestionsOpen ? (
             <div className="checkout-suggestion-content">
@@ -192,7 +193,7 @@ export default function CheckoutMilestoneSuggest({
                   </div>
                   <div className="no-scrollbar suggestion-slider suggestion-slider-v2">
                     {toppingSuggestions.map((topping) => (
-                      <button
+                      <CustomerControl
                         key={topping.id}
                         type="button"
                         onClick={() => addToCart({ product: makeAddonProduct(topping), spice: suggestText.addonSpice, toppings: [], note: "", quantity: 1 })}
@@ -200,7 +201,7 @@ export default function CheckoutMilestoneSuggest({
                       >
                         <span>{topping.name}</span>
                         <strong>+{formatMoney(topping.price)}</strong>
-                      </button>
+                      </CustomerControl>
                     ))}
                   </div>
                 </div>
@@ -214,11 +215,11 @@ export default function CheckoutMilestoneSuggest({
                   </div>
                   <div className="no-scrollbar suggestion-slider suggestion-slider-v2 main-suggest-slider">
                     {mainSuggestions.map((product) => (
-                      <button key={product.id} type="button" onClick={() => openOptionModal(product)} className="suggestion-chip suggestion-chip-v2 suggestion-main-chip">
+                      <CustomerControl key={product.id} type="button" onClick={() => openOptionModal(product)} className="suggestion-chip suggestion-chip-v2 suggestion-main-chip">
                         <img src={product.image} alt={product.name} width="112" height="92" loading="lazy" />
                         <span>{product.name}</span>
                         <strong>+{formatMoney(product.price)}</strong>
-                      </button>
+                      </CustomerControl>
                     ))}
                   </div>
                 </div>

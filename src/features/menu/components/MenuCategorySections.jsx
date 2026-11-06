@@ -1,3 +1,4 @@
+import MenuPromotionHeading from "./MenuPromotionHeading.jsx";
 import ProductCard from "../../../components/ProductCard.jsx";
 
 export default function MenuCategorySections({
@@ -20,6 +21,7 @@ export default function MenuCategorySections({
         >
           <header className="menu-category-section__head">
             <h2 id={`menu-category-${group.key}`}>{group.category}</h2>
+            {group.promoItems && <MenuPromotionHeading items={group.promoItems} />}
             <span>{group.products.length} món</span>
           </header>
 

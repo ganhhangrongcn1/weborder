@@ -50,7 +50,7 @@ export default function useGuestOrderLookup() {
   async function handleLookup() {
     const normalizedPhone = getCustomerKey(phone);
     if (!normalizedPhone || normalizedPhone.length < 9) {
-      alert("Vui lòng nhập số điện thoại hợp lệ.");
+      setNotice("Vui lòng nhập số điện thoại hợp lệ.");
       return false;
     }
 
@@ -80,10 +80,13 @@ export default function useGuestOrderLookup() {
       setOrders(nextOrders);
       setNotice(
         nextOrders.length
-          ? `Đã tìm thấy ${nextOrders.length} đơn theo số ${normalizedPhone}.`
+          ? `Đã tìm thấy ${nextOrders.length} đơn hàng.`
           : "Chưa tìm thấy đơn hàng theo số điện thoại này."
       );
       return true;
+    } catch {
+      setNotice("Chưa thể tải đơn hàng. Vui lòng kiểm tra kết nối rồi thử lại.");
+      return false;
     } finally {
       setIsLoading(false);
     }

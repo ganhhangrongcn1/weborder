@@ -1,6 +1,7 @@
 export function createHomeActionHandlers({
   navigate,
-  refs
+  refs,
+  onDeliveryApps
 }) {
   const getRefByTarget = (target) => {
     const map = {
@@ -20,6 +21,7 @@ export function createHomeActionHandlers({
       return;
     }
     const target = item?.actionTarget || "home";
+    if (target === "deliveryApps" && onDeliveryApps) { onDeliveryApps(); return; }
     if (target === "categorySection") {
       navigate("menu", "menu");
       return;
@@ -33,6 +35,8 @@ export function createHomeActionHandlers({
       return;
     }
     const targetRef = getRefByTarget(target);
+    if (!targetRef?.current && target === "promoVouchers") { navigate("loyalty", "rewards"); return; }
+    if (!targetRef?.current && target === "flashSale") { navigate("menu", "menu"); return; }
     targetRef?.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   };
 

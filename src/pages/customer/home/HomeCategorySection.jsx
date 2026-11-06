@@ -1,13 +1,14 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 function HomeCategoryBubble({ category, onClick, active }) {
   return (
-    <button
+    <CustomerControl
       type="button"
       onClick={onClick}
       className={`home2026-category-bubble ${active ? "active" : ""}`}
       aria-pressed={active}
     >
       {category.label}
-    </button>
+    </CustomerControl>
   );
 }
 
@@ -23,7 +24,7 @@ export default function HomeCategorySection({
     <section className="home2026-section">
       <div className="home2026-section-head">
         <h2>{categoryTitle}</h2>
-        <button type="button" onClick={onViewAll}>{viewAll}</button>
+        <CustomerControl type="button" onClick={onViewAll}>{viewAll}</CustomerControl>
       </div>
       <div className="home2026-category-scroll-wrap">
         <div className="home2026-category-scroll no-scrollbar">

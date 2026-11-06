@@ -1,33 +1,35 @@
-﻿import Icon from "./Icon.jsx";
+import CustomerControl from "./customer/CustomerControl.jsx";
+import Icon from "./Icon.jsx";
 
 const defaultItems = [
   { id: "home", label: "Trang chủ", icon: "home" },
   { id: "menu", label: "Menu", icon: "dish" },
-  { id: "orders", label: "Đơn", icon: "bag" },
-  { id: "rewards", label: "Ưu đãi", icon: "gift" },
+  { id: "orders", label: "Lịch sử đơn", icon: "bag" },
+  { id: "rewards", label: "Quà của bạn", icon: "gift" },
   { id: "account", label: "Tài khoản", icon: "user" }
 ];
 
 export default function BottomNav({ activeTab, onChange, items = defaultItems }) {
+  const resolvedTab = activeTab;
   return (
     <nav className="customer-bottom-nav">
       {items.map((item) => (
-        <button
+        <CustomerControl
           key={item.id}
           type="button"
           onClick={() => onChange(item.id)}
-          aria-current={activeTab === item.id ? "page" : undefined}
-          className={`customer-bottom-nav__item ${activeTab === item.id ? "customer-bottom-nav__item--active" : ""}`}
+          aria-current={resolvedTab === item.id ? "page" : undefined}
+          className={`customer-bottom-nav__item ${resolvedTab === item.id ? "customer-bottom-nav__item--active" : ""}`}
         >
-          <span className={`customer-bottom-nav__icon ${activeTab === item.id ? "customer-bottom-nav__icon--active" : ""}`}>
+          <span className={`customer-bottom-nav__icon ${resolvedTab === item.id ? "customer-bottom-nav__icon--active" : ""}`}>
             <Icon
               name={item.icon}
               size={20}
-              weight={activeTab === item.id ? "fill" : "regular"}
+              weight={resolvedTab === item.id ? "fill" : "regular"}
             />
           </span>
           <span className="customer-bottom-nav__label">{item.label}</span>
-        </button>
+        </CustomerControl>
       ))}
     </nav>
   );

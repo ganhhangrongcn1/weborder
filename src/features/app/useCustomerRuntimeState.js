@@ -316,6 +316,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     filteredProducts: availableFilteredProducts,
     isMenuLoading,
     customerProducts: availableCustomerProducts,
+    branchCartCatalog: productState.customerProducts,
     storeToppings: productState.storeToppings,
     customerPromoCards: productState.customerPromoCards,
     adminCoupons: productState.adminCoupons,

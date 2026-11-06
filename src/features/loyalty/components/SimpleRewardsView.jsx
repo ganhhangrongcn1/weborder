@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import AppSectionTitle from "../../../components/app/SectionTitle.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
 import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
@@ -25,9 +26,9 @@ export default function SimpleRewardsView({
           <strong>--</strong>
           <p>{loyaltyText.signedOutRewardMessage}</p>
           <span>{currencyPerPoint.toLocaleString("vi-VN")}đ = {pointPerUnit} điểm</span>
-          <button onClick={() => navigate("account", "account")} className="mt-5 w-full rounded-[20px] bg-white px-4 py-4 text-sm font-black text-orange-600 shadow-soft">
+          <CustomerControl onClick={() => navigate("account", "account")} className="mt-5 w-full rounded-[20px] bg-white px-4 py-4 text-sm font-black text-orange-600 shadow-soft">
             {loyaltyText.authCta}
-          </button>
+          </CustomerControl>
         </div>
         {stampCard}
         <div className="space-y-4 px-4 pt-4">

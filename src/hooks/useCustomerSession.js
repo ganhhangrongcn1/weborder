@@ -535,6 +535,7 @@ export default function useCustomerSession({
     return normalizeUserProfile({
       ...userProfile,
       name: activeDemoUser.name,
+      avatarUrl: activeDemoUser.avatarUrl || activeDemoUser.avatar_url || "",
       email: "",
       phone: activeDemoUser.phone,
       points: profileLoyalty.totalPoints,
@@ -546,7 +547,7 @@ export default function useCustomerSession({
       pointHistory: profileLoyalty.pointHistory || userProfile.pointHistory,
       checkinStreak: profileLoyalty.checkinStreak
     });
-  }, [activeDemoUser.name, activeDemoUser.phone, demoAddresses, getMemberRank, getOrderStats, normalizeUserProfile, profileLoyalty, profileOrders, userProfile]);
+  }, [activeDemoUser.name, activeDemoUser.phone, activeDemoUser.avatarUrl, activeDemoUser.avatar_url, demoAddresses, getMemberRank, getOrderStats, normalizeUserProfile, profileLoyalty, profileOrders, userProfile]);
 
   return {
     currentPhone,

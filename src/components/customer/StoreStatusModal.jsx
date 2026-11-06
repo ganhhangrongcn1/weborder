@@ -1,3 +1,4 @@
+import CustomerControl from "./CustomerControl.jsx";
 import { useEffect } from "react";
 import Icon from "../Icon.jsx";
 import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
@@ -66,8 +67,8 @@ export default function StoreStatusModal({ notice, onClose }) {
       showHeader={false}
       footer={(
         <div className="flex gap-3">
-          {notice.onAction && <button type="button" onClick={onClose} className="flex-1 rounded-2xl border px-4 py-3 font-bold">Đóng</button>}
-          <button type="button" onClick={notice.onAction || onClose} className="cta w-full">{notice.actionLabel || tone.actionText}</button>
+          {notice.onAction && <CustomerControl type="button" onClick={onClose} className="flex-1 rounded-2xl border px-4 py-3 font-bold">Đóng</CustomerControl>}
+          <CustomerControl type="button" onClick={notice.onAction || onClose} className="cta w-full">{notice.actionLabel || tone.actionText}</CustomerControl>
         </div>
       )}
     >

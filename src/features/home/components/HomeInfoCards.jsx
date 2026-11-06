@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import { useEffect, useMemo, useState } from "react";
 import HomeBranchPlannerModal from "./HomeBranchPlannerModal.jsx";
 
 function normalizeExternalUrl(url) {
@@ -91,20 +92,20 @@ export default function HomeInfoCards({
             <>
               <label className="delivery-app-branch-select">
                 <span>Chi nhánh</span>
-                <button
+                <CustomerControl
                   type="button"
                   className="delivery-app-branch-trigger"
                   onClick={() => setBranchPickerOpen(true)}
                 >
                   <span>{activeBranch?.branchName || "Chọn chi nhánh"}</span>
                   <i>▾</i>
-                </button>
+                </CustomerControl>
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {(activeBranch?.apps || []).map((app) => {
                   const appUrl = normalizeExternalUrl(app.url);
                   return (
-                    <button
+                    <CustomerControl
                       key={app.id}
                       type="button"
                       className="delivery-app-item"
@@ -113,7 +114,7 @@ export default function HomeInfoCards({
                     >
                       <DeliveryAppLogo app={app} />
                       <strong>{app.name}</strong>
-                    </button>
+                    </CustomerControl>
                   );
                 })}
               </div>

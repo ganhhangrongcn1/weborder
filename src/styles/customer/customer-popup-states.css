@@ -1,0 +1,73 @@
+/* Theme contract for every customer sheet, including non-default and disabled states. */
+:root .customer-bottom-sheet :is(.customer-icon-button,.qr-counter-guide__close,.order-journey-sheet__header>button) { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; }
+:root .customer-shell .stamp-card .stamp-card__grid>span.stamp-card__reward-slot { border-color:var(--ghr-yellow); }
+:root .customer-bottom-sheet :is(.customer-button--secondary,.secondary-cta,.order-journey-sheet__secondary) { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; box-shadow:none; }
+:root .customer-bottom-sheet :is(.delivery-fee-list>div,.loyalty-points-popup__progress,.loyalty-voucher-coupon,.checkout-address-branch-card,.qr-counter-guide__benefit,.order-journey-sheet__status,.order-journey__loyalty-hint) { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; box-shadow:none; }
+:root .customer-bottom-sheet :is(.delivery-fee-list span,.delivery-fee-list>div,.loyalty-points-popup__value small,.loyalty-voucher-coupon__code strong,.loyalty-voucher-coupon__meta,.loyalty-voucher-coupon__meta p,.loyalty-voucher-coupon__meta strong,.checkout-address-branch-card__copy strong,.qr-counter-guide__benefit strong,.order-journey-sheet__status strong,.order-journey-sheet__status svg,.order-journey__loyalty-hint strong) { color:var(--ghr-ink); }
+:root .customer-bottom-sheet :is(.loyalty-voucher-subtitle,.loyalty-voucher-coupon__code>span,.checkout-address-branch-card__copy small,.checkout-address-branch-card__copy span,.qr-counter-guide__copy p,.qr-counter-guide__benefit p,.order-journey-sheet__header p,.order-journey-sheet__eyebrow,.order-journey__loyalty-hint p,.order-journey__loyalty-hint small) { color:var(--ghr-muted); }
+:root .customer-bottom-sheet .loyalty-voucher-hero { background:var(--ghr-yellow-gradient); border-radius:18px; padding:16px 42px 16px 16px; }
+:root .customer-bottom-sheet .loyalty-voucher-hero :is(h2,p,strong,span,small) { color:#111; }
+:root .customer-bottom-sheet .loyalty-voucher-pill { background:#1111110d; color:#111; border-color:transparent; }
+:root .customer-bottom-sheet .loyalty-points-popup__value { color:#111; }
+:root .customer-bottom-sheet :is(.qr-counter-guide__badge,.qr-counter-guide__member-note) { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; }
+:root .customer-bottom-sheet :is(.qr-counter-guide__badge,.qr-counter-guide__member-note) :is(span,svg) { color:var(--ghr-ink); }
+:root .customer-bottom-sheet .qr-counter-guide__benefit>span { background:var(--ghr-yellow); color:#111; }
+:root .customer-bottom-sheet .qr-counter-guide__benefit div>span { color:var(--ghr-muted); }
+:root .customer-bottom-sheet .qr-counter-guide__benefit small { color:var(--ghr-muted); }
+:root .customer-bottom-sheet :is(.rewards-tier-timeline__amount,.rewards-tier-timeline__name) { color:var(--ghr-ink); }
+:root .customer-bottom-sheet .rewards-tier-timeline__caption { color:var(--ghr-muted); }
+:root .customer-bottom-sheet .rewards-tier-timeline__track { background:var(--ghr-line); }
+:root .customer-bottom-sheet .rewards-tier-timeline__track>span { background:var(--ghr-yellow); }
+:root .customer-bottom-sheet .rewards-tier-timeline .rewards-tier-timeline__dot { background:var(--ghr-line); border:0; color:var(--ghr-muted); }
+:root .customer-bottom-sheet .rewards-tier-timeline :is(.is-current,.is-completed) .rewards-tier-timeline__dot { background:var(--ghr-yellow); border-color:var(--ghr-yellow); color:#111; animation:none; }
+:root .customer-bottom-sheet .rewards-tier-timeline .rewards-tier-timeline__dot svg { color:#111; }
+:root .customer-bottom-sheet .rewards-section-title svg { color:var(--ghr-ink); }
+:root .customer-bottom-sheet .order-detail-item span { color:var(--ghr-muted); }
+:root .customer-bottom-sheet .rewards-benefit-tier em { background:var(--ghr-surface-soft); color:var(--ghr-muted); }
+:root .customer-bottom-sheet .rewards-icon-box { color:#111; }
+:root .customer-bottom-sheet .loyalty-tier-upgrade__icon { background:var(--ghr-yellow); border-color:transparent; color:#111; }
+:root .customer-bottom-sheet .checkout-address-branch-card__icon { background:var(--ghr-surface); color:var(--ghr-ink); }
+:root .customer-bottom-sheet .pickup-confirmation__header { background:var(--ghr-yellow-gradient); color:#111; }
+:root .customer-bottom-sheet .pickup-confirmation__header :is(h2,p,span,svg) { color:#111; }
+:root .customer-bottom-sheet .pickup-confirmation__icon { background:#1111110d; color:#111; }
+:root .customer-bottom-sheet :is(.pickup-confirmation__branch,.pickup-confirmation__points) { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; }
+:root .customer-bottom-sheet .pickup-confirmation__branch :is(span,svg,strong,em,p) { color:var(--ghr-ink); }
+:root .customer-bottom-sheet .pickup-confirmation__branch small { color:var(--ghr-muted); }
+:root .customer-bottom-sheet .pickup-confirmation__branch>div { color:var(--ghr-ink); }
+:root .customer-bottom-sheet .order-journey-sheet__header { background:var(--ghr-surface); color:var(--ghr-ink); }
+:root .customer-bottom-sheet .order-journey__loyalty-hint>span { background:var(--ghr-surface); color:var(--ghr-ink); }
+:root[data-customer-theme="dark"] .customer-bottom-sheet [class~="bg-white"] { background:var(--ghr-surface-soft); }
+:root[data-customer-theme] .customer-bottom-sheet .loyalty-voucher-card { background:var(--ghr-surface); border:0; box-shadow:none; }
+:root .customer-bottom-sheet .loyalty-voucher-card::before { display:none; }
+:root[data-customer-theme] .customer-bottom-sheet .loyalty-voucher-card .loyalty-voucher-hero :is(h2,p,strong,span,small) { color:#111; }
+:root .customer-bottom-sheet .loyalty-voucher-close { background:var(--ghr-surface-soft); color:var(--ghr-ink); }
+:root .customer-bottom-sheet .loyalty-points-popup__progress :is(span,p) { color:var(--ghr-muted); }
+:root .customer-bottom-sheet .loyalty-points-popup__progress strong { color:var(--ghr-ink); }
+:root .customer-bottom-sheet .loyalty-points-popup__track { background:var(--ghr-line); }
+:root .customer-bottom-sheet .loyalty-points-popup__track span { background:var(--ghr-yellow); }
+:root[data-customer-theme] .customer-bottom-sheet .loyalty-voucher-coupon__code { background:var(--ghr-surface); box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet .loyalty-voucher-coupon__code strong { color:var(--ghr-ink); font-size:24px; }
+:root .customer-bottom-sheet .loyalty-voucher-coupon__code::after { border-color:var(--ghr-line); }
+:root .customer-bottom-sheet .loyalty-voucher-coupon::before,:root .customer-bottom-sheet .loyalty-voucher-coupon::after { background:var(--ghr-surface); border-color:transparent; }
+:root[data-customer-theme] .customer-bottom-sheet .checkout-saved-address-card.is-selected { background:var(--ghr-surface-soft); border-color:var(--ghr-yellow); }
+:root[data-customer-theme] .customer-bottom-sheet .checkout-saved-address-card__status { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet .checkout-saved-address-card__status svg { color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet .pickup-confirmation__header { box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet .pickup-confirmation__header :is(h2,span,p,svg) { color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet .pickup-confirmation__items :is(span,b,strong) { color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-bottom-sheet .pickup-confirmation__items { border-color:var(--ghr-line); }
+:root[data-customer-theme] .customer-bottom-sheet .pickup-confirmation__points :is(span,strong,svg) { color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-bottom-sheet .pickup-confirmation__points svg { color:#111; background:var(--ghr-yellow); border-radius:5px; padding:2px; box-sizing:content-box; }
+:root[data-customer-theme] .customer-bottom-sheet .pickup-confirmation__branch { box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet .pickup-confirmation__summary>div:first-child>span { color:var(--ghr-ink); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .order-journey__message>span { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .order-journey__message>span svg { color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet .order-detail-total:not(.grand) { font-size:12px; }
+:root[data-customer-theme] .customer-bottom-sheet .order-detail-total:not(.grand) strong { font-size:13px; font-weight:500; color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-bottom-sheet .order-detail-total.discount strong { color:var(--ghr-muted); font-weight:400; }
+:root[data-customer-theme] .customer-bottom-sheet .order-detail-total.discount>span { color:var(--ghr-muted); font-weight:400; }
+:root[data-customer-theme] .customer-bottom-sheet .order-detail-total.grand { padding-top:16px; margin-top:10px; }
+:root[data-customer-theme] .customer-bottom-sheet .order-detail-total.grand strong { font-size:23px; font-weight:750; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey-sheet__status>span { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey-sheet__status>span svg { color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey-sheet__primary,:root[data-customer-theme] .customer-bottom-sheet .order-journey-sheet__primary :is(svg,span) { color:#111; }

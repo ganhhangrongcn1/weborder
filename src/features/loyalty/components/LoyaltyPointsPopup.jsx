@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 
 export default function LoyaltyPointsPopup({
@@ -27,16 +28,16 @@ export default function LoyaltyPointsPopup({
       showHeader={false}
       footer={(
         <div className="loyalty-voucher-footer">
-          <button type="button" className="cta w-full" onClick={onPrimaryAction}>
+          <CustomerControl type="button" className="cta w-full" onClick={onPrimaryAction}>
             Xem cách dùng điểm
-          </button>
+          </CustomerControl>
         </div>
       )}
     >
       <section className="loyalty-voucher-card loyalty-points-popup">
-        <button type="button" className="loyalty-voucher-close" onClick={onClose} aria-label="Đóng">
+        <CustomerControl type="button" className="loyalty-voucher-close" onClick={onClose} aria-label="Đóng">
           X
-        </button>
+        </CustomerControl>
 
         <div className="loyalty-voucher-hero">
           <p className="loyalty-voucher-pill">Điểm thưởng của bạn</p>

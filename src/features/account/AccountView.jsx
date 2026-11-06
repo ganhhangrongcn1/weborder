@@ -1,4 +1,6 @@
-﻿import Icon from "../../components/Icon.jsx";
+import CustomerControl from "../../components/customer/CustomerControl.jsx";
+import CustomerAppearanceToggle from "../../components/customer/CustomerAppearanceToggle.jsx";
+import Icon from "../../components/Icon.jsx";
 import { useEffect, useState } from "react";
 import ProfileModal from "../../pages/customer/account/ProfileModal.jsx";
 import AccountAddressModal from "../../pages/customer/account/AccountAddressModal.jsx";
@@ -51,7 +53,7 @@ function PasswordField(props) {
       {...props}
       type={isVisible ? "text" : "password"}
       suffix={(
-        <button
+        <CustomerControl
           type="button"
           className={`account-auth-password-toggle${isVisible ? " is-visible" : ""}`}
           onClick={() => setIsVisible((current) => !current)}
@@ -60,7 +62,7 @@ function PasswordField(props) {
           disabled={props.disabled}
         >
           <Icon name="eye" size={18} />
-        </button>
+        </CustomerControl>
       )}
     />
   );
@@ -75,17 +77,17 @@ function AuthFormError({ message = "" }) {
   ) : null;
 }
 
-function AuthSubmitButton({ busy = false, busyLabel, children }) {
+function AuthSubmitButton({ busy = false, disabled = false, busyLabel, children }) {
   return (
-    <button
+    <CustomerControl
       type="submit"
       className="account-auth-submit w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange"
-      disabled={busy}
+      disabled={busy || disabled}
       aria-busy={busy ? "true" : undefined}
     >
       {busy ? <span className="account-auth-spinner" aria-hidden="true" /> : null}
       <span>{busy ? busyLabel : children}</span>
-    </button>
+    </CustomerControl>
   );
 }
 
@@ -224,7 +226,7 @@ export default function Account({
                     Đăng nhập
                   </AuthSubmitButton>
                 </form>
-                <button
+                <CustomerControl
                   type="button"
                   onClick={() => {
                     vm.setAccountEntryTab("register");
@@ -238,15 +240,15 @@ export default function Account({
                   className="mt-3 w-full rounded-2xl bg-orange-50 px-4 py-3 text-xs font-black text-orange-600"
                 >
                   Chưa có tài khoản? Tạo tài khoản
-                </button>
-                <button
+                </CustomerControl>
+                <CustomerControl
                   type="button"
                   onClick={() => vm.navigateToTab("orders")}
                   className="mt-2 w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55"
                 >
                   Tra cứu đơn không cần đăng nhập
-                </button>
-                <button
+                </CustomerControl>
+                <CustomerControl
                   type="button"
                   onClick={() => {
                     vm.setAccountEntryTab("forgot");
@@ -257,7 +259,7 @@ export default function Account({
                   className="mt-2 w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55"
                 >
                   Quên mật khẩu?
-                </button>
+                </CustomerControl>
               </div>
             ) : vm.accountEntryTab === "register" ? (
               <div className="mt-4">
@@ -313,6 +315,7 @@ export default function Account({
                     disabled={vm.authBusy === "register"}
                     value={vm.registerDraft.email}
                     error={vm.authErrors.registerEmail}
+                    onBlur={vm.validateRegisterEmail}
                     onChange={(event) => {
                       vm.clearAuthError("registerEmail");
                       vm.setRegisterDraft((draft) => ({ ...draft, email: event.target.value }));
@@ -348,10 +351,10 @@ export default function Account({
                     placeholder="Nhập lại mật khẩu"
                   />
                   <AuthFormError message={vm.authErrors.form} />
-                  <AuthSubmitButton busy={vm.authBusy === "register"} busyLabel="Đang tạo tài khoản…">
+                  <AuthSubmitButton disabled={!vm.registerEmailValid} busy={vm.authBusy === "register"} busyLabel="Đang tạo tài khoản…">
                     Tạo tài khoản
                   </AuthSubmitButton>
-                  <button
+                  <CustomerControl
                     type="button"
                     disabled={vm.authBusy === "register"}
                     onClick={() => {
@@ -361,7 +364,7 @@ export default function Account({
                     className="w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55"
                   >
                     Đã có tài khoản? Đăng nhập
-                  </button>
+                  </CustomerControl>
                 </form>
               </div>
             ) : vm.accountEntryTab === "forgot" ? (
@@ -396,7 +399,7 @@ export default function Account({
                   <AuthSubmitButton busy={vm.authBusy === "forgot"} busyLabel="Đang gửi email…">
                     Gửi link đặt lại mật khẩu
                   </AuthSubmitButton>
-                  <button
+                  <CustomerControl
                     type="button"
                     disabled={vm.authBusy === "forgot"}
                     onClick={() => {
@@ -406,7 +409,7 @@ export default function Account({
                     className="w-full rounded-2xl bg-white px-4 py-3 text-xs font-black text-brown/55"
                   >
                     Quay lại đăng nhập
-                  </button>
+                  </CustomerControl>
                 </form>
               </div>
             ) : vm.accountEntryTab === "resetPassword" ? (
@@ -459,10 +462,11 @@ export default function Account({
               <div className="mt-4">
                 <h2 className="text-base font-black text-brown">Đặt lại mật khẩu</h2>
                 <p className="mt-1 text-sm text-brown/60">Mật khẩu của bạn đang được bảo vệ. Vui lòng liên hệ cửa hàng để được hỗ trợ đặt lại.</p>
-                <button type="button" onClick={() => vm.setAccountEntryTab("login")} className="mt-3 w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Quay lại đăng nhập</button>
+                <CustomerControl type="button" onClick={() => vm.setAccountEntryTab("login")} className="mt-3 w-full rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange">Quay lại đăng nhập</CustomerControl>
               </div>
             )}
           </div>
+          <CustomerAppearanceToggle />
         </div>
       </section>
     );

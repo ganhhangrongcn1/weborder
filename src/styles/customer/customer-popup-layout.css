@@ -1,0 +1,49 @@
+/* One customer overlay: body portal, bottom sheet, fixed header/footer and one scroll area. */
+:root .customer-sheet-backdrop[data-popup-layout="sheet"] { position:fixed; inset:0; display:flex; align-items:flex-end; justify-content:center; padding:env(safe-area-inset-top,0px) 0 0; background:#0008; backdrop-filter:blur(4px); }
+:root .customer-sheet-backdrop[data-popup-layout="sheet"]>.customer-bottom-sheet {
+  position:relative; inset:auto; transform:none; display:flex; flex-direction:column;
+  width:min(100%,430px); max-width:430px; height:auto; max-height:92dvh; min-height:0;
+  margin:0; padding:0; border:0; border-radius:24px 24px 0 0; overflow:hidden;
+  background:var(--ghr-surface,#fff); color:var(--ghr-ink,#111); box-shadow:0 -8px 32px #0002;
+  animation:customer-touch-sheet var(--ghr-sheet-time) var(--ghr-ease);
+}
+:root .customer-sheet-backdrop[data-popup-layout="sheet"]>.customer-bottom-sheet.customer-cart-sheet { height:100dvh; max-height:100dvh; border-radius:0; }
+:root .customer-sheet-backdrop[data-popup-layout="sheet"] .customer-sheet-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain; background:var(--ghr-surface); }
+:root .customer-sheet-backdrop[data-popup-layout="sheet"] :is(.customer-sheet-header,.customer-sheet-footer) { position:relative; flex:0 0 auto; background:var(--ghr-surface); color:var(--ghr-ink); border-color:var(--ghr-line); box-shadow:none; }
+:root .customer-sheet-backdrop[data-popup-layout="sheet"] .customer-sheet-handle { flex:0 0 5px; background:var(--ghr-line); }
+:root .customer-bottom-sheet .order-detail-actions { position:static; margin:0; padding:0; background:var(--ghr-surface); }
+:root .customer-bottom-sheet .order-detail-actions p { color:var(--ghr-muted); }
+:root .customer-bottom-sheet .customer-offer-card.is-selected { background:var(--ghr-surface-soft); box-shadow:none; }
+:root .customer-bottom-sheet .customer-offer-card.is-selected .customer-offer-card__footer button { background:var(--ghr-yellow); color:#111; opacity:1; }
+:root .customer-bottom-sheet .customer-offer-card.is-selected .customer-offer-card__footer button svg { color:#111; }
+:root[data-customer-theme] .customer-shell .loyalty-page .checkin-card .checkin-direct-submit:disabled { background:var(--ghr-yellow); color:#111; border-color:transparent; opacity:1; box-shadow:none; cursor:default; }
+:root .customer-bottom-sheet :is(.loyalty-checkin-details>section,.checkin-bonus-grid>div,.loyalty-checkin-calendar>div,.stamp-rewards-sheet__summary,.stamp-card__gifts button,.stamp-card__gifts button:disabled) { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; box-shadow:none; }
+:root .customer-bottom-sheet :is(.stamp-rewards-sheet__summary strong,.checkin-bonus-grid strong,.checkin-bonus-grid div:last-child strong,.stamp-card__gifts button>span) { color:var(--ghr-ink); }
+:root .customer-bottom-sheet :is(.stamp-rewards-sheet__content p,.stamp-rewards-sheet summary,.stamp-rules,.stamp-card__gifts small,.checkin-bonus-grid span,.loyalty-checkin-calendar span) { color:var(--ghr-muted); }
+:root .customer-bottom-sheet .loyalty-checkin-calendar strong { background:var(--ghr-line); color:var(--ghr-muted); }
+:root .customer-bottom-sheet .loyalty-checkin-calendar strong.is-checked { background:var(--ghr-yellow); color:#111; }
+:root .customer-bottom-sheet .loyalty-checkin-calendar>div.is-today { border:1px solid var(--ghr-yellow); background:var(--ghr-surface-soft); }
+:root .customer-bottom-sheet .stamp-disclosure { border-color:var(--ghr-line); }
+:root .rewards-benefits-page .rewards-shared-benefits { background:var(--ghr-surface-soft); padding:14px; margin:16px 0; border-radius:16px; }
+:root .rewards-benefits-page .rewards-shared-benefits h2 { font-size:14px; color:var(--ghr-ink); }
+:root .rewards-benefits-page .rewards-shared-benefits p { margin-top:6px; font-size:12px; color:var(--ghr-muted); }
+:root .rewards-benefits-page .rewards-tier-earning { display:flex; align-items:center; gap:12px; padding:16px; color:var(--ghr-ink); }
+:root .rewards-benefits-page .rewards-tier-earning svg { color:var(--ghr-ink); }
+:root .rewards-benefits-page .rewards-tier-earning strong { display:block; color:var(--ghr-ink); font-size:18px; }
+:root .rewards-benefits-page .rewards-tier-earning small { display:block; margin-top:4px; color:var(--ghr-muted); font-size:11px; }
+:root .rewards-benefits-page .rewards-tier-voucher { display:flex; gap:8px; padding:0 16px 16px; font-size:12px; color:var(--ghr-muted); }
+:root[data-customer-theme="dark"] .customer-shell .menu-side-categories { background:#161616; }
+:root[data-customer-theme] .customer-shell .menu-storefront:has(.menu-vouchers) { padding-bottom:10px; }
+:root[data-customer-theme] .customer-shell .menu-vouchers { padding:8px; border:1px solid var(--ghr-line); border-radius:12px; background:var(--ghr-surface); }
+:root[data-customer-theme="dark"] .customer-shell .menu-vouchers { border-color:#383838; }
+:root[data-customer-theme] .customer-shell .menu-vouchers__more { inset-block:8px; right:8px; border-radius:8px; }
+:root[data-customer-theme="dark"] .customer-shell .menu-catalog-columns { background:#161616; }
+:root[data-customer-theme="dark"] .customer-shell .menu-page--storefront .menu-catalog-products { border-inline-start:1px solid #383838; background:var(--ghr-surface); }
+:root[data-customer-theme="dark"] .customer-shell .menu-page--storefront .product-row { border-bottom-color:#363636; }
+:root[data-customer-theme] .customer-shell .menu-category-section__head>.menu-promotion-label { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] .customer-shell .menu-promotion-label :is(svg,time) { color:#111; }
+:root[data-customer-theme] .customer-shell .menu-category-section__head>.menu-promotion-label.is-flash { background:#d92d20; color:#fff; }
+:root[data-customer-theme] .customer-shell .menu-promotion-label.is-flash :is(svg,time) { color:#fff; }
+:root[data-customer-theme] .customer-shell .menu-promotion-label.is-flash time { border-color:#ffffff40; }
+:root[data-customer-theme="dark"] .customer-shell .menu-side-categories button[aria-pressed="true"] { background:#292929; }
+@media(prefers-reduced-motion:reduce) { :root .customer-sheet-backdrop[data-popup-layout="sheet"]>.customer-bottom-sheet { animation:none; } }

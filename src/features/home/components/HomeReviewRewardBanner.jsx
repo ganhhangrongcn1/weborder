@@ -1,11 +1,11 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import Icon from "../../../components/Icon.jsx";
 
 export default function HomeReviewRewardBanner({
   block,
-  image,
   onOpen
 }) {
-  const title = "Đánh Giá Ngay – Nhận Điểm Liền Tay";
+  const title = "Đánh giá nhận điểm";
   const subtitle = String(
     block?.subtitle ||
     "GrabFood · ShopeeFood · Xanh Ngon · Google Maps"
@@ -15,24 +15,11 @@ export default function HomeReviewRewardBanner({
     : `${subtitle} · Google Maps`;
 
   return (
-    <section className="home-review-reward" aria-labelledby="home-review-reward-title">
-      <button type="button" className="home-review-reward__banner" onClick={onOpen}>
-        <span className="home-review-reward__visual" aria-hidden="true">
-          {image ? <img src={image} alt="" /> : <Icon name="star" size={24} />}
-          <span><Icon name="star" size={11} /> 5</span>
-        </span>
-
-        <span className="home-review-reward__content">
-          <span className="home-review-reward__eyebrow">Quà cảm ơn từ Gánh</span>
-          <strong id="home-review-reward-title">{title}</strong>
-          <span className="home-review-reward__subtitle">{displayedSubtitle}</span>
-        </span>
-
-        <span className="home-review-reward__cta">
-          <span>Xem cách nhận</span>
-          <Icon name="back" size={18} />
-        </span>
-      </button>
+    <section className="home-review-reward" aria-label={title}>
+      <CustomerControl type="button" className="home-review-action" onClick={onOpen}>
+        <span className="home-review-action__icon"><Icon name="star" size={24} weight="fill" /></span>
+        <span className="home-review-action__copy"><small>Quà cảm ơn từ Gánh</small><strong>{title}</strong><span>{displayedSubtitle}</span><em>Khám phá ngay <Icon name="back" size={15} /></em></span>
+      </CustomerControl>
     </section>
   );
 }

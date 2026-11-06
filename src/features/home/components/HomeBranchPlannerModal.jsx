@@ -1,7 +1,10 @@
-﻿import { useEffect } from "react";
-import { createPortal } from "react-dom";
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import Icon from "../../../components/Icon.jsx";
+import CustomerSelectionIndicator from "../../../components/customer/CustomerSelectionIndicator.jsx";
 import { getBranchHours, getClosingSoonText } from "../homeHelpers.js";
+import useNearbyBranches from "../hooks/useNearbyBranches.js";
+import { formatBranchDistance } from "../../../services/branchProximityService.js";
 
 function getNowMinutes() {
   const now = new Date();
@@ -29,57 +32,35 @@ export default function HomeBranchPlannerModal({
   title,
   subtitle,
   ariaLabel,
-  branches,
+  branches = [],
   selectedBranchId,
   onSelectBranch,
   onConfirm,
   confirmLabel = "Xong, vào menu",
   iconName = "home",
-  disabledConfirm = false
+  disabledConfirm = false,
+  enableNearby = false
 }) {
-  useEffect(() => {
-    if (!open) return undefined;
-
-    const handleEsc = (event) => {
-      if (event.key === "Escape") onClose?.();
-    };
-
-    document.addEventListener("keydown", handleEsc);
-    return () => document.removeEventListener("keydown", handleEsc);
-  }, [open, onClose]);
-
+  const nearby = useNearbyBranches(branches,open && enableNearby);
   if (!open) return null;
 
-  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId) || null;
+  const visibleBranches = enableNearby && nearby.position
+    ? [...nearby.nearby].sort((a,b)=>Number(isBranchOpenNow(b))-Number(isBranchOpenNow(a)))
+    : enableNearby ? nearby.nearby : branches;
+  const nearest = nearby.position ? visibleBranches.find(isBranchOpenNow) : null;
   const shouldShowConfirm = false;
 
-  return createPortal(
-    <div
-      className="branch-picker-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label={ariaLabel || title || "Chọn chi nhánh"}
-      onClick={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (onBackdropClose) onBackdropClose();
-      }}
-    >
-      <section className="branch-picker-panel" onClick={(event) => event.stopPropagation()}>
-        <div className="branch-picker-head">
-          <div>
-            <h2>{title}</h2>
-            {subtitle ? <p>{subtitle}</p> : null}
-          </div>
-          <button type="button" className="branch-picker-close" onClick={onClose} aria-label="Đóng">X</button>
-        </div>
-
+  return (
+    <CustomerBottomSheet title={title} subtitle={subtitle} ariaLabel={ariaLabel || title || "Chọn chi nhánh"} className="branch-picker-panel" onClose={onClose} onBackdropClose={onBackdropClose} closeOnBackdrop={Boolean(onBackdropClose)}>
+        {enableNearby && (nearby.busy || nearby.message) && <p className="home-nearby-status" role="status">{nearby.busy ? "Đang tìm quán gần bạn…" : nearby.message}</p>}
         <div className="branch-picker-list">
-          {branches.map((branch) => {
+          {!visibleBranches.length && <p role="status">Hiện chưa có chi nhánh nhận hình thức đặt món này. Bạn quay lại sau nhé.</p>}
+          {visibleBranches.map((branch) => {
             const openNow = isBranchOpenNow(branch);
             const closingSoonText = openNow ? getClosingSoonText(branch) : "";
 
             return (
-              <button
+              <CustomerControl
                 key={branch.id}
                 type="button"
                 onClick={() => {
@@ -97,22 +78,21 @@ export default function HomeBranchPlannerModal({
                   <strong>{branch.name}</strong>
                   <small>{branch.address}</small>
                   <em>Giờ hoạt động: {getBranchHours(branch).label}</em>
+                  {enableNearby && Number.isFinite(branch.distanceKm) && <small className="home-branch-distance">{formatBranchDistance(branch.distanceKm)}{nearest?.id === branch.id ? " · Gần bạn nhất đang mở" : ""}</small>}
                   {!openNow ? <small className="branch-closed-warning">Chi nhánh đã đóng cửa.</small> : null}
                   {closingSoonText ? <small className="branch-closing-warning">{closingSoonText}</small> : null}
                 </span>
-                <span className="branch-radio">{selectedBranchId === branch.id ? "✓" : ""}</span>
-              </button>
+                <CustomerSelectionIndicator selected={selectedBranchId === branch.id} className="branch-radio" />
+              </CustomerControl>
             );
           })}
         </div>
 
         {shouldShowConfirm ? (
           <div className="branch-picker-footer">
-            <button onClick={onConfirm} className="cta w-full" disabled={disabledConfirm}>{confirmLabel}</button>
+            <CustomerControl onClick={onConfirm} className="cta w-full" disabled={disabledConfirm}>{confirmLabel}</CustomerControl>
           </div>
         ) : null}
-      </section>
-    </div>,
-    document.body
+    </CustomerBottomSheet>
   );
 }

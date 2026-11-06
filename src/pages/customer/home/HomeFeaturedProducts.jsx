@@ -1,4 +1,5 @@
-﻿import ProductCard from "../../../components/ProductCard.jsx";
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import ProductCard from "../../../components/ProductCard.jsx";
 
 export default function HomeFeaturedProducts({
   featuredTitle,
@@ -11,7 +12,7 @@ export default function HomeFeaturedProducts({
     <section className="home2026-section">
       <div className="home2026-section-head">
         <h2>{featuredTitle}</h2>
-        <button type="button" onClick={onViewAll}>{viewMore}</button>
+        <CustomerControl type="button" onClick={onViewAll}>{viewMore}</CustomerControl>
       </div>
       <div className="home2026-featured-list">
         {featuredProducts.map((product) => (

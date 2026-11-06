@@ -1,153 +1,22 @@
-import { useState } from "react";
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import { useMemo, useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
-import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
-import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
 import PointsCard from "../../../pages/customer/loyalty/PointsCard.jsx";
-import {
-  getLoyaltyEarnPercent,
-  getLoyaltyTierIconSymbol
-} from "../../../services/loyaltyProgramConfigService.js";
+import { buildLoyaltyTierJourney } from "../../../services/loyaltyProgramConfigService.js";
+import RewardsOverview from "./RewardsOverview.jsx";
+import LoyaltyBenefitsPage from "./LoyaltyBenefitsPage.jsx";
 
 export default function GuestLoyaltyView({ navigate, loyaltyRule, stampCard = null }) {
-  const [showRules, setShowRules] = useState(false);
-  const currencyPerPoint = Math.max(1, Number(loyaltyRule?.currencyPerPoint || 100));
-  const pointPerUnit = Math.max(1, Number(loyaltyRule?.pointPerUnit || 10));
-  const configuredTierRates = Array.isArray(loyaltyRule?.tiers)
-    ? loyaltyRule.tiers.map((tier) => getLoyaltyEarnPercent(tier.currencyPerPoint, tier.pointPerUnit))
-    : [];
-  const tierRates = configuredTierRates.length
-    ? configuredTierRates
-    : [getLoyaltyEarnPercent(currencyPerPoint, pointPerUnit)];
-  const minTierRate = Math.min(...tierRates);
-  const maxTierRate = Math.max(...tierRates);
-  const exampleSpend = 100000;
-  const minExamplePoints = Math.round((exampleSpend * minTierRate) / 100);
-  const maxExamplePoints = Math.round((exampleSpend * maxTierRate) / 100);
-  const pointRulesExample = "Số điểm dùng được sẽ tự tính theo giá trị đơn và voucher đang áp dụng.";
-  const loyaltyRulesRows = [
-    { label: "Tích điểm theo hạng", value: `${minTierRate}% đến ${maxTierRate}%` },
-    { label: "Dùng điểm", value: "1 điểm = 1đ" },
-    { label: "Hạn điểm", value: "60 ngày" }
-  ];
-  const safeBonusDisplay = Object.entries(loyaltyRule?.streakRewards || {})
-    .map(([days, points]) => ({
-      days: Math.max(1, Math.floor(Number(days || 0))),
-      points: Math.max(0, Math.floor(Number(points || 0)))
-    }))
-    .filter((reward) => reward.days > 0 && reward.points > 0)
-    .sort((a, b) => a.days - b.days);
-  const tiers = Array.isArray(loyaltyRule?.tiers) ? loyaltyRule.tiers.filter((tier) => tier.enabled !== false) : [];
-  const firstMilestone = safeBonusDisplay[0];
-  const checkinEnabled = loyaltyRule?.checkinEnabled !== false
-    && Number(loyaltyRule?.checkinDailyPoints || 0) > 0;
+  const [activePage, setActivePage] = useState("");
+  const journey = useMemo(() => buildLoyaltyTierJourney({}, loyaltyRule), [loyaltyRule]);
   const openAccount = () => navigate("account", "account");
-
-  return (
-    <section className="loyalty-page loyalty-page--guest pb-6">
-      <LoyaltySummary
-        title="Hội mê Gánh"
-        tierName="Quà ngon đang chờ bạn"
-        pointsValue="Đăng nhập"
-        subtitle="để xem điểm"
-        tierMessage="Đăng nhập để Gánh giữ điểm sau mỗi lần ăn ngon"
-        tierRateText={`Tích ${minTierRate}% đến ${maxTierRate}%`}
-        ratioText={`${exampleSpend.toLocaleString("vi-VN")}đ = ${minExamplePoints.toLocaleString("vi-VN")} đến ${maxExamplePoints.toLocaleString("vi-VN")} điểm`}
-        expiryText="1 điểm = 1đ"
-        metaSecondaryNote="1 điểm = 1đ khi thanh toán"
-        ctaLabel="Đăng nhập để bắt đầu tích điểm"
-        onCta={openAccount}
-        isGuest
-      />
-
-      {stampCard}
-
-      <div className="loyalty-page__content">
-        <details className="loyalty-guest-overview">
-          <summary>Quyền lợi thành viên</summary>
-        <CustomerCard className="loyalty-guest-benefits" padding="md">
-          <div className="loyalty-section-head">
-            <div className="loyalty-section-head__title">
-              <span><Icon name="dish" size={18} /></span>
-              <div>
-                <small>Ăn là có quà</small>
-                <h2>Tham gia có gì vui?</h2>
-              </div>
-            </div>
-          </div>
-
-          <div className="loyalty-guest-benefits__list">
-            <div>
-              <span className="is-orange"><Icon name="star" size={17} /></span>
-              <p><strong>Tích điểm từ đơn đầu</strong><small>Mỗi hạng được cộng từ {minTierRate}% đến {maxTierRate}%</small></p>
-            </div>
-            <div>
-              <span className="is-green"><Icon name="star" size={17} /></span>
-              <p><strong>Dùng điểm cho lần đặt sau</strong><small>1 điểm = 1đ khi thanh toán</small></p>
-            </div>
-            {checkinEnabled ? (
-              <div>
-                <span className="is-yellow"><Icon name="clock" size={17} /></span>
-                <p><strong>Ghé mỗi ngày, nhận thêm điểm</strong><small>{firstMilestone ? `${firstMilestone.days} ngày liên tiếp nhận +${firstMilestone.points} điểm` : "Điểm danh để giữ chuỗi vui"}</small></p>
-              </div>
-            ) : null}
-          </div>
-        </CustomerCard>
-
-        {tiers.length ? (
-          <CustomerCard className="loyalty-guest-journey" padding="md">
-            <div className="loyalty-section-head">
-              <div className="loyalty-section-head__title">
-                <span><Icon name="gift" size={18} /></span>
-                <div>
-                  <small>{tiers.length} hạng thành viên</small>
-                  <h2>Đi từ Chớm Ghiền tới Huyền Thoại</h2>
-                </div>
-              </div>
-            </div>
-            <div className="loyalty-guest-journey__track" aria-label="Các hạng thành viên">
-              {tiers.map((tier, index) => (
-                <div key={tier.id || tier.name} className={index === 0 ? "is-first" : ""}>
-                  <span aria-hidden="true">{getLoyaltyTierIconSymbol(tier.iconKey)}</span>
-                  <small>{tier.name}</small>
-                </div>
-              ))}
-            </div>
-          </CustomerCard>
-        ) : null}
-
-        </details>
-
-        <CustomerCard className="loyalty-action-list" padding="none">
-          <button type="button" className="loyalty-action-row" onClick={() => setShowRules(true)}>
-            <span className="loyalty-action-row__icon is-green"><Icon name="star" size={17} /></span>
-            <span className="loyalty-action-row__copy">
-              <strong>Điểm dùng thế nào?</strong>
-              <small>Xem cách đổi điểm và thời hạn sử dụng</small>
-            </span>
-            <Icon name="back" size={16} className="loyalty-action-row__arrow" />
-          </button>
-          <div className="loyalty-action-row loyalty-action-row--locked">
-            <span className="loyalty-action-row__icon is-orange"><Icon name="clock" size={17} /></span>
-            <span className="loyalty-action-row__copy">
-              <strong>Voucher và nhật ký điểm</strong>
-              <small>Mở sau khi đăng nhập để xem quà và điểm của riêng bạn</small>
-            </span>
-            <span className="loyalty-action-row__status">Khóa</span>
-          </div>
-        </CustomerCard>
-
-      </div>
-
-      {showRules ? (
-        <CustomerBottomSheet
-          title="Điểm dùng thế nào?"
-          onClose={() => setShowRules(false)}
-          className="loyalty-detail-sheet"
-        >
-          <PointsCard rows={loyaltyRulesRows} example={pointRulesExample} />
-        </CustomerBottomSheet>
-      ) : null}
-    </section>
-  );
+  return <section className="loyalty-page loyalty-page--guest pb-6">
+    <RewardsOverview isGuest journey={journey} stampCard={stampCard} onBenefits={() => setActivePage("tiers")}
+      onHistory={openAccount} onVouchers={openAccount} onPoints={() => setActivePage("rules")} onLogin={openAccount}>
+      <div className="rewards-empty"><Icon name="gift" weight="regular" size={35} /><h2>Quà ngon đang chờ bạn</h2><p>Đăng nhập để xem voucher và điểm của bạn.</p><CustomerControl type="button" onClick={openAccount}>Đăng nhập</CustomerControl></div>
+    </RewardsOverview>
+    {activePage === "tiers" && <LoyaltyBenefitsPage journey={journey} onClose={() => setActivePage("")} />}
+    {activePage === "rules" && <CustomerBottomSheet title="Dùng điểm Gánh" onClose={() => setActivePage("")} className="loyalty-detail-sheet rewards-detail-sheet"><PointsCard rows={[{ label: "Dùng điểm", value: "1 điểm = 1đ" }, { label: "Hạn điểm", value: "60 ngày" }]} example="Điểm dùng được sẽ tự tính tại bước thanh toán." /></CustomerBottomSheet>}
+  </section>;
 }

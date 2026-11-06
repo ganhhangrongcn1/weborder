@@ -1,7 +1,13 @@
+import CustomerControl from "../customer/CustomerControl.jsx";
 import { useEffect, useRef, useState } from "react";
 import { isToppingAlreadyShownInSpice } from "../../utils/orderItemDisplay.js";
 
-export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableItem, CheckoutCard, addonCategory, formatMoney, Icon }) {
+function CartToppingDetails({ rows, compact }) {
+  const content = <div className="checkout-topping-list">{rows.map((topping) => <span key={topping.name}><em>{topping.name}</em><strong>x{topping.quantity}</strong></span>)}</div>;
+  return compact ? <details className="checkout-cart-options"><summary>{rows.length} lựa chọn · Xem chi tiết</summary>{content}</details> : content;
+}
+
+export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableItem, CheckoutCard, addonCategory, formatMoney, Icon, compact = false }) {
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [removedItem, setRemovedItem] = useState(null);
   const undoTimerRef = useRef(null);
@@ -63,6 +69,7 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
   return (
     <CheckoutCard
       title="Món đã chọn"
+      className={compact ? "checkout-cart--compact" : ""}
       action={cart.length ? "Xóa tất cả" : ""}
       onAction={() => setIsConfirmingClear(true)}
     >
@@ -73,8 +80,8 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
             <small>Thao tác này sẽ làm trống giỏ hàng.</small>
           </span>
           <div>
-            <button type="button" onClick={() => setIsConfirmingClear(false)}>Giữ lại</button>
-            <button
+            <CustomerControl type="button" onClick={() => setIsConfirmingClear(false)}>Giữ lại</CustomerControl>
+            <CustomerControl
               type="button"
               className="is-danger"
               onClick={() => {
@@ -84,7 +91,7 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
               }}
             >
               Xóa giỏ
-            </button>
+            </CustomerControl>
           </div>
         </div>
       ) : null}
@@ -121,46 +128,42 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
               ) : null}
               <div className="min-w-0 flex-1">
                 <h3>{item.name}</h3>
-                <span className="checkout-spice-pill">{(item.autoGiftByPromo || item.stampGift) ? "Quà tặng" : item.spice}</span>
+                {(item.autoGiftByPromo || item.stampGift || item.spice) && <span className="checkout-spice-pill">{(item.autoGiftByPromo || item.stampGift) ? "Quà tặng" : item.spice}</span>}
                 {toppingRows.length > 0 && (
-                  <div className="checkout-topping-list">
-                    {toppingRows.map((topping) => (
-                      <span key={topping.name}><em>{topping.name}</em><strong>x{topping.quantity}</strong></span>
-                    ))}
-                  </div>
+                  <CartToppingDetails rows={toppingRows} compact={compact} />
                 )}
                 {item.note && <div className="checkout-note-pill">Ghi chú: {item.note}</div>}
                 {!item.stampGift && isEditableItem?.(item) ? (
-                  <button
+                  <CustomerControl
                     type="button"
                     className="checkout-edit-item"
                     onClick={() => onEditItem?.(item)}
                   >
                     Chỉnh món
-                  </button>
+                  </CustomerControl>
                 ) : null}
                 <div className="mt-2 flex items-center justify-between gap-2">
                   {(item.autoGiftByPromo || item.stampGift) ? (
                     <div className="text-xs text-brown/60">{item.stampGift ? "Quà đổi 10 tem" : "Tự động thêm khi đủ mốc"}</div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <button
+                      <CustomerControl
                         type="button"
                         onClick={() => updateQty(item.cartId, -1)}
                         className="qty-btn"
                         aria-label={`Giảm số lượng ${item.name}`}
                       >
                         −
-                      </button>
+                      </CustomerControl>
                       <span className="w-5 text-center text-sm font-black">{item.quantity}</span>
-                      <button
+                      <CustomerControl
                         type="button"
                         onClick={() => updateQty(item.cartId, 1)}
                         className="qty-btn text-orange-600"
                         aria-label={`Tăng số lượng ${item.name}`}
                       >
                         +
-                      </button>
+                      </CustomerControl>
                     </div>
                   )}
                   <div className="text-right">
@@ -172,14 +175,14 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
                 </div>
               </div>
               {item.autoGiftByPromo ? null : (
-                <button
+                <CustomerControl
                   type="button"
                   onClick={() => handleRemoveItem(item)}
                   className="checkout-remove"
                   aria-label={`Xóa ${item.name}`}
                 >
                   <Icon name="trash" size={15} />
-                </button>
+                </CustomerControl>
               )}
             </article>
           );
@@ -192,7 +195,7 @@ export default function Cart({ cart, setCart, updateQty, onEditItem, isEditableI
             <strong>Đã xóa món</strong>
             <small>{removedItem.item.name}</small>
           </span>
-          <button type="button" onClick={handleUndoRemove}>Hoàn tác</button>
+          <CustomerControl type="button" onClick={handleUndoRemove}>Hoàn tác</CustomerControl>
         </div>
       ) : null}
     </CheckoutCard>

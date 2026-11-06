@@ -6,6 +6,7 @@ import { getRuntimeStrategy } from "./runtimeStrategy.js";
 import { STORAGE_KEYS } from "./storageKeys.js";
 import { shouldAllowLocalFallbackForDomain, shouldWriteDomainToSupabase } from "./writeThroughPolicy.js";
 import { enqueuePosOfflineOrder, removePosOfflineOrder } from "../posOfflineQueueService.js";
+import cartDraftRepository from "./cartDraftRepository.js";
 
 const repository = createRuntimeAppConfigRepository();
 const REMOTE_CACHE_TTL_MS = 8000;
@@ -327,20 +328,20 @@ async function persistOrderLocalAsync(nextOrder, phoneKey) {
 
 export const orderRepository = {
   getCartDraft(fallback = []) {
-    const raw = repository.get(STORAGE_KEYS.cartDraft, fallback);
+    const raw = cartDraftRepository.get(fallback);
     const normalized = Array.isArray(raw) ? raw : fallback;
     if (isLegacySeededDemoCart(normalized)) {
-      repository.set(STORAGE_KEYS.cartDraft, []);
+      cartDraftRepository.clear();
       return [];
     }
     return normalized;
   },
   saveCartDraft(nextCart) {
     const normalized = Array.isArray(nextCart) ? nextCart : [];
-    return repository.set(STORAGE_KEYS.cartDraft, normalized);
+    return cartDraftRepository.save(normalized);
   },
   clearCartDraft() {
-    return repository.set(STORAGE_KEYS.cartDraft, []);
+    return cartDraftRepository.clear();
   },
   getOrderStatus(fallback = "confirmed") {
     return repository.get(STORAGE_KEYS.legacyOrderStatus, fallback);

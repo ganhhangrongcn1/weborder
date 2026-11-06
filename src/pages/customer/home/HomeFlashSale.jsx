@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import { formatMoney } from "../../../utils/format.js";
@@ -24,7 +25,7 @@ function HomeFlashCard({ product, onBuy, buyText }) {
         <del>{formatMoney(product.originalPrice)}</del>
         <strong>{formatMoney(product.salePrice)}</strong>
       </div>
-      <button type="button" onClick={onBuy}>{buyText}</button>
+      <CustomerControl type="button" onClick={onBuy}>{buyText}</CustomerControl>
     </article>
   );
 }
@@ -32,7 +33,7 @@ function HomeFlashCard({ product, onBuy, buyText }) {
 function HomeFlashDealCard({ product, onBuy, flashSub }) {
   return (
     <article className="home2026-flash-main-card">
-      <button
+      <CustomerControl
         type="button"
         className="home2026-flash-main-action"
         onClick={onBuy}
@@ -69,9 +70,9 @@ function FlashSaleSheet({ products, onClose, onBuy, secondsLeft, endAfter, flash
           <h2 className="customer-modal-title">{flashTitle}</h2>
         </div>
         <span>{formatCountdown(secondsLeft)}</span>
-        <button type="button" onClick={onClose} aria-label={closeText}>
+        <CustomerControl type="button" onClick={onClose} aria-label={closeText}>
           <Icon name="back" size={18} />
-        </button>
+        </CustomerControl>
       </div>
       <div className="home2026-flash-sheet-list">
         {products.map((product) => (
@@ -111,7 +112,7 @@ export default function HomeFlashSale({
             <HomeDealTimer getCountdownParts={getCountdownParts} secondsLeft={secondsLeft} />
           </div>
           {canViewAll && (
-            <button type="button" onClick={() => setFlashModalOpen(true)}>{viewAll}</button>
+            <CustomerControl type="button" onClick={() => setFlashModalOpen(true)}>{viewAll}</CustomerControl>
           )}
         </div>
         {mainFlashProduct && <HomeFlashDealCard product={mainFlashProduct} onBuy={() => openOptionModal(mainFlashProduct)} flashSub={flashSub} />}

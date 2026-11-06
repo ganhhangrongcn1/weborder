@@ -1,3 +1,4 @@
+import CustomerControl from "./CustomerControl.jsx";
 import usePwaInstallPrompt from "../../hooks/usePwaInstallPrompt.js";
 
 export default function PwaInstallBanner() {
@@ -12,12 +13,12 @@ export default function PwaInstallBanner() {
         <span>Cài đặt ứng dụng để truy cập nhanh hơn</span>
       </div>
       <div className="customer-install-actions">
-        <button type="button" className="customer-install-later" onClick={dismissInstallPrompt}>
+        <CustomerControl type="button" className="customer-install-later" onClick={dismissInstallPrompt}>
           Để sau
-        </button>
-        <button type="button" className="customer-install-primary" onClick={requestInstall}>
+        </CustomerControl>
+        <CustomerControl type="button" className="customer-install-primary" onClick={requestInstall}>
           Cài đặt
-        </button>
+        </CustomerControl>
       </div>
     </section>
   );

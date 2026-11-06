@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isValidCustomerEmail } from "../../../utils/customerEmail.js";
 import { getCustomerKey } from "../../../services/storageService.js";
 import { createUserStorage, isRegisteredUser } from "../../../services/customerService.js";
 import { customerRepository } from "../../../services/repositories/customerRepository.js";
@@ -688,7 +689,7 @@ export default function useAccountViewModel({
     const isValid = applyAuthErrors({
       registerPhone: !registerPhone || registerPhone.length < 9 ? "Vui lòng nhập số điện thoại hợp lệ." : "",
       registerName: !registerDraft.name.trim() ? "Vui lòng nhập tên của bạn." : "",
-      registerEmail: !isRealEmail(registerDraft.email) ? "Vui lòng nhập email thật để lấy lại mật khẩu khi cần." : "",
+      registerEmail: !isValidCustomerEmail(registerDraft.email) ? "Email chưa đúng định dạng. Ví dụ: ten@gmail.com." : "",
       registerPassword: registerDraft.password.length < 6 ? "Mật khẩu cần tối thiểu 6 ký tự." : "",
       registerConfirmPassword: registerDraft.password !== registerDraft.confirmPassword
         ? "Mật khẩu nhập lại chưa khớp."
@@ -791,6 +792,8 @@ export default function useAccountViewModel({
     authPassword,
     setAuthPassword,
     registerDraft,
+    registerEmailValid: isValidCustomerEmail(registerDraft.email),
+    validateRegisterEmail: () => setAuthErrors(current=>({...current,registerEmail:isValidCustomerEmail(registerDraft.email) ? "" : "Email chưa đúng định dạng. Ví dụ: ten@gmail.com."})),
     setRegisterDraft,
     forgotEmail,
     setForgotEmail,

@@ -1,11 +1,7 @@
 import { useMemo, useState } from "react";
-import Icon from "../../../components/Icon.jsx";
-import AppEmptyState from "../../../components/app/EmptyState.jsx";
-import { CustomerCard } from "../../../components/customer/CustomerUI.jsx";
 import LoyaltyVoucherPopup from "../../../components/customer/LoyaltyVoucherPopup.jsx";
-import LoyaltySummary from "../../../pages/customer/loyalty/LoyaltySummary.jsx";
-import CouponList from "../../../pages/customer/loyalty/CouponList.jsx";
-import { isVoucherExpired } from "../../../utils/pureHelpers.js";
+import RewardsOverview from "./RewardsOverview.jsx";
+import LoyaltyBenefitsPage from "./LoyaltyBenefitsPage.jsx";
 import { rewardFeatureFlags } from "../../../constants/featureFlags.js";
 import { saveCheckoutVoucherIntent } from "../../../services/checkoutVoucherIntentService.js";
 import { buildCustomerVoucherLibrary } from "../../../services/customerVoucherLibraryService.js";
@@ -16,28 +12,6 @@ import CheckinCard from "./CheckinCard.jsx";
 import LoyaltyDetailSheet from "./LoyaltyDetailSheet.jsx";
 import LoyaltyPointsPopup from "./LoyaltyPointsPopup.jsx";
 import TierUpgradeModal from "./TierUpgradeModal.jsx";
-
-function formatCustomerDate(value) {
-  if (!value) return "sau lần mua đầu tiên";
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "đang cập nhật";
-  return date.toLocaleDateString("vi-VN");
-}
-
-function ActionRow({ icon, title, description, onClick, tone = "orange" }) {
-  return (
-    <button type="button" className="loyalty-action-row" onClick={onClick}>
-      <span className={`loyalty-action-row__icon is-${tone}`}>
-        <Icon name={icon} size={17} />
-      </span>
-      <span className="loyalty-action-row__copy">
-        <strong>{title}</strong>
-        {description && <small>{description}</small>}
-      </span>
-      <Icon name="back" size={16} className="loyalty-action-row__arrow" />
-    </button>
-  );
-}
 
 export default function MemberLoyaltyView({
   stampCard = null,
@@ -60,13 +34,14 @@ export default function MemberLoyaltyView({
   progressPercent,
   recentDays,
   handleCheckin,
+  checkinPending,
+  checkinFeedback,
   canCheckin,
   canShowLoyaltyPopups,
   checkinAuthNotice,
   coupons,
   orders
 }) {
-  const currentTier = tierJourney?.currentTier || {};
   const safePointHistory =
     Array.isArray(loyalty?.pointHistory) && loyalty.pointHistory.length
       ? loyalty.pointHistory
@@ -88,31 +63,6 @@ export default function MemberLoyaltyView({
   ];
   const pointRulesExample = "Số điểm dùng được sẽ tự tính theo giá trị đơn và voucher đang áp dụng.";
   const [activeSheet, setActiveSheet] = useState("");
-  const usableVouchers = useMemo(
-    () =>
-      displayVouchers.filter(
-        (voucher) => !voucher?.canceled && !voucher?.used && !isVoucherExpired(voucher)
-      ),
-    [displayVouchers]
-  );
-  const availableVouchers = usableVouchers.slice(0, 2);
-  const voucherHeader = useMemo(() => {
-    const total = usableVouchers.length;
-    return total > 0 ? `Bạn có ${total} voucher` : "Chưa có voucher mới";
-  }, [usableVouchers.length]);
-  const estimatedOrdersToNext = tierJourney?.estimatedOrdersToNext;
-  const progressMessage = tierJourney?.nextTier
-    ? Number.isFinite(estimatedOrdersToNext) && estimatedOrdersToNext > 0
-      ? `Khoảng ${estimatedOrdersToNext.toLocaleString("vi-VN")} đơn nữa để lên ${tierJourney.nextTier.name}`
-      : `Tiếp tục tích hạng để lên ${tierJourney.nextTier.name}`
-    : "Bạn đã chạm tới hạng cao nhất của Gánh rồi đó";
-  const tierMessages = {
-    new_customer: "Mới chớm thôi, nhưng Gánh thấy có tín hiệu ghiền rồi đó",
-    returning_customer: "Bạn với Gánh bắt đầu thân nhau rồi nha",
-    super_fan: "Bạn là fan chính hiệu của Gánh rồi đó!",
-    inner_circle_fan: "Tên bạn đã có chỗ trong hội mê Gánh rồi nha",
-    ganh_legend: "Bạn thuộc nhóm khách đặc biệt nhất của Gánh"
-  };
   const { celebratedTier, closeTierCelebration } = useTierUpgradeCelebration({
     customerPhone: canShowLoyaltyPopups ? currentPhone : "",
     journey: tierJourney
@@ -139,61 +89,13 @@ export default function MemberLoyaltyView({
 
   return (
     <section className="loyalty-page loyalty-page--member pb-6">
-      <LoyaltySummary
-        title="Cấp hiện tại"
-        pointsValue={loyalty.totalPoints.toLocaleString("vi-VN")}
-        subtitle="điểm"
-
-        tierName={currentTier.name || "Khách Mới"}
-        tierIconKey={currentTier.iconKey}
-        tierMessage={tierMessages[currentTier.id] || "Ăn ngon, tích điểm vui cùng Gánh"}
-        tierRateText={`Tích ${Number(currentTier.earnPercent || 10).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}%`}
-        expiryText={`Hạn điểm ${formatCustomerDate(tierJourney?.pointsExpiresAt)}`}
-        progressPercent={tierJourney?.progressPercent}
-        progressMessage={progressMessage}
-        metaSecondaryNote="1 điểm = 1đ khi thanh toán"
-        metaDisclosureLabel="Quyền lợi hạng"
-        metaSummaryText={`Tích ${Number(currentTier.earnPercent || 10).toLocaleString("vi-VN", { maximumFractionDigits: 2 })}% · Hạn ${formatCustomerDate(tierJourney?.pointsExpiresAt)}`}
-        onOpenTierDetails={() => setActiveSheet("tiers")}
-      />
-
-      {stampCard}
-
-      <div className="loyalty-page__content">
-        {displayVouchers.length > 0 ? (
-        <section className="loyalty-vouchers" aria-labelledby="loyalty-voucher-heading">
-          <div className="loyalty-section-head">
-            <div className="loyalty-section-head__title">
-              <span><Icon name="gift" size={18} /></span>
-              <div>
-                <small>Ưu đãi của bạn</small>
-                <h2 id="loyalty-voucher-heading">{voucherHeader}</h2>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="loyalty-section-head__action"
-              onClick={() => setActiveSheet("vouchers")}
-            >
-              {usableVouchers.length === 0 && safeVoucherHistory.length > 0 ? "Xem lịch sử" : "Xem tất cả"}
-              <Icon name="back" size={14} />
-            </button>
-          </div>
-
-          <div className="loyalty-vouchers__list">
-            <CouponList
-              vouchers={availableVouchers}
-              isVoucherExpired={isVoucherExpired}
-              EmptyState={<AppEmptyState icon="gift" message="Chưa có voucher mới" center />}
-              onUseVoucher={handleUseVoucher}
-            />
-          </div>
-        </section>
-        ) : null}
-
+      <RewardsOverview points={loyalty.totalPoints} journey={tierJourney} stampCard={stampCard}
+        onBenefits={() => setActiveSheet("tiers")} onHistory={() => setActiveSheet("history")}
+        onVouchers={() => setActiveSheet("vouchers")} onPoints={() => setActiveSheet("rules")}>
         {checkinEnabled ? (
           <CheckinCard
             loyalty={loyalty}
+            loyaltyRule={loyaltyRule}
             today={today}
             checkedInToday={checkedInToday}
             comebackStreak={comebackStreak}
@@ -202,31 +104,18 @@ export default function MemberLoyaltyView({
             nextMilestone={nextMilestone}
             progressPercent={progressPercent}
             handleCheckin={handleCheckin}
+            checkinPending={checkinPending}
+            checkinFeedback={checkinFeedback}
             onOpenDetails={() => setActiveSheet("checkin")}
             canCheckin={canCheckin}
             checkinAuthNotice={checkinAuthNotice}
           />
         ) : null}
 
-        <CustomerCard className="loyalty-action-list" padding="none">
-          <ActionRow
-            icon="clock"
-            title={`Nhật ký điểm của bạn${safePointHistory.length ? ` (${safePointHistory.length})` : ""}`}
-
-            onClick={() => setActiveSheet("history")}
-          />
-          <ActionRow
-            icon="star"
-            tone="green"
-            title="Điểm dùng thế nào?"
-
-            onClick={() => setActiveSheet("rules")}
-          />
-        </CustomerCard>
-      </div>
-
+      </RewardsOverview>
+      {activeSheet === "tiers" && <LoyaltyBenefitsPage journey={tierJourney} onClose={() => setActiveSheet("")} />}
       <LoyaltyDetailSheet
-        activeSheet={activeSheet}
+        activeSheet={activeSheet === "tiers" ? "" : activeSheet}
         onClose={() => setActiveSheet("")}
         journey={tierJourney}
         loyalty={loyalty}

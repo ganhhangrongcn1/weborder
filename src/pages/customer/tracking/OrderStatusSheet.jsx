@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import { Fragment } from "react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -84,6 +85,12 @@ export default function OrderStatusSheet({
       backdropClassName="order-status-sheet-backdrop"
       className="promo-sheet order-status-sheet"
       showHeader={false}
+      footer={canReorder && orderItems.length > 0 && typeof onReorder === "function" ? (
+        <div className="order-detail-actions">
+          <CustomerButton full icon="cart" onClick={onReorder}>Đặt lại đơn này</CustomerButton>
+          <p>Giá và tình trạng món sẽ được cập nhật theo menu hiện tại.</p>
+        </div>
+      ) : null}
     >
       <div className="order-status-sheet__header flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -97,9 +104,9 @@ export default function OrderStatusSheet({
           <p className="mt-1 customer-body">{orderItems.length} món · {formatMoney(order.totalAmount || 0)}</p>
           {!isPartnerOrder ? <p className="mt-2 text-sm font-bold text-brown/75">{journey.title}</p> : null}
         </div>
-        <button type="button" onClick={onClose} className="customer-icon-button shrink-0" aria-label="Đóng">
+        <CustomerControl type="button" onClick={onClose} className="customer-icon-button shrink-0" aria-label="Đóng">
           ×
-        </button>
+        </CustomerControl>
       </div>
 
       {!isPartnerOrder ? (
@@ -111,14 +118,14 @@ export default function OrderStatusSheet({
       <OrderBranchLocationCard order={order} branches={branches} />
 
       {!showDetails ? (
-        <button type="button" className="order-journey-detail-trigger" onClick={() => setShowDetails(true)}>
+        <CustomerControl type="button" className="order-journey-detail-trigger" onClick={() => setShowDetails(true)}>
           <span><Icon name="eye" size={17} /></span>
           <span>
             <strong>Xem chi tiết đơn</strong>
             <small>Món đã chọn, địa chỉ và thanh toán</small>
           </span>
           <i aria-hidden="true">›</i>
-        </button>
+        </CustomerControl>
       ) : (
         <>
       <div className="order-detail-box">
@@ -126,10 +133,10 @@ export default function OrderStatusSheet({
           <h3>Chi tiết đơn</h3>
           <div className="order-detail-head__actions">
             <span>{orderItems.length} món</span>
-            <button type="button" onClick={() => setShowDetails(false)}>
+            <CustomerControl type="button" onClick={() => setShowDetails(false)}>
               <Icon name="back" size={14} />
               Thu gọn
-            </button>
+            </CustomerControl>
           </div>
         </div>
 
@@ -244,19 +251,11 @@ export default function OrderStatusSheet({
         ) : null}
       </div>
 
-      <button type="button" className="order-detail-collapse-footer" onClick={() => setShowDetails(false)}>
+      <CustomerControl type="button" className="order-detail-collapse-footer" onClick={() => setShowDetails(false)}>
         <Icon name="back" size={15} />
         Thu gọn chi tiết
-      </button>
+      </CustomerControl>
 
-      {canReorder && orderItems.length > 0 && typeof onReorder === "function" ? (
-        <div className="order-detail-actions">
-          <CustomerButton full icon="cart" onClick={onReorder}>
-            Đặt lại đơn này
-          </CustomerButton>
-          <p>Giá và tình trạng món sẽ được cập nhật theo menu hiện tại.</p>
-        </div>
-      ) : null}
         </>
       )}
 

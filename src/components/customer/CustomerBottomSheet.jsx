@@ -1,7 +1,23 @@
-import { useEffect, useRef } from "react";
+import CustomerControl from "./CustomerControl.jsx";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import Icon from "../Icon.jsx";
 
 const SHEET_LOCK_CLASS = "customer-sheet-open";
 const SHEET_LOCK_COUNT_ATTR = "data-customer-sheet-lock-count";
+const sheetStack = [];
+let sheetLayer = 0;
+
+function updateSheetStack() {
+  sheetStack.sort((a, b) => Number(a.dataset.popupLayer) - Number(b.dataset.popupLayer));
+  const top = sheetStack[sheetStack.length - 1];
+  sheetStack.forEach((dialog) => {
+    dialog.inert = dialog !== top;
+    dialog.setAttribute("aria-modal", dialog === top ? "true" : "false");
+    if (dialog === top) dialog.removeAttribute("aria-hidden");
+    else dialog.setAttribute("aria-hidden", "true");
+  });
+}
 
 function getOpenSheetCount() {
   return Number(document.documentElement.getAttribute(SHEET_LOCK_COUNT_ATTR) || 0);
@@ -44,23 +60,38 @@ export default function CustomerBottomSheet({
   ariaLabel,
   onClose,
   closeOnBackdrop = true,
+  onBackdropClose,
   backdropClassName = "",
   className = "",
   contentClassName = "",
   footer = null,
   showHeader = true,
-  showHandle = true
+  showHandle = true,
+  placement = "bottom"
 }) {
   const dialogRef = useRef(null);
   const onCloseRef = useRef(onClose);
+  const layerRef = useRef(null);
+  if (layerRef.current === null) layerRef.current = ++sheetLayer;
 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return undefined;
+    dialog.dataset.popupLayer = String(layerRef.current);
+    sheetStack.push(dialog);
+    dialog.parentElement.style.zIndex = String(1200 + layerRef.current);
+    updateSheetStack();
     lockBodyScroll();
-    return unlockBodyScroll;
+    return () => {
+      const index = sheetStack.indexOf(dialog);
+      if (index >= 0) sheetStack.splice(index, 1);
+      updateSheetStack();
+      unlockBodyScroll();
+    };
   }, []);
 
   useEffect(() => {
@@ -71,6 +102,7 @@ export default function CustomerBottomSheet({
     dialog.focus({ preventScroll: true });
 
     function handleKeyDown(event) {
+      if (sheetStack[sheetStack.length - 1] !== dialog) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onCloseRef.current?.();
@@ -105,7 +137,8 @@ export default function CustomerBottomSheet({
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      if (typeof previousActiveElement?.focus === "function") {
+      const top = sheetStack[sheetStack.length - 1];
+      if (previousActiveElement?.isConnected && (!top || top.contains(previousActiveElement)) && typeof previousActiveElement.focus === "function") {
         previousActiveElement.focus({ preventScroll: true });
       }
     };
@@ -113,11 +146,11 @@ export default function CustomerBottomSheet({
 
   function handleBackdropClick(event) {
     if (!closeOnBackdrop || event.target !== event.currentTarget) return;
-    onClose?.(event);
+    (onBackdropClose || onClose)?.(event);
   }
 
-  return (
-    <div className={`customer-sheet-backdrop ${backdropClassName}`.trim()} onClick={handleBackdropClick}>
+  const sheet = (
+    <div data-popup-layout={placement === "center" ? "center" : "sheet"} className={`customer-sheet-backdrop ${backdropClassName}`.trim()} onClick={handleBackdropClick}>
       <section
         ref={dialogRef}
         className={`customer-bottom-sheet ${className}`.trim()}
@@ -135,9 +168,9 @@ export default function CustomerBottomSheet({
               {subtitle ? <p>{subtitle}</p> : null}
             </div>
             {onClose ? (
-              <button type="button" className="customer-sheet-close" onClick={onClose} aria-label="Đóng">
-                X
-              </button>
+              <CustomerControl type="button" className="customer-sheet-close" onClick={onClose} aria-label="Đóng">
+                <Icon name="close" size={23} />
+              </CustomerControl>
             ) : null}
           </div>
         ) : null}
@@ -146,4 +179,5 @@ export default function CustomerBottomSheet({
       </section>
     </div>
   );
+  return typeof document === "undefined" ? sheet : createPortal(sheet, document.body);
 }

@@ -1,3 +1,4 @@
+import CustomerControl from "./CustomerControl.jsx";
 import Icon from "../Icon.jsx";
 import { getCustomerOrderJourney } from "../../services/customerOrderStatusService.js";
 
@@ -63,7 +64,7 @@ export default function ActiveOrderFloatboard({
   if (collapsed) {
     return (
       <div className={`active-order-floatboard-wrap active-order-floatboard-wrap--compact${raised ? " is-raised" : ""}${hasUnreadUpdate ? " has-unread" : ""}${isReadyForPickup ? " is-ready" : ""}${isScheduledPickup ? " is-scheduled" : ""}`} aria-live="polite">
-        <button
+        <CustomerControl
           type="button"
           className="active-order-floatboard__compact-button"
           onClick={onExpand}
@@ -74,7 +75,7 @@ export default function ActiveOrderFloatboard({
             {isReadyForPickup ? "Lấy món" : isScheduledPickup ? "Đã nhận" : hasUnreadUpdate ? "Mới" : "Đơn"}
           </span>
           {hasUnreadUpdate ? <i className="active-order-floatboard__unread-dot" aria-hidden="true" /> : null}
-        </button>
+        </CustomerControl>
       </div>
     );
   }
@@ -91,18 +92,18 @@ export default function ActiveOrderFloatboard({
           <strong>{journey.title}</strong>
           <MiniStepProgress journey={journey} />
         </span>
-        <button type="button" className="active-order-floatboard__action" onClick={onOpenJourney}>
+        <CustomerControl type="button" className="active-order-floatboard__action" onClick={onOpenJourney}>
           <Icon name={isAwaitingPayment ? "qr" : "eye"} size={15} />
           {isAwaitingPayment ? "Thanh toán tiếp" : isReadyForPickup ? "Nhận món" : "Theo dõi"}
-        </button>
-        <button
+        </CustomerControl>
+        <CustomerControl
           type="button"
           className="active-order-floatboard__collapse"
           onClick={onCollapse}
           aria-label={`Thu gọn đơn ${orderCode}`}
         >
           ×
-        </button>
+        </CustomerControl>
       </div>
     </aside>
   );

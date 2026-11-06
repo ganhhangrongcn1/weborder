@@ -1,3 +1,4 @@
+import { updateCartItemQuantity } from "../../services/cartQuantityService.js";
 import { buildCreateOrderPayload, validateCheckoutContact } from "../../services/checkoutOrderService.js";
 
 import { getCheckoutPointsErrorMessage, getCheckoutVoucherErrorMessage } from "../../services/checkoutOrderService.js";
@@ -31,19 +32,7 @@ export default function useCheckoutActions({
   repriceCartNow,
   refreshCheckoutPricing
 }) {
-  const updateQty = (cartId, delta) => setCart((items) => items.map((item) => {
-    if (item.cartId !== cartId) return item;
-    if (item.autoGiftByPromo || item.stampGift) return item;
-    const quantity = Math.max(1, item.quantity + delta);
-    return {
-      ...item,
-      quantity,
-      lineTotal: item.unitTotal * quantity,
-      originalLineTotal: Number(item.originalUnitTotal || 0) > Number(item.unitTotal || 0)
-        ? Number(item.originalUnitTotal || 0) * quantity
-        : item.originalLineTotal
-    };
-  }));
+  const updateQty = (cartId, delta) => setCart((items) => updateCartItemQuantity(items, cartId, delta));
 
   const handlePlaceOrder = async () => {
     const priceRefresh = typeof repriceCartNow === "function"

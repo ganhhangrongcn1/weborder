@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import { useMemo } from "react";
 import Icon from "../../../components/Icon.jsx";
 import { CustomerButton, CustomerEmptyState } from "../../../components/customer/CustomerUI.jsx";
@@ -132,7 +133,7 @@ function OfferImageCard({ offer, fallbackImage, onClick, actionLabel = "Mua nhan
   const displaySubtitle = offer?.productDescription || offer?.text || offer?.detail;
 
   return (
-    <button type="button" className="qr-mini-offer-image-card" onClick={onClick}>
+    <CustomerControl type="button" className="qr-mini-offer-image-card" onClick={onClick}>
       <span className="qr-mini-offer-image-card__photo">
         {offer.image || fallbackImage ? (
           <img
@@ -172,7 +173,7 @@ function OfferImageCard({ offer, fallbackImage, onClick, actionLabel = "Mua nhan
           <span className="qr-mini-offer-image-card__add">+</span>
         </span>
       </span>
-    </button>
+    </CustomerControl>
   );
 }
 
@@ -186,7 +187,7 @@ function QrOfferSection({ title, count, items = [], fallbackImage, onOpenMenu, o
           <small>{title}</small>
           <strong>{count ? `${count} ưu đãi` : "Đang áp dụng"}</strong>
         </div>
-        <button type="button" onClick={onOpenMenu}>Xem menu</button>
+        <CustomerControl type="button" onClick={onOpenMenu}>Xem menu</CustomerControl>
       </div>
       <div className={`qr-mini-home__offer-grid${items.length === 1 ? " is-single" : ""}`}>
         {items.map((offer) => (
@@ -211,7 +212,7 @@ function QrOfferSection({ title, count, items = [], fallbackImage, onOpenMenu, o
 
 function VoucherHintCard({ onClick }) {
   return (
-    <button type="button" className="qr-mini-home__voucher-hint" onClick={onClick}>
+    <CustomerControl type="button" className="qr-mini-home__voucher-hint" onClick={onClick}>
       <span className="qr-mini-home__voucher-hint-icon">
         <Icon name="tag" size={17} />
       </span>
@@ -219,7 +220,7 @@ function VoucherHintCard({ onClick }) {
         <small>Voucher của bạn</small>
         <strong>Voucher sẽ hiện ở đây nếu có</strong>
       </span>
-    </button>
+    </CustomerControl>
   );
 }
 
@@ -481,7 +482,7 @@ export default function QrMiniHomePage({
             <strong>Đăng ký để sử dụng điểm tích lũy và ưu đãi</strong>
             <small>Tích điểm, đổi điểm, theo dõi đơn hàng</small>
           </div>
-          <button type="button" onClick={() => navigate("account", "account")}>Đăng ký ngay</button>
+          <CustomerControl type="button" onClick={() => navigate("account", "account")}>Đăng ký ngay</CustomerControl>
         </section>
       ) : null}
     </section>

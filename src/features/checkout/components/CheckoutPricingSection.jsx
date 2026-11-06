@@ -1,19 +1,13 @@
-﻿import Icon from "../../../components/Icon.jsx";
-import CheckoutMilestoneSuggest from "./CheckoutMilestoneSuggest.jsx";
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import Icon from "../../../components/Icon.jsx";
 import CheckoutCard from "./CheckoutCard.jsx";
 import CheckoutTotalCard from "./CheckoutTotalCard.jsx";
-import { formatMoney } from "../../../utils/format.js";
+import CustomerSelectionIndicator from "../../../components/customer/CustomerSelectionIndicator.jsx";
 
 export default function CheckoutPricingSection({
   subtotal,
-  addToCart,
-  openOptionModal,
   navigate,
   promoCodes = [],
-  products,
-  toppings,
-  coupons,
-  smartPromotions,
   selectedPromo,
   setSelectedPromo,
   setIsPromoModalOpen,
@@ -53,7 +47,7 @@ export default function CheckoutPricingSection({
   const promoSummary = selectedPromo
     ? selectedPromo.freeShip
       ? `${selectedPromo.code} · Hỗ trợ phí ship`
-      : `${selectedPromo.code} · Tiết kiệm ${formatMoney(selectedPromo.discount)}`
+      : selectedPromo.code
     : hasPromoCodes
       ? "Chọn mã phù hợp với đơn"
       : "Hiện chưa có voucher áp dụng";
@@ -61,47 +55,36 @@ export default function CheckoutPricingSection({
   const formattedEarnedPoints = Number(earnedPreviewPoints || 0).toLocaleString("vi-VN");
   const canUsePoints = availablePoints > 0 && maxPointDiscount > 0;
 
+
   return (
     <>
-      <CheckoutMilestoneSuggest
-        subtotal={subtotal}
-        addToCart={addToCart}
-        openOptionModal={openOptionModal}
-        products={products}
-        toppings={toppings}
-        coupons={coupons}
-        smartPromotions={smartPromotions}
-      />
-
+      <section className="checkout-pricing-group" aria-label="Ưu đãi và tổng tiền">
       {showMemberBenefits ? (
-        <CheckoutCard title="Ưu đãi & điểm Gánh" className="checkout-benefits-card">
+        <CheckoutCard title={<span className="checkout-benefit-heading"><Icon name="ticket" size={23} />Ưu đãi & điểm Gánh</span>} className="checkout-benefits-card">
           <div className="checkout-benefit-stack">
-            <button
+            <CustomerControl
               type="button"
               onClick={() => setIsPromoModalOpen(true)}
               className={`promo-select${selectedPromo ? " is-applied" : ""}`}
             >
+              <i className="checkout-promo-icon" aria-hidden="true"><Icon name="ticket" size={23} /></i>
               <span className="promo-select__copy">
-                <small>Mã ưu đãi</small>
                 <strong>{promoSummary}</strong>
+                <small>{selectedPromo?.title || "Xem điều kiện và chọn mã phù hợp"}</small>
               </span>
               <span className="promo-select__status">
+                {selectedPromo && <Icon name="check" size={14} />}
                 {selectedPromo ? "Đã áp dụng" : hasPromoCodes ? "Chọn" : "Chưa có"}
                 <Icon name="back" size={14} />
               </span>
-            </button>
+            </CustomerControl>
 
             <label className={`points-row${canUsePoints ? "" : " is-disabled"}`}>
-              <div>
-                <strong>{usePoints ? `Đã giảm ${formatMoney(pointsDiscount)} bằng điểm` : "Dùng điểm Gánh"}</strong>
-                <span>
-                  {usePoints
-                    ? `Đơn hàng đã được trừ ${formatMoney(pointsDiscount)}.`
-                    : `Bạn có ${formattedAvailablePoints} điểm`}
-                </span>
-                <small className="points-limit-note">
-                  Đặt đơn này nhận thêm +{formattedEarnedPoints} điểm.
-                </small>
+              <i className="checkout-points-icon" aria-hidden="true"><Icon name="coins" size={24} /></i>
+              <div className="checkout-points-copy">
+                <strong>Dùng điểm Gánh</strong>
+                <span>{formattedAvailablePoints} điểm khả dụng</span>
+                {!canUsePoints && availablePoints > 0 && <small className="points-limit-note">Đơn này chưa đủ điều kiện dùng điểm.</small>}
               </div>
               <input
                 type="checkbox"
@@ -112,27 +95,30 @@ export default function CheckoutPricingSection({
                 disabled={!canUsePoints}
               />
             </label>
+            <div className="checkout-earned-points"><Icon name="coins" size={20} /><p>Điểm dự kiến cho đơn này: <strong>+{formattedEarnedPoints} điểm</strong></p></div>
           </div>
         </CheckoutCard>
       ) : isQrCounterOrder ? (
         <>
-          <CheckoutCard title="Voucher của quán" className="checkout-benefits-card">
+          <CheckoutCard title={<span className="checkout-benefit-heading"><Icon name="ticket" size={23} />Voucher của quán</span>} className="checkout-benefits-card">
             <div className="checkout-benefit-stack">
-              <button
+              <CustomerControl
                 type="button"
                 onClick={() => setIsPromoModalOpen(true)}
                 className={`promo-select${selectedPromo ? " is-applied" : ""}`}
                 disabled={!hasPromoCodes}
               >
+                <i className="checkout-promo-icon" aria-hidden="true"><Icon name="ticket" size={23} /></i>
                 <span className="promo-select__copy">
                   <small>Mã ưu đãi</small>
                   <strong>{promoSummary}</strong>
                 </span>
                 <span className="promo-select__status">
+                  {selectedPromo && <Icon name="check" size={14} />}
                   {selectedPromo ? "Đã áp dụng" : hasPromoCodes ? "Chọn" : "Chưa có"}
                   <Icon name="back" size={14} />
                 </span>
-              </button>
+              </CustomerControl>
             </div>
           </CheckoutCard>
 
@@ -144,9 +130,9 @@ export default function CheckoutPricingSection({
                   <strong>Đăng nhập để sử dụng điểm tích lũy và mã ưu đãi.</strong>
                   <small>Khi đăng nhập, voucher cá nhân sẽ được gộp chung và ưu tiên hiển thị trước.</small>
                 </span>
-                <button type="button" className="qr-member-checkout-note__cta" onClick={() => navigate?.("account", "account")}>
+                <CustomerControl type="button" className="qr-member-checkout-note__cta" onClick={() => navigate?.("account", "account")}>
                   Đăng nhập ngay
-                </button>
+                </CustomerControl>
               </div>
             </div>
           </CheckoutCard>
@@ -154,7 +140,7 @@ export default function CheckoutPricingSection({
       ) : (
         <CheckoutCard title="Ưu đãi & điểm Gánh">
           <div className="checkout-benefit-stack">
-            <button type="button" onClick={() => setIsPromoModalOpen(true)} className="promo-select">
+            <CustomerControl type="button" onClick={() => setIsPromoModalOpen(true)} className="promo-select">
               <span className="promo-select__copy">
                 <small>Mã ưu đãi</small>
                 <strong>Chọn mã phù hợp với đơn</strong>
@@ -163,7 +149,7 @@ export default function CheckoutPricingSection({
                 Chọn
                 <Icon name="back" size={14} />
               </span>
-            </button>
+            </CustomerControl>
           </div>
           <div className="mt-3 rounded-2xl bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700">
             Đăng nhập để dùng voucher thành viên và điểm tích lũy của bạn.
@@ -171,78 +157,9 @@ export default function CheckoutPricingSection({
         </CheckoutCard>
       )}
 
-      <CheckoutCard title="Phương thức thanh toán">
-        {isQrCounterOrder || fulfillmentType === "pickup" ? (
-          <div className="payment-choice-stack">
-            {webMomoEnabled ? (
-              <button
-                type="button"
-                onClick={() => setPaymentMethod?.("momo")}
-                className={`payment-card payment-card--momo${isMomoSelected ? " active" : ""}`}
-                aria-label="Phương thức thanh toán: Thanh toán ví MoMo"
-                aria-pressed={isMomoSelected}
-              >
-                <img
-                  className="payment-card__brand payment-card__brand--momo"
-                  src="/brand/momo-logo-app.png"
-                  alt=""
-                  width="32"
-                  height="32"
-                  decoding="async"
-                />
-                <span>
-                  <strong>Thanh toán ví MoMo</strong>
-                  <small>Mở ứng dụng MoMo</small>
-                </span>
-                {isMomoSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
-              </button>
-            ) : null}
-            {webBankQrEnabled ? (
-              <button
-                type="button"
-                onClick={() => setPaymentMethod?.("bank_qr")}
-                className={`payment-card${isBankQrSelected ? " active" : ""}`}
-                aria-label="Phương thức thanh toán: QR ngân hàng"
-                aria-pressed={isBankQrSelected}
-              >
-                <Icon name="qr" size={18} />
-                <span>
-                  <strong>QR ngân hàng</strong>
-                  <small>Quét mã bằng ứng dụng ngân hàng</small>
-                </span>
-                {isBankQrSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
-              </button>
-            ) : null}
-            {webCounterPaymentEnabled ? (
-              <button
-                type="button"
-                onClick={() => setPaymentMethod?.("counter")}
-                className={`payment-card${isCounterSelected ? " active" : ""}`}
-                aria-label="Phương thức thanh toán: Thanh toán tại quầy"
-                aria-pressed={isCounterSelected}
-              >
-                <Icon name="bag" size={18} />
-                <span>
-                  <strong>Thanh toán tại quầy</strong>
-                  <small>{Number(checkoutTotal) === 0 ? "Đơn 0đ · Không cần thanh toán" : "Thanh toán khi nhận món"}</small>
-                </span>
-                {isCounterSelected ? <span className="payment-card__selected" aria-hidden="true">✓</span> : null}
-              </button>
-            ) : null}
-          </div>
-        ) : (
-          <div className="payment-card active" aria-label="Phương thức thanh toán: Tiền mặt">
-            <Icon name="bag" size={18} />
-            <span>
-              <strong>Tiền mặt</strong>
-              <small>Thanh toán khi nhận món</small>
-            </span>
-            <span className="payment-card__selected" aria-hidden="true">✓</span>
-          </div>
-        )}
-      </CheckoutCard>
-
       <CheckoutTotalCard
+        title="Chi tiết thanh toán"
+        showSavings={false}
         subtotal={subtotal}
         originalSubtotal={originalSubtotal}
         giftSavingAmount={giftSavingAmount}
@@ -261,6 +178,78 @@ export default function CheckoutPricingSection({
         distanceKm={deliveryDistanceKm}
         onShowDeliveryFee={() => setIsDeliveryFeeModalOpen(true)}
       />
+      </section>
+
+      <CheckoutCard title="Phương thức thanh toán" className="checkout-payment-card">
+        {isQrCounterOrder || fulfillmentType === "pickup" ? (
+          <div className="payment-choice-stack">
+            {webMomoEnabled ? (
+              <CustomerControl
+                type="button"
+                onClick={() => setPaymentMethod?.("momo")}
+                className={`payment-card payment-card--momo${isMomoSelected ? " active" : ""}`}
+                aria-label="Phương thức thanh toán: Thanh toán ví MoMo"
+                aria-pressed={isMomoSelected}
+              >
+                <img
+                  className="payment-card__brand payment-card__brand--momo"
+                  src="/brand/momo-logo-app.png"
+                  alt=""
+                  width="32"
+                  height="32"
+                  decoding="async"
+                />
+                <span>
+                  <strong>Thanh toán ví MoMo</strong>
+                  <small>Mở ứng dụng MoMo</small>
+                </span>
+                <CustomerSelectionIndicator selected={isMomoSelected} className="payment-card__selected" />
+              </CustomerControl>
+            ) : null}
+            {webBankQrEnabled ? (
+              <CustomerControl
+                type="button"
+                onClick={() => setPaymentMethod?.("bank_qr")}
+                className={`payment-card${isBankQrSelected ? " active" : ""}`}
+                aria-label="Phương thức thanh toán: QR ngân hàng"
+                aria-pressed={isBankQrSelected}
+              >
+                <Icon name="qr" size={18} />
+                <span>
+                  <strong>QR ngân hàng</strong>
+                  <small>Quét mã bằng ứng dụng ngân hàng</small>
+                </span>
+                <CustomerSelectionIndicator selected={isBankQrSelected} className="payment-card__selected" />
+              </CustomerControl>
+            ) : null}
+            {webCounterPaymentEnabled ? (
+              <CustomerControl
+                type="button"
+                onClick={() => setPaymentMethod?.("counter")}
+                className={`payment-card${isCounterSelected ? " active" : ""}`}
+                aria-label="Phương thức thanh toán: Thanh toán tại quầy"
+                aria-pressed={isCounterSelected}
+              >
+                <Icon name="bag" size={18} />
+                <span>
+                  <strong>Thanh toán tại quầy</strong>
+                  <small>{Number(checkoutTotal) === 0 ? "Đơn 0đ · Không cần thanh toán" : "Thanh toán khi nhận món"}</small>
+                </span>
+                <CustomerSelectionIndicator selected={isCounterSelected} className="payment-card__selected" />
+              </CustomerControl>
+            ) : null}
+          </div>
+        ) : (
+          <div className="payment-card active" aria-label="Phương thức thanh toán: Tiền mặt">
+            <Icon name="bag" size={18} />
+            <span>
+              <strong>Tiền mặt</strong>
+              <small>Thanh toán khi nhận món</small>
+            </span>
+            <CustomerSelectionIndicator selected className="payment-card__selected" />
+          </div>
+        )}
+      </CheckoutCard>
     </>
   );
 }

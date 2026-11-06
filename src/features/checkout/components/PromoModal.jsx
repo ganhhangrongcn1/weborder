@@ -37,12 +37,12 @@ export default function PromoModal({
                 { icon: "tag", text: promo.condition }
               ]}
               codeLabel={`Mã: ${promo.code}`}
-              actionLabel={active ? "Đang áp dụng" : "Áp dụng"}
-              actionIcon="check"
+              actionLabel={active ? "Bỏ chọn" : "Áp dụng"}
+              actionIcon={active ? "close" : "check"}
               selected={active}
               inactive={disabled}
-              disabled={disabled}
-              onAction={() => onSelect(promo)}
+              disabled={disabled && !active}
+              onAction={() => onSelect(active ? null : promo)}
               className="checkout-offer-option"
             />
           );

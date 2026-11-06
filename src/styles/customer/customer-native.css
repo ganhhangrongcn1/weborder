@@ -1,0 +1,60 @@
+/* Mobile app density. Brand actions stay yellow; lilac is reserved for reward information. */
+:root[data-customer-theme] .customer-bottom-sheet.review-reward-popup-sheet { background:var(--ghr-surface); }
+:root[data-customer-theme] .customer-bottom-sheet .review-intro-scroll { padding:16px; }
+.review-intro { display:grid; gap:16px; }
+.review-intro__summary { display:flex; align-items:center; gap:12px; background:var(--ghr-highlight-bg); border-radius:14px; padding:16px; }
+.review-intro__summary>svg { color:var(--ghr-highlight-ink); flex-shrink:0; }
+:root[data-customer-theme] .customer-bottom-sheet .review-intro h3 { color:var(--ghr-ink); font-size:16px; line-height:1.4; margin:0; }
+.review-intro p { color:var(--ghr-muted); font-size:12px; line-height:1.6; margin:4px 0 0; }
+.review-intro__ways { display:grid; gap:10px; }
+.review-intro__ways>button { display:flex; align-items:center; gap:12px; width:100%; min-height:76px; padding:14px; background:var(--ghr-surface-soft); border:0; border-radius:14px; text-align:left; }
+.review-intro__ways>button>span { flex:1; min-width:0; display:grid; gap:4px; }
+.review-intro__ways small { color:var(--ghr-muted); font-size:11px; line-height:1.5; }
+.review-intro__ways>button>svg:first-child { box-sizing:content-box; padding:10px; border-radius:12px; background:var(--ghr-yellow); color:#111; }
+.review-intro__ways>button>svg:last-child { transform:rotate(180deg); }
+.review-intro__ways svg { color:var(--ghr-ink); flex-shrink:0; }
+.review-intro strong { color:var(--ghr-ink); font-size:13px; }
+.review-intro__support { padding:14px; border-radius:14px; background:var(--ghr-surface-soft); }
+.review-intro__support a { display:inline-flex; align-items:center; gap:5px; min-height:44px; margin-top:6px; color:var(--ghr-ink); font-size:12px; font-weight:600; }
+.review-intro__support a svg { transform:rotate(180deg); }
+.review-intro__steps { display:grid; gap:16px; list-style:none; padding:0; margin:0; }
+.review-intro__steps li { display:flex; gap:12px; }
+.review-intro__steps li>span { display:grid; place-items:center; flex:0 0 28px; height:28px; background:var(--ghr-highlight-bg); color:var(--ghr-highlight-ink); border-radius:9px; font-size:13px; }
+.review-intro__example { display:flex; gap:10px; padding:14px; background:var(--ghr-surface-soft); border-radius:14px; }
+.review-intro__example svg { flex-shrink:0; }
+.review-intro-actions { display:flex; gap:10px; }
+.review-intro-actions>.customer-button { flex:1; min-width:0; font-size:13px; }
+:root[data-customer-theme] .customer-shell .customer-highlight {
+  display:grid; grid-template-columns:24px minmax(0,1fr) 20px; align-items:center; gap:12px;
+  width:100%; min-height:76px; padding:14px 16px; border:0; border-radius:14px;
+  background:var(--ghr-highlight-bg); color:var(--ghr-ink); text-align:left; box-shadow:none;
+}
+:root[data-customer-theme] .customer-shell .customer-highlight :is(.customer-highlight__icon,.customer-highlight__arrow) { color:var(--ghr-highlight-ink); }
+.customer-highlight__arrow { transform:rotate(180deg); }
+.customer-highlight__copy { display:grid; gap:3px; min-width:0; }
+:root[data-customer-theme] .customer-shell .customer-highlight__copy strong { color:var(--ghr-ink); font-size:15px; line-height:1.4; font-weight:650; letter-spacing:-.2px; }
+:root[data-customer-theme] .customer-shell .customer-highlight__copy small { color:var(--ghr-highlight-muted); font-size:11px; line-height:1.5; }
+:root[data-customer-theme] .customer-shell :is(.customer-card,.orders-checkin-promo,.orders-card,.account-overview,.account-panel,.account-hero,.stamp-card) { border-radius:16px; box-shadow:none; }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo { padding:16px; gap:14px; }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo__copy h2 { font-size:17px; line-height:1.4; letter-spacing:-.3px; }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo__copy p { font-size:12px; line-height:1.5; }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo__stats>span { padding:0; background:transparent; border-radius:0; }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo__stats>span+span { border-left:1px solid var(--ghr-line); }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo__stats strong { font-size:16px; }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo__stats small { font-size:10px; text-transform:none; }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo__topline>strong { padding:0; background:transparent; font-size:11px; }
+:root[data-customer-theme] .customer-shell .orders-checkin-promo__topline>span { padding:0; background:transparent; font-size:12px; }
+:root[data-customer-theme] .customer-shell .checkout-earned-points { background:var(--ghr-highlight-bg); border-color:transparent; color:var(--ghr-ink); border-radius:12px; }
+:root[data-customer-theme] .customer-shell .checkout-earned-points :is(p,strong) { color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-shell .checkout-earned-points>svg { color:var(--ghr-highlight-ink); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .customer-control[data-customer-control="icon"] { width:44px; height:44px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .customer-control[data-customer-control="text"] { min-height:44px; }
+:root[data-customer-theme] .customer-shell .product-price-stack.customer-control { text-align:left; }
+.customer-shell .customer-bottom-nav__item { min-height:56px; }
+.customer-shell .customer-bottom-nav__label { font-size:11px; }
+.customer-sheet-scroll { scroll-padding-block:16px 90px; }
+@media(max-width:600px) {
+  :root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]),textarea,select) { font-size:16px; line-height:1.5; }
+  :is(.customer-shell,.customer-bottom-sheet) :is(input,textarea,select) { scroll-margin-block:72px 140px; }
+  .customer-shell :is(.account-page-content,.orders-page) { scroll-padding-bottom:calc(var(--customer-bottom-nav-height,74px) + 16px); }
+}

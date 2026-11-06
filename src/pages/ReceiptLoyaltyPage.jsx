@@ -1,6 +1,8 @@
+import CustomerControl from "../components/customer/CustomerControl.jsx";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import useReceiptLoyalty from "../hooks/useReceiptLoyalty.js";
+import useCustomerAppearance from "../hooks/useCustomerAppearance.js";
 import "../styles/receipt-loyalty.css";
 
 const number = (value) => Number(value || 0).toLocaleString("vi-VN");
@@ -12,6 +14,7 @@ const notices = {
 };
 
 export default function ReceiptLoyaltyPage() {
+  useCustomerAppearance(true);
   const { token = "" } = useParams();
   const [tab, setTab] = useState("claim");
   const vm = useReceiptLoyalty(token);
@@ -31,8 +34,8 @@ export default function ReceiptLoyaltyPage() {
 
         <section className="receipt-rewards__card" aria-label="Điểm thành viên">
           <div className="receipt-rewards__tabs" role="tablist" aria-label="Chức năng">
-            <button id="receipt-claim-tab" type="button" role="tab" aria-selected={tab === "claim"} aria-controls="receipt-panel" onClick={() => { setTab("claim"); vm.clearError(); }}>Tích điểm đơn</button>
-            <button id="receipt-summary-tab" type="button" role="tab" aria-selected={tab === "summary"} aria-controls="receipt-panel" onClick={() => { setTab("summary"); vm.clearError(); }}>Xem điểm</button>
+            <CustomerControl id="receipt-claim-tab" type="button" role="tab" aria-selected={tab === "claim"} aria-controls="receipt-panel" onClick={() => { setTab("claim"); vm.clearError(); }}>Tích điểm đơn</CustomerControl>
+            <CustomerControl id="receipt-summary-tab" type="button" role="tab" aria-selected={tab === "summary"} aria-controls="receipt-panel" onClick={() => { setTab("summary"); vm.clearError(); }}>Xem điểm</CustomerControl>
           </div>
           <div className="receipt-rewards__voucher">
           <div id="receipt-panel" role="tabpanel" aria-labelledby={tab === "claim" ? "receipt-claim-tab" : "receipt-summary-tab"}>
@@ -52,16 +55,16 @@ export default function ReceiptLoyaltyPage() {
                     <label htmlFor="receipt-phone">Số điện thoại nhận điểm</label>
                     <input id="receipt-phone" type="tel" inputMode="tel" autoComplete="tel" maxLength={16} placeholder="Nhập số điện thoại của bạn" value={vm.phone} onChange={(e) => { vm.setPhone(e.target.value); vm.setConfirmPhone(""); }} disabled={vm.busy} required />
                     <p>Kiểm tra kỹ số điện thoại. Sau khi nhận, bạn cần liên hệ quán để điều chỉnh nếu nhập nhầm.</p>
-                    {vm.confirmPhone ? <div className="receipt-rewards__confirm"><span>Nhận điểm vào số</span><strong>{vm.confirmPhone}</strong><button className="receipt-rewards__primary" type="button" disabled={vm.busy} onClick={vm.claim}>{vm.busy ? "Đang nhận điểm…" : "Xác nhận nhận điểm"}</button><button type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={() => vm.setConfirmPhone("")}>Sửa số điện thoại</button></div>
-                      : <button className="receipt-rewards__primary" type="submit" disabled={vm.busy}>Nhận điểm</button>}
+                    {vm.confirmPhone ? <div className="receipt-rewards__confirm"><span>Nhận điểm vào số</span><strong>{vm.confirmPhone}</strong><CustomerControl className="receipt-rewards__primary" type="button" disabled={vm.busy} onClick={vm.claim}>{vm.busy ? "Đang nhận điểm…" : "Xác nhận nhận điểm"}</CustomerControl><CustomerControl type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={() => vm.setConfirmPhone("")}>Sửa số điện thoại</CustomerControl></div>
+                      : <CustomerControl className="receipt-rewards__primary" type="submit" disabled={vm.busy}>Nhận điểm</CustomerControl>}
                     <small>Nhận trong 24 giờ từ lúc mua · Hạn {new Date(bill.expiresAt).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</small>
                   </form> : <p role="status" className="receipt-rewards__notice">{notices[bill.status] || "Vui lòng liên hệ quán để kiểm tra bill."}</p>}
               </> : null}
-              {!vm.loading && !["claimed", "not_eligible"].includes(bill?.status) && <button type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={vm.refresh}>Kiểm tra lại bill</button>}
+              {!vm.loading && !["claimed", "not_eligible"].includes(bill?.status) && <CustomerControl type="button" className="receipt-rewards__text-button" disabled={vm.busy} onClick={vm.refresh}>Kiểm tra lại bill</CustomerControl>}
             </> : <>
               <header className="receipt-rewards__heading"><span>THÀNH VIÊN GÁNH HÀNG RONG</span><h2>Xem điểm bạn đang có</h2><p>Tra cứu số dư điểm. Lịch sử mua và đổi thưởng được bảo vệ trong tài khoản của bạn.</p></header>
               <div className="receipt-rewards__tear" aria-hidden="true" />
-              <form onSubmit={vm.lookup} className="receipt-rewards__form"><label htmlFor="summary-phone">Số điện thoại</label><input id="summary-phone" type="tel" autoComplete="tel" maxLength={16} value={vm.summaryPhone} onChange={(e) => vm.setSummaryPhone(e.target.value)} placeholder="Nhập số điện thoại của bạn" required /><button className="receipt-rewards__primary" disabled={vm.busy}>{vm.busy ? "Đang tra cứu…" : "Xem điểm"}</button></form>
+              <form onSubmit={vm.lookup} className="receipt-rewards__form"><label htmlFor="summary-phone">Số điện thoại</label><input id="summary-phone" type="tel" autoComplete="tel" maxLength={16} value={vm.summaryPhone} onChange={(e) => vm.setSummaryPhone(e.target.value)} placeholder="Nhập số điện thoại của bạn" required /><CustomerControl className="receipt-rewards__primary" disabled={vm.busy}>{vm.busy ? "Đang tra cứu…" : "Xem điểm"}</CustomerControl></form>
               {vm.summary && <div className="receipt-rewards__points" role="status"><span>Tổng điểm hiện có</span><strong>{number(vm.summary.totalPoints)} <small>điểm</small></strong></div>}
             </>}
           </div>

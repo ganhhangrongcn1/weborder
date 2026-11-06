@@ -1,3 +1,4 @@
+import CustomerControl from "./CustomerControl.jsx";
 import { useState } from "react";
 import Icon from "../Icon.jsx";
 import {
@@ -53,22 +54,22 @@ export default function CustomerOrderActionPanel({
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
+          <CustomerControl
             type="button"
             className="rounded-2xl border border-red-100 bg-white px-3 py-3 text-sm font-black text-brown"
             disabled={isCancelling}
             onClick={() => setIsConfirmingCancel(false)}
           >
             Tiếp tục thanh toán
-          </button>
-          <button
+          </CustomerControl>
+          <CustomerControl
             type="button"
             className="rounded-2xl bg-red-600 px-3 py-3 text-sm font-black text-white disabled:opacity-60"
             disabled={isCancelling}
             onClick={onCancel}
           >
             {isCancelling ? "Đang hủy…" : "Xác nhận hủy"}
-          </button>
+          </CustomerControl>
         </div>
         {message ? <p className="mt-3 text-xs font-bold leading-5 text-red-700" role="status">{message}</p> : null}
       </div>
@@ -82,13 +83,13 @@ export default function CustomerOrderActionPanel({
           Tiếp tục thanh toán
         </CustomerButton>
       ) : null}
-      <button
+      <CustomerControl
         type="button"
         className="mx-auto px-4 py-2 text-sm font-black text-red-600 underline decoration-red-200 underline-offset-4"
         onClick={() => setIsConfirmingCancel(true)}
       >
         Hủy đơn
-      </button>
+      </CustomerControl>
       {message ? <p className="text-center text-xs font-bold leading-5 text-red-600" role="status">{message}</p> : null}
     </div>
   );

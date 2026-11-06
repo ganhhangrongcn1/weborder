@@ -1,3 +1,5 @@
+import CheckoutFulfillmentTabs from "./components/CheckoutFulfillmentTabs.jsx";
+import CheckoutSubmitBar from "./components/CheckoutSubmitBar.jsx";
 import { useEffect, useMemo, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import AppHeader from "../../components/app/Header.jsx";
@@ -33,8 +35,7 @@ import {
 import {
   buildCheckoutPromoCodes,
   buildShippingZonesFromConfig,
-  calculateCheckoutPricing,
-  findLowestValueEligibleCheckoutPromo
+  calculateCheckoutPricing
 } from "./checkoutPricing.js";
 import { resolvePickupBranches } from "./checkoutDomain.js";
 import useCheckoutActions from "./useCheckoutActions.js";
@@ -45,6 +46,7 @@ import useCheckoutGiftPromotions from "./hooks/useCheckoutGiftPromotions.js";
 import useCheckoutDeliveryBranchSync from "./hooks/useCheckoutDeliveryBranchSync.js";
 import useCheckoutLoyaltyRuleSync from "./hooks/useCheckoutLoyaltyRuleSync.js";
 import useCheckoutPricingRefresh from "./hooks/useCheckoutPricingRefresh.js";
+import useCheckoutPromoChoice from "./hooks/useCheckoutPromoChoice.js";
 import useCheckoutPickupContactSync from "./hooks/useCheckoutPickupContactSync.js";
 
 function isPlaceholderCustomerName(name = "") {
@@ -116,6 +118,7 @@ export default function Checkout({
   branches = [],
   checkoutPreset,
   setCheckoutPreset,
+  requestBranchChange,
   setServiceNotice,
   getStoreBlockNotice,
   isBranchOpenNow,
@@ -135,7 +138,6 @@ export default function Checkout({
   const [pickupDate, setPickupDate] = useState(() => normalizePickupDate(checkoutPreset?.pickupDate));
   const [pickupClock, setPickupClock] = useState(() => normalizePickupClock(checkoutPreset?.pickupClock));
   const [usePoints, setUsePoints] = useState(false);
-  const [selectedPromo, setSelectedPromo] = useState(null);
   const [voucherIntent, setVoucherIntent] = useState(() => readCheckoutVoucherIntent());
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
@@ -233,6 +235,7 @@ export default function Checkout({
     if (!isQrCounterOrder || isRegisteredCustomer) return allPromoCodes;
     return allPromoCodes.filter((promo) => String(promo?.source || "").toLowerCase() !== "loyalty");
   }, [allPromoCodes, isQrCounterOrder, isRegisteredCustomer]);
+  const { selectedPromo, setSelectedPromo, selectPromo } = useCheckoutPromoChoice(promoCodes, voucherIntent);
 
   useEffect(() => {
     if (!voucherIntent || !promoCodes.length) return;
@@ -257,27 +260,6 @@ export default function Checkout({
     setVoucherIntent(null);
   }, [promoCodes, voucherIntent]);
 
-  useEffect(() => {
-    if (!selectedPromo) return;
-    const refreshedPromo = promoCodes.find((promo) => promo.id === selectedPromo.id);
-    if (!refreshedPromo || Number(refreshedPromo.discount || 0) <= 0) {
-      setSelectedPromo(null);
-      return;
-    }
-    if (
-      Number(refreshedPromo.discount || 0) !== Number(selectedPromo.discount || 0) ||
-      refreshedPromo.code !== selectedPromo.code ||
-      refreshedPromo.condition !== selectedPromo.condition
-    ) {
-      setSelectedPromo(refreshedPromo);
-    }
-  }, [promoCodes, selectedPromo]);
-
-  useEffect(() => {
-    if (voucherIntent || selectedPromo) return;
-    const automaticPromo = findLowestValueEligibleCheckoutPromo(promoCodes);
-    if (automaticPromo) setSelectedPromo(automaticPromo);
-  }, [promoCodes, selectedPromo, voucherIntent]);
 
   const availablePoints = Math.max(
     0,
@@ -629,23 +611,19 @@ export default function Checkout({
   const stickyFulfillmentLabel = fulfillmentType === "pickup" ? "Tự lấy" : "Giao hàng";
   const stickySummary = `${stickyFulfillmentLabel} • ${cartCount} món • ${stickyMeta}`;
 
-  const headerSubtitle =
-    isQrCounterOrder
-      ? "Xem lại món và chọn cách thanh toán"
-      : fulfillmentType === "pickup"
-      ? "Xem lại món và thời gian đến lấy"
-      : "Xem lại món, địa chỉ và ưu đãi";
-
   return (
-    <section>
+    <section className="checkout-page checkout-page--compact">
+      <header className="checkout-compact-header">
       <AppHeader
         title="Thanh toán"
-        subtitle={headerSubtitle}
         onBack={() => navigate("menu", "menu")}
       />
+      </header>
 
       <div className="checkout-page-content">
+      <CheckoutFulfillmentTabs fulfillmentType={fulfillmentType} setFulfillmentType={setFulfillmentType} forcePickupOnly={isQrCounterOrder || hasStampGift} isQrCounterOrder={isQrCounterOrder} deliveryAvailable={deliveryAvailable} onUnavailableDelivery={() => setIsDeliveryAppOrderingOpen(true)} onClearFieldError={clearCheckoutFieldError} />
         <CheckoutFulfillmentSection
+          showTabs={false}
           fulfillmentType={fulfillmentType}
           setFulfillmentType={setFulfillmentType}
           forcePickupOnly={isQrCounterOrder || hasStampGift}
@@ -663,7 +641,7 @@ export default function Checkout({
           isChangingBranch={isChangingBranch}
           pickupBranches={pickupBranches}
           selectedBranch={selectedBranch}
-          setSelectedBranch={setSelectedBranch}
+          setSelectedBranch={id=>requestBranchChange ? requestBranchChange(id,()=>setSelectedBranch(id)) : setSelectedBranch(id)}
           setIsChangingBranch={setIsChangingBranch}
           pickupMode={pickupMode}
           setPickupMode={setPickupMode}
@@ -679,6 +657,7 @@ export default function Checkout({
         />
 
         <AppCart
+          compact
           cart={cart}
           setCart={setCart}
           updateQty={updateQty}
@@ -694,6 +673,7 @@ export default function Checkout({
         />
 
         <CheckoutPricingSection
+          compact
           subtotal={subtotal}
           addToCart={addToCart}
           openOptionModal={openOptionModal}
@@ -736,31 +716,7 @@ export default function Checkout({
         />
       </div>
 
-      <div className="checkout-sticky-cta">
-        <div className="checkout-sticky-cta__inner">
-          <div className="checkout-sticky-cta__meta">
-            <strong>{formatMoney(checkoutTotal)}</strong>
-            <div className="checkout-sticky-cta__subline">
-              <span className="checkout-sticky-status">
-                <em>{stickySummary}</em>
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={handleCheckoutPlaceOrder}
-            className={`cta ${isPlacingOrder ? "is-loading" : ""}`}
-            disabled={isPlacingOrder}
-          >
-            {isPlacingOrder
-              ? "Đang xác nhận…"
-              : effectivePaymentMethod === "bank_qr"
-                ? "Đặt & thanh toán QR"
-                : effectivePaymentMethod === "momo"
-                  ? "Thanh toán bằng MoMo"
-                  : "Đặt món"}
-          </button>
-        </div>
-      </div>
+      <CheckoutSubmitBar total={checkoutTotal} summary={stickySummary} paymentMethod={effectivePaymentMethod} busy={isPlacingOrder} onSubmit={handleCheckoutPlaceOrder} />
 
       <CheckoutPlacingOverlay open={isPlacingOrder} />
 
@@ -787,7 +743,7 @@ export default function Checkout({
         isPromoModalOpen={isPromoModalOpen}
         promoCodes={promoCodes}
         selectedPromo={selectedPromo}
-        setSelectedPromo={setSelectedPromo}
+        setSelectedPromo={selectPromo}
         setIsPromoModalOpen={setIsPromoModalOpen}
         isAddressModalOpen={isAddressModalOpen}
         deliveryInfo={deliveryInfo}
@@ -795,7 +751,7 @@ export default function Checkout({
         subtotal={subtotal}
         deliveryEligibleBranches={deliveryEligibleBranches}
         selectedDeliveryBranchId={selectedDeliveryBranchId}
-        setSelectedDeliveryBranchId={setSelectedDeliveryBranchId}
+        setSelectedDeliveryBranchId={id=>requestBranchChange ? requestBranchChange(id,()=>setSelectedDeliveryBranchId(id)) : setSelectedDeliveryBranchId(id)}
         handleSelectAddress={(address) => {
           clearCheckoutFieldError("delivery");
           return handleSelectAddress(address);

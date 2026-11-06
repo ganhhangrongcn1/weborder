@@ -1,0 +1,23 @@
+:root {
+  --ghr-yellow:#ffda21;
+  --ghr-yellow-gradient:var(--ghr-yellow);
+  --ghr-yellow-hover:#ffd12c;
+  --ghr-yellow-soft:#fff8d6;
+  --ghr-highlight-bg:#f0ebff;
+  --ghr-highlight-ink:#7350c8;
+  --ghr-highlight-muted:#635b78;
+  --ghr-ink:#111111;
+  --ghr-muted:#737373;
+  --ghr-line:#e8e8e8;
+  --ghr-accent:#262626;
+  --ghr-selected:#111111;
+  --ghr-accent-soft:#fff8d6;
+  --ghr-accent-line:#ffda21;
+  --ghr-button-radius:999px;
+  --ghr-button-border:#ffda21;
+  --ghr-button-shadow:0 5px 12px #dfb72b1a,inset 0 1px #ffffff6b;
+  --ghr-press-time:120ms;
+  --ghr-release-time:180ms;
+  --ghr-sheet-time:280ms;
+  --ghr-ease:cubic-bezier(.2,.8,.2,1);
+}

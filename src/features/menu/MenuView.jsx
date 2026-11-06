@@ -1,3 +1,4 @@
+import CustomerControl from "../../components/customer/CustomerControl.jsx";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ProductCard from "../../components/ProductCard.jsx";
@@ -8,59 +9,12 @@ import MenuCategorySections from "./components/MenuCategorySections.jsx";
 import MenuLoadingState from "./components/MenuLoadingState.jsx";
 import { buildMenuProductGroups, getMenuCategoryAnchorKey } from "./menuGrouping.js";
 import { buildPromotionOffersForChannel } from "../../services/qrOfferService.js";
-import { formatMoney } from "../../utils/format.js";
+import MenuPromoRail from "./components/MenuPromoRail.jsx";
 import { normalizeSearchText } from "./menuSearch.js";
 
-function MenuPromoRail({ items = [], onOpen }) {
-  if (!items.length) return null;
-  const canSwipe = items.length > 1;
-
-  return (
-    <section className={`menu-promo-rail${canSwipe ? " is-scrollable" : " is-single"}`} aria-label="Ưu đãi món đang giảm">
-      <div className="menu-promo-rail__head">
-        <div>
-          <small>Ưu đãi hôm nay</small>
-          <strong>{items.length} món đang giảm</strong>
-        </div>
-      </div>
-      <div className="menu-promo-rail__scroll no-scrollbar" aria-label="Món đang giảm giá">
-        {items.map((item) => (
-          <article key={item.id} className="menu-promo-card">
-            <button
-              type="button"
-              className="menu-promo-card__main"
-              onClick={() => onOpen(item.product)}
-              aria-label={`Chọn ${item.product.name}`}
-            >
-              <span className="menu-promo-card__image">
-                <img src={item.product.image} alt={item.product.name} width="176" height="176" loading="lazy" />
-                <em>{item.offer.eyebrow || "Flash Sale"}</em>
-              </span>
-              <span className="menu-promo-card__copy">
-                <strong>{item.product.name}</strong>
-                <small>{item.product.short || item.offer.detail || "Giá ưu đãi đang áp dụng"}</small>
-                <span className="menu-promo-card__price">
-                  <b>{formatMoney(Number(item.offer.currentPrice || item.product.price || 0))}</b>
-                  <span>
-                    <del>{formatMoney(Number(item.offer.originalPrice || item.product.originalPrice || item.product.price || 0))}</del>
-                    <span className="menu-promo-card__cta">
-                      Chọn món
-                    </span>
-                  </span>
-                </span>
-              </span>
-              <span className="menu-promo-card__discount">
-                -{Math.max(1, Math.round(((Number(item.offer.originalPrice || item.product.originalPrice || 0) - Number(item.offer.currentPrice || item.product.price || 0)) / Math.max(Number(item.offer.originalPrice || item.product.originalPrice || 1), 1)) * 100))}%
-              </span>
-            </button>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export default function Menu({
+  storefront = false,
+  storefrontActive = true,
   activeCategory,
   setActiveCategory,
   categories,
@@ -111,11 +65,6 @@ export default function Menu({
       return !keyword || [name, short, category, badge].some((value) => value.includes(keyword));
     });
   }, [deferredSearchTerm, products]);
-
-  const productGroups = useMemo(
-    () => buildMenuProductGroups(displayCategories, displayProducts),
-    [displayCategories, displayProducts]
-  );
 
   const promoRailItems = useMemo(() => {
     const menuChannel = isQrCounterMenu ? "qr" : "web";
@@ -168,6 +117,15 @@ export default function Menu({
     return [...promotionItems, ...pricedSaleItems].slice(0, 8);
   }, [isQrCounterMenu, products, smartPromotions]);
 
+  const promotionCategory = promoRailItems.some((item) => item.offer.source === "flash_sale" || item.product.flashPromoId) ? "Flash sale" : "Ưu đãi hôm nay";
+  const productGroups = useMemo(() => {
+    const groups = buildMenuProductGroups(displayCategories, displayProducts);
+    return storefront && promoRailItems.length ? [{ key: getMenuCategoryAnchorKey(promotionCategory), category: promotionCategory, products: promoRailItems.map((item) => item.product), promoItems: promoRailItems }, ...groups] : groups;
+  }, [displayCategories, displayProducts, storefront, promoRailItems, promotionCategory]);
+  const navigationCategories = storefront && promoRailItems.length
+    ? [promotionCategory, ...displayCategories.filter((category) => !isAllMenuCategory(category))]
+    : displayCategories;
+
   const removeOneByKey = (rawKey) => {
     const key = String(rawKey || "").replace(/^addon-/, "");
     setCart((items) => {
@@ -206,24 +164,29 @@ export default function Menu({
     const chip = categoryChipRefs.current.get(getMenuCategoryAnchorKey(category));
     if (!rail || !chip) return;
 
+    if (storefront) {
+      const top = chip.offsetTop - rail.offsetTop - (rail.clientHeight - chip.offsetHeight) / 2;
+      rail.scrollTo({ top: Math.max(0, top), behavior });
+      return;
+    }
     const centeredLeft = chip.offsetLeft - ((rail.clientWidth - chip.offsetWidth) / 2);
     const maxLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
     rail.scrollTo({
       left: Math.min(Math.max(0, centeredLeft), maxLeft),
       behavior
     });
-  }, []);
+  }, [storefront]);
 
   const scrollToCategory = useCallback((category, behavior = "smooth") => {
     const target = isAllMenuCategory(category)
       ? catalogTopRef.current
       : categorySectionRefs.current.get(getMenuCategoryAnchorKey(category));
     if (!target) return;
-    const stickyBottom = Math.round(stickyToolsRef.current?.getBoundingClientRect().bottom || 98);
+    const stickyBottom = storefront ? Math.max(0,Math.round(document.querySelector(".customer-install-banner")?.getBoundingClientRect().bottom || 0)) : Math.round(stickyToolsRef.current?.getBoundingClientRect().bottom || 98);
     const stickyOffset = stickyBottom + 8;
     const targetTop = target.getBoundingClientRect().top + window.scrollY - stickyOffset;
     window.scrollTo({ top: Math.max(0, targetTop), behavior });
-  }, []);
+  }, [storefront]);
 
   const handleCategorySelect = (category) => {
     setSearchTerm("");
@@ -236,18 +199,19 @@ export default function Menu({
   };
 
   useEffect(() => {
-    if (initialCategoryScrollHandledRef.current || !productGroups.length) return undefined;
+    if (!storefrontActive || initialCategoryScrollHandledRef.current || !productGroups.length) return undefined;
     initialCategoryScrollHandledRef.current = true;
     if (isAllMenuCategory(activeCategory)) return undefined;
     const frame = window.requestAnimationFrame(() => scrollToCategory(activeCategory, "auto"));
     return () => window.cancelAnimationFrame(frame);
-  }, [activeCategory, productGroups.length, scrollToCategory]);
+  }, [activeCategory, productGroups.length, scrollToCategory, storefrontActive]);
 
   useEffect(() => {
     syncedCategoryKeyRef.current = getMenuCategoryAnchorKey(activeCategory);
   }, [activeCategory]);
 
   useEffect(() => {
+    if (!storefrontActive) return undefined;
     let animationFrame = 0;
     const syncCategoryFromScroll = () => {
       animationFrame = 0;
@@ -258,13 +222,19 @@ export default function Menu({
 
       if (!productGroups.length || searchTerm) return;
       const activationLine = Math.round(stickyTools?.getBoundingClientRect().bottom || 112) + 12;
-      let nextCategory = displayCategories.find(isAllMenuCategory) || displayCategories[0] || productGroups[0]?.category;
+      let nextCategory = storefront ? productGroups[0]?.category : displayCategories.find(isAllMenuCategory) || displayCategories[0] || productGroups[0]?.category;
 
       for (const group of productGroups) {
         const section = categorySectionRefs.current.get(getMenuCategoryAnchorKey(group.category));
         if (!section || section.getBoundingClientRect().top > activationLine) break;
         nextCategory = group.category;
       }
+
+      // The last section may be too short to reach the sticky activation line.
+      // Keep its category selected when scrolling has reached the page end.
+      const atPageEnd = window.scrollY > 0 &&
+        Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 2;
+      if (atPageEnd) nextCategory = productGroups[productGroups.length - 1]?.category || nextCategory;
 
       const nextKey = getMenuCategoryAnchorKey(nextCategory);
       if (syncedCategoryKeyRef.current === nextKey) return;
@@ -287,11 +257,21 @@ export default function Menu({
       window.removeEventListener("resize", scheduleSync);
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
-  }, [displayCategories, productGroups, scrollCategoryChipIntoView, searchTerm, setActiveCategory]);
+  }, [displayCategories, productGroups, scrollCategoryChipIntoView, searchTerm, setActiveCategory, storefrontActive, storefront]);
+
+  const categoryNavigation = (
+    <nav className="menu-side-categories" aria-label="Danh mục món">
+      <div ref={categoryRailRef} className="menu-side-categories__scroll">
+        {navigationCategories.map((category) => (
+          <CustomerControl key={category} ref={(node) => registerCategoryChipRef(category, node)} type="button" onClick={() => handleCategorySelect(category)} aria-pressed={activeCategory === category && !searchTerm}>{category}</CustomerControl>
+        ))}
+      </div>
+    </nav>
+  );
 
   const fixedMenuTools = (
-    <div ref={stickyToolsRef} className="menu-sticky-tools menu-sticky-tools--fixed">
-      <div className="menu-search">
+    <div ref={stickyToolsRef} className={`menu-sticky-tools ${storefront ? "menu-sticky-tools--storefront" : "menu-sticky-tools--fixed"}`}>
+      {!storefront && <div className="menu-search">
         <Icon name="search" size={17} />
         <input
           type="search"
@@ -304,16 +284,16 @@ export default function Menu({
           placeholder={menuText.searchPlaceholder}
         />
         {searchTerm ? (
-          <button type="button" onClick={() => setSearchTerm("")} className="menu-search-clear" aria-label="Xóa tìm kiếm">
+          <CustomerControl type="button" onClick={() => setSearchTerm("")} className="menu-search-clear" aria-label="Xóa tìm kiếm">
             ×
-          </button>
+          </CustomerControl>
         ) : null}
-      </div>
+      </div>}
 
-      <nav className="menu-chip-row-wrap" aria-label="Danh mục món">
+      {!storefront && <nav className="menu-chip-row-wrap" aria-label="Danh mục món">
         <div ref={categoryRailRef} className="no-scrollbar menu-chip-row">
           {displayCategories.map((category) => (
-            <button
+            <CustomerControl
               key={category}
               ref={(node) => registerCategoryChipRef(category, node)}
               type="button"
@@ -322,22 +302,22 @@ export default function Menu({
               aria-pressed={activeCategory === category && !searchTerm}
             >
               {category}
-            </button>
+            </CustomerControl>
           ))}
         </div>
-      </nav>
+      </nav>}
     </div>
   );
 
   return (
-    <section className="menu-page">
-      {typeof document === "undefined" ? fixedMenuTools : createPortal(fixedMenuTools, document.body)}
+    <section className={`menu-page ${storefront ? "menu-page--storefront" : ""}`}>
+      {storefront || typeof document === "undefined" ? fixedMenuTools : createPortal(fixedMenuTools, document.body)}
       <div className="menu-page-content space-y-4 px-4 pb-32">
-        <div className="menu-sticky-tools-spacer" aria-hidden="true" />
+        {!storefront && <div className="menu-sticky-tools-spacer" aria-hidden="true" />}
 
         <div ref={catalogTopRef} className="menu-catalog-anchor" aria-hidden="true" />
 
-        {!searchTerm ? (
+        {!storefront && !searchTerm ? (
           <MenuPromoRail
             items={promoRailItems}
             onOpen={openProduct}
@@ -351,6 +331,9 @@ export default function Menu({
           </div>
         ) : null}
 
+        <div className={storefront ? "menu-catalog-columns" : undefined}>
+        {storefront && categoryNavigation}
+        <div className="menu-catalog-products">
         {isMenuLoading ? (
           <MenuLoadingState />
         ) : displayProducts.length ? (
@@ -384,7 +367,8 @@ export default function Menu({
             <span>Thử đổi danh mục hoặc tìm bằng tên món khác.</span>
           </div>
         )}
-
+        </div>
+        </div>
       </div>
     </section>
   );

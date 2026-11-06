@@ -1,9 +1,11 @@
-﻿import { useMemo, useState } from "react";
+import CustomerControl from "../components/customer/CustomerControl.jsx";
+import { useMemo, useState } from "react";
 import { useEffect, useRef } from "react";
 import Icon from "../components/Icon.jsx";
 import GoongAddressPicker from "../components/GoongAddressPicker.jsx";
 import { resolveDeliveryContext, resolvePickupBranches } from "../features/checkout/checkoutDomain.js";
 import useCakeProducts from "../hooks/useCakeProducts.js";
+import useCustomerAppearance from "../hooks/useCustomerAppearance.js";
 import { CAKE_ADDON_MODES, buildCakeZaloMessage, createCakeOrder } from "../services/cakeService.js";
 import { notifyCakeOrderWebhook } from "../services/cakeOrderWebhookService.js";
 import { buildZaloLink } from "../services/zaloService.js";
@@ -199,6 +201,7 @@ function branchMatchesRuntimeId(branch = {}, value = "") {
 }
 
 export default function BanhKemBanhTrangPage({ branches = [] }) {
+  useCustomerAppearance(true);
   const { products, settings, loading, error } = useCakeProducts();
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [orderingProduct, setOrderingProduct] = useState(null);
@@ -547,9 +550,9 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           </div>
           <div className="cake-hero__grid" aria-label="Mẫu bánh bán chạy">
             {featuredProducts.map((product) => (
-              <button key={product.id} type="button" onClick={() => setSelectedProduct(product)} aria-label={`Xem chi tiết ${product.name}`}>
+              <CustomerControl key={product.id} type="button" onClick={() => setSelectedProduct(product)} aria-label={`Xem chi tiết ${product.name}`}>
                 <img src={product.image} alt={product.name} width="520" height="520" decoding="async" />
-              </button>
+              </CustomerControl>
             ))}
           </div>
         </div>
@@ -571,15 +574,15 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
           <div className="cake-grid">
             {products.map((product) => (
               <article key={product.id} className="cake-card">
-                <button type="button" className="cake-card__image" onClick={() => openProductDetail(product)} aria-label={`Xem chi tiết ${product.name}`}>
+                <CustomerControl type="button" className="cake-card__image" onClick={() => openProductDetail(product)} aria-label={`Xem chi tiết ${product.name}`}>
                   <img src={product.image} alt={product.name} width="640" height="640" loading="lazy" decoding="async" />
                   <span className="cake-card__badge">{product.serving}</span>
                   <strong className="cake-card__price">{formatMoney(product.price)}</strong>
-                </button>
+                </CustomerControl>
                 <div className="cake-card__body">
                   <h3>{product.name}</h3>
                   <p>{product.size}</p>
-                  <button type="button" onClick={() => openProductDetail(product)}>Xem chi tiết</button>
+                  <CustomerControl type="button" onClick={() => openProductDetail(product)}>Xem chi tiết</CustomerControl>
                 </div>
               </article>
             ))}
@@ -589,9 +592,9 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
       {selectedProduct && (
         <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-detail-title">
-          <button type="button" className="cake-modal__backdrop" aria-label="Đóng chi tiết bánh" tabIndex="-1" onClick={() => setSelectedProduct(null)} />
+          <CustomerControl type="button" className="cake-modal__backdrop" aria-label="Đóng chi tiết bánh" tabIndex="-1" onClick={() => setSelectedProduct(null)} />
           <div className="cake-detail">
-            <button className="cake-modal__close" type="button" onClick={() => setSelectedProduct(null)} aria-label="Đóng chi tiết bánh">×</button>
+            <CustomerControl className="cake-modal__close" type="button" onClick={() => setSelectedProduct(null)} aria-label="Đóng chi tiết bánh">×</CustomerControl>
             <div className="cake-detail__image-wrap">
               <img className="cake-detail__image" src={selectedProduct.image} alt={selectedProduct.name} width="760" height="760" decoding="async" />
             </div>
@@ -622,7 +625,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                 </ul>
               </div>
 
-              <button className="cake-primary-btn" type="button" onClick={() => openOrderForm(selectedProduct)}>Đặt mẫu này</button>
+              <CustomerControl className="cake-primary-btn" type="button" onClick={() => openOrderForm(selectedProduct)}>Đặt mẫu này</CustomerControl>
             </div>
           </div>
         </div>
@@ -630,9 +633,9 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
       {orderingProduct && (
         <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-order-title">
-          <button type="button" className="cake-modal__backdrop" aria-label="Đóng form đặt bánh" tabIndex="-1" onClick={closeOrderForm} />
+          <CustomerControl type="button" className="cake-modal__backdrop" aria-label="Đóng form đặt bánh" tabIndex="-1" onClick={closeOrderForm} />
           <form className="cake-order-form" onSubmit={submitOrder}>
-            <button className="cake-modal__close" type="button" onClick={closeOrderForm} aria-label="Đóng form đặt bánh">×</button>
+            <CustomerControl className="cake-modal__close" type="button" onClick={closeOrderForm} aria-label="Đóng form đặt bánh">×</CustomerControl>
             <div className="cake-order-form__head">
               <img src={orderingProduct.image} alt={orderingProduct.name} width="96" height="96" decoding="async" />
               <div>
@@ -658,7 +661,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                     onChange={(event) => updateForm("chibiSelected", event.target.checked)}
                   />
                   <span>{chibiAddon.name} (+{formatMoney(Number(chibiAddon.price || 0))})</span>
-                  <button type="button" onClick={() => setAddonInfoPopup("chibi")}>Chi tiết</button>
+                  <CustomerControl type="button" onClick={() => setAddonInfoPopup("chibi")}>Chi tiết</CustomerControl>
                 </label>
               ) : null}
 
@@ -667,7 +670,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                   {decorationIncluded ? (
                     <div className="cake-addon-check cake-addon-check--included">
                       <span>{decorationAddon.name} (Đã bao gồm)</span>
-                      <button type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</button>
+                      <CustomerControl type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</CustomerControl>
                     </div>
                   ) : (
                     <label className="cake-addon-check">
@@ -683,14 +686,14 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                         }}
                       />
                       <span>{decorationAddon.name} (+{formatMoney(Number(decorationAddon.price || 0))})</span>
-                      <button type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</button>
+                      <CustomerControl type="button" onClick={() => setAddonInfoPopup("decoration")}>Xem mẫu</CustomerControl>
                     </label>
                   )}
 
                   {(decorationIncluded || form.decorationSelected) ? (
                     <div className="cake-addon-option-grid">
                       {decorationOptions.map((item) => (
-                        <button
+                        <CustomerControl
                           key={item.id}
                           type="button"
                           className={form.decorationOptionId === item.id ? "is-active" : ""}
@@ -699,7 +702,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                           <img src={item.image} alt={item.name} width="320" height="240" loading="lazy" decoding="async" />
                           <strong>{item.name}</strong>
                           <span>{decorationIncluded ? "Đã bao gồm" : `+${formatMoney(Number(item.price || 0))}`}</span>
-                        </button>
+                        </CustomerControl>
                       ))}
                     </div>
                   ) : null}
@@ -756,7 +759,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               <h3 id="cake-fulfillment-section"><span>2</span> Cách nhận bánh</h3>
               <div className="cake-segmented" role="group" aria-label="Hình thức nhận bánh">
                 {pickupEnabled ? (
-                  <button
+                  <CustomerControl
                     type="button"
                     className={form.fulfillmentType === "pickup" ? "is-active" : ""}
                     aria-pressed={form.fulfillmentType === "pickup"}
@@ -764,10 +767,10 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                   >
                     <Icon name="home" size={17} />
                     <span>Tự đến lấy</span>
-                  </button>
+                  </CustomerControl>
                 ) : null}
                 {deliveryEnabled ? (
-                  <button
+                  <CustomerControl
                     type="button"
                     className={form.fulfillmentType === "delivery" ? "is-active" : ""}
                     aria-pressed={form.fulfillmentType === "delivery"}
@@ -775,7 +778,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                   >
                     <Icon name="bike" size={17} />
                     <span>Giao hàng</span>
-                  </button>
+                  </CustomerControl>
                 ) : null}
               </div>
 
@@ -800,7 +803,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                     const branchId = getBranchRuntimeId(branch) || branch.id;
                     const isSelected = branchMatchesRuntimeId(selectedPickupBranch, branchId);
                     return (
-                      <button
+                      <CustomerControl
                         key={branchId}
                         type="button"
                         className={`branch-card ${isSelected ? "branch-card-active" : ""}`}
@@ -816,7 +819,7 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                           {branch.time ? <em>{branch.time}</em> : null}
                         </span>
                         <span className="branch-radio">{isSelected ? "✓" : ""}</span>
-                      </button>
+                      </CustomerControl>
                     );
                   })}
                 </div>
@@ -882,9 +885,9 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
               </label>
             </section>
 
-            <button className="cake-primary-btn cake-order-submit" type="submit" disabled={submitting || deliveryDistanceOutOfRange} aria-busy={submitting ? "true" : "false"}>
+            <CustomerControl className="cake-primary-btn cake-order-submit" type="submit" disabled={submitting || deliveryDistanceOutOfRange} aria-busy={submitting ? "true" : "false"}>
               {submitting ? "Đang tạo đơn…" : deliveryDistanceOutOfRange ? "Ngoài khu vực giao hàng" : "Tạo đơn và gửi Zalo"}
-            </button>
+            </CustomerControl>
             {message ? <p className="cake-form-message" role="status" aria-live="polite">{message}</p> : null}
             <p className="cake-zalo-copy-note">
               App sẽ chuẩn bị nội dung đơn để bạn gửi Zalo cho quán xác nhận.
@@ -895,9 +898,9 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
       {successOrder ? (
         <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-success-title">
-          <button type="button" className="cake-modal__backdrop" aria-label="Đóng thông báo đặt bánh" tabIndex="-1" onClick={() => setSuccessOrder(null)} />
+          <CustomerControl type="button" className="cake-modal__backdrop" aria-label="Đóng thông báo đặt bánh" tabIndex="-1" onClick={() => setSuccessOrder(null)} />
           <div className="cake-success-popup">
-            <button className="cake-modal__close" type="button" onClick={() => setSuccessOrder(null)} aria-label="Đóng thông báo đặt bánh">×</button>
+            <CustomerControl className="cake-modal__close" type="button" onClick={() => setSuccessOrder(null)} aria-label="Đóng thông báo đặt bánh">×</CustomerControl>
             <div className="cake-success-popup__icon">{successOrder.zaloSent ? "✓" : successOrder.isCompletingZalo ? "…" : "!"}</div>
             <p className="cake-eyebrow">{successOrder.zaloSent ? "Đã hoàn tất" : successOrder.isCompletingZalo ? "Đang mở Zalo" : "Gần xong rồi"}</p>
             <h3 id="cake-success-title">{successOrder.zaloSent ? "Cảm ơn bạn, quán sẽ xác nhận đơn sớm" : successOrder.isCompletingZalo ? "Đang mở Zalo để gửi đơn…" : "Gửi tin nhắn Zalo để quán xác nhận mẫu bánh"}</h3>
@@ -935,13 +938,13 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
             ) : null}
             <div className="cake-success-popup__actions">
               {successOrder.zaloSent ? (
-                <button className="cake-primary-btn" type="button" onClick={() => setSuccessOrder(null)}>
+                <CustomerControl className="cake-primary-btn" type="button" onClick={() => setSuccessOrder(null)}>
                   Tiếp tục xem mẫu bánh
-                </button>
+                </CustomerControl>
               ) : successOrder.isCompletingZalo ? (
-                <button className="cake-primary-btn" type="button" disabled>
+                <CustomerControl className="cake-primary-btn" type="button" disabled>
                   Đang gửi Zalo…
-                </button>
+                </CustomerControl>
               ) : (
                 <>
                   <a
@@ -953,9 +956,9 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
                   >
                     Mở Zalo gửi đơn
                   </a>
-                  <button className="cake-secondary-btn" type="button" onClick={() => setSuccessOrder(null)}>
+                  <CustomerControl className="cake-secondary-btn" type="button" onClick={() => setSuccessOrder(null)}>
                     Tiếp tục xem mẫu bánh
-                  </button>
+                  </CustomerControl>
                 </>
               )}
             </div>
@@ -965,13 +968,13 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
       {pickupTimeWarningOpen ? (
         <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-time-warning-title">
-          <button type="button" className="cake-modal__backdrop" aria-label="Đóng cảnh báo giờ lấy bánh" tabIndex="-1" onClick={() => setPickupTimeWarningOpen(false)} />
+          <CustomerControl type="button" className="cake-modal__backdrop" aria-label="Đóng cảnh báo giờ lấy bánh" tabIndex="-1" onClick={() => setPickupTimeWarningOpen(false)} />
           <div className="cake-addon-popup">
-            <button className="cake-modal__close" type="button" onClick={() => setPickupTimeWarningOpen(false)} aria-label="Đóng cảnh báo giờ lấy bánh">×</button>
+            <CustomerControl className="cake-modal__close" type="button" onClick={() => setPickupTimeWarningOpen(false)} aria-label="Đóng cảnh báo giờ lấy bánh">×</CustomerControl>
             <div className="cake-addon-popup__body">
               <h3 id="cake-time-warning-title">Chọn lại giờ lấy bánh</h3>
               <p>{pickupTimeWarningMessage}</p>
-              <button className="cake-primary-btn" type="button" onClick={() => setPickupTimeWarningOpen(false)}>Chọn lại giờ lấy</button>
+              <CustomerControl className="cake-primary-btn" type="button" onClick={() => setPickupTimeWarningOpen(false)}>Chọn lại giờ lấy</CustomerControl>
             </div>
           </div>
         </div>
@@ -979,9 +982,9 @@ export default function BanhKemBanhTrangPage({ branches = [] }) {
 
       {addonInfoPopup ? (
         <div ref={modalRootRef} className="cake-modal" role="dialog" aria-modal="true" aria-labelledby="cake-addon-popup-title">
-          <button type="button" className="cake-modal__backdrop" aria-label="Đóng thông tin phụ kiện" tabIndex="-1" onClick={() => setAddonInfoPopup("")} />
+          <CustomerControl type="button" className="cake-modal__backdrop" aria-label="Đóng thông tin phụ kiện" tabIndex="-1" onClick={() => setAddonInfoPopup("")} />
           <div className="cake-addon-popup">
-            <button className="cake-modal__close" type="button" onClick={() => setAddonInfoPopup("")} aria-label="Đóng thông tin phụ kiện">×</button>
+            <CustomerControl className="cake-modal__close" type="button" onClick={() => setAddonInfoPopup("")} aria-label="Đóng thông tin phụ kiện">×</CustomerControl>
 
             {addonInfoPopup === "chibi" ? (
               <div className="cake-addon-popup__body">

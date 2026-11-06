@@ -1,0 +1,38 @@
+/* Portals use the same neutral surfaces, typography and yellow controls. */
+:root[data-customer-theme] .customer-bottom-sheet.promo-sheet { background:var(--ghr-surface); }
+:root[data-customer-theme] .customer-bottom-sheet .order-status-sheet__header h2+span { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .qty-btn:not(:disabled) { color:#111; }
+:root[data-customer-theme] .customer-option-sheet .customer-option-group { border:0; }
+:root[data-customer-theme] .customer-bottom-sheet :is(.customer-sheet-title p,.customer-caption,.address-field>span,.order-journey__message,.order-journey__message p,.order-info-grid span,.order-detail-total>span,.order-detail-item p,.order-branch-location-card__copy small,.order-branch-location-card__copy em) { color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-bottom-sheet :is(.customer-body,.address-field input,.address-field textarea,.order-info-grid strong,.order-detail-item strong,.order-detail-item em,.order-detail-total strong,.order-branch-location-card__copy strong,.customer-cart-sheet__actions,.customer-cart-sheet__actions button,.checkout-cart-item .text-right>strong) { color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-bottom-sheet .address-field :is(input,textarea) { background:var(--ghr-surface-soft); border-color:var(--ghr-line); color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-bottom-sheet :is(.order-status-sheet__header,.order-detail-box,.customer-cart-sheet__items) { background:var(--ghr-surface); border-color:transparent; box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet :is(.order-journey__message,.order-branch-location-card,.order-info-grid>div,.order-detail-item,.checkout-edit-item,.checkout-remove,.order-detail-head__actions button,.order-detail-head__actions>span) { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet .order-branch-location-card__icon { background:var(--ghr-surface); color:var(--ghr-ink); border-color:transparent; }
+:root[data-customer-theme] .customer-bottom-sheet :is(.order-detail-head__actions button,.order-detail-collapse-footer) { color:var(--ghr-ink); border-color:transparent; }
+:root[data-customer-theme] .customer-bottom-sheet .order-detail-collapse-footer { background:var(--ghr-surface-soft); }
+:root[data-customer-theme] .customer-bottom-sheet :is(.order-detail-total,.order-detail-total.grand) { border-color:var(--ghr-line); }
+:root[data-customer-theme] .customer-bottom-sheet .order-branch-location-card__action { background:var(--ghr-yellow); color:#111; border-color:transparent; border-radius:999px; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey { background:var(--ghr-surface); border-color:transparent; box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__track { background:var(--ghr-line); }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__track>span { background:var(--ghr-yellow); }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__step { color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__step.is-active { color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__node { background:var(--ghr-surface-soft); border-color:transparent; color:var(--ghr-muted); box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__step.is-active .order-journey__node { background:var(--ghr-yellow); border-color:transparent; color:#111; box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__step.is-current .order-journey__node { box-shadow:0 0 0 3px #ffda2133; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__step.is-active .order-journey__node svg { color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet .order-journey__message>span { background:var(--ghr-surface); color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-cart-sheet .checkout-cart-item .qty-btn svg { color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet :is(.customer-primary-action,.customer-button--primary,.customer-offer-card__footer button) { color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet .customer-offer-card :is(.customer-offer-card__mark,.customer-offer-card__mark svg,.customer-offer-card__value) { color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-bottom-sheet .customer-offer-card :is(.customer-offer-card__details span,.customer-offer-card__details svg,.customer-offer-card__code) { color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-bottom-sheet .customer-offer-card__footer button svg { color:#111; }
+:root[data-customer-theme] .customer-bottom-sheet :is(.customer-sheet-title h2,.customer-modal-title) { font-weight:650; }
+:root[data-customer-theme] .delivery-ordering-sheet :is(.delivery-ordering-branch-list>button,.delivery-ordering-app-grid>button,.delivery-ordering-empty) { background:var(--ghr-surface-soft); border-color:transparent; color:var(--ghr-ink); box-shadow:none; }
+:root[data-customer-theme] .customer-bottom-sheet.delivery-ordering-sheet { background:var(--ghr-surface); }
+:root[data-customer-theme] .delivery-ordering-sheet .delivery-ordering-branch-list>button.is-active { background:var(--ghr-surface-soft); border-color:transparent; box-shadow:none; }
+:root[data-customer-theme] .delivery-ordering-sheet :is(.delivery-ordering-branch-list strong,.delivery-ordering-apps__head strong,.delivery-ordering-app-grid strong,.delivery-ordering-app-arrow) { color:var(--ghr-ink); }
+:root[data-customer-theme] .delivery-ordering-sheet :is(.delivery-ordering-branch-list small,.delivery-ordering-apps__head>span,.delivery-ordering-app-grid small,.delivery-ordering-empty span) { color:var(--ghr-muted); }
+:root[data-customer-theme] .delivery-ordering-sheet .delivery-ordering-branch-icon { background:var(--ghr-surface); color:var(--ghr-ink); border-radius:12px; }
+:root[data-customer-theme] .delivery-ordering-sheet .delivery-ordering-apps { border-color:var(--ghr-line); }

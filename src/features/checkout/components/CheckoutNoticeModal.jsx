@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 
@@ -12,10 +13,10 @@ export default function CheckoutNoticeModal({ notice, onClose }) {
       showHeader={false}
       footer={(
         <div className="flex gap-3">
-          {notice.onAction && <button type="button" onClick={onClose} className="flex-1 rounded-2xl border px-4 py-3 font-bold">Đóng</button>}
-          <button type="button" className="cta w-full" onClick={() => { onClose(); notice.onAction?.(); }}>
+          {notice.onAction && <CustomerControl type="button" onClick={onClose} className="flex-1 rounded-2xl border px-4 py-3 font-bold">Đóng</CustomerControl>}
+          <CustomerControl type="button" className="cta w-full" onClick={() => { onClose(); notice.onAction?.(); }}>
             {notice.actionLabel || "Đã hiểu"}
-          </button>
+          </CustomerControl>
         </div>
       )}
     >

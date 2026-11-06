@@ -1,0 +1,31 @@
+/* Promotional artwork is a centered dialog; ordering dialogs stay bottom sheets. */
+:root .customer-sheet-backdrop[data-popup-layout="center"] {
+  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  padding:16px; background:#000a; backdrop-filter:none; -webkit-backdrop-filter:none;
+}
+:root[data-customer-theme] .customer-sheet-backdrop[data-popup-layout="center"]>.home-popup-sheet {
+  position:relative; inset:auto; display:block; width:min(100%,360px); max-width:360px;
+  height:auto; min-height:0; max-height:calc(100dvh - 32px); margin:0; padding:0;
+  border:0; border-radius:0; background:transparent; box-shadow:none; overflow:visible;
+  transform:none; animation:home-promo-enter 180ms ease-out;
+}
+:root[data-customer-theme] .home-popup-sheet .customer-sheet-scroll {
+  display:grid; place-items:center; padding:0; background:transparent; overflow:visible;
+}
+:root .home-popup-sheet .home-popup-image-only { width:100%; max-height:none; }
+:root .home-popup-sheet .home-popup-image-wrap {
+  display:grid; place-items:center; width:100%; height:auto; margin:0; padding:0;
+  border:0; border-radius:0; background:transparent; box-shadow:none; line-height:0;
+}
+:root .home-popup-sheet .home-popup-image {
+  display:block; width:auto; height:auto; max-width:100%; max-height:calc(100dvh - 48px);
+  aspect-ratio:auto; object-fit:contain; border-radius:0;
+}
+:root .home-popup-sheet .home-popup-close {
+  display:grid; place-items:center; top:8px; right:8px; width:44px; height:44px;
+  min-height:44px; padding:0; border:1px solid #ffffff50; border-radius:50%;
+  background:#111; color:#fff; box-shadow:none;
+}
+:root .home-popup-image-wrap:focus-visible { outline:2px solid var(--ghr-yellow); outline-offset:3px; }
+@keyframes home-promo-enter { from { opacity:0; transform:scale(.97); } to { opacity:1; transform:scale(1); } }
+@media(prefers-reduced-motion:reduce) { :root .home-popup-sheet { animation:none !important; } }

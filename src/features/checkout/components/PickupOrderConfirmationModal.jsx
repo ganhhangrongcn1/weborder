@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import Icon from "../../../components/Icon.jsx";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 
@@ -31,12 +32,12 @@ export default function PickupOrderConfirmationModal({
       showHeader={false}
       footer={(
         <div className="pickup-confirmation-sheet__actions">
-          <button type="button" className="secondary-cta" onClick={onClose}>
+          <CustomerControl type="button" className="secondary-cta" onClick={onClose}>
             Xem lại
-          </button>
-          <button type="button" className="cta" onClick={onConfirm}>
+          </CustomerControl>
+          <CustomerControl type="button" className="cta" onClick={onConfirm}>
             {confirmLabel}
-          </button>
+          </CustomerControl>
         </div>
       )}
     >

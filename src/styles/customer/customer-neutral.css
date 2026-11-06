@@ -1,0 +1,96 @@
+/* Yellow + neutral black; no brown in customer typography or borders. */
+.customer-shell,.customer-shell main.shadow-preview { background:var(--ghr-page); }
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel,.customer-modal-frame__panel,.cake-page,.receipt-rewards) {
+  --customer-primary:#111; --customer-primary-strong:#111; --customer-text:var(--ghr-ink); --customer-muted:var(--ghr-muted);
+}
+.customer-shell :is(.home2026-greeting-copy span,.menu-storefront__identity button,.menu-voucher-ticket strong,.menu-voucher-ticket__icon,.menu-promo-rail__head small,.product-price-stack strong,.product-row-price,.customer-caption,.branch-card em,.checkout-inline-action,.checkout-edit-item,.checkout-cart-item strong,.stamp-card__count,.stamp-card__footer,.stamp-card__footer button,.rewards-login,.rewards-hero__progress-copy,.rewards-tier-link,.rewards-tier-timeline__name,.rewards-tier-timeline__amount),
+.customer-bottom-sheet :is(.option-modal-product-price strong,.customer-offer-card__value,.customer-offer-card__details svg,.loyalty-text-action,.points-card strong),
+.branch-picker-panel :is(.branch-card strong,.branch-card em) { color:var(--ghr-ink); }
+.customer-shell :is(.menu-voucher-ticket small,.checkout-source-summary,.checkout-cart-options>summary,.customer-caption,.stamp-card p,.rewards-tier-timeline__caption),
+.customer-bottom-sheet :is(.customer-offer-card__details span,.customer-offer-card__code,.modal-topping__copy>strong,.loyalty-voucher-archive>summary) { color:var(--ghr-muted); }
+.customer-shell :is(.branch-card,.payment-card,.customer-offer-card,.stamp-card,.pickup-time-card,.checkout-earned-points),
+.customer-bottom-sheet :is(.customer-offer-card,.branch-card,.payment-card) { border-color:var(--ghr-line); }
+.customer-shell :is(.branch-card-active,.payment-card.active),.customer-bottom-sheet .customer-offer-card.is-selected { border-color:var(--ghr-yellow); }
+.customer-shell :is(.customer-icon-button,.home2026-action-btn,.account-auth-icon,.checkout-subsection-icon,.checkout-promo-icon,.checkout-points-icon,.cart-glass-icon),
+.customer-bottom-sheet :is(.customer-sheet-close,.customer-offer-card__mark) { color:var(--ghr-ink); }
+.customer-shell :is(.cta,.cta-small,.customer-button--primary,.cart-glass-cta,.account-auth-submit,.customer-install-primary,.customer-primary-action,.product-add-btn,.qty-btn),
+.customer-bottom-sheet :is(.cta,.customer-button--primary,.customer-primary-action,.customer-offer-card__footer button,.qty-btn),
+.branch-picker-panel .cta { background:var(--ghr-yellow-gradient); color:#111; border-color:var(--ghr-yellow); }
+.customer-shell :is(.rewards-hero__balance,.rewards-login,.rewards-shortcuts button>span,.checkin-direct-icon),
+.customer-bottom-sheet .rewards-icon-box { color:#111; }
+.customer-shell .rewards-hero__balance :is(strong,small,b,svg) { color:#111; }
+.customer-shell .review-reward-panel--page>header { background:var(--ghr-yellow); color:#111; }
+.customer-shell :is(.review-reward-point-showcase,.review-reward-login) { background:var(--ghr-yellow); color:#111; border-color:var(--ghr-yellow); }
+.customer-shell :is(.review-reward-point-showcase,.review-reward-login) :is(strong,small,span,p,svg) { color:#111; }
+.customer-shell .review-reward-entry { background:var(--ghr-surface); border-color:var(--ghr-line); box-shadow:none; }
+.customer-shell .review-reward-entry__eyebrow,.customer-shell .review-reward-entry p { color:var(--ghr-muted); }
+.customer-shell .review-reward-panel--page>header :is(h1,p,small,span,button,svg) { color:#111; }
+.customer-shell .menu-side-categories button[aria-pressed="true"] { color:var(--ghr-ink); border-left-color:var(--ghr-yellow); }
+.customer-shell :is(button,a,input,textarea,select):focus-visible,.customer-bottom-sheet :is(button,summary,input,textarea):focus-visible { outline-color:var(--ghr-yellow); }
+.customer-shell :is(input,textarea,select):focus-visible:not([aria-invalid="true"]),.customer-bottom-sheet :is(input,textarea,select):focus-visible:not([aria-invalid="true"]) { border-color:var(--ghr-yellow); }
+.customer-shell [class*="text-brown/"] { color:var(--ghr-muted); }
+.customer-shell [class~="text-brown"] { color:var(--ghr-ink); }
+.customer-shell :is(.orders-checkin-promo,.orders-review-reward-promo,.account-review-reward-card,.review-reward-point-showcase>button) {
+  background:var(--ghr-surface); border:1px solid var(--ghr-line); color:var(--ghr-ink); box-shadow:none;
+}
+.customer-shell :is(.orders-checkin-promo,.orders-review-reward-promo,.account-review-reward-card)::before { display:none; }
+.customer-shell :is(.orders-checkin-promo,.orders-review-reward-promo,.account-review-reward-card) :is(strong,span,small,p,h2,svg) { color:var(--ghr-ink); text-shadow:none; }
+.customer-shell :is(.orders-checkin-promo__topline>strong,.orders-checkin-promo__stats>div,.orders-review-reward-promo__icon,.account-review-reward-card__icon) { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:var(--ghr-line); }
+.customer-shell .review-reward-point-showcase { background:transparent; color:var(--ghr-ink); }
+.customer-shell .review-reward-point-showcase>button :is(strong,span,small) { color:var(--ghr-ink); }
+.customer-shell .review-reward-pagebar { background:var(--ghr-yellow); color:#111; }
+.customer-shell .review-reward-pagebar :is(h1,span,button,svg) { color:#111; }
+html[data-customer-theme="dark"] .customer-shell .review-reward-pagebar { background:var(--ghr-surface); color:var(--ghr-ink); }
+html[data-customer-theme="dark"] .customer-shell .review-reward-pagebar :is(h1,span,button,svg) { color:var(--ghr-ink); }
+html[data-customer-theme="dark"] .customer-shell :is(.review-reward-icon,.orders-review-reward-promo__icon,.account-review-reward-card__icon) svg { color:var(--ghr-yellow); }
+html[data-customer-theme="dark"] .customer-shell .review-reward-point-showcase>button strong { color:var(--ghr-yellow); }
+.customer-shell :is(.review-reward-panel--page,.rewards-overview,.customer-store-rewards,.loyalty-page) { background:var(--ghr-page); }
+.customer-shell :is(.account-auth-field input,.pickup-field input) { background:var(--ghr-surface-soft); border-color:var(--ghr-line); color:var(--ghr-ink); }
+.customer-shell .rewards-tier-link>svg:first-child,.customer-shell .rewards-shortcuts button>span,.customer-shell .stamp-card h2 svg { color:#111; }
+.customer-shell :is(.product-row-image,.bg-orange-50,.bg-orange-100) { background:var(--ghr-surface-soft); }
+.receipt-rewards :is(.receipt-rewards__brand,.receipt-rewards__points strong,.receipt-rewards__account,.receipt-rewards__support a,.receipt-rewards__text-button) { color:var(--ghr-ink); }
+.receipt-rewards :is(.receipt-rewards__heading>span,.receipt-rewards__heading p,.receipt-rewards__bill dt,.receipt-rewards__form p,.receipt-rewards__form>small,.receipt-rewards__support) { color:var(--ghr-muted); }
+.receipt-rewards :is(.receipt-rewards__tabs,.receipt-rewards__points,.receipt-rewards__confirm,.receipt-rewards__notice,.receipt-rewards__success) { background:var(--ghr-surface-soft); color:var(--ghr-ink); }
+.receipt-rewards .receipt-rewards__tabs button { color:var(--ghr-ink); }
+.receipt-rewards .receipt-rewards__tabs button[aria-selected=true],.receipt-rewards :is(.receipt-rewards__primary,.receipt-rewards__banner) { background:var(--ghr-yellow-gradient); color:#111; border-color:var(--ghr-yellow); }
+.receipt-rewards :is(.receipt-rewards__star,.receipt-rewards__banner-cta) { background:var(--ghr-surface); color:var(--ghr-ink); }
+.receipt-rewards input { background:var(--ghr-surface); color:var(--ghr-ink); border-color:var(--ghr-line); }
+.receipt-rewards .receipt-rewards__bill { border-color:var(--ghr-line); }
+.cake-page { --cake-line:var(--ghr-line); --cake-cream:var(--ghr-page); --cake-surface:var(--ghr-surface); }
+html[data-customer-theme="dark"] .customer-shell .review-reward-point-showcase { background:transparent; }
+.customer-shell .orders-review-reward-promo__action { background:var(--ghr-surface-soft); color:var(--ghr-ink); }
+.customer-shell .orders-page button[type="submit"] { color:#111; background:var(--ghr-yellow-gradient); }
+
+/* Cards are separated by surface tone, not outlined frames. Keep control and
+   keyboard-focus rings so selections and editable fields remain clear. */
+html[data-customer-theme="dark"] {
+  --ghr-surface:#1f1f1f;
+  --ghr-surface-soft:#292929;
+}
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel,.customer-modal-frame__panel) :is(.customer-card,.checkout-card,.checkout-pricing-group,.account-panel,.stamp-card,.pickup-time-card,.branch-card,.payment-card,.customer-offer-card,.customer-option-group,.menu-storefront,.rewards-shortcuts button,.loyalty-voucher-archive,.rewards-hero,.rewards-benefit-tier,.rewards-benefits-current,.orders-empty,.order-card,.order-journey,.order-detail-box,.order-detail-section,.customer-empty-state,.delivery-app-card,.delivery-app-item,.review-reward-entry,.review-reward-history-empty,.review-reward-claim,.review-reward-order-card,.orders-checkin-promo,.orders-review-reward-promo,.account-review-reward-card,.review-reward-point-showcase>button) {
+  border-color:transparent; box-shadow:none;
+}
+.customer-shell .checkout-page--compact :is(.checkout-card,.payment-card.active,.checkout-pickup-branch .branch-card.branch-card-active),
+.branch-picker-panel .branch-card.branch-card-active,
+.customer-bottom-sheet .customer-offer-card.is-selected,
+.customer-option-sheet .customer-option-group,
+.customer-shell .rewards-overview .checkin-card--direct,
+.customer-shell .account-page-content>.bg-white,
+.rewards-benefits-page :is(.rewards-benefits-current,.rewards-benefit-tier),
+.cake-page :is(.cake-card,.cake-summary,.cake-order-panel,.cake-form-card,.cake-modal__panel,.cake-addon-card) { border-color:transparent; box-shadow:none; }
+html[data-customer-theme="dark"] .customer-shell .checkout-page--compact :is(.payment-card.active,.checkout-pickup-branch .branch-card.branch-card-active),
+html[data-customer-theme="dark"] .branch-picker-panel .branch-card,
+html[data-customer-theme="dark"] .customer-shell .rewards-overview .checkin-card--direct,
+html[data-customer-theme="dark"] .customer-shell :is(.orders-checkin-promo__topline>strong,.orders-checkin-promo__stats>div),
+html[data-customer-theme="dark"] .customer-shell .checkout-page--compact .checkout-benefits-card .promo-select { border-color:transparent; }
+html[data-customer-theme="dark"] .customer-shell :is(.customer-card,.account-panel,.stamp-card,.order-card,.orders-checkin-promo,.orders-review-reward-promo,.account-review-reward-card,.review-reward-point-showcase>button) { background:var(--ghr-surface); }
+.customer-bottom-sheet,.customer-modal-frame__panel,.branch-picker-panel { border-color:transparent; }
+.customer-shell :is(.orders-checkin-promo__topline>span,.orders-checkin-promo__stats>span,.orders-review-reward-promo__icon,.account-review-reward-card__icon) { border-color:transparent; box-shadow:none; }
+.customer-shell .orders-checkin-promo__stats>span { background:var(--ghr-surface-soft); }
+.customer-shell .rewards-overview .rewards-tier-link { border-color:transparent; box-shadow:none; }
+.customer-shell .rewards-hero__heading h1>svg { background:var(--ghr-yellow); color:#111; }
+.customer-shell .rewards-hero__heading button { color:var(--ghr-muted); }
+.customer-shell .rewards-empty>svg { color:var(--ghr-yellow); }
+.customer-shell .rewards-tier-timeline__dot { border:0; background:var(--ghr-line); }
+.customer-shell .rewards-tier-timeline .is-current .rewards-tier-timeline__dot,
+.customer-shell .rewards-tier-timeline .is-completed .rewards-tier-timeline__dot { background:var(--ghr-yellow); border-color:var(--ghr-yellow); color:#111; }

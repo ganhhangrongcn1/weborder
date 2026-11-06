@@ -1,0 +1,23 @@
+/* Stable menu rows and shared, square add controls; choice dots stay circular. */
+body:has(.menu-page--storefront):not(.customer-sheet-open),
+.customer-shell:has(.menu-page--storefront),
+.customer-shell:has(.menu-page--storefront) main.shadow-preview { overflow-x:clip; overflow-y:visible; }
+:root[data-customer-theme] .customer-shell .product-add-btn,
+:root[data-customer-theme] .customer-shell .product-flash-sale .product-add-btn {
+  box-sizing:border-box; display:grid; place-items:center;
+  width:44px; height:44px; min-width:44px; min-height:44px; flex:0 0 44px;
+  border:0; border-radius:12px; background:var(--ghr-yellow-gradient); color:#111;
+}
+:root[data-customer-theme] .customer-shell .product-add-btn span { transform:none; font-size:24px; line-height:1; font-weight:600; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .qty-btn,
+:root[data-customer-theme] .customer-shell .checkout-page--compact .checkout-cart-item .qty-btn,
+:root[data-customer-theme] .customer-option-sheet .modal-topping-count button { border-radius:10px; }
+:root[data-customer-theme] .customer-shell .product-card-stepper { border-radius:12px; }
+:root[data-customer-theme] .customer-shell .product-card-stepper button { border-radius:9px; color:#111; }
+:root[data-customer-theme] .customer-shell .menu-side-categories button { color:var(--ghr-muted); border-left-color:transparent; font-weight:500; }
+:root[data-customer-theme] .customer-shell .menu-side-categories button[aria-pressed="true"] { color:var(--ghr-ink); background:var(--ghr-surface); border-left-color:var(--ghr-yellow); font-weight:750!important; }
+:root[data-customer-theme="dark"] .customer-shell .menu-side-categories button[aria-pressed="true"] { color:var(--ghr-yellow); }
+:root[data-customer-theme] .customer-shell :is(.product-price-stack>span,.menu-promo-card__price span,.menu-promo-card__copy p) { color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-shell :is(.menu-promo-card__copy small,.menu-promo-card__price del) { color:var(--ghr-muted); }
+:root[data-customer-theme] .customer-shell .menu-promo-card__price b { color:var(--ghr-ink); }
+:root[data-customer-theme] .customer-shell :is(.menu-promo-card__image em,.menu-promo-card__cta,.menu-promo-card__discount) { color:#111; }

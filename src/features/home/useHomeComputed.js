@@ -4,6 +4,7 @@ import { getActiveFlashSalePromotions } from "../../services/flashSaleService.js
 import { buildHomeVoucherCards } from "../../services/homeVoucherService.js";
 import { calculateSalePrice, isTopBannerItem, toIdList } from "./homeHelpers.js";
 import { buildDeliveryAppBranches } from "../../services/deliveryAppService.js";
+import HOME_PICKUP_CAMPAIGN from "../../constants/homePickupCampaign.js";
 
 function hashPopupCampaign(value) {
   const input = String(value || "");
@@ -112,7 +113,7 @@ export default function useHomeComputed({
   const siteBrandBlock = safeHomeContent.find((block) => block?.id === "siteBrand");
   const reviewRewardsBlock = safeHomeContent.find((block) => block?.id === "reviewRewards");
   const deliveryAppsBlock = safeHomeContent.find((block) => block?.id === "deliveryApps");
-  const popupCampaignBlock = safeHomeContent.find((block) => block?.id === "popupCampaign");
+  const popupCampaignBlock = { ...safeHomeContent.find((block) => block?.id === "popupCampaign"), ...HOME_PICKUP_CAMPAIGN };
   const promoVouchersBlock = safeHomeContent.find((block) => block?.id === "promoVouchers" || block?.id === "promo_vouchers");
   const fulfillmentBlock = safeHomeContent.find((block) => block?.id === "fulfillment");
   const flashSaleBlock = safeHomeContent.find((block) => block?.id === "flashSale" || block?.id === "flash_sale");

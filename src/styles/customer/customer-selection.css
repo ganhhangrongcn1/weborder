@@ -1,0 +1,22 @@
+/* One geometric indicator for every customer selection; no text-glyph alignment. */
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel) .customer-selection-indicator.customer-selection-indicator {
+  box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; min-width:22px; min-height:22px; flex:0 0 22px;
+  padding:0; border:2px solid #aaa; border-radius:50%; background:#fff;
+  color:var(--ghr-ink); font-size:0; line-height:0; box-shadow:none; vertical-align:middle;
+}
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel) .customer-selection-indicator.customer-selection-indicator.is-selected {
+  border-color:var(--ghr-selection-ring,#ffda21); background:var(--ghr-surface,#fff); color:#111; box-shadow:0 0 0 2px #ffda2133;
+}
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel) .customer-selection-indicator.customer-selection-indicator::after { content:none; display:none; }
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel) .customer-selection-indicator.customer-selection-indicator>.customer-selection-indicator__dot {
+  box-sizing:border-box; display:block; flex:0 0 12px; width:12px; height:12px; min-width:12px; min-height:12px;
+  margin:0; padding:0; border:0; border-radius:50%; background:var(--ghr-yellow); transform:none; scale:1; opacity:0;
+}
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel) .customer-selection-indicator.customer-selection-indicator.is-selected>.customer-selection-indicator__dot { opacity:1; }
+.customer-option-sheet .customer-option-group .option-spice-grid .option { align-items:center; }
+.customer-option-sheet .option-spice-grid .option:not(:disabled):hover,
+.customer-option-sheet .modal-topping__select:not(:disabled):hover { background:#fff; color:var(--ghr-ink); }
+.customer-shell .checkout-page--compact .payment-card.active,
+.customer-shell .checkout-page--compact .checkout-pickup-branch .branch-card.branch-card-active,
+.branch-picker-panel .branch-card.branch-card-active { border-color:var(--ghr-yellow); background:#fff; box-shadow:none; }

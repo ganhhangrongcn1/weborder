@@ -1,0 +1,46 @@
+/* Review rewards panel. Entry banners use CustomerHighlight and customer-native.css. */
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel {
+  color:var(--ghr-ink); background:var(--ghr-surface); border:0; border-radius:20px; box-shadow:none;
+}
+:root[data-customer-theme] .customer-bottom-sheet.account-review-reward-sheet { background:var(--ghr-surface); }
+:root[data-customer-theme] .account-review-reward-sheet .review-reward-panel { padding:0; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(h1,h2,h3,strong,b) { color:var(--ghr-ink); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(p,small,em) { color:var(--ghr-muted); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(button,label,input,textarea) { border-color:var(--ghr-line); box-shadow:none; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-section-title>span,.review-reward-section-title>strong,.review-reward-entry__eyebrow,.review-reward-claim span,.review-reward-upload span) { color:var(--ghr-muted); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-point-showcase>button,.review-reward-google-card__reward,.review-reward-submit,.review-reward-login,.review-reward-maps-flow button) {
+  background:var(--ghr-yellow-gradient); color:#111; border:0; box-shadow:none;
+}
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-point-showcase>button { padding:14px 12px; border-radius:16px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-point-showcase :is(span,strong,small),
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-google-card__reward { color:#111; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-point-showcase>button::after { display:none; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-icon,.review-reward-google-card__icon,.review-reward-entry__icon) { background:var(--ghr-yellow); color:#111; border-radius:12px; box-shadow:none; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-icon,.review-reward-google-card__icon,.review-reward-entry__icon) svg { color:#111; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-google-card,.review-reward-order-picker__trigger,.review-reward-order,.review-reward-branches button,.review-reward-source-picker button,.review-reward-proof-guide,.review-reward-maps-flow,.review-reward-entry,.review-reward-upload,.review-reward-claim,.review-reward-empty-state,.review-reward-history-empty,.review-reward-resubmit-note,.review-reward-loading__body,.review-reward-loading__header) {
+  background:var(--ghr-surface-soft); color:var(--ghr-ink); border:1px solid transparent; border-radius:16px; box-shadow:none;
+}
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-google-card.is-selected,.review-reward-order.is-selected,.review-reward-branches button.is-selected,.review-reward-source-picker button.is-selected,.review-reward-order-picker.is-open .review-reward-order-picker__trigger) { border-color:var(--ghr-yellow); box-shadow:none; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-google-card { padding:52px 14px 14px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-google-card__reward { top:12px; right:12px; min-height:26px; padding:0 9px; border-radius:9px; animation:none; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-view-tabs,.review-reward-filters) { padding:4px; background:var(--ghr-surface-soft); border:0; border-radius:14px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-view-tabs button,.review-reward-filters button) { background:transparent; color:var(--ghr-muted); border:0; border-radius:11px; min-height:40px; box-shadow:none; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-view-tabs button.is-active,.review-reward-filters button.is-active) { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-order-picker__trigger strong,.review-reward-order-picker__trigger svg,.review-reward-claim__result span,.review-reward-claim__reason,.review-reward-maps-flow strong,.review-reward-upload strong,.review-reward-proof-guide strong) { color:var(--ghr-ink); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-message,.review-reward-claim__retry,.review-reward-resubmit-note button) { color:var(--ghr-ink); background:var(--ghr-surface-soft); border-color:transparent; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel :is(.review-reward-proof-guide>span,.review-reward-maps-flow>span,.review-reward-resubmit-note>span) { color:var(--ghr-ink); background:var(--ghr-surface); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-pagebar { background:var(--ghr-yellow); color:#111; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-pagebar :is(h1,span,button,svg) { color:#111; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel>header { background:var(--ghr-surface); border-radius:16px; box-shadow:none; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel>.review-reward-body { background:var(--ghr-surface); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel button:focus-visible { outline:2px solid var(--ghr-yellow); outline-offset:3px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-submit:disabled { background:var(--ghr-surface-soft); color:var(--ghr-muted); opacity:1; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-orders button { background:var(--ghr-surface-soft); color:var(--ghr-ink); border-color:transparent; border-radius:14px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-orders :is(span,em) { color:var(--ghr-muted); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-orders button.is-selected { border-color:var(--ghr-yellow); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-proof-guide>div { background:var(--ghr-surface); border-radius:12px; }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-proof-guide>div>span { background:var(--ghr-surface-soft); color:var(--ghr-ink); }
+:root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-proof-step { background:var(--ghr-surface); border-color:var(--ghr-line); border-radius:16px; box-shadow:none; }
+@media(max-width:360px) {
+  :root[data-customer-theme] :is(.customer-shell,.customer-bottom-sheet) .review-reward-panel .review-reward-point-showcase strong { font-size:24px; }
+}

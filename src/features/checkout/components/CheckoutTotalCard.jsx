@@ -1,4 +1,5 @@
-﻿import { formatMoney } from "../../../utils/format.js";
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import { formatMoney } from "../../../utils/format.js";
 import Icon from "../../../components/Icon.jsx";
 import CheckoutCard from "./CheckoutCard.jsx";
 
@@ -7,6 +8,8 @@ const DISTANCE_FORMATTER = new Intl.NumberFormat("vi-VN", {
 });
 
 export default function CheckoutTotalCard({
+  title = "Tổng cộng",
+  showSavings = true,
   subtotal,
   originalSubtotal = subtotal,
   giftSavingAmount = 0,
@@ -39,7 +42,7 @@ export default function CheckoutTotalCard({
   const savedAmount = Math.max(savingOriginalTotal - total, 0);
 
   return (
-    <CheckoutCard title="Tổng cộng" className="checkout-total-card">
+    <CheckoutCard title={title} className="checkout-total-card">
       <div className="checkout-total-summary">
         <div className="summary-line">
           <span>Tạm tính ({count} món)</span>
@@ -50,14 +53,14 @@ export default function CheckoutTotalCard({
           <div className="summary-line">
             <span>
               Phí ship bạn trả {distanceKm ? `(${DISTANCE_FORMATTER.format(distanceKm)} km)` : ""}{" "}
-              <button
+              <CustomerControl
                 type="button"
                 onClick={onShowDeliveryFee}
                 className="fee-info-btn"
                 aria-label="Xem cách tính phí giao hàng"
               >
                 i
-              </button>
+              </CustomerControl>
             </span>
             <strong>{formatMoney(effectiveShippingPaid)}</strong>
           </div>
@@ -96,7 +99,7 @@ export default function CheckoutTotalCard({
           <strong>{formatMoney(total)}</strong>
         </div>
 
-        {savedAmount > 0 ? (
+        {showSavings && savedAmount > 0 ? (
           <div className="summary-saving">
             <span className="summary-saving__label">
               <Icon name="gift" size={15} />

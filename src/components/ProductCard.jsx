@@ -1,4 +1,6 @@
+import CustomerControl from "./customer/CustomerControl.jsx";
 import { formatMoney } from "../utils/format.js";
+import CustomerBadge from "./customer/CustomerBadge.jsx";
 
 function getProductBadge(product, badgeText) {
   if (product?.flashPromoId) return "⚡ Flash Sale";
@@ -10,6 +12,10 @@ function getProductBadge(product, badgeText) {
 export default function ProductCard({ product, compact = false, onOpen, onAdd, onRemove, selectedCount = 0 }) {
   const badgeText = getProductBadge(product, String(product?.badge || "").trim());
   const hasDiscount = Number(product?.originalPrice || 0) > Number(product?.price || 0);
+  const handleCardClick = (event) => {
+    if (event.target.closest("button,a,input,select,textarea,[role='button']")) return;
+    (onAdd || onOpen)?.(product);
+  };
   const rootClass = [
     compact ? "product-row" : "product-card",
     product?.flashPromoId ? "product-flash-sale" : "",
@@ -17,8 +23,8 @@ export default function ProductCard({ product, compact = false, onOpen, onAdd, o
   ].filter(Boolean).join(" ");
 
   return (
-    <article className={rootClass}>
-      <button
+    <article className={rootClass} onClick={handleCardClick}>
+      <CustomerControl
         type="button"
         onClick={() => onOpen(product)}
         className={compact ? "product-row-image" : "product-image-wrap"}
@@ -32,33 +38,33 @@ export default function ProductCard({ product, compact = false, onOpen, onAdd, o
           loading="lazy"
           className="h-full w-full object-cover"
         />
-        {badgeText ? <span className="badge">{badgeText}</span> : null}
-        {selectedCount > 0 ? <span className="selected-badge">Đã chọn {selectedCount}</span> : null}
-      </button>
+        {badgeText ? <CustomerBadge compact={compact} title={badgeText}>{badgeText}</CustomerBadge> : null}
+        {selectedCount > 0 ? <CustomerBadge className="product-count-badge" compact={compact} title={`Đã chọn ${selectedCount}`}>{compact ? `×${selectedCount}` : `Đã chọn ${selectedCount}`}</CustomerBadge> : null}
+      </CustomerControl>
 
       <div className="product-card-body">
-        <button type="button" onClick={() => onOpen(product)} className="product-card-copy">
+        <CustomerControl type="button" onClick={() => onOpen(product)} className="product-card-copy">
           <h3>{product.name}</h3>
           {product.short ? <p>{product.short}</p> : null}
-        </button>
+        </CustomerControl>
 
         <div className="product-card-footer">
-          <div className="product-price-stack">
+          <CustomerControl type="button" className="product-price-stack" onClick={() => onOpen(product)} aria-label={`Xem ${product.name}`}>
             {hasDiscount ? <span>{formatMoney(product.originalPrice)}</span> : null}
             <strong>{formatMoney(product.price)}</strong>
             {product?.flashPromoId ? <small>Đang giảm sốc</small> : null}
-          </div>
+          </CustomerControl>
 
           {selectedCount > 0 ? (
             <div className="product-card-stepper" role="group" aria-label={`Số lượng ${product.name}`}>
-              <button type="button" onClick={() => onRemove?.(product)} aria-label={`Bớt ${product.name}`}>-</button>
+              <CustomerControl appearance="quantity" type="button" onClick={() => onRemove?.(product)} aria-label={`Bớt ${product.name}`}>-</CustomerControl>
               <span>{selectedCount}</span>
-              <button type="button" onClick={() => onAdd(product)} aria-label={`Thêm ${product.name}`}>+</button>
+              <CustomerControl appearance="quantity" type="button" onClick={() => onAdd(product)} aria-label={`Thêm ${product.name}`}>+</CustomerControl>
             </div>
           ) : (
-            <button type="button" onClick={() => onAdd(product)} aria-label={`Thêm ${product.name}`} className="product-add-btn">
+            <CustomerControl type="button" onClick={() => onAdd(product)} aria-label={`Thêm ${product.name}`} className="product-add-btn">
               <span>+</span>
-            </button>
+            </CustomerControl>
           )}
         </div>
       </div>

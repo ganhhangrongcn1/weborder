@@ -1,4 +1,6 @@
 import Icon from "../Icon.jsx";
+import CustomerBottomSheet from "./CustomerBottomSheet.jsx";
+import CustomerControl from "./CustomerControl.jsx";
 
 function joinClassNames(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -13,8 +15,9 @@ export function CustomerCard({
   children,
   ...props
 }) {
+  const Surface = Component === "button" ? CustomerControl : Component;
   return (
-    <Component
+    <Surface
       className={joinClassNames(
         "customer-card",
         `customer-card--${tone}`,
@@ -25,7 +28,7 @@ export function CustomerCard({
       {...props}
     >
       {children}
-    </Component>
+    </Surface>
   );
 }
 
@@ -41,9 +44,10 @@ export function CustomerButton({
   ...props
 }) {
   const buttonType = Component === "button" ? type || "button" : undefined;
+  const Control = Component === "button" ? CustomerControl : Component;
 
   return (
-    <Component
+    <Control
       type={buttonType}
       className={joinClassNames(
         "customer-button",
@@ -56,7 +60,7 @@ export function CustomerButton({
     >
       {icon ? <Icon name={icon} size={size === "sm" ? 15 : 17} /> : null}
       <span>{children}</span>
-    </Component>
+    </Control>
   );
 }
 
@@ -111,9 +115,9 @@ export function CustomerLoadingState({
   className = ""
 }) {
   return (
-    <CustomerCard className={joinClassNames("customer-loading-state", className)} padding="lg">
+    <CustomerCard role="status" aria-live="polite" aria-busy="true" className={joinClassNames("customer-loading-state", className)} padding="lg">
       <span className="customer-loading-state__icon">
-        <Icon name="star" size={20} />
+        <Icon name="refresh" size={20} />
       </span>
       <h2>{title}</h2>
       {message ? <p>{message}</p> : null}
@@ -128,19 +132,9 @@ export function CustomerModalFrame({
   onBackdropClick
 }) {
   return (
-    <div className="customer-modal-frame" onClick={onBackdropClick}>
-      <CustomerCard
-        as="section"
-        className={joinClassNames("customer-modal-frame__panel", className)}
-        padding="lg"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={ariaLabel}
-      >
-        {children}
-      </CustomerCard>
-    </div>
+    <CustomerBottomSheet ariaLabel={ariaLabel} className={joinClassNames("customer-modal-frame__panel", className)} onClose={onBackdropClick} showHeader={false}>
+      {children}
+    </CustomerBottomSheet>
   );
 }
 

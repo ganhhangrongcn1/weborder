@@ -1,3 +1,4 @@
+import CustomerControl from "../../components/customer/CustomerControl.jsx";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import AppEmptyState from "../../components/app/EmptyState.jsx";
@@ -605,10 +606,10 @@ export default function Tracking({
     <section className="orders-page">
       <div className="tracking-page-content space-y-4 px-4 pb-6 pt-4">
         {!canAccessFullOrderHistory ? (
-          <CustomerCard className="space-y-3">
+          <CustomerCard className="orders-guest-lookup space-y-3">
             <div>
               <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-orange-50 text-orange-600">
-                <Icon name="gift" size={18} />
+                <Icon name="search" size={20} />
               </div>
               <h2 className="mt-2 text-center text-base font-black text-brown">Tra cứu đơn và tích điểm</h2>
               <p className="mt-1 text-center text-xs leading-5 text-brown/60">
@@ -630,22 +631,24 @@ export default function Tracking({
                 placeholder="Ví dụ: 0901 234 567…"
                 className="min-w-0 flex-1 rounded-2xl border border-orange-100 bg-cream px-4 py-3 text-sm outline-none"
               />
-              <button
+              <CustomerControl
                 type="submit"
                 disabled={guestLookup.isLoading}
+                aria-busy={guestLookup.isLoading}
                 className="shrink-0 rounded-2xl bg-gradient-main px-4 py-3 text-sm font-black text-white shadow-orange disabled:opacity-60"
               >
                 {guestLookup.isLoading ? "Đang tìm" : "Tra cứu"}
-              </button>
+              </CustomerControl>
             </form>
 
-            <button
+            <CustomerControl
               type="button"
               onClick={() => navigate("account", "account")}
+              appearance="secondary"
               className="w-full rounded-2xl bg-orange-50 px-4 py-3 text-sm font-black text-orange-600"
             >
               Đăng nhập để xem đầy đủ
-            </button>
+            </CustomerControl>
 
             {guestLookup.notice ? (
               <div className="rounded-2xl bg-cream/70 px-4 py-3 text-sm font-bold text-brown/65" aria-live="polite">
@@ -659,7 +662,7 @@ export default function Tracking({
           <div
             ref={guestResultsRef}
             tabIndex={-1}
-            className="scroll-mt-4 rounded-2xl bg-white/80 px-4 py-3 outline-none"
+            className="guest-lookup-results-heading scroll-mt-4 rounded-2xl bg-white/80 px-4 py-3 outline-none"
             aria-live="polite"
           >
             <strong className="block text-sm font-black text-brown">Kết quả tra cứu</strong>
@@ -703,7 +706,7 @@ export default function Tracking({
               <div>
                 <p>
                   <Icon name="star" size={14} />
-                  Điểm đã nhận
+                  Đã nhận
                 </p>
                 <strong>+{orderSummary.claimedPoints.toLocaleString("vi-VN")}</strong>
                 <small>điểm Gánh</small>
@@ -711,7 +714,7 @@ export default function Tracking({
               <div>
                 <p>
                   <Icon name="clock" size={14} />
-                  Điểm chờ nhận
+                  Chờ nhận
                 </p>
                 <strong>+{orderSummary.pendingPoints.toLocaleString("vi-VN")}</strong>
                 <small>đang đối soát</small>
@@ -720,13 +723,14 @@ export default function Tracking({
 
             <div className="orders-filter-tabs" role="group" aria-label="Lọc đơn hàng theo trạng thái">
               {ORDER_FILTERS.map((filter) => (
-                <button
+                <CustomerControl
                   key={filter.key}
                   type="button"
                   aria-pressed={orderFilter === filter.key}
                   className="orders-filter-tab"
                   onClick={() => setOrderFilter(filter.key)}
                 >
+                  <Icon name={filter.key === "all" ? "bag" : filter.key === "active" ? "clock" : filter.key === "completed" ? "check" : "close"} size={15} />
                   <span>{filter.label}</span>
                   {filter.key === "all" || (shouldLoadFullHistory && !isOrderListRefreshing) ? (
                     <strong>{(
@@ -737,7 +741,7 @@ export default function Tracking({
                           : orderFilterCounts[filter.key]
                     ).toLocaleString("vi-VN")}</strong>
                   ) : null}
-                </button>
+                </CustomerControl>
               ))}
             </div>
 
@@ -780,7 +784,7 @@ export default function Tracking({
             <span className="orders-no-result__icon"><Icon name="search" size={22} /></span>
             <h2>Không tìm thấy đơn phù hợp</h2>
             <p>Thử nhập mã đơn khác, tên chi nhánh hoặc chọn trạng thái khác.</p>
-            <button
+            <CustomerControl
               type="button"
               onClick={() => {
                 setOrderSearch("");
@@ -788,7 +792,7 @@ export default function Tracking({
               }}
             >
               Xóa bộ lọc
-            </button>
+            </CustomerControl>
           </CustomerCard>
         ) : null}
 
@@ -839,9 +843,9 @@ export default function Tracking({
 
             if (!canAccessFullOrderHistory) {
               return (
-                <CustomerCard as="article" key={order.orderCode || order.id} className={isReadyForPickup ? "orders-card--ready" : ""}>
+                <CustomerCard as="article" key={order.orderCode || order.id} data-order-status={statusMeta.key} className={`guest-order-card${isReadyForPickup ? " orders-card--ready" : ""}`}>
                   <div className="flex items-start gap-3">
-                    <div className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl border text-sm font-black ${sourceBadge.className}`}>
+                    <div className={`guest-order-source grid h-14 w-14 shrink-0 place-items-center rounded-2xl border text-sm font-black ${sourceBadge.className}`}>
                       {sourceBadge.label}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -852,9 +856,11 @@ export default function Tracking({
                           </h2>
                           <p className="mt-1 text-xs font-semibold leading-5 text-brown/55">
                             {formatOrderTime(order.createdAt)}
+                            <span className="guest-order-source-label">{sourceBadge.label}</span>
                           </p>
                         </div>
-                        <span className={`shrink-0 rounded-2xl px-3 py-1 text-xs font-black ${getCustomerOrderStatusToneClass(statusMeta)}`}>
+                        <span className={`guest-order-status shrink-0 rounded-2xl px-3 py-1 text-xs font-black ${getCustomerOrderStatusToneClass(statusMeta)}`}>
+                          <Icon name={statusMeta.key === "completed" ? "check" : statusMeta.key === "cancelled" ? "close" : "clock"} size={13} />
                           {status}
                         </span>
                       </div>
@@ -864,13 +870,14 @@ export default function Tracking({
                           {getOrderAmountLabel(order)}: <strong className="text-base text-brown">{formatMoney(getOrderDisplayAmount(order))}</strong>
                         </p>
                         {pointBadge ? (
-                          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${pointBadge.className}`}>
+                          <span className={`guest-order-points shrink-0 rounded-full px-3 py-1 text-xs font-black ${pointBadge.className}`}>
+                            <Icon name="coins" size={14} />
                             {pointBadge.label}
                           </span>
                         ) : null}
                       </div>
                       {canTrackJourney || isExpiredPayment ? (
-                        <button
+                        <CustomerControl
                           type="button"
                           onClick={() => (
                             isExpiredPayment
@@ -879,11 +886,12 @@ export default function Tracking({
                                 ? handleContinuePayment(order)
                                 : openOrderDetails(order)
                           )}
-                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-black text-orange-600"
+                          appearance="primary"
+                          className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm"
                         >
                           <Icon name={journeyActionIcon} size={16} />
                           {journeyActionLabel}
-                        </button>
+                        </CustomerControl>
                       ) : null}
                     </div>
                   </div>
@@ -897,6 +905,7 @@ export default function Tracking({
                   as="article"
                   key={order.orderCode || order.id}
                   className={`orders-card ${isActiveOrder ? "orders-card--active" : ""}${isReadyForPickup ? " orders-card--ready" : ""}${isScheduledPickup ? " orders-card--scheduled" : ""}`}
+                  data-order-status={statusMeta.key}
                 >
                   <div className="orders-card__head">
                     <div>
@@ -904,6 +913,7 @@ export default function Tracking({
                       <em className={sourceBadge.className}>{sourceBadge.label}</em>
                     </div>
                     <span className={`orders-card__status ${getCustomerOrderStatusToneClass(statusMeta)}`}>
+                      <Icon name={statusMeta.key === "completed" ? "check" : statusMeta.key === "cancelled" ? "close" : "clock"} size={13} />
                       {status}
                     </span>
                   </div>
@@ -928,7 +938,7 @@ export default function Tracking({
 
                   {reviewRewardOrder ? (
                     reviewRewardOrder.reward_status === "eligible" ? (
-                      <button
+                      <CustomerControl
                         type="button"
                         className="orders-card__review-reward"
                         onClick={() => openReviewRewards("submit")}
@@ -939,9 +949,9 @@ export default function Tracking({
                           <strong>Gửi ảnh 5 sao, nhận {reviewRewardPoints.toLocaleString("vi-VN")}đ</strong>
                         </span>
                         <em>Tham gia</em>
-                      </button>
+                      </CustomerControl>
                     ) : reviewRewardOrder.reward_status === "submitted" ? (
-                      <button
+                      <CustomerControl
                         type="button"
                         className="orders-card__review-reward is-submitted"
                         onClick={() => openReviewRewards("history")}
@@ -952,7 +962,7 @@ export default function Tracking({
                           <strong>Đã gửi ảnh đánh giá</strong>
                         </span>
                         <em>Xem kết quả</em>
-                      </button>
+                      </CustomerControl>
                     ) : (
                       <div className="orders-card__review-reward is-expired">
                         <Icon name="clock" size={18} />
@@ -976,9 +986,10 @@ export default function Tracking({
                         {pointBadge.label}
                       </span>
                     ) : null}
-                      <button
+                      <CustomerControl
                         type="button"
                         className="orders-card__detail"
+                        appearance="primary"
                         aria-label={`${canTrackJourney || isExpiredPayment ? journeyActionLabel : "Xem chi tiết"} đơn ${getDisplayOrderCode(order)}`}
                         onClick={() => (
                           isExpiredPayment
@@ -990,7 +1001,7 @@ export default function Tracking({
                       >
                         <Icon name={canTrackJourney || isExpiredPayment ? journeyActionIcon : "eye"} size={16} />
                         {canTrackJourney || isExpiredPayment ? journeyActionLabel : "Chi tiết"}
-                      </button>
+                      </CustomerControl>
                     </div>
                   </div>
                 </CustomerCard>

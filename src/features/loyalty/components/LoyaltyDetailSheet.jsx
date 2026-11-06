@@ -73,7 +73,7 @@ export default function LoyaltyDetailSheet({
     <CustomerBottomSheet
       title={SHEET_TITLES[activeSheet]}
       onClose={onClose}
-      className="loyalty-detail-sheet"
+      className="loyalty-detail-sheet rewards-detail-sheet"
       contentClassName="loyalty-detail-sheet__content"
     >
       {activeSheet === "tiers" ? <TierJourneyCard journey={journey} /> : null}

@@ -1,3 +1,4 @@
+import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import { CustomerButton } from "../../../components/customer/CustomerUI.jsx";
 import Icon from "../../../components/Icon.jsx";
 import { getLoyaltyTierIconSymbol } from "../../../services/loyaltyProgramConfigService.js";
@@ -50,10 +51,10 @@ export default function LoyaltySummary({
           </div>
         </div>
         {primaryAction ? (
-          <button type="button" className="loyalty-summary__route" onClick={primaryAction.onClick}>
+          <CustomerControl type="button" className="loyalty-summary__route" onClick={primaryAction.onClick}>
             {primaryAction.label}
             <Icon name="back" size={15} />
-          </button>
+          </CustomerControl>
         ) : null}
       </div>
 

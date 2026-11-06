@@ -1,0 +1,68 @@
+/* App-style feedback, using the existing yellow brand and native scrolling. */
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel,.cake-page,.receipt-rewards) :is(button,a,summary,[role="button"]) {
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+:is(.customer-shell,.customer-bottom-sheet,.branch-picker-panel,.cake-page,.receipt-rewards) :is(button,a[role="button"]) {
+  transition:transform var(--ghr-release-time) var(--ghr-ease),scale var(--ghr-release-time) var(--ghr-ease),box-shadow var(--ghr-release-time) ease,background-color var(--ghr-release-time) ease,border-color var(--ghr-release-time) ease,opacity var(--ghr-press-time) ease;
+}
+.customer-shell :is(.cta,.cta-small,.customer-button,.account-auth-submit,.cart-glass-cta,.product-add-btn,.qty-btn,.customer-icon-button,.home2026-action-btn,.customer-install-primary):active:not(:disabled):not([aria-disabled="true"]),
+.customer-bottom-sheet :is(.cta,.customer-button,.customer-primary-action,.customer-sheet-close,.qty-btn,.customer-offer-card__footer button):active:not(:disabled):not([aria-disabled="true"]),
+.branch-picker-panel .cta:active:not(:disabled),
+.cake-page .cake-primary-btn:active:not(:disabled),.receipt-rewards .receipt-rewards__primary:active:not(:disabled) {
+  transform:scale(.97); opacity:1; filter:brightness(.97);
+  box-shadow:inset 0 2px 4px #302b2214;
+  transition-duration:var(--ghr-press-time);
+}
+.customer-shell :is(.payment-card,.branch-card,.pickup-mode-tabs button,.fulfillment-tabs button,.orders-filter-tab,.rewards-shortcuts button):active:not(:disabled) {
+  transform:scale(.985); opacity:1; transition-duration:var(--ghr-press-time);
+}
+.customer-shell :is(.payment-card,.branch-card) { transition:border-color .18s ease,background-color .18s ease,transform .16s var(--ghr-ease); }
+.customer-shell .payment-card__selected,.customer-option-sheet .modal-topping-active .modal-topping__indicator { animation:customer-selection-pop .2s var(--ghr-ease) both; }
+.customer-shell .toggle-input::after,.customer-bottom-sheet .toggle-input::after { transition:transform .2s var(--ghr-ease); }
+.customer-shell .customer-bottom-nav__item { transition:background-color .18s ease,color .18s ease; }
+.customer-shell .customer-bottom-nav__item--active>.icon-ux { animation:customer-selection-pop .2s var(--ghr-ease); }
+.customer-shell .customer-bottom-nav__item:active { opacity:1; background:var(--ghr-yellow-soft); }
+.customer-shell .customer-page-stage { animation:customer-screen-arrive .22s var(--ghr-ease) backwards; }
+.customer-sheet-backdrop { animation:customer-touch-backdrop .18s ease-out both; }
+.customer-bottom-sheet:not(.rewards-benefits-page) { animation:customer-touch-sheet var(--ghr-sheet-time) var(--ghr-ease) both; }
+.customer-bottom-sheet:not(.customer-cart-sheet):not(.rewards-benefits-page) { border-radius:24px 24px 0 0; }
+.customer-bottom-sheet .customer-sheet-close { width:44px; height:44px; min-height:44px; flex:0 0 44px; border-radius:14px; }
+.customer-shell .customer-icon-button,.branch-picker-panel .branch-picker-close { min-width:44px; min-height:44px; }
+.customer-shell :is(.product-add-btn,.qty-btn),.customer-bottom-sheet .qty-btn { position:relative; }
+.customer-shell :is(.product-add-btn,.qty-btn)::before,.customer-bottom-sheet .qty-btn::before {
+  content:""; position:absolute; width:max(100%,44px); height:max(100%,44px); top:50%; left:50%; transform:translate(-50%,-50%); border-radius:50%;
+}
+.customer-shell :is(.product-add-btn,.qty-btn):disabled::before,.customer-bottom-sheet .qty-btn:disabled::before { pointer-events:none; }
+.customer-shell :is(input,textarea,select):focus-visible:not([aria-invalid="true"]),
+.customer-bottom-sheet :is(input,textarea,select):focus-visible:not([aria-invalid="true"]) {
+  border-color:#b99b17; outline:2px solid #ffda2155; outline-offset:2px; box-shadow:0 0 0 3px #ffda211a;
+}
+.customer-shell .toast { animation:customer-feedback-arrive .22s var(--ghr-ease) both; border-color:var(--ghr-line); }
+.customer-shell .toast>span { background:var(--ghr-yellow-soft); color:var(--ghr-ink); }
+.customer-sheet-scroll,.customer-option-sheet-scroll { -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
+@media(hover:hover) and (pointer:fine) {
+  .customer-shell :is(.cta,.customer-button--primary,.cart-glass-cta,.account-auth-submit):hover:not(:disabled),
+  .customer-bottom-sheet :is(.cta,.customer-primary-action):hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 7px 16px #dfb72b24,inset 0 1px #ffffff80; }
+  .customer-shell .customer-icon-button:hover,.customer-bottom-sheet .customer-sheet-close:hover { background:var(--ghr-yellow-soft); color:var(--ghr-ink); }
+  .customer-shell :is(.product-row,.product-card,.branch-card,.payment-card):hover { border-color:var(--ghr-accent-line); box-shadow:0 4px 12px #302b2208; }
+}
+@media(hover:none) {
+  .customer-shell :is(.product-row,.product-card,.menu-addon-card,.checkin-card,.home2026-flash-card,.branch-card,.promo-code-card,.payment-card,.delivery-app-item,.flash-card,.topping-card,.customer-card--interactive):hover:not(:active) { transform:none; box-shadow:none; }
+  .customer-shell :is(.cta,.customer-button,.cart-glass-cta,.account-auth-submit):hover:not(:active),
+  .customer-bottom-sheet :is(.cta,.customer-primary-action):hover:not(:active) { filter:none; }
+}
+@keyframes customer-touch-sheet { from { opacity:.75; transform:translateY(32px); } to { opacity:1; transform:translateY(0); } }
+@keyframes customer-touch-backdrop { from { opacity:0; } to { opacity:1; } }
+@keyframes customer-screen-arrive { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+@keyframes customer-selection-pop { from { transform:scale(.82); } to { transform:scale(1); } }
+@keyframes customer-feedback-arrive { from { opacity:0; translate:0 8px; } to { opacity:1; translate:0 0; } }
+@media(prefers-reduced-motion:reduce) {
+  .customer-shell *,.customer-shell *::before,.customer-shell *::after,
+  .customer-sheet-backdrop,.customer-bottom-sheet,.customer-bottom-sheet *,
+  .branch-picker-panel *,.cake-page *,.receipt-rewards * {
+    animation:none!important; transition:none!important; scroll-behavior:auto!important;
+  }
+  .customer-shell :is(.cta,.customer-button,.qty-btn,.product-add-btn):active:not(:disabled),
+  .customer-bottom-sheet :is(.cta,.customer-primary-action,.qty-btn):active:not(:disabled) { transform:none; }
+}
