@@ -253,7 +253,9 @@ async function invokeSessionAction(body = {}, authPreparation = null) {
   }
   return {
     ok: true,
-    session: normalizeSessionRow(data.session),
+    session: body.action === "recover_checkout" && data.session === null
+      ? null
+      : normalizeSessionRow(data.session),
     sessions: Array.isArray(data.sessions)
       ? data.sessions.map((session) => normalizeSessionRow(session))
       : [],
