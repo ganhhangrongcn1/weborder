@@ -5,7 +5,10 @@ export default function ReviewRewardsPage({ navigate, branches = [] }) {
     <ReviewRewardPanel
       variant="page"
       showHistory
-      onBack={() => navigate("home", "home")}
+      onBack={() => {
+        if (window.history.state?.idx > 0) window.history.back();
+        else navigate("home", "home");
+      }}
       onLogin={() => navigate("account", "account")}
       branches={branches}
     />

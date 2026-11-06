@@ -1,11 +1,9 @@
 import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import CustomerAppearanceToggle from "../../../components/customer/CustomerAppearanceToggle.jsx";
-import { useState } from "react";
 import Icon from "../../../components/Icon.jsx";
 import AppEmptyState from "../../../components/app/EmptyState.jsx";
 import AccountPanel from "../../../pages/customer/account/AccountPanel.jsx";
 import AddressCard from "../../../pages/customer/account/AddressCard.jsx";
-import ReviewRewardSheet from "./ReviewRewardSheet.jsx";
 import CustomerHighlight from "../../../components/customer/CustomerHighlight.jsx";
 
 function OverviewSkeleton() {
@@ -62,9 +60,9 @@ function getTierProgressMetric(tierJourney = {}) {
 
 export default function AccountDashboard({
   vm,
-  logoutDemoUser
+  logoutDemoUser,
+  onOpenReviewRewards
 }) {
-  const [reviewRewardOpen, setReviewRewardOpen] = useState(false);
   const points = Number(vm.accountOverview.loyalty?.totalPoints || 0);
   const showOverviewSkeleton = vm.accountOverview.isLoading && !vm.accountOverview.hasSummary;
   const tierProgressMetric = getTierProgressMetric(vm.tierJourney);
@@ -154,15 +152,10 @@ export default function AccountDashboard({
 
       <CustomerHighlight
         className="account-review-reward-card"
-        onClick={() => setReviewRewardOpen(true)}
-        aria-haspopup="dialog"
+        onClick={onOpenReviewRewards}
         title="Đánh giá nhận điểm"
         description="Xem đơn đủ điều kiện và kết quả đã gửi"
       />
-
-      {reviewRewardOpen ? (
-        <ReviewRewardSheet onClose={() => setReviewRewardOpen(false)} />
-      ) : null}
 
       <AccountPanel
         title="Địa chỉ giao hàng"

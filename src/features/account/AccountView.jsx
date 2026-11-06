@@ -477,6 +477,7 @@ export default function Account({
       <AccountDashboard
         vm={vm}
         logoutDemoUser={logoutDemoUser}
+        onOpenReviewRewards={() => navigate("reviewRewards", "account")}
       />
       {vm.profileOpen ? <ProfileModal user={vm.accountUser} onClose={() => vm.setProfileOpen(false)} onSave={vm.handleSaveUser} onChangePassword={vm.handleChangePassword} /> : null}
       {vm.addressModal ? (
