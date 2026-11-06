@@ -118,3 +118,13 @@ html[data-customer-theme="dark"] .receipt-rewards .receipt-rewards__banner :is(s
 html[data-customer-theme="dark"] .cake-page :is(.cake-card,.cake-summary,.cake-order-panel,.cake-form-card,.cake-modal__panel,.cake-addon-card,.cake-addon-option-grid button,.cake-segmented) { background:var(--ghr-surface); color:var(--ghr-ink); border-color:var(--ghr-line); }
 html[data-customer-theme="dark"] :is(.customer-shell,.customer-bottom-sheet) :is(.checkout-field-error,.account-auth-field__error,.account-auth-form-error) { color:#ffb4ab; }
 html[data-customer-theme="dark"] .receipt-rewards .receipt-rewards__error { background:#291717; color:#ffb4ab; }
+@media (display-mode: standalone) {
+  :root[data-customer-theme] .customer-shell {
+    --customer-bottom-safe: env(safe-area-inset-bottom, 0px);
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  :root[data-customer-theme] .customer-shell .customer-bottom-nav {
+    background: var(--ghr-surface);
+    padding-bottom: calc(8px + var(--customer-bottom-safe));
+  }
+}
