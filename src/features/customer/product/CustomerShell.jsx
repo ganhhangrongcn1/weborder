@@ -443,7 +443,7 @@ export default function CustomerShell({
                       handleBottomNav(tab);
                       return;
                     }
-                    if (page === "checkout" && menuBranchPicker.selectedBranchId) {
+                    if ((cartCount > 0 || page === "checkout") && menuBranchPicker.selectedBranchId) {
                       navigate("menu", "menu");
                       return;
                     }
