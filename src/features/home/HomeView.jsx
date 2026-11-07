@@ -107,7 +107,7 @@ export default function Home({
       subtitle="Chọn quán để xem các món đang bán tại quán đó."
       ariaLabel="Chọn quán ghé lấy" branches={pickupBranches}
       selectedBranchId={pickupBranch} onSelectBranch={()=>{}}
-      onConfirm={id=>{const commit=()=>{setPickupBranch(id);confirmPickupAndOpenMenu(id);};requestBranchChange ? requestBranchChange(id,commit) : commit();}} iconName="store" enableNearby />
+      onConfirm={(id,schedule)=>{const commit=()=>{setPickupBranch(id);confirmPickupAndOpenMenu(id,schedule);};requestBranchChange ? requestBranchChange(id,commit) : commit();}} iconName="store" enableNearby allowScheduledPickup />
   </section>;
 }
 

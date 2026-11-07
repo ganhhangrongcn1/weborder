@@ -1,6 +1,5 @@
 import CustomerControl from "../../../components/customer/CustomerControl.jsx";
 import { formatMoney } from "../../../utils/format.js";
-import Icon from "../../../components/Icon.jsx";
 import CheckoutCard from "./CheckoutCard.jsx";
 
 const DISTANCE_FORMATTER = new Intl.NumberFormat("vi-VN", {
@@ -96,18 +95,13 @@ export default function CheckoutTotalCard({
 
         <div className="summary-final">
           <span>Tổng thanh toán</span>
-          <strong>{formatMoney(total)}</strong>
-        </div>
-
-        {showSavings && savedAmount > 0 ? (
-          <div className="summary-saving">
-            <span className="summary-saving__label">
-              <Icon name="gift" size={15} />
-              Bạn tiết kiệm được {formatMoney(savedAmount)}
-            </span>
-            <del>{formatMoney(savingOriginalTotal)}</del>
+          <div className="summary-final__amount">
+            <strong>{formatMoney(total)}</strong>
+            {showSavings && savedAmount > 0 && (
+              <small className="summary-saving">Bạn tiết kiệm được {formatMoney(savedAmount)}</small>
+            )}
           </div>
-        ) : null}
+        </div>
       </div>
     </CheckoutCard>
   );

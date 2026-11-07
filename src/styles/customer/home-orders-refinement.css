@@ -10,9 +10,11 @@
 .home-review-action__copy>span { color:var(--ghr-highlight-muted); font-size:11px; line-height:1.6; }
 .home-review-action__arrow { flex-shrink:0; color:var(--ghr-highlight-ink); transform:rotate(180deg); }
 .customer-shell > main:has(.home-native-home) { padding-bottom:var(--customer-bottom-nav-height); }
-.customer-shell .home-native-home:has(> .home-review-reward) {
-  min-height:calc(100dvh - var(--customer-bottom-nav-height));
-  align-content:space-between;
+.customer-shell > main:has(.home-native-home):has(.floating-cart-stack) {
+  padding-bottom:calc(var(--customer-bottom-nav-height) + 65px);
+}
+.customer-shell main:has(.floating-cart-stack) .home-native-home {
+  gap:8px;
 }
 @media (max-height: 690px) {
   .home-native-home .home-review-action__copy>span { display:none; }

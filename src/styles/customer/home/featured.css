@@ -256,6 +256,25 @@
   padding: 0 14px 8px;
 }
 
+.branch-pickup-schedule {
+  display: grid;
+  gap: 12px;
+  padding-block: 12px;
+}
+
+.branch-pickup-schedule__store {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--ghr-surface-soft);
+  color: var(--ghr-ink);
+}
+
+.branch-pickup-schedule__store small { color: var(--ghr-muted); }
+.branch-pickup-schedule .pickup-field input { width: 100%; min-height: 44px; }
+.branch-pickup-schedule__change { min-height: 44px; text-align: center; color: var(--ghr-ink); }
+
 .branch-picker-footer {
   flex: 0 0 auto;
   padding: 10px 14px calc(14px + env(safe-area-inset-bottom));

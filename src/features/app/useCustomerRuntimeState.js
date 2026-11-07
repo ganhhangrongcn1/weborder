@@ -34,6 +34,7 @@ import { filterProductsForAvailability } from "../../services/productAvailabilit
 import { isPromotionAllowedForChannel } from "../../services/promotionChannelService.js";
 import { hasMenuCategory, isAllMenuCategory, resolveDefaultMenuCategory } from "../../constants/menuCategoryConfig.js";
 import { buildReorderCheckoutPreset } from "../checkout/checkoutDomain.js";
+import { isValidPickupSchedule } from "../../utils/dateTimeDefaults.js";
 import { clearCheckoutVoucherIntent } from "../../services/checkoutVoucherIntentService.js";
 import { orderingFeatureFlags } from "../../constants/featureFlags.js";
 import { getCustomerOrderCatalogAsync } from "../../services/customerOrderCatalogService.js";
@@ -128,11 +129,19 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     (productState.isCatalogLoading && availableCustomerProducts.length === 0) ||
     (menuChannel === "qr" && Boolean(selectedMenuBranchValue) && !selectedMenuBranch);
 
+  const getCustomerStoreBlockNotice = () => {
+    const preset = coreState.checkoutPreset;
+    const scheduledPickup = menuChannel !== "qr" && preset?.fulfillmentType === "pickup" && preset.pickupMode === "schedule";
+    if (scheduledPickup && isValidPickupSchedule(preset.pickupDate, preset.pickupClock, selectedMenuBranch)) return null;
+    return getStoreBlockNotice();
+  };
+
   const prepareReorderCheckout = useCallback((order) => {
     clearCheckoutVoucherIntent();
     const { preset, branchUnavailable } = buildReorderCheckoutPreset({
       order,
       branches: productState.branches,
+      isBranchOpenNow,
       pathname: typeof window !== "undefined" ? window.location.pathname : ""
     });
     coreState.setCheckoutPreset((current) => ({
@@ -146,7 +155,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
         description: "Món đã được đưa vào giỏ. Bạn chọn lại chi nhánh đang hoạt động trước khi đặt nhé."
       });
     }
-  }, [coreState.setCheckoutPreset, productState.branches]);
+  }, [coreState.setCheckoutPreset, productState.branches, isBranchOpenNow]);
 
   const {
     navigate,
@@ -170,7 +179,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     spiceLevels,
     storeToppings: productState.storeToppings,
     getDefaultOrderChoices,
-    getStoreBlockNotice,
+    getStoreBlockNotice: getCustomerStoreBlockNotice,
     onStoreBlocked: setServiceNotice,
     onRouteChange: onRouteChange || applyRouteChange
   });
@@ -260,6 +269,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
       const { preset } = buildReorderCheckoutPreset({
         order,
         branches: productState.branches,
+        isBranchOpenNow,
         pathname: typeof window !== "undefined" ? window.location.pathname : ""
       });
       const branchValue = getCheckoutBranchValue(preset);
@@ -362,7 +372,7 @@ export default function useCustomerRuntimeState({ domainState, demoData, onRoute
     hasRegisteredAccountByPhone,
     serviceNotice,
     setServiceNotice,
-    getStoreBlockNotice,
+    getStoreBlockNotice: getCustomerStoreBlockNotice,
     isBranchOpenNow,
     buildStoreOfflineNotice,
     buildDeliveryDisabledNotice,

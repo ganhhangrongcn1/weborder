@@ -104,14 +104,15 @@ export default function FloatingCartBar({ count, subtotal, onClick, onContinue, 
         ) : null}
 
         <div className="floating-cart-bar">
-          <CustomerControl type="button" onClick={onClick} className="floating-cart-open" aria-label="Mở giỏ hàng">
-          <span className="cart-glass-icon"><Icon name="cart" size={18} /></span>
-          <span className="min-w-0 flex-1 text-left">
-            <strong>{count} món đã chọn</strong>
-            <small>Tạm tính {formatMoney(subtotal)}</small>
-          </span>
+          <CustomerControl type="button" onClick={onClick || onContinue} className="floating-cart-open" aria-label={onClick ? "Mở giỏ hàng" : "Đến trang thanh toán"}>
+            <span className="cart-glass-icon"><Icon name="cart" size={18} /></span>
+            <span className="min-w-0 flex-1 text-left">
+              <strong>{count} món đã chọn</strong>
+              <small>Tạm tính {formatMoney(subtotal)}</small>
+            </span>
+            {!onClick && <span className="cart-glass-cta">Thanh toán</span>}
           </CustomerControl>
-          <CustomerControl type="button" className="cart-glass-cta" onClick={onContinue || onClick}>Tiếp tục</CustomerControl>
+          {onClick && <CustomerControl type="button" className="cart-glass-cta" onClick={onContinue || onClick}>Tiếp tục</CustomerControl>}
         </div>
       </div>
     </div>

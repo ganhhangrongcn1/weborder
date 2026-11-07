@@ -4,6 +4,7 @@ import { defaultPickupBranches } from "../../data/storeDefaults.js";
 import { getDefaultAddress, estimateDistanceKm } from "./checkoutHelpers.js";
 import { calculateBaseShippingFeeByConfig } from "../../services/shippingService.js";
 import { resolveBranchFromCandidates, resolveOrderBranch } from "../../services/branchIdentityService.js";
+import { getNextPickupSchedule } from "../../utils/dateTimeDefaults.js";
 
 function parseBranchLocation(branch) {
   if (!branch) return null;
@@ -113,7 +114,7 @@ function buildReorderDeliveryInfo(order = {}) {
   };
 }
 
-export function buildReorderCheckoutPreset({ order = {}, branches = [], pathname = "" }) {
+export function buildReorderCheckoutPreset({ order = {}, branches = [], pathname = "", isBranchOpenNow }) {
   const branchList = Array.isArray(branches) ? branches.filter(Boolean) : [];
   const pickupBranches = branchList.filter((branch) => branch?.pickupEnabled !== false);
   const qrBranchKey = getQrBranchKeyFromPath(pathname);
@@ -147,20 +148,25 @@ export function buildReorderCheckoutPreset({ order = {}, branches = [], pathname
     : branchList.filter((branch) => branch?.shipEnabled !== false);
   const matchedBranch = resolveOrderBranch(order, eligibleBranches);
   const selectedBranchId = String(matchedBranch?.id || "");
+  const closedPickupBranch = resolveOrderBranch(order, pickupBranches);
+  const schedule = closedPickupBranch && isBranchOpenNow && !isBranchOpenNow(matchedBranch || closedPickupBranch)
+    ? getNextPickupSchedule(closedPickupBranch)
+    : null;
 
   return {
-    branchUnavailable: branchList.length > 0 && !matchedBranch,
+    branchUnavailable: branchList.length > 0 && !matchedBranch && !schedule,
     preset: {
-      fulfillmentType,
-      selectedBranch: fulfillmentType === "pickup" ? selectedBranchId : "",
-      selectedDeliveryBranch: fulfillmentType === "delivery" ? selectedBranchId : "",
+      fulfillmentType: schedule ? "pickup" : fulfillmentType,
+      selectedBranch: schedule ? closedPickupBranch.id : fulfillmentType === "pickup" ? selectedBranchId : "",
+      selectedDeliveryBranch: !schedule && fulfillmentType === "delivery" ? selectedBranchId : "",
       pickupMode: "soon",
+      ...schedule,
       orderSource: "online",
       source: "online",
       qrBranchId: "",
       qrBranchLocked: false,
       qrAutoPickupNow: false,
-      reorderDeliveryInfo: fulfillmentType === "delivery" ? buildReorderDeliveryInfo(order) : null
+      reorderDeliveryInfo: !schedule && fulfillmentType === "delivery" ? buildReorderDeliveryInfo(order) : null
     }
   };
 }

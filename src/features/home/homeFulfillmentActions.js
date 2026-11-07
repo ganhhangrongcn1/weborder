@@ -1,3 +1,5 @@
+import { isValidPickupSchedule } from "../../utils/dateTimeDefaults.js";
+
 export function createHomeFulfillmentActions({
   deliveryBranches,
   pickupBranches,
@@ -67,7 +69,7 @@ export function createHomeFulfillmentActions({
     setDeliveryPlannerOpen(false);
   };
 
-  const confirmPickupAndOpenMenu = (branchId = "") => {
+  const confirmPickupAndOpenMenu = (branchId = "", schedule) => {
     const selectedPickupBranchInfo = branchId
       ? pickupBranches.find((branch) => branch.id === branchId) || null
       : pickupBranches.find((branch) => branch.id === pickupBranch) || pickupBranches[0] || null;
@@ -76,7 +78,7 @@ export function createHomeFulfillmentActions({
       setServiceNotice?.(buildPickupDisabledNotice?.() || buildStoreOfflineNotice?.());
       return;
     }
-    if (!isBranchOpenNow(selectedPickupBranchInfo)) {
+    if (!isBranchOpenNow(selectedPickupBranchInfo) && !isValidPickupSchedule(schedule?.pickupDate, schedule?.pickupClock, selectedPickupBranchInfo)) {
       setServiceNotice?.(buildOutOfHoursNotice?.(selectedPickupBranchInfo));
       return;
     }
@@ -84,9 +86,9 @@ export function createHomeFulfillmentActions({
       fulfillmentType: "pickup",
       selectedBranch: selectedPickupBranchInfo.id || pickupBranch,
       selectedDeliveryBranch: selectedDeliveryBranchInfo?.id || "",
-      pickupMode,
-      pickupDate,
-      pickupClock
+      pickupMode: schedule?.pickupMode || pickupMode,
+      pickupDate: schedule?.pickupDate || pickupDate,
+      pickupClock: schedule?.pickupClock || pickupClock
     });
     setPickupPlannerOpen(false);
     navigate("menu", "menu");

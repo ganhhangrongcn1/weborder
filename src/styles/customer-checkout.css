@@ -1292,14 +1292,18 @@ button.payment-card {
   font-weight: 950;
 }
 
+.summary-final__amount {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+}
+
 .summary-saving {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  color: #6d6872;
-  font-size: 13px;
-  font-weight: 750;
+  color: var(--ghr-highlight-ink, #7350c8);
+  font-size: 11px;
+  font-weight: 400;
+  text-align: right;
 }
 
 .payment-card__brand {
@@ -1319,17 +1323,6 @@ button.payment-card {
   border-color: rgba(165, 0, 100, 0.4);
   background: #fff7fc;
   box-shadow: 0 12px 28px rgba(165, 0, 100, 0.1);
-}
-
-.summary-saving__label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.summary-saving__label .icon-ux {
-  flex: 0 0 auto;
-  color: #e55b00;
 }
 
 .shipping-support-note {

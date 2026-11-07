@@ -159,7 +159,6 @@ export default function CheckoutPricingSection({
 
       <CheckoutTotalCard
         title="Chi tiết thanh toán"
-        showSavings={false}
         subtotal={subtotal}
         originalSubtotal={originalSubtotal}
         giftSavingAmount={giftSavingAmount}

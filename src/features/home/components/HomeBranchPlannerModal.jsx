@@ -1,4 +1,6 @@
+import { useState } from "react";
 import CustomerControl from "../../../components/customer/CustomerControl.jsx";
+import { getNextPickupSchedule, getTodayInputDate, getTomorrowInputDate, isValidPickupSchedule } from "../../../utils/dateTimeDefaults.js";
 import CustomerBottomSheet from "../../../components/customer/CustomerBottomSheet.jsx";
 import Icon from "../../../components/Icon.jsx";
 import CustomerSelectionIndicator from "../../../components/customer/CustomerSelectionIndicator.jsx";
@@ -39,10 +41,20 @@ export default function HomeBranchPlannerModal({
   confirmLabel = "Xong, vào menu",
   iconName = "home",
   disabledConfirm = false,
-  enableNearby = false
+  enableNearby = false,
+  allowScheduledPickup = false
 }) {
+  const [appointment, setAppointment] = useState(null);
   const nearby = useNearbyBranches(branches,open && enableNearby);
   if (!open) return null;
+  const scheduledBranch = appointment && branches.find(branch => branch.id === appointment.branchId);
+  const canConfirmAppointment = scheduledBranch && isValidPickupSchedule(appointment.pickupDate, appointment.pickupClock, scheduledBranch);
+  const appointmentDay = appointment?.pickupDate === getTodayInputDate()
+    ? "hôm nay"
+    : appointment?.pickupDate === getTomorrowInputDate()
+      ? "ngày mai"
+      : appointment?.pickupDate.split("-").reverse().join("/");
+  const close = () => { setAppointment(null); onClose?.(); };
 
   const visibleBranches = enableNearby && nearby.position
     ? [...nearby.nearby].sort((a,b)=>Number(isBranchOpenNow(b))-Number(isBranchOpenNow(a)))
@@ -51,7 +63,24 @@ export default function HomeBranchPlannerModal({
   const shouldShowConfirm = false;
 
   return (
-    <CustomerBottomSheet title={title} subtitle={subtitle} ariaLabel={ariaLabel || title || "Chọn chi nhánh"} className="branch-picker-panel" onClose={onClose} onBackdropClose={onBackdropClose} closeOnBackdrop={Boolean(onBackdropClose)}>
+    <CustomerBottomSheet title={title} subtitle={subtitle} ariaLabel={ariaLabel || title || "Chọn chi nhánh"} className="branch-picker-panel" onClose={close} onBackdropClose={onBackdropClose && (event => { setAppointment(null); onBackdropClose(event); })} closeOnBackdrop={Boolean(onBackdropClose)}>
+      {scheduledBranch ? (
+        <div className="branch-picker-list branch-pickup-schedule">
+          <div className="branch-pickup-schedule__store">
+            <strong>{scheduledBranch.name}</strong>
+            <small>Giờ bán {getBranchHours(scheduledBranch).label}</small>
+          </div>
+          <label className="pickup-field">
+            <span>Giờ nhận món {appointmentDay}</span>
+            <input type="time" value={appointment.pickupClock} onChange={event => setAppointment({ ...appointment, pickupClock: event.target.value })} />
+          </label>
+          {!canConfirmAppointment && <p role="status">Chọn giờ chưa qua và nằm trong giờ bán của quán.</p>}
+          <CustomerControl type="button" className="cta w-full" disabled={!canConfirmAppointment} onClick={() => { setAppointment(null); onConfirm?.(scheduledBranch.id, appointment); }}>
+            Hẹn nhận {appointmentDay}{appointment.pickupClock && ` · ${appointment.pickupClock}`}
+          </CustomerControl>
+          <CustomerControl type="button" className="branch-pickup-schedule__change" onClick={() => setAppointment(null)}>Chọn quán khác</CustomerControl>
+        </div>
+      ) : <>
         {enableNearby && (nearby.busy || nearby.message) && <p className="home-nearby-status" role="status">{nearby.busy ? "Đang tìm quán gần bạn…" : nearby.message}</p>}
         <div className="branch-picker-list">
           {!visibleBranches.length && <p role="status">Hiện chưa có chi nhánh nhận hình thức đặt món này. Bạn quay lại sau nhé.</p>}
@@ -64,12 +93,15 @@ export default function HomeBranchPlannerModal({
                 key={branch.id}
                 type="button"
                 onClick={() => {
-                  if (!openNow) return;
+                  if (!openNow) {
+                    if (allowScheduledPickup) setAppointment({ ...getNextPickupSchedule(branch), branchId: branch.id });
+                    return;
+                  }
                   onSelectBranch(branch.id);
                   onConfirm?.(branch.id);
                 }}
-                className={`branch-card ${selectedBranchId === branch.id ? "branch-card-active" : ""} ${openNow ? "" : "branch-card-closed"}`}
-                disabled={!openNow}
+                className={`branch-card ${selectedBranchId === branch.id ? "branch-card-active" : ""} ${openNow || allowScheduledPickup ? "" : "branch-card-closed"}`}
+                disabled={!openNow && !allowScheduledPickup}
               >
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-50 text-orange-600">
                   <Icon name={iconName} size={18} />
@@ -79,7 +111,7 @@ export default function HomeBranchPlannerModal({
                   <small>{branch.address}</small>
                   <em>Giờ hoạt động: {getBranchHours(branch).label}</em>
                   {enableNearby && Number.isFinite(branch.distanceKm) && <small className="home-branch-distance">{formatBranchDistance(branch.distanceKm)}{nearest?.id === branch.id ? " · Gần bạn nhất đang mở" : ""}</small>}
-                  {!openNow ? <small className="branch-closed-warning">Chi nhánh đã đóng cửa.</small> : null}
+                  {!openNow ? <small className="branch-closed-warning">{allowScheduledPickup ? "Ngoài giờ · Hẹn giờ ghé lấy" : "Chi nhánh đã đóng cửa."}</small> : null}
                   {closingSoonText ? <small className="branch-closing-warning">{closingSoonText}</small> : null}
                 </span>
                 <CustomerSelectionIndicator selected={selectedBranchId === branch.id} className="branch-radio" />
@@ -93,6 +125,7 @@ export default function HomeBranchPlannerModal({
             <CustomerControl onClick={onConfirm} className="cta w-full" disabled={disabledConfirm}>{confirmLabel}</CustomerControl>
           </div>
         ) : null}
+      </>}
     </CustomerBottomSheet>
   );
 }

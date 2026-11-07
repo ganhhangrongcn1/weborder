@@ -26,9 +26,9 @@ import { optionModalText } from "../../data/uiText.js";
 import { formatMoney } from "../../utils/format.js";
 import {
   getBranchOpenClose,
-  getClockMinutes,
   getTodayInputDate,
-  isPickupClockInBranchHours,
+  getTomorrowInputDate,
+  isValidPickupSchedule,
   normalizePickupClock,
   normalizePickupDate
 } from "../../utils/dateTimeDefaults.js";
@@ -515,34 +515,24 @@ export default function Checkout({
 
     if (fulfillmentType === "pickup" && pickupMode === "schedule" && !isQrCounterOrder) {
       const today = getTodayInputDate();
-      if (pickupDate !== today) {
+      if (pickupDate !== today && pickupDate !== getTomorrowInputDate()) {
         showCheckoutFieldError(
           "pickupDate",
-          "Quán chỉ nhận đơn hẹn lấy trong ngày hôm nay.",
+          "Bạn có thể hẹn lấy hôm nay hoặc ngày mai.",
           "checkout-pickup-date"
         );
         return;
       }
 
-      if (!isPickupClockInBranchHours(pickupClock, selectedBranchInfo)) {
+      if (!isValidPickupSchedule(pickupDate, pickupClock, selectedBranchInfo)) {
         showCheckoutFieldError(
           "pickupTime",
-          `Vui lòng chọn giờ từ ${pickupBranchHours.open} đến ${pickupBranchHours.close}.`,
+          `Chọn giờ chưa qua và nằm trong giờ bán ${pickupBranchHours.open} – ${pickupBranchHours.close}.`,
           "checkout-pickup-time"
         );
         return;
       }
 
-      const now = new Date();
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
-      if (getClockMinutes(pickupClock) <= currentMinutes) {
-        showCheckoutFieldError(
-          "pickupTime",
-          "Vui lòng chọn giờ muộn hơn thời gian hiện tại.",
-          "checkout-pickup-time"
-        );
-        return;
-      }
     }
 
     if (fulfillmentType === "delivery" && !deliverySourceBranch) {
@@ -571,7 +561,14 @@ export default function Checkout({
     const orderBranch = fulfillmentType === "pickup" ? selectedBranchInfo : deliverySourceBranch;
     const storeNotice = getStoreBlockNotice?.();
 
-    if (orderBranch && isBranchOpenNow && !isBranchOpenNow(orderBranch)) {
+    const scheduledPickup = fulfillmentType === "pickup" && pickupMode === "schedule" && !isQrCounterOrder;
+    if (scheduledPickup && !isValidPickupSchedule(pickupDate, pickupClock, orderBranch)) {
+      setIsPickupConfirmationOpen(false);
+      showCheckoutFieldError("pickupTime", "Giờ hẹn không còn phù hợp. Bạn chọn lại giờ lấy trong giờ bán nhé.", "checkout-pickup-time");
+      return;
+    }
+
+    if (!scheduledPickup && orderBranch && isBranchOpenNow && !isBranchOpenNow(orderBranch)) {
       setServiceNotice?.(buildOutOfHoursNotice?.(orderBranch) || storeNotice);
       return;
     }
@@ -650,6 +647,7 @@ export default function Checkout({
           pickupClock={pickupClock}
           setPickupClock={setPickupClock}
           pickupDateLimit={getTodayInputDate()}
+          pickupDateMax={getTomorrowInputDate()}
           pickupTimeMin={pickupBranchHours.open}
           pickupTimeMax={pickupBranchHours.close}
           fieldErrors={checkoutFieldErrors}

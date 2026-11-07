@@ -28,7 +28,7 @@ export default function MenuStorefront({ homeContent = [], branches = [], checko
       <HomeBranchPlannerModal open={branchPicker.open} onClose={branchPicker.closePicker}
         title="Chọn chi nhánh" subtitle="Thực đơn sẽ cập nhật theo quán bạn chọn." iconName="store" enableNearby
         branches={branchPicker.availableBranches} selectedBranchId={branchPicker.selectedBranchId}
-        onSelectBranch={()=>{}} onConfirm={branchPicker.selectBranch} />
+        onSelectBranch={()=>{}} onConfirm={branchPicker.selectBranch} allowScheduledPickup={branchPicker.allowScheduledPickup} />
     </header>
   );
 }

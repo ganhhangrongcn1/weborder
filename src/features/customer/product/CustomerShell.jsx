@@ -32,6 +32,7 @@ import useActiveOrderFloatboard from "../../../hooks/useActiveOrderFloatboard.js
 import useMomoReturnRecovery from "../../../hooks/useMomoReturnRecovery.js";
 import { orderRepository } from "../../../services/repositories/orderRepository.js";
 import { resolveBranchFromCandidates } from "../../../services/branchIdentityService.js";
+import { isValidPickupSchedule } from "../../../utils/dateTimeDefaults.js";
 import {
   findLatestActiveCustomerOrder,
   getCustomerOrderDisplayStatus,
@@ -109,7 +110,7 @@ export default function CustomerShell({
   useCustomerAppearance(true);
   const branchGuard = useBranchCartGuard({cart:originalPageProps.cart,catalog:originalPageProps.branchCartCatalog,branches:originalPageProps.branches,setCart:originalPageProps.setCart,catalogReady:!originalPageProps.isMenuLoading});
   const pageProps = {...originalPageProps,requestBranchChange:branchGuard.requestChange};
-  const menuBranchPicker = useMenuBranchPicker({branches:pageProps.branches,checkoutPreset:pageProps.checkoutPreset,setCheckoutPreset:pageProps.setCheckoutPreset,requestBranchChange:branchGuard.requestChange,onSelected:()=>navigate("menu","menu")});
+  const menuBranchPicker = useMenuBranchPicker({branches:pageProps.branches,checkoutPreset:pageProps.checkoutPreset,setCheckoutPreset:pageProps.setCheckoutPreset,requestBranchChange:branchGuard.requestChange,onSelected:destination=>destination === "checkout" ? navigate("checkout","orders") : navigate("menu","menu")});
   const isQrRoute = typeof window !== "undefined" && /^\/qr\/[^/]+/i.test(window.location.pathname || "");
   const isQrCounterFlow = isQrRoute || (String(pageProps?.checkoutPreset?.orderSource || pageProps?.checkoutPreset?.source || "").toLowerCase() === "qr_counter" && Boolean(pageProps?.checkoutPreset?.qrBranchLocked));
   const qrAllowedPages = ["home", "qr-entry", "menu", "detail", "checkout", "tracking", "success", "loyalty", "account"];
@@ -243,6 +244,14 @@ export default function CustomerShell({
 
   const handleOpenCheckout = () => {
     const notice = getStoreBlockNotice?.();
+    const preset = pageProps.checkoutPreset;
+    const branch = menuBranchPicker.availableBranches.find(item => item.id === menuBranchPicker.selectedBranchId);
+    const hasValidSchedule = preset?.pickupMode === "schedule" && isValidPickupSchedule(preset.pickupDate, preset.pickupClock, branch);
+    if (!isQrCounterFlow && menuBranchPicker.allowScheduledPickup && menuBranchPicker.availableBranches.length && !hasValidSchedule &&
+        (!branch || notice?.type === "out_of_hours" || pageProps.isBranchOpenNow?.(branch) === false)) {
+      menuBranchPicker.openPicker("checkout");
+      return;
+    }
     if (notice) {
       setServiceNotice?.(notice);
       return;
@@ -407,7 +416,7 @@ export default function CustomerShell({
               <CustomerFloatingCartBar
                 count={cartCount}
                 subtotal={subtotal}
-                onClick={cartSheet.openCart}
+                onClick={isQrCounterFlow ? cartSheet.openCart : undefined}
                 onContinue={cartSheet.continueCheckout}
                 formatMoney={formatMoney}
                 products={pageProps.products}
@@ -432,9 +441,9 @@ export default function CustomerShell({
                 : <BottomNav activeTab={page === "checkout" ? "menu" : activeTab} onChange={tab=>tab === "menu" ? menuBranchPicker.openPicker() : handleBottomNav(tab)} />
             )}
             {!isQrCounterFlow && <HomeBranchPlannerModal open={menuBranchPicker.open} onClose={menuBranchPicker.closePicker}
-              title="Chọn chi nhánh" subtitle="Chọn quán trước khi xem thực đơn." iconName="store" enableNearby
+              title="Chọn chi nhánh" subtitle={menuBranchPicker.destination === "checkout" ? "Chọn quán và giờ nhận món để thanh toán." : "Chọn quán trước khi xem thực đơn."} iconName="store" enableNearby
               branches={menuBranchPicker.availableBranches} selectedBranchId={menuBranchPicker.selectedBranchId}
-              onSelectBranch={()=>{}} onConfirm={menuBranchPicker.selectBranch} />}
+              onSelectBranch={()=>{}} onConfirm={menuBranchPicker.selectBranch} allowScheduledPickup={menuBranchPicker.allowScheduledPickup} />}
             {isJourneyOpen && journeyOrder && !serviceNotice ? (
               <ActiveOrderJourneySheet
                 order={journeyOrder}
