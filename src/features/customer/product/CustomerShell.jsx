@@ -438,7 +438,17 @@ export default function CustomerShell({
             {!shouldHideBottomNav && (
               isQrCounterFlow
                 ? <BottomNav activeTab={activeTab} onChange={handleQrBottomNav} items={qrBottomNavItems} />
-                : <BottomNav activeTab={page === "checkout" ? "menu" : activeTab} onChange={tab=>tab === "menu" ? menuBranchPicker.openPicker() : handleBottomNav(tab)} />
+                : <BottomNav activeTab={page === "checkout" ? "menu" : activeTab} onChange={tab => {
+                    if (tab !== "menu") {
+                      handleBottomNav(tab);
+                      return;
+                    }
+                    if (page === "checkout" && menuBranchPicker.selectedBranchId) {
+                      navigate("menu", "menu");
+                      return;
+                    }
+                    menuBranchPicker.openPicker();
+                  }} />
             )}
             {!isQrCounterFlow && <HomeBranchPlannerModal open={menuBranchPicker.open} onClose={menuBranchPicker.closePicker}
               title="Chọn chi nhánh" subtitle={menuBranchPicker.destination === "checkout" ? "Chọn quán và giờ nhận món để thanh toán." : "Chọn quán trước khi xem thực đơn."} iconName="store" enableNearby
